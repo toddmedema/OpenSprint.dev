@@ -135,12 +135,11 @@ export class PrdService {
     const now = new Date().toISOString();
 
     for (const update of updates) {
+      this.validateSectionKey(update.section);
       const existing = prd.sections[update.section];
-      if (!existing) continue;
-
-      const previousVersion = existing.version;
+      const previousVersion = existing ? existing.version : 0;
       const newVersion = previousVersion + 1;
-      const diff = this.computeDiff(existing.content, update.content);
+      const diff = this.computeDiff(existing?.content ?? "", update.content);
 
       prd.sections[update.section] = {
         content: update.content,

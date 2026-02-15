@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../../api/client";
+import { useWebSocket } from "../../hooks/useWebSocket";
 
 interface DesignPhaseProps {
   projectId: string;
@@ -38,6 +39,17 @@ function combinePrdSections(prdContent: Record<string, string>): string {
   return all.replace(/\n[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*\n/g, "\n\n");
 }
 
+function parsePrdSections(prd: unknown): Record<string, string> {
+  const data = prd as { sections?: Record<string, { content: string }> };
+  const content: Record<string, string> = {};
+  if (data?.sections) {
+    for (const [key, section] of Object.entries(data.sections)) {
+      content[key] = section.content;
+    }
+  }
+  return content;
+}
+
 export function DesignPhase({ projectId }: DesignPhaseProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -46,7 +58,22 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
   const [prdContent, setPrdContent] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load conversation history
+  const refetchPrd = useCallback(async () => {
+    const data = await api.prd.get(projectId);
+    setPrdContent(parsePrdSections(data));
+  }, [projectId]);
+
+  // Subscribe to live PRD updates via WebSocket
+  useWebSocket({
+    projectId,
+    onEvent: (event) => {
+      if (event.type === "prd.updated") {
+        refetchPrd();
+      }
+    },
+  });
+
+  // Load conversation history and PRD
   useEffect(() => {
     api.chat.history(projectId, "design").then((data: unknown) => {
       const conv = data as { messages?: Message[] };
@@ -55,18 +82,8 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
       }
     });
 
-    // Load PRD
-    api.prd.get(projectId).then((data: unknown) => {
-      const prd = data as { sections?: Record<string, { content: string }> };
-      if (prd?.sections) {
-        const content: Record<string, string> = {};
-        for (const [key, section] of Object.entries(prd.sections)) {
-          content[key] = section.content;
-        }
-        setPrdContent(content);
-      }
-    });
-  }, [projectId]);
+    refetchPrd();
+  }, [projectId, refetchPrd]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -90,6 +107,7 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
     try {
       const response = (await api.chat.send(projectId, userMessage.content, "design")) as {
         message: string;
+        prdChanges?: { section: string; previousVersion: number; newVersion: number }[];
       };
       setMessages((prev) => [
         ...prev,
@@ -99,6 +117,10 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
           timestamp: new Date().toISOString(),
         },
       ]);
+      // Live PRD update: refetch when agent applied PRD changes (WebSocket may also fire, but this ensures updates)
+      if (response.prdChanges?.length) {
+        refetchPrd();
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send message. Please try again.";
       setError(msg);
