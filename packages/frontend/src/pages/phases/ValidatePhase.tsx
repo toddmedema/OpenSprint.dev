@@ -159,6 +159,7 @@ export function ValidatePhase({ projectId, onNavigateToBuildTask }: ValidatePhas
                         type="button"
                         onClick={() => onNavigateToBuildTask(taskId)}
                         className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-brand-600 hover:bg-brand-50 hover:text-brand-700 underline transition-colors"
+                        title={`Go to ${taskId} on Build tab`}
                       >
                         {taskId}
                       </button>

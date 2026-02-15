@@ -104,7 +104,13 @@ function ProjectContent() {
   const phaseComponents: Record<ProjectPhase, React.ReactNode> = {
     design: <DesignPhase projectId={projectId!} />,
     plan: <PlanPhase projectId={projectId!} />,
-    build: <BuildPhase projectId={projectId!} initialSelectedTaskId={buildSelectedTaskId} />,
+    build: (
+      <BuildPhase
+        projectId={projectId!}
+        initialTaskId={buildSelectedTaskId}
+        onInitialTaskConsumed={() => setBuildSelectedTaskId(null)}
+      />
+    ),
     validate: <ValidatePhase projectId={projectId!} onNavigateToBuildTask={handleNavigateToBuildTask} />,
   };
 

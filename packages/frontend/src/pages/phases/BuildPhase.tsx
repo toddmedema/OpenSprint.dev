@@ -7,7 +7,8 @@ import { KANBAN_COLUMNS, PRIORITY_LABELS } from "@opensprint/shared";
 
 interface BuildPhaseProps {
   projectId: string;
-  initialSelectedTaskId?: string | null;
+  initialTaskId?: string | null;
+  onInitialTaskConsumed?: () => void;
 }
 
 interface TaskCard {
@@ -122,7 +123,7 @@ function getEpicTitleFromPlan(plan: Plan): string {
   return plan.metadata.planId.replace(/-/g, " ");
 }
 
-export function BuildPhase({ projectId, initialSelectedTaskId }: BuildPhaseProps) {
+export function BuildPhase({ projectId, initialTaskId, onInitialTaskConsumed }: BuildPhaseProps) {
   const [tasks, setTasks] = useState<TaskCard[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [orchestratorRunning, setOrchestratorRunning] = useState(false);
@@ -190,12 +191,13 @@ export function BuildPhase({ projectId, initialSelectedTaskId }: BuildPhaseProps
     [projectId, selectedTask],
   );
 
-  // When navigating from Validate with a task ID, select that task
+  // Apply initial task selection when navigating from Validate (e.g. clicking an issue ID)
   useEffect(() => {
-    if (initialSelectedTaskId) {
-      setSelectedTask(initialSelectedTaskId);
+    if (initialTaskId) {
+      setSelectedTask(initialTaskId);
+      onInitialTaskConsumed?.();
     }
-  }, [initialSelectedTaskId]);
+  }, [initialTaskId, onInitialTaskConsumed]);
 
   // Clear completion state, archived sessions, and task detail when switching tasks
   useEffect(() => {
