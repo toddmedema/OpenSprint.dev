@@ -68,7 +68,7 @@ export class BeadsService {
 
   /** Initialize beads in a project repository */
   async init(repoPath: string): Promise<void> {
-    await execAsync("bd init", { cwd: repoPath });
+    await this.exec(repoPath, "init");
   }
 
   /** Create a new issue */
