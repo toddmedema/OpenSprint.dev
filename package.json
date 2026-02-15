@@ -9,6 +9,7 @@
     "packages/frontend"
   ],
   "scripts": {
+    "sync-prd": "tsx scripts/sync-prd-to-living.ts",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "npm run dev -w packages/backend",
     "dev:frontend": "npm run dev -w packages/frontend",
