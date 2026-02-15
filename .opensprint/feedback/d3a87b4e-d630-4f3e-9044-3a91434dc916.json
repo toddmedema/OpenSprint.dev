@@ -1,0 +1,11 @@
+{
+  "id": "d3a87b4e-d630-4f3e-9044-3a91434dc916",
+  "text": "When trying to view the live agent output of an in progress task in build, I get this error on the server:\n\n[0] [WS] Client subscribed to agent output for task opensprint.dev-dlp\n[0] [Error] Cannot read properties of undefined (reading 'lastIndexOf') TypeError: Cannot read properties of undefined (reading 'lastIndexOf')\n[0]     at TaskService.extractEpicId (/Users/todd/My Drive/Code/opensprint.dev/packages/backend/src/services/task.service.ts:102:24)\n[0]     at TaskService.beadsIssueToTask (/Users/todd/My Drive/Code/opensprint.dev/packages/backend/src/services/task.service.ts:57:25)\n[0]     at TaskService.getTask (/Users/todd/My Drive/Code/opensprint.dev/packages/backend/src/services/task.service.ts:50:17)\n[0]     at async <anonymous> (/Users/todd/My Drive/Code/opensprint.dev/packages/backend/src/routes/tasks.ts:38:18)",
+  "category": "bug",
+  "mappedPlanId": null,
+  "createdTaskIds": [
+    "opensprint.dev-1gy"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-15T17:23:52.765Z"
+}

@@ -148,30 +148,6 @@ export class OrchestratorService {
     return this.getState(projectId).status;
   }
 
-  /** Resolve plan content for a task from its parent epic. task.description is the task spec, not a path. */
-  private async getPlanContentForTask(repoPath: string, task: BeadsIssue): Promise<string> {
-    const parentId = this.beads.getParentId(task.id);
-    if (parentId) {
-      try {
-        const parent = await this.beads.show(repoPath, parentId);
-        const desc = parent.description as string;
-        if (desc?.startsWith('.opensprint/plans/')) {
-          const planId = path.basename(desc, '.md');
-          return this.contextAssembler.readPlanContent(repoPath, planId);
-        }
-      } catch {
-        // Parent might not exist
-      }
-    }
-    return '';
-  }
-
-  /** Get IDs of tasks that block this one (must complete before this task) */
-  private async getBlockingDependencyIds(repoPath: string, taskId: string): Promise<string[]> {
-    const blockers = await this.beads.getBlockers(repoPath, taskId);
-    return blockers;
-  }
-
   // ─── Main Orchestrator Loop ───
 
   private async runLoop(projectId: string): Promise<void> {
@@ -187,6 +163,8 @@ export class OrchestratorService {
 
       // Filter out Plan approval gate tasks — they are closed by user "Ship it!", not by agents
       readyTasks = readyTasks.filter((t) => (t.title ?? '') !== 'Plan approval gate');
+      // Filter out epics — they are containers, not work items; agents implement tasks/bugs
+      readyTasks = readyTasks.filter((t) => (t.issue_type ?? t.type) !== 'epic');
 
       state.status.queueDepth = readyTasks.length;
 
@@ -228,6 +206,7 @@ export class OrchestratorService {
         type: 'build.status',
         running: true,
         currentTask: task.id,
+        currentPhase: 'coding',
         queueDepth: readyTasks.length - 1,
       });
 
@@ -269,12 +248,12 @@ export class OrchestratorService {
         await this.branchManager.createBranch(repoPath, branchName);
       }
 
-      // Assemble context
-      const prdExcerpt = await this.contextAssembler.extractPrdExcerpt(repoPath);
-      const planContent = await this.getPlanContentForTask(repoPath, task);
-      const dependencyOutputs = await this.contextAssembler.collectDependencyOutputs(
+      // Assemble context via ContextBuilder (given taskId)
+      const context = await this.contextAssembler.buildContext(
         repoPath,
-        await this.getBlockingDependencyIds(repoPath, task.id),
+        task.id,
+        this.beads,
+        this.branchManager,
       );
 
       const config: ActiveTaskConfig = {
@@ -291,14 +270,7 @@ export class OrchestratorService {
         reviewFeedback: retryContext?.reviewFeedback ?? null,
       };
 
-      await this.contextAssembler.assembleTaskDirectory(repoPath, task.id, config, {
-        taskId: task.id,
-        title: task.title,
-        description: task.description || '',
-        planContent,
-        prdExcerpt,
-        dependencyOutputs,
-      });
+      await this.contextAssembler.assembleTaskDirectory(repoPath, task.id, config, context);
 
       state.startedAt = new Date().toISOString();
       state.outputLog = [];
@@ -380,13 +352,20 @@ export class OrchestratorService {
 
       state.lastTestResults = testResults;
 
-      // Move to review phase
+      // Move to review phase (coding-to-review transition)
       state.status.currentPhase = 'review';
       broadcastToProject(projectId, {
         type: 'task.updated',
         taskId: task.id,
         status: 'in_progress',
         assignee: 'agent-1',
+      });
+      broadcastToProject(projectId, {
+        type: 'build.status',
+        running: true,
+        currentTask: task.id,
+        currentPhase: 'review',
+        queueDepth: state.status.queueDepth,
       });
 
       await this.executeReviewPhase(projectId, repoPath, task, branchName);
@@ -428,21 +407,25 @@ export class OrchestratorService {
         JSON.stringify(config, null, 2),
       );
 
-      // Generate review prompt (resolve plan from parent epic, same as coding phase)
-      const prdExcerpt = await this.contextAssembler.extractPrdExcerpt(repoPath);
-      const planContent = await this.getPlanContentForTask(repoPath, task);
-      await this.contextAssembler.assembleTaskDirectory(repoPath, task.id, config, {
-        taskId: task.id,
-        title: task.title,
-        description: task.description || '',
-        planContent,
-        prdExcerpt,
-        dependencyOutputs: [],
-      });
+      // Generate review prompt (ContextBuilder assembles plan, PRD; deps not needed for review)
+      const context = await this.contextAssembler.buildContext(
+        repoPath,
+        task.id,
+        this.beads,
+        this.branchManager,
+      );
+      await this.contextAssembler.assembleTaskDirectory(repoPath, task.id, config, context);
 
       state.startedAt = new Date().toISOString();
       state.outputLog = [];
       state.lastOutputTime = Date.now();
+
+      broadcastToProject(projectId, {
+        type: 'agent.started',
+        taskId: task.id,
+        phase: 'review',
+        branchName,
+      });
 
       const promptPath = path.join(taskDir, 'prompt.md');
 
@@ -729,3 +712,6 @@ export class OrchestratorService {
     return approved;
   }
 }
+
+/** Shared orchestrator instance for build routes and task list (kanban phase override) */
+export const orchestratorService = new OrchestratorService();

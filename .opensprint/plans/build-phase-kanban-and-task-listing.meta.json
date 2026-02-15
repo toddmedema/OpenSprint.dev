@@ -1,0 +1,7 @@
+{
+  "planId": "build-phase-kanban-and-task-listing",
+  "beadEpicId": "opensprint.dev-cxx",
+  "gateTaskId": "opensprint.dev-cxx.1",
+  "shippedAt": null,
+  "complexity": "medium"
+}

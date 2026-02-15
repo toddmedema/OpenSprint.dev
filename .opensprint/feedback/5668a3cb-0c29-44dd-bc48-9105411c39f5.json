@@ -1,0 +1,11 @@
+{
+  "id": "5668a3cb-0c29-44dd-bc48-9105411c39f5",
+  "text": "When submitting feedback, cmd + enter / ctrl + enter should submit the feedback",
+  "category": "ux",
+  "mappedPlanId": null,
+  "createdTaskIds": [
+    "opensprint.dev-80l"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-15T17:24:17.295Z"
+}

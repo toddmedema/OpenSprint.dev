@@ -139,6 +139,7 @@ export class ConcurrentOrchestrator {
 
         // Filter out Plan approval gate tasks — they are closed by user "Ship it!", not by agents
         readyTasks = readyTasks.filter((t: BeadsIssue) => (t.title ?? '') !== 'Plan approval gate');
+        readyTasks = readyTasks.filter((t: BeadsIssue) => (t.issue_type ?? t.type) !== 'epic');
 
         // Filter out tasks that are already being worked on
         const activeTasks = new Set(state.activeSlots.keys());

@@ -4,6 +4,9 @@ import type { TaskType, TaskPriority } from "@opensprint/shared";
 
 const execAsync = promisify(exec);
 
+const DEFAULT_TIMEOUT_MS = 30000;
+const MAX_BUFFER_BYTES = 2 * 1024 * 1024; // 2MB for large list output
+
 export interface BeadsIssue {
   id: string;
   title: string;
@@ -23,18 +26,68 @@ export interface BeadsIssue {
 export class BeadsService {
   /**
    * Execute a bd command in the context of a project directory.
+   * Handles exec errors, timeouts, and surfaces stderr to caller.
    */
-  private async exec(repoPath: string, command: string): Promise<string> {
+  private async exec(
+    repoPath: string,
+    command: string,
+    options?: { timeout?: number },
+  ): Promise<string> {
+    const timeout = options?.timeout ?? DEFAULT_TIMEOUT_MS;
     try {
       const { stdout } = await execAsync(`bd ${command}`, {
         cwd: repoPath,
-        timeout: 30000,
+        timeout,
+        maxBuffer: MAX_BUFFER_BYTES,
         env: { ...process.env },
       });
       return stdout;
     } catch (error: unknown) {
-      const err = error as { message: string; stderr?: string; code?: number };
-      throw new Error(`Beads command failed: bd ${command}\n${err.stderr || err.message}`);
+      const err = error as {
+        message: string;
+        stderr?: string;
+        stdout?: string;
+        code?: number;
+        killed?: boolean;
+        signal?: string;
+      };
+      if (err.killed && err.signal === 'SIGTERM') {
+        throw new Error(
+          `Beads command timed out after ${timeout}ms: bd ${command}\n${err.stderr || err.message}`,
+        );
+      }
+      const stderr = err.stderr || err.stdout || err.message;
+      throw new Error(`Beads command failed: bd ${command}\n${stderr}`);
+    }
+  }
+
+  /**
+   * Run bd with command and args, return parsed JSON.
+   * Use for commands that output JSON (--json flag).
+   */
+  async runBd(
+    repoPath: string,
+    command: string,
+    args: string[] = [],
+    options?: { timeout?: number },
+  ): Promise<unknown> {
+    const fullCmd = [command, ...args].filter(Boolean).join(' ');
+    const stdout = await this.exec(repoPath, fullCmd, options);
+    const trimmed = stdout.trim();
+    if (!trimmed) return null;
+    try {
+      const jsonStart = trimmed.indexOf('{');
+      const arrStart = trimmed.indexOf('[');
+      const start =
+        jsonStart >= 0 && (arrStart < 0 || jsonStart < arrStart)
+          ? jsonStart
+          : arrStart;
+      if (start >= 0) {
+        return JSON.parse(trimmed.slice(start));
+      }
+      return JSON.parse(trimmed);
+    } catch {
+      throw new Error(`Failed to parse beads JSON output: ${trimmed.slice(0, 200)}`);
     }
   }
 
@@ -113,10 +166,18 @@ export class BeadsService {
     return this.parseJson(stdout);
   }
 
-  /** Close an issue */
+  /** Close an issue (bd close returns a JSON array of closed issues, or sometimes empty output) */
   async close(repoPath: string, id: string, reason: string): Promise<BeadsIssue> {
     const stdout = await this.exec(repoPath, `close ${id} --reason "${reason.replace(/"/g, '\\"')}" --json`);
-    return this.parseJson(stdout);
+    const arr = this.parseJsonArray(stdout);
+    let result = arr[0];
+    if (!result) {
+      result = await this.show(repoPath, id);
+    }
+    if ((result.status as string) !== "closed") {
+      throw new Error(`Beads close did not persist: issue ${id} still has status "${result.status ?? "undefined"}"`);
+    }
+    return result;
   }
 
   /** Get ready tasks (priority-sorted, all deps resolved) */
@@ -137,13 +198,13 @@ export class BeadsService {
     return this.parseJsonArray(stdout);
   }
 
-  /** Show full details of an issue */
+  /** Show full details of an issue (bd show returns a JSON array) */
   async show(repoPath: string, id: string): Promise<BeadsIssue> {
     const stdout = await this.exec(repoPath, `show ${id} --json`);
-    const parsed = this.parseJson(stdout);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-    if (Array.isArray(parsed)) throw new Error(`Issue ${id} not found`);
-    return parsed as BeadsIssue;
+    const arr = this.parseJsonArray(stdout);
+    const first = arr[0];
+    if (first) return first;
+    throw new Error(`Issue ${id} not found`);
   }
 
   /** Get IDs of issues that block this one (this task depends on them) */
@@ -186,6 +247,6 @@ export class BeadsService {
 
   /** Sync beads with git */
   async sync(repoPath: string): Promise<void> {
-    await execAsync("bd sync", { cwd: repoPath });
+    await this.exec(repoPath, "sync");
   }
 }

@@ -1,0 +1,7 @@
+{
+  "planId": "build-orchestrator-context-assembly-and-agent-lifecycle",
+  "beadEpicId": "opensprint.dev-zar",
+  "gateTaskId": "opensprint.dev-zar.1",
+  "shippedAt": null,
+  "complexity": "very_high"
+}

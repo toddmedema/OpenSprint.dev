@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { ProjectPhase } from '@opensprint/shared';
 
@@ -28,11 +29,18 @@ function ProjectContent() {
   const navigate = useNavigate();
   const { project, loading, error } = useProject(projectId!);
   const currentPhase = phaseFromSlug(phaseSlug);
+  const [buildSelectedTaskId, setBuildSelectedTaskId] = useState<string | null>(null);
   const { hilRequest, hilNotification, respondToHil, clearHilNotification } = useProjectWebSocket();
 
   const handlePhaseChange = (phase: ProjectPhase) => {
+    if (phase !== 'build') setBuildSelectedTaskId(null);
     const path = phase === 'design' ? `/projects/${projectId}` : `/projects/${projectId}/${phase}`;
     navigate(path);
+  };
+
+  const handleNavigateToBuildTask = (taskId: string) => {
+    setBuildSelectedTaskId(taskId);
+    navigate(`/projects/${projectId}/build`);
   };
 
   if (loading) {
@@ -96,8 +104,8 @@ function ProjectContent() {
   const phaseComponents: Record<ProjectPhase, React.ReactNode> = {
     design: <DesignPhase projectId={projectId!} />,
     plan: <PlanPhase projectId={projectId!} />,
-    build: <BuildPhase projectId={projectId!} />,
-    validate: <ValidatePhase projectId={projectId!} />,
+    build: <BuildPhase projectId={projectId!} initialSelectedTaskId={buildSelectedTaskId} />,
+    validate: <ValidatePhase projectId={projectId!} onNavigateToBuildTask={handleNavigateToBuildTask} />,
   };
 
   return (

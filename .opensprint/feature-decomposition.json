@@ -1,0 +1,458 @@
+{
+  "plans": [
+    {
+      "title": "Backend API Foundation",
+      "content": "# Backend API Foundation\n\n## Overview\n\nEstablish the Node.js + TypeScript backend API server that serves as the core of OpenSprint. Provides REST endpoints, project index management, and the foundation for all subsequent features.\n\n## Acceptance Criteria\n\n- Backend server starts and listens on configurable port\n- Health check endpoint returns 200\n- CORS configured for frontend origin\n- Project index at `~/.opensprint/projects.json` is read/written correctly\n- All API responses are JSON\n- TypeScript compiles without errors\n\n## Technical Approach\n\n- Express or Fastify for HTTP server\n- Structured routing under `/api/v1`\n- Project index: read on startup, write on project create/delete\n- Environment variable for port (default 3001)\n\n## Dependencies\n\nNone (foundational).\n\n## Data Model Changes\n\n- Project index schema: `{ projects: [{ id, name, repo_path, created_at }] }`\n\n## API Specification\n\n| Method | Endpoint | Description |\n|--------|----------|-------------|\n| GET | `/api/v1/health` | Health check |\n| GET | `/api/v1/projects` | List all projects |\n| POST | `/api/v1/projects` | Create project (stub) |\n| GET | `/api/v1/projects/:id` | Get project details |\n\n## UI/UX Requirements\n\nNone (backend only).\n\n## Edge Cases and Error Handling\n\n- Missing `~/.opensprint/` directory: create on first use\n- Invalid project index JSON: log error, return empty list\n- Project not found: 404 with JSON error body\n\n## Testing Strategy\n\n- Unit tests for project index read/write\n- Integration tests for each endpoint\n- Test with missing/corrupt index file\n\n## Estimated Complexity\n\nlow",
+      "complexity": "low",
+      "dependsOnPlans": [],
+      "tasks": [
+        {
+          "title": "Initialize backend project structure",
+          "description": "Create Node.js + TypeScript backend with package.json, tsconfig, and folder structure (src/, routes/, services/). Configure build and dev scripts.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement HTTP server and health endpoint",
+          "description": "Set up Express/Fastify server with /api/v1/health endpoint. Add CORS middleware. Make port configurable via env.",
+          "priority": 1,
+          "dependsOn": ["Initialize backend project structure"]
+        },
+        {
+          "title": "Implement project index service",
+          "description": "Create service to read/write ~/.opensprint/projects.json. Handle missing directory, invalid JSON. Expose getProjects, addProject, removeProject.",
+          "priority": 1,
+          "dependsOn": ["Initialize backend project structure"]
+        },
+        {
+          "title": "Implement projects REST endpoints",
+          "description": "GET /projects, POST /projects (stub), GET /projects/:id. Use project index service. Return 404 for unknown project.",
+          "priority": 2,
+          "dependsOn": ["Implement HTTP server and health endpoint", "Implement project index service"]
+        }
+      ]
+    },
+    {
+      "title": "Beads CLI Integration",
+      "content": "# Beads CLI Integration\n\n## Overview\n\nIntegrate the beads (`bd`) CLI into the OpenSprint backend. Provide a wrapper service that invokes `bd` via `child_process.exec()` with `--json` flags for structured output.\n\n## Acceptance Criteria\n\n- `bd init` executes successfully in a project directory\n- `bd create`, `bd update`, `bd close`, `bd list`, `bd show`, `bd ready`, `bd dep add` all work via wrapper\n- All commands use `--json` for parseable output\n- Errors from bd (exit code, stderr) are surfaced to caller\n- Works when bd is in PATH\n\n## Technical Approach\n\n- Create BeadsService that accepts repo_path and runs bd in that cwd\n- Use child_process.exec() with timeout\n- Parse JSON output, handle parse errors\n- Map bd exit codes to service errors\n\n## Dependencies\n\nNone.\n\n## Data Model Changes\n\nNone (beads manages its own state in .beads/).\n\n## API Specification\n\nInternal service only; no new REST endpoints.\n\n## UI/UX Requirements\n\nNone.\n\n## Edge Cases and Error Handling\n\n- bd not in PATH: clear error message\n- bd init in non-git directory: fail with guidance\n- Malformed bd JSON output: wrap in service error\n- Timeout on long-running bd commands (e.g., bd list with 500 tasks)\n\n## Testing Strategy\n\n- Unit tests with mocked exec\n- Integration test: run bd init in temp repo, verify .beads/ created\n- Test each command with real bd in test fixture\n\n## Estimated Complexity\n\nmedium",
+      "complexity": "medium",
+      "dependsOnPlans": [],
+      "tasks": [
+        {
+          "title": "Create BeadsService with exec wrapper",
+          "description": "Implement BeadsService class. Run bd in given repo_path via exec. Add runBd(command, args) returning parsed JSON. Handle exec errors and timeouts.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement bd init and create commands",
+          "description": "Add init(repoPath), create(title, type, priority) methods. Map to bd init and bd create with --json. Return created issue ID.",
+          "priority": 1,
+          "dependsOn": ["Create BeadsService with exec wrapper"]
+        },
+        {
+          "title": "Implement bd update, close, list, show, ready",
+          "description": "Add update(id, opts), close(id, reason), list(filters), show(id), ready() methods. All return structured data from --json output.",
+          "priority": 1,
+          "dependsOn": ["Create BeadsService with exec wrapper"]
+        },
+        {
+          "title": "Implement bd dep add and dep tree",
+          "description": "Add depAdd(childId, parentId, type?), depTree(id) methods. Support blocks and discovered-from dependency types.",
+          "priority": 2,
+          "dependsOn": ["Implement bd update, close, list, show, ready"]
+        }
+      ]
+    },
+    {
+      "title": "WebSocket Relay",
+      "content": "# WebSocket Relay\n\n## Overview\n\nAdd WebSocket support to the backend for real-time updates. Clients connect per-project and receive events for task updates, agent output streaming, and build status.\n\n## Acceptance Criteria\n\n- WebSocket server accepts connections at ws://host/ws/projects/:id\n- Server broadcasts task.updated, agent.output, agent.completed, build.status to subscribed clients\n- Client can subscribe/unsubscribe to agent output for specific task\n- Connection survives brief network hiccups (reconnect support)\n- < 500ms latency for event delivery (per NFR)\n\n## Technical Approach\n\n- Use ws library or Socket.IO\n- Maintain per-project connection set\n- Event emitter pattern: backend components emit events, relay forwards to connected clients\n- agent.subscribe/agent.unsubscribe for task-specific streaming\n\n## Dependencies\n\nBackend API Foundation.\n\n## Data Model Changes\n\nNone.\n\n## API Specification\n\n**Server → Client:** task.updated, agent.output, agent.completed, build.status, prd.updated, hil.request, feedback.mapped\n\n**Client → Server:** agent.subscribe, agent.unsubscribe, hil.respond\n\n## UI/UX Requirements\n\nNone (infrastructure for frontend).\n\n## Edge Cases and Error Handling\n\n- Invalid project ID in connection URL: close with error code\n- Client disconnects: remove from subscription set, no errors\n- Backend crash: clients reconnect and resubscribe\n\n## Testing Strategy\n\n- Unit tests for event routing\n- Integration test: connect, subscribe, emit event, verify client receives\n\n## Estimated Complexity\n\nmedium",
+      "complexity": "medium",
+      "dependsOnPlans": ["backend-api-foundation"],
+      "tasks": [
+        {
+          "title": "Add WebSocket server and connection handling",
+          "description": "Integrate ws/Socket.IO. Accept connections at /ws/projects/:id. Validate project exists. Store connections per project. Handle disconnect.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement event relay and broadcast",
+          "description": "Create EventRelay service. emit(event, payload) broadcasts to all clients for that project. Support task.updated, build.status.",
+          "priority": 1,
+          "dependsOn": ["Add WebSocket server and connection handling"]
+        },
+        {
+          "title": "Implement agent.subscribe and agent.output streaming",
+          "description": "Handle agent.subscribe { taskId } and agent.unsubscribe. Route agent.output only to clients subscribed to that taskId.",
+          "priority": 2,
+          "dependsOn": ["Implement event relay and broadcast"]
+        }
+      ]
+    },
+    {
+      "title": "Project Setup Wizard",
+      "content": "# Project Setup Wizard\n\n## Overview\n\nImplement the full project creation flow. User provides name, description, agent config, deployment config, and HIL preferences. OpenSprint creates git repo, runs bd init, creates .opensprint/ structure, and adds project to index.\n\n## Acceptance Criteria\n\n- Wizard collects: project name, description, planning agent (type + model), coding agent (type + model), deployment mode, HIL preferences\n- Creates git repo at user-selected path (or default)\n- Runs bd init in repo\n- Creates .opensprint/ with prd.json, settings.json, plans/, conversations/, feedback/, sessions/\n- Adds project to ~/.opensprint/projects.json\n- User lands in Design tab after completion\n- Agent config supports Claude, Cursor, Custom CLI\n- Model dropdown populated when Claude/Cursor selected (API query for models)\n\n## Technical Approach\n\n- POST /projects accepts wizard payload\n- Use simple-git or exec for git init\n- BeadsService.init() for bd init\n- Write initial prd.json with empty sections, settings.json from wizard\n- Create directory structure\n\n## Dependencies\n\nBackend API Foundation, Beads CLI Integration.\n\n## Data Model Changes\n\n- Project: id, name, description, repo_path, created_at, updated_at, current_phase\n- ProjectSettings: planning_agent, coding_agent, deployment, hil_config\n- Initial prd.json structure\n\n## API Specification\n\n| Method | Endpoint | Description |\n|--------|----------|-------------|\n| POST | `/api/v1/projects` | Create project (full wizard payload) |\n\nRequest body: name, description, repo_path, planning_agent, coding_agent, deployment, hil_config\n\n## UI/UX Requirements\n\n- Sequential wizard steps (1: name/desc, 2: agents, 3: deployment, 4: HIL, 5: init)\n- Back/Next navigation\n- Validation before proceeding\n- Loading state during init\n\n## Edge Cases and Error Handling\n\n- repo_path exists and is not empty: prompt user or fail\n- bd init fails: rollback git init, return error\n- No bd in PATH: clear error before starting\n\n## Testing Strategy\n\n- Integration test: full wizard flow in temp directory\n- Verify .opensprint/ structure, prd.json, settings.json\n- Verify bd init created .beads/\n\n## Estimated Complexity\n\nhigh",
+      "complexity": "high",
+      "dependsOnPlans": ["backend-api-foundation", "beads-cli-integration"],
+      "tasks": [
+        {
+          "title": "Implement project creation backend",
+          "description": "POST /projects handler. Validate payload. Create repo_path, git init, bd init, .opensprint/ structure, prd.json, settings.json. Add to project index. Return project id.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement agent configuration schema and model fetching",
+          "description": "Define planning_agent and coding_agent schema (type, model, cli_command). For Claude/Cursor, add API call to fetch available models. Store in settings.json.",
+          "priority": 1,
+          "dependsOn": ["Implement project creation backend"]
+        },
+        {
+          "title": "Implement deployment and HIL configuration",
+          "description": "Define deployment (mode: expo|custom, expo_config?, custom_command?). Define hil_config per category (scope, architecture, dependency, test_failures) with mode (automated|notify|approval). Persist in settings.json.",
+          "priority": 2,
+          "dependsOn": ["Implement project creation backend"]
+        }
+      ]
+    },
+    {
+      "title": "Home Screen and Project Switcher",
+      "content": "# Home Screen and Project Switcher\n\n## Overview\n\nBuild the React frontend home screen that lists all projects and allows creating new ones. Include project switcher dropdown in navbar when inside a project.\n\n## Acceptance Criteria\n\n- Home screen displays project cards: name, last-modified, current phase, progress\n- Prominent \"Create New Project\" button opens setup wizard\n- Clicking a project card opens that project (navigate to Design tab)\n- Navbar shows project name as dropdown when in project; clicking reveals all projects for quick switch\n- No flash of wrong content on load\n\n## Technical Approach\n\n- React app with routing (e.g., React Router)\n- Fetch GET /projects for home screen\n\n## Dependencies\n\nBackend API Foundation, Project Setup Wizard (for create flow).\n\n## Data Model Changes\n\nNone (consumes existing API).\n\n## API Specification\n\nGET /projects, POST /projects (from wizard)\n\n## UI/UX Requirements\n\n- Card-based project list\n- Empty state when no projects\n- Project switcher dropdown in navbar\n- Responsive layout\n\n## Edge Cases and Error Handling\n\n- No projects: show empty state with CTA\n- Project load fails: show error, allow retry\n\n## Testing Strategy\n\n- Component tests for HomeScreen, ProjectCard\n- E2E: create project, see it on home, switch projects\n\n## Estimated Complexity\n\nmedium",
+      "complexity": "medium",
+      "dependsOnPlans": ["backend-api-foundation", "project-setup-wizard"],
+      "tasks": [
+        {
+          "title": "Create React app shell and routing",
+          "description": "Initialize React + TypeScript app. Add React Router. Routes: / (home), /projects/:id (app with tabs). Fetch projects for home.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement home screen with project cards",
+          "description": "HomeScreen component. Fetch GET /projects. Render ProjectCard for each (name, last-modified, phase, progress). Create New Project button.",
+          "priority": 1,
+          "dependsOn": ["Create React app shell and routing"]
+        },
+        {
+          "title": "Implement project switcher dropdown",
+          "description": "Navbar component with project name dropdown when in project. List all projects, click to switch. Update URL and reload project context.",
+          "priority": 2,
+          "dependsOn": ["Create React app shell and routing"]
+        },
+        {
+          "title": "Implement project setup wizard UI",
+          "description": "Multi-step wizard component. Steps: name/desc, agent config (with model dropdown), deployment, HIL. Submit to POST /projects. Navigate to Design on success.",
+          "priority": 2,
+          "dependsOn": ["Implement home screen with project cards"]
+        }
+      ]
+    },
+    {
+      "title": "PRD Storage and Versioning",
+      "content": "# PRD Storage and Versioning\n\n## Overview\n\nImplement the living PRD as a structured JSON file at `.opensprint/prd.json`. Each section is independently versioned. Support section-level updates, change log, and diff history.\n\n## Acceptance Criteria\n\n- prd.json has structure: version, sections (each with content, version, updated_at), change_log\n- Sections: executive_summary, problem_statement, user_personas, goals_and_metrics, feature_list, technical_architecture, data_model, api_contracts, non_functional_requirements, open_questions\n- GET /projects/:id/prd returns full PRD\n- GET /projects/:id/prd/:section returns single section\n- PUT /projects/:id/prd/:section updates section, increments version, appends to change_log\n- GET /projects/:id/prd/history returns change_log\n- Content is markdown within each section\n\n## Technical Approach\n\n- PRDService reads/writes .opensprint/prd.json\n- Atomic writes (write to temp, rename)\n- change_log entry: section, version, source, timestamp, diff (optional)\n\n## Dependencies\n\nBackend API Foundation.\n\n## Data Model Changes\n\nPRD schema per §10.2.\n\n## API Specification\n\n| Method | Endpoint | Description |\n|--------|----------|-------------|\n| GET | `/projects/:id/prd` | Full PRD |\n| GET | `/projects/:id/prd/:section` | Single section |\n| PUT | `/projects/:id/prd/:section` | Update section |\n| GET | `/projects/:id/prd/history` | Change log |\n\n## UI/UX Requirements\n\nNone (backend).\n\n## Edge Cases and Error Handling\n\n- Missing prd.json: return 404 or create default\n- Invalid section name: 400\n- Concurrent writes: last-write-wins with version increment\n\n## Testing Strategy\n\n- Unit tests for PRDService\n- Integration tests for each endpoint\n- Test version increment and change_log\n\n## Estimated Complexity\n\nmedium",
+      "complexity": "medium",
+      "dependsOnPlans": ["backend-api-foundation"],
+      "tasks": [
+        {
+          "title": "Implement PRD file schema and PRDService",
+          "description": "Define prd.json schema. PRDService: load, save, getSection, updateSection(section, content, source). Atomic writes. Version increment per section.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement PRD REST endpoints",
+          "description": "GET/PUT /projects/:id/prd/:section, GET /projects/:id/prd, GET /projects/:id/prd/history. Resolve repo_path from project.",
+          "priority": 1,
+          "dependsOn": ["Implement PRD file schema and PRDService"]
+        },
+        {
+          "title": "Implement change log and diff tracking",
+          "description": "Append to change_log on each section update. Include section, version, source, timestamp. Optional diff of content change.",
+          "priority": 2,
+          "dependsOn": ["Implement PRD file schema and PRDService"]
+        }
+      ]
+    },
+    {
+      "title": "Agent Invocation Service",
+      "content": "# Agent Invocation Service\n\n## Overview\n\nUnified service to invoke planning and coding agents. Supports Claude API, Cursor API, and custom CLI. Used for Design chat, Plan decomposition, Build coding/review, and Validate feedback mapping.\n\n## Acceptance Criteria\n\n- Invoke planning agent with messages, get streaming or complete response\n- Invoke coding/review agent with prompt file path, capture stdout/stderr, detect result.json\n- Claude: call API with model from settings\n- Cursor: call API or CLI with model\n- Custom: exec user-provided command with prompt path as arg\n- All agents use same invocation interface (prompt file or message array)\n- API keys from env or settings (never hardcoded)\n\n## Technical Approach\n\n- AgentService with invokePlanningAgent(messages) and invokeCodingAgent(promptPath, config)\n- For streaming: return async generator or callback\n- Claude: @anthropic-ai/sdk\n- Cursor: similar SDK or REST\n- Custom: child_process.spawn with prompt path\n\n## Dependencies\n\nBackend API Foundation.\n\n## Data Model Changes\n\nReads ProjectSettings.planning_agent, coding_agent.\n\n## API Specification\n\nInternal service. Used by chat, plan, build, validate.\n\n## UI/UX Requirements\n\nNone.\n\n## Edge Cases and Error Handling\n\n- API key missing: clear error\n- Agent timeout: configurable (default 5 min for coding)\n- Agent crash: capture exit code, stderr\n- Rate limits: retry with backoff (optional for v1)\n\n## Testing Strategy\n\n- Mock agent responses for unit tests\n- Integration test with real Claude API (optional, env-gated)\n\n## Estimated Complexity\n\nhigh",
+      "complexity": "high",
+      "dependsOnPlans": ["backend-api-foundation"],
+      "tasks": [
+        {
+          "title": "Implement AgentService interface and Claude integration",
+          "description": "AgentService.invokePlanningAgent(messages) returns response. Claude API integration with model from config. Support streaming.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement Cursor and Custom agent support",
+          "description": "Add Cursor API/CLI integration. Add Custom: exec user command with prompt path. Same interface for all types.",
+          "priority": 1,
+          "dependsOn": ["Implement AgentService interface and Claude integration"]
+        },
+        {
+          "title": "Implement coding agent invocation with file-based prompt",
+          "description": "invokeCodingAgent(promptPath, config). Spawn process, pass prompt path. Capture stdout/stderr. Poll for result.json on exit.",
+          "priority": 2,
+          "dependsOn": ["Implement AgentService interface and Claude integration"]
+        }
+      ]
+    },
+    {
+      "title": "Design Phase - Chat and Living PRD",
+      "content": "# Design Phase - Chat and Living PRD\n\n## Overview\n\nImplement the Design phase: split-pane UI with chat on the left and live PRD on the right. User converses with planning agent to create and refine the PRD. PRD updates in real-time. Conversations stored per phase.\n\n## Acceptance Criteria\n\n- Split-pane layout: chat left, PRD right (resizable)\n- User sends message; planning agent responds (streaming)\n- Agent can update PRD sections during conversation (prd_changes in response)\n- PRD renders markdown; updates in real-time\n- User can click PRD section to focus conversation on that area\n- User can edit PRD directly; changes reflected in conversation context\n- Conversation stored at .opensprint/conversations/<id>.json\n- POST /projects/:id/chat sends message, returns agent response\n- GET /projects/:id/chat/history returns conversation\n\n## Technical Approach\n\n- Chat API: POST /chat with message, call AgentService.invokePlanningAgent with conversation history + new message\n- Parse agent response for prd_changes; call PRDService.updateSection for each\n- Emit prd.updated via WebSocket\n- Conversation: load or create for context design\n\n## Dependencies\n\nBackend API Foundation, PRD Storage and Versioning, Agent Invocation Service, WebSocket Relay.\n\n## Data Model Changes\n\nConversation schema: id, context (design|plan:planId), messages[].\n\n## API Specification\n\n| Method | Endpoint | Description |\n|--------|----------|-------------|\n| POST | `/projects/:id/chat` | Send message, get response |\n| GET | `/projects/:id/chat/history` | Get conversation |\n\n## UI/UX Requirements\n\n- Split-pane, resizable\n- Chat: message list, input, send button\n- PRD: rendered markdown, section headers clickable\n- Loading state during agent response\n- Scroll to bottom on new message\n\n## Edge Cases and Error Handling\n\n- Agent timeout: show error, allow retry\n- PRD update fails: log, continue conversation\n- Empty PRD: show placeholder or template\n\n## Testing Strategy\n\n- Unit tests for chat handler\n- E2E: send message, see PRD update\n\n## Estimated Complexity\n\nhigh",
+      "complexity": "high",
+      "dependsOnPlans": ["backend-api-foundation", "prd-storage-and-versioning", "agent-invocation-service", "websocket-relay"],
+      "tasks": [
+        {
+          "title": "Implement chat API and conversation storage",
+          "description": "POST /chat, GET /chat/history. Load/create conversation for context design. Store messages. Call AgentService.invokePlanningAgent with history + new message.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement PRD update from agent response",
+          "description": "Parse agent response for prd_changes. Call PRDService.updateSection for each. Emit prd.updated via WebSocket. Add change_log entries.",
+          "priority": 1,
+          "dependsOn": ["Implement chat API and conversation storage"]
+        },
+        {
+          "title": "Implement Design tab split-pane UI",
+          "description": "Design tab: left pane chat (messages, input), right pane PRD (markdown render). Resizable split. Fetch PRD, subscribe to prd.updated.",
+          "priority": 1,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement chat-PRD interaction and direct edit",
+          "description": "Click PRD section to focus conversation. Direct PRD edit: PUT /prd/:section on edit, include in next agent context.",
+          "priority": 2,
+          "dependsOn": ["Implement Design tab split-pane UI", "Implement PRD update from agent response"]
+        }
+      ]
+    },
+    {
+      "title": "Plan Phase - Feature Decomposition",
+      "content": "# Plan Phase - Feature Decomposition\n\n## Overview\n\nImplement the Plan phase. AI suggests feature breakdown from PRD. User accepts/modifies. Each feature becomes a Plan markdown file and beads epic with gating task and child tasks. Dependency graph visualization. Ship it! closes gate and unblocks tasks.\n\n## Acceptance Criteria\n\n- Plan tab shows card-based interface for all Plans\n- AI suggests decomposition: planning agent analyzes PRD, returns JSON with plans array (title, content, tasks, dependencies)\n- User accepts/modifies; for each Plan: create .opensprint/plans/<plan-id>.md, create beads epic, create gating task bd-xxx.0, create child tasks with blocks on gate, add inter-task deps\n- Epic description = Plan file path\n- Dependency graph visualization at top\n- Each card: title, status (Planning/Shipped/Complete), complexity, dependency count\n- Ship it! closes gating task via bd close\n- Re-ship: only when all tasks Done (or none started); disabled if any In Progress/In Review\n- Upstream: on Ship it!, invoke planning agent to review Plan vs PRD, update affected sections\n\n## Technical Approach\n\n- POST /projects/:id/plans with suggested plans from AI or user edits\n- PlanService: createPlan, updatePlan, shipPlan, reshipPlan\n- BeadsService: create epic, gating task, child tasks, dep add\n- GET /plans/dependencies for graph data\n\n## Dependencies\n\nBackend API Foundation, Beads CLI Integration, PRD Storage, Agent Invocation Service.\n\n## Data Model Changes\n\nPlan: plan_id, bead_epic_id, gate_task_id, shipped_at, complexity. Stored as .opensprint/plans/<id>.md + beads.\n\n## API Specification\n\n| Method | Endpoint | Description |\n|--------|----------|-------------|\n| GET | `/projects/:id/plans` | List Plans with status |\n| POST | `/projects/:id/plans` | Create Plan |\n| GET | `/projects/:id/plans/:planId` | Get Plan markdown |\n| PUT | `/projects/:id/plans/:planId` | Update Plan |\n| POST | `/projects/:id/plans/:planId/ship` | Ship it! |\n| POST | `/projects/:id/plans/:planId/reship` | Re-ship |\n| GET | `/projects/:id/plans/dependencies` | Dependency graph |\n\n## UI/UX Requirements\n\n- Card grid for Plans\n- Dependency graph (nodes + edges)\n- Click Plan to view/edit markdown\n- Sidebar for conversational refinement with planning agent\n- Ship it! and Re-ship buttons with guards\n\n## Edge Cases and Error Handling\n\n- Re-ship with in-progress tasks: disable button, show message\n- Plan creation fails mid-way: rollback beads creates\n- Invalid Plan markdown: validate before save\n\n## Testing Strategy\n\n- Integration: create Plan, verify beads structure, ship, verify bd ready returns tasks\n- E2E: full Plan flow\n\n## Estimated Complexity\n\nvery_high",
+      "complexity": "very_high",
+      "dependsOnPlans": ["backend-api-foundation", "beads-cli-integration", "prd-storage-and-versioning", "agent-invocation-service"],
+      "tasks": [
+        {
+          "title": "Implement Plan CRUD and beads epic creation",
+          "description": "PlanService: createPlan(planData). Create .opensprint/plans/<id>.md, bd create epic, bd update epic -d plan path, bd create gating task. Return plan_id, bead_epic_id, gate_task_id.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement task decomposition and beads task creation",
+          "description": "For each task in plan: bd create task, bd dep add task gate (blocks). Add inter-task deps from dependsOn. Store task IDs in plan metadata.",
+          "priority": 1,
+          "dependsOn": ["Implement Plan CRUD and beads epic creation"]
+        },
+        {
+          "title": "Implement Ship it! and PRD upstream propagation",
+          "description": "shipPlan(planId): bd close gate_task_id. Invoke planning agent with Plan + PRD, get section updates. Apply to PRD. Emit prd.updated.",
+          "priority": 2,
+          "dependsOn": ["Implement Plan CRUD and beads epic creation"]
+        },
+        {
+          "title": "Implement Re-ship with guards",
+          "description": "reshipPlan(planId): Check all tasks Done or none started. If in progress: return error. Else: delete obsolete tasks, create delta tasks from updated Plan.",
+          "priority": 3,
+          "dependsOn": ["Implement Ship it! and PRD upstream propagation", "Implement task decomposition and beads task creation"]
+        },
+        {
+          "title": "Implement Plan tab UI and dependency graph",
+          "description": "Plan tab: fetch plans, render cards. Dependency graph at top (nodes=plans, edges=dependsOn). Click card to view/edit markdown. Sidebar for agent chat.",
+          "priority": 2,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement AI-assisted decomposition endpoint",
+          "description": "POST /plans/suggest. Invoke planning agent with PRD, get suggested plans JSON. Return to frontend for user to accept/modify.",
+          "priority": 3,
+          "dependsOn": ["Implement Plan CRUD and beads epic creation"]
+        }
+      ]
+    },
+    {
+      "title": "Build Phase - Kanban and Task Listing",
+      "content": "# Build Phase - Kanban and Task Listing\n\n## Overview\n\nImplement the Build tab kanban board. Tasks displayed across columns: Planning, Backlog, Ready, In Progress, In Review, Done. Tasks grouped by Plan epic. Task cards show title, status, assignee, elapsed time.\n\n## Acceptance Criteria\n\n- Kanban board with columns: Planning, Backlog, Ready, In Progress, In Review, Done\n- Tasks mapped from beads: Planning = open + blocked by gate; Backlog = open + other deps; Ready = from bd ready; In Progress/In Review = in_progress (sub-phase from orchestrator); Done = closed\n- Swimlanes grouped by Plan epic\n- Task card: title, status, assignee, elapsed time\n- Click card opens detail panel: spec, live output (if in progress), or artifacts (if done)\n- Top-level progress bar\n- GET /tasks, GET /tasks/ready, GET /tasks/:id, GET /tasks/:id/sessions\n\n## Technical Approach\n\n- Tasks API reads through beads (bd list, bd show, bd ready)\n- Derive kanban columns from beads status + gate state + assignee\n- In Review: check .opensprint/active/<task-id>/config.json phase field\n- Sessions from .opensprint/sessions/\n\n## Dependencies\n\nBackend API Foundation, Beads CLI Integration.\n\n## Data Model Changes\n\nTask state derived from beads. AgentSession in .opensprint/sessions/.\n\n## API Specification\n\n| Method | Endpoint | Description |\n|--------|----------|-------------|\n| GET | `/projects/:id/tasks` | List all tasks |\n| GET | `/projects/:id/tasks/ready` | Ready tasks |\n| GET | `/projects/:id/tasks/:taskId` | Task details |\n| GET | `/projects/:id/tasks/:taskId/sessions` | Agent sessions |\n\n## UI/UX Requirements\n\n- Kanban columns, drag not required (auto-update)\n- Task cards, detail panel\n- Progress bar\n- Real-time updates via WebSocket (task.updated)\n\n## Edge Cases and Error Handling\n\n- No tasks: empty state\n- Beads unavailable: show error\n\n## Testing Strategy\n\n- Unit tests for task-to-column mapping\n- E2E: view kanban, click task\n\n## Estimated Complexity\n\nmedium",
+      "complexity": "medium",
+      "dependsOnPlans": ["backend-api-foundation", "beads-cli-integration", "websocket-relay"],
+      "tasks": [
+        {
+          "title": "Implement tasks REST API",
+          "description": "GET /tasks (bd list), GET /tasks/ready (bd ready), GET /tasks/:id (bd show), GET /tasks/:id/sessions (read .opensprint/sessions/). Map beads output to API response.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement task-to-kanban-column mapping",
+          "description": "Logic: Planning (open + blocks gate), Backlog (open + other deps), Ready (bd ready), In Progress (in_progress + phase coding), In Review (in_progress + phase review), Done (closed). Expose in API or frontend.",
+          "priority": 1,
+          "dependsOn": ["Implement tasks REST API"]
+        },
+        {
+          "title": "Implement Build tab kanban UI",
+          "description": "Build tab: fetch tasks, render kanban columns. Task cards with title, status, assignee, elapsed. Group by epic. Progress bar. Subscribe to task.updated.",
+          "priority": 2,
+          "dependsOn": ["Implement tasks REST API"]
+        },
+        {
+          "title": "Implement task detail panel",
+          "description": "Detail panel: full spec, live agent output (if in progress), or session artifacts (if done). Fetch sessions for task.",
+          "priority": 3,
+          "dependsOn": ["Implement Build tab kanban UI"]
+        }
+      ]
+    },
+    {
+      "title": "Build Orchestrator - Context Assembly and Agent Lifecycle",
+      "content": "# Build Orchestrator - Context Assembly and Agent Lifecycle\n\n## Overview\n\nImplement the build orchestrator loop. Picks next task from bd ready, creates task directory with prompt and context, spawns coding agent, monitors for completion/timeout. Assembles context from Plan markdown, PRD excerpt, and dependency task outputs.\n\n## Acceptance Criteria\n\n- POST /build/start starts orchestrator loop\n- POST /build/pause pauses it\n- GET /build/status returns running, currentTask, queueDepth\n- Loop: bd ready → assign task → create branch → create task dir → spawn coding agent\n- Task dir: .opensprint/active/<task-id>/ with prompt.md, config.json, context/plan.md, context/prd_excerpt.md, context/deps/\n- Context assembly: Plan from epic description path, PRD relevant sections, deps from git diff of dependency task branches\n- Spawn agent: exec with prompt path, stream stdout/stderr via WebSocket\n- 5-minute inactivity timeout: no output for 5 min → kill process, revert, retry flow\n- On coding agent success: run test command, if pass → move to In Review\n\n## Technical Approach\n\n- OrchestratorService: start(), pause(), status\n- Loop: await bd ready, bd update in_progress assignee, git checkout -b, build task dir, spawn agent, wait for exit\n- ContextBuilder: gather Plan, PRD sections, dependency diffs\n- OutputMonitor: track last output time, timeout after 5 min\n\n## Dependencies\n\nBeads CLI Integration, Agent Invocation Service, WebSocket Relay, PRD Storage.\n\n## Data Model Changes\n\n.opensprint/active/<task-id>/config.json with phase, attempt, etc.\n\n## API Specification\n\n| Method | Endpoint | Description |\n|--------|----------|-------------|\n| POST | `/projects/:id/build/start` | Start orchestrator |\n| POST | `/projects/:id/build/pause` | Pause |\n| GET | `/projects/:id/build/status` | Status |\n\n## UI/UX Requirements\n\nStart/pause controls in Build tab. Status display.\n\n## Edge Cases and Error Handling\n\n- Agent crash: revert branch, add comment to bead, re-queue\n- Timeout: same as crash\n- Test failure after success: treat as failure, retry flow\n- No ready tasks: idle, poll periodically\n\n## Testing Strategy\n\n- Unit tests for ContextBuilder\n- Integration: mock agent, verify task dir structure, timeout behavior\n\n## Estimated Complexity\n\nvery_high",
+      "complexity": "very_high",
+      "dependsOnPlans": ["beads-cli-integration", "agent-invocation-service", "websocket-relay", "prd-storage-and-versioning"],
+      "tasks": [
+        {
+          "title": "Implement context assembly",
+          "description": "ContextBuilder: given taskId, get Plan path from epic, read Plan markdown. Get relevant PRD sections. For each dependency task, get git diff of that branch vs main, write to context/deps/<dep-id>.diff.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement task directory and prompt generation",
+          "description": "Create .opensprint/active/<task-id>/. Write prompt.md (from §12.3), config.json, context/plan.md, context/prd_excerpt.md, context/deps/*. Use ContextBuilder.",
+          "priority": 1,
+          "dependsOn": ["Implement context assembly"]
+        },
+        {
+          "title": "Implement orchestrator loop - task pickup and branch creation",
+          "description": "Loop: bd ready, bd update in_progress assignee, git checkout -b opensprint/<task-id>, create task dir. Emit task.updated, build.status.",
+          "priority": 1,
+          "dependsOn": ["Implement task directory and prompt generation"]
+        },
+        {
+          "title": "Implement coding agent spawn and output streaming",
+          "description": "Spawn coding agent CLI with prompt path. Stream stdout/stderr to WebSocket (agent.output). On exit, check result.json. Emit agent.completed.",
+          "priority": 2,
+          "dependsOn": ["Implement orchestrator loop - task pickup and branch creation"]
+        },
+        {
+          "title": "Implement 5-minute inactivity timeout",
+          "description": "Monitor last output time. If 5 min with no stdout/stderr, kill process. Revert git changes. Add failure comment to bead. Re-queue task. Emit task.updated.",
+          "priority": 3,
+          "dependsOn": ["Implement coding agent spawn and output streaming"]
+        },
+        {
+          "title": "Implement build start/pause/status API",
+          "description": "POST /build/start, POST /build/pause, GET /build/status. Orchestrator runs in background. Status includes running, currentTask, queueDepth.",
+          "priority": 2,
+          "dependsOn": ["Implement orchestrator loop - task pickup and branch creation"]
+        }
+      ]
+    },
+    {
+      "title": "Two-Agent Build Cycle and Review",
+      "content": "# Two-Agent Build Cycle and Review\n\n## Overview\n\nImplement the two-agent cycle: coding agent implements, review agent validates. On approval, review agent merges to main and task is Done. On rejection, feedback added to bead, coding agent retries. Retry limits and HIL escalation.\n\n## Acceptance Criteria\n\n- Coding agent completes → orchestrator runs test command → if pass, move to In Review\n- In Review: update config phase=review, generate review prompt, spawn review agent\n- Review agent uses git diff main...<branch>, verifies tests, approves or rejects\n- Approved: review agent merges branch to main, writes result.json approved → orchestrator marks Done, deletes branch, archives session\n- Rejected: add feedback as bead comment, move back to In Progress, spawn new coding agent with feedback in prompt\n- Retry limit (default 2): coding failures + review rejections count; on limit, escalate per HIL config\n- Session archival to .opensprint/sessions/<task-id>-<attempt>/\n\n## Technical Approach\n\n- After coding success: run test command, if pass set phase=review, write review prompt, spawn review agent\n- Review agent prompt includes: diff instructions, merge on approve\n- On approve: verify merge, bd close task, git branch -d, move active dir to sessions\n- On reject: bd update add comment, phase=coding, increment attempt, spawn coding agent with review_feedback in prompt\n\n## Dependencies\n\nBuild Orchestrator - Context Assembly and Agent Lifecycle.\n\n## Data Model Changes\n\nAgentSession archival. config.json phase, attempt, previous_failure, review_feedback.\n\n## API Specification\n\nUses existing build APIs. task.updated, agent.completed events.\n\n## UI/UX Requirements\n\nTask moves through In Progress → In Review → Done (or back to In Progress). Detail panel shows phase.\n\n## Edge Cases and Error Handling\n\n- Review agent crash: treat as reject, retry\n- Review agent doesn't merge on approve: orchestrator verifies, fail if not merged\n- Retry limit: emit hil.request for Test Failures category if configured\n\n## Testing Strategy\n\n- Integration: mock coding + review agents, verify full cycle\n- Test reject → retry flow\n- Test retry limit escalation\n\n## Estimated Complexity\n\nhigh",
+      "complexity": "high",
+      "dependsOnPlans": ["build-orchestrator-context-assembly-and-agent-lifecycle"],
+      "tasks": [
+        {
+          "title": "Implement coding-to-review transition",
+          "description": "After coding agent success: run test command. If pass, update config phase=review, write review prompt to prompt.md, spawn review agent. Emit task.updated.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement review agent prompt and invocation",
+          "description": "Review prompt per §12.3. Spawn review agent. Review agent reviews git diff, runs tests, approves (merge) or rejects (result.json).",
+          "priority": 1,
+          "dependsOn": ["Implement coding-to-review transition"]
+        },
+        {
+          "title": "Implement approval flow - merge and Done",
+          "description": "On result.json approved: verify branch merged to main. bd close task. Delete task branch. Move .opensprint/active/<task-id> to .opensprint/sessions/<task-id>-<attempt>. Emit task.updated.",
+          "priority": 2,
+          "dependsOn": ["Implement review agent prompt and invocation"]
+        },
+        {
+          "title": "Implement rejection flow - feedback and retry",
+          "description": "On result.json rejected: add feedback as bd comment. bd update status open (back to Ready). Increment attempt. Spawn coding agent with review_feedback in prompt. If retry limit, escalate per HIL.",
+          "priority": 2,
+          "dependsOn": ["Implement review agent prompt and invocation"]
+        },
+        {
+          "title": "Implement coding agent failure and retry flow",
+          "description": "On coding agent failed/timeout: revert branch, add comment to bead, bd update open. Increment attempt. Re-queue. If retry limit, escalate per HIL.",
+          "priority": 3,
+          "dependsOn": ["Implement rejection flow - feedback and retry"]
+        }
+      ]
+    },
+    {
+      "title": "Validate Phase - Feedback Submission and Mapping",
+      "content": "# Validate Phase - Feedback Submission and Mapping\n\n## Overview\n\nImplement the Validate phase. Users submit feedback in natural language. Planning agent categorizes (bug/feature/ux/scope) and maps to Plan epic, creating new beads tasks. Feedback history feed. Scope changes trigger PRD review (HIL if configured).\n\n## Acceptance Criteria\n\n- Validate tab: text input for feedback, submit button\n- POST /feedback with text → planning agent categorizes and maps\n- Creates FeedbackItem: id, text, category, mapped_plan_id, created_task_ids, status\n- For bug/feature/ux: create bead task under mapped epic, discovered-from link to source\n- For scope: invoke agent to review PRD, propose updates; if HIL approval required, emit hil.request\n- Feedback feed: chronological list, each showing text, category, mapped plan, created tasks, status\n- GET /feedback, GET /feedback/:id\n- New tasks enter build queue automatically\n\n## Technical Approach\n\n- POST /feedback: call AgentService with feedback + PRD + plans context\n- Agent returns: category, mapped_plan_id, task_titles[], scope_prd_updates? (if scope)\n- Create FeedbackItem JSON, create beads tasks, dep add discovered-from\n- If scope + HIL approval: emit hil.request, wait for hil.respond\n\n## Dependencies\n\nBackend API Foundation, Beads CLI Integration, Agent Invocation Service, PRD Storage, WebSocket Relay.\n\n## Data Model Changes\n\nFeedbackItem at .opensprint/feedback/<id>.json\n\n## API Specification\n\n| Method | Endpoint | Description |\n|--------|----------|-------------|\n| GET | `/projects/:id/feedback` | List feedback |\n| POST | `/projects/:id/feedback` | Submit feedback |\n| GET | `/projects/:id/feedback/:id` | Feedback details |\n\n## UI/UX Requirements\n\n- Simple input area\n- Feedback feed with cards\n- Each card: text, category badge, mapped plan, task links, status\n- Real-time: feedback.mapped event\n\n## Edge Cases and Error Handling\n\n- Agent maps to wrong plan: user can see and correct (submit clarifying feedback)\n- Scope change without HIL: apply PRD updates directly\n- Agent fails to categorize: default to bug, map to first plan\n\n## Testing Strategy\n\n- Integration: submit feedback, verify task creation\n- Test scope change with HIL\n\n## Estimated Complexity\n\nhigh",
+      "complexity": "high",
+      "dependsOnPlans": ["backend-api-foundation", "beads-cli-integration", "agent-invocation-service", "prd-storage-and-versioning", "websocket-relay"],
+      "tasks": [
+        {
+          "title": "Implement feedback storage and REST API",
+          "description": "FeedbackItem schema. Store at .opensprint/feedback/<id>.json. GET /feedback, POST /feedback, GET /feedback/:id. POST creates placeholder, returns id.",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement feedback categorization and mapping",
+          "description": "On POST /feedback: invoke planning agent with feedback text, PRD, plans. Agent returns category, mapped_plan_id, task_titles. Update FeedbackItem. Emit feedback.mapped.",
+          "priority": 1,
+          "dependsOn": ["Implement feedback storage and REST API"]
+        },
+        {
+          "title": "Implement bead task creation from feedback",
+          "description": "For each task_title from agent: bd create bug/feature/task under mapped epic. bd dep add discovered-from to feedback source if applicable. Update FeedbackItem.created_task_ids.",
+          "priority": 2,
+          "dependsOn": ["Implement feedback categorization and mapping"]
+        },
+        {
+          "title": "Implement scope change and PRD update with HIL",
+          "description": "If category=scope: agent proposes PRD updates. If HIL requires approval: emit hil.request, wait for hil.respond. On approve, apply PRD updates. On reject, log.",
+          "priority": 3,
+          "dependsOn": ["Implement feedback categorization and mapping"]
+        },
+        {
+          "title": "Implement Validate tab UI",
+          "description": "Validate tab: feedback input, submit button. Feedback feed: fetch GET /feedback, render cards. Subscribe to feedback.mapped for real-time updates.",
+          "priority": 2,
+          "dependsOn": ["Implement feedback storage and REST API"]
+        }
+      ]
+    },
+    {
+      "title": "Theme Support",
+      "content": "# Theme Support\n\n## Overview\n\nAdd light, dark, and system theme support. Preference persists across sessions. No flash of wrong theme on load.\n\n## Acceptance Criteria\n\n- Three themes: light, dark, system (follows OS)\n- Theme selector in UI (e.g., settings or navbar)\n- Preference persisted (localStorage or settings)\n- No flash: apply theme before first paint (inline script or CSS variables)\n- All components respect theme\n\n## Technical Approach\n\n- CSS variables for colors\n- Theme provider or root class (data-theme=light|dark)\n- Persist in localStorage, read before React mount\n- System: matchMedia(prefers-color-scheme: dark)\n\n## Dependencies\n\nHome Screen and Project Switcher (frontend exists).\n\n## Data Model Changes\n\nUser preference in localStorage: opensprint-theme\n\n## API Specification\n\nNone.\n\n## UI/UX Requirements\n\n- Theme toggle/selector\n- Smooth transition between themes\n- Per NFR: no flash on load\n\n## Edge Cases and Error Handling\n\n- Invalid stored theme: fallback to system\n- System theme change: update if theme=system\n\n## Testing Strategy\n\n- Visual regression for light/dark\n- Test no flash (e.g., delay JS, verify theme applied)\n\n## Estimated Complexity\n\nlow",
+      "complexity": "low",
+      "dependsOnPlans": ["home-screen-and-project-switcher"],
+      "tasks": [
+        {
+          "title": "Implement theme CSS variables and provider",
+          "description": "Define CSS variables for light/dark. ThemeProvider or root data-theme. Apply based on preference (light|dark|system).",
+          "priority": 0,
+          "dependsOn": []
+        },
+        {
+          "title": "Implement theme persistence and no-flash load",
+          "description": "Save theme to localStorage. On load, read before first paint (inline script in index.html or early in app). Apply theme class/vars before React render.",
+          "priority": 1,
+          "dependsOn": ["Implement theme CSS variables and provider"]
+        },
+        {
+          "title": "Implement theme selector UI",
+          "description": "Theme toggle or dropdown in navbar/settings. Options: Light, Dark, System. Update preference and apply.",
+          "priority": 2,
+          "dependsOn": ["Implement theme persistence and no-flash load"]
+        }
+      ]
+    }
+  ]
+}

@@ -41,6 +41,8 @@ export interface BuildStatusEvent {
   type: 'build.status';
   running: boolean;
   currentTask: string | null;
+  /** Coding vs review sub-phase for current task (PRD §7.3.2) */
+  currentPhase?: AgentPhase | null;
   queueDepth: number;
   /** True when orchestrator is paused waiting for HIL approval (PRD §6.5) */
   awaitingApproval?: boolean;

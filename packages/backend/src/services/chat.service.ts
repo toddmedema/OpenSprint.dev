@@ -12,7 +12,8 @@ import type {
 import { OPENSPRINT_PATHS } from '@opensprint/shared';
 import { ProjectService } from './project.service.js';
 import { PrdService } from './prd.service.js';
-import { AgentClient } from './agent-client.js';
+import { agentService } from './agent.service.js';
+import { AppError } from '../middleware/error-handler.js';
 import { hilService } from './hil-service.js';
 import { broadcastToProject } from '../websocket/index.js';
 
@@ -60,7 +61,6 @@ Only include a PLAN_UPDATE block when you are making substantive changes to the 
 export class ChatService {
   private projectService = new ProjectService();
   private prdService = new PrdService();
-  private agentClient = new AgentClient();
 
   /** Get conversations directory for a project */
   private async getConversationsDir(projectId: string): Promise<string> {
@@ -192,6 +192,9 @@ export class ChatService {
 
   /** Send a message to the planning agent */
   async sendMessage(projectId: string, body: ChatRequest): Promise<ChatResponse> {
+    if (body.message == null || String(body.message).trim() === '') {
+      throw new AppError(400, 'INVALID_INPUT', 'Chat message is required');
+    }
     const context = body.context ?? 'design';
     const isPlanContext = context.startsWith('plan:');
     const planId = isPlanContext ? context.slice(5) : null;
@@ -240,25 +243,24 @@ export class ChatService {
       systemPrompt = DESIGN_SYSTEM_PROMPT + '\n\n' + prdContext;
     }
 
-    // Assemble conversation history for agent
-    const history = conversation.messages.slice(0, -1).map((m) => ({
+    // Assemble messages for AgentService.invokePlanningAgent
+    const messages = conversation.messages.slice(0, -1).map((m) => ({
       role: m.role,
       content: m.content,
     }));
+    messages.push({ role: 'user', content: agentPrompt });
 
     let responseContent: string;
 
     try {
-      console.log('[chat] Invoking agent', { type: agentConfig.type, model: agentConfig.model ?? 'default', context, historyLen: history.length, promptLen: agentPrompt.length });
-      const response = await this.agentClient.invoke({
+      console.log('[chat] Invoking planning agent', { type: agentConfig.type, model: agentConfig.model ?? 'default', context, messagesLen: messages.length });
+      const response = await agentService.invokePlanningAgent({
         config: agentConfig,
-        prompt: agentPrompt,
+        messages,
         systemPrompt,
-        conversationHistory: history,
-        cwd: (await this.projectService.getProject(projectId)).repoPath,
       });
 
-      console.log('[chat] Agent returned', { contentLen: response.content?.length ?? 0 });
+      console.log('[chat] Planning agent returned', { contentLen: response.content?.length ?? 0 });
       responseContent = response.content;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -358,7 +360,6 @@ export class ChatService {
     const settings = await this.projectService.getSettings(projectId);
     const agentConfig = settings.planningAgent;
     const prdContext = await this.buildPrdContext(projectId);
-    const repoPath = (await this.projectService.getProject(projectId)).repoPath;
 
     const systemPrompt = `You are a PRD synchronization assistant for OpenSprint. A Plan has just been shipped.
 
@@ -379,11 +380,10 @@ Only output PRD_UPDATE blocks for sections that need changes. If no updates are 
 
     const fullContext = `${systemPrompt}\n\n## Current PRD\n\n${prdContext}`;
 
-    const response = await this.agentClient.invoke({
+    const response = await agentService.invokePlanningAgent({
       config: agentConfig,
-      prompt,
+      messages: [{ role: 'user', content: prompt }],
       systemPrompt: fullContext,
-      cwd: repoPath,
     });
 
     const prdUpdates = this.parsePrdUpdates(response.content);
@@ -411,7 +411,6 @@ Only output PRD_UPDATE blocks for sections that need changes. If no updates are 
     const settings = await this.projectService.getSettings(projectId);
     const agentConfig = settings.planningAgent;
     const prdContext = await this.buildPrdContext(projectId);
-    const repoPath = (await this.projectService.getProject(projectId)).repoPath;
 
     const systemPrompt = `You are a PRD synchronization assistant for OpenSprint. A user has submitted validation feedback that was categorized as a scope change and approved for PRD updates.
 
@@ -432,11 +431,10 @@ Only output PRD_UPDATE blocks for sections that need changes. If no updates are 
 
     const fullContext = `${systemPrompt}\n\n## Current PRD\n\n${prdContext}`;
 
-    const response = await this.agentClient.invoke({
+    const response = await agentService.invokePlanningAgent({
       config: agentConfig,
-      prompt,
+      messages: [{ role: 'user', content: prompt }],
       systemPrompt: fullContext,
-      cwd: repoPath,
     });
 
     const prdUpdates = this.parsePrdUpdates(response.content);

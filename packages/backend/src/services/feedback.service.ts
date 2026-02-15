@@ -3,6 +3,7 @@ import path from 'path';
 import { v4 as uuid } from 'uuid';
 import type { FeedbackItem, FeedbackSubmitRequest, FeedbackCategory } from '@opensprint/shared';
 import { OPENSPRINT_PATHS } from '@opensprint/shared';
+import { AppError } from '../middleware/error-handler.js';
 import { ProjectService } from './project.service.js';
 import { AgentClient } from './agent-client.js';
 import { BeadsService } from './beads.service.js';
@@ -87,6 +88,10 @@ export class FeedbackService {
     projectId: string,
     body: FeedbackSubmitRequest,
   ): Promise<FeedbackItem> {
+    const text = typeof body?.text === 'string' ? body.text.trim() : '';
+    if (!text) {
+      throw new AppError(400, 'INVALID_INPUT', 'Feedback text is required');
+    }
     const feedbackDir = await this.getFeedbackDir(projectId);
     await fs.mkdir(feedbackDir, { recursive: true });
     const id = uuid();
@@ -94,7 +99,7 @@ export class FeedbackService {
     // Create initial feedback item
     const item: FeedbackItem = {
       id,
-      text: body.text,
+      text,
       category: 'bug', // Default, will be updated by AI
       mappedPlanId: null,
       createdTaskIds: [],
@@ -195,8 +200,10 @@ export class FeedbackService {
           },
         );
 
-        // Skip addDependency when parentId was used: beads creates parent-child automatically,
-        // and adding discovered-from between the same pair would be rejected as redundant.
+        // Note: When parentId is set, beads creates a parent-child dependency automatically.
+        // Adding a separate discovered-from dep between child and parent would cause a deadlock
+        // (beads rejects: "Children inherit dependency on parent completion via hierarchy").
+        // The parent-child relationship already captures that this task was discovered from the plan.
 
         item.createdTaskIds = [taskResult.id];
         item.status = 'mapped';
@@ -231,7 +238,15 @@ export class FeedbackService {
   /** Get a single feedback item */
   async getFeedback(projectId: string, feedbackId: string): Promise<FeedbackItem> {
     const feedbackDir = await this.getFeedbackDir(projectId);
-    const data = await fs.readFile(path.join(feedbackDir, `${feedbackId}.json`), 'utf-8');
-    return JSON.parse(data) as FeedbackItem;
+    try {
+      const data = await fs.readFile(path.join(feedbackDir, `${feedbackId}.json`), 'utf-8');
+      return JSON.parse(data) as FeedbackItem;
+    } catch (err) {
+      const nodeErr = err as NodeJS.ErrnoException;
+      if (nodeErr?.code === 'ENOENT') {
+        throw new AppError(404, 'FEEDBACK_NOT_FOUND', `Feedback '${feedbackId}' not found`);
+      }
+      throw err;
+    }
   }
 }

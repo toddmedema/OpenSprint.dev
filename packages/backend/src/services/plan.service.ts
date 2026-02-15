@@ -75,15 +75,17 @@ export class PlanService {
     await fs.rename(tmpPath, filePath);
   }
 
-  /** Count tasks under an epic from beads */
+  /** Count tasks under an epic from beads (implementation tasks only, excludes gating .0) */
   private async countTasks(repoPath: string, epicId: string): Promise<{ total: number; completed: number }> {
     try {
-      const allIssues = await this.beads.list(repoPath);
-      // Filter for child tasks of this epic (ID pattern: epicId.N)
-      const children = allIssues.filter((issue: BeadsIssue) =>
-        issue.id.startsWith(epicId + '.') && issue.type !== 'epic',
+      const allIssues = await this.beads.listAll(repoPath);
+      const children = allIssues.filter(
+        (issue: BeadsIssue) =>
+          issue.id.startsWith(epicId + '.') &&
+          !issue.id.endsWith('.0') &&
+          (issue.issue_type ?? issue.type) !== 'epic',
       );
-      const completed = children.filter((issue: BeadsIssue) => issue.status === 'closed').length;
+      const completed = children.filter((issue: BeadsIssue) => (issue.status as string) === 'closed').length;
       return { total: children.length, completed };
     } catch {
       return { total: 0, completed: 0 };
@@ -275,11 +277,12 @@ export class PlanService {
     await fs.writeFile(path.join(plansDir, `${planId}.md`), body.content);
 
     // Create beads epic
-    const epicResult = await this.beads.create(repoPath, body.title, {
-      type: 'epic',
-      description: `.opensprint/plans/${planId}.md`,
-    });
+    const epicResult = await this.beads.create(repoPath, body.title, { type: 'epic' });
     const epicId = epicResult.id;
+
+    // Set epic description to Plan file path (PRD §7.2.2)
+    const planPath = `${OPENSPRINT_PATHS.plans}/${planId}.md`;
+    await this.beads.update(repoPath, epicId, { description: planPath });
 
     // Create gating task
     const gateResult = await this.beads.create(repoPath, 'Plan approval gate', {

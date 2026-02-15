@@ -121,6 +121,11 @@ export const api = {
       request<unknown[]>(`/projects/${projectId}/tasks/${taskId}/sessions`),
     session: (projectId: string, taskId: string, attempt: number) =>
       request<unknown>(`/projects/${projectId}/tasks/${taskId}/sessions/${attempt}`),
+    markComplete: (projectId: string, taskId: string) =>
+      request<{ taskClosed: boolean; epicClosed?: boolean }>(
+        `/projects/${projectId}/tasks/${taskId}/complete`,
+        { method: "POST" },
+      ),
   },
 
   // ─── Build ───

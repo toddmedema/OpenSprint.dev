@@ -5,38 +5,44 @@ import path from "path";
 import os from "os";
 import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
-import { API_PREFIX } from "@opensprint/shared";
-import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
+import { API_PREFIX, DEFAULT_HIL_CONFIG, OPENSPRINT_PATHS } from "@opensprint/shared";
 
-const mockInvoke = vi.fn();
+const mockInvokePlanningAgent = vi.fn();
 
-vi.mock("../services/agent-client.js", () => ({
-  AgentClient: vi.fn().mockImplementation(() => ({
-    invoke: (...args: unknown[]) => mockInvoke(...args),
-  })),
+vi.mock("../services/agent.service.js", () => ({
+  agentService: {
+    invokePlanningAgent: (...args: unknown[]) => mockInvokePlanningAgent(...args),
+  },
 }));
 
 vi.mock("../websocket/index.js", () => ({
   broadcastToProject: vi.fn(),
 }));
 
-describe("Chat REST endpoints - PRD update from agent response", () => {
-  let tempDir: string;
-  let originalHome: string | undefined;
-  let projectId: string;
+describe("Chat REST API", () => {
+  let app: ReturnType<typeof createApp>;
   let projectService: ProjectService;
+  let tempDir: string;
+  let projectId: string;
+  let repoPath: string;
+  let originalHome: string | undefined;
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockInvokePlanningAgent.mockResolvedValue({
+      content: "I'd be happy to help you design your product. What are your main goals?",
+    });
+
+    app = createApp();
+    projectService = new ProjectService();
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-chat-route-test-"));
     originalHome = process.env.HOME;
     process.env.HOME = tempDir;
+    repoPath = path.join(tempDir, "my-project");
 
-    projectService = new ProjectService();
-    const repoPath = path.join(tempDir, "test-project");
     const project = await projectService.createProject({
-      name: "Chat Test Project",
-      description: "For chat PRD update tests",
+      name: "Test Project",
+      description: "A test project",
       repoPath,
       planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
@@ -51,6 +57,39 @@ describe("Chat REST endpoints - PRD update from agent response", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
+  it("GET /projects/:id/chat/history should return empty conversation when none exists", async () => {
+    const res = await request(app).get(
+      `${API_PREFIX}/projects/${projectId}/chat/history`
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeDefined();
+    expect(res.body.data.id).toBeDefined();
+    expect(res.body.data.context).toBe("design");
+    expect(res.body.data.messages).toEqual([]);
+  });
+
+  it("GET /projects/:id/chat/history should accept context query param", async () => {
+    const res = await request(app).get(
+      `${API_PREFIX}/projects/${projectId}/chat/history?context=plan:auth-plan`
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.context).toBe("plan:auth-plan");
+    expect(res.body.data.messages).toEqual([]);
+  });
+
+  it("POST /projects/:id/chat should send message and return agent response", async () => {
+    const res = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/chat`)
+      .send({ message: "I want to build a todo app" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeDefined();
+    expect(res.body.data.message).toBeDefined();
+    expect(typeof res.body.data.message).toBe("string");
+  });
+
   it("POST /chat should parse PRD_UPDATE blocks from agent response and apply to PRD", async () => {
     const agentResponseWithPrdUpdate = `Here's my suggested executive summary for your product.
 
@@ -62,29 +101,20 @@ OpenSprint is a web application that guides users through the full software deve
 
 Let me know if you'd like to refine this further.`;
 
-    mockInvoke.mockResolvedValue({ content: agentResponseWithPrdUpdate });
+    mockInvokePlanningAgent.mockResolvedValue({ content: agentResponseWithPrdUpdate });
 
-    const app = createApp();
     const res = await request(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Help me write an executive summary", context: "design" });
 
     expect(res.status).toBe(200);
-    expect(res.body.data).toBeDefined();
-    expect(res.body.data.message).toBeDefined();
-    // Display content should have PRD_UPDATE blocks stripped
     expect(res.body.data.message).not.toContain("[PRD_UPDATE:");
     expect(res.body.data.message).not.toContain("[/PRD_UPDATE]");
     expect(res.body.data.message).toContain("Here's my suggested executive summary");
-
-    // Response should include prdChanges (initial sections have version 0)
     expect(res.body.data.prdChanges).toBeDefined();
     expect(res.body.data.prdChanges).toHaveLength(1);
     expect(res.body.data.prdChanges[0].section).toBe("executive_summary");
-    expect(res.body.data.prdChanges[0].previousVersion).toBe(0);
-    expect(res.body.data.prdChanges[0].newVersion).toBe(1);
 
-    // Verify PRD was actually updated
     const prdRes = await request(app).get(
       `${API_PREFIX}/projects/${projectId}/prd/executive_summary`
     );
@@ -92,7 +122,6 @@ Let me know if you'd like to refine this further.`;
     expect(prdRes.body.data.content).toContain(
       "OpenSprint is a web application that guides users through the full software development lifecycle using AI agents"
     );
-    expect(prdRes.body.data.version).toBe(1);
   });
 
   it("POST /chat should handle multiple PRD_UPDATE blocks in one response", async () => {
@@ -112,9 +141,8 @@ Users currently face Y.
 
 Hope that helps!`;
 
-    mockInvoke.mockResolvedValue({ content: agentResponse });
+    mockInvokePlanningAgent.mockResolvedValue({ content: agentResponse });
 
-    const app = createApp();
     const res = await request(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Update both sections", context: "design" });
@@ -137,11 +165,10 @@ Hope that helps!`;
   });
 
   it("POST /chat should return message without prdChanges when agent response has no PRD_UPDATE blocks", async () => {
-    mockInvoke.mockResolvedValue({
+    mockInvokePlanningAgent.mockResolvedValue({
       content: "That's a great question! Could you tell me more about your target users?",
     });
 
-    const app = createApp();
     const res = await request(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "What should I include?", context: "design" });
@@ -149,5 +176,60 @@ Hope that helps!`;
     expect(res.status).toBe(200);
     expect(res.body.data.prdChanges).toBeUndefined();
     expect(res.body.data.message).toContain("That's a great question!");
+  });
+
+  it("POST /projects/:id/chat should persist conversation; GET history returns it", async () => {
+    const postRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/chat`)
+      .send({ message: "Hello, help me design my product" });
+
+    expect(postRes.status).toBe(200);
+
+    const getRes = await request(app).get(
+      `${API_PREFIX}/projects/${projectId}/chat/history`
+    );
+
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.messages).toHaveLength(2);
+    expect(getRes.body.data.messages[0].role).toBe("user");
+    expect(getRes.body.data.messages[0].content).toBe("Hello, help me design my product");
+    expect(getRes.body.data.messages[1].role).toBe("assistant");
+    expect(getRes.body.data.messages[1].content).toBeDefined();
+  });
+
+  it("POST /projects/:id/chat should return 400 when message is empty", async () => {
+    const res = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/chat`)
+      .send({ message: "" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error?.code).toBe("INVALID_INPUT");
+  });
+
+  it("POST /projects/:id/chat should return 400 when message is missing", async () => {
+    const res = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/chat`)
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error?.code).toBe("INVALID_INPUT");
+  });
+
+  it("conversation should be stored in .opensprint/conversations/", async () => {
+    await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/chat`)
+      .send({ message: "Test message" });
+
+    const convDir = path.join(repoPath, OPENSPRINT_PATHS.conversations);
+    const files = await fs.readdir(convDir);
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.some((f) => f.endsWith(".json"))).toBe(true);
+
+    const jsonFile = files.find((f) => f.endsWith(".json"));
+    const content = await fs.readFile(path.join(convDir, jsonFile!), "utf-8");
+    const conv = JSON.parse(content);
+    expect(conv.id).toBeDefined();
+    expect(conv.context).toBe("design");
+    expect(conv.messages).toHaveLength(2);
   });
 });

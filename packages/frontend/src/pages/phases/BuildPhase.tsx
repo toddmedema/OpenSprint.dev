@@ -7,6 +7,7 @@ import { KANBAN_COLUMNS, PRIORITY_LABELS } from "@opensprint/shared";
 
 interface BuildPhaseProps {
   projectId: string;
+  initialSelectedTaskId?: string | null;
 }
 
 interface TaskCard {
@@ -121,7 +122,7 @@ function getEpicTitleFromPlan(plan: Plan): string {
   return plan.metadata.planId.replace(/-/g, " ");
 }
 
-export function BuildPhase({ projectId }: BuildPhaseProps) {
+export function BuildPhase({ projectId, initialSelectedTaskId }: BuildPhaseProps) {
   const [tasks, setTasks] = useState<TaskCard[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [orchestratorRunning, setOrchestratorRunning] = useState(false);
@@ -138,6 +139,7 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
   const [taskDetailLoading, setTaskDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [awaitingApproval, setAwaitingApproval] = useState(false);
+  const [markCompleteLoading, setMarkCompleteLoading] = useState(false);
 
   const handleWsEvent = useCallback(
     (event: ServerEvent) => {
@@ -187,6 +189,13 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
     },
     [projectId, selectedTask],
   );
+
+  // When navigating from Validate with a task ID, select that task
+  useEffect(() => {
+    if (initialSelectedTaskId) {
+      setSelectedTask(initialSelectedTaskId);
+    }
+  }, [initialSelectedTaskId]);
 
   // Clear completion state, archived sessions, and task detail when switching tasks
   useEffect(() => {
@@ -278,6 +287,26 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
     }
   };
 
+  const handleMarkComplete = async () => {
+    if (!selectedTask || isDoneTask) return;
+    setMarkCompleteLoading(true);
+    setError(null);
+    try {
+      await api.tasks.markComplete(projectId, selectedTask);
+      const [tasksData, plansData] = await Promise.all([
+        api.tasks.list(projectId),
+        api.plans.list(projectId),
+      ]);
+      setTasks((tasksData as TaskCard[]) ?? []);
+      setPlans((plansData as Plan[]) ?? []);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to mark complete";
+      setError(msg);
+    } finally {
+      setMarkCompleteLoading(false);
+    }
+  };
+
   /** Implementation tasks only (exclude epics and gating tasks) */
   const implTasks = useMemo(
     () =>
@@ -290,7 +319,7 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
     [tasks],
   );
 
-  /** Swimlanes grouped by Plan epic (PRD §7.3.4) */
+  /** Swimlanes grouped by Plan epic (PRD §7.3.4). Hide epics where all tasks are done. */
   const swimlanes = useMemo(() => {
     const epicIdToTitle = new Map<string, string>();
     plans.forEach((p) => {
@@ -304,13 +333,16 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
       byEpic.get(key)!.push(t);
     }
 
+    const allDone = (tasks: TaskCard[]) =>
+      tasks.length > 0 && tasks.every((t) => t.kanbanColumn === "done");
+
     const result: { epicId: string; epicTitle: string; tasks: TaskCard[] }[] = [];
     // Epics with plans first (in plan order)
     for (const plan of plans) {
       const epicId = plan.metadata.beadEpicId;
       if (!epicId) continue;
       const laneTasks = byEpic.get(epicId) ?? [];
-      if (laneTasks.length > 0) {
+      if (laneTasks.length > 0 && !allDone(laneTasks)) {
         result.push({
           epicId,
           epicTitle: epicIdToTitle.get(epicId) ?? epicId,
@@ -321,7 +353,7 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
     // Epics without plans (e.g. feedback-created tasks under beads epic)
     const seenEpics = new Set(result.map((r) => r.epicId));
     for (const [epicId, laneTasks] of byEpic) {
-      if (epicId && !seenEpics.has(epicId) && laneTasks.length > 0) {
+      if (epicId && !seenEpics.has(epicId) && laneTasks.length > 0 && !allDone(laneTasks)) {
         result.push({
           epicId,
           epicTitle: epicId,
@@ -332,7 +364,7 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
     }
     // Unassigned tasks (no epic)
     const unassigned = byEpic.get(null) ?? [];
-    if (unassigned.length > 0) {
+    if (unassigned.length > 0 && !allDone(unassigned)) {
       result.push({ epicId: "", epicTitle: "Other", tasks: unassigned });
     }
     return result;
@@ -465,9 +497,21 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
         <div className="h-80 border-t border-gray-200 bg-gray-900 text-gray-100 overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700 shrink-0">
             <span className="text-xs font-mono text-gray-400">{selectedTask}</span>
-            <button onClick={() => setSelectedTask(null)} className="text-gray-500 hover:text-gray-300 text-xs">
-              Close
-            </button>
+            <div className="flex items-center gap-2">
+              {!isDoneTask && (
+                <button
+                  type="button"
+                  onClick={handleMarkComplete}
+                  disabled={markCompleteLoading}
+                  className="text-xs px-3 py-1.5 rounded bg-green-600 hover:bg-green-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {markCompleteLoading ? "Marking…" : "Mark as complete"}
+                </button>
+              )}
+              <button onClick={() => setSelectedTask(null)} className="text-gray-500 hover:text-gray-300 text-xs">
+                Close
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto flex flex-col min-h-0">
             {/* Full task specification (PRD §7.3.4) */}
