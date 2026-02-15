@@ -1,9 +1,11 @@
 import { Router, Request } from 'express';
 import { PrdService } from '../services/prd.service.js';
+import { ChatService } from '../services/chat.service.js';
 import { broadcastToProject } from '../websocket/index.js';
 import type { ApiResponse, Prd, PrdSection, PrdChangeLogEntry } from '@opensprint/shared';
 
 const prdService = new PrdService();
+const chatService = new ChatService();
 
 export const prdRouter = Router({ mergeParams: true });
 
@@ -46,7 +48,7 @@ prdRouter.get('/:section', async (req: Request<SectionParams>, res, next) => {
   }
 });
 
-// PUT /projects/:projectId/prd/:section — Update a specific PRD section
+// PUT /projects/:projectId/prd/:section — Update a specific PRD section (direct edit)
 prdRouter.put('/:section', async (req: Request<SectionParams>, res, next) => {
   try {
     const { content, source } = req.body as { content: string; source?: string };
@@ -55,6 +57,13 @@ prdRouter.put('/:section', async (req: Request<SectionParams>, res, next) => {
       req.params.section,
       content,
       (source as 'design' | 'plan' | 'build' | 'validate') || 'design',
+    );
+
+    // Sync direct edit to conversation context (PRD §7.1.5)
+    await chatService.addDirectEditMessage(
+      req.params.projectId,
+      req.params.section,
+      content,
     );
 
     // Broadcast PRD update via WebSocket

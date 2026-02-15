@@ -56,18 +56,6 @@ const PRD_SECTION_ORDER = [
   "open_questions",
 ] as const;
 
-function combinePrdSections(prdContent: Record<string, string>): string {
-  const ordered = PRD_SECTION_ORDER.filter((k) => prdContent[k]).map(
-    (k) => prdContent[k]
-  );
-  const orderSet = new Set<string>(PRD_SECTION_ORDER);
-  const rest = Object.keys(prdContent)
-    .filter((k) => !orderSet.has(k))
-    .map((k) => prdContent[k]);
-  const all = [...ordered, ...rest].join("\n\n");
-  return all.replace(/\n[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*\n/g, "\n\n");
-}
-
 function parsePrdSections(prd: unknown): Record<string, string> {
   const data = prd as { sections?: Record<string, { content: string }> };
   const content: Record<string, string> = {};
@@ -79,6 +67,13 @@ function parsePrdSections(prd: unknown): Record<string, string> {
   return content;
 }
 
+function getOrderedSections(prdContent: Record<string, string>): string[] {
+  const orderSet = new Set<string>(PRD_SECTION_ORDER);
+  const ordered = PRD_SECTION_ORDER.filter((k) => prdContent[k]);
+  const rest = Object.keys(prdContent).filter((k) => !orderSet.has(k));
+  return [...ordered, ...rest];
+}
+
 export function DesignPhase({ projectId }: DesignPhaseProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -87,6 +82,9 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
   const [prdContent, setPrdContent] = useState<Record<string, string>>({});
   const [prdHistory, setPrdHistory] = useState<PrdChangeLogEntry[]>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [savingSection, setSavingSection] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const refetchPrd = useCallback(async () => {
@@ -110,18 +108,20 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
     },
   });
 
+  const refetchConversation = useCallback(async () => {
+    const data = await api.chat.history(projectId, "design");
+    const conv = data as { messages?: Message[] };
+    if (conv?.messages) {
+      setMessages(conv.messages);
+    }
+  }, [projectId]);
+
   // Load conversation history, PRD, and change history
   useEffect(() => {
-    api.chat.history(projectId, "design").then((data: unknown) => {
-      const conv = data as { messages?: Message[] };
-      if (conv?.messages) {
-        setMessages(conv.messages);
-      }
-    });
-
+    refetchConversation();
     refetchPrd();
     refetchHistory();
-  }, [projectId, refetchPrd, refetchHistory]);
+  }, [projectId, refetchPrd, refetchHistory, refetchConversation]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -165,6 +165,33 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
       setError(msg);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleStartEdit = (section: string) => {
+    setEditingSection(section);
+    setEditDraft(prdContent[section] ?? "");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSection(null);
+    setEditDraft("");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingSection || savingSection) return;
+    setSavingSection(editingSection);
+    try {
+      await api.prd.updateSection(projectId, editingSection, editDraft);
+      await refetchPrd();
+      await refetchHistory();
+      await refetchConversation();
+      setEditingSection(null);
+      setEditDraft("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save PRD section");
+    } finally {
+      setSavingSection(null);
     }
   };
 
@@ -249,10 +276,63 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
             PRD sections will appear here as you design your product
           </div>
         ) : (
-          <div className="prose prose-sm prose-gray max-w-none flex-1">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {combinePrdSections(prdContent)}
-            </ReactMarkdown>
+          <div className="space-y-4 flex-1">
+            {getOrderedSections(prdContent).map((sectionKey) => (
+              <div
+                key={sectionKey}
+                className="bg-white rounded-lg border border-gray-200 p-4"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    {formatSectionKey(sectionKey)}
+                  </h3>
+                  {editingSection !== sectionKey ? (
+                    <button
+                      type="button"
+                      onClick={() => handleStartEdit(sectionKey)}
+                      className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+                    >
+                      Edit
+                    </button>
+                  ) : null}
+                </div>
+                {editingSection === sectionKey ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      className="w-full min-h-[120px] p-3 text-sm border border-gray-300 rounded-md font-mono focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                      placeholder="Markdown content..."
+                      disabled={!!savingSection}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveEdit}
+                        disabled={savingSection === sectionKey || editDraft === (prdContent[sectionKey] ?? "")}
+                        className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
+                      >
+                        {savingSection === sectionKey ? "Saving…" : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        disabled={!!savingSection}
+                        className="btn-secondary text-sm py-1.5 px-3"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="prose prose-sm prose-gray max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {prdContent[sectionKey] || "_No content yet_"}
+                    </ReactMarkdown>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
 

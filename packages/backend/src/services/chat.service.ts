@@ -233,6 +233,28 @@ export class ChatService {
   }
 
   /**
+   * Append a direct-edit message to the design conversation when the user edits the PRD inline.
+   * Syncs the edit into conversation context so the agent is aware of user-made changes (PRD §7.1.5).
+   */
+  async addDirectEditMessage(
+    projectId: string,
+    section: string,
+    _content: string,
+  ): Promise<void> {
+    const conversation = await this.getOrCreateConversation(projectId, 'design');
+    const sectionLabel = section
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+    const message: ConversationMessage = {
+      role: 'user',
+      content: `I edited the ${sectionLabel} section of the PRD directly. The updated content is now in the living document.`,
+      timestamp: new Date().toISOString(),
+    };
+    conversation.messages.push(message);
+    await this.saveConversation(projectId, conversation);
+  }
+
+  /**
    * When a Plan is shipped, invoke the planning agent to review the Plan against the PRD
    * and update any affected sections. PRD §15.1 Living PRD Synchronization.
    */
