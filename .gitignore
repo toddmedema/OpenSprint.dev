@@ -32,6 +32,7 @@ packages/frontend/.vite/
 
 # OpenSprint runtime data (local only)
 .opensprint/active/
+.opensprint/conversations/
 
 # Temporary files
 *.tmp
