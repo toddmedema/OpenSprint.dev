@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opensprint.dev/schemas/prd.json",
+  "title": "OpenSprint PRD",
+  "description": "Living PRD document stored at .opensprint/prd.json. Each section contains markdown content with independent versioning.",
+  "type": "object",
+  "required": ["version", "sections", "changeLog"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Document-level version; incremented on any section update"
+    },
+    "sections": {
+      "type": "object",
+      "description": "PRD sections keyed by section identifier",
+      "required": [
+        "executive_summary",
+        "problem_statement",
+        "user_personas",
+        "goals_and_metrics",
+        "feature_list",
+        "technical_architecture",
+        "data_model",
+        "api_contracts",
+        "non_functional_requirements",
+        "open_questions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "executive_summary": { "$ref": "#/$defs/section" },
+        "problem_statement": { "$ref": "#/$defs/section" },
+        "user_personas": { "$ref": "#/$defs/section" },
+        "goals_and_metrics": { "$ref": "#/$defs/section" },
+        "feature_list": { "$ref": "#/$defs/section" },
+        "technical_architecture": { "$ref": "#/$defs/section" },
+        "data_model": { "$ref": "#/$defs/section" },
+        "api_contracts": { "$ref": "#/$defs/section" },
+        "non_functional_requirements": { "$ref": "#/$defs/section" },
+        "open_questions": { "$ref": "#/$defs/section" }
+      }
+    },
+    "changeLog": {
+      "type": "array",
+      "description": "Chronological log of section updates",
+      "items": { "$ref": "#/$defs/changeLogEntry" }
+    }
+  },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "required": ["content", "version", "updatedAt"],
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Markdown content for this section"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Section-level version"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of last update"
+        }
+      }
+    },
+    "changeLogEntry": {
+      "type": "object",
+      "required": ["section", "version", "source", "timestamp", "diff"],
+      "properties": {
+        "section": {
+          "type": "string",
+          "enum": [
+            "executive_summary",
+            "problem_statement",
+            "user_personas",
+            "goals_and_metrics",
+            "feature_list",
+            "technical_architecture",
+            "data_model",
+            "api_contracts",
+            "non_functional_requirements",
+            "open_questions"
+          ]
+        },
+        "version": { "type": "integer", "minimum": 0 },
+        "source": {
+          "type": "string",
+          "enum": ["design", "plan", "build", "validate"]
+        },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "diff": { "type": "string", "description": "Summary of changes" }
+      }
+    }
+  }
+}

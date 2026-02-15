@@ -7,10 +7,12 @@ import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG, OPENSPRINT_PATHS } from "@opensprint/shared";
 
-vi.mock("../services/agent-client.js", () => ({
-  AgentClient: vi.fn().mockImplementation(() => ({
-    invoke: vi.fn().mockResolvedValue({ content: "I'd be happy to help you design your product. What are your main goals?" }),
-  })),
+vi.mock("../services/agent.service.js", () => ({
+  agentService: {
+    invokePlanningAgent: vi.fn().mockResolvedValue({
+      content: "I'd be happy to help you design your product. What are your main goals?",
+    }),
+  },
 }));
 
 describe("Chat REST API", () => {
