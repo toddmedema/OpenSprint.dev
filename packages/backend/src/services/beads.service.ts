@@ -1,6 +1,6 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import type { TaskType, TaskPriority } from '@opensprint/shared';
+import { exec } from "child_process";
+import { promisify } from "util";
+import type { TaskType, TaskPriority } from "@opensprint/shared";
 
 const execAsync = promisify(exec);
 
@@ -34,9 +34,7 @@ export class BeadsService {
       return stdout;
     } catch (error: unknown) {
       const err = error as { message: string; stderr?: string; code?: number };
-      throw new Error(
-        `Beads command failed: bd ${command}\n${err.stderr || err.message}`,
-      );
+      throw new Error(`Beads command failed: bd ${command}\n${err.stderr || err.message}`);
     }
   }
 
@@ -44,7 +42,7 @@ export class BeadsService {
     try {
       return JSON.parse(stdout.trim());
     } catch {
-      const jsonStart = stdout.indexOf('{');
+      const jsonStart = stdout.indexOf("{");
       if (jsonStart >= 0) {
         return JSON.parse(stdout.slice(jsonStart));
       }
@@ -57,11 +55,11 @@ export class BeadsService {
       const parsed = JSON.parse(stdout.trim());
       return Array.isArray(parsed) ? parsed : [parsed];
     } catch {
-      const jsonStart = stdout.indexOf('[');
+      const jsonStart = stdout.indexOf("[");
       if (jsonStart >= 0) {
         return JSON.parse(stdout.slice(jsonStart));
       }
-      if (stdout.trim() === '' || stdout.trim() === '[]') {
+      if (stdout.trim() === "" || stdout.trim() === "[]") {
         return [];
       }
       throw new Error(`Failed to parse beads JSON array output: ${stdout}`);
@@ -70,7 +68,7 @@ export class BeadsService {
 
   /** Initialize beads in a project repository */
   async init(repoPath: string): Promise<void> {
-    await execAsync('bd init', { cwd: repoPath });
+    await execAsync("bd init", { cwd: repoPath });
   }
 
   /** Create a new issue */
@@ -123,13 +121,19 @@ export class BeadsService {
 
   /** Get ready tasks (priority-sorted, all deps resolved) */
   async ready(repoPath: string): Promise<BeadsIssue[]> {
-    const stdout = await this.exec(repoPath, 'ready --json');
+    const stdout = await this.exec(repoPath, "ready --json");
     return this.parseJsonArray(stdout);
   }
 
-  /** List all issues */
+  /** List all issues (open + in_progress by default) */
   async list(repoPath: string): Promise<BeadsIssue[]> {
-    const stdout = await this.exec(repoPath, 'list --json');
+    const stdout = await this.exec(repoPath, "list --json");
+    return this.parseJsonArray(stdout);
+  }
+
+  /** List all issues including closed (for kanban column computation) */
+  async listAll(repoPath: string): Promise<BeadsIssue[]> {
+    const stdout = await this.exec(repoPath, "list --all --json --limit 0");
     return this.parseJsonArray(stdout);
   }
 
@@ -140,12 +144,7 @@ export class BeadsService {
   }
 
   /** Add a dependency between issues */
-  async addDependency(
-    repoPath: string,
-    childId: string,
-    parentId: string,
-    type?: string,
-  ): Promise<void> {
+  async addDependency(repoPath: string, childId: string, parentId: string, type?: string): Promise<void> {
     let cmd = `dep add ${childId} ${parentId} --json`;
     if (type) cmd += ` --type ${type}`;
     await this.exec(repoPath, cmd);
@@ -163,6 +162,6 @@ export class BeadsService {
 
   /** Sync beads with git */
   async sync(repoPath: string): Promise<void> {
-    await execAsync('bd sync', { cwd: repoPath });
+    await execAsync("bd sync", { cwd: repoPath });
   }
 }

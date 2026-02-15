@@ -1,29 +1,30 @@
-import { useState, useEffect } from 'react';
-import { api } from '../../api/client';
-import type { FeedbackItem } from '@opensprint/shared';
+import { useState, useEffect } from "react";
+import { api } from "../../api/client";
+import type { FeedbackItem } from "@opensprint/shared";
 
 interface ValidatePhaseProps {
   projectId: string;
 }
 
 const categoryColors: Record<string, string> = {
-  bug: 'bg-red-50 text-red-700',
-  feature: 'bg-purple-50 text-purple-700',
-  ux: 'bg-blue-50 text-blue-700',
-  scope: 'bg-yellow-50 text-yellow-700',
+  bug: "bg-red-50 text-red-700",
+  feature: "bg-purple-50 text-purple-700",
+  ux: "bg-blue-50 text-blue-700",
+  scope: "bg-yellow-50 text-yellow-700",
 };
 
 const statusColors: Record<string, string> = {
-  pending: 'bg-gray-100 text-gray-600',
-  mapped: 'bg-blue-100 text-blue-700',
-  resolved: 'bg-green-100 text-green-700',
+  pending: "bg-gray-100 text-gray-600",
+  mapped: "bg-blue-100 text-blue-700",
+  resolved: "bg-green-100 text-green-700",
 };
 
 export function ValidatePhase({ projectId }: ValidatePhaseProps) {
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.feedback
@@ -37,12 +38,14 @@ export function ValidatePhase({ projectId }: ValidatePhaseProps) {
     if (!input.trim() || submitting) return;
 
     setSubmitting(true);
+    setError(null);
     try {
       const item = await api.feedback.submit(projectId, input.trim());
       setFeedback((prev) => [item as FeedbackItem, ...prev]);
-      setInput('');
+      setInput("");
     } catch (err) {
-      console.error('Failed to submit feedback:', err);
+      const msg = err instanceof Error ? err.message : "Failed to submit feedback";
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -50,19 +53,25 @@ export function ValidatePhase({ projectId }: ValidatePhaseProps) {
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex justify-between items-center">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError(null)} className="text-red-500 hover:text-red-700 underline">
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="mb-8">
         <h2 className="text-lg font-semibold text-gray-900 mb-1">Validate</h2>
         <p className="text-sm text-gray-500">
-          Test your application and report feedback. The AI will map issues to the right
-          features and create tickets automatically.
+          Test your application and report feedback. The AI will map issues to the right features and create tickets
+          automatically.
         </p>
       </div>
 
       {/* Feedback Input */}
       <div className="card p-5 mb-8">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          What did you find?
-        </label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">What did you find?</label>
         <textarea
           className="input min-h-[100px] mb-3"
           value={input}
@@ -76,15 +85,13 @@ export function ValidatePhase({ projectId }: ValidatePhaseProps) {
             disabled={submitting || !input.trim()}
             className="btn-primary disabled:opacity-50"
           >
-            {submitting ? 'Submitting...' : 'Submit Feedback'}
+            {submitting ? "Submitting..." : "Submit Feedback"}
           </button>
         </div>
       </div>
 
       {/* Feedback Feed */}
-      <h3 className="text-sm font-semibold text-gray-900 mb-4">
-        Feedback History ({feedback.length})
-      </h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4">Feedback History ({feedback.length})</h3>
 
       {loading ? (
         <div className="text-center py-10 text-gray-400">Loading feedback...</div>
@@ -101,14 +108,14 @@ export function ValidatePhase({ projectId }: ValidatePhaseProps) {
                 <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                   <span
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
-                      categoryColors[item.category] ?? 'bg-gray-100 text-gray-600'
+                      categoryColors[item.category] ?? "bg-gray-100 text-gray-600"
                     }`}
                   >
                     {item.category}
                   </span>
                   <span
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
-                      statusColors[item.status] ?? 'bg-gray-100 text-gray-600'
+                      statusColors[item.status] ?? "bg-gray-100 text-gray-600"
                     }`}
                   >
                     {item.status}
@@ -135,9 +142,7 @@ export function ValidatePhase({ projectId }: ValidatePhaseProps) {
                 </div>
               )}
 
-              <p className="text-xs text-gray-400 mt-2">
-                {new Date(item.createdAt).toLocaleString()}
-              </p>
+              <p className="text-xs text-gray-400 mt-2">{new Date(item.createdAt).toLocaleString()}</p>
             </div>
           ))}
         </div>

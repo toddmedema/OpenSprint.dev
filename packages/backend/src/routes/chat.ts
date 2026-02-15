@@ -12,7 +12,9 @@ type ProjectParams = { projectId: string };
 chatRouter.post('/', async (req: Request<ProjectParams>, res, next) => {
   try {
     const body = req.body as ChatRequest;
+    console.log('[chat] POST received', { projectId: req.params.projectId, context: body.context ?? 'design', messageLen: body.message?.length ?? 0 });
     const response = await chatService.sendMessage(req.params.projectId, body);
+    console.log('[chat] POST completed', { projectId: req.params.projectId });
     const result: ApiResponse<ChatResponse> = { data: response };
     res.json(result);
   } catch (err) {

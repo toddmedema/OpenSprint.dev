@@ -1,26 +1,54 @@
-import { useState, useEffect, useRef } from 'react';
-import { api } from '../../api/client';
+import { useState, useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { api } from "../../api/client";
 
 interface DesignPhaseProps {
   projectId: string;
 }
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: string;
 }
 
+const PRD_SECTION_ORDER = [
+  "executive_summary",
+  "problem_statement",
+  "goals_and_metrics",
+  "user_personas",
+  "technical_architecture",
+  "feature_list",
+  "non_functional_requirements",
+  "data_model",
+  "api_contracts",
+  "open_questions",
+] as const;
+
+function combinePrdSections(prdContent: Record<string, string>): string {
+  const ordered = PRD_SECTION_ORDER.filter((k) => prdContent[k]).map(
+    (k) => prdContent[k]
+  );
+  const orderSet = new Set<string>(PRD_SECTION_ORDER);
+  const rest = Object.keys(prdContent)
+    .filter((k) => !orderSet.has(k))
+    .map((k) => prdContent[k]);
+  const all = [...ordered, ...rest].join("\n\n");
+  return all.replace(/\n[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*\n/g, "\n\n");
+}
+
 export function DesignPhase({ projectId }: DesignPhaseProps) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [prdContent, setPrdContent] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load conversation history
   useEffect(() => {
-    api.chat.history(projectId, 'design').then((data: unknown) => {
+    api.chat.history(projectId, "design").then((data: unknown) => {
       const conv = data as { messages?: Message[] };
       if (conv?.messages) {
         setMessages(conv.messages);
@@ -42,36 +70,38 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
 
   // Auto-scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim() || sending) return;
 
     const userMessage: Message = {
-      role: 'user',
+      role: "user",
       content: input.trim(),
       timestamp: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInput('');
+    setInput("");
     setSending(true);
+    setError(null);
 
     try {
-      const response = (await api.chat.send(projectId, userMessage.content, 'design')) as {
+      const response = (await api.chat.send(projectId, userMessage.content, "design")) as {
         message: string;
       };
       setMessages((prev) => [
         ...prev,
         {
-          role: 'assistant',
+          role: "assistant",
           content: response.message,
           timestamp: new Date().toISOString(),
         },
       ]);
     } catch (err) {
-      console.error('Chat error:', err);
+      const msg = err instanceof Error ? err.message : "Failed to send message. Please try again.";
+      setError(msg);
     } finally {
       setSending(false);
     }
@@ -87,21 +117,16 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
             <div className="text-center py-20">
               <h3 className="text-lg font-medium text-gray-900 mb-2">Start designing your product</h3>
               <p className="text-gray-500 max-w-md mx-auto">
-                Describe your product vision and the AI planning agent will help you build
-                a comprehensive PRD through conversation.
+                Describe your product vision and the AI planning agent will help you build a comprehensive PRD through
+                conversation.
               </p>
             </div>
           )}
           {messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               <div
                 className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                  msg.role === 'user'
-                    ? 'bg-brand-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                  msg.role === "user" ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-900"
                 }`}
               >
                 <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -110,13 +135,26 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
           ))}
           {sending && (
             <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-2xl px-4 py-3 text-sm text-gray-400">
-                Thinking...
-              </div>
+              <div className="bg-gray-100 rounded-2xl px-4 py-3 text-sm text-gray-400">Thinking...</div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Error banner */}
+        {error && (
+          <div className="mx-4 mb-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {error}
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="ml-2 text-red-500 hover:text-red-700 underline"
+              aria-label="Dismiss"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Input */}
         <div className="p-4 border-t border-gray-200">
@@ -126,7 +164,7 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
               className="input flex-1"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
               placeholder="Describe your product vision..."
               disabled={sending}
             />
@@ -150,17 +188,10 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
             PRD sections will appear here as you design your product
           </div>
         ) : (
-          <div className="space-y-6">
-            {Object.entries(prdContent).map(([key, content]) => (
-              <div key={key} className="card p-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2 capitalize">
-                  {key.replace(/_/g, ' ')}
-                </h3>
-                <div className="prose prose-sm max-w-none text-gray-600">
-                  <p className="whitespace-pre-wrap">{content}</p>
-                </div>
-              </div>
-            ))}
+          <div className="prose prose-sm prose-gray max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {combinePrdSections(prdContent)}
+            </ReactMarkdown>
           </div>
         )}
       </div>

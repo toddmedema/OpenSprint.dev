@@ -132,7 +132,7 @@ The data flows through the system in a unidirectional pipeline with feedback loo
 
 OpenSprint opens to a home screen that lists all existing projects as cards, each showing the project name, last-modified date, current phase, and overall progress. A prominent "Create New Project" button starts the project setup wizard.
 
-Once inside a project, the project name appears at the top-left of the navbar and functions as a dropdown selector. Clicking it reveals a list of all projects, allowing the user to rapidly switch between projects without returning to the home screen.
+Once inside a project, the project name appears at the top-left of the navbar and functions as a dropdown selector. Clicking it reveals a list of all projects, allowing the user to rapidly switch between projects without returning to the home screen. The navbar also includes a theme toggle (light/dark/system) for quick access to appearance preferences (see 6.6).
 
 ### 6.2 Project Setup Wizard
 
@@ -193,6 +193,25 @@ For each category, users choose one of three modes:
 - **Requires approval:** The AI prepares a recommendation with full context, pauses the affected work stream, and waits for explicit user approval before proceeding. Other non-blocked work continues in parallel.
 
 This configuration ensures that users who want full autonomy can get it, while users who want tight control over critical decisions have that option. The system defaults to requiring approval for the two highest-impact categories (Scope Changes, Architecture Decisions) and automating the two more operational categories.
+
+### 6.6 Appearance & Theme
+
+OpenSprint supports light and dark mode theming to accommodate user preference and reduce eye strain during extended development sessions.
+
+**Theme options:**
+
+- **Light** — Light background, dark text; suitable for bright environments.
+- **Dark** — Dark background, light text; suitable for low-light environments and developer preference.
+- **System** — Follows the user's operating system or browser preference (`prefers-color-scheme`). Default for new users.
+
+**Behavior:**
+
+- Theme preference is global (applies across all projects) and persists across sessions.
+- A theme toggle is available in the navbar (or settings) for quick switching without opening project settings.
+- The selected theme applies immediately to the entire UI: home screen, all four phase tabs, modals, and agent output panels.
+- When "System" is selected, the UI responds to OS/browser theme changes in real time.
+
+**Storage:** Theme preference is stored in `localStorage` (frontend-only) under a key such as `opensprint.theme`. No backend changes are required. This keeps the preference local to the browser and avoids polluting project or global config files.
 
 ---
 
@@ -524,6 +543,16 @@ Stored as `.opensprint/settings.json`:
 | deployment | object | `{ mode, expo_config, custom_command }` |
 | hil_config | object | Per-category notification mode settings |
 | test_framework | string | Detected or user-selected test framework |
+
+#### UserPreferences (frontend-only)
+
+Theme and other global UI preferences are stored in the browser's `localStorage`, not in project or backend storage:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `opensprint.theme` | enum | `light` / `dark` / `system` — color scheme preference |
+
+This keeps theme as a purely client-side concern. If cross-device sync is needed in the future, a `~/.opensprint/preferences.json` file could be introduced and synced by the backend.
 
 ### 10.3 Storage Strategy
 
@@ -942,6 +971,7 @@ Every piece of work in OpenSprint is traceable. The beads system captures: which
 | Reliability     | Agent failures must not corrupt project state; all state changes are transactional and recoverable           |
 | Security        | Code execution in sandboxed environments; user projects isolated at the filesystem level                     |
 | Usability       | First-time users can create a Design and reach Build phase within 30 minutes without documentation           |
+| Theme Support   | Light, dark, and system themes; preference persists across sessions; no flash of wrong theme on load       |
 | Data Integrity  | Full audit trail of every change via PRD versioning and bead provenance; no data loss on agent crash         |
 | Testing         | Minimum 80% code coverage; all test layers automated; test results visible in real-time                      |
 | Offline Support | All core features (Design, Plan, Build, Validate) fully functional without internet connectivity             |
@@ -974,7 +1004,7 @@ Every piece of work in OpenSprint is traceable. The beads system captures: which
 
 | Phase | Scope                                                                                                                                                                                                                                                                                                                     |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Alpha | Design + Plan phases with living PRD; chat interface with planning agent; Plan markdown generation; agent selection during setup; project home screen                                                                                                                                                                     |
+| Alpha | Design + Plan phases with living PRD; chat interface with planning agent; Plan markdown generation; agent selection during setup; project home screen; light/dark/system theme toggle                                                                                                                                                                     |
 | Beta  | Build phase with kanban board, single-agent task execution with coding/review cycle, beads integration, agent CLI contract, unit test generation, and error handling                                                                                                                                                      |
 | v1.0  | Full Build phase with real-time monitoring, comprehensive testing (unit + integration + E2E), HIL configuration, and 5-minute timeout handling                                                                                                                                                                            |
 | v1.1  | Validate phase with feedback ingestion, intelligent mapping, flywheel closure, and Expo.dev deployment integration                                                                                                                                                                                                        |
@@ -1016,6 +1046,7 @@ Every piece of work in OpenSprint is traceable. The beads system captures: which
 | Unified agent invocation               | All agents (planning, coding, review) use the same invocation mechanism — the user-configured API/CLI | Simplifies architecture; no separate integration path for planning vs build agents               |
 | Project index                          | Global file at `~/.opensprint/projects.json`                                                          | Enables home screen project discovery; only data stored outside project repos                    |
 | PRD content format                     | Markdown stored inside JSON section wrappers                                                          | Markdown is readable and renderable; JSON wrapper enables section-level versioning               |
+| Theme preference storage               | `localStorage` (frontend-only), key `opensprint.theme`                                                | Theme is purely UI; no backend needed; keeps preference local to browser                         |
 | Conversation history                   | Stored per phase/context at `.opensprint/conversations/<id>.json`                                     | Preserves Design and Plan chat context; enables conversation resumption                          |
 | Review agent diff access               | Review agent uses `git diff main...<branch>`                                                          | No need to copy files; git provides authoritative diff natively                                  |
 | Branch strategy                        | Orchestrator creates branch before coding agent; review agent merges to main on approval              | Centralizes branch lifecycle in orchestrator; merge is natural final step of approval            |

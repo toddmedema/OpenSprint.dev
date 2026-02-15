@@ -1,0 +1,22 @@
+{
+  "planningAgent": {
+    "type": "cursor",
+    "model": "composer-1.5",
+    "cliCommand": null
+  },
+  "codingAgent": {
+    "type": "cursor",
+    "model": "composer-1.5",
+    "cliCommand": null
+  },
+  "deployment": {
+    "mode": "custom"
+  },
+  "hilConfig": {
+    "scopeChanges": "requires_approval",
+    "architectureDecisions": "requires_approval",
+    "dependencyModifications": "automated",
+    "testFailuresAndRetries": "automated"
+  },
+  "testFramework": null
+}

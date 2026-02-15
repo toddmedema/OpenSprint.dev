@@ -158,6 +158,7 @@ export class ChatService {
     let responseContent: string;
 
     try {
+      console.log('[chat] Invoking agent', { type: agentConfig.type, model: agentConfig.model ?? 'default', historyLen: history.length, promptLen: body.message.length });
       // Invoke the planning agent
       const response = await this.agentClient.invoke({
         config: agentConfig,
@@ -167,12 +168,16 @@ export class ChatService {
         cwd: (await this.projectService.getProject(projectId)).repoPath,
       });
 
+      console.log('[chat] Agent returned', { contentLen: response.content?.length ?? 0 });
       responseContent = response.content;
     } catch (error) {
-      // If agent invocation fails, provide a graceful fallback
+      // If agent invocation fails, provide a graceful fallback with actionable guidance
+      const msg = error instanceof Error ? error.message : String(error);
       console.error('Agent invocation failed:', error);
-      responseContent = 'I apologize, but I was unable to connect to the configured planning agent. Please check your agent configuration in project settings. Error: ' +
-        (error instanceof Error ? error.message : String(error));
+      responseContent =
+        'I was unable to connect to the planning agent.\n\n' +
+        `**Error:** ${msg}\n\n` +
+        '**What to try:** Open Project Settings → Agent Config. Ensure your API key is set, the CLI is installed, and the model is valid.';
     }
 
     // Parse any PRD updates from the response
