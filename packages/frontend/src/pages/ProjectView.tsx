@@ -21,7 +21,13 @@ function ProjectContent() {
   const { projectId } = useParams<{ projectId: string }>();
   const { project, loading, error } = useProject(projectId!);
   const [currentPhase, setCurrentPhase] = useState<ProjectPhase>('design');
+  const [buildSelectedTaskId, setBuildSelectedTaskId] = useState<string | null>(null);
   const { hilRequest, hilNotification, respondToHil, clearHilNotification } = useProjectWebSocket();
+
+  const handleNavigateToBuild = (taskId: string) => {
+    setCurrentPhase('build');
+    setBuildSelectedTaskId(taskId);
+  };
 
   if (loading) {
     return (
@@ -84,8 +90,14 @@ function ProjectContent() {
   const phaseComponents: Record<ProjectPhase, React.ReactNode> = {
     design: <DesignPhase projectId={projectId!} />,
     plan: <PlanPhase projectId={projectId!} />,
-    build: <BuildPhase projectId={projectId!} />,
-    validate: <ValidatePhase projectId={projectId!} />,
+    build: (
+      <BuildPhase
+        projectId={projectId!}
+        initialTaskId={buildSelectedTaskId}
+        onInitialTaskConsumed={() => setBuildSelectedTaskId(null)}
+      />
+    ),
+    validate: <ValidatePhase projectId={projectId!} onNavigateToBuild={handleNavigateToBuild} />,
   };
 
   return (

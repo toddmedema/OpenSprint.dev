@@ -5,6 +5,7 @@ import type { FeedbackItem, FeedbackMappedEvent } from "@opensprint/shared";
 
 interface ValidatePhaseProps {
   projectId: string;
+  onNavigateToBuild?: (taskId: string) => void;
 }
 
 const categoryColors: Record<string, string> = {
@@ -20,7 +21,7 @@ const statusColors: Record<string, string> = {
   resolved: "bg-green-100 text-green-700",
 };
 
-export function ValidatePhase({ projectId }: ValidatePhaseProps) {
+export function ValidatePhase({ projectId, onNavigateToBuild }: ValidatePhaseProps) {
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -153,15 +154,27 @@ export function ValidatePhase({ projectId }: ValidatePhaseProps) {
               )}
 
               {item.createdTaskIds.length > 0 && (
-                <div className="mt-1 flex gap-1">
-                  {item.createdTaskIds.map((taskId) => (
-                    <span
-                      key={taskId}
-                      className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-600"
-                    >
-                      {taskId}
-                    </span>
-                  ))}
+                <div className="mt-1 flex gap-1 flex-wrap">
+                  {item.createdTaskIds.map((taskId) =>
+                    onNavigateToBuild ? (
+                      <button
+                        key={taskId}
+                        type="button"
+                        onClick={() => onNavigateToBuild(taskId)}
+                        className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-600 hover:bg-brand-100 hover:text-brand-700 underline cursor-pointer transition-colors"
+                        title={`Go to ${taskId} on Build tab`}
+                      >
+                        {taskId}
+                      </button>
+                    ) : (
+                      <span
+                        key={taskId}
+                        className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-600"
+                      >
+                        {taskId}
+                      </span>
+                    ),
+                  )}
                 </div>
               )}
 

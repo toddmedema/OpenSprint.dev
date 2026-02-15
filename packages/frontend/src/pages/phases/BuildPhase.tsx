@@ -7,6 +7,8 @@ import { KANBAN_COLUMNS, PRIORITY_LABELS } from "@opensprint/shared";
 
 interface BuildPhaseProps {
   projectId: string;
+  initialTaskId?: string | null;
+  onInitialTaskConsumed?: () => void;
 }
 
 interface TaskCard {
@@ -121,7 +123,7 @@ function getEpicTitleFromPlan(plan: Plan): string {
   return plan.metadata.planId.replace(/-/g, " ");
 }
 
-export function BuildPhase({ projectId }: BuildPhaseProps) {
+export function BuildPhase({ projectId, initialTaskId, onInitialTaskConsumed }: BuildPhaseProps) {
   const [tasks, setTasks] = useState<TaskCard[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [orchestratorRunning, setOrchestratorRunning] = useState(false);
@@ -187,6 +189,14 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
     },
     [projectId, selectedTask],
   );
+
+  // Apply initial task selection when navigating from Validate (e.g. clicking an issue ID)
+  useEffect(() => {
+    if (initialTaskId) {
+      setSelectedTask(initialTaskId);
+      onInitialTaskConsumed?.();
+    }
+  }, [initialTaskId, onInitialTaskConsumed]);
 
   // Clear completion state, archived sessions, and task detail when switching tasks
   useEffect(() => {
