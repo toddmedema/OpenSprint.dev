@@ -4,15 +4,26 @@ import type { TaskType, TaskPriority } from '@opensprint/shared';
 
 const execAsync = promisify(exec);
 
+/**
+ * Raw shape returned by `bd list --json` / `bd show --json`.
+ * Field names use snake_case to match the beads CLI output.
+ */
 export interface BeadsIssue {
   id: string;
   title: string;
-  description: string;
-  type: string;
+  description?: string;
+  issue_type: string;
   status: string;
   priority: number;
-  assignee: string | null;
-  labels: string[];
+  assignee?: string | null;
+  owner?: string | null;
+  labels?: string[];
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  dependency_count?: number;
+  dependent_count?: number;
+  comment_count?: number;
   [key: string]: unknown;
 }
 
