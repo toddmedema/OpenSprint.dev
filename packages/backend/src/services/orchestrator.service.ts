@@ -91,6 +91,7 @@ export class OrchestratorService {
 
   /** Start the build orchestrator for a project */
   async start(projectId: string): Promise<OrchestratorStatus> {
+    await this.projectService.getProject(projectId);
     const state = this.getState(projectId);
 
     if (state.status.running) {
@@ -115,6 +116,7 @@ export class OrchestratorService {
 
   /** Pause the build orchestrator */
   async pause(projectId: string): Promise<OrchestratorStatus> {
+    await this.projectService.getProject(projectId);
     const state = this.getState(projectId);
     state.status.running = false;
 
@@ -140,6 +142,7 @@ export class OrchestratorService {
 
   /** Get orchestrator status */
   async getStatus(projectId: string): Promise<OrchestratorStatus> {
+    await this.projectService.getProject(projectId);
     return this.getState(projectId).status;
   }
 
