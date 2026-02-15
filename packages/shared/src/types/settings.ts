@@ -19,7 +19,10 @@ export interface DeploymentConfig {
   expoConfig?: {
     projectId: string;
   };
+  /** Shell command to run after Build completion (custom mode) */
   customCommand?: string;
+  /** Webhook URL to POST after Build completion (custom mode) */
+  webhookUrl?: string;
 }
 
 export type DeploymentConfigInput = DeploymentConfig;

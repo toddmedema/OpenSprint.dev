@@ -32,6 +32,8 @@ export function ProjectSetup() {
   const [codingAgentType, setCodingAgentType] = useState<AgentType>("claude");
   const [codingModel, setCodingModel] = useState("");
   const [deploymentMode, setDeploymentMode] = useState<DeploymentMode>("custom");
+  const [customDeployCommand, setCustomDeployCommand] = useState("");
+  const [customDeployWebhook, setCustomDeployWebhook] = useState("");
   const [testFramework, setTestFramework] = useState<string>("none");
   const [hilConfig, setHilConfig] = useState(DEFAULT_HIL_CONFIG);
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
@@ -104,7 +106,11 @@ export function ProjectSetup() {
         repoPath,
         planningAgent: { type: planningAgentType, model: planningModel || null, cliCommand: null },
         codingAgent: { type: codingAgentType, model: codingModel || null, cliCommand: null },
-        deployment: { mode: deploymentMode },
+        deployment: {
+          mode: deploymentMode,
+          customCommand: deploymentMode === "custom" && customDeployCommand.trim() ? customDeployCommand.trim() : undefined,
+          webhookUrl: deploymentMode === "custom" && customDeployWebhook.trim() ? customDeployWebhook.trim() : undefined,
+        },
         hilConfig,
         testFramework: testFramework === "none" ? null : testFramework,
       });
@@ -372,11 +378,38 @@ export function ProjectSetup() {
                     />
                     <div>
                       <p className="text-sm font-medium text-gray-900">Custom Pipeline</p>
-                      <p className="text-xs text-gray-500">Connect your own CI/CD system</p>
+                      <p className="text-xs text-gray-500">Command or webhook triggered after Build completion</p>
                     </div>
                   </label>
                 </div>
               </div>
+              {deploymentMode === "custom" && (
+                <div className="space-y-3 pt-2 border-t border-gray-200">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Deployment command</label>
+                    <input
+                      type="text"
+                      className="input w-full font-mono text-sm"
+                      placeholder="e.g. ./deploy.sh or vercel deploy --prod"
+                      value={customDeployCommand}
+                      onChange={(e) => setCustomDeployCommand(e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Shell command run from project root after each task completion</p>
+                  </div>
+                  <div className="text-sm text-gray-500 text-center">— or —</div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
+                    <input
+                      type="url"
+                      className="input w-full font-mono text-sm"
+                      placeholder="https://api.example.com/deploy"
+                      value={customDeployWebhook}
+                      onChange={(e) => setCustomDeployWebhook(e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">HTTP POST sent after each task completion (GitHub Actions, Vercel, etc.)</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -480,7 +513,15 @@ export function ProjectSetup() {
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-500">Deployment</dt>
-                  <dd className="font-medium capitalize">{deploymentMode}</dd>
+                  <dd className="font-medium">
+                    {deploymentMode === "custom"
+                      ? customDeployCommand.trim()
+                        ? `Custom: ${customDeployCommand.trim()}`
+                        : customDeployWebhook.trim()
+                          ? `Webhook: ${customDeployWebhook.trim()}`
+                          : "Custom (not configured)"
+                      : "Expo"}
+                  </dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-500">Test Framework</dt>

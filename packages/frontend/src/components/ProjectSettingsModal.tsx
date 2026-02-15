@@ -108,7 +108,11 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
             model: codingAgent.model || null,
             cliCommand: codingAgent.cliCommand || null,
           },
-          deployment: { mode: deployment.mode },
+          deployment: {
+            mode: deployment.mode,
+            customCommand: deployment.customCommand ?? undefined,
+            webhookUrl: deployment.webhookUrl ?? undefined,
+          },
           hilConfig,
         }),
       ]);
@@ -451,11 +455,38 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         />
                         <div>
                           <p className="text-sm font-medium text-gray-900">Custom Pipeline</p>
-                          <p className="text-xs text-gray-500">Connect your own CI/CD system</p>
+                          <p className="text-xs text-gray-500">Command or webhook triggered after Build completion</p>
                         </div>
                       </label>
                     </div>
                   </div>
+                  {deployment.mode === "custom" && (
+                    <div className="space-y-3 pt-2 border-t border-gray-200">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Deployment command</label>
+                        <input
+                          type="text"
+                          className="input w-full font-mono text-sm"
+                          placeholder="e.g. ./deploy.sh or vercel deploy --prod"
+                          value={deployment.customCommand ?? ""}
+                          onChange={(e) => updateDeployment({ customCommand: e.target.value || undefined })}
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Shell command run from project root after each task completion</p>
+                      </div>
+                      <div className="text-sm text-gray-500 text-center">— or —</div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
+                        <input
+                          type="url"
+                          className="input w-full font-mono text-sm"
+                          placeholder="https://api.example.com/deploy"
+                          value={deployment.webhookUrl ?? ""}
+                          onChange={(e) => updateDeployment({ webhookUrl: e.target.value || undefined })}
+                        />
+                        <p className="mt-1 text-xs text-gray-500">HTTP POST sent after each task completion (GitHub Actions, Vercel, etc.)</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

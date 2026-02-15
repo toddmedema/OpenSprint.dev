@@ -2,7 +2,6 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { DeploymentConfig } from '@opensprint/shared';
 import { ProjectService } from './project.service.js';
-import { broadcastToProject } from '../websocket/index.js';
 
 const execAsync = promisify(exec);
 
@@ -141,27 +140,35 @@ export class DeploymentService {
   }
 
   /**
-   * Deploy using a custom pipeline command.
+   * Deploy using a custom pipeline: command or webhook (PRD §6.4).
    */
   private async deployCustom(
     repoPath: string,
     config: DeploymentConfig,
   ): Promise<DeploymentResult> {
-    if (!config.customCommand) {
-      return {
-        success: false,
-        error: 'No custom deployment command configured',
-        timestamp: new Date().toISOString(),
-      };
+    if (config.webhookUrl) {
+      return this.deployWebhook(config.webhookUrl, repoPath);
     }
+    if (config.customCommand) {
+      return this.deployCommand(repoPath, config.customCommand);
+    }
+    return {
+      success: false,
+      error: 'No custom deployment command or webhook URL configured',
+      timestamp: new Date().toISOString(),
+    };
+  }
 
+  private async deployCommand(
+    repoPath: string,
+    command: string,
+  ): Promise<DeploymentResult> {
     try {
-      const { stdout } = await execAsync(config.customCommand, {
+      await execAsync(command, {
         cwd: repoPath,
         timeout: 600000,
         env: { ...process.env },
       });
-
       return {
         success: true,
         url: undefined,
@@ -172,6 +179,46 @@ export class DeploymentService {
       return {
         success: false,
         error: `Custom deployment failed: ${err.stderr || err.message}`,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+
+  private async deployWebhook(
+    url: string,
+    repoPath: string,
+  ): Promise<DeploymentResult> {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60000);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'build.completed',
+          repoPath,
+          timestamp: new Date().toISOString(),
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) {
+        return {
+          success: false,
+          error: `Webhook returned ${res.status}: ${res.statusText}`,
+          timestamp: new Date().toISOString(),
+        };
+      }
+      return {
+        success: true,
+        url,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return {
+        success: false,
+        error: `Webhook failed: ${err.message}`,
         timestamp: new Date().toISOString(),
       };
     }

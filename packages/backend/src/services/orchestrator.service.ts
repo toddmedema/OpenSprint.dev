@@ -17,6 +17,7 @@ import {
 import { BeadsService, type BeadsIssue } from './beads.service.js';
 import { ProjectService } from './project.service.js';
 import { AgentClient } from './agent-client.js';
+import { deploymentService } from './deployment-service.js';
 import { hilService } from './hil-service.js';
 import { BranchManager } from './branch-manager.js';
 import { ContextAssembler } from './context-assembler.js';
@@ -535,6 +536,11 @@ export class OrchestratorService {
         taskId: task.id,
         status: 'approved',
         testResults: state.lastTestResults,
+      });
+
+      // Trigger deployment after Build completion (PRD §6.4)
+      deploymentService.deploy(projectId).catch((err) => {
+        console.warn(`Deployment trigger failed for project ${projectId}:`, err);
       });
 
       // Continue the loop
