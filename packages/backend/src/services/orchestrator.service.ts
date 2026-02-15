@@ -158,6 +158,8 @@ export class OrchestratorService {
 
       // Filter out Plan approval gate tasks — they are closed by user "Ship it!", not by agents
       readyTasks = readyTasks.filter((t) => (t.title ?? '') !== 'Plan approval gate');
+      // Filter out epics — they are containers, not work items; agents implement tasks/bugs
+      readyTasks = readyTasks.filter((t) => (t.issue_type ?? t.type) !== 'epic');
 
       state.status.queueDepth = readyTasks.length;
 

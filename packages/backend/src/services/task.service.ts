@@ -18,7 +18,10 @@ export class TaskService {
       this.beads.listAll(project.repoPath),
       this.beads.ready(project.repoPath),
     ]);
-    const readyIds = new Set(readyIssues.map((i) => i.id));
+    // Exclude epics from ready — they are containers, not work items
+    const readyIds = new Set(
+      readyIssues.filter((i) => (i.issue_type ?? i.type) !== 'epic').map((i) => i.id),
+    );
     const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
 
     const tasks = allIssues.map((issue) => this.beadsIssueToTask(issue, readyIds, idToIssue));
@@ -35,16 +38,17 @@ export class TaskService {
     return tasks;
   }
 
-  /** Get ready tasks (wraps bd ready --json) */
+  /** Get ready tasks (wraps bd ready --json). Excludes epics — they are containers, not work items. */
   async getReadyTasks(projectId: string): Promise<Task[]> {
     const project = await this.projectService.getProject(projectId);
     const [readyIssues, allIssues] = await Promise.all([
       this.beads.ready(project.repoPath),
       this.beads.listAll(project.repoPath),
     ]);
-    const readyIds = new Set(readyIssues.map((i) => i.id));
+    const nonEpicReady = readyIssues.filter((i) => (i.issue_type ?? i.type) !== 'epic');
+    const readyIds = new Set(nonEpicReady.map((i) => i.id));
     const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
-    return readyIssues.map((issue) => this.beadsIssueToTask(issue, readyIds, idToIssue));
+    return nonEpicReady.map((issue) => this.beadsIssueToTask(issue, readyIds, idToIssue));
   }
 
   /** Get a single task (wraps bd show --json) */
@@ -55,7 +59,9 @@ export class TaskService {
       this.beads.listAll(project.repoPath),
       this.beads.ready(project.repoPath),
     ]);
-    const readyIds = new Set(readyIssues.map((i) => i.id));
+    const readyIds = new Set(
+      readyIssues.filter((i) => (i.issue_type ?? i.type) !== 'epic').map((i) => i.id),
+    );
     const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
     return this.beadsIssueToTask(issue, readyIds, idToIssue);
   }

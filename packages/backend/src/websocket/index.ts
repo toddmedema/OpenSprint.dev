@@ -16,13 +16,20 @@ export function setupWebSocket(server: Server): void {
   wss = new WebSocketServer({ server });
 
   wss.on("connection", (ws, req) => {
-    // Extract projectId from URL: /ws/projects/:id
+    // Extract projectId from URL: /ws/projects/:id (PRD §11.2)
     const url = new URL(req.url ?? "", `http://${req.headers.host}`);
-    const match = url.pathname.match(/^\/ws\/projects\/([^/]+)$/);
+    const path = url.pathname;
+    const match = path.match(/^\/ws\/projects\/([^/]+)$/);
     const projectId = match?.[1];
 
+    // Reject connections that don't match expected paths
+    if (path !== "/ws" && !match) {
+      ws.close(1008, "Invalid path: use /ws or /ws/projects/:id");
+      return;
+    }
+
     if (!projectId) {
-      // Also accept bare /ws connections — they just won't be project-scoped
+      // Bare /ws connections accepted but not project-scoped
       console.log("[WS] Client connected (no project scope)");
     } else {
       console.log(`[WS] Client connected to project ${projectId}`);
@@ -60,21 +67,33 @@ export function setupWebSocket(server: Server): void {
 }
 
 function handleClientEvent(ws: WebSocket, event: ClientEvent): void {
+  if (!event || typeof event !== "object" || !event.type) {
+    console.warn("[WS] Ignoring malformed client event");
+    return;
+  }
   switch (event.type) {
     case "agent.subscribe": {
-      agentSubscriptions.get(ws)?.add(event.taskId);
-      console.log(`[WS] Client subscribed to agent output for task ${event.taskId}`);
+      if ("taskId" in event && event.taskId) {
+        agentSubscriptions.get(ws)?.add(event.taskId);
+        console.log(`[WS] Client subscribed to agent output for task ${event.taskId}`);
+      }
       break;
     }
     case "agent.unsubscribe": {
-      agentSubscriptions.get(ws)?.delete(event.taskId);
-      console.log(`[WS] Client unsubscribed from agent output for task ${event.taskId}`);
+      if ("taskId" in event && event.taskId) {
+        agentSubscriptions.get(ws)?.delete(event.taskId);
+        console.log(`[WS] Client unsubscribed from agent output for task ${event.taskId}`);
+      }
       break;
     }
     case "hil.respond": {
-      hilService.respondToRequest(event.requestId, event.approved, event.notes);
+      if ("requestId" in event && event.requestId) {
+        hilService.respondToRequest(event.requestId, event.approved, event.notes);
+      }
       break;
     }
+    default:
+      console.warn(`[WS] Unknown client event type: ${(event as { type?: string }).type}`);
   }
 }
 
