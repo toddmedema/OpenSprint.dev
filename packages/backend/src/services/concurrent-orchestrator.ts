@@ -134,7 +134,10 @@ export class ConcurrentOrchestrator {
       const availableSlots = state.maxAgents - state.activeSlots.size;
 
       if (availableSlots > 0) {
-        const readyTasks = await this.beads.ready(repoPath);
+        let readyTasks = await this.beads.ready(repoPath);
+
+        // Filter out Plan approval gate tasks — they are closed by user "Ship it!", not by agents
+        readyTasks = readyTasks.filter((t: BeadsIssue) => (t.title ?? '') !== 'Plan approval gate');
 
         // Filter out tasks that are already being worked on
         const activeTasks = new Set(state.activeSlots.keys());

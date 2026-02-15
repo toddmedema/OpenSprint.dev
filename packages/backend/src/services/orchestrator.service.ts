@@ -170,7 +170,11 @@ export class OrchestratorService {
       const repoPath = await this.projectService.getRepoPath(projectId);
 
       // 1. Poll bd ready for next task
-      const readyTasks = await this.beads.ready(repoPath);
+      let readyTasks = await this.beads.ready(repoPath);
+
+      // Filter out Plan approval gate tasks — they are closed by user "Ship it!", not by agents
+      readyTasks = readyTasks.filter((t) => (t.title ?? '') !== 'Plan approval gate');
+
       state.status.queueDepth = readyTasks.length;
 
       if (readyTasks.length === 0) {
