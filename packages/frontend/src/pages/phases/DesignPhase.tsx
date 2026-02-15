@@ -14,6 +14,35 @@ interface Message {
   timestamp: string;
 }
 
+interface PrdChangeLogEntry {
+  section: string;
+  version: number;
+  source: "design" | "plan" | "build" | "validate";
+  timestamp: string;
+  diff: string;
+}
+
+function formatSectionKey(key: string): string {
+  return key
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function formatTimestamp(ts: string): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString();
+}
+
 const PRD_SECTION_ORDER = [
   "executive_summary",
   "problem_statement",
@@ -56,11 +85,18 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prdContent, setPrdContent] = useState<Record<string, string>>({});
+  const [prdHistory, setPrdHistory] = useState<PrdChangeLogEntry[]>([]);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const refetchPrd = useCallback(async () => {
     const data = await api.prd.get(projectId);
     setPrdContent(parsePrdSections(data));
+  }, [projectId]);
+
+  const refetchHistory = useCallback(async () => {
+    const data = await api.prd.getHistory(projectId);
+    setPrdHistory((data as PrdChangeLogEntry[]) ?? []);
   }, [projectId]);
 
   // Subscribe to live PRD updates via WebSocket
@@ -69,11 +105,12 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
     onEvent: (event) => {
       if (event.type === "prd.updated") {
         refetchPrd();
+        refetchHistory();
       }
     },
   });
 
-  // Load conversation history and PRD
+  // Load conversation history, PRD, and change history
   useEffect(() => {
     api.chat.history(projectId, "design").then((data: unknown) => {
       const conv = data as { messages?: Message[] };
@@ -83,7 +120,8 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
     });
 
     refetchPrd();
-  }, [projectId, refetchPrd]);
+    refetchHistory();
+  }, [projectId, refetchPrd, refetchHistory]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -120,6 +158,7 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
       // Live PRD update: refetch when agent applied PRD changes (WebSocket may also fire, but this ensures updates)
       if (response.prdChanges?.length) {
         refetchPrd();
+        refetchHistory();
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send message. Please try again.";
@@ -201,8 +240,8 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
         </div>
       </div>
 
-      {/* Right: Live PRD */}
-      <div className="w-[480px] overflow-y-auto p-6 bg-gray-50">
+      {/* Right: Live PRD + Change History */}
+      <div className="w-[480px] overflow-y-auto p-6 bg-gray-50 flex flex-col">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Living PRD</h2>
 
         {Object.keys(prdContent).length === 0 ? (
@@ -210,12 +249,66 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
             PRD sections will appear here as you design your product
           </div>
         ) : (
-          <div className="prose prose-sm prose-gray max-w-none">
+          <div className="prose prose-sm prose-gray max-w-none flex-1">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {combinePrdSections(prdContent)}
             </ReactMarkdown>
           </div>
         )}
+
+        {/* PRD Change History */}
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={() => setHistoryExpanded(!historyExpanded)}
+            className="flex items-center justify-between w-full text-left text-sm font-medium text-gray-700 hover:text-gray-900"
+          >
+            <span>Change history</span>
+            <span className="text-gray-400">
+              {prdHistory.length} {prdHistory.length === 1 ? "entry" : "entries"}
+            </span>
+          </button>
+          {historyExpanded && (
+            <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+              {prdHistory.length === 0 ? (
+                <p className="text-sm text-gray-400">No changes yet</p>
+              ) : (
+                [...prdHistory].reverse().map((entry, i) => (
+                  <div
+                    key={`${entry.section}-${entry.version}-${i}`}
+                    className="text-xs bg-white rounded border border-gray-200 p-2"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-gray-800">
+                        {formatSectionKey(entry.section)}
+                      </span>
+                      <span className="text-gray-500 shrink-0">
+                        {formatTimestamp(entry.timestamp)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                          entry.source === "design"
+                            ? "bg-blue-100 text-blue-800"
+                            : entry.source === "plan"
+                              ? "bg-amber-100 text-amber-800"
+                              : entry.source === "build"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-purple-100 text-purple-800"
+                        }`}
+                      >
+                        {entry.source}
+                      </span>
+                      <span className="text-gray-500">v{entry.version}</span>
+                      <span className="text-gray-400 truncate">{entry.diff}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
