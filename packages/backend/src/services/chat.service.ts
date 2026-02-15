@@ -35,6 +35,8 @@ When you have enough information about a PRD section, output it as a structured 
 
 Valid section keys: executive_summary, problem_statement, user_personas, goals_and_metrics, feature_list, technical_architecture, data_model, api_contracts, non_functional_requirements, open_questions
 
+Do NOT include a top-level section header (e.g. "## 1. Executive Summary") in the content — the UI already displays the section title. Start with the body content directly (sub-headers like ### 3.1 are fine).
+
 You can include multiple PRD_UPDATE blocks in a single response. Only include updates when you have substantive content to add or modify.`;
 
 const PLAN_REFINEMENT_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. You help users refine individual feature Plans through conversation.
@@ -128,6 +130,11 @@ export class ChatService {
     }
   }
 
+  /** Strip leading ## N. Title header from PRD section content (UI already shows section title) */
+  private stripSectionHeader(content: string): string {
+    return content.replace(/^##\s+[\d.]+\s*[^\n]*\n+/i, '').trim();
+  }
+
   /** Parse PRD updates from agent response */
   private parsePrdUpdates(content: string): Array<{ section: PrdSectionKey; content: string }> {
     const updates: Array<{ section: PrdSectionKey; content: string }> = [];
@@ -136,7 +143,7 @@ export class ChatService {
 
     while ((match = regex.exec(content)) !== null) {
       const section = match[1] as PrdSectionKey;
-      const sectionContent = match[2].trim();
+      const sectionContent = this.stripSectionHeader(match[2].trim());
       updates.push({ section, content: sectionContent });
     }
 
@@ -364,6 +371,8 @@ Output updates using this format:
 
 Valid section keys: executive_summary, problem_statement, user_personas, goals_and_metrics, feature_list, technical_architecture, data_model, api_contracts, non_functional_requirements, open_questions
 
+Do NOT include a top-level section header (e.g. "## 1. Executive Summary") in the content — the UI already displays the section title. Start with the body content directly.
+
 Only output PRD_UPDATE blocks for sections that need changes. If no updates are needed, respond briefly without any PRD_UPDATE blocks.`;
 
     const prompt = `Review this shipped Plan (${planId}) and update the PRD as needed.\n\n## Shipped Plan\n\n${planContent}`;
@@ -414,6 +423,8 @@ Output updates using this format:
 [/PRD_UPDATE]
 
 Valid section keys: executive_summary, problem_statement, user_personas, goals_and_metrics, feature_list, technical_architecture, data_model, api_contracts, non_functional_requirements, open_questions
+
+Do NOT include a top-level section header (e.g. "## 1. Executive Summary") in the content — the UI already displays the section title. Start with the body content directly.
 
 Only output PRD_UPDATE blocks for sections that need changes. If no updates are needed, respond briefly without any PRD_UPDATE blocks.`;
 

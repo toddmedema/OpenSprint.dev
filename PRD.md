@@ -237,7 +237,7 @@ The living PRD generated in this phase includes the following sections: Executiv
 
 #### 7.1.4 PRD Storage
 
-The living PRD is stored as a structured JSON file within the project's git repository at `.opensprint/prd.json`. Each section is a top-level key with its content stored as markdown text, enabling independent versioning and targeted updates. The JSON wrapper allows the backend to subscribe to changes at the section level, diff individual sections, and merge updates from different phases without conflicts. Git history provides the full version timeline. The frontend renders each section's markdown content as a readable document.
+The living PRD is stored as a structured JSON file within the project's git repository at `.opensprint/prd.json`. Each section is a top-level key with its content stored as markdown text, enabling independent versioning and targeted updates. The JSON wrapper allows the backend to subscribe to changes at the section level, diff individual sections, and merge updates from different phases without conflicts. Git history provides the full version timeline. The frontend renders each section's markdown content as a readable document. Section content should NOT include a top-level header (e.g. `## 1. Executive Summary`) — the UI already displays the section title for each card.
 
 #### 7.1.5 User Interface
 
@@ -450,9 +450,9 @@ Stored as `.opensprint/prd.json` in the project repo. Each section's content is 
 {
   "version": 12,
   "sections": {
-    "executive_summary": { "content": "## Executive Summary\n\nThis product...", "version": 5, "updated_at": "..." },
-    "problem_statement": { "content": "## Problem Statement\n\nUsers face...", "version": 3, "updated_at": "..." },
-    "user_personas": { "content": "## User Personas\n\n### Persona 1...", "version": 2, "updated_at": "..." }
+    "executive_summary": { "content": "This product...", "version": 5, "updated_at": "..." },
+    "problem_statement": { "content": "Users face...", "version": 3, "updated_at": "..." },
+    "user_personas": { "content": "### Persona 1...", "version": 2, "updated_at": "..." }
   },
   "change_log": [
     { "section": "executive_summary", "version": 5, "source": "validate", "timestamp": "...", "diff": "..." }

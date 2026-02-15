@@ -1,0 +1,11 @@
+{
+  "id": "6300e02b-2d38-47a2-a87b-e0a823e4ab5e",
+  "text": "In the plan view, we shouldn't show the \"re-ship\" button unless changes have been made AFTER the feature was fully shipped. I think this should be as easy as comparing the lastModified date of the plan to the shipped date of the plan in the plan's metadata.",
+  "category": "bug",
+  "mappedPlanId": "plan-phase-feature-decomposition",
+  "createdTaskIds": [
+    "opensprint.dev-vwf.8"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-15T18:00:47.597Z"
+}

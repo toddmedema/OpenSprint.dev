@@ -52,12 +52,13 @@ export class TaskService {
 
   /** Transform beads issue to Task with computed kanbanColumn */
   private beadsIssueToTask(issue: BeadsIssue, readyIds: Set<string>, idToIssue: Map<string, BeadsIssue>): Task {
+    const id = issue.id ?? "";
     const kanbanColumn = this.computeKanbanColumn(issue, readyIds, idToIssue);
     const deps = (issue.dependencies as Array<{ depends_on_id: string; type: string }>) ?? [];
     const epicId = this.extractEpicId(issue.id);
 
     return {
-      id: issue.id,
+      id,
       title: issue.title ?? "",
       description: (issue.description as string) ?? "",
       type: this.normalizeType((issue.issue_type ?? issue.type) as string | undefined),
@@ -98,7 +99,8 @@ export class TaskService {
     return readyIds.has(issue.id) ? "ready" : "backlog";
   }
 
-  private extractEpicId(id: string): string | null {
+  private extractEpicId(id: string | undefined | null): string | null {
+    if (id == null || typeof id !== "string") return null;
     const lastDot = id.lastIndexOf(".");
     if (lastDot <= 0) return null;
     return id.slice(0, lastDot);
