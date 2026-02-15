@@ -1,0 +1,11 @@
+{
+  "id": "a3918dc5-d603-480a-a86f-90f102b87916",
+  "text": "The page contents of the validate screen should be scrollable (currently, I cannot scroll down to view the feedback when it is longer than the viewport)",
+  "category": "ux",
+  "mappedPlanId": null,
+  "createdTaskIds": [
+    "opensprint.dev-5p2"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-15T17:24:55.164Z"
+}

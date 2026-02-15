@@ -1,8 +1,6 @@
 import { Router, Request } from 'express';
-import { OrchestratorService } from '../services/orchestrator.service.js';
+import { orchestratorService } from '../services/orchestrator.service.js';
 import type { ApiResponse, OrchestratorStatus } from '@opensprint/shared';
-
-const orchestratorService = new OrchestratorService();
 
 export const buildRouter = Router({ mergeParams: true });
 

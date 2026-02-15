@@ -221,6 +221,7 @@ export class OrchestratorService {
         type: 'build.status',
         running: true,
         currentTask: task.id,
+        currentPhase: 'coding',
         queueDepth: readyTasks.length - 1,
       });
 
@@ -377,13 +378,20 @@ export class OrchestratorService {
 
       state.lastTestResults = testResults;
 
-      // Move to review phase
+      // Move to review phase (coding-to-review transition)
       state.status.currentPhase = 'review';
       broadcastToProject(projectId, {
         type: 'task.updated',
         taskId: task.id,
         status: 'in_progress',
         assignee: 'agent-1',
+      });
+      broadcastToProject(projectId, {
+        type: 'build.status',
+        running: true,
+        currentTask: task.id,
+        currentPhase: 'review',
+        queueDepth: state.status.queueDepth,
       });
 
       await this.executeReviewPhase(projectId, repoPath, task, branchName);
@@ -440,6 +448,13 @@ export class OrchestratorService {
       state.startedAt = new Date().toISOString();
       state.outputLog = [];
       state.lastOutputTime = Date.now();
+
+      broadcastToProject(projectId, {
+        type: 'agent.started',
+        taskId: task.id,
+        phase: 'review',
+        branchName,
+      });
 
       const promptPath = path.join(taskDir, 'prompt.md');
 
@@ -730,3 +745,6 @@ export class OrchestratorService {
     return approved;
   }
 }
+
+/** Shared orchestrator instance for build routes and task list (kanban phase override) */
+export const orchestratorService = new OrchestratorService();

@@ -5,6 +5,7 @@ import type { FeedbackItem, FeedbackMappedEvent } from "@opensprint/shared";
 
 interface ValidatePhaseProps {
   projectId: string;
+  onNavigateToBuildTask?: (taskId: string) => void;
 }
 
 const categoryColors: Record<string, string> = {
@@ -20,7 +21,7 @@ const statusColors: Record<string, string> = {
   resolved: "bg-green-100 text-green-700",
 };
 
-export function ValidatePhase({ projectId }: ValidatePhaseProps) {
+export function ValidatePhase({ projectId, onNavigateToBuildTask }: ValidatePhaseProps) {
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -153,15 +154,26 @@ export function ValidatePhase({ projectId }: ValidatePhaseProps) {
               )}
 
               {item.createdTaskIds.length > 0 && (
-                <div className="mt-1 flex gap-1">
-                  {item.createdTaskIds.map((taskId) => (
-                    <span
-                      key={taskId}
-                      className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-600"
-                    >
-                      {taskId}
-                    </span>
-                  ))}
+                <div className="mt-1 flex gap-1 flex-wrap">
+                  {item.createdTaskIds.map((taskId) =>
+                    onNavigateToBuildTask ? (
+                      <button
+                        key={taskId}
+                        type="button"
+                        onClick={() => onNavigateToBuildTask(taskId)}
+                        className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-brand-600 hover:bg-brand-50 hover:text-brand-700 underline transition-colors"
+                      >
+                        {taskId}
+                      </button>
+                    ) : (
+                      <span
+                        key={taskId}
+                        className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-600"
+                      >
+                        {taskId}
+                      </span>
+                    ),
+                  )}
                 </div>
               )}
 

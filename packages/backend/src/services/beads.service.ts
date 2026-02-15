@@ -113,10 +113,18 @@ export class BeadsService {
     return this.parseJson(stdout);
   }
 
-  /** Close an issue */
+  /** Close an issue (bd close returns a JSON array of closed issues, or sometimes empty output) */
   async close(repoPath: string, id: string, reason: string): Promise<BeadsIssue> {
     const stdout = await this.exec(repoPath, `close ${id} --reason "${reason.replace(/"/g, '\\"')}" --json`);
-    return this.parseJson(stdout);
+    const arr = this.parseJsonArray(stdout);
+    let result = arr[0];
+    if (!result) {
+      result = await this.show(repoPath, id);
+    }
+    if ((result.status as string) !== "closed") {
+      throw new Error(`Beads close did not persist: issue ${id} still has status "${result.status ?? "undefined"}"`);
+    }
+    return result;
   }
 
   /** Get ready tasks (priority-sorted, all deps resolved) */
@@ -137,10 +145,13 @@ export class BeadsService {
     return this.parseJsonArray(stdout);
   }
 
-  /** Show full details of an issue */
+  /** Show full details of an issue (bd show returns a JSON array) */
   async show(repoPath: string, id: string): Promise<BeadsIssue> {
     const stdout = await this.exec(repoPath, `show ${id} --json`);
-    return this.parseJson(stdout);
+    const arr = this.parseJsonArray(stdout);
+    const first = arr[0];
+    if (first) return first;
+    throw new Error(`Issue ${id} not found`);
   }
 
   /** Get IDs of issues that block this one (this task depends on them) */

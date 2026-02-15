@@ -1,0 +1,9 @@
+{
+  "id": "b9eb49c1-2b87-44e2-9d2d-0e5d46d91152",
+  "text": "To prevent a flash of content loading, when you load the build page, it should come pre-hydrated with the current tasks state rather than waiting for that information to load from websockets",
+  "category": "ux",
+  "mappedPlanId": "build-phase-kanban-and-task-listing",
+  "createdTaskIds": [],
+  "status": "mapped",
+  "createdAt": "2026-02-15T17:40:15.409Z"
+}

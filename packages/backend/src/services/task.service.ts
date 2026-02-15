@@ -1,8 +1,9 @@
 import type { Task, AgentSession, KanbanColumn, TaskDependency } from "@opensprint/shared";
-import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { BeadsService } from "./beads.service.js";
 import { SessionManager } from "./session-manager.js";
+import { orchestratorService } from "./orchestrator.service.js";
+import { broadcastToProject } from "../websocket/index.js";
 import type { BeadsIssue } from "./beads.service.js";
 
 export class TaskService {
@@ -22,6 +23,15 @@ export class TaskService {
 
     const tasks = allIssues.map((issue) => this.beadsIssueToTask(issue, readyIds, idToIssue));
     await this.enrichTasksWithTestResults(project.repoPath, tasks);
+
+    // Override kanban column for current task when orchestrator phase is review (PRD §7.3.2)
+    const buildStatus = await orchestratorService.getStatus(projectId);
+    if (buildStatus.currentTask && buildStatus.currentPhase === "review") {
+      const currentTask = tasks.find((t) => t.id === buildStatus.currentTask);
+      if (currentTask && currentTask.kanbanColumn === "in_progress") {
+        currentTask.kanbanColumn = "in_review";
+      }
+    }
     return tasks;
   }
 
@@ -136,5 +146,56 @@ export class TaskService {
       throw new Error(`Session ${taskId}-${attempt} not found`);
     }
     return session;
+  }
+
+  /** Manually mark a task as complete. If it was the last task in its epic, closes the epic too. */
+  async markComplete(projectId: string, taskId: string): Promise<{ taskClosed: boolean; epicClosed?: boolean }> {
+    const project = await this.projectService.getProject(projectId);
+    const issue = await this.beads.show(project.repoPath, taskId);
+    const status = (issue.status as string) ?? "open";
+
+    if (status === "closed") {
+      return { taskClosed: false };
+    }
+
+    await this.beads.close(project.repoPath, taskId, "Manually marked complete");
+    await this.beads.sync(project.repoPath);
+    broadcastToProject(projectId, {
+      type: "task.updated",
+      taskId,
+      status: "closed",
+      assignee: null,
+    });
+
+    const epicId = this.extractEpicId(taskId);
+    let epicClosed = false;
+
+    if (epicId) {
+      const allIssues = await this.beads.listAll(project.repoPath);
+      const implTasks = allIssues.filter(
+        (i) =>
+          i.id.startsWith(epicId + ".") &&
+          !i.id.endsWith(".0") &&
+          (i.issue_type ?? i.type) !== "epic",
+      );
+      const allClosed = implTasks.every((i) => (i.status as string) === "closed");
+
+      if (allClosed) {
+        const epicIssue = allIssues.find((i) => i.id === epicId);
+        if (epicIssue && (epicIssue.status as string) !== "closed") {
+          await this.beads.close(project.repoPath, epicId, "All tasks completed");
+          await this.beads.sync(project.repoPath);
+          broadcastToProject(projectId, {
+            type: "task.updated",
+            taskId: epicId,
+            status: "closed",
+            assignee: null,
+          });
+          epicClosed = true;
+        }
+      }
+    }
+
+    return { taskClosed: true, epicClosed };
   }
 }
