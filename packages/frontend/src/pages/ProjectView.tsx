@@ -1,6 +1,12 @@
-import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import type { ProjectPhase } from '@opensprint/shared';
+
+const VALID_PHASES: ProjectPhase[] = ['design', 'plan', 'build', 'validate'];
+
+function phaseFromSlug(slug: string | undefined): ProjectPhase {
+  if (slug && VALID_PHASES.includes(slug as ProjectPhase)) return slug as ProjectPhase;
+  return 'design';
+}
 import { Layout } from '../components/layout/Layout';
 import { HilApprovalModal } from '../components/HilApprovalModal';
 import { ProjectWebSocketProvider, useProjectWebSocket } from '../contexts/ProjectWebSocketContext';
@@ -18,10 +24,16 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 function ProjectContent() {
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId, phase: phaseSlug } = useParams<{ projectId: string; phase?: string }>();
+  const navigate = useNavigate();
   const { project, loading, error } = useProject(projectId!);
-  const [currentPhase, setCurrentPhase] = useState<ProjectPhase>('design');
+  const currentPhase = phaseFromSlug(phaseSlug);
   const { hilRequest, hilNotification, respondToHil, clearHilNotification } = useProjectWebSocket();
+
+  const handlePhaseChange = (phase: ProjectPhase) => {
+    const path = phase === 'design' ? `/projects/${projectId}` : `/projects/${projectId}/${phase}`;
+    navigate(path);
+  };
 
   if (loading) {
     return (
@@ -93,7 +105,7 @@ function ProjectContent() {
       <Layout
         project={project}
         currentPhase={currentPhase}
-        onPhaseChange={setCurrentPhase}
+        onPhaseChange={handlePhaseChange}
       >
         {phaseComponents[currentPhase]}
       </Layout>

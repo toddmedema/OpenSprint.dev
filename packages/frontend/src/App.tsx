@@ -8,7 +8,7 @@ export function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/projects/new" element={<ProjectSetup />} />
-      <Route path="/projects/:projectId/*" element={<ProjectView />} />
+      <Route path="/projects/:projectId/:phase?" element={<ProjectView />} />
     </Routes>
   );
 }
