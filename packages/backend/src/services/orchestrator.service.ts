@@ -274,9 +274,16 @@ export class OrchestratorService {
     const state = this.getState(projectId);
     console.log(`[orchestrator] Recovery: crash recovery for task ${taskId} (branch ${branchName})`);
 
-    // Revert branch and return to main
+    // Preserve work before reverting: commit any uncommitted changes and push branch to remote
     try {
       await this.branchManager.waitForGitReady(repoPath);
+      try {
+        await this.branchManager.checkout(repoPath, branchName);
+        await this.branchManager.commitWip(repoPath, taskId);
+        await this.branchManager.pushBranch(repoPath, branchName);
+      } catch (preserveErr) {
+        console.warn("[orchestrator] Recovery: could not preserve branch before revert:", preserveErr);
+      }
       await this.branchManager.revertAndReturnToMain(repoPath, branchName);
     } catch (err) {
       console.warn("[orchestrator] Recovery: branch revert failed, forcing main:", err);
@@ -801,6 +808,11 @@ export class OrchestratorService {
 
       // Clean up branch
       await this.branchManager.deleteBranch(repoPath, branchName);
+
+      // Push main to remote so completed work reaches origin
+      await this.branchManager.pushMain(repoPath).catch((err) => {
+        console.warn("[orchestrator] pushMain failed after merge:", err);
+      });
 
       state.status.totalCompleted += 1;
       state.status.currentTask = null;

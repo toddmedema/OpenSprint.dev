@@ -116,6 +116,30 @@ export class BranchManager {
   }
 
   /**
+   * Push a branch to the remote. Used to preserve work before crash recovery revert.
+   */
+  async pushBranch(repoPath: string, branchName: string): Promise<void> {
+    try {
+      await this.git(repoPath, `push -u origin ${branchName}`);
+    } catch (error) {
+      console.warn(`[branch-manager] pushBranch ${branchName} failed:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Push main to the remote. Called after successful merge so completed work reaches origin.
+   */
+  async pushMain(repoPath: string): Promise<void> {
+    try {
+      await this.git(repoPath, "push origin main");
+    } catch (error) {
+      console.warn("[branch-manager] pushMain failed:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Check for uncommitted changes and create a WIP commit if any exist.
    * Used when agent is terminated (SIGTERM, inactivity timeout) to preserve partial work.
    */
