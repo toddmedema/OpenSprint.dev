@@ -163,7 +163,7 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Feature Plans</h2>
           <button type="button" onClick={() => setShowAddPlanModal(true)} className="btn-primary text-sm">
-            Add Plan
+            Add Feature
           </button>
         </div>
 
@@ -176,7 +176,7 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
               tasks, or add a plan manually.
             </p>
             <button type="button" onClick={() => setShowAddPlanModal(true)} className="btn-primary">
-              Add Plan
+              Add Feature
             </button>
           </div>
         ) : (
