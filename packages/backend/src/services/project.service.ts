@@ -3,9 +3,9 @@ import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { v4 as uuid } from "uuid";
-import type { Project, CreateProjectRequest, ProjectSettings } from "@opensprint/shared";
+import type { Project, CreateProjectRequest, ProjectSettings, CodingAgentByComplexity } from "@opensprint/shared";
 import { OPENSPRINT_DIR, OPENSPRINT_PATHS, DEFAULT_HIL_CONFIG, DEFAULT_DEPLOYMENT_CONFIG } from "@opensprint/shared";
-import type { DeploymentConfig, HilConfig } from "@opensprint/shared";
+import type { DeploymentConfig, HilConfig, PlanComplexity } from "@opensprint/shared";
 import { BeadsService } from "./beads.service.js";
 import { ensureEasConfig } from "./eas-config.js";
 import { AppError } from "../middleware/error-handler.js";
@@ -35,9 +35,12 @@ function normalizeDeployment(input: CreateProjectRequest["deployment"]): Deploym
 /** Normalize HIL config: merge partial input with defaults (PRD §6.5) */
 function normalizeHilConfig(input: CreateProjectRequest["hilConfig"]): HilConfig {
   if (!input) return DEFAULT_HIL_CONFIG;
+  const defined = Object.fromEntries(
+    Object.entries(input).filter(([, v]) => v !== undefined),
+  );
   return {
     ...DEFAULT_HIL_CONFIG,
-    ...input,
+    ...defined,
   };
 }
 
@@ -301,7 +304,37 @@ export class ProjectService {
       }
     }
 
-    const updated = { ...current, ...updates, planningAgent, codingAgent };
+    // Validate codingAgentByComplexity if provided
+    let codingAgentByComplexity: CodingAgentByComplexity | undefined = current.codingAgentByComplexity;
+    if (updates.codingAgentByComplexity !== undefined) {
+      if (updates.codingAgentByComplexity === null || Object.keys(updates.codingAgentByComplexity).length === 0) {
+        codingAgentByComplexity = undefined;
+      } else {
+        codingAgentByComplexity = {};
+        const validKeys: PlanComplexity[] = ["low", "medium", "high", "very_high"];
+        for (const [key, value] of Object.entries(updates.codingAgentByComplexity)) {
+          if (!validKeys.includes(key as PlanComplexity)) continue;
+          if (!value) continue;
+          try {
+            codingAgentByComplexity[key as PlanComplexity] = parseAgentConfig(value, "codingAgent");
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : `Invalid agent config for ${key}`;
+            throw new AppError(400, "INVALID_AGENT_CONFIG", msg);
+          }
+        }
+        if (Object.keys(codingAgentByComplexity).length === 0) {
+          codingAgentByComplexity = undefined;
+        }
+      }
+    }
+
+    const updated: ProjectSettings = {
+      ...current,
+      ...updates,
+      planningAgent,
+      codingAgent,
+      codingAgentByComplexity,
+    };
     const settingsPath = path.join(repoPath, OPENSPRINT_PATHS.settings);
     await this.writeJson(settingsPath, updated);
     return updated;

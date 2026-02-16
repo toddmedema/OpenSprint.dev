@@ -14,8 +14,9 @@ import { BeadsService, type BeadsIssue } from '../services/beads.service.js';
 import { ContextAssembler } from '../services/context-assembler.js';
 import { AgentClient } from '../services/agent-client.js';
 import { BranchManager } from '../services/branch-manager.js';
-import { OPENSPRINT_PATHS, getTestCommandForFramework } from '@opensprint/shared';
+import { OPENSPRINT_PATHS, getTestCommandForFramework, getCodingAgentForComplexity } from '@opensprint/shared';
 import type { AgentConfig, ProjectSettings } from '@opensprint/shared';
+import { getPlanComplexityForTask } from '../services/plan-complexity.js';
 
 // Load .env from monorepo root — override: true so the user's .env key wins
 // over the Cursor IDE's internal CURSOR_API_KEY (which can't auth the CLI agent)
@@ -75,10 +76,11 @@ const branchManager = new BranchManager();
 
 async function main(): Promise<number> {
   const settings = await loadSettings();
-  const codingAgent = settings.codingAgent as AgentConfig;
   const branchName = `opensprint/${taskId}`;
 
   const task = await beads.show(repoPath, taskId);
+  const taskComplexity = await getPlanComplexityForTask(repoPath, task);
+  const codingAgent = getCodingAgentForComplexity(settings, taskComplexity);
   const planContent = await getPlanContentForTask(beads, task);
   const blockers = await beads.getBlockers(repoPath, taskId);
   const prdExcerpt = await contextAssembler.extractPrdExcerpt(repoPath);

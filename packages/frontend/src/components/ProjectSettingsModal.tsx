@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { FolderBrowser } from "./FolderBrowser";
 import { ModelSelect } from "./ModelSelect";
 import { api } from "../api/client";
-import type { Project, ProjectSettings, AgentType, DeploymentMode, HilNotificationMode } from "@opensprint/shared";
+import type { Project, ProjectSettings, AgentType, DeploymentMode, HilNotificationMode, AgentConfig, PlanComplexity } from "@opensprint/shared";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 interface ProjectSettingsModalProps {
@@ -108,6 +108,8 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
             model: codingAgent.model || null,
             cliCommand: codingAgent.cliCommand || null,
           },
+          codingAgentByComplexity:
+            Object.keys(codingAgentByComplexity).length > 0 ? codingAgentByComplexity : undefined,
           deployment: {
             mode: deployment.mode,
             expoConfig:
@@ -147,6 +149,21 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
           }
         : null,
     );
+  };
+
+  const codingAgentByComplexity = settings?.codingAgentByComplexity ?? {};
+
+  const updateCodingAgentByComplexity = (level: PlanComplexity, value: AgentConfig | null) => {
+    setSettings((s) => {
+      if (!s) return null;
+      const current = { ...s.codingAgentByComplexity };
+      if (value === null) {
+        delete current[level];
+      } else {
+        current[level] = value;
+      }
+      return { ...s, codingAgentByComplexity: Object.keys(current).length > 0 ? current : undefined };
+    });
   };
 
   const updateDeployment = (updates: Partial<typeof deployment>) => {
@@ -458,6 +475,107 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                           </p>
                         </div>
                       )}
+                    </div>
+                  </div>
+                  <hr />
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-1">Per-Complexity Overrides</h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Optionally use different agents for tasks based on plan complexity. When not set, the default
+                      coding agent above is used.
+                    </p>
+                    <div className="space-y-3">
+                      {(
+                        [
+                          { key: "low" as PlanComplexity, label: "Low", desc: "Simple, well-defined tasks" },
+                          { key: "medium" as PlanComplexity, label: "Medium", desc: "Moderate complexity tasks" },
+                          { key: "high" as PlanComplexity, label: "High", desc: "Complex, multi-step tasks" },
+                          {
+                            key: "very_high" as PlanComplexity,
+                            label: "Very High",
+                            desc: "Large, cross-cutting tasks",
+                          },
+                        ] as const
+                      ).map((level) => {
+                        const override = codingAgentByComplexity[level.key];
+                        const isEnabled = !!override;
+                        return (
+                          <div key={level.key} className="rounded-lg border border-gray-200 p-3">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={isEnabled}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    updateCodingAgentByComplexity(level.key, {
+                                      type: codingAgent.type,
+                                      model: codingAgent.model,
+                                      cliCommand: codingAgent.cliCommand,
+                                    });
+                                  } else {
+                                    updateCodingAgentByComplexity(level.key, null);
+                                  }
+                                }}
+                                className="rounded"
+                              />
+                              <div className="flex-1">
+                                <span className="text-sm font-medium text-gray-900">{level.label}</span>
+                                <span className="text-xs text-gray-500 ml-2">{level.desc}</span>
+                              </div>
+                            </label>
+                            {isEnabled && override && (
+                              <div className="mt-3 ml-7 grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+                                  <select
+                                    className="input text-sm"
+                                    value={override.type}
+                                    onChange={(e) =>
+                                      updateCodingAgentByComplexity(level.key, {
+                                        ...override,
+                                        type: e.target.value as AgentType,
+                                      })
+                                    }
+                                  >
+                                    <option value="claude">Claude</option>
+                                    <option value="cursor">Cursor</option>
+                                    <option value="custom">Custom CLI</option>
+                                  </select>
+                                </div>
+                                {override.type !== "custom" ? (
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Model</label>
+                                    <ModelSelect
+                                      provider={override.type}
+                                      value={override.model}
+                                      onChange={(id) =>
+                                        updateCodingAgentByComplexity(level.key, { ...override, model: id })
+                                      }
+                                      refreshTrigger={modelRefreshTrigger}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">CLI command</label>
+                                    <input
+                                      type="text"
+                                      className="input w-full font-mono text-xs"
+                                      placeholder="e.g. my-agent"
+                                      value={override.cliCommand ?? ""}
+                                      onChange={(e) =>
+                                        updateCodingAgentByComplexity(level.key, {
+                                          ...override,
+                                          cliCommand: e.target.value || null,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

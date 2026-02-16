@@ -1,4 +1,5 @@
 import type { AgentType } from './agent.js';
+import type { PlanComplexity } from './plan.js';
 
 /** Agent configuration */
 export interface AgentConfig {
@@ -9,6 +10,9 @@ export interface AgentConfig {
 
 /** Agent configuration input for project creation */
 export type AgentConfigInput = AgentConfig;
+
+/** Per-complexity coding agent overrides. Keys are PlanComplexity levels. */
+export type CodingAgentByComplexity = Partial<Record<PlanComplexity, AgentConfig>>;
 
 /** Deployment mode */
 export type DeploymentMode = 'expo' | 'custom';
@@ -51,9 +55,25 @@ export type HilConfigInput = HilConfig;
 export interface ProjectSettings {
   planningAgent: AgentConfig;
   codingAgent: AgentConfig;
+  /** Optional per-complexity coding agent overrides (PRD §12.4) */
+  codingAgentByComplexity?: CodingAgentByComplexity;
   deployment: DeploymentConfig;
   hilConfig: HilConfig;
   testFramework: string | null;
+}
+
+/**
+ * Resolve the coding agent config for a given task complexity.
+ * Falls back through: exact complexity override → default codingAgent.
+ */
+export function getCodingAgentForComplexity(
+  settings: ProjectSettings,
+  complexity: PlanComplexity | undefined,
+): AgentConfig {
+  if (complexity && settings.codingAgentByComplexity?.[complexity]) {
+    return settings.codingAgentByComplexity[complexity]!;
+  }
+  return settings.codingAgent;
 }
 
 /** Default HIL configuration */

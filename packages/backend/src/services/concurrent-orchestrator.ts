@@ -1,6 +1,6 @@
 import path from "path";
 import type { OrchestratorStatus, AgentPhase, ActiveTaskConfig } from "@opensprint/shared";
-import { DEFAULT_RETRY_LIMIT, AGENT_INACTIVITY_TIMEOUT_MS, getTestCommandForFramework } from "@opensprint/shared";
+import { DEFAULT_RETRY_LIMIT, AGENT_INACTIVITY_TIMEOUT_MS, getTestCommandForFramework, getCodingAgentForComplexity } from "@opensprint/shared";
 import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { ProjectService } from "./project.service.js";
 import { agentService } from "./agent.service.js";
@@ -9,6 +9,7 @@ import { ContextAssembler } from "./context-assembler.js";
 import { SessionManager } from "./session-manager.js";
 import { ConductorAgent } from "./conductor-agent.js";
 import { broadcastToProject, sendAgentOutputToProject } from "../websocket/index.js";
+import { getPlanComplexityForTask } from "./plan-complexity.js";
 
 interface AgentSlot {
   taskId: string;
@@ -264,7 +265,11 @@ export class ConcurrentOrchestrator {
 
       const promptPath = `${taskDir}/prompt.md`;
 
-      slot.process = agentService.invokeCodingAgent(promptPath, settings.codingAgent, {
+      // Resolve complexity-aware agent config
+      const taskComplexity = await getPlanComplexityForTask(repoPath, task);
+      const resolvedAgent = getCodingAgentForComplexity(settings, taskComplexity);
+
+      slot.process = agentService.invokeCodingAgent(promptPath, resolvedAgent, {
         cwd: repoPath,
         onOutput: (chunk: string) => {
           slot.outputLog.push(chunk);

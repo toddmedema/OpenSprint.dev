@@ -346,6 +346,55 @@ describe("ProjectService", () => {
     expect(settings.planningAgent.cliCommand).toBe("/usr/bin/my-agent");
   });
 
+  it("should accept and persist codingAgentByComplexity in updateSettings", async () => {
+    const repoPath = path.join(tempDir, "complexity-overrides");
+    const project = await projectService.createProject({
+      name: "Complexity Project",
+      description: "",
+      repoPath,
+      planningAgent: { type: "claude", model: null, cliCommand: null },
+      codingAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    const updated = await projectService.updateSettings(project.id, {
+      codingAgentByComplexity: {
+        high: { type: "claude", model: "claude-opus-5", cliCommand: null },
+        low: { type: "cursor", model: "fast-model", cliCommand: null },
+      },
+    });
+
+    expect(updated.codingAgentByComplexity).toBeDefined();
+    expect(updated.codingAgentByComplexity?.high?.model).toBe("claude-opus-5");
+    expect(updated.codingAgentByComplexity?.low?.type).toBe("cursor");
+
+    // Verify persistence
+    const reloaded = await projectService.getSettings(project.id);
+    expect(reloaded.codingAgentByComplexity?.high?.model).toBe("claude-opus-5");
+  });
+
+  it("should reject invalid agent config in codingAgentByComplexity", async () => {
+    const repoPath = path.join(tempDir, "bad-complexity");
+    const project = await projectService.createProject({
+      name: "Bad Complexity",
+      description: "",
+      repoPath,
+      planningAgent: { type: "claude", model: null, cliCommand: null },
+      codingAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    await expect(
+      projectService.updateSettings(project.id, {
+        codingAgentByComplexity: {
+          high: { type: "invalid" as "claude", model: null, cliCommand: null },
+        },
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_AGENT_CONFIG" });
+  });
+
   it("should reject invalid agent config in updateSettings", async () => {
     const repoPath = path.join(tempDir, "update-settings");
     const project = await projectService.createProject({
