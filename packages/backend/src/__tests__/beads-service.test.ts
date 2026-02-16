@@ -348,4 +348,28 @@ describe('BeadsService', () => {
       expect(result.some((r) => r.status === 'closed')).toBe(true);
     });
   });
+
+  describe('listInProgressWithAgentAssignee', () => {
+    it('should return only in_progress tasks with agent-N assignee', async () => {
+      mockStdout = JSON.stringify([
+        { id: 'task-1', status: 'in_progress', assignee: 'agent-1' },
+        { id: 'task-2', status: 'open', assignee: 'agent-1' },
+        { id: 'task-3', status: 'in_progress', assignee: 'Todd Medema' },
+        { id: 'task-4', status: 'in_progress', assignee: 'agent-2' },
+        { id: 'task-5', status: 'in_progress', assignee: null },
+      ]);
+      const result = await beads.listInProgressWithAgentAssignee('/repo');
+      expect(result).toHaveLength(2);
+      expect(result.map((r) => r.id)).toEqual(['task-1', 'task-4']);
+    });
+
+    it('should return empty array when no orphaned tasks', async () => {
+      mockStdout = JSON.stringify([
+        { id: 'a', status: 'open', assignee: null },
+        { id: 'b', status: 'closed', assignee: null },
+      ]);
+      const result = await beads.listInProgressWithAgentAssignee('/repo');
+      expect(result).toEqual([]);
+    });
+  });
 });

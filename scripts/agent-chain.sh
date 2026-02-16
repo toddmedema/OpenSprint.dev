@@ -8,6 +8,9 @@
 set -e
 cd "$(dirname "$0")/.."
 
+# 0. Pre-flight: recover orphaned tasks (in_progress + agent assignee but no active process)
+npm run recover-orphans -w packages/backend 2>/dev/null || true
+
 # 1. Get next ready task (dependency-aware, priority-sorted)
 READY_JSON=$(bd ready --json 2>/dev/null || echo "[]")
 # Filter out Plan approval gate (user closes via Build It!) and epics (containers, not work items)
