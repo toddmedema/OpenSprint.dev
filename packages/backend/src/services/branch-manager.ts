@@ -1,8 +1,8 @@
-import { exec } from 'child_process';
-import fs from 'fs/promises';
-import os from 'os';
-import path from 'path';
-import { promisify } from 'util';
+import { exec } from "child_process";
+import fs from "fs/promises";
+import os from "os";
+import path from "path";
+import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
@@ -23,7 +23,7 @@ export class BranchManager {
    * Create a task branch from main.
    */
   async createBranch(repoPath: string, branchName: string): Promise<void> {
-    await this.git(repoPath, 'checkout main');
+    await this.git(repoPath, "checkout main");
     await this.git(repoPath, `checkout -b ${branchName}`);
   }
 
@@ -52,7 +52,7 @@ export class BranchManager {
    * Get the current branch name.
    */
   async getCurrentBranch(repoPath: string): Promise<string> {
-    const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: repoPath });
+    const { stdout } = await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: repoPath });
     return stdout.trim();
   }
 
@@ -62,17 +62,17 @@ export class BranchManager {
   async revertAndReturnToMain(repoPath: string, branchName: string): Promise<void> {
     try {
       // Reset any uncommitted changes
-      await this.git(repoPath, 'reset --hard HEAD');
-      await this.git(repoPath, 'clean -fd');
+      await this.git(repoPath, "reset --hard HEAD");
+      await this.git(repoPath, "clean -fd");
       // Switch back to main
-      await this.git(repoPath, 'checkout main');
+      await this.git(repoPath, "checkout main");
       // Delete the task branch
       await this.git(repoPath, `branch -D ${branchName}`);
     } catch (error) {
       console.error(`Failed to revert branch ${branchName}:`, error);
       // Force checkout main even if something failed
       try {
-        await this.git(repoPath, 'checkout -f main');
+        await this.git(repoPath, "checkout -f main");
       } catch {
         // Last resort
       }
@@ -84,10 +84,7 @@ export class BranchManager {
    */
   async verifyMerge(repoPath: string, branchName: string): Promise<boolean> {
     try {
-      const { stdout } = await execAsync(
-        `git branch --merged main`,
-        { cwd: repoPath },
-      );
+      const { stdout } = await execAsync(`git branch --merged main`, { cwd: repoPath });
       return stdout.includes(branchName);
     } catch {
       return false;
@@ -109,10 +106,7 @@ export class BranchManager {
    * Get the diff between main and a task branch.
    */
   async getDiff(repoPath: string, branchName: string): Promise<string> {
-    const { stdout } = await execAsync(
-      `git diff main...${branchName}`,
-      { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 },
-    );
+    const { stdout } = await execAsync(`git diff main...${branchName}`, { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 });
     return stdout;
   }
 
@@ -146,13 +140,13 @@ export class BranchManager {
    */
   async commitWip(repoPath: string, taskId: string): Promise<boolean> {
     try {
-      const { stdout } = await execAsync('git status --porcelain', {
+      const { stdout } = await execAsync("git status --porcelain", {
         cwd: repoPath,
         timeout: 5000,
       });
       if (!stdout.trim()) return false;
 
-      await this.git(repoPath, 'add -A');
+      await this.git(repoPath, "add -A");
       await this.git(repoPath, `commit -m "WIP: ${taskId}"`);
       return true;
     } catch (error) {
@@ -165,11 +159,8 @@ export class BranchManager {
    * Get a summary of files changed between main and a branch.
    */
   async getChangedFiles(repoPath: string, branchName: string): Promise<string[]> {
-    const { stdout } = await execAsync(
-      `git diff --name-only main...${branchName}`,
-      { cwd: repoPath },
-    );
-    return stdout.trim().split('\n').filter(Boolean);
+    const { stdout } = await execAsync(`git diff --name-only main...${branchName}`, { cwd: repoPath });
+    return stdout.trim().split("\n").filter(Boolean);
   }
 
   /**
@@ -178,7 +169,7 @@ export class BranchManager {
    * the previous agent's git operations haven't fully completed.
    */
   async waitForGitReady(repoPath: string): Promise<void> {
-    const lockPath = path.join(repoPath, '.git', 'index.lock');
+    const lockPath = path.join(repoPath, ".git", "index.lock");
     const start = Date.now();
 
     while (Date.now() - start < GIT_LOCK_TIMEOUT_MS) {
@@ -209,7 +200,7 @@ export class BranchManager {
 
     // Timeout reached — force-remove the lock as last resort
     try {
-      console.warn('[branch-manager] Git lock wait timed out, force-removing .git/index.lock');
+      console.warn("[branch-manager] Git lock wait timed out, force-removing .git/index.lock");
       await fs.unlink(lockPath);
     } catch {
       // Lock may have been removed concurrently
@@ -225,13 +216,13 @@ export class BranchManager {
     await this.waitForGitReady(repoPath);
 
     const currentBranch = await this.getCurrentBranch(repoPath);
-    if (currentBranch !== 'main') {
+    if (currentBranch !== "main") {
       console.warn(`[branch-manager] Expected main but on ${currentBranch}, switching to main`);
       try {
-        await this.git(repoPath, 'reset --hard HEAD');
-        await this.git(repoPath, 'checkout main');
+        await this.git(repoPath, "reset --hard HEAD");
+        await this.git(repoPath, "checkout main");
       } catch {
-        await this.git(repoPath, 'checkout -f main');
+        await this.git(repoPath, "checkout -f main");
       }
     }
   }
@@ -244,20 +235,20 @@ export class BranchManager {
    */
   async captureBranchDiff(repoPath: string, branchName: string): Promise<string> {
     try {
-      const { stdout } = await execAsync(
-        `git diff main...${branchName}`,
-        { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 },
-      );
+      const { stdout } = await execAsync(`git diff main...${branchName}`, {
+        cwd: repoPath,
+        maxBuffer: 10 * 1024 * 1024,
+      });
       return stdout;
     } catch {
-      return '';
+      return "";
     }
   }
 
   // ─── Git Worktree Operations ───
 
   private getWorktreeBasePath(): string {
-    return path.join(os.tmpdir(), 'opensprint-worktrees');
+    return path.join(os.tmpdir(), "opensprint-worktrees");
   }
 
   /**
@@ -307,32 +298,49 @@ export class BranchManager {
    */
   private async symlinkNodeModules(repoPath: string, wtPath: string): Promise<void> {
     // Symlink root node_modules
-    const srcRoot = path.join(repoPath, 'node_modules');
-    const destRoot = path.join(wtPath, 'node_modules');
+    const srcRoot = path.join(repoPath, "node_modules");
+    const destRoot = path.join(wtPath, "node_modules");
     try {
       await fs.access(srcRoot);
-      await fs.symlink(srcRoot, destRoot, 'junction');
+      await this.forceSymlink(srcRoot, destRoot);
     } catch (err) {
-      console.warn('[branch-manager] Failed to symlink root node_modules:', err);
+      console.warn("[branch-manager] Failed to symlink root node_modules:", err);
     }
 
     // Symlink per-package node_modules (for .vite caches etc.)
     try {
-      const packagesDir = path.join(repoPath, 'packages');
+      const packagesDir = path.join(repoPath, "packages");
       const entries = await fs.readdir(packagesDir, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
-        const srcPkg = path.join(packagesDir, entry.name, 'node_modules');
-        const destPkg = path.join(wtPath, 'packages', entry.name, 'node_modules');
+        const srcPkg = path.join(packagesDir, entry.name, "node_modules");
+        const destPkg = path.join(wtPath, "packages", entry.name, "node_modules");
         try {
           await fs.access(srcPkg);
-          await fs.symlink(srcPkg, destPkg, 'junction');
+          await fs.mkdir(path.dirname(destPkg), { recursive: true });
+          await this.forceSymlink(srcPkg, destPkg);
         } catch {
           // Package doesn't have node_modules — skip
         }
       }
     } catch {
       // No packages directory or other issue — non-critical
+    }
+  }
+
+  /**
+   * Create a symlink, removing any existing file/symlink at the destination first.
+   */
+  private async forceSymlink(target: string, linkPath: string): Promise<void> {
+    try {
+      await fs.symlink(target, linkPath, "junction");
+    } catch (err: any) {
+      if (err.code === "EEXIST") {
+        await fs.rm(linkPath, { recursive: true, force: true });
+        await fs.symlink(target, linkPath, "junction");
+      } else {
+        throw err;
+      }
     }
   }
 
@@ -347,7 +355,7 @@ export class BranchManager {
       // Worktree may not exist — also try manual cleanup
       try {
         await fs.rm(wtPath, { recursive: true, force: true });
-        await this.git(repoPath, 'worktree prune');
+        await this.git(repoPath, "worktree prune");
       } catch {
         // Nothing to clean up
       }
