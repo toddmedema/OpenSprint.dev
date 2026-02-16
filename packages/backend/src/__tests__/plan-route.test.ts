@@ -103,4 +103,47 @@ describe("Plan REST endpoints - task decomposition", () => {
     expect(res.body.data.metadata.beadEpicId).toBeDefined();
     expect(res.body.data.metadata.gateTaskId).toBeDefined();
   });
+
+  it("GET /projects/:id/plans/:planId returns lastModified (plan markdown file mtime)", async () => {
+    const app = createApp();
+    const planBody = {
+      title: "Feature With LastModified",
+      content: "# Feature\n\nContent.",
+      complexity: "low",
+    };
+
+    const createRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send(planBody);
+    expect(createRes.status).toBe(201);
+    const planId = createRes.body.data.metadata.planId;
+
+    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans/${planId}`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.lastModified).toBeDefined();
+    expect(typeof getRes.body.data.lastModified).toBe("string");
+    // Should be valid ISO date
+    expect(new Date(getRes.body.data.lastModified).getTime()).not.toBeNaN();
+  });
+
+  it("GET /projects/:id/plans list returns lastModified for each plan", async () => {
+    const app = createApp();
+    const planBody = {
+      title: "List Test Feature",
+      content: "# List Test\n\nContent.",
+      complexity: "low",
+    };
+
+    await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+
+    const listRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.data.length).toBeGreaterThan(0);
+    const plan = listRes.body.data.find((p: { metadata: { planId: string } }) =>
+      p.metadata.planId.includes("list-test-feature")
+    );
+    expect(plan).toBeDefined();
+    expect(plan.lastModified).toBeDefined();
+    expect(typeof plan.lastModified).toBe("string");
+  });
 });
