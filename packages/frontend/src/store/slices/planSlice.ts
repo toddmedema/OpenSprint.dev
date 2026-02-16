@@ -35,13 +35,10 @@ const initialState: PlanState = {
 };
 
 export const fetchPlans = createAsyncThunk("plan/fetchPlans", async (projectId: string) => {
-  const [listData, depsData] = await Promise.all([
-    api.plans.list(projectId),
-    api.plans.dependencies(projectId).catch(() => null),
-  ]);
+  const graph = await api.plans.list(projectId);
   return {
-    plans: listData as Plan[],
-    dependencyGraph: depsData as PlanDependencyGraph | null,
+    plans: graph.plans,
+    dependencyGraph: graph,
   };
 });
 
@@ -98,6 +95,13 @@ const planSlice = createSlice({
     },
     setPlanError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
+    },
+    setPlansAndGraph(
+      state,
+      action: PayloadAction<{ plans: Plan[]; dependencyGraph: PlanDependencyGraph | null }>,
+    ) {
+      state.plans = action.payload.plans;
+      state.dependencyGraph = action.payload.dependencyGraph;
     },
     resetPlan() {
       return initialState;
@@ -181,5 +185,5 @@ const planSlice = createSlice({
   },
 });
 
-export const { setSelectedPlanId, addPlanLocally, setPlanError, resetPlan } = planSlice.actions;
+export const { setSelectedPlanId, addPlanLocally, setPlanError, setPlansAndGraph, resetPlan } = planSlice.actions;
 export default planSlice.reducer;

@@ -24,7 +24,7 @@ vi.mock("../api/client", () => ({
   api: {
     projects: { get: vi.fn().mockResolvedValue({ id: "proj-1", name: "Test", currentPhase: "dream" }) },
     prd: { get: vi.fn().mockResolvedValue({}), getHistory: vi.fn().mockResolvedValue([]) },
-    plans: { list: vi.fn().mockResolvedValue([]) },
+    plans: { list: vi.fn().mockResolvedValue({ plans: [], edges: [] }) },
     tasks: { list: vi.fn().mockResolvedValue([]) },
     build: { getPlans: vi.fn().mockResolvedValue([]), getStatus: vi.fn().mockResolvedValue({}) },
     feedback: { list: vi.fn().mockResolvedValue([]) },

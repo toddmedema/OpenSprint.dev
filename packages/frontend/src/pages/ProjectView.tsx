@@ -9,7 +9,6 @@ import { fetchDreamChat, fetchPrd, fetchPrdHistory, resetDream } from "../store/
 import { fetchPlans, resetPlan } from "../store/slices/planSlice";
 import {
   fetchTasks,
-  fetchBuildPlans,
   fetchBuildStatus,
   resetBuild,
   setSelectedTaskId,
@@ -56,7 +55,6 @@ export function ProjectView() {
     dispatch(fetchPrdHistory(projectId));
     dispatch(fetchPlans(projectId));
     dispatch(fetchTasks(projectId));
-    dispatch(fetchBuildPlans(projectId));
     dispatch(fetchBuildStatus(projectId));
     dispatch(fetchFeedback(projectId));
 
@@ -130,7 +128,12 @@ export function ProjectView() {
             {phase === "dream" && (
               <DreamPhase projectId={projectId} onNavigateToPlan={() => handlePhaseChange("plan")} />
             )}
-            {phase === "plan" && <PlanPhase projectId={projectId} />}
+            {phase === "plan" && (
+              <PlanPhase
+                projectId={projectId}
+                onNavigateToBuildTask={handleNavigateToBuildTask}
+              />
+            )}
             {phase === "build" && <BuildPhase projectId={projectId} />}
             {phase === "verify" && (
               <VerifyPhase projectId={projectId} onNavigateToBuildTask={handleNavigateToBuildTask} />

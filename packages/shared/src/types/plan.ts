@@ -31,6 +31,8 @@ export interface Plan {
   taskCount: number;
   completedTaskCount: number;
   dependencyCount: number;
+  /** ISO date string of plan markdown file mtime */
+  lastModified?: string;
 }
 
 /** Dependency edge between Plans for the dependency graph */

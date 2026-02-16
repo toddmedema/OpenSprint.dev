@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import type { AgentSession, Task, Plan, KanbanColumn } from "@opensprint/shared";
+import type { AgentSession, Task, KanbanColumn } from "@opensprint/shared";
 import { api } from "../../api/client";
+import { setPlansAndGraph } from "./planSlice";
 
 interface TaskCard {
   id: string;
@@ -14,7 +15,6 @@ interface TaskCard {
 
 export interface BuildState {
   tasks: TaskCard[];
-  plans: Plan[];
   orchestratorRunning: boolean;
   awaitingApproval: boolean;
   selectedTaskId: string | null;
@@ -34,7 +34,6 @@ export interface BuildState {
 
 const initialState: BuildState = {
   tasks: [],
-  plans: [],
   orchestratorRunning: false,
   awaitingApproval: false,
   selectedTaskId: null,
@@ -51,10 +50,6 @@ const initialState: BuildState = {
 
 export const fetchTasks = createAsyncThunk("build/fetchTasks", async (projectId: string) => {
   return (await api.tasks.list(projectId)) as TaskCard[];
-});
-
-export const fetchBuildPlans = createAsyncThunk("build/fetchPlans", async (projectId: string) => {
-  return (await api.plans.list(projectId)) as Plan[];
 });
 
 export const fetchBuildStatus = createAsyncThunk("build/fetchStatus", async (projectId: string) => {
@@ -85,13 +80,14 @@ export const pauseBuild = createAsyncThunk("build/pause", async (projectId: stri
 
 export const markTaskComplete = createAsyncThunk(
   "build/markTaskComplete",
-  async ({ projectId, taskId }: { projectId: string; taskId: string }) => {
+  async ({ projectId, taskId }: { projectId: string; taskId: string }, { dispatch }) => {
     await api.tasks.markComplete(projectId, taskId);
-    const [tasksData, plansData] = await Promise.all([api.tasks.list(projectId), api.plans.list(projectId)]);
-    return {
-      tasks: (tasksData as TaskCard[]) ?? [],
-      plans: (plansData as Plan[]) ?? [],
-    };
+    const [tasksData, plansGraph] = await Promise.all([
+      api.tasks.list(projectId),
+      api.plans.list(projectId),
+    ]);
+    dispatch(setPlansAndGraph({ plans: plansGraph.plans, dependencyGraph: plansGraph }));
+    return { tasks: (tasksData as TaskCard[]) ?? [] };
   },
 );
 
@@ -163,10 +159,6 @@ const buildSlice = createSlice({
         state.loading = false;
         state.error = action.error.message ?? "Failed to load tasks";
       })
-      // fetchBuildPlans
-      .addCase(fetchBuildPlans.fulfilled, (state, action) => {
-        state.plans = action.payload;
-      })
       // fetchBuildStatus
       .addCase(fetchBuildStatus.fulfilled, (state, action) => {
         state.orchestratorRunning = action.payload?.running ?? false;
@@ -216,7 +208,6 @@ const buildSlice = createSlice({
       })
       .addCase(markTaskComplete.fulfilled, (state, action) => {
         state.tasks = action.payload.tasks;
-        state.plans = action.payload.plans;
         state.markCompleteLoading = false;
       })
       .addCase(markTaskComplete.rejected, (state, action) => {

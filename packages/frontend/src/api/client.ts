@@ -102,7 +102,8 @@ export const api = {
 
   // ─── Plans ───
   plans: {
-    list: (projectId: string) => request<unknown[]>(`/projects/${projectId}/plans`),
+    list: (projectId: string) =>
+      request<import("@opensprint/shared").PlanDependencyGraph>(`/projects/${projectId}/plans`),
     decompose: (projectId: string) =>
       request<{ created: number; plans: unknown[] }>(`/projects/${projectId}/plans/decompose`, {
         method: "POST",

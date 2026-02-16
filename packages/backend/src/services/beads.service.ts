@@ -197,7 +197,7 @@ export class BeadsService {
    * a blocks dependency resolved when the blocker status is closed.
    */
   async ready(repoPath: string): Promise<BeadsIssue[]> {
-    const stdout = await this.exec(repoPath, "ready --json");
+    const stdout = await this.exec(repoPath, "ready --json -n 0");
     const rawTasks = this.parseJsonArray(stdout);
     if (rawTasks.length === 0) return [];
 

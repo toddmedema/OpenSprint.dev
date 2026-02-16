@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { KanbanColumn, AgentSession, Plan } from "@opensprint/shared";
 import { KANBAN_COLUMNS, PRIORITY_LABELS } from "@opensprint/shared";
 import { useAppDispatch, useAppSelector } from "../../store";
@@ -152,7 +153,7 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
 
   /* ── Redux state ── */
   const tasks = useAppSelector((s) => s.build.tasks) as TaskCard[];
-  const plans = useAppSelector((s) => s.build.plans);
+  const plans = useAppSelector((s) => s.plan.plans);
   const orchestratorRunning = useAppSelector((s) => s.build.orchestratorRunning);
   const awaitingApproval = useAppSelector((s) => s.build.awaitingApproval);
   const selectedTask = useAppSelector((s) => s.build.selectedTaskId);
@@ -269,7 +270,7 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
   const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full">
       {error && (
         <div className="mx-4 mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex justify-between items-center">
           <span>{error}</span>
@@ -278,8 +279,10 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
           </button>
         </div>
       )}
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 bg-white">
+      <div className="px-6 py-4 border-b border-gray-200 bg-white shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Build</h2>
@@ -384,53 +387,59 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
           </div>
         )}
       </div>
+      </div>
 
-      {/* Task Detail Panel */}
+      {/* Sidebar: Task Detail — matches Plan detail layout */}
       {selectedTask && (
-        <div className="h-80 border-t border-gray-200 bg-gray-900 text-gray-100 overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700 shrink-0">
-            <span className="text-xs font-mono text-gray-400">{selectedTask}</span>
-            <div className="flex items-center gap-2">
+        <div className="w-[420px] border-l border-gray-200 flex flex-col bg-gray-50 shrink-0">
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 shrink-0">
+            <h3 className="font-semibold text-gray-900 truncate pr-2">
+              {taskDetailLoading ? "Loading…" : taskDetail?.title ?? selectedTask}
+            </h3>
+            <div className="flex items-center gap-2 shrink-0">
               {!isDoneTask && (
                 <button
                   type="button"
                   onClick={handleMarkComplete}
                   disabled={markCompleteLoading}
-                  className="text-xs px-3 py-1.5 rounded bg-green-600 hover:bg-green-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {markCompleteLoading ? "Marking…" : "Mark as complete"}
+                  {markCompleteLoading ? "Marking…" : "Mark complete"}
                 </button>
               )}
-              <button onClick={() => dispatch(setSelectedTaskId(null))} className="text-gray-500 hover:text-gray-300 text-xs">
+              <button onClick={() => dispatch(setSelectedTaskId(null))} className="text-gray-400 hover:text-gray-600">
                 Close
               </button>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto flex flex-col min-h-0">
-            {/* Full task specification */}
-            <div className="shrink-0 border-b border-gray-700 bg-gray-800/50">
+
+          {/* Scrollable content area */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {/* Task specification */}
+            <div className="p-4 border-b border-gray-200">
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Task</h4>
               {taskDetailLoading ? (
-                <div className="p-4 text-gray-400 text-sm">Loading task spec...</div>
+                <div className="text-sm text-gray-500">Loading task spec...</div>
               ) : taskDetail ? (
-                <div className="p-4 space-y-3">
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="font-semibold text-white">{taskDetail.title}</span>
-                    <span className="text-gray-500">·</span>
-                    <span className="text-gray-400">{taskDetail.type}</span>
-                    <span className="text-gray-500">·</span>
-                    <span className="text-gray-400">{PRIORITY_LABELS[taskDetail.priority] ?? "Medium"}</span>
-                    <span className="text-gray-500">·</span>
-                    <span className="text-gray-400">{columnLabels[taskDetail.kanbanColumn]}</span>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                    <span className="font-medium text-gray-900">{taskDetail.title}</span>
+                    <span className="text-gray-400">·</span>
+                    <span className="text-gray-500">{taskDetail.type}</span>
+                    <span className="text-gray-400">·</span>
+                    <span className="text-gray-500">{PRIORITY_LABELS[taskDetail.priority] ?? "Medium"}</span>
+                    <span className="text-gray-400">·</span>
+                    <span className="text-gray-500">{columnLabels[taskDetail.kanbanColumn]}</span>
                     {taskDetail.assignee && (
                       <>
-                        <span className="text-gray-500">·</span>
-                        <span className="text-brand-400">{taskDetail.assignee}</span>
+                        <span className="text-gray-400">·</span>
+                        <span className="text-brand-600">{taskDetail.assignee}</span>
                       </>
                     )}
                   </div>
                   {taskDetail.description && (
-                    <div className="prose prose-invert prose-sm max-w-none text-gray-300">
-                      <ReactMarkdown>{taskDetail.description}</ReactMarkdown>
+                    <div className="prose prose-sm max-w-none bg-white p-4 rounded-lg border text-xs">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{taskDetail.description}</ReactMarkdown>
                     </div>
                   )}
                   {taskDetail.dependencies.filter((d) => d.targetId).length > 0 && (
@@ -448,7 +457,7 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
                                 key={d.targetId}
                                 type="button"
                                 onClick={() => dispatch(setSelectedTaskId(d.targetId))}
-                                className="inline-flex items-center gap-1.5 text-left hover:underline text-brand-400 hover:text-brand-300 transition-colors"
+                                className="inline-flex items-center gap-1.5 text-left hover:underline text-brand-600 hover:text-brand-500 transition-colors"
                               >
                                 <StatusIcon col={col} size="xs" title={columnLabels[col]} />
                                 <span className="truncate max-w-[200px]" title={label}>
@@ -462,15 +471,16 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
                   )}
                 </div>
               ) : (
-                <div className="p-4 text-gray-500 text-sm">Could not load task details.</div>
+                <div className="text-sm text-gray-500">Could not load task details.</div>
               )}
             </div>
+
             {/* Live agent output or completed artifacts */}
-            <div className="flex-1 min-h-0 flex flex-col text-green-400">
-              <div className="px-4 py-2 border-b border-gray-700 text-xs text-gray-400 shrink-0">
+            <div className="p-4">
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
                 {isDoneTask ? "Completed work artifacts" : "Live agent output"}
-              </div>
-              <div className="flex-1 overflow-y-auto min-h-0">
+              </h4>
+              <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden min-h-[200px]">
                 {isDoneTask ? (
                   archivedLoading ? (
                     <div className="p-4 text-gray-400 text-sm">Loading archived sessions...</div>
@@ -481,11 +491,11 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
                   )
                 ) : (
                   <>
-                    <pre className="p-4 text-xs font-mono whitespace-pre-wrap">
+                    <pre className="p-4 text-xs font-mono whitespace-pre-wrap text-green-400 min-h-[120px]">
                       {agentOutput.length > 0 ? agentOutput.join("") : "Waiting for agent output..."}
                     </pre>
                     {completionState && (
-                      <div className="px-4 pb-4 border-t border-gray-700 pt-3 mt-2">
+                      <div className="px-4 pb-4 border-t border-gray-700 pt-3 mt-0">
                         <div
                           className={`text-sm font-medium ${
                             completionState.status === "approved" ? "text-green-400" : "text-amber-400"
@@ -496,7 +506,7 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
                         {completionState.testResults && completionState.testResults.total > 0 && (
                           <div className="text-xs text-gray-400 mt-1">
                             {completionState.testResults.passed} passed
-                            {completionState.testResults.failed > 0 && `, ${completionState.testResults.failed} failed`}
+                            {completionState.testResults.failed > 0 ? `, ${completionState.testResults.failed} failed` : ""}
                             {completionState.testResults.skipped > 0 &&
                               `, ${completionState.testResults.skipped} skipped`}
                           </div>

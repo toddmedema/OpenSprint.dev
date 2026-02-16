@@ -20,11 +20,11 @@ plansRouter.post("/decompose", async (req: Request<ProjectParams>, res, next) =>
   }
 });
 
-// GET /projects/:projectId/plans — List all Plans
+// GET /projects/:projectId/plans — List all Plans with dependency graph (single call)
 plansRouter.get("/", async (req: Request<ProjectParams>, res, next) => {
   try {
-    const plans = await planService.listPlans(req.params.projectId);
-    const body: ApiResponse<Plan[]> = { data: plans };
+    const graph = await planService.listPlansWithDependencyGraph(req.params.projectId);
+    const body: ApiResponse<PlanDependencyGraph> = { data: graph };
     res.json(body);
   } catch (err) {
     next(err);

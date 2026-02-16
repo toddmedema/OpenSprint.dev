@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Plan } from "@opensprint/shared";
@@ -19,9 +19,10 @@ import { DependencyGraph } from "../../components/DependencyGraph";
 
 interface PlanPhaseProps {
   projectId: string;
+  onNavigateToBuildTask?: (taskId: string) => void;
 }
 
-export function PlanPhase({ projectId }: PlanPhaseProps) {
+export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) {
   const dispatch = useAppDispatch();
 
   /* ── Redux state ── */
@@ -33,15 +34,26 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
   const shippingPlanId = useAppSelector((s) => s.plan.shippingPlanId);
   const reshippingPlanId = useAppSelector((s) => s.plan.reshippingPlanId);
   const error = useAppSelector((s) => s.plan.error);
+  const buildTasks = useAppSelector((s) => s.build.tasks);
 
   /* ── Local UI state (preserved by mount-all) ── */
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [tasksSectionExpanded, setTasksSectionExpanded] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const selectedPlan = plans.find((p) => p.metadata.planId === selectedPlanId) ?? null;
+
+  const planTasks = useMemo(() => {
+    if (!selectedPlan?.metadata.beadEpicId) return [];
+    const epicId = selectedPlan.metadata.beadEpicId;
+    const gateTaskId = selectedPlan.metadata.gateTaskId;
+    return buildTasks.filter(
+      (t) => t.epicId === epicId && t.id !== gateTaskId
+    );
+  }, [selectedPlan?.metadata.beadEpicId, selectedPlan?.metadata.gateTaskId, buildTasks]);
   const planContext = selectedPlan ? `plan:${selectedPlan.metadata.planId}` : null;
   const currentChatMessages = planContext ? (chatMessages[planContext] ?? []) : [];
 
@@ -255,6 +267,55 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
                 </div>
               </div>
             )}
+
+            {/* Tasks — collapsible */}
+            <div className="border-b border-gray-200">
+              <button
+                type="button"
+                onClick={() => setTasksSectionExpanded(!tasksSectionExpanded)}
+                className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-100/50 transition-colors"
+              >
+                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Tasks ({planTasks.length})
+                </h4>
+                <span className="text-gray-400 text-xs">
+                  {tasksSectionExpanded ? "▼" : "▶"}
+                </span>
+              </button>
+              {tasksSectionExpanded && (
+                <div className="px-4 pb-4 space-y-2">
+                  {planTasks.length === 0 ? (
+                    <p className="text-sm text-gray-500">No tasks yet. Ship this plan to generate tasks.</p>
+                  ) : (
+                    planTasks.map((task) => (
+                      <button
+                        key={task.id}
+                        type="button"
+                        onClick={() => onNavigateToBuildTask?.(task.id)}
+                        className="w-full flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-200 text-sm text-left hover:border-brand-500 hover:bg-brand-50/50 transition-colors cursor-pointer"
+                      >
+                        <span
+                          className={`shrink-0 w-2 h-2 rounded-full ${
+                            task.kanbanColumn === "done"
+                              ? "bg-green-500"
+                              : task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review"
+                                ? "bg-blue-500"
+                                : "bg-gray-300"
+                          }`}
+                          title={task.kanbanColumn}
+                        />
+                        <span className="flex-1 truncate text-gray-900" title={task.title}>
+                          {task.title}
+                        </span>
+                        <span className="shrink-0 text-xs text-gray-500 capitalize">
+                          {task.kanbanColumn.replace(/_/g, " ")}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Chat messages */}
             <div className="p-4">

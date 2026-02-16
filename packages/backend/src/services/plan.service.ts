@@ -151,8 +151,13 @@ export class PlanService {
     return edges;
   }
 
-  /** List all Plans for a project */
-  async listPlans(projectId: string): Promise<Plan[]> {
+  /** List all Plans with dependency graph in one call (avoids duplicate work) */
+  async listPlansWithDependencyGraph(projectId: string): Promise<PlanDependencyGraph> {
+    return this.listPlansWithEdges(projectId);
+  }
+
+  /** Internal: list plans and build edges once */
+  private async listPlansWithEdges(projectId: string): Promise<PlanDependencyGraph> {
     const plansDir = await this.getPlansDir(projectId);
     const repoPath = await this.getRepoPath(projectId);
     const plans: Plan[] = [];
@@ -179,6 +184,12 @@ export class PlanService {
       plan.dependencyCount = edges.filter((e) => e.to === plan.metadata.planId).length;
     }
 
+    return { plans, edges };
+  }
+
+  /** List all Plans for a project */
+  async listPlans(projectId: string): Promise<Plan[]> {
+    const { plans } = await this.listPlansWithEdges(projectId);
     return plans;
   }
 
@@ -499,10 +510,7 @@ export class PlanService {
 
   /** Get the dependency graph for all Plans */
   async getDependencyGraph(projectId: string): Promise<PlanDependencyGraph> {
-    const plans = await this.listPlans(projectId);
-    const repoPath = await this.getRepoPath(projectId);
-    const edges = await this.buildDependencyEdges(plans, repoPath);
-    return { plans, edges };
+    return this.listPlansWithDependencyGraph(projectId);
   }
 
   /** Build PRD context string for agent prompts */

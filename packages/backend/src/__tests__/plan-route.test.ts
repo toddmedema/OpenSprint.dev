@@ -138,8 +138,10 @@ describe("Plan REST endpoints - task decomposition", () => {
 
     const listRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
     expect(listRes.status).toBe(200);
-    expect(listRes.body.data.length).toBeGreaterThan(0);
-    const plan = listRes.body.data.find((p: { metadata: { planId: string } }) =>
+    expect(listRes.body.data.plans).toBeDefined();
+    expect(listRes.body.data.edges).toBeDefined();
+    expect(listRes.body.data.plans.length).toBeGreaterThan(0);
+    const plan = listRes.body.data.plans.find((p: { metadata: { planId: string } }) =>
       p.metadata.planId.includes("list-test-feature")
     );
     expect(plan).toBeDefined();
