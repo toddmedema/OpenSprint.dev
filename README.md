@@ -1,33 +1,45 @@
 # OpenSprint
 
-AI-powered platform that guides you through the full software development lifecycle — from idea to working software. OpenSprint orchestrates AI agents across four phases: **Dream**, **Plan**, **Build**, and **Verify**.
+**AI-powered platform that guides you from idea to working software.**
 
-## Prerequisites
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Node.js >= 20](https://img.shields.io/badge/Node.js-%3E%3D20-green.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-- [Node.js](https://nodejs.org/) >= 20.0.0
-- npm (included with Node.js)
-- Git
+<p align="center">
+  <img src="docs/assets/hero-screenshot.png" alt="OpenSprint — Dream, Plan, Build, Verify" width="800" />
+</p>
 
-## Project Structure
+OpenSprint orchestrates AI agents across four phases — **Dream**, **Plan**, **Build**, and **Verify** — to transform a high-level product idea into working software with minimal manual intervention.
 
-```
-opensprint.dev/
-├── packages/
-│   ├── backend/    # Node.js + Express API server (TypeScript)
-│   ├── frontend/   # React + Vite application (TypeScript, Tailwind CSS)
-│   └── shared/     # Shared types and constants
-├── .beads/         # Git-based issue tracker data
-├── PRD.md          # Product Requirements Document
-└── package.json    # Root workspace config
-```
+---
 
-This is an npm workspaces monorepo with three packages that share a common TypeScript configuration.
+## Why OpenSprint?
 
-## Getting Started
+Building software with AI today is **fragmented and unstructured**. Developers use AI coding assistants for individual tasks, but there is no cohesive system that manages the full journey from idea to deployed product. This leads to:
+
+- **No architectural coherence** — AI-generated code lacks a unified vision because each prompt is handled in isolation
+- **No dependency tracking** — parallel features have no mechanism to account for shared dependencies
+- **Manual orchestration overhead** — users spend time managing prompts, context windows, and task sequencing instead of making product decisions
+- **No feedback loop** — there is no structured way to validate completed work and feed findings back into development
+
+OpenSprint solves this by maintaining context across the entire lifecycle and automating the orchestration of AI development agents. Humans focus on *what* to build and *why*; AI handles *how*.
+
+---
+
+## Quick Start
 
 ```bash
+# Clone the repo
+git clone https://github.com/toddmedema/opensprint.git
+cd opensprint
+
 # Install all dependencies
 npm install
+
+# Add at least one API key (see Configuration below)
+cp .env.example .env
 
 # Start both backend and frontend in development mode
 npm run dev
@@ -40,6 +52,74 @@ The app will be available at:
 | Frontend  | http://localhost:5173  |
 | Backend   | http://localhost:3100  |
 | WebSocket | ws://localhost:3100/ws |
+
+---
+
+## Configuration
+
+OpenSprint requires at least one AI provider API key. Create a `.env` file in the project root:
+
+```bash
+# Required — at least one of the following:
+ANTHROPIC_API_KEY=sk-ant-...      # For Claude agents (https://console.anthropic.com/)
+CURSOR_API_KEY=...                 # For Cursor agents (Cursor → Settings → Integrations → User API Keys)
+
+# Optional
+PORT=3100                          # Backend API port (default: 3100)
+NODE_ENV=production                # Set to "production" for production mode
+```
+
+API keys can also be configured through the UI via **Project Settings** after the app is running.
+
+### Auto-created directories
+
+These are created automatically — no manual setup needed:
+
+| Path | Purpose |
+| ---- | ------- |
+| `~/.opensprint/projects.json` | Global project index |
+| `<project>/.opensprint/` | Per-project PRD, plans, conversations, sessions, and feedback |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A["🌙 Dream"] -->|PRD| B["📋 Plan"]
+    B -->|Epics & Tasks| C["🔨 Build"]
+    C -->|Working Code| D["✅ Verify"]
+    D -->|Feedback| B
+
+    style A fill:#3B82F6,color:#fff
+    style B fill:#8B5CF6,color:#fff
+    style C fill:#F59E0B,color:#fff
+    style D fill:#10B981,color:#fff
+```
+
+| Phase | What happens |
+| ----- | ------------ |
+| **Dream** | Chat with AI to refine your idea into a structured Product Requirements Document |
+| **Plan** | AI decomposes the PRD into epics, tasks, and a dependency graph |
+| **Build** | AI agents autonomously execute tasks with two-agent code + review cycles |
+| **Verify** | Submit feedback that AI categorizes and maps back to plan epics for iteration |
+
+---
+
+## Project Structure
+
+```
+opensprint/
+├── packages/
+│   ├── backend/    # Node.js + Express API server (TypeScript)
+│   ├── frontend/   # React + Vite application (TypeScript, Tailwind CSS)
+│   └── shared/     # Shared types and constants
+├── .beads/         # Git-based issue tracker data
+├── PRD.md          # Product Requirements Document
+└── package.json    # Root workspace config (npm workspaces)
+```
+
+---
 
 ## Scripts
 
@@ -55,14 +135,50 @@ All scripts can be run from the project root:
 | `npm run lint`         | Lint all packages                                |
 | `npm run clean`        | Remove all build artifacts and node_modules      |
 
+---
+
 ## Tech Stack
 
-**Backend:** Node.js, Express, WebSocket (ws), TypeScript, Vitest
+| Layer | Technologies |
+| ----- | ------------ |
+| **Backend** | Node.js, Express, WebSocket (ws), TypeScript, Vitest |
+| **Frontend** | React 19, React Router, Vite, Tailwind CSS, TypeScript |
+| **Shared** | TypeScript types and constants consumed by both packages |
+| **Issue Tracking** | [Beads](https://github.com/toddmedema/beads) — git-native issue tracker |
 
-**Frontend:** React 19, React Router, Vite, Tailwind CSS, TypeScript
+---
 
-**Shared:** TypeScript types and constants consumed by both backend and frontend
+## Prerequisites
+
+- [Node.js](https://nodejs.org/) >= 20.0.0
+- npm (included with Node.js)
+- Git
+
+---
+
+## Contributing
+
+Contributions are welcome! Whether it's a bug report, feature request, or pull request — all input is appreciated.
+
+1. **Fork** the repository
+2. **Create a branch** for your feature or fix: `git checkout -b my-feature`
+3. **Make your changes** and add tests where appropriate
+4. **Run the test suite**: `npm test`
+5. **Submit a pull request**
+
+### Issue Tracking with Beads
+
+This project uses [Beads](https://github.com/toddmedema/beads) (`bd`) for task and issue tracking. Run `bd onboard` to get started, then `bd ready` to find available work.
+
+### Reporting Bugs
+
+Open a [GitHub Issue](https://github.com/toddmedema/opensprint/issues) with:
+- Steps to reproduce
+- Expected vs actual behavior
+- Environment details (OS, Node version, browser)
+
+---
 
 ## License
 
-Private — not licensed for redistribution.
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) — you are free to use, modify, and distribute it, but derivative works must remain open source under the same license.
