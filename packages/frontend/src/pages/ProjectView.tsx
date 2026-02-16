@@ -7,7 +7,7 @@ import { fetchProject, resetProject } from "../store/slices/projectSlice";
 import { resetWebsocket, clearHilRequest, clearHilNotification } from "../store/slices/websocketSlice";
 import { fetchDreamChat, fetchPrd, fetchPrdHistory, resetDream } from "../store/slices/dreamSlice";
 import { fetchPlans, resetPlan } from "../store/slices/planSlice";
-import { fetchTasks, fetchBuildStatus, resetBuild, setSelectedTaskId } from "../store/slices/buildSlice";
+import { fetchTasks, resetBuild, setSelectedTaskId } from "../store/slices/buildSlice";
 import { fetchFeedback, resetVerify } from "../store/slices/verifySlice";
 import { wsConnect, wsDisconnect } from "../store/middleware/websocketMiddleware";
 import { wsSend } from "../store/middleware/websocketMiddleware";
@@ -50,7 +50,6 @@ export function ProjectView() {
     dispatch(fetchPrdHistory(projectId));
     dispatch(fetchPlans(projectId));
     dispatch(fetchTasks(projectId));
-    dispatch(fetchBuildStatus(projectId));
     dispatch(fetchFeedback(projectId));
 
     return () => {

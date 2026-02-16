@@ -108,7 +108,6 @@ function createStore(plansOverride?: typeof basePlan[]) {
           },
         ],
         plans: [],
-        orchestratorRunning: false,
         awaitingApproval: false,
         selectedTaskId: null,
         taskDetail: null,

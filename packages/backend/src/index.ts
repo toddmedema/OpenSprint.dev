@@ -21,7 +21,7 @@ const server = createServer(app);
 // Attach WebSocket server
 setupWebSocket(server);
 
-async function logOrchestratorStatus(): Promise<void> {
+async function initAlwaysOnOrchestrator(): Promise<void> {
   const projectService = new ProjectService();
   const beads = new BeadsService();
 
@@ -32,12 +32,12 @@ async function logOrchestratorStatus(): Promise<void> {
       return;
     }
 
-    console.log(`[orchestrator] ${projects.length} project(s) registered`);
+    console.log(`[orchestrator] ${projects.length} project(s) registered — starting always-on orchestrator`);
 
     for (const project of projects) {
       try {
-        // Auto-start orchestrator for each project (always-on)
-        await orchestratorService.start(project.id);
+        // Auto-start always-on orchestrator for each project (PRDv2 §5.7)
+        await orchestratorService.ensureRunning(project.id);
 
         const allTasks = await beads.list(project.repoPath);
         const nonEpicTasks = allTasks.filter(
@@ -54,7 +54,6 @@ async function logOrchestratorStatus(): Promise<void> {
           `${open.length} open task(s)`,
           `${inProgress.length} in-progress`,
           agentRunning ? "1 agent running" : "0 agents running",
-          status.running ? "loop ACTIVE" : "loop IDLE",
         ];
         console.log(parts.join(" | "));
 
@@ -76,8 +75,8 @@ async function logOrchestratorStatus(): Promise<void> {
 server.listen(port, () => {
   console.log(`OpenSprint backend listening on http://localhost:${port}`);
   console.log(`WebSocket server ready on ws://localhost:${port}/ws`);
-  logOrchestratorStatus().catch((err) => {
-    console.error("[orchestrator] Status logging failed:", err);
+  initAlwaysOnOrchestrator().catch((err) => {
+    console.error("[orchestrator] Always-on init failed:", err);
   });
 });
 

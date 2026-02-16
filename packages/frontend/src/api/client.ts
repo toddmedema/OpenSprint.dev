@@ -151,15 +151,11 @@ export const api = {
 
   // ─── Build ───
   build: {
-    start: (projectId: string) =>
-      request<unknown>(`/projects/${projectId}/build/start`, {
-        method: "POST",
-      }),
-    pause: (projectId: string) =>
-      request<unknown>(`/projects/${projectId}/build/pause`, {
-        method: "POST",
-      }),
     status: (projectId: string) => request<unknown>(`/projects/${projectId}/build/status`),
+    nudge: (projectId: string) =>
+      request<unknown>(`/projects/${projectId}/build/nudge`, {
+        method: "POST",
+      }),
   },
 
   // ─── Feedback ───

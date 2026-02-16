@@ -35,6 +35,7 @@ packages/frontend/.vite/
 .opensprint/active/
 .opensprint/conversations/
 .opensprint/sessions/
+.opensprint/orchestrator-state.json
 packages/backend/.opensprint/
 
 # Temporary files

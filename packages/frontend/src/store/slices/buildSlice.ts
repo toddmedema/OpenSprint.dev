@@ -15,7 +15,6 @@ interface TaskCard {
 
 export interface BuildState {
   tasks: TaskCard[];
-  orchestratorRunning: boolean;
   awaitingApproval: boolean;
   selectedTaskId: string | null;
   taskDetail: Task | null;
@@ -34,7 +33,6 @@ export interface BuildState {
 
 const initialState: BuildState = {
   tasks: [],
-  orchestratorRunning: false,
   awaitingApproval: false,
   selectedTaskId: null,
   taskDetail: null,
@@ -52,10 +50,6 @@ export const fetchTasks = createAsyncThunk("build/fetchTasks", async (projectId:
   return (await api.tasks.list(projectId)) as TaskCard[];
 });
 
-export const fetchBuildStatus = createAsyncThunk("build/fetchStatus", async (projectId: string) => {
-  return (await api.build.status(projectId)) as { running: boolean };
-});
-
 export const fetchTaskDetail = createAsyncThunk(
   "build/fetchTaskDetail",
   async ({ projectId, taskId }: { projectId: string; taskId: string }) => {
@@ -69,14 +63,6 @@ export const fetchArchivedSessions = createAsyncThunk(
     return ((await api.tasks.sessions(projectId, taskId)) as AgentSession[]) ?? [];
   },
 );
-
-export const startBuild = createAsyncThunk("build/start", async (projectId: string) => {
-  await api.build.start(projectId);
-});
-
-export const pauseBuild = createAsyncThunk("build/pause", async (projectId: string) => {
-  await api.build.pause(projectId);
-});
 
 export const markTaskComplete = createAsyncThunk(
   "build/markTaskComplete",
@@ -112,9 +98,6 @@ const buildSlice = createSlice({
           state.agentOutput = state.agentOutput.slice(-MAX_AGENT_OUTPUT);
         }
       }
-    },
-    setOrchestratorRunning(state, action: PayloadAction<boolean>) {
-      state.orchestratorRunning = action.payload;
     },
     setAwaitingApproval(state, action: PayloadAction<boolean>) {
       state.awaitingApproval = action.payload;
@@ -159,10 +142,6 @@ const buildSlice = createSlice({
         state.loading = false;
         state.error = action.error.message ?? "Failed to load tasks";
       })
-      // fetchBuildStatus
-      .addCase(fetchBuildStatus.fulfilled, (state, action) => {
-        state.orchestratorRunning = action.payload?.running ?? false;
-      })
       // fetchTaskDetail
       .addCase(fetchTaskDetail.pending, (state) => {
         state.taskDetailLoading = true;
@@ -187,20 +166,6 @@ const buildSlice = createSlice({
         state.archivedSessions = [];
         state.archivedLoading = false;
       })
-      // startBuild
-      .addCase(startBuild.fulfilled, (state) => {
-        state.orchestratorRunning = true;
-      })
-      .addCase(startBuild.rejected, (state, action) => {
-        state.error = action.error.message ?? "Failed to start build";
-      })
-      // pauseBuild
-      .addCase(pauseBuild.fulfilled, (state) => {
-        state.orchestratorRunning = false;
-      })
-      .addCase(pauseBuild.rejected, (state, action) => {
-        state.error = action.error.message ?? "Failed to pause build";
-      })
       // markTaskComplete
       .addCase(markTaskComplete.pending, (state) => {
         state.markCompleteLoading = true;
@@ -220,7 +185,6 @@ const buildSlice = createSlice({
 export const {
   setSelectedTaskId,
   appendAgentOutput,
-  setOrchestratorRunning,
   setAwaitingApproval,
   setCompletionState,
   setTasks,

@@ -10,6 +10,7 @@ export const OPENSPRINT_PATHS = {
   feedback: `${OPENSPRINT_DIR}/feedback`,
   active: `${OPENSPRINT_DIR}/active`,
   settings: `${OPENSPRINT_DIR}/settings.json`,
+  orchestratorState: `${OPENSPRINT_DIR}/orchestrator-state.json`,
 } as const;
 
 /** Global project index path */
@@ -18,8 +19,14 @@ export const PROJECT_INDEX_PATH = '~/.opensprint/projects.json';
 /** Agent timeout in milliseconds (5 minutes of inactivity) */
 export const AGENT_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 
-/** Default retry limit for failed tasks */
+/** @deprecated Use BACKOFF_FAILURE_THRESHOLD with progressive backoff (PRDv2 §9.1) */
 export const DEFAULT_RETRY_LIMIT = 2;
+
+/** Number of consecutive failures before priority demotion (PRDv2 §9.1) */
+export const BACKOFF_FAILURE_THRESHOLD = 3;
+
+/** Maximum beads priority value; tasks at this level get blocked on next demotion (PRDv2 §9.1) */
+export const MAX_PRIORITY_BEFORE_BLOCK = 4;
 
 /** Default API port */
 export const DEFAULT_API_PORT = 3100;

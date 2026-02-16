@@ -103,7 +103,7 @@ export class AgentClient {
     onOutput: (chunk: string) => void,
     onExit: (code: number | null) => void | Promise<void>,
     agentRole?: string,
-  ): { kill: () => void } {
+  ): { kill: () => void; pid: number | null } {
     let command: string;
     let args: string[];
 
@@ -187,6 +187,7 @@ export class AgentClient {
     });
 
     return {
+      pid: child.pid ?? null,
       kill: () => {
         try {
           // Kill the entire process group (negative PID) since agent is detached

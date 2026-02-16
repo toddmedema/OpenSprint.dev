@@ -1,5 +1,6 @@
 import { Router, Request } from "express";
 import { PlanService } from "../services/plan.service.js";
+import { orchestratorService } from "../services/orchestrator.service.js";
 import type { ApiResponse, Plan, PlanDependencyGraph } from "@opensprint/shared";
 
 const planService = new PlanService();
@@ -79,6 +80,8 @@ plansRouter.put("/:planId", async (req: Request<PlanParams>, res, next) => {
 plansRouter.post("/:planId/ship", async (req: Request<PlanParams>, res, next) => {
   try {
     const plan = await planService.shipPlan(req.params.projectId, req.params.planId);
+    // Nudge orchestrator to pick up newly-available tasks (PRDv2 §5.7 event-driven dispatch)
+    orchestratorService.nudge(req.params.projectId);
     const body: ApiResponse<Plan> = { data: plan };
     res.json(body);
   } catch (err) {
@@ -90,6 +93,8 @@ plansRouter.post("/:planId/ship", async (req: Request<PlanParams>, res, next) =>
 plansRouter.post("/:planId/reship", async (req: Request<PlanParams>, res, next) => {
   try {
     const plan = await planService.reshipPlan(req.params.projectId, req.params.planId);
+    // Nudge orchestrator to pick up newly-available tasks (PRDv2 §5.7 event-driven dispatch)
+    orchestratorService.nudge(req.params.projectId);
     const body: ApiResponse<Plan> = { data: plan };
     res.json(body);
   } catch (err) {

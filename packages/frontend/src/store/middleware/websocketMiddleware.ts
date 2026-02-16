@@ -6,9 +6,7 @@ import { fetchPrd, fetchPrdHistory, fetchDreamChat } from "../slices/dreamSlice"
 import { fetchPlans, fetchSinglePlan } from "../slices/planSlice";
 import {
   fetchTasks,
-  fetchBuildStatus,
   appendAgentOutput,
-  setOrchestratorRunning,
   setAwaitingApproval,
   setCompletionState,
 } from "../slices/buildSlice";
@@ -128,12 +126,10 @@ export const websocketMiddleware: Middleware = (storeApi) => {
 
       case "agent.started":
         d(fetchTasks(projectId));
-        d(fetchBuildStatus(projectId));
         break;
 
       case "agent.completed":
         d(fetchTasks(projectId));
-        d(fetchBuildStatus(projectId));
         d(
           setCompletionState({
             taskId: event.taskId,
@@ -148,7 +144,6 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         break;
 
       case "build.status":
-        d(setOrchestratorRunning(event.running));
         if ("awaitingApproval" in event) {
           d(setAwaitingApproval(Boolean(event.awaitingApproval)));
         }

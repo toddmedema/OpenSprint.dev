@@ -30,7 +30,7 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [agentOutput, setAgentOutput] = useState<string[]>([]);
-  const [orchestratorRunning, setOrchestratorRunning] = useState(false);
+  const [currentTask, setCurrentTask] = useState<string | null>(null);
   const [stats, setStats] = useState({ totalCompleted: 0, totalFailed: 0, queueDepth: 0 });
 
   const handleWsEvent = useCallback(
@@ -42,7 +42,7 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
           }
           break;
         case "build.status":
-          setOrchestratorRunning(event.running);
+          setCurrentTask(event.currentTask);
           break;
         case "agent.started":
         case "agent.completed":
@@ -62,12 +62,12 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
   const loadStatus = () => {
     api.build.status(projectId).then((data: unknown) => {
       const status = data as {
-        running: boolean;
+        currentTask: string | null;
         totalCompleted: number;
         totalFailed: number;
         queueDepth: number;
       };
-      setOrchestratorRunning(status?.running ?? false);
+      setCurrentTask(status?.currentTask ?? null);
       setStats({
         totalCompleted: status?.totalCompleted ?? 0,
         totalFailed: status?.totalFailed ?? 0,
@@ -102,10 +102,10 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
           <div className="flex items-center gap-4">
             <div
               className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                orchestratorRunning ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"
+                currentTask ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"
               }`}
             >
-              {orchestratorRunning ? "Running" : "Paused"}
+              {currentTask ? "Active" : "Idle"}
             </div>
           </div>
         </div>

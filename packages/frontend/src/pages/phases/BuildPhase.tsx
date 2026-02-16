@@ -7,8 +7,6 @@ import { useAppDispatch, useAppSelector } from "../../store";
 import {
   fetchTaskDetail,
   fetchArchivedSessions,
-  startBuild,
-  pauseBuild,
   markTaskComplete,
   setSelectedTaskId,
   setBuildError,
@@ -154,7 +152,6 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
   /* ── Redux state ── */
   const tasks = useAppSelector((s) => s.build.tasks) as TaskCard[];
   const plans = useAppSelector((s) => s.plan.plans);
-  const orchestratorRunning = useAppSelector((s) => s.build.orchestratorRunning);
   const awaitingApproval = useAppSelector((s) => s.build.awaitingApproval);
   const selectedTask = useAppSelector((s) => s.build.selectedTaskId);
   const taskDetail = useAppSelector((s) => s.build.taskDetail);
@@ -192,16 +189,6 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
       };
     }
   }, [selectedTask, isDoneTask, dispatch]);
-
-  const handleStartBuild = async () => {
-    dispatch(setBuildError(null));
-    dispatch(startBuild(projectId));
-  };
-
-  const handlePauseBuild = async () => {
-    dispatch(setBuildError(null));
-    dispatch(pauseBuild(projectId));
-  };
 
   const handleMarkComplete = async () => {
     if (!selectedTask || isDoneTask) return;
@@ -292,15 +279,6 @@ export function BuildPhase({ projectId }: BuildPhaseProps) {
           </div>
           <div className="flex items-center gap-3">
             {awaitingApproval && <span className="text-sm font-medium text-amber-600">Awaiting approval…</span>}
-            {orchestratorRunning ? (
-              <button onClick={handlePauseBuild} className="btn-secondary text-sm" disabled={awaitingApproval}>
-                Pause Build
-              </button>
-            ) : (
-              <button onClick={handleStartBuild} className="btn-primary text-sm">
-                Start Build
-              </button>
-            )}
           </div>
         </div>
 

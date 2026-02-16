@@ -1,5 +1,6 @@
 import { Router, Request } from 'express';
 import { FeedbackService } from '../services/feedback.service.js';
+import { orchestratorService } from '../services/orchestrator.service.js';
 import type { ApiResponse, FeedbackItem, FeedbackSubmitRequest } from '@opensprint/shared';
 
 const feedbackService = new FeedbackService();
@@ -24,6 +25,8 @@ feedbackRouter.get('/', async (req: Request<ProjectParams>, res, next) => {
 feedbackRouter.post('/', async (req: Request<ProjectParams>, res, next) => {
   try {
     const item = await feedbackService.submitFeedback(req.params.projectId, req.body as FeedbackSubmitRequest);
+    // Nudge orchestrator — feedback may create new tasks (PRDv2 §5.7 event-driven dispatch)
+    orchestratorService.nudge(req.params.projectId);
     const body: ApiResponse<FeedbackItem> = { data: item };
     res.status(201).json(body);
   } catch (err) {

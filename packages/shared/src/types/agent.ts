@@ -89,9 +89,8 @@ export interface ActiveAgent {
   startedAt: string;
 }
 
-/** Build orchestrator status */
+/** Build orchestrator status (always-on per PRDv2 §5.7) */
 export interface OrchestratorStatus {
-  running: boolean;
   currentTask: string | null;
   currentPhase: AgentPhase | null;
   queueDepth: number;

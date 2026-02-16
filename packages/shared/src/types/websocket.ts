@@ -39,7 +39,6 @@ export interface PrdUpdatedEvent {
 
 export interface BuildStatusEvent {
   type: 'build.status';
-  running: boolean;
   currentTask: string | null;
   /** Coding vs review sub-phase for current task (PRD §7.3.2) */
   currentPhase?: AgentPhase | null;
@@ -76,6 +75,14 @@ export interface PlanUpdatedEvent {
   planId: string;
 }
 
+/** Emitted when a task is blocked after progressive backoff exhaustion (PRDv2 §9.1) */
+export interface TaskBlockedEvent {
+  type: 'task.blocked';
+  taskId: string;
+  reason: string;
+  cumulativeAttempts: number;
+}
+
 /** Emitted when orchestrator pauses for HIL approval or resumes after response (PRD §6.5) */
 export interface BuildAwaitingApprovalEvent {
   type: 'build.awaiting_approval';
@@ -92,6 +99,7 @@ export type ServerEvent =
   | AgentCompletedEvent
   | PrdUpdatedEvent
   | BuildStatusEvent
+  | TaskBlockedEvent
   | BuildAwaitingApprovalEvent
   | HilRequestEvent
   | FeedbackMappedEvent

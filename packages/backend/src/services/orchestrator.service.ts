@@ -10,7 +10,8 @@ import type {
 } from "@opensprint/shared";
 import {
   OPENSPRINT_PATHS,
-  DEFAULT_RETRY_LIMIT,
+  BACKOFF_FAILURE_THRESHOLD,
+  MAX_PRIORITY_BEFORE_BLOCK,
   AGENT_INACTIVITY_TIMEOUT_MS,
   getTestCommandForFramework,
 } from "@opensprint/shared";
@@ -18,7 +19,6 @@ import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { ProjectService } from "./project.service.js";
 import { agentService } from "./agent.service.js";
 import { deploymentService } from "./deployment-service.js";
-import { hilService } from "./hil-service.js";
 import { BranchManager } from "./branch-manager.js";
 import { ContextAssembler } from "./context-assembler.js";
 import { SessionManager } from "./session-manager.js";
@@ -31,10 +31,50 @@ interface RetryContext {
   useExistingBranch?: boolean;
 }
 
+/** Watchdog interval: 5 minutes (PRDv2 §5.7) */
+const WATCHDOG_INTERVAL_MS = 5 * 60 * 1000;
+
+/** Polling interval for monitoring orphaned agent processes during crash recovery */
+const RECOVERY_POLL_MS = 5_000;
+
+// ─── State Persistence Types (PRDv2 §5.8) ───
+
+/**
+ * Serializable orchestrator state persisted to `.opensprint/orchestrator-state.json`.
+ * Written atomically on every state transition so the backend can recover after a crash.
+ */
+interface PersistedOrchestratorState {
+  projectId: string;
+  currentTaskId: string | null;
+  currentTaskTitle: string | null;
+  currentPhase: AgentPhase | null;
+  branchName: string | null;
+  agentPid: number | null;
+  attempt: number;
+  startedAt: string | null;
+  lastTransition: string;
+  queueDepth: number;
+  totalCompleted: number;
+  totalFailed: number;
+}
+
+/** Check whether a PID is still running */
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 interface OrchestratorState {
   status: OrchestratorStatus;
+  /** True when the orchestrator loop is actively running (internal tracking, not exposed) */
+  loopActive: boolean;
   loopTimer: ReturnType<typeof setTimeout> | null;
-  activeProcess: { kill: () => void } | null;
+  watchdogTimer: ReturnType<typeof setInterval> | null;
+  activeProcess: { kill: () => void; pid: number | null } | null;
   lastOutputTime: number;
   inactivityTimer: ReturnType<typeof setInterval> | null;
   outputLog: string[];
@@ -43,6 +83,10 @@ interface OrchestratorState {
   lastCodingDiff: string;
   lastCodingSummary: string;
   lastTestResults: TestResults | null;
+  /** Branch name of the currently active task (for persistence) */
+  activeBranchName: string | null;
+  /** Title of the current task (for persistence/logging) */
+  activeTaskTitle: string | null;
 }
 
 /**
@@ -62,7 +106,9 @@ export class OrchestratorService {
     if (!this.state.has(projectId)) {
       this.state.set(projectId, {
         status: this.defaultStatus(),
+        loopActive: false,
         loopTimer: null,
+        watchdogTimer: null,
         activeProcess: null,
         lastOutputTime: 0,
         inactivityTimer: null,
@@ -72,6 +118,8 @@ export class OrchestratorService {
         lastCodingDiff: "",
         lastCodingSummary: "",
         lastTestResults: null,
+        activeBranchName: null,
+        activeTaskTitle: null,
       });
     }
     return this.state.get(projectId)!;
@@ -79,7 +127,6 @@ export class OrchestratorService {
 
   private defaultStatus(): OrchestratorStatus {
     return {
-      running: false,
       currentTask: null,
       currentPhase: null,
       queueDepth: 0,
@@ -88,57 +135,252 @@ export class OrchestratorService {
     };
   }
 
-  /** Start the build orchestrator for a project */
-  async start(projectId: string): Promise<OrchestratorStatus> {
-    await this.projectService.getProject(projectId);
+  // ─── State Persistence (PRDv2 §5.8) ───
+
+  /**
+   * Persist current orchestrator state to `.opensprint/orchestrator-state.json`.
+   * Uses atomic write (tmp + rename) to prevent corruption.
+   */
+  private async persistState(projectId: string, repoPath: string): Promise<void> {
+    const state = this.getState(projectId);
+    const persisted: PersistedOrchestratorState = {
+      projectId,
+      currentTaskId: state.status.currentTask,
+      currentTaskTitle: state.activeTaskTitle,
+      currentPhase: state.status.currentPhase,
+      branchName: state.activeBranchName,
+      agentPid: state.activeProcess?.pid ?? null,
+      attempt: state.attempt,
+      startedAt: state.startedAt || null,
+      lastTransition: new Date().toISOString(),
+      queueDepth: state.status.queueDepth,
+      totalCompleted: state.status.totalCompleted,
+      totalFailed: state.status.totalFailed,
+    };
+
+    const statePath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorState);
+    const tmpPath = statePath + ".tmp";
+    try {
+      await fs.mkdir(path.dirname(statePath), { recursive: true });
+      await fs.writeFile(tmpPath, JSON.stringify(persisted, null, 2));
+      await fs.rename(tmpPath, statePath);
+    } catch (err) {
+      console.warn("[orchestrator] Failed to persist state:", err);
+    }
+  }
+
+  /** Load persisted state from disk (returns null if none exists or is unreadable) */
+  private async loadPersistedState(repoPath: string): Promise<PersistedOrchestratorState | null> {
+    const statePath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorState);
+    try {
+      const raw = await fs.readFile(statePath, "utf-8");
+      return JSON.parse(raw) as PersistedOrchestratorState;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Clear persisted state (task completed or recovered) */
+  private async clearPersistedState(repoPath: string): Promise<void> {
+    const statePath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorState);
+    try {
+      await fs.unlink(statePath);
+    } catch {
+      // File may not exist
+    }
+  }
+
+  // ─── Crash Recovery (PRDv2 §5.8) ───
+
+  /**
+   * Attempt to recover from a crash based on persisted state.
+   * Three scenarios:
+   *   1. No active task → normal start
+   *   2. Active task, agent PID alive → monitor until exit, then handle result
+   *   3. Active task, agent PID dead → revert branch, comment, requeue
+   */
+  private async recoverFromPersistedState(
+    projectId: string,
+    repoPath: string,
+    persisted: PersistedOrchestratorState,
+  ): Promise<void> {
     const state = this.getState(projectId);
 
-    if (state.status.running) {
-      console.log("[orchestrator] Already running for project", projectId);
-      return state.status;
+    // Restore aggregate counters from persisted state
+    state.status.totalCompleted = persisted.totalCompleted;
+    state.status.totalFailed = persisted.totalFailed;
+
+    if (!persisted.currentTaskId || !persisted.branchName) {
+      console.log("[orchestrator] Recovery: no active task in persisted state, starting fresh");
+      await this.clearPersistedState(repoPath);
+      return;
     }
 
-    console.log("[orchestrator] Starting build loop for project", projectId);
-    state.status.running = true;
+    const taskId = persisted.currentTaskId;
+    const branchName = persisted.branchName;
+    const pid = persisted.agentPid;
 
-    // Broadcast status
-    broadcastToProject(projectId, {
-      type: "build.status",
-      running: true,
-      currentTask: null,
-      queueDepth: state.status.queueDepth,
+    console.log("[orchestrator] Recovery: found persisted active task", {
+      projectId,
+      taskId,
+      phase: persisted.currentPhase,
+      pid,
     });
 
-    // Start the orchestrator loop
-    this.runLoop(projectId);
+    // Scenario 2: PID is still alive — monitor and wait for exit
+    if (pid && isPidAlive(pid)) {
+      console.log(`[orchestrator] Recovery: agent PID ${pid} still alive, resuming monitoring`);
+
+      state.status.currentTask = taskId;
+      state.status.currentPhase = persisted.currentPhase;
+      state.activeBranchName = branchName;
+      state.activeTaskTitle = persisted.currentTaskTitle;
+      state.attempt = persisted.attempt;
+      state.startedAt = persisted.startedAt ?? new Date().toISOString();
+      state.loopActive = true;
+
+      // Poll until the process exits, then handle the result
+      const pollTimer = setInterval(async () => {
+        if (isPidAlive(pid)) return;
+        clearInterval(pollTimer);
+
+        console.log(`[orchestrator] Recovery: agent PID ${pid} has exited, handling result`);
+        try {
+          const task = await this.beads.show(repoPath, taskId);
+          if (persisted.currentPhase === "review") {
+            await this.handleReviewComplete(projectId, repoPath, task, branchName, null);
+          } else {
+            await this.handleCodingComplete(projectId, repoPath, task, branchName, null);
+          }
+        } catch (err) {
+          console.error("[orchestrator] Recovery: post-exit handling failed:", err);
+          await this.performCrashRecovery(projectId, repoPath, taskId, branchName);
+        }
+      }, RECOVERY_POLL_MS);
+      return;
+    }
+
+    // Scenario 3: PID is dead (or missing) — crash recovery
+    await this.performCrashRecovery(projectId, repoPath, taskId, branchName);
+  }
+
+  /** Revert branch, add failure comment, requeue task after a crash */
+  private async performCrashRecovery(
+    projectId: string,
+    repoPath: string,
+    taskId: string,
+    branchName: string,
+  ): Promise<void> {
+    const state = this.getState(projectId);
+    console.log(`[orchestrator] Recovery: crash recovery for task ${taskId} (branch ${branchName})`);
+
+    // Revert branch and return to main
+    try {
+      await this.branchManager.waitForGitReady(repoPath);
+      await this.branchManager.revertAndReturnToMain(repoPath, branchName);
+    } catch (err) {
+      console.warn("[orchestrator] Recovery: branch revert failed, forcing main:", err);
+      try {
+        await this.branchManager.ensureOnMain(repoPath);
+      } catch {
+        // Last resort — proceed anyway
+      }
+    }
+
+    // Add failure comment to the task
+    try {
+      await this.beads.comment(
+        repoPath,
+        taskId,
+        "Agent process crashed (backend restart). Reverting branch and requeuing task.",
+      );
+    } catch (err) {
+      console.warn("[orchestrator] Recovery: failed to add comment:", err);
+    }
+
+    // Requeue the task (set back to open/unassigned)
+    try {
+      await this.beads.update(repoPath, taskId, {
+        status: "open",
+        assignee: "",
+      });
+    } catch {
+      // Task may already be in the right state
+    }
+
+    state.status.totalFailed += 1;
+    state.status.currentTask = null;
+    state.status.currentPhase = null;
+    state.activeBranchName = null;
+    state.activeTaskTitle = null;
+    state.loopActive = false;
+
+    broadcastToProject(projectId, {
+      type: "task.updated",
+      taskId,
+      status: "open",
+      assignee: null,
+    });
+
+    // Clear persisted state and continue normal operation
+    await this.clearPersistedState(repoPath);
+    console.log(`[orchestrator] Recovery: task ${taskId} requeued, resuming normal operation`);
+  }
+
+  // ─── Lifecycle ───
+
+  /**
+   * Initialize the always-on orchestrator for a project (PRDv2 §5.7).
+   * Called once on backend boot. Checks for persisted state and recovers if needed,
+   * then starts the loop and the 5-minute watchdog (PRDv2 §5.8).
+   */
+  async ensureRunning(projectId: string): Promise<OrchestratorStatus> {
+    await this.projectService.getProject(projectId);
+    const state = this.getState(projectId);
+    const repoPath = await this.projectService.getRepoPath(projectId);
+
+    // Crash recovery: check for persisted state from a previous run
+    const persisted = await this.loadPersistedState(repoPath);
+    if (persisted && persisted.currentTaskId) {
+      await this.recoverFromPersistedState(projectId, repoPath, persisted);
+    } else if (persisted) {
+      // Persisted state exists but no active task — restore counters and clean up
+      state.status.totalCompleted = persisted.totalCompleted;
+      state.status.totalFailed = persisted.totalFailed;
+      await this.clearPersistedState(repoPath);
+    }
+
+    // Start watchdog timer if not already running
+    if (!state.watchdogTimer) {
+      state.watchdogTimer = setInterval(() => {
+        this.nudge(projectId);
+      }, WATCHDOG_INTERVAL_MS);
+      console.log("[orchestrator] Watchdog started (5m interval) for project", projectId);
+    }
+
+    // Kick off the loop if idle (recovery may have left it active for PID-alive monitoring)
+    if (!state.loopActive) {
+      this.nudge(projectId);
+    }
 
     return state.status;
   }
 
-  /** Pause the build orchestrator */
-  async pause(projectId: string): Promise<OrchestratorStatus> {
-    await this.projectService.getProject(projectId);
+  /**
+   * Event-driven dispatch trigger (PRDv2 §5.7).
+   * Called on: agent completion, feedback submission, "Build it!" click, watchdog tick.
+   * If the loop is idle (no active task, no pending loop timer), starts the loop.
+   */
+  nudge(projectId: string): void {
     const state = this.getState(projectId);
-    state.status.running = false;
 
-    // Clear timers
-    if (state.loopTimer) {
-      clearTimeout(state.loopTimer);
-      state.loopTimer = null;
-    }
-    if (state.inactivityTimer) {
-      clearInterval(state.inactivityTimer);
-      state.inactivityTimer = null;
+    // Don't start a second loop if one is already active, has an agent running, or is scheduled
+    if (state.loopActive || state.loopTimer || state.activeProcess) {
+      return;
     }
 
-    broadcastToProject(projectId, {
-      type: "build.status",
-      running: false,
-      currentTask: state.status.currentTask,
-      queueDepth: state.status.queueDepth,
-    });
-
-    return state.status;
+    console.log("[orchestrator] Nudge received, starting loop for project", projectId);
+    this.runLoop(projectId);
   }
 
   /** Get orchestrator status */
@@ -152,7 +394,9 @@ export class OrchestratorService {
   private async runLoop(projectId: string): Promise<void> {
     const state = this.getState(projectId);
 
-    if (!state.status.running) return;
+    // Mark the loop as active to prevent duplicate loops
+    state.loopActive = true;
+    state.loopTimer = null;
 
     try {
       const repoPath = await this.projectService.getRepoPath(projectId);
@@ -164,16 +408,16 @@ export class OrchestratorService {
       readyTasks = readyTasks.filter((t) => (t.title ?? "") !== "Plan approval gate");
       // Filter out epics — they are containers, not work items; agents implement tasks/bugs
       readyTasks = readyTasks.filter((t) => (t.issue_type ?? t.type) !== "epic");
+      // Filter out blocked tasks — they require user intervention to unblock (PRDv2 §9.1)
+      readyTasks = readyTasks.filter((t) => !this.beads.hasLabel(t, "blocked"));
 
       state.status.queueDepth = readyTasks.length;
 
       if (readyTasks.length === 0) {
-        console.log("[orchestrator] No ready tasks, polling again in 5s", { projectId });
-        // No tasks available, poll again in 5 seconds
-        state.loopTimer = setTimeout(() => this.runLoop(projectId), 5000);
+        console.log("[orchestrator] No ready tasks, going idle", { projectId });
+        state.loopActive = false;
         broadcastToProject(projectId, {
           type: "build.status",
-          running: true,
           currentTask: null,
           queueDepth: 0,
         });
@@ -195,13 +439,12 @@ export class OrchestratorService {
         });
       }
       if (!task) {
-        console.log("[orchestrator] No task with all blockers closed, polling again in 5s", {
+        console.log("[orchestrator] No task with all blockers closed, going idle", {
           projectId,
         });
-        state.loopTimer = setTimeout(() => this.runLoop(projectId), 5000);
+        state.loopActive = false;
         broadcastToProject(projectId, {
           type: "build.status",
-          running: true,
           currentTask: null,
           queueDepth: 0,
         });
@@ -215,9 +458,17 @@ export class OrchestratorService {
         assignee: "agent-1",
       });
 
+      // Load cumulative attempt count from bead metadata (PRDv2 §9.1)
+      const cumulativeAttempts = await this.beads.getCumulativeAttempts(repoPath, task.id);
+
       state.status.currentTask = task.id;
       state.status.currentPhase = "coding";
-      state.attempt = 1;
+      state.attempt = cumulativeAttempts + 1;
+      state.activeBranchName = `opensprint/${task.id}`;
+      state.activeTaskTitle = task.title ?? null;
+
+      // Persist state: idle → coding transition (PRDv2 §5.8)
+      await this.persistState(projectId, repoPath);
 
       broadcastToProject(projectId, {
         type: "task.updated",
@@ -228,7 +479,6 @@ export class OrchestratorService {
 
       broadcastToProject(projectId, {
         type: "build.status",
-        running: true,
         currentTask: task.id,
         currentPhase: "coding",
         queueDepth: readyTasks.length - 1,
@@ -249,10 +499,8 @@ export class OrchestratorService {
     } catch (error) {
       console.error(`Orchestrator loop error for project ${projectId}:`, error);
       // Retry loop after delay
-      const state2 = this.getState(projectId);
-      if (state2.status.running) {
-        state2.loopTimer = setTimeout(() => this.runLoop(projectId), 10000);
-      }
+      state.loopActive = false;
+      state.loopTimer = setTimeout(() => this.runLoop(projectId), 10000);
     }
   }
 
@@ -315,6 +563,9 @@ export class OrchestratorService {
           await this.handleCodingComplete(projectId, repoPath, task, branchName, code);
         },
       });
+
+      // Persist state with agent PID for crash recovery (PRDv2 §5.8)
+      await this.persistState(projectId, repoPath);
 
       // Start inactivity monitoring
       state.inactivityTimer = setInterval(() => {
@@ -383,6 +634,10 @@ export class OrchestratorService {
 
       // Move to review phase (coding-to-review transition)
       state.status.currentPhase = "review";
+
+      // Persist state: coding → review transition (PRDv2 §5.8)
+      await this.persistState(projectId, repoPath);
+
       broadcastToProject(projectId, {
         type: "task.updated",
         taskId: task.id,
@@ -391,7 +646,6 @@ export class OrchestratorService {
       });
       broadcastToProject(projectId, {
         type: "build.status",
-        running: true,
         currentTask: task.id,
         currentPhase: "review",
         queueDepth: state.status.queueDepth,
@@ -473,6 +727,9 @@ export class OrchestratorService {
         },
       );
 
+      // Persist state with review agent PID for crash recovery (PRDv2 §5.8)
+      await this.persistState(projectId, repoPath);
+
       // Start inactivity monitoring
       state.inactivityTimer = setInterval(() => {
         const elapsed = Date.now() - state.lastOutputTime;
@@ -548,6 +805,11 @@ export class OrchestratorService {
       state.status.totalCompleted += 1;
       state.status.currentTask = null;
       state.status.currentPhase = null;
+      state.activeBranchName = null;
+      state.activeTaskTitle = null;
+
+      // Clear persisted state: task completed successfully (PRDv2 §5.8)
+      await this.clearPersistedState(repoPath);
 
       broadcastToProject(projectId, {
         type: "task.updated",
@@ -568,54 +830,30 @@ export class OrchestratorService {
         console.warn(`Deployment trigger failed for project ${projectId}:`, err);
       });
 
-      // Continue the loop (3s delay to let git operations fully settle)
-      if (state.status.running) {
-        state.loopTimer = setTimeout(() => this.runLoop(projectId), 3000);
-      }
+      // Mark loop as idle, then re-trigger after a short delay to let git settle
+      state.loopActive = false;
+      state.loopTimer = setTimeout(() => this.nudge(projectId), 3000);
     } else if (result && result.status === "rejected") {
-      // Review rejected — retry coding with feedback
-      state.attempt += 1;
-      const retryLimit = DEFAULT_RETRY_LIMIT;
+      // Review rejected — treat as a failure for progressive backoff (PRDv2 §9.1)
+      const reason = `Review rejected: ${result.issues?.join("; ") || result.summary}`;
+      const reviewFeedback = [result.summary, ...(result.issues ?? [])].filter(Boolean).join("\n");
 
-      if (state.attempt <= retryLimit + 1) {
-        console.log(`Review rejected for ${task.id}, retrying (attempt ${state.attempt})`);
+      // Archive rejection session before handling failure
+      const session = await this.sessionManager.createSession(repoPath, {
+        taskId: task.id,
+        attempt: state.attempt,
+        agentType: (await this.projectService.getSettings(projectId)).codingAgent.type,
+        agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || "",
+        gitBranch: branchName,
+        status: "rejected",
+        outputLog: state.outputLog.join(""),
+        failureReason: result.summary,
+        startedAt: state.startedAt,
+      });
+      await this.sessionManager.archiveSession(repoPath, task.id, state.attempt, session);
 
-        // Archive rejection session
-        const session = await this.sessionManager.createSession(repoPath, {
-          taskId: task.id,
-          attempt: state.attempt - 1,
-          agentType: (await this.projectService.getSettings(projectId)).codingAgent.type,
-          agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || "",
-          gitBranch: branchName,
-          status: "rejected",
-          outputLog: state.outputLog.join(""),
-          failureReason: result.summary,
-          startedAt: state.startedAt,
-        });
-        await this.sessionManager.archiveSession(repoPath, task.id, state.attempt - 1, session);
-
-        const reviewFeedback = [result.summary, ...(result.issues ?? [])].filter(Boolean).join("\n");
-
-        await this.executeCodingPhase(projectId, repoPath, task, {
-          reviewFeedback,
-          useExistingBranch: true,
-        });
-      } else {
-        // Retry limit reached — escalate per HIL config (PRD §9.2)
-        const reason = `Review rejected ${state.attempt - 1} times. Issues: ${result.issues?.join("; ") || result.summary}`;
-        const reviewFeedback = [result.summary, ...(result.issues ?? [])].filter(Boolean).join("\n");
-        const shouldRetry = await this.escalateRetryLimit(projectId, task.id, reason);
-
-        if (shouldRetry) {
-          state.attempt = 1;
-          await this.executeCodingPhase(projectId, repoPath, task, {
-            reviewFeedback,
-            useExistingBranch: true,
-          });
-        } else {
-          await this.handleTaskFailure(projectId, repoPath, task, branchName, reason, null);
-        }
-      }
+      // Delegate to progressive backoff handler (which will retry, demote, or block)
+      await this.handleTaskFailure(projectId, repoPath, task, branchName, reason, null);
     } else {
       // No result.json or unexpected status
       await this.handleTaskFailure(
@@ -629,6 +867,15 @@ export class OrchestratorService {
     }
   }
 
+  /**
+   * Progressive backoff error handler (PRDv2 §9.1).
+   *
+   * Replaces the fixed retry limit + HIL escalation model. Cumulative attempt
+   * count is tracked on each bead issue via metadata. The backoff cadence:
+   *   - Attempts where (cumulative % 3 !== 0): immediate retry with failure context
+   *   - Every 3rd failure: deprioritize the task (beads priority += 1)
+   *   - At priority 4 on a 3rd failure: add `blocked` label, emit `task.blocked`
+   */
   private async handleTaskFailure(
     projectId: string,
     repoPath: string,
@@ -638,8 +885,9 @@ export class OrchestratorService {
     testResults?: TestResults | null,
   ): Promise<void> {
     const state = this.getState(projectId);
+    const cumulativeAttempts = state.attempt;
 
-    console.error(`Task ${task.id} failed: ${reason}`);
+    console.error(`Task ${task.id} failed (cumulative attempt ${cumulativeAttempts}): ${reason}`);
 
     // Wait for any lingering git operations, then revert and return to main
     await this.branchManager.waitForGitReady(repoPath);
@@ -648,7 +896,7 @@ export class OrchestratorService {
     // Archive failure session
     const session = await this.sessionManager.createSession(repoPath, {
       taskId: task.id,
-      attempt: state.attempt,
+      attempt: cumulativeAttempts,
       agentType: (await this.projectService.getSettings(projectId)).codingAgent.type,
       agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || "",
       gitBranch: branchName,
@@ -658,40 +906,63 @@ export class OrchestratorService {
       testResults: testResults ?? undefined,
       startedAt: state.startedAt,
     });
-    await this.sessionManager.archiveSession(repoPath, task.id, state.attempt, session);
+    await this.sessionManager.archiveSession(repoPath, task.id, cumulativeAttempts, session);
 
-    const retryLimit = DEFAULT_RETRY_LIMIT;
-    const canRetry = state.attempt <= retryLimit;
+    // Persist cumulative attempt count on the bead issue (PRDv2 §9.1)
+    await this.beads.setCumulativeAttempts(repoPath, task.id, cumulativeAttempts);
 
-    if (canRetry) {
-      state.attempt += 1;
-      console.log(`Coding failed for ${task.id}, retrying (attempt ${state.attempt})`);
+    // Add failure comment for audit trail
+    await this.beads.comment(
+      repoPath,
+      task.id,
+      `Attempt ${cumulativeAttempts} failed: ${reason.slice(0, 500)}`,
+    ).catch((err) => console.warn("[orchestrator] Failed to add failure comment:", err));
+
+    const isDemotionPoint = cumulativeAttempts % BACKOFF_FAILURE_THRESHOLD === 0;
+
+    if (!isDemotionPoint) {
+      // Immediate retry with failure context
+      state.attempt = cumulativeAttempts + 1;
+      console.log(`[orchestrator] Retrying ${task.id} (attempt ${state.attempt})`);
+
+      // Persist state: retry attempt transition (PRDv2 §5.8)
+      await this.persistState(projectId, repoPath);
+
       await this.executeCodingPhase(projectId, repoPath, task, {
         previousFailure: reason,
       });
     } else {
-      // Retry limit reached — escalate per HIL config (PRD §9.1)
-      const shouldRetry = await this.escalateRetryLimit(projectId, task.id, reason);
+      // Demotion point: deprioritize or block
+      const currentPriority = task.priority ?? 2;
 
-      if (shouldRetry) {
-        state.attempt = 1;
-        await this.executeCodingPhase(projectId, repoPath, task, {
-          previousFailure: reason,
-        });
+      if (currentPriority >= MAX_PRIORITY_BEFORE_BLOCK) {
+        // At max priority — block the task
+        await this.blockTask(projectId, repoPath, task, cumulativeAttempts, reason);
       } else {
-        // Return task to Ready queue
+        // Deprioritize and requeue for later pickup
+        const newPriority = currentPriority + 1;
+        console.log(
+          `[orchestrator] Demoting ${task.id} priority ${currentPriority} → ${newPriority} after ${cumulativeAttempts} failures`,
+        );
+
         try {
           await this.beads.update(repoPath, task.id, {
             status: "open",
             assignee: "",
+            priority: newPriority,
           });
         } catch {
-          // Task might already be in the right state
+          // Task may already be in the right state
         }
 
         state.status.totalFailed += 1;
         state.status.currentTask = null;
         state.status.currentPhase = null;
+        state.activeBranchName = null;
+        state.activeTaskTitle = null;
+
+        // Clear persisted state: task returned to queue (PRDv2 §5.8)
+        await this.clearPersistedState(repoPath);
 
         broadcastToProject(projectId, {
           type: "task.updated",
@@ -707,34 +978,73 @@ export class OrchestratorService {
           testResults: null,
         });
 
-        if (state.status.running) {
-          state.loopTimer = setTimeout(() => this.runLoop(projectId), 2000);
-        }
+        // Mark loop idle and schedule next iteration
+        state.loopActive = false;
+        state.loopTimer = setTimeout(() => this.nudge(projectId), 2000);
       }
     }
   }
 
   /**
-   * Escalate retry limit to user per HIL config (PRD §9.1, §9.2).
-   * For automated/notify_and_proceed: logs/notifies and returns false.
-   * For requires_approval: waits for user; true = retry, false = return to queue.
+   * Block a task after progressive backoff exhaustion (PRDv2 §9.1).
+   * Adds the `blocked` label, emits `task.blocked`, and moves the task out of the active queue.
    */
-  private async escalateRetryLimit(projectId: string, taskId: string, reason: string): Promise<boolean> {
-    const description = `Task ${taskId} reached retry limit: ${reason}`;
-    const options = [
-      { id: "retry", label: "Retry", description: "Give the agent another attempt" },
-      { id: "queue", label: "Return to queue", description: "Leave task in Ready for manual intervention" },
-    ];
+  private async blockTask(
+    projectId: string,
+    repoPath: string,
+    task: BeadsIssue,
+    cumulativeAttempts: number,
+    reason: string,
+  ): Promise<void> {
+    const state = this.getState(projectId);
 
-    const { approved } = await hilService.evaluateDecision(
-      projectId,
-      "testFailuresAndRetries",
-      description,
-      options,
-      false, // default: return to queue (don't retry) per PRD §9.1
+    console.log(
+      `[orchestrator] Blocking ${task.id} after ${cumulativeAttempts} cumulative failures at max priority`,
     );
 
-    return approved;
+    try {
+      await this.beads.addLabel(repoPath, task.id, "blocked");
+      await this.beads.update(repoPath, task.id, {
+        status: "open",
+        assignee: "",
+      });
+    } catch (err) {
+      console.warn("[orchestrator] Failed to block task:", err);
+    }
+
+    state.status.totalFailed += 1;
+    state.status.currentTask = null;
+    state.status.currentPhase = null;
+    state.activeBranchName = null;
+    state.activeTaskTitle = null;
+
+    // Clear persisted state (PRDv2 §5.8)
+    await this.clearPersistedState(repoPath);
+
+    broadcastToProject(projectId, {
+      type: "task.blocked",
+      taskId: task.id,
+      reason: `Blocked after ${cumulativeAttempts} failed attempts: ${reason.slice(0, 300)}`,
+      cumulativeAttempts,
+    });
+
+    broadcastToProject(projectId, {
+      type: "task.updated",
+      taskId: task.id,
+      status: "open",
+      assignee: null,
+    });
+
+    broadcastToProject(projectId, {
+      type: "agent.completed",
+      taskId: task.id,
+      status: "failed",
+      testResults: null,
+    });
+
+    // Mark loop idle and schedule next iteration
+    state.loopActive = false;
+    state.loopTimer = setTimeout(() => this.nudge(projectId), 2000);
   }
 }
 

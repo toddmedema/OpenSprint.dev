@@ -48,13 +48,14 @@ describe("Build API", () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
       expect(res.body.data).toMatchObject({
-        running: false,
         currentTask: null,
         currentPhase: null,
         queueDepth: 0,
         totalCompleted: 0,
         totalFailed: 0,
       });
+      // Always-on orchestrator: no `running` field (PRDv2 §5.7)
+      expect(res.body.data.running).toBeUndefined();
     });
 
     it("should return 404 for non-existent project", async () => {
@@ -68,44 +69,20 @@ describe("Build API", () => {
     });
   });
 
-  describe("POST /projects/:projectId/build/start", () => {
-    it("should start the orchestrator and return status", async () => {
+  describe("POST /projects/:projectId/build/nudge", () => {
+    it("should accept nudge and return status", async () => {
       const res = await request(app)
-        .post(`${API_PREFIX}/projects/${projectId}/build/start`);
+        .post(`${API_PREFIX}/projects/${projectId}/build/nudge`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
-      expect(res.body.data.running).toBe(true);
       expect(res.body.data.currentTask).toBeNull();
       expect(res.body.data.queueDepth).toBeGreaterThanOrEqual(0);
-
-      await request(app).post(`${API_PREFIX}/projects/${projectId}/build/pause`);
     });
 
     it("should return 404 for non-existent project", async () => {
       const res = await request(app)
-        .post(`${API_PREFIX}/projects/nonexistent-id/build/start`);
-
-      expect(res.status).toBe(404);
-      expect(res.body.error).toBeDefined();
-      expect(res.body.error.code).toBe("PROJECT_NOT_FOUND");
-    });
-  });
-
-  describe("POST /projects/:projectId/build/pause", () => {
-    it("should pause the orchestrator and return status", async () => {
-      await request(app).post(`${API_PREFIX}/projects/${projectId}/build/start`);
-      const res = await request(app)
-        .post(`${API_PREFIX}/projects/${projectId}/build/pause`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.data).toBeDefined();
-      expect(res.body.data.running).toBe(false);
-    });
-
-    it("should return 404 for non-existent project", async () => {
-      const res = await request(app)
-        .post(`${API_PREFIX}/projects/nonexistent-id/build/pause`);
+        .post(`${API_PREFIX}/projects/nonexistent-id/build/nudge`);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();

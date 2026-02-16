@@ -40,6 +40,7 @@ export interface InvokeCodingAgentOptions {
 /** Return type for invokeCodingAgent — handle with kill() to terminate */
 export interface CodingAgentHandle {
   kill: () => void;
+  pid: number | null;
 }
 /**
  * AgentService — unified interface for planning and coding agents.

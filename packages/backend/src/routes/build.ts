@@ -26,24 +26,12 @@ buildRouter.post('/tasks/:taskId/prepare', async (req: Request<PrepareParams>, r
   }
 });
 
-// POST /projects/:projectId/build/start — Start the build orchestrator
-buildRouter.post('/start', async (req: Request<ProjectParams>, res, next) => {
+// POST /projects/:projectId/build/nudge — Event-driven dispatch trigger (PRDv2 §5.7)
+buildRouter.post('/nudge', async (req: Request<ProjectParams>, res, next) => {
   try {
     const { projectId } = req.params;
-    console.log('[build] POST /start received', { projectId });
-    const status = await orchestratorService.start(projectId);
-    console.log('[build] Orchestrator started', { projectId, running: status });
-    const body: ApiResponse<OrchestratorStatus> = { data: status };
-    res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /projects/:projectId/build/pause — Pause the build orchestrator
-buildRouter.post('/pause', async (req: Request<ProjectParams>, res, next) => {
-  try {
-    const status = await orchestratorService.pause(req.params.projectId);
+    orchestratorService.nudge(projectId);
+    const status = await orchestratorService.getStatus(projectId);
     const body: ApiResponse<OrchestratorStatus> = { data: status };
     res.json(body);
   } catch (err) {

@@ -1,7 +1,7 @@
 # OpenSprint — Product Requirements Document
 
-**Version:** 1.7
-**Date:** February 14, 2026
+**Version:** 1.8
+**Date:** February 15, 2026
 **Status:** Draft
 
 ---
@@ -23,7 +23,7 @@ Building software with AI today is fragmented and unstructured. Developers use A
 - **Lack of architectural coherence:** AI-generated code often lacks a unified vision because each prompt is handled in isolation, without awareness of the broader system design.
 - **No dependency tracking:** When building features in parallel, there is no mechanism to ensure that work on one feature accounts for dependencies on another.
 - **Manual orchestration overhead:** Users spend significant time managing prompts, context windows, and task sequencing rather than focusing on product decisions.
-- **No feedback loop:** There is no structured way to verify completed work and feed findings back into the development process.
+- **No feedback loop:** There is no structured way to validate completed work and feed findings back into the development process.
 
 OpenSprint solves these problems by providing an end-to-end platform that maintains context across the entire lifecycle and automates the orchestration of AI development agents.
 
@@ -83,16 +83,16 @@ OpenSprint is designed to run entirely offline. The web frontend and backend API
 
 ### 5.3 Core Components
 
-| Component           | Technology                            | Responsibility                                                                                                                                                                                                                                                          |
-| ------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web Frontend        | React + TypeScript                    | User interface for all four phases; real-time agent monitoring; project management                                                                                                                                                                                      |
-| Backend API         | Node.js + TypeScript                  | Project state management, WebSocket relay, PRD versioning, agent orchestration                                                                                                                                                                                          |
-| Agent CLI           | Pluggable (Claude, Cursor, Custom)    | Executes development tasks: code generation, testing, debugging                                                                                                                                                                                                         |
-| Orchestration Layer | Node.js (custom)                      | Agent lifecycle management (spawn, monitor, timeout), context assembly, retry logic, code review triggering. Owns all critical git operations (branch, commit, merge). Delegates task prioritization and readiness to beads. See Section 5.5 (trust boundary).          |
-| Beads               | Git-based issue tracker (CLI: `bd`)   | Issue storage, dependency tracking (blocks/related/parent-child/discovered-from), ready-work detection and prioritization via `bd ready`, agent assignment via `assignee` field, hierarchical epic/task IDs, provenance via audit trail, JSONL-backed distributed state |
-| Version Control     | Git                                   | Code repository management, branch-per-task strategy                                                                                                                                                                                                                    |
-| Test Runner         | Configurable (Jest, Playwright, etc.) | Automated test execution and coverage reporting                                                                                                                                                                                                                         |
-| Deployment          | Expo.dev / Custom pipeline            | Automated deployment for supported platforms                                                                                                                                                                                                                            |
+| Component           | Technology                            | Responsibility                                                                                                                                                                                                                                                                                                                               |
+| ------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web Frontend        | React + TypeScript                    | User interface for all four phases; real-time agent monitoring; project management                                                                                                                                                                                                                                                           |
+| Backend API         | Node.js + TypeScript                  | Project state management, WebSocket relay, PRD versioning, agent orchestration                                                                                                                                                                                                                                                               |
+| Agent CLI           | Pluggable (Claude, Cursor, Custom)    | Executes development tasks: code generation, testing, debugging                                                                                                                                                                                                                                                                              |
+| Orchestration Layer | Node.js (custom, deterministic)       | Always-on agent lifecycle management (spawn, monitor, timeout), context assembly, retry logic, code review triggering. Owns all critical git and beads operations (branch, commit, merge, issue creation, state transitions). Event-driven dispatch with 5-minute watchdog. Crash recovery via persistent state. See Sections 5.5, 5.7, 5.8. |
+| Beads               | Git-based issue tracker (CLI: `bd`)   | Issue storage, dependency tracking (blocks/related/parent-child/discovered-from), ready-work detection and prioritization via `bd ready`, agent assignment via `assignee` field, hierarchical epic/task IDs, provenance via audit trail, JSONL-backed distributed state                                                                      |
+| Version Control     | Git                                   | Code repository management, branch-per-task strategy                                                                                                                                                                                                                                                                                         |
+| Test Runner         | Configurable (Jest, Playwright, etc.) | Automated test execution and coverage reporting                                                                                                                                                                                                                                                                                              |
+| Deployment          | Expo.dev / Custom pipeline            | Automated deployment for supported platforms                                                                                                                                                                                                                                                                                                 |
 
 ### 5.4 Beads Integration Details
 
@@ -111,7 +111,7 @@ OpenSprint is designed to run entirely offline. The web frontend and backend API
 - Daemon with real-time event capabilities
 - Full audit trail of every change
 
-**Planning state via gating task:** When a Plan is created and its tasks are decomposed, the orchestrator creates a special gating task as the first child of the epic (e.g., `bd-a3f8.0` titled "Plan approval gate"). All real implementation tasks have a `blocks` dependency on this gate. While the gate is open, `bd ready` will not return any of the implementation tasks. When the user clicks "Build It!", the gate task is closed, which unblocks all child tasks and makes them eligible for `bd ready` based on their own inter-task dependencies. The epic itself stays open throughout the build process and is only closed when all child tasks are Done.
+**Planning state via gating task:** When a Plan is created and its tasks are decomposed, the orchestrator creates a special gating task as the first child of the epic (e.g., `bd-a3f8.0` titled "Plan approval gate"). All real implementation tasks have a `blocks` dependency on this gate. While the gate is open, `bd ready` will not return any of the implementation tasks. When the user clicks "Build it!", the gate task is closed, which unblocks all child tasks and makes them eligible for `bd ready` based on their own inter-task dependencies. The epic itself stays open throughout the build process and is only closed when all child tasks are Done.
 
 **What OpenSprint's orchestration layer adds:**
 
@@ -122,23 +122,75 @@ OpenSprint is designed to run entirely offline. The web frontend and backend API
 
 ### 5.5 Orchestrator Trust Boundary
 
-**Agents cannot be trusted to execute specific steps.** LLMs are non-deterministic and may omit, misinterpret, or fail to execute instructions. Any operation that affects project state, version control, or workflow progression must be performed by the orchestrator in code — never delegated to agent prompts.
+**The orchestrator is a deterministic Node.js process — it executes scripted logic, never LLM inference.** Every decision point in the orchestrator is a coded conditional (e.g., `if result.json status === "approved" then merge`), not an AI judgment. The orchestrator is fundamentally distinct from agents: agents produce natural-language reasoning and code; the orchestrator runs fixed, predictable scripts that read agent outputs and perform state transitions.
+
+**Agents cannot be trusted to execute specific steps.** LLMs are non-deterministic and may omit, misinterpret, or fail to execute instructions. Agents may also be terminated unexpectedly by external factors (resource limits, process crashes, provider outages). Any operation that affects project state, version control, or workflow progression must be performed by the orchestrator in code — never delegated to agent prompts.
 
 **Critical operations (orchestrator-only):**
 
-| Operation                    | Why Orchestrator Must Own It                                                                                                 |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Branch creation and checkout | Agent might not create the branch, might check out the wrong branch, or might leave the repo in an inconsistent state        |
-| Committing changes           | Agent might forget to commit, commit with wrong message, commit partial changes, or commit to the wrong branch               |
-| Merging to main              | Agent might merge incorrectly, merge the wrong branch, or leave merge conflicts unresolved                                   |
-| Triggering the next agent    | Agent has no mechanism to invoke the orchestrator; workflow progression is entirely orchestrator-driven                      |
-| Beads state transitions      | `bd update`, `bd close`, `bd dep add` — all must be invoked by the orchestrator based on agent _output_, not agent _actions_ |
+| Operation                    | Phase(s)     | Why Orchestrator Must Own It                                                                                                                          |
+| ---------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Branch creation and checkout | Build        | Agent might not create the branch, might check out the wrong branch, or might leave the repo in an inconsistent state                                 |
+| Committing changes           | Build        | Agent might forget to commit, commit with wrong message, commit partial changes, or commit to the wrong branch                                        |
+| Merging to main              | Build        | Agent might merge incorrectly, merge the wrong branch, or leave merge conflicts unresolved                                                            |
+| Triggering the next agent    | All          | Agent has no mechanism to invoke the orchestrator; workflow progression is entirely orchestrator-driven                                               |
+| Beads state transitions      | Build        | `bd update`, `bd close` — all must be invoked by the orchestrator based on agent _output_, not agent _actions_                                        |
+| Beads issue creation         | Plan, Verify | `bd create`, `bd dep add` — agents propose task decompositions and feedback mappings as structured data; orchestrator creates the actual beads issues |
+| PRD file updates             | Plan, Verify | Agents propose PRD section updates as structured output; orchestrator writes to `prd.json` and commits                                                |
+| Gating task closure          | Plan         | "Build it!" closes the gating task via `bd close` — this is a scripted orchestrator action triggered by a UI button, never by an agent                |
 
-**Agent responsibilities:** Agents produce _outputs_ — code files, `result.json`, and reasoning. The orchestrator reads these outputs and performs the corresponding critical operations. For example: when the review agent writes `result.json` with `status: "approved"`, the orchestrator performs the merge, updates beads, and triggers the next task — the agent never touches git or beads directly for these steps.
+**Agent responsibilities:** Agents produce _outputs_ — code files, `result.json`, structured data (task proposals, PRD update proposals, feedback categorizations), and reasoning. The orchestrator reads these outputs and performs the corresponding critical operations. For example: when the review agent writes `result.json` with `status: "approved"`, the orchestrator performs the merge, updates beads, and triggers the next task — the agent never touches git or beads directly. Similarly, when the planning agent proposes a task decomposition, the orchestrator executes all `bd create` and `bd dep add` commands.
 
 ### 5.6 Data Flow
 
 The data flows through the system in a unidirectional pipeline with feedback loops. User input in Dream creates or updates the PRD. The PRD is decomposed in Plan into feature-level Plan markdown files, each representing an epic. In Build, Plan markdowns are further broken into individual tasks mapped to beads for dependency tracking. Agent CLIs pick up tasks, execute them, and report results back through the system. In Verify, user feedback is mapped back to the relevant Plan epic and Build tasks, creating new tickets as needed. Any changes at any phase propagate upstream to update the living PRD, ensuring the document always reflects the current state of the project.
+
+### 5.7 Orchestrator Lifecycle & Always-On Loop
+
+**The orchestrator is always running.** When the OpenSprint backend starts, the orchestrator begins its loop automatically — there is no manual "start build" action. The orchestrator continuously monitors for available work and dispatches agents as needed. The user never needs to ask the system to pick up work; any change that produces eligible tasks (clicking "Build it!", submitting feedback, a dependency resolving) is automatically detected and acted upon.
+
+**Single-agent execution (v1):** The orchestrator runs one coding or review agent at a time. If new tasks become available while an agent is active (e.g., from user feedback or a newly shipped Plan), those tasks enter the `bd ready` queue and are picked up after the current agent completes. The orchestrator does not spawn a second agent concurrently.
+
+**Event-driven with watchdog polling:** The orchestrator operates primarily on events — it triggers the next agent when the current one completes, triggers feedback categorization when feedback is submitted, and triggers PRD review when a Plan is built. In addition, a **watchdog timer** runs on a 5-minute cadence and performs a health check:
+
+1. Queries `bd ready --json` for available tasks.
+2. Checks whether any agents are currently running.
+3. If there are eligible tasks but no running agent, the watchdog kicks off the next coding/review agent.
+4. If a running agent has produced no output for more than 5 minutes (the inactivity timeout from Section 9.4), the watchdog terminates it and triggers the error recovery flow.
+
+This watchdog ensures the flywheel recovers from edge cases where an event was missed, a process silently died, or the system restarted.
+
+### 5.8 Orchestrator State Persistence & Recovery
+
+The orchestrator maintains its state in a local file at `.opensprint/orchestrator-state.json` (added to `.gitignore`). This file is updated atomically on every state transition and contains:
+
+```json
+{
+  "active_task": {
+    "task_id": "bd-a3f8.2",
+    "phase": "coding",
+    "agent_pid": 12345,
+    "branch": "opensprint/bd-a3f8.2",
+    "started_at": "2026-02-14T10:30:00Z",
+    "last_output_at": "2026-02-14T10:32:15Z",
+    "attempt": 1
+  },
+  "last_watchdog_run": "2026-02-14T10:35:00Z",
+  "pending_feedback_categorizations": []
+}
+```
+
+**On startup recovery:** When the OpenSprint backend starts, the orchestrator reads `orchestrator-state.json` and performs the following recovery sequence:
+
+1. **No active task recorded:** Normal startup. Begin the event loop and watchdog timer.
+2. **Active task recorded, agent process still running (PID alive):** Resume monitoring the existing agent process.
+3. **Active task recorded, agent process not running (PID dead):** The agent was terminated unexpectedly. The orchestrator automatically recovers without user intervention:
+   - Revert any partial git changes on the task branch (`git reset --hard` + `git checkout main`).
+   - Add a failure comment to the bead issue documenting the unexpected termination.
+   - Re-queue the task by setting its status back to `open` (returning it to Ready via `bd ready`).
+   - Resume the normal orchestration loop, which will pick the task up on its next iteration.
+
+This follows the same error handling pattern as all other agent failures (Section 9): the orchestrator always reverts partial work, re-queues the task, and continues. No user prompt is needed — the system self-heals and the flywheel continues uninterrupted.
 
 ---
 
@@ -189,16 +241,17 @@ OpenSprint supports two deployment modes that users configure during project set
 
 ### 6.5 Human-in-the-Loop Configuration
 
-OpenSprint is designed to operate as an autonomous flywheel, but users have granular control over when the system pauses for human input. During project setup (and adjustable at any time), users configure their autonomy preferences via a series of checkboxes organized into four decision categories.
+OpenSprint is designed to operate as an autonomous flywheel, but users have granular control over when the system pauses for human input. During project setup (and adjustable at any time), users configure their autonomy preferences via a series of checkboxes organized into three decision categories.
 
 #### 6.5.1 Decision Categories
 
-| Category                 | What It Covers                                                                                                                                                                                          | Default                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| Scope Changes            | Any modification that adds, removes, or substantially alters a feature in the PRD. This includes changes triggered by Verify feedback that the AI determines represent new scope rather than bug fixes. | Requires approval                         |
-| Architecture Decisions   | Technology stack changes, new external service integrations, database schema modifications, API contract changes, and significant refactors that alter system structure.                                | Requires approval                         |
-| Dependency Modifications | Changes to task ordering, adding new dependencies between epics, splitting or merging tasks, and re-prioritization of the build queue.                                                                  | Automated                                 |
-| Test Failures & Retries  | How to handle tasks where automated tests fail after agent completion: retry with the same agent, retry with modified instructions, or escalate to the user.                                            | Automated (retry up to 2x, then escalate) |
+| Category                 | What It Covers                                                                                                                                                                                          | Default           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| Scope Changes            | Any modification that adds, removes, or substantially alters a feature in the PRD. This includes changes triggered by Verify feedback that the AI determines represent new scope rather than bug fixes. | Requires approval |
+| Architecture Decisions   | Technology stack changes, new external service integrations, database schema modifications, API contract changes, and significant refactors that alter system structure.                                | Requires approval |
+| Dependency Modifications | Changes to task ordering, adding new dependencies between epics, splitting or merging tasks, and re-prioritization of the build queue.                                                                  | Automated         |
+
+**Note:** Test failures and agent errors are always handled automatically via progressive backoff (retry, requeue, deprioritize, and eventually block — see Section 9.1). This is not configurable, as the hands-off recovery strategy is core to the flywheel design.
 
 #### 6.5.2 Notification Behavior
 
@@ -208,7 +261,7 @@ For each category, users choose one of three modes:
 - **Notify and proceed:** The AI makes the decision, sends a real-time notification to the user, and continues without waiting. The user can review and override retroactively if needed.
 - **Requires approval:** The AI prepares a recommendation with full context, pauses the affected work stream, and waits for explicit user approval before proceeding. Other non-blocked work continues in parallel.
 
-This configuration ensures that users who want full autonomy can get it, while users who want tight control over critical decisions have that option. The system defaults to requiring approval for the two highest-impact categories (Scope Changes, Architecture Decisions) and automating the two more operational categories.
+This configuration ensures that users who want full autonomy can get it, while users who want tight control over critical decisions have that option. The system defaults to requiring approval for the two highest-impact categories (Scope Changes, Architecture Decisions) and automating the operational category (Dependency Modifications).
 
 ### 6.6 Appearance & Theme
 
@@ -257,9 +310,7 @@ The living PRD is stored as a structured JSON file within the project's git repo
 
 #### 7.1.5 User Interface
 
-The Dream tab presents a split-pane interface. The left pane is a chat window where the user converses with the planning agent. The right pane displays the live PRD document, updating in real-time as the conversation progresses. Users can click on any section of the PRD to focus the conversation on that area.
-
-**Inline editing:** PRD sections support direct inline editing — no Edit/Save flow. The experience is Google Docs–style: users edit text directly in place. The frontend uses a WYSIWYG-style editor (e.g., Ctrl+B for bold renders as bold on screen) while the backend stores content as markdown. Changes are reflected back into the conversation context automatically.
+The Dream tab presents a split-pane interface. The left pane is a chat window where the user converses with the planning agent. The right pane displays the live PRD document, updating in real-time as the conversation progresses. Users can click on any section of the PRD to focus the conversation on that area, or edit the PRD directly with changes reflected back into the conversation context.
 
 ---
 
@@ -271,14 +322,31 @@ The Plan phase breaks the high-level PRD into discrete, implementable features. 
 
 #### 7.2.2 Key Capabilities
 
-- **AI-assisted decomposition:** The planning agent analyzes the PRD and suggests a breakdown into features. The user can accept, modify, merge, or split the suggested features.
+- **AI-assisted decomposition:** The planning agent analyzes the PRD and suggests a breakdown into features. The user can accept, modify, merge, or split the suggested features. **Trust boundary:** The planning agent _proposes_ the decomposition by outputting structured data (a list of features with titles, descriptions, and suggested dependency relationships). The orchestrator _executes_ all `bd` commands to create epics, tasks, and dependencies based on this output — the agent never invokes `bd` directly. This is the same trust boundary pattern as the Build phase (see Section 5.5). **Dependency references:** Since beads task IDs are only assigned at creation time, the agent expresses inter-task dependencies using ordinal index references within its structured output (e.g., `"depends_on": [0, 2]` means "this task depends on the tasks at index 0 and 2 in this list"). The orchestrator creates tasks sequentially, maintains a mapping of `index → actual beads ID`, and then executes the `bd dep add` commands using the resolved IDs. Example agent output:
+
+  ```json
+  {
+    "tasks": [
+      { "index": 0, "title": "Set up database schema", "description": "...", "depends_on": [] },
+      { "index": 1, "title": "Implement user model", "description": "...", "depends_on": [0] },
+      { "index": 2, "title": "Build auth endpoints", "description": "...", "depends_on": [0, 1] }
+    ]
+  }
+  ```
+
 - **Plan markdown specification:** Each feature is documented in a structured markdown file stored at `.opensprint/plans/<plan-id>.md`, containing: overview, acceptance criteria, technical approach, dependencies on other Plans, data model changes, API endpoints, UI components, edge cases, and testing strategy.
 - **Dependency graph visualization:** A visual graph shows how features relate to each other, highlighting critical paths and potential bottlenecks. This helps the user understand implementation order before committing to the Build phase.
 - **Suggested implementation order:** The AI recommends a build sequence based on dependency analysis, risk assessment, and foundational priority — building the riskiest and most foundational pieces first.
-- **Upstream propagation:** Any changes made to Plans (additions, modifications, scope changes) are automatically reflected back in the living PRD. When a Plan is approved for build, the orchestrator invokes the planning agent to review the Plan against the current PRD and update any affected sections. The agent receives the full PRD and the approved Plan as context and produces targeted section updates with change log entries.
-- **"Plan it" / "Replan it" transition:** Before any plan has been generated, the Plan tab shows a "Plan it" button. When clicked, the planning agent analyzes the PRD and creates the initial feature breakdown. If the user subsequently edits the PRD in the Dream phase and returns to Plan, the button becomes "Replan it" — the planning agent reviews the changes to the PRD since the last plan (using versioned snapshots for diffing) and creates or updates plans as necessary. If the plan has already been generated and there are no new PRD changes, the button is not shown.
-- **"Build It!" transition:** Plans and their decomposed tasks exist in a Planning state — all implementation tasks have a `blocks` dependency on a gating task (`bd-a3f8.0 "Plan approval gate"`), so they do not appear in `bd ready`. Each Plan card in the Plan view has a "Build It!" button that closes the gating task, allowing child tasks to become eligible for `bd ready` based on their own inter-task dependencies. This prevents agents from working on features that are still being refined.
-- **Rebuild behavior:** A Plan can only be rebuilt once ALL tasks in its existing epic are Done (or if no work has been started yet, in which case all existing sub-tasks are simply deleted). The "Rebuild" button is disabled if any tasks are currently In Progress or In Review. When clicked, the system generates new tasks representing the delta between the updated Plan and the completed work. The AI reasons about this as it would any new feature, but with the context of what has already been built.
+- **Upstream propagation:** Any changes made to Plans (additions, modifications, scope changes) are automatically reflected back in the living PRD. PRD updates are triggered at two scripted points: (1) as part of the "Build it!" flow (see above, steps 3–5), and (2) when Verify feedback is categorized as a scope change (see Section 7.4.2). In both cases, the planning agent _proposes_ updates and the orchestrator _applies_ them — the agent never modifies `prd.json` directly.
+- **"Build it!" transition:** Plans and their decomposed tasks exist in a Planning state — all implementation tasks have a `blocks` dependency on a gating task (`bd-a3f8.0 "Plan approval gate"`), so they do not appear in `bd ready`. Each Plan card in the Plan view has a "Build it!" button. Clicking it triggers the following **scripted sequence** (all steps are executed by the orchestrator in code, not by an agent):
+  1. **Close the gating task:** `bd close <gate-id> --reason "Plan built"` — this unblocks child tasks.
+  2. **Record the timestamp:** Update Plan metadata with `shipped_at`.
+  3. **Invoke the planning agent** to review the shipped Plan against the current PRD and propose section updates. The agent receives the full PRD and the Plan markdown as context and produces a structured output containing targeted section updates with change log entries. **The agent does not modify `prd.json` directly.**
+  4. **Apply PRD updates:** The orchestrator reads the agent's proposed updates and writes them to `.opensprint/prd.json`, incrementing section versions and appending to the change log.
+  5. **Commit PRD changes:** `git add .opensprint/prd.json && git commit -m "PRD updated after Plan <plan-id> built"`.
+  6. **Tasks become available:** Child tasks with no other unresolved dependencies now appear in `bd ready --json`. The always-on orchestrator loop picks them up automatically — no user action required.
+
+- **Re-build behavior:** A Plan can only be re-built once ALL tasks in its existing epic are Done (or if no work has been started yet, in which case all existing sub-tasks are simply deleted). The "Re-build" button is disabled if any tasks are currently In Progress or In Review. When clicked, the system generates new tasks representing the delta between the updated Plan and the completed work. The AI reasons about this as it would any new feature, but with the context of what has already been built.
 
 #### 7.2.3 Plan Markdown Structure
 
@@ -286,7 +354,7 @@ Each Plan markdown file follows a standardized template: Feature Title, Overview
 
 #### 7.2.4 User Interface
 
-The Plan tab displays a card-based interface showing all feature Plans, with a dependency graph visualization at the top. Each card shows the feature title, status (Planning/Building/Complete), complexity estimate, and dependency count. Users can click into any Plan to view or edit the full markdown. A sidebar allows conversational interaction with the planning agent to refine individual Plans. Each Plan card has a "Build It!" button (or "Rebuild" for completed Plans with pending changes; disabled if any tasks are In Progress or In Review).
+The Plan tab displays a card-based interface showing all feature Plans, with a dependency graph visualization at the top. Each card shows the feature title, status (Planning/Building/Complete), complexity estimate, and dependency count. Users can click into any Plan to view or edit the full markdown. A sidebar allows conversational interaction with the planning agent to refine individual Plans. Each Plan card has a "Build it!" button (or "Re-build" for completed Plans with pending changes; disabled if any tasks are In Progress or In Review).
 
 ---
 
@@ -298,11 +366,11 @@ The Build phase is where AI agents autonomously implement the planned features. 
 
 #### 7.3.2 Key Capabilities
 
-- **Automatic task decomposition:** Each Plan markdown is broken down into granular, atomic tasks. The planning agent determines task boundaries to maximize future parallelism while respecting dependencies. Tasks are created as beads child issues under the Plan's epic (e.g., `bd-a3f8.1`, `bd-a3f8.2`), each with a `blocks` dependency on the epic's gating task (`bd-a3f8.0`) to keep them in Planning state until the user clicks "Build It!".
+- **Automatic task decomposition:** Each Plan markdown is broken down into granular, atomic tasks. The planning agent determines task boundaries to maximize future parallelism while respecting dependencies, and outputs a structured task list (titles, descriptions, dependency relationships). The orchestrator then executes all `bd` commands to create the tasks as beads child issues under the Plan's epic (e.g., `bd-a3f8.1`, `bd-a3f8.2`), each with a `blocks` dependency on the epic's gating task (`bd-a3f8.0`) to keep them in Planning state until the user clicks "Build it!". The agent never invokes `bd` directly.
 - **Beads-based tracking:** Each Plan maps to a bead epic. The Plan markdown file (`.opensprint/plans/<plan-id>.md`) is attached to the bead epic as its design document metadata — the epic's description field contains the path to the Plan markdown, making the Plan the authoritative specification for all child tasks under that epic. Each task maps to a child bead within that epic. Beads provides dependency tracking, ready-work detection via `bd ready`, agent assignment via the `assignee` field, and the distributed git-backed storage.
-- **Kanban board interface:** Tasks are displayed across columns: Planning, Backlog, Ready, In Progress, In Review, Done. Tasks move automatically as agents pick them up and complete them.
-- **Two-agent build cycle:** Each task is processed by two agents sequentially. First, a **coding agent** picks up the task, moves it to In Progress, implements the solution, writes tests, and moves it to In Review. Then, a **review agent** is automatically triggered to verify the implementation against the ticket specification, verify that tests pass and adequately cover the ticket scope, and check code quality. If the review agent approves, it moves the task to Done. If it rejects, it adds detailed feedback as a comment on the bead issue and moves the task back to In Progress, triggering a new coding agent with the original prompt plus the review feedback. This cycle repeats until the review agent approves or the retry limit is reached.
-- **Autonomous single-agent execution:** The orchestration layer runs one agent at a time (coding or review). It polls `bd ready --json` to find the next available task, assigns it via `bd update <id> --assignee agent-1`, and manages the full execution lifecycle. This is designed as a flywheel that runs in the background without requiring constant user intervention.
+- **Kanban board interface:** Tasks are displayed across columns: Planning, Backlog, Ready, In Progress, In Review, Done, Blocked. Tasks move automatically as agents pick them up and complete them. Blocked tasks are visually distinct and require user action to unblock.
+- **Two-agent build cycle:** Each task is processed by two agents sequentially. First, a **coding agent** implements the solution and writes tests, producing a `result.json` with its status. Then, a **review agent** is automatically triggered by the orchestrator to validate the implementation against the ticket specification, verify that tests pass and adequately cover the ticket scope, and check code quality. **All state transitions are performed by the orchestrator based on agent output, never by the agents themselves.** Specifically: the orchestrator moves the task to In Progress when assigning the coding agent; the orchestrator moves it to In Review after the coding agent produces `result.json` with `status: "success"`; the orchestrator moves it to Done after the review agent produces `result.json` with `status: "approved"` and merges the branch; and the orchestrator moves it back to In Progress if the review agent produces `status: "rejected"`, adding the rejection feedback as a bead comment and triggering a new coding agent. This cycle repeats until the review agent approves or a retry cycle is exhausted, at which point the task is returned to the Ready queue with progressive backoff applied (see Section 9.1).
+- **Autonomous single-agent execution:** The orchestration layer runs one agent at a time (coding or review). It is always running (see Section 5.7) and requires no manual start. It polls `bd ready --json` to find the next available task, assigns it via `bd update <id> --assignee agent-1`, and manages the full execution lifecycle. New tasks that arrive while an agent is active (e.g., from user feedback or a newly shipped Plan) are queued and picked up after the current agent completes.
 - **Real-time agent monitoring:** Users can click on any In Progress or In Review task to see a live stream of the agent's reasoning, code generation, and decision-making. Completed tasks display the full output log and generated artifacts.
 - **Context propagation:** When Task B depends on Task A, the agent picking up Task B receives not just the Plan, but also the actual output and code produced by Task A. This ensures agents build on reality, not just plans. (Note: for v1, context is assembled from the Plan markdown plus the git diff/files produced by dependency tasks. A dedicated "conductor" agent for intelligent context summarization is planned for v2 to support large projects.)
 
@@ -316,29 +384,34 @@ The Build phase is where AI agents autonomously implement the planned features. 
 | In Progress | `status: in_progress` + `assignee: agent-1`             | Coding agent actively implementing the task. Sub-phase (coding vs review) tracked in `.opensprint/active/<task-id>/config.json` `phase` field.                                                                                                           |
 | In Review   | `status: in_progress` + `assignee: agent-1`             | Review agent validating the implementation. Beads does not have a native `in_review` status, so this is the same beads state as In Progress — the distinction is tracked in the orchestrator's config (`phase: "review"`) and reflected in the frontend. |
 | Done        | `status: closed` + `close reason`                       | Task completed; review agent approved; all tests passing                                                                                                                                                                                                 |
+| Blocked     | `status: open` + `blocked` label                        | Task has exhausted all retry and deprioritization levels (see Section 9.1). Removed from `bd ready` results by the `blocked` label. Requires user to investigate, unblock, and optionally reset the attempt counter.                                     |
 
 **Valid State Transitions:**
 
 ```
-Planning → Backlog          (user clicks "Build It!" — gating task closed)
+Planning → Backlog          (user clicks "Build it!" — gating task closed)
 Backlog → Ready             (all blocking dependencies resolve — automatic via bd ready)
 Ready → In Progress         (orchestrator assigns coding agent)
 In Progress → In Review     (coding agent completes — review agent triggered)
 In Review → Done            (review agent approves)
 In Review → In Progress     (review agent rejects — feedback added to bead, new coding agent triggered)
 In Progress → Ready         (coding agent fails — changes rolled back, comment added to bead)
+Ready → Blocked             (progressive backoff exhausted at priority 4 — blocked label added)
+Blocked → Ready             (user removes blocked label — task re-enters bd ready)
 Done → (terminal)           (tasks cannot be reopened; new tasks are created instead)
 ```
 
 **Transition Guards:**
 
-- `Planning → Backlog`: Requires the gating task (`bd-a3f8.0`) to be closed (via "Build It!").
+- `Planning → Backlog`: Requires the gating task (`bd-a3f8.0`) to be closed (via "Build it!").
 - `Backlog → Ready`: Checked by `bd ready` — all `blocks` dependencies must be `closed`.
 - `Ready → In Progress`: Orchestrator must not have another agent currently running (single-agent execution in v1).
 - `In Progress → In Review`: Coding agent process has exited and produced a `result.json` with `status: success`.
 - `In Review → Done`: Review agent approves the implementation; all automated tests pass.
-- `In Review → In Progress`: Review agent rejects; feedback comment is added to bead issue; attempt count incremented. If retry limit reached, escalates per HIL config.
+- `In Review → In Progress`: Review agent rejects; feedback comment is added to bead issue; attempt count incremented. After a retry cycle is exhausted, task is requeued with progressive backoff (see Section 9.1).
 - `In Progress → Ready`: Coding agent fails or times out (5-minute inactivity timeout); all git changes reverted; failure comment added to bead issue.
+- `Ready → Blocked`: Orchestrator determines task has failed 3 times at priority 4 (lowest); adds `blocked` label; sends `task.blocked` WebSocket notification.
+- `Blocked → Ready`: User manually removes the `blocked` label (and optionally resets the attempt counter or adjusts priority); task re-enters `bd ready`.
 
 #### 7.3.4 User Interface
 
@@ -355,9 +428,9 @@ The Verify phase closes the feedback loop. Users test the built software on thei
 #### 7.4.2 Key Capabilities
 
 - **Feedback submission:** Users submit feedback in natural language via a simple input prompt. The AI categorizes feedback as bug reports, feature requests, UX improvements, or scope changes.
-- **Intelligent mapping:** The planning agent analyzes each piece of feedback and determines which Plan epic and Build task(s) it relates to. It then creates new bead tickets under the appropriate epic with full context about the issue.
+- **Intelligent mapping:** The planning agent analyzes each piece of feedback and determines which Plan epic and Build task(s) it relates to. It outputs a structured response containing: the feedback category (bug/feature/UX/scope), the mapped Plan epic ID, and proposed new task details (title, description, priority, dependencies). **The orchestrator then executes all `bd create` and `bd dep add` commands** to create the new bead tickets under the appropriate epic — the agent never invokes `bd` directly (see Section 5.5).
 - **Automatic PRD updates:** When feedback is submitted and the planning agent categorizes it as a scope change, the agent reviews the feedback against the current PRD and determines if updates are necessary. If so, it produces targeted section updates. Scope changes require user approval based on the Human-in-the-Loop configuration before the PRD is modified.
-- **Flywheel operation:** Once new tickets are created from validation feedback, they automatically enter the Build phase task queue. Agents pick them up and implement fixes without requiring the user to manually manage the process. This creates a continuous improvement cycle.
+- **Flywheel operation:** Once the orchestrator creates new tickets from validation feedback, they automatically enter the Build phase task queue (`bd ready`). Because the orchestrator is always running (see Section 5.7), agents pick them up and implement fixes without requiring the user to manually trigger the build process. This creates a continuous improvement cycle.
 - **Feedback history:** A scrollable feed tracks all submitted feedback items, their mapped location in the project (which Plan/task), and the current resolution status.
 
 #### 7.4.3 User Interface
@@ -383,7 +456,7 @@ OpenSprint takes an aggressive approach to automated testing. Every task complet
 
 ### 8.3 Test Execution
 
-The test runner is configurable during project setup. OpenSprint supports common testing frameworks (Jest, Vitest, Playwright, Cypress, pytest, etc.) and will detect or recommend the appropriate framework based on the project's tech stack. Test results are displayed in the Build tab alongside task status. Failed tests block a task from moving to Done and trigger either an automatic retry or escalation based on the Human-in-the-Loop configuration.
+The test runner is configurable during project setup. OpenSprint supports common testing frameworks (Jest, Vitest, Playwright, Cypress, pytest, etc.) and will detect or recommend the appropriate framework based on the project's tech stack. Test results are displayed in the Build tab alongside task status. Failed tests block a task from moving to Done and trigger the automatic retry and progressive backoff flow (see Section 9.1).
 
 ### 8.4 Coverage Requirements
 
@@ -393,37 +466,50 @@ OpenSprint targets a minimum of 80% code coverage across all generated code. Cov
 
 ## 9. Error Handling
 
-### 9.1 Coding Agent Task Failure
+### 9.1 Error Recovery Philosophy
+
+OpenSprint follows a hands-off error recovery strategy with progressive deprioritization. When any agent fails, the orchestrator automatically retries once. If the retry also fails, the orchestrator reverts all changes and returns the task to the Ready queue. The user is never prompted to intervene in error recovery — the flywheel keeps running.
+
+To prevent a persistently failing task from monopolizing the queue, the orchestrator tracks a cumulative attempt count on each bead issue and applies **progressive backoff**:
+
+- **Attempts 1–2:** Normal retry cycle. Fail once, retry immediately with failure context. If the retry also fails, revert and requeue at the current priority.
+- **After 3 total failed attempts:** The orchestrator lowers the task's beads priority by one level (e.g., priority 1 → 2) via `bd update <id> -p <priority+1>`. This allows higher-priority and untried tasks to be worked on first, while the failing task still gets future attempts.
+- **After every subsequent 3 failed attempts:** Priority is lowered by one additional level (e.g., after 6 attempts: 2 → 3, after 9 attempts: 3 → 4).
+- **After 3 failed attempts at priority 4 (lowest):** The task cannot be deprioritized further. The orchestrator adds a `blocked` label to the bead issue, which removes it from `bd ready` results. A `task.blocked` notification is sent to the frontend via WebSocket so the user is informed. The task remains in beads with full failure history; the user can unblock it manually when ready to investigate.
+
+All failed attempts are recorded as comments on the bead issue with full failure context (failure reason, agent output log, attempt number), giving future agent attempts and the user visibility into what went wrong.
+
+### 9.2 Coding Agent Task Failure
 
 When a coding agent produces code that does not pass automated tests or otherwise fails:
 
 1. All git changes from the agent's attempt are reverted (hard reset of the task branch).
-2. The task's beads status is set back to `open` (returning it to the Ready queue).
-3. A comment is added to the bead issue documenting: the failure reason, the agent's output log, and the attempt number.
-4. The orchestrator checks the attempt count:
-   - If under the retry limit (default: 2 retries), the task is re-queued. The next coding agent attempt receives the previous failure context in its prompt.
-   - If the retry limit is reached, behavior follows the Human-in-the-Loop configuration for "Test Failures & Retries" (default: escalate to user).
+2. A comment is added to the bead issue documenting: the failure reason, the agent's output log, and the attempt number.
+3. If the attempt number is **odd** (1st, 3rd, 5th, etc.), the task is immediately re-queued (`status: open`) for one more try. The next coding agent attempt receives the previous failure context in its prompt.
+4. If the attempt number is **even** (2nd, 4th, 6th, etc. — completing a retry cycle), the task branch is deleted, the task status is set back to `open`, and the orchestrator proceeds to the next available task in `bd ready`. Before requeuing, the orchestrator checks the cumulative attempt count and applies progressive backoff per Section 9.1 (deprioritize after every 3 attempts, block at priority 4).
 
-### 9.2 Review Agent Rejection
+### 9.3 Review Agent Rejection
 
 When a review agent rejects an implementation:
 
 1. The review agent's detailed feedback is added as a comment on the bead issue.
 2. The task is moved back to In Progress and a new coding agent is triggered with the original prompt plus the review feedback.
-3. The attempt count is incremented. If the retry limit is reached (across both coding failures and review rejections combined), escalate per HIL config.
+3. If the coding agent fails again after incorporating review feedback (i.e., a retry cycle is exhausted), the task branch is reverted, failure context is added to the bead issue, and the task is returned to the Ready queue with progressive backoff applied per Section 9.1.
 
-### 9.3 Agent Process Failures & Timeout
+Review rejections and coding failures share the same cumulative attempt counter — they are not tracked separately.
+
+### 9.4 Agent Process Failures & Timeout
 
 If an agent CLI process (coding or review) crashes, hangs, or produces no output for more than 5 minutes:
 
 1. The process is forcefully terminated.
 2. Any partial git changes are reverted.
-3. The task follows the same retry/escalation flow as 9.1.
+3. The task follows the same retry and progressive backoff flow as 9.2.
 4. The orchestrator logs the process failure details for debugging.
 
 The 5-minute inactivity timeout is measured from the last output received from the agent process (stdout/stderr). If the agent is actively producing output, it is not timed out regardless of total elapsed time.
 
-### 9.4 Verify Feedback Mapping
+### 9.5 Verify Feedback Mapping
 
 If the planning agent maps feedback to the wrong Plan epic or task, no special error handling is required. The user can see the mapping in the feedback feed and can manually correct it or submit clarifying feedback. The cost of an incorrect mapping is low — a task gets created in the wrong epic, which the user can notice and redirect.
 
@@ -479,8 +565,6 @@ Stored as `.opensprint/prd.json` in the project repo. Each section's content is 
 }
 ```
 
-**PRD snapshots for Replan it:** The system stores versioned copies of the PRD to support the "Replan it" flow. The current working version lives in `prd.json`. Each time the user clicks "Plan it" or "Replan it", a snapshot is saved (e.g., at `.opensprint/prd_snapshots/<plan-version>.json` or equivalent). The planning agent receives the diff between the last snapshot and the current PRD when "Replan it" is triggered.
-
 #### Conversation
 
 Stored as `.opensprint/conversations/<conversation-id>.json`. Conversations are created per phase context (one for the main Dream chat, one per Plan sidebar chat).
@@ -505,8 +589,8 @@ Stored as `.opensprint/plans/<plan-id>.md` in the project repo. The Plan markdow
 |-------|------|-------------|
 | plan_id | string | Unique identifier (matches filename) |
 | bead_epic_id | string | Corresponding beads epic ID (e.g., `bd-a3f8`). Plan status (planning/building/complete) is derived from the beads epic state — no separate status field needed. |
-| gate_task_id | string | The gating task ID (e.g., `bd-a3f8.0`) — closed when user clicks "Build It!" |
-| shipped_at | datetime | When the user clicked "Build It!" (null if still in planning) |
+| gate_task_id | string | The gating task ID (e.g., `bd-a3f8.0`) — closed when user clicks "Build it!" |
+| shipped_at | datetime | When the user clicked "Build it!" (null if still in planning) |
 | complexity | enum | low / medium / high / very_high |
 
 #### Task
@@ -629,15 +713,15 @@ All endpoints are prefixed with `/api/v1`. Responses are JSON.
 
 #### Plans
 
-| Method | Endpoint                             | Description                                           |
-| ------ | ------------------------------------ | ----------------------------------------------------- |
-| GET    | `/projects/:id/plans`                | List all Plans with status                            |
-| POST   | `/projects/:id/plans`                | Create a new Plan                                     |
-| GET    | `/projects/:id/plans/:planId`        | Get Plan markdown and metadata                        |
-| PUT    | `/projects/:id/plans/:planId`        | Update Plan markdown                                  |
-| POST   | `/projects/:id/plans/:planId/ship`   | Build It! (transition tasks from Planning to Backlog) |
-| POST   | `/projects/:id/plans/:planId/reship` | Rebuild an updated Plan (with confirmation)           |
-| GET    | `/projects/:id/plans/dependencies`   | Get dependency graph data                             |
+| Method | Endpoint                              | Description                                               |
+| ------ | ------------------------------------- | --------------------------------------------------------- |
+| GET    | `/projects/:id/plans`                 | List all Plans with status                                |
+| POST   | `/projects/:id/plans`                 | Create a new Plan                                         |
+| GET    | `/projects/:id/plans/:planId`         | Get Plan markdown and metadata                            |
+| PUT    | `/projects/:id/plans/:planId`         | Update Plan markdown                                      |
+| POST   | `/projects/:id/plans/:planId/ship`    | Ship the Plan (transition tasks from Planning to Backlog) |
+| POST   | `/projects/:id/plans/:planId/rebuild` | Re-build an updated Plan (with confirmation)              |
+| GET    | `/projects/:id/plans/dependencies`    | Get dependency graph data                                 |
 
 #### Tasks (read-through to beads)
 
@@ -651,11 +735,9 @@ All endpoints are prefixed with `/api/v1`. Responses are JSON.
 
 #### Build Orchestration
 
-| Method | Endpoint                     | Description                                                          |
-| ------ | ---------------------------- | -------------------------------------------------------------------- |
-| POST   | `/projects/:id/build/start`  | Start the build orchestrator                                         |
-| POST   | `/projects/:id/build/pause`  | Pause the build orchestrator                                         |
-| GET    | `/projects/:id/build/status` | Get orchestrator status (running/paused, active agents, queue depth) |
+| Method | Endpoint                     | Description                                                       |
+| ------ | ---------------------------- | ----------------------------------------------------------------- |
+| GET    | `/projects/:id/build/status` | Get orchestrator status (active agent, current task, queue depth) |
 
 #### Verify
 
@@ -680,10 +762,11 @@ Connection: `ws://localhost:<port>/ws/projects/:id`
 | Event | Payload | Description |
 |-------|---------|-------------|
 | `task.updated` | `{ taskId, status, assignee }` | Task state changed |
+| `task.blocked` | `{ taskId, totalAttempts, lastFailureReason }` | Task blocked after exhausting all retry/deprioritization levels; requires user attention |
 | `agent.output` | `{ taskId, chunk }` | Streaming agent output for a task |
 | `agent.completed` | `{ taskId, status, testResults }` | Agent finished a task |
 | `prd.updated` | `{ section, version }` | PRD section was updated |
-| `build.status` | `{ running, currentTask, queueDepth }` | Orchestrator status change |
+| `build.status` | `{ currentTask, queueDepth }` | Orchestrator status change |
 | `hil.request` | `{ category, description, options }` | Human-in-the-loop approval needed |
 | `feedback.mapped` | `{ feedbackId, planId, taskIds }` | Feedback was mapped to tasks |
 
@@ -821,7 +904,7 @@ The orchestrator invokes the agent CLI as a subprocess:
 - **Cursor:** `cursor-agent --input .opensprint/active/<task-id>/prompt.md`
 - **Custom:** `<user-provided-command> .opensprint/active/<task-id>/prompt.md`
 
-The agent's stdout/stderr is captured and streamed to the frontend in real-time via WebSocket. The orchestrator monitors output activity — if no stdout/stderr is received for 5 minutes, the agent process is assumed to have crashed and is forcefully terminated (see Section 9.3).
+The agent's stdout/stderr is captured and streamed to the frontend in real-time via WebSocket. The orchestrator monitors output activity — if no stdout/stderr is received for 5 minutes, the agent process is assumed to have crashed and is forcefully terminated (see Section 9.4).
 
 ### 12.5 Output
 
@@ -880,7 +963,7 @@ If the agent does not produce a `result.json` (crash/timeout), the orchestrator 
 3. When the process exits, the orchestrator checks for `result.json`.
 4. If `status` is `success`, the orchestrator commits all changes on the task branch (agent does not commit), then runs the test command as a sanity check.
 5. If tests pass, the task moves to In Review and the review agent is triggered (still on the task branch).
-6. If tests fail or `status` is `failed`, the error handling flow (Section 9.1) is triggered.
+6. If tests fail or `status` is `failed`, the error handling flow (Section 9.2) is triggered.
 
 **Review phase:**
 
@@ -901,10 +984,10 @@ This section traces a complete journey from project creation to verified feature
 The user clicks "Create New Project" on the home screen. The setup wizard collects the project name, agent configuration (e.g., Claude Opus for planning, Claude Sonnet for coding), deployment mode, and HIL preferences. OpenSprint creates a git repo, runs `bd init` to set up beads, creates the `.opensprint/` directory structure, and adds an entry to `~/.opensprint/projects.json`. The user lands in the Dream tab.
 
 **2. Dream Phase — PRD Creation**
-The user describes their product vision in the chat pane. The planning agent (invoked via the configured API) responds conversationally — asking clarifying questions, suggesting architecture, and challenging assumptions. As the conversation progresses, the planning agent generates and updates sections of `.opensprint/prd.json`. Each section is stored as markdown content. The right pane renders the PRD live with inline WYSIWYG editing — the user can edit any section directly without an Edit/Save flow. The conversation is stored in `.opensprint/conversations/<id>.json`.
+The user describes their product vision in the chat pane. The planning agent (invoked via the configured API) responds conversationally — asking clarifying questions, suggesting architecture, and challenging assumptions. As the conversation progresses, the planning agent generates and updates sections of `.opensprint/prd.json`. Each section is stored as markdown content. The right pane renders the PRD live. The conversation is stored in `.opensprint/conversations/<id>.json`.
 
 **3. Plan Phase — Feature Decomposition**
-The user switches to the Plan tab. If no plan exists yet, they click "Plan it" to trigger the planning agent. If they have edited the PRD since the last plan, they see "Replan it" instead; the agent receives the diff since the last snapshot and creates or updates plans. If the plan is current and unchanged, no button is shown. The planning agent analyzes the PRD and suggests a breakdown into features. For each accepted feature, OpenSprint:
+The user switches to the Plan tab. The planning agent analyzes the PRD and proposes a breakdown into features, outputting structured data (feature titles, descriptions, dependency relationships). The user can accept, modify, merge, or split the suggestions. For each accepted feature, the **orchestrator** executes all `bd` commands (the agent never invokes `bd` directly):
 
 - Creates a Plan markdown file at `.opensprint/plans/<plan-id>.md`
 - Creates a beads epic: `bd create "Feature Name" -t epic` → returns `bd-a3f8`
@@ -916,11 +999,19 @@ The user switches to the Plan tab. If no plan exists yet, they click "Plan it" t
 
 The dependency graph visualization shows these relationships. All tasks are in Planning state (gated behind `bd-a3f8.0`).
 
-**4. Build It!**
-The user reviews a Plan and clicks "Build It!". OpenSprint closes the gating task: `bd close bd-a3f8.0 --reason "Plan approved for build"`. Child tasks with no other unresolved dependencies now appear in `bd ready --json`. The planning agent is invoked to review the approved Plan against the PRD and update any affected PRD sections.
+**4. Build It! — Scripted Transition**
+The user reviews a Plan and clicks "Build it!". The orchestrator executes the following scripted sequence (see Section 7.2.2 for full details):
+
+1. Closes the gating task: `bd close bd-a3f8.0 --reason "Plan built"`.
+2. Records the `shipped_at` timestamp.
+3. Invokes the planning agent to review the Plan against the PRD and propose section updates. The agent outputs structured update proposals.
+4. Applies the agent's proposed PRD updates to `.opensprint/prd.json`.
+5. Commits the PRD changes.
+
+Child tasks with no other unresolved dependencies now appear in `bd ready --json`. The always-on orchestrator loop picks them up automatically.
 
 **5. Build Phase — Orchestrator Loop**
-The orchestrator starts its loop (triggered by `POST /projects/:id/build/start`):
+The orchestrator is already running (it starts automatically with the backend — see Section 5.7). When tasks appear in `bd ready`, it processes them:
 
 1. Calls `bd ready --json` — gets the highest-priority unblocked task (e.g., `bd-a3f8.1`).
 2. Assigns it: `bd update bd-a3f8.1 --status in_progress --assignee agent-1`.
@@ -933,15 +1024,15 @@ The orchestrator starts its loop (triggered by `POST /projects/:id/build/start`)
 The coding agent implements the feature, writes tests, and writes `result.json` with `status: success` (it does not commit). The orchestrator commits the changes to the task branch, runs the test command as a sanity check, and tests pass.
 
 **7. Review Agent Triggered**
-The orchestrator updates `config.json` to `phase: "review"` and generates a review prompt. The review agent is spawned, reviews `git diff main...opensprint/bd-a3f8.1`, verifies tests cover the acceptance criteria, and approves by writing `result.json` with `status: approved` (it does not merge). The orchestrator performs the merge to main, marks the task Done: `bd close bd-a3f8.1 --reason "Implemented and reviewed"`, deletes the branch, and archives the session to `.opensprint/sessions/bd-a3f8.1-1/`.
+The orchestrator updates `config.json` to `phase: "review"` and generates a review prompt. The review agent is spawned, reviews `git diff main...opensprint/bd-a3f8.1`, verifies tests cover the acceptance criteria, and writes `result.json` with `status: approved` (it does not merge or update beads). The orchestrator performs the merge to main, marks the task Done: `bd close bd-a3f8.1 --reason "Implemented and reviewed"`, deletes the branch, and archives the session to `.opensprint/sessions/bd-a3f8.1-1/`.
 
 **8. Next Task**
 The orchestrator loops back to step 5.1. If `bd-a3f8.2` was blocked on `bd-a3f8.1`, it now appears in `bd ready` since its dependency is closed. The orchestrator picks it up, and its context includes the diff from `bd-a3f8.1`.
 
 **9. Verify Phase — Feedback Loop**
-Once features are built, the user tests the application independently, then submits feedback in the Verify tab: "The login form doesn't show an error message when the password is wrong." The planning agent categorizes this as a bug, maps it to epic `bd-a3f8`, and creates a new task: `bd create "Show error on failed login" -t bug -p 1`. If the agent determines the feedback represents a scope change, it reviews the PRD and proposes updates (pending HIL approval if configured).
+Once features are built, the user tests the application independently, then submits feedback in the Verify tab: "The login form doesn't show an error message when the password is wrong." The planning agent analyzes the feedback and outputs structured data: category (bug), mapped epic (`bd-a3f8`), and proposed task details. The **orchestrator** then executes the `bd` commands to create the task: `bd create "Show error on failed login" -t bug -p 1` (the agent never invokes `bd` directly). If the agent determines the feedback represents a scope change, it proposes PRD updates which the orchestrator applies (pending HIL approval if configured).
 
-The new task enters the build queue. The orchestrator picks it up on its next loop iteration, and the flywheel continues.
+The new task enters the build queue. Because the orchestrator is always running, it picks the task up automatically and the flywheel continues — no user intervention required.
 
 ---
 
@@ -956,14 +1047,14 @@ All beads interactions use the `bd` CLI with `--json` flags, invoked via `child_
 | `bd update <id> --status <status> --json`                   | Orchestrator state transitions      | Move tasks between open/in_progress/closed                   |
 | `bd update <id> --assignee <agent-id> --json`               | Orchestrator task assignment        | Track which agent is working on a task                       |
 | `bd update <id> -d "<description>" --json`                  | Plan creation                       | Set epic description to Plan markdown path                   |
-| `bd close <id> --reason "<reason>" --json`                  | Build It!, task completion          | Close gating tasks, completed tasks                          |
+| `bd close <id> --reason "<reason>" --json`                  | Build it!, task completion          | Close gating tasks, completed tasks                          |
 | `bd ready --json`                                           | Orchestrator build loop             | Get next available task (priority-sorted, all deps resolved) |
 | `bd list --json`                                            | Build tab, task listing             | List all tasks with filters                                  |
 | `bd show <id> --json`                                       | Task detail panel                   | Get full task details                                        |
 | `bd dep add <id> <blocker-id> --json`                       | Plan decomposition                  | Add blocks/parent-child dependencies                         |
 | `bd dep add <id> <parent-id> --type discovered-from --json` | Verify feedback                     | Link feedback tasks to source                                |
 | `bd dep tree <id>`                                          | Dependency graph visualization      | Visualize dependency relationships                           |
-| `bd delete <id> --force --json`                             | Plan rebuild (no work started)      | Remove obsolete tasks                                        |
+| `bd delete <id> --force --json`                             | Plan re-build (no work started)     | Remove obsolete tasks                                        |
 
 ---
 
@@ -971,13 +1062,16 @@ All beads interactions use the `bd` CLI with `--json` flags, invoked via `child_
 
 ### 15.1 Living PRD Synchronization
 
-The living PRD is the backbone of OpenSprint. Changes propagate to the PRD at two trigger points: (1) when a Plan is approved for build, the planning agent reviews the Plan against the PRD and updates affected sections; (2) when Verify feedback is categorized as a scope change, the planning agent reviews the feedback and proposes PRD updates (subject to HIL approval). Both invocations use the same agent calling system as all other agent interactions. All PRD changes are recorded in the `change_log` with source attribution (which phase triggered the change) and full diff history. Users can view any historical version of the PRD in the Dream tab.
+The living PRD is the backbone of OpenSprint. Changes propagate to the PRD at two scripted trigger points, both following the same trust boundary pattern: the planning agent _proposes_ updates and the orchestrator _applies_ them to `prd.json`.
 
-**PRD-to-Plan flow:** When the user edits the PRD in Dream and triggers "Plan it" (first time) or "Replan it" (after plans exist), the system stores a PRD snapshot for that plan version. On "Replan it", the planning agent receives the diff between the last snapshot and the current PRD, enabling it to create or update plans based on what changed.
+1. **When a Plan is built** (user clicks "Build it!"): Steps 3–5 of the "Build it!" scripted sequence (Section 7.2.2) invoke the planning agent to review the Plan against the PRD, then the orchestrator writes the proposed updates and commits.
+2. **When Verify feedback is categorized as a scope change**: The planning agent reviews the feedback and proposes PRD updates (subject to HIL approval if configured). Upon approval, the orchestrator writes the updates and commits.
+
+All PRD changes are recorded in the `change_log` with source attribution (which phase triggered the change) and full diff history. Users can view any historical version of the PRD in the Dream tab.
 
 ### 15.2 Agent Orchestration
 
-The agent orchestration layer manages the lifecycle of agent instances. All agents — planning, coding, and review — are invoked through the same mechanism: the user-configured agent API or CLI for that mode (see Section 6.3). The orchestrator runs a single agent at a time (v1), handling: task selection via `bd ready`, agent assignment via beads' `assignee` field, context assembly (gathering PRD sections, Plan markdowns, and outputs from dependency tasks into the task directory), the two-agent coding/review cycle, **all critical git operations** (branch creation, commit, merge, branch deletion — see Section 5.5), 5-minute inactivity timeout monitoring, and retry logic for failed tasks.
+The orchestrator is a deterministic Node.js process (not an AI agent) that manages the lifecycle of agent instances. It is always running when the OpenSprint backend is active (see Section 5.7) and requires no manual start. All agents — planning, coding, and review — are invoked through the same mechanism: the user-configured agent API or CLI for that mode (see Section 6.3). The orchestrator runs a single agent at a time (v1), handling: task selection via `bd ready`, agent assignment via beads' `assignee` field, context assembly (gathering PRD sections, Plan markdowns, and outputs from dependency tasks into the task directory), the two-agent coding/review cycle, **all critical git and beads operations** (branch creation, commit, merge, branch deletion, beads state transitions — see Section 5.5), event-driven dispatch with 5-minute watchdog polling, inactivity timeout monitoring, retry logic for failed tasks, and crash recovery via persistent state (see Section 5.8).
 
 ### 15.3 Work Provenance (Beads)
 
@@ -1012,7 +1106,9 @@ Every piece of work in OpenSprint is traceable. The beads system captures: which
 - Custom agent support requires the agent to accept a file path argument pointing to the task prompt and produce a `result.json` file on completion.
 - OpenSprint must be fully functional without an internet connection; all core features (Dream, Plan, Build, Verify) must work offline when paired with a local agent.
 - V1 runs a single agent at a time to eliminate merge conflict concerns. Concurrent agent execution is a v2 feature.
-- Critical operations (branch create/checkout, commit, merge, beads state transitions, next-agent trigger) must be performed by the orchestrator in code. Agents cannot be trusted to execute these steps reliably (see Section 5.5).
+- Critical operations (branch create/checkout, commit, merge, beads state transitions, beads issue creation, PRD file updates, next-agent trigger) must be performed by the orchestrator in code. Agents cannot be trusted to execute these steps reliably (see Section 5.5).
+- The orchestrator is a deterministic Node.js process that starts automatically with the backend and runs continuously. There is no manual start/pause mechanism — the orchestrator is always available to pick up work (see Section 5.7).
+- Orchestrator state must be persisted to disk (`.opensprint/orchestrator-state.json`) and updated atomically on every state transition to enable crash recovery (see Section 5.8).
 
 ### 17.2 Assumptions
 
@@ -1038,46 +1134,51 @@ Every piece of work in OpenSprint is traceable. The beads system captures: which
 
 ## 19. Resolved Decisions
 
-| Decision                               | Resolution                                                                                            | Rationale                                                                                        |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Product name                           | OpenSprint (opensprint.dev)                                                                           | Clear, memorable, conveys speed                                                                  |
-| Backend language                       | Node.js + TypeScript                                                                                  | Shared language with React frontend; npm beads package; strong subprocess and WebSocket support  |
-| PRD storage                            | JSON file in git (`.opensprint/prd.json`)                                                             | Structured for section-level diffing; git-versioned; offline-compatible                          |
-| Agent selection                        | Pluggable: Claude, Cursor, or Custom CLI command                                                      | Maximizes flexibility; Custom option future-proofs for new agents                                |
-| Planning vs coding agents              | Separate configuration with model selection                                                           | Users can optimize cost/quality per phase (e.g., Opus for planning, Sonnet for coding)           |
-| Cost management                        | Out of scope for v1                                                                                   | Focus on core workflow; cost tracking can be added later                                         |
-| Deployment integration                 | Expo.dev (built-in) + custom pipeline support                                                         | Expo covers the primary target (web/mobile); custom supports any other setup                     |
-| Testing strategy                       | Comprehensive: unit, integration, E2E, and regression                                                 | Higher test coverage = more reliable autonomous operation                                        |
-| Human-in-the-loop threshold            | 4 configurable categories with 3 notification modes each                                              | Gives users full control while defaulting to a sensible autonomous balance                       |
-| Multi-tenancy                          | Not needed for v1; single-user only                                                                   | Keeps scope focused on the core workflow                                                         |
-| Agent marketplace                      | Not needed                                                                                            | Three built-in options (Claude, Cursor, Custom) provide sufficient flexibility                   |
-| Offline mode                           | Fully supported — OpenSprint runs offline with local agents                                           | Beads is git-based and inherently offline-compatible                                             |
-| Agent concurrency                      | Single agent in v1; concurrent execution deferred to v2                                               | Eliminates merge conflict concerns for MVP                                                       |
-| Plan rebuild behavior                  | Only when all tasks Done (or none started); rebuild button disabled during In Progress/In Review      | Simplifies reasoning; AI treats delta like a new feature with existing context                   |
-| Logical conflict detection             | Removed from scope                                                                                    | Git-level conflicts are sufficient; logical detection too complex                                |
-| Merge conflict resolution              | Removed from v1 scope                                                                                 | Single-agent execution eliminates merge conflicts entirely                                       |
-| Context propagation for large projects | V2 conductor agent for intelligent summarization                                                      | V1 uses simple Plan + dependency diff assembly; conductor agent avoids premature complexity      |
-| Error handling (task failure)          | Revert changes, return to queue, add failure comment to bead                                          | Clean rollback preserves project integrity; failure context aids subsequent attempts             |
-| Error handling (feedback mapping)      | No special handling; user can see and correct                                                         | Low-cost error; over-engineering detection adds complexity without proportional value            |
-| Agent assignment tracking              | Use beads native `assignee` field                                                                     | No need for custom assignment logic                                                              |
-| Planning state implementation          | Gating task (`bd-a3f8.0`) with `blocks` dependency on all child tasks                                 | Leverages beads' native `bd ready` — closing the gate unblocks children; epic stays open         |
-| Build queue logic                      | Delegate to `bd ready --json`                                                                         | Beads handles priority + dependency resolution natively                                          |
-| In Review state                        | Use beads `in_progress` status; track coding vs review sub-phase in orchestrator config               | Beads has no native `in_review` status; keeping beads usage clean with `open/in_progress/closed` |
-| Build review process                   | Two-agent cycle: coding agent + review agent per task                                                 | Catches quality issues before marking Done; reduces user intervention                            |
-| Agent timeout                          | 5-minute inactivity timeout (no output)                                                               | Prevents hung agents from blocking the pipeline                                                  |
-| Dream vs Plan separation               | Keep as separate phases                                                                               | PRD is holistic product doc; Plans are implementation-scoped agent handoffs                      |
-| V2 Agent Dashboard                     | Dedicated tab for agent monitoring and management                                                     | Provides visibility into all agents including conductor; essential for concurrent execution      |
-| Unified agent invocation               | All agents (planning, coding, review) use the same invocation mechanism — the user-configured API/CLI | Simplifies architecture; no separate integration path for planning vs build agents               |
-| Project index                          | Global file at `~/.opensprint/projects.json`                                                          | Enables home screen project discovery; only data stored outside project repos                    |
-| PRD content format                     | Markdown stored inside JSON section wrappers                                                          | Markdown is readable and renderable; JSON wrapper enables section-level versioning               |
-| Theme preference storage               | `localStorage` (frontend-only), key `opensprint.theme`                                                | Theme is purely UI; no backend needed; keeps preference local to browser                         |
-| Conversation history                   | Stored per phase/context at `.opensprint/conversations/<id>.json`                                     | Preserves Dream and Plan chat context; enables conversation resumption                           |
-| Review agent diff access               | Review agent uses `git diff main...<branch>`                                                          | No need to copy files; git provides authoritative diff natively                                  |
-| Branch strategy                        | Orchestrator creates branch, commits after coding agent, merges after review approval                 | Agents cannot be trusted to execute git operations; orchestrator owns all critical steps (5.5)   |
-| PRD upstream propagation               | Planning agent invoked at Plan ship and scope-change feedback to review and update PRD                | Explicit trigger points; uses same agent system as all other invocations                         |
-| Orchestrator trust boundary            | All critical ops (branch, commit, merge, beads, next-agent) performed by orchestrator in code         | Agents cannot be trusted to execute specific steps; they produce outputs, orchestrator acts      |
-| Dream PRD editing UX                   | Inline WYSIWYG editing (Google Docs–style); markdown stored in backend; no Edit/Save flow             | Reduces friction; users edit directly in place                                                  |
-| Plan it / Replan it                    | "Plan it" for first plan; "Replan it" when PRD changed after plan exists; button hidden if no changes | Mirrors Build It!/Rebuild pattern; versioned PRD snapshots enable agent diff for Replan it        |
+| Decision                               | Resolution                                                                                                                  | Rationale                                                                                             |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Product name                           | OpenSprint (opensprint.dev)                                                                                                 | Clear, memorable, conveys speed                                                                       |
+| Backend language                       | Node.js + TypeScript                                                                                                        | Shared language with React frontend; npm beads package; strong subprocess and WebSocket support       |
+| PRD storage                            | JSON file in git (`.opensprint/prd.json`)                                                                                   | Structured for section-level diffing; git-versioned; offline-compatible                               |
+| Agent selection                        | Pluggable: Claude, Cursor, or Custom CLI command                                                                            | Maximizes flexibility; Custom option future-proofs for new agents                                     |
+| Planning vs coding agents              | Separate configuration with model selection                                                                                 | Users can optimize cost/quality per phase (e.g., Opus for planning, Sonnet for coding)                |
+| Cost management                        | Out of scope for v1                                                                                                         | Focus on core workflow; cost tracking can be added later                                              |
+| Deployment integration                 | Expo.dev (built-in) + custom pipeline support                                                                               | Expo covers the primary target (web/mobile); custom supports any other setup                          |
+| Testing strategy                       | Comprehensive: unit, integration, E2E, and regression                                                                       | Higher test coverage = more reliable autonomous operation                                             |
+| Human-in-the-loop threshold            | 3 configurable categories with 3 notification modes each; error recovery always automatic                                   | Gives users control over product decisions while keeping the flywheel running through errors          |
+| Multi-tenancy                          | Not needed for v1; single-user only                                                                                         | Keeps scope focused on the core workflow                                                              |
+| Agent marketplace                      | Not needed                                                                                                                  | Three built-in options (Claude, Cursor, Custom) provide sufficient flexibility                        |
+| Offline mode                           | Fully supported — OpenSprint runs offline with local agents                                                                 | Beads is git-based and inherently offline-compatible                                                  |
+| Agent concurrency                      | Single agent in v1; concurrent execution deferred to v2                                                                     | Eliminates merge conflict concerns for MVP                                                            |
+| Plan re-build behavior                 | Only when all tasks Done (or none started); re-build button disabled during In Progress/In Review                           | Simplifies reasoning; AI treats delta like a new feature with existing context                        |
+| Logical conflict detection             | Removed from scope                                                                                                          | Git-level conflicts are sufficient; logical detection too complex                                     |
+| Merge conflict resolution              | Removed from v1 scope                                                                                                       | Single-agent execution eliminates merge conflicts entirely                                            |
+| Context propagation for large projects | V2 conductor agent for intelligent summarization                                                                            | V1 uses simple Plan + dependency diff assembly; conductor agent avoids premature complexity           |
+| Error handling (task failure)          | Auto-retry once, then requeue with progressive backoff: deprioritize every 3 attempts, block at lowest priority             | Hands-off philosophy; flywheel never stops for errors; persistent failures deprioritized then blocked |
+| Error handling (feedback mapping)      | No special handling; user can see and correct                                                                               | Low-cost error; over-engineering detection adds complexity without proportional value                 |
+| Agent assignment tracking              | Use beads native `assignee` field                                                                                           | No need for custom assignment logic                                                                   |
+| Planning state implementation          | Gating task (`bd-a3f8.0`) with `blocks` dependency on all child tasks                                                       | Leverages beads' native `bd ready` — closing the gate unblocks children; epic stays open              |
+| Build queue logic                      | Delegate to `bd ready --json`                                                                                               | Beads handles priority + dependency resolution natively                                               |
+| In Review state                        | Use beads `in_progress` status; track coding vs review sub-phase in orchestrator config                                     | Beads has no native `in_review` status; keeping beads usage clean with `open/in_progress/closed`      |
+| Build review process                   | Two-agent cycle: coding agent + review agent per task                                                                       | Catches quality issues before marking Done; reduces user intervention                                 |
+| Agent timeout                          | 5-minute inactivity timeout (no output)                                                                                     | Prevents hung agents from blocking the pipeline                                                       |
+| Dream vs Plan separation               | Keep as separate phases                                                                                                     | PRD is holistic product doc; Plans are implementation-scoped agent handoffs                           |
+| V2 Agent Dashboard                     | Dedicated tab for agent monitoring and management                                                                           | Provides visibility into all agents including conductor; essential for concurrent execution           |
+| Unified agent invocation               | All agents (planning, coding, review) use the same invocation mechanism — the user-configured API/CLI                       | Simplifies architecture; no separate integration path for planning vs build agents                    |
+| Project index                          | Global file at `~/.opensprint/projects.json`                                                                                | Enables home screen project discovery; only data stored outside project repos                         |
+| PRD content format                     | Markdown stored inside JSON section wrappers                                                                                | Markdown is readable and renderable; JSON wrapper enables section-level versioning                    |
+| Theme preference storage               | `localStorage` (frontend-only), key `opensprint.theme`                                                                      | Theme is purely UI; no backend needed; keeps preference local to browser                              |
+| Conversation history                   | Stored per phase/context at `.opensprint/conversations/<id>.json`                                                           | Preserves Dream and Plan chat context; enables conversation resumption                                |
+| Review agent diff access               | Review agent uses `git diff main...<branch>`                                                                                | No need to copy files; git provides authoritative diff natively                                       |
+| Branch strategy                        | Orchestrator creates branch, commits after coding agent, merges after review approval                                       | Agents cannot be trusted to execute git operations; orchestrator owns all critical steps (5.5)        |
+| PRD upstream propagation               | Planning agent _proposes_ updates; orchestrator _applies_ them at two trigger points: "Build it!" and scope-change feedback | Same trust boundary as all agent interactions; agent never modifies `prd.json` directly               |
+| Orchestrator trust boundary            | All critical ops (branch, commit, merge, beads, next-agent) performed by orchestrator in code                               | Agents cannot be trusted to execute specific steps; they produce outputs, orchestrator acts           |
+| Orchestrator nature                    | Deterministic Node.js process; executes scripted logic, never LLM inference                                                 | All decision points are coded conditionals, not AI judgments; fundamentally distinct from agents      |
+| Orchestrator lifecycle                 | Always-on; starts automatically with backend; no manual start/pause API                                                     | Users should never need to ask the system to pick up work; all changes auto-detected                  |
+| Orchestrator dispatch model            | Event-driven (trigger on agent completion, feedback submission, "Build it!") + 5-minute watchdog poll                       | Events handle the common case; watchdog catches edge cases (missed events, silent deaths, restarts)   |
+| Orchestrator state persistence         | `.opensprint/orchestrator-state.json` (gitignored); updated atomically on every state transition                            | Enables crash recovery; orchestrator can resume or present recovery options on restart                |
+| Orchestrator crash recovery            | Auto-recover: revert partial changes, re-queue task, resume loop. No user prompt needed.                                    | Consistent with hands-off philosophy; same pattern as all other agent failures (Section 9)            |
+| Phase naming                           | Dream, Plan, Build, Verify                                                                                                  | Dream captures the aspirational nature of ideation; Verify emphasizes validation rigor                |
+| Transition naming                      | "Build it!" (Plan → Build), "Re-build" (re-ship updated Plan)                                                               | Consistent with phase naming; clear user-facing language                                              |
 
 ---
 
