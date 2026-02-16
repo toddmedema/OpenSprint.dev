@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import type { Project, ProjectPhase } from '@opensprint/shared';
-import { api } from '../../api/client';
-import { ActiveAgentsList } from '../ActiveAgentsList';
-import { ConnectionIndicator } from '../ConnectionIndicator';
+import { useState, useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import type { Project, ProjectPhase } from "@opensprint/shared";
+import { api } from "../../api/client";
+import { ActiveAgentsList } from "../ActiveAgentsList";
+import { ConnectionIndicator } from "../ConnectionIndicator";
 
 interface NavbarProps {
   project?: Project | null;
@@ -12,10 +12,10 @@ interface NavbarProps {
 }
 
 const phases: { key: ProjectPhase; label: string }[] = [
-  { key: 'design', label: 'Design' },
-  { key: 'plan', label: 'Plan' },
-  { key: 'build', label: 'Build' },
-  { key: 'validate', label: 'Validate' },
+  { key: "dream", label: "Dream" },
+  { key: "plan", label: "Plan" },
+  { key: "build", label: "Build" },
+  { key: "verify", label: "Verify" },
 ];
 
 export function Navbar({ project, currentPhase, onPhaseChange }: NavbarProps) {
@@ -40,8 +40,8 @@ export function Navbar({ project, currentPhase, onPhaseChange }: NavbarProps) {
       }
     }
     if (dropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [dropdownOpen]);
 
@@ -66,9 +66,9 @@ export function Navbar({ project, currentPhase, onPhaseChange }: NavbarProps) {
               aria-expanded={dropdownOpen}
               aria-haspopup="listbox"
             >
-              {project ? project.name : 'All Projects'}
+              {project ? project.name : "All Projects"}
               <svg
-                className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
+                className={`w-4 h-4 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -76,46 +76,44 @@ export function Navbar({ project, currentPhase, onPhaseChange }: NavbarProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-              {dropdownOpen && (
-                <div
-                  className="absolute left-0 top-full mt-1 min-w-[200px] max-h-[280px] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50"
-                  role="listbox"
-                >
-                  {projects.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      role="option"
-                      aria-selected={p.id === project?.id}
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        navigate(`/projects/${p.id}`);
-                      }}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                        p.id === project?.id ? 'bg-brand-50 text-brand-700 font-medium' : 'text-gray-700'
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                  {projects.length === 0 && (
-                    <div className="px-4 py-3 text-sm text-gray-500">No projects</div>
-                  )}
-                  <div className="border-t border-gray-100 mt-1 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        navigate('/projects/new');
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-brand-600 hover:bg-brand-50 font-medium"
-                    >
-                      + Create New Project
-                    </button>
-                  </div>
+            {dropdownOpen && (
+              <div
+                className="absolute left-0 top-full mt-1 min-w-[200px] max-h-[280px] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50"
+                role="listbox"
+              >
+                {projects.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="option"
+                    aria-selected={p.id === project?.id}
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      navigate(`/projects/${p.id}`);
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                      p.id === project?.id ? "bg-brand-50 text-brand-700 font-medium" : "text-gray-700"
+                    }`}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+                {projects.length === 0 && <div className="px-4 py-3 text-sm text-gray-500">No projects</div>}
+                <div className="border-t border-gray-100 mt-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      navigate("/projects/new");
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-brand-600 hover:bg-brand-50 font-medium"
+                  >
+                    + Create New Project
+                  </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Center: Phase Tabs */}
@@ -125,11 +123,7 @@ export function Navbar({ project, currentPhase, onPhaseChange }: NavbarProps) {
               <button
                 key={phase.key}
                 onClick={() => onPhaseChange(phase.key)}
-                className={`phase-tab ${
-                  currentPhase === phase.key
-                    ? 'phase-tab-active'
-                    : 'phase-tab-inactive'
-                }`}
+                className={`phase-tab ${currentPhase === phase.key ? "phase-tab-active" : "phase-tab-inactive"}`}
               >
                 {phase.label}
               </button>

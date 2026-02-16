@@ -1,21 +1,21 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import type { ProjectPhase } from '@opensprint/shared';
+import { useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import type { ProjectPhase } from "@opensprint/shared";
 
-const VALID_PHASES: ProjectPhase[] = ['design', 'plan', 'build', 'validate'];
+const VALID_PHASES: ProjectPhase[] = ["dream", "plan", "build", "verify"];
 
 function phaseFromSlug(slug: string | undefined): ProjectPhase {
   if (slug && VALID_PHASES.includes(slug as ProjectPhase)) return slug as ProjectPhase;
-  return 'design';
+  return "dream";
 }
-import { Layout } from '../components/layout/Layout';
-import { HilApprovalModal } from '../components/HilApprovalModal';
-import { ProjectWebSocketProvider, useProjectWebSocket } from '../contexts/ProjectWebSocketContext';
-import { useProject } from '../hooks/useProject';
-import { DesignPhase } from './phases/DesignPhase';
-import { PlanPhase } from './phases/PlanPhase';
-import { BuildPhase } from './phases/BuildPhase';
-import { ValidatePhase } from './phases/ValidatePhase';
+import { Layout } from "../components/layout/Layout";
+import { HilApprovalModal } from "../components/HilApprovalModal";
+import { ProjectWebSocketProvider, useProjectWebSocket } from "../contexts/ProjectWebSocketContext";
+import { useProject } from "../hooks/useProject";
+import { DreamPhase } from "./phases/DreamPhase";
+import { PlanPhase } from "./phases/PlanPhase";
+import { BuildPhase } from "./phases/BuildPhase";
+import { VerifyPhase } from "./phases/VerifyPhase";
 
 const CATEGORY_LABELS: Record<string, string> = {
   scopeChanges: "Scope Changes",
@@ -33,8 +33,8 @@ function ProjectContent() {
   const { hilRequest, hilNotification, respondToHil, clearHilNotification } = useProjectWebSocket();
 
   const handlePhaseChange = (phase: ProjectPhase) => {
-    if (phase !== 'build') setBuildSelectedTaskId(null);
-    const path = phase === 'design' ? `/projects/${projectId}` : `/projects/${projectId}/${phase}`;
+    if (phase !== "build") setBuildSelectedTaskId(null);
+    const path = phase === "dream" ? `/projects/${projectId}` : `/projects/${projectId}/${phase}`;
     navigate(path);
   };
 
@@ -47,9 +47,7 @@ function ProjectContent() {
     return (
       <>
         <Layout>
-          <div className="flex items-center justify-center h-full text-gray-400">
-            Loading project...
-          </div>
+          <div className="flex items-center justify-center h-full text-gray-400">Loading project...</div>
         </Layout>
         {hilRequest && <HilApprovalModal request={hilRequest} onRespond={respondToHil} />}
         {hilNotification && (
@@ -62,8 +60,15 @@ function ProjectContent() {
                 <p className="mt-1 text-sm text-gray-600">{hilNotification.description}</p>
                 <p className="mt-2 text-xs text-gray-500">Proceeding automatically.</p>
               </div>
-              <button type="button" onClick={clearHilNotification} className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100" aria-label="Dismiss">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              <button
+                type="button"
+                onClick={clearHilNotification}
+                className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100"
+                aria-label="Dismiss"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
           </div>
@@ -76,9 +81,7 @@ function ProjectContent() {
     return (
       <>
         <Layout>
-          <div className="flex items-center justify-center h-full text-red-500">
-            {error ?? 'Project not found'}
-          </div>
+          <div className="flex items-center justify-center h-full text-red-500">{error ?? "Project not found"}</div>
         </Layout>
         {hilRequest && <HilApprovalModal request={hilRequest} onRespond={respondToHil} />}
         {hilNotification && (
@@ -91,8 +94,15 @@ function ProjectContent() {
                 <p className="mt-1 text-sm text-gray-600">{hilNotification.description}</p>
                 <p className="mt-2 text-xs text-gray-500">Proceeding automatically.</p>
               </div>
-              <button type="button" onClick={clearHilNotification} className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100" aria-label="Dismiss">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              <button
+                type="button"
+                onClick={clearHilNotification}
+                className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100"
+                aria-label="Dismiss"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
           </div>
@@ -102,7 +112,7 @@ function ProjectContent() {
   }
 
   const phaseComponents: Record<ProjectPhase, React.ReactNode> = {
-    design: <DesignPhase projectId={projectId!} />,
+    dream: <DreamPhase projectId={projectId!} onNavigateToPlan={() => handlePhaseChange("plan")} />,
     plan: <PlanPhase projectId={projectId!} />,
     build: (
       <BuildPhase
@@ -111,24 +121,15 @@ function ProjectContent() {
         onInitialTaskConsumed={() => setBuildSelectedTaskId(null)}
       />
     ),
-    validate: <ValidatePhase projectId={projectId!} onNavigateToBuildTask={handleNavigateToBuildTask} />,
+    verify: <VerifyPhase projectId={projectId!} onNavigateToBuildTask={handleNavigateToBuildTask} />,
   };
 
   return (
     <>
-      <Layout
-        project={project}
-        currentPhase={currentPhase}
-        onPhaseChange={handlePhaseChange}
-      >
+      <Layout project={project} currentPhase={currentPhase} onPhaseChange={handlePhaseChange}>
         {phaseComponents[currentPhase]}
       </Layout>
-      {hilRequest && (
-        <HilApprovalModal
-          request={hilRequest}
-          onRespond={respondToHil}
-        />
-      )}
+      {hilRequest && <HilApprovalModal request={hilRequest} onRespond={respondToHil} />}
       {hilNotification && (
         <div className="fixed bottom-4 right-4 z-40 max-w-md rounded-lg border border-gray-200 bg-white p-4 shadow-lg">
           <div className="flex items-start justify-between gap-3">

@@ -2,10 +2,8 @@
   "id": "4906943e-c4b5-4e8e-babb-f4ab2759117c",
   "text": "Change the name of \"Validate\" and all references to it to \"Verify\"",
   "category": "ux",
-  "mappedPlanId": "validate-phase-feedback-submission-and-mapping",
-  "createdTaskIds": [
-    "opensprint.dev-srl.8"
-  ],
+  "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
+  "createdTaskIds": ["opensprint.dev-srl.8"],
   "status": "mapped",
   "createdAt": "2026-02-16T01:45:41.995Z"
 }

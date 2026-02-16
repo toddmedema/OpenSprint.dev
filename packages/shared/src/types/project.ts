@@ -1,5 +1,5 @@
 /** The four lifecycle phases of an OpenSprint project */
-export type ProjectPhase = 'design' | 'plan' | 'build' | 'validate';
+export type ProjectPhase = "dream" | "plan" | "build" | "verify";
 
 /** Core project entity */
 export interface Project {
@@ -42,4 +42,4 @@ export interface CreateProjectRequest {
 }
 
 // Forward references for agent/deployment config — defined in settings.ts
-import type { AgentConfigInput, DeploymentConfigInput, HilConfigInput } from './settings.js';
+import type { AgentConfigInput, DeploymentConfigInput, HilConfigInput } from "./settings.js";

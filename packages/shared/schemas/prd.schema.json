@@ -89,7 +89,7 @@
         "version": { "type": "integer", "minimum": 0 },
         "source": {
           "type": "string",
-          "enum": ["design", "plan", "build", "validate"]
+          "enum": ["dream", "plan", "build", "verify"]
         },
         "timestamp": { "type": "string", "format": "date-time" },
         "diff": { "type": "string", "description": "Summary of changes" }

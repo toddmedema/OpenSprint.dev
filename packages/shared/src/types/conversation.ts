@@ -1,9 +1,9 @@
 /** Conversation context — which phase/plan it belongs to */
-export type ConversationContext = 'design' | `plan:${string}`;
+export type ConversationContext = "dream" | `plan:${string}`;
 
 /** A message in a conversation */
 export interface ConversationMessage {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: string;
   prdChanges?: PrdChangeReference[];

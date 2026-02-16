@@ -1,8 +1,8 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import type { DeploymentConfig } from '@opensprint/shared';
-import { ProjectService } from './project.service.js';
-import { ensureEasConfig } from './eas-config.js';
+import { exec } from "child_process";
+import { promisify } from "util";
+import type { DeploymentConfig } from "@opensprint/shared";
+import { ProjectService } from "./project.service.js";
+import { ensureEasConfig } from "./eas-config.js";
 
 const execAsync = promisify(exec);
 
@@ -31,10 +31,10 @@ export class DeploymentService {
       let result: DeploymentResult;
 
       switch (settings.deployment.mode) {
-        case 'expo':
+        case "expo":
           result = await this.deployExpo(project.repoPath, settings.deployment);
           break;
-        case 'custom':
+        case "custom":
           result = await this.deployCustom(project.repoPath, settings.deployment);
           break;
         default:
@@ -64,16 +64,13 @@ export class DeploymentService {
 
   /**
    * Deploy using Expo.dev / EAS.
-   * OTA update to preview channel for Validate phase (PRD §6.4).
+   * OTA update to preview channel for Verify phase (PRD §6.4).
    */
-  private async deployExpo(
-    repoPath: string,
-    config: DeploymentConfig,
-  ): Promise<DeploymentResult> {
+  private async deployExpo(repoPath: string, config: DeploymentConfig): Promise<DeploymentResult> {
     try {
       await ensureEasConfig(repoPath);
 
-      const channel = config.expoConfig?.channel ?? 'preview';
+      const channel = config.expoConfig?.channel ?? "preview";
       const message = `OpenSprint preview ${new Date().toISOString().slice(0, 19)}`;
 
       // Run EAS Update for OTA preview deployment
@@ -116,11 +113,11 @@ export class DeploymentService {
    */
   async buildExpo(
     repoPath: string,
-    platform: 'ios' | 'android' | 'all',
-    profile: string = 'preview',
+    platform: "ios" | "android" | "all",
+    profile: string = "preview",
   ): Promise<DeploymentResult> {
     try {
-      const platformArg = platform === 'all' ? '--platform all' : `--platform ${platform}`;
+      const platformArg = platform === "all" ? "--platform all" : `--platform ${platform}`;
       const { stdout } = await execAsync(
         `npx eas-cli build ${platformArg} --profile ${profile} --non-interactive --json`,
         {
@@ -156,10 +153,7 @@ export class DeploymentService {
   /**
    * Deploy using a custom pipeline: command or webhook (PRD §6.4).
    */
-  private async deployCustom(
-    repoPath: string,
-    config: DeploymentConfig,
-  ): Promise<DeploymentResult> {
+  private async deployCustom(repoPath: string, config: DeploymentConfig): Promise<DeploymentResult> {
     if (config.webhookUrl) {
       return this.deployWebhook(config.webhookUrl, repoPath);
     }
@@ -168,15 +162,12 @@ export class DeploymentService {
     }
     return {
       success: false,
-      error: 'No custom deployment command or webhook URL configured',
+      error: "No custom deployment command or webhook URL configured",
       timestamp: new Date().toISOString(),
     };
   }
 
-  private async deployCommand(
-    repoPath: string,
-    command: string,
-  ): Promise<DeploymentResult> {
+  private async deployCommand(repoPath: string, command: string): Promise<DeploymentResult> {
     try {
       await execAsync(command, {
         cwd: repoPath,
@@ -198,18 +189,15 @@ export class DeploymentService {
     }
   }
 
-  private async deployWebhook(
-    url: string,
-    repoPath: string,
-  ): Promise<DeploymentResult> {
+  private async deployWebhook(url: string, repoPath: string): Promise<DeploymentResult> {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 60000);
       const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          event: 'build.completed',
+          event: "build.completed",
           repoPath,
           timestamp: new Date().toISOString(),
         }),

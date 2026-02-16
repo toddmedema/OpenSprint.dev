@@ -1,13 +1,13 @@
-import fs from 'fs/promises';
-import path from 'path';
-import type { Plan, PlanMetadata, PlanDependencyGraph, PlanDependencyEdge } from '@opensprint/shared';
-import { OPENSPRINT_PATHS } from '@opensprint/shared';
-import { ProjectService } from './project.service.js';
-import { BeadsService, type BeadsIssue } from './beads.service.js';
-import { ChatService } from './chat.service.js';
-import { PrdService } from './prd.service.js';
-import { AgentClient } from './agent-client.js';
-import { AppError } from '../middleware/error-handler.js';
+import fs from "fs/promises";
+import path from "path";
+import type { Plan, PlanMetadata, PlanMockup, PlanDependencyGraph, PlanDependencyEdge } from "@opensprint/shared";
+import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import { ProjectService } from "./project.service.js";
+import { BeadsService, type BeadsIssue } from "./beads.service.js";
+import { ChatService } from "./chat.service.js";
+import { PrdService } from "./prd.service.js";
+import { AgentClient } from "./agent-client.js";
+import { AppError } from "../middleware/error-handler.js";
 
 const DECOMPOSE_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. You analyze Product Requirements Documents (PRDs) and suggest a breakdown into discrete, implementable features (Plans).
 
@@ -16,6 +16,7 @@ Your task: Given the full PRD, produce a feature decomposition. For each feature
 2. Break the Plan into granular, atomic tasks that an AI coding agent can implement
 3. Specify task dependencies (dependsOn) where one task must complete before another
 4. Recommend implementation order (foundational/risky first)
+5. Create at least one UI/UX mockup per Plan using ASCII wireframes
 
 Plan markdown must follow this structure (PRD §7.2.3):
 - Feature Title
@@ -32,6 +33,8 @@ Plan markdown must follow this structure (PRD §7.2.3):
 
 Tasks should be atomic, implementable in one agent session, with clear acceptance criteria in the description.
 
+MOCKUPS: Every Plan MUST include at least one mockup. Mockups are ASCII wireframes that illustrate key screens, components, or UI states for the feature. Use box-drawing characters, labels, and annotations. Even backend-heavy features should include a mockup of the admin/monitoring UI, API response shape, or data flow diagram. Include multiple mockups if the feature has several distinct views or states.
+
 Respond with ONLY valid JSON in this exact format. You may use a markdown code block with language "json" for readability. The JSON structure:
 {
   "plans": [
@@ -40,6 +43,9 @@ Respond with ONLY valid JSON in this exact format. You may use a markdown code b
       "content": "# Feature Name\\n\\n## Overview\\n...\\n\\n## Acceptance Criteria\\n...\\n\\n## Dependencies\\nReferences to other plans (e.g. user-authentication) if this feature depends on them.",
       "complexity": "medium",
       "dependsOnPlans": [],
+      "mockups": [
+        {"title": "Main Screen", "content": "+------------------+\\n| Header           |\\n+------------------+\\n| Content area     |\\n|                  |\\n+------------------+"}
+      ],
       "tasks": [
         {"title": "Task title", "description": "Task spec", "priority": 1, "dependsOn": []}
       ]
@@ -47,7 +53,7 @@ Respond with ONLY valid JSON in this exact format. You may use a markdown code b
   ]
 }
 
-complexity: low, medium, high, or very_high. priority: 0=highest. dependsOn: array of task titles this task depends on (blocked by). dependsOnPlans: array of other plan titles (slugified, e.g. "user-auth") this plan depends on - use empty array if none.`;
+complexity: low, medium, high, or very_high. priority: 0=highest. dependsOn: array of task titles this task depends on (blocked by). dependsOnPlans: array of other plan titles (slugified, e.g. "user-auth") this plan depends on - use empty array if none. mockups: array of {title, content} — ASCII wireframes illustrating the UI; at least one required per plan.`;
 
 export class PlanService {
   private projectService = new ProjectService();
@@ -70,8 +76,8 @@ export class PlanService {
 
   /** Atomic JSON write */
   private async writeJson(filePath: string, data: unknown): Promise<void> {
-    const tmpPath = filePath + '.tmp';
-    await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+    const tmpPath = filePath + ".tmp";
+    await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
     await fs.rename(tmpPath, filePath);
   }
 
@@ -81,11 +87,9 @@ export class PlanService {
       const allIssues = await this.beads.listAll(repoPath);
       const children = allIssues.filter(
         (issue: BeadsIssue) =>
-          issue.id.startsWith(epicId + '.') &&
-          !issue.id.endsWith('.0') &&
-          (issue.issue_type ?? issue.type) !== 'epic',
+          issue.id.startsWith(epicId + ".") && !issue.id.endsWith(".0") && (issue.issue_type ?? issue.type) !== "epic",
       );
-      const completed = children.filter((issue: BeadsIssue) => (issue.status as string) === 'closed').length;
+      const completed = children.filter((issue: BeadsIssue) => (issue.status as string) === "closed").length;
       return { total: children.length, completed };
     } catch {
       return { total: 0, completed: 0 };
@@ -103,7 +107,7 @@ export class PlanService {
       const key = `${fromPlanId}->${toPlanId}`;
       if (seenEdges.has(key)) return;
       seenEdges.add(key);
-      edges.push({ from: fromPlanId, to: toPlanId, type: 'blocks' });
+      edges.push({ from: fromPlanId, to: toPlanId, type: "blocks" });
     };
 
     const getEpicId = (id: string): string => {
@@ -115,7 +119,7 @@ export class PlanService {
       const allIssues = await this.beads.listAll(repoPath);
       for (const issue of allIssues) {
         const deps = (issue.dependencies as Array<{ depends_on_id: string; type: string }>) ?? [];
-        const blockers = deps.filter((d) => d.type === 'blocks').map((d) => d.depends_on_id);
+        const blockers = deps.filter((d) => d.type === "blocks").map((d) => d.depends_on_id);
         const myEpicId = getEpicId(issue.id);
         const toPlanId = epicToPlan.get(myEpicId);
         if (!toPlanId) continue;
@@ -137,8 +141,8 @@ export class PlanService {
       const text = depsSection[0].toLowerCase();
       for (const other of plans) {
         if (other.metadata.planId === plan.metadata.planId) continue;
-        const slug = other.metadata.planId.replace(/-/g, '[\\s-]*');
-        if (new RegExp(slug, 'i').test(text)) {
+        const slug = other.metadata.planId.replace(/-/g, "[\\s-]*");
+        if (new RegExp(slug, "i").test(text)) {
           addEdge(other.metadata.planId, plan.metadata.planId);
         }
       }
@@ -156,8 +160,8 @@ export class PlanService {
     try {
       const files = await fs.readdir(plansDir);
       for (const file of files) {
-        if (file.endsWith('.md')) {
-          const planId = file.replace('.md', '');
+        if (file.endsWith(".md")) {
+          const planId = file.replace(".md", "");
           try {
             const plan = await this.getPlan(projectId, planId);
             plans.push(plan);
@@ -190,7 +194,7 @@ export class PlanService {
       const key = `${fromPlanId}->${toPlanId}`;
       if (seenEdges.has(key)) return;
       seenEdges.add(key);
-      edges.push({ from: fromPlanId, to: toPlanId, type: 'blocks' });
+      edges.push({ from: fromPlanId, to: toPlanId, type: "blocks" });
     };
 
     /** Epic ID from issue ID: x.y.z -> x.y when z is numeric, else self */
@@ -204,21 +208,21 @@ export class PlanService {
     try {
       const files = await fs.readdir(plansDir);
       for (const file of files) {
-        if (!file.endsWith('.md')) continue;
-        const planId = file.replace('.md', '');
+        if (!file.endsWith(".md")) continue;
+        const planId = file.replace(".md", "");
         const mdPath = path.join(plansDir, file);
         const metaPath = path.join(plansDir, `${planId}.meta.json`);
-        let beadEpicId = '';
+        let beadEpicId = "";
         try {
-          const metaData = await fs.readFile(metaPath, 'utf-8');
+          const metaData = await fs.readFile(metaPath, "utf-8");
           const meta = JSON.parse(metaData) as PlanMetadata;
-          beadEpicId = meta.beadEpicId ?? '';
+          beadEpicId = meta.beadEpicId ?? "";
         } catch {
           // No metadata
         }
-        let content = '';
+        let content = "";
         try {
-          content = await fs.readFile(mdPath, 'utf-8');
+          content = await fs.readFile(mdPath, "utf-8");
         } catch {
           // Skip broken plans
         }
@@ -235,7 +239,7 @@ export class PlanService {
       const allIssues = await this.beads.listAll(repoPath);
       for (const issue of allIssues) {
         const deps = (issue.dependencies as Array<{ depends_on_id: string; type: string }>) ?? [];
-        const blockers = deps.filter((d) => d.type === 'blocks').map((d) => d.depends_on_id);
+        const blockers = deps.filter((d) => d.type === "blocks").map((d) => d.depends_on_id);
         const myEpicId = getEpicId(issue.id);
         const toPlanId = epicToPlan.get(myEpicId);
         if (!toPlanId) continue;
@@ -258,8 +262,8 @@ export class PlanService {
       const text = depsSection[0].toLowerCase();
       for (const other of planInfos) {
         if (other.planId === plan.planId) continue;
-        const slug = other.planId.replace(/-/g, '[\\s-]*');
-        if (new RegExp(slug, 'i').test(text)) {
+        const slug = other.planId.replace(/-/g, "[\\s-]*");
+        if (new RegExp(slug, "i").test(text)) {
           addEdge(other.planId, plan.planId);
         }
       }
@@ -277,33 +281,33 @@ export class PlanService {
 
     let content: string;
     try {
-      content = await fs.readFile(mdPath, 'utf-8');
+      content = await fs.readFile(mdPath, "utf-8");
     } catch {
-      throw new AppError(404, 'PLAN_NOT_FOUND', `Plan '${planId}' not found`);
+      throw new AppError(404, "PLAN_NOT_FOUND", `Plan '${planId}' not found`);
     }
 
     let metadata: PlanMetadata;
     try {
-      const metaData = await fs.readFile(metaPath, 'utf-8');
+      const metaData = await fs.readFile(metaPath, "utf-8");
       metadata = JSON.parse(metaData) as PlanMetadata;
     } catch {
       metadata = {
         planId,
-        beadEpicId: '',
-        gateTaskId: '',
+        beadEpicId: "",
+        gateTaskId: "",
         shippedAt: null,
-        complexity: 'medium',
+        complexity: "medium",
       };
     }
 
     // Derive status from beads state
-    let status: Plan['status'] = 'planning';
+    let status: Plan["status"] = "planning";
     const { total, completed } = metadata.beadEpicId
       ? await this.countTasks(repoPath, metadata.beadEpicId)
       : { total: 0, completed: 0 };
 
     if (metadata.shippedAt) {
-      status = total > 0 && completed === total ? 'complete' : 'shipped';
+      status = total > 0 && completed === total ? "complete" : "building";
     }
 
     const edges = await this.buildDependencyEdgesFromProject(projectId);
@@ -322,7 +326,13 @@ export class PlanService {
   /** Create a new Plan with beads epic and gating task */
   async createPlan(
     projectId: string,
-    body: { title: string; content: string; complexity?: string; tasks?: Array<{ title: string; description: string; priority?: number; dependsOn?: string[] }> },
+    body: {
+      title: string;
+      content: string;
+      complexity?: string;
+      mockups?: PlanMockup[];
+      tasks?: Array<{ title: string; description: string; priority?: number; dependsOn?: string[] }>;
+    },
   ): Promise<Plan> {
     const repoPath = await this.getRepoPath(projectId);
     const plansDir = await this.getPlansDir(projectId);
@@ -331,14 +341,14 @@ export class PlanService {
     // Generate plan ID from title
     const planId = body.title
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
 
     // Write markdown
     await fs.writeFile(path.join(plansDir, `${planId}.md`), body.content);
 
     // Create beads epic
-    const epicResult = await this.beads.create(repoPath, body.title, { type: 'epic' });
+    const epicResult = await this.beads.create(repoPath, body.title, { type: "epic" });
     const epicId = epicResult.id;
 
     // Set epic description to Plan file path (PRD §7.2.2)
@@ -346,8 +356,8 @@ export class PlanService {
     await this.beads.update(repoPath, epicId, { description: planPath });
 
     // Create gating task
-    const gateResult = await this.beads.create(repoPath, 'Plan approval gate', {
-      type: 'task',
+    const gateResult = await this.beads.create(repoPath, "Plan approval gate", {
+      type: "task",
       parentId: epicId,
     });
     const gateTaskId = gateResult.id;
@@ -359,7 +369,7 @@ export class PlanService {
       for (const task of body.tasks) {
         const priority = Math.min(4, Math.max(0, task.priority ?? 2));
         const taskResult = await this.beads.create(repoPath, task.title, {
-          type: 'task',
+          type: "task",
           description: task.description,
           priority,
           parentId: epicId,
@@ -387,12 +397,14 @@ export class PlanService {
     }
 
     // Write metadata
+    const mockups: PlanMockup[] = (body.mockups ?? []).filter((m) => m.title && m.content);
     const metadata: PlanMetadata = {
       planId,
       beadEpicId: epicId,
       gateTaskId,
       shippedAt: null,
-      complexity: (body.complexity as PlanMetadata['complexity']) || 'medium',
+      complexity: (body.complexity as PlanMetadata["complexity"]) || "medium",
+      mockups: mockups.length > 0 ? mockups : undefined,
     };
 
     await this.writeJson(path.join(plansDir, `${planId}.meta.json`), metadata);
@@ -400,7 +412,7 @@ export class PlanService {
     return {
       metadata,
       content: body.content,
-      status: 'planning',
+      status: "planning",
       taskCount: body.tasks?.length ?? 0,
       completedTaskCount: 0,
       dependencyCount: 0,
@@ -408,48 +420,41 @@ export class PlanService {
   }
 
   /** Update a Plan's markdown */
-  async updatePlan(
-    projectId: string,
-    planId: string,
-    body: { content: string },
-  ): Promise<Plan> {
+  async updatePlan(projectId: string, planId: string, body: { content: string }): Promise<Plan> {
     const plansDir = await this.getPlansDir(projectId);
     await fs.writeFile(path.join(plansDir, `${planId}.md`), body.content);
     return this.getPlan(projectId, planId);
   }
 
-  /** Ship a Plan — close the gating task to unblock child tasks */
+  /** Build It! — close the gating task to unblock child tasks */
   async shipPlan(projectId: string, planId: string): Promise<Plan> {
     const plan = await this.getPlan(projectId, planId);
     const repoPath = await this.getRepoPath(projectId);
     const plansDir = await this.getPlansDir(projectId);
 
     if (!plan.metadata.gateTaskId) {
-      throw new AppError(400, 'NO_GATE_TASK', 'Plan has no gating task to close');
+      throw new AppError(400, "NO_GATE_TASK", "Plan has no gating task to close");
     }
 
     // Close the gating task
-    await this.beads.close(repoPath, plan.metadata.gateTaskId, 'Plan shipped');
+    await this.beads.close(repoPath, plan.metadata.gateTaskId, "Plan approved for build");
 
     // Update metadata
     plan.metadata.shippedAt = new Date().toISOString();
-    await this.writeJson(
-      path.join(plansDir, `${planId}.meta.json`),
-      plan.metadata,
-    );
+    await this.writeJson(path.join(plansDir, `${planId}.meta.json`), plan.metadata);
 
     // Living PRD sync: invoke planning agent to review Plan vs PRD and update affected sections (PRD §15.1)
     try {
       await this.chatService.syncPrdFromPlanShip(projectId, planId, plan.content);
     } catch (err) {
-      console.error('[plan] PRD sync on ship failed:', err);
-      // Ship succeeds even if PRD sync fails; user can manually update PRD
+      console.error("[plan] PRD sync on build approval failed:", err);
+      // Build approval succeeds even if PRD sync fails; user can manually update PRD
     }
 
-    return { ...plan, status: 'shipped' };
+    return { ...plan, status: "building" };
   }
 
-  /** Re-ship an updated Plan */
+  /** Rebuild an updated Plan */
   async reshipPlan(projectId: string, planId: string): Promise<Plan> {
     const plan = await this.getPlan(projectId, planId);
     const repoPath = await this.getRepoPath(projectId);
@@ -457,24 +462,18 @@ export class PlanService {
     // Verify all existing tasks are Done or none started
     if (plan.metadata.beadEpicId) {
       const allIssues = await this.beads.list(repoPath);
-      const children = allIssues.filter((issue: BeadsIssue) =>
-        issue.id.startsWith(plan.metadata.beadEpicId + '.') &&
-        issue.id !== plan.metadata.gateTaskId,
+      const children = allIssues.filter(
+        (issue: BeadsIssue) =>
+          issue.id.startsWith(plan.metadata.beadEpicId + ".") && issue.id !== plan.metadata.gateTaskId,
       );
 
-      const hasInProgress = children.some(
-        (issue: BeadsIssue) => issue.status === 'in_progress',
-      );
+      const hasInProgress = children.some((issue: BeadsIssue) => issue.status === "in_progress");
       if (hasInProgress) {
-        throw new AppError(
-          400,
-          'TASKS_IN_PROGRESS',
-          'Cannot re-ship while tasks are In Progress or In Review',
-        );
+        throw new AppError(400, "TASKS_IN_PROGRESS", "Cannot rebuild while tasks are In Progress or In Review");
       }
 
-      const allDone = children.every((issue: BeadsIssue) => issue.status === 'closed');
-      const noneStarted = children.every((issue: BeadsIssue) => issue.status === 'open');
+      const allDone = children.every((issue: BeadsIssue) => issue.status === "closed");
+      const noneStarted = children.every((issue: BeadsIssue) => issue.status === "open");
 
       if (noneStarted && children.length > 0) {
         // Delete all existing sub-tasks
@@ -482,11 +481,7 @@ export class PlanService {
           await this.beads.delete(repoPath, child.id);
         }
       } else if (!allDone && children.length > 0) {
-        throw new AppError(
-          400,
-          'TASKS_NOT_COMPLETE',
-          'All tasks must be Done before re-shipping (or none started)',
-        );
+        throw new AppError(400, "TASKS_NOT_COMPLETE", "All tasks must be Done before rebuilding (or none started)");
       }
     }
 
@@ -505,16 +500,16 @@ export class PlanService {
   private async buildPrdContext(projectId: string): Promise<string> {
     try {
       const prd = await this.prdService.getPrd(projectId);
-      let context = '';
+      let context = "";
       for (const [key, section] of Object.entries(prd.sections)) {
         if (section.content) {
-          context += `### ${key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}\n`;
+          context += `### ${key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}\n`;
           context += `${section.content}\n\n`;
         }
       }
-      return context || 'The PRD is currently empty.';
+      return context || "The PRD is currently empty.";
     } catch {
-      return 'No PRD exists yet.';
+      return "No PRD exists yet.";
     }
   }
 
@@ -533,7 +528,7 @@ export class PlanService {
     const response = await this.agentClient.invoke({
       config: settings.planningAgent,
       prompt,
-      systemPrompt: DECOMPOSE_SYSTEM_PROMPT + '\n\n## Current PRD\n\n' + prdContext,
+      systemPrompt: DECOMPOSE_SYSTEM_PROMPT + "\n\n## Current PRD\n\n" + prdContext,
       cwd: repoPath,
     });
 
@@ -542,37 +537,48 @@ export class PlanService {
     if (!jsonMatch) {
       throw new AppError(
         400,
-        'DECOMPOSE_PARSE_FAILED',
-        'Planning agent did not return valid decomposition JSON. Response: ' + response.content.slice(0, 500),
+        "DECOMPOSE_PARSE_FAILED",
+        "Planning agent did not return valid decomposition JSON. Response: " + response.content.slice(0, 500),
       );
     }
 
-    let parsed: { plans?: Array<{
-      title: string;
-      content: string;
-      complexity?: string;
-      tasks?: Array<{ title: string; description: string; priority?: number; dependsOn?: string[] }>;
-    }> };
+    let parsed: {
+      plans?: Array<{
+        title: string;
+        content: string;
+        complexity?: string;
+        mockups?: Array<{ title: string; content: string }>;
+        tasks?: Array<{ title: string; description: string; priority?: number; dependsOn?: string[] }>;
+      }>;
+    };
     try {
       parsed = JSON.parse(jsonMatch[0]);
     } catch {
-      throw new AppError(400, 'DECOMPOSE_JSON_INVALID', 'Could not parse decomposition JSON from agent response');
+      throw new AppError(400, "DECOMPOSE_JSON_INVALID", "Could not parse decomposition JSON from agent response");
     }
 
     const planSpecs = parsed.plans ?? [];
     if (planSpecs.length === 0) {
-      throw new AppError(400, 'DECOMPOSE_EMPTY', 'Planning agent returned no plans. Ensure the PRD has sufficient content.');
+      throw new AppError(
+        400,
+        "DECOMPOSE_EMPTY",
+        "Planning agent returned no plans. Ensure the PRD has sufficient content.",
+      );
     }
 
     const created: Plan[] = [];
     for (const spec of planSpecs) {
       const plan = await this.createPlan(projectId, {
-        title: spec.title || 'Untitled Feature',
-        content: spec.content || '# Untitled Feature\n\nNo content.',
-        complexity: (spec.complexity as PlanMetadata['complexity']) || 'medium',
+        title: spec.title || "Untitled Feature",
+        content: spec.content || "# Untitled Feature\n\nNo content.",
+        complexity: (spec.complexity as PlanMetadata["complexity"]) || "medium",
+        mockups: (spec.mockups ?? []).map((m) => ({
+          title: m.title || "Mockup",
+          content: m.content || "",
+        })),
         tasks: (spec.tasks ?? []).map((t) => ({
-          title: t.title || 'Untitled task',
-          description: t.description || '',
+          title: t.title || "Untitled task",
+          description: t.description || "",
           priority: Math.min(4, Math.max(0, t.priority ?? 2)),
           dependsOn: t.dependsOn ?? [],
         })),

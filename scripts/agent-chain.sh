@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 # 1. Get next ready task (dependency-aware, priority-sorted)
 READY_JSON=$(bd ready --json 2>/dev/null || echo "[]")
-# Filter out Plan approval gate (user closes via Ship it!) and epics (containers, not work items)
+# Filter out Plan approval gate (user closes via Build It!) and epics (containers, not work items)
 READY_TASKS=$(echo "$READY_JSON" | jq 'if type == "array" then [.[] | select((.title // "") != "Plan approval gate") | select((.issue_type // .type // "") != "epic")] else [] end' 2>/dev/null)
 
 # Find first task with all blockers closed (bd ready may return in_progress blockers as resolved)

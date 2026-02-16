@@ -3,17 +3,8 @@ import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { v4 as uuid } from "uuid";
-import type {
-  Project,
-  CreateProjectRequest,
-  ProjectSettings,
-} from "@opensprint/shared";
-import {
-  OPENSPRINT_DIR,
-  OPENSPRINT_PATHS,
-  DEFAULT_HIL_CONFIG,
-  DEFAULT_DEPLOYMENT_CONFIG,
-} from "@opensprint/shared";
+import type { Project, CreateProjectRequest, ProjectSettings } from "@opensprint/shared";
+import { OPENSPRINT_DIR, OPENSPRINT_PATHS, DEFAULT_HIL_CONFIG, DEFAULT_DEPLOYMENT_CONFIG } from "@opensprint/shared";
 import type { DeploymentConfig, HilConfig } from "@opensprint/shared";
 import { BeadsService } from "./beads.service.js";
 import { ensureEasConfig } from "./eas-config.js";
@@ -23,25 +14,26 @@ import { parseAgentConfig } from "../schemas/agent-config.js";
 
 const execAsync = promisify(exec);
 
-const VALID_DEPLOYMENT_MODES = ['expo', 'custom'] as const;
+const VALID_DEPLOYMENT_MODES = ["expo", "custom"] as const;
 
 /** Normalize deployment config: ensure valid mode, merge with defaults (PRD §6.4) */
-function normalizeDeployment(input: CreateProjectRequest['deployment']): DeploymentConfig {
-  const mode = input?.mode && VALID_DEPLOYMENT_MODES.includes(input.mode as 'expo' | 'custom')
-    ? (input.mode as 'expo' | 'custom')
-    : 'custom';
+function normalizeDeployment(input: CreateProjectRequest["deployment"]): DeploymentConfig {
+  const mode =
+    input?.mode && VALID_DEPLOYMENT_MODES.includes(input.mode as "expo" | "custom")
+      ? (input.mode as "expo" | "custom")
+      : "custom";
   return {
     ...DEFAULT_DEPLOYMENT_CONFIG,
     ...input,
     mode,
-    expoConfig: mode === 'expo' ? { channel: input?.expoConfig?.channel ?? 'preview' } : undefined,
-    customCommand: mode === 'custom' ? input?.customCommand : undefined,
-    webhookUrl: mode === 'custom' ? input?.webhookUrl : undefined,
+    expoConfig: mode === "expo" ? { channel: input?.expoConfig?.channel ?? "preview" } : undefined,
+    customCommand: mode === "custom" ? input?.customCommand : undefined,
+    webhookUrl: mode === "custom" ? input?.webhookUrl : undefined,
   };
 }
 
 /** Normalize HIL config: merge partial input with defaults (PRD §6.5) */
-function normalizeHilConfig(input: CreateProjectRequest['hilConfig']): HilConfig {
+function normalizeHilConfig(input: CreateProjectRequest["hilConfig"]): HilConfig {
   if (!input) return DEFAULT_HIL_CONFIG;
   return {
     ...DEFAULT_HIL_CONFIG,
@@ -64,10 +56,7 @@ export class ProjectService {
     try {
       const issues = await this.beads.listAll(repoPath);
       const buildTasks = issues.filter(
-        (i) =>
-          (i.type ?? i.issue_type) !== "epic" &&
-          !/\.0$/.test(i.id) &&
-          i.id.includes("."),
+        (i) => (i.type ?? i.issue_type) !== "epic" && !/\.0$/.test(i.id) && i.id.includes("."),
       );
       const done = buildTasks.filter((i) => (i.status as string) === "closed").length;
       const total = buildTasks.length;
@@ -92,7 +81,7 @@ export class ProjectService {
           name: entry.name,
           description: entry.description ?? "",
           repoPath: entry.repoPath,
-          currentPhase: "design",
+          currentPhase: "dream",
           createdAt: entry.createdAt,
           updatedAt: stat.mtime.toISOString(),
           progressPercent,
@@ -202,7 +191,7 @@ export class ProjectService {
     await this.writeJson(settingsPath, settings);
 
     // Create eas.json for Expo projects (PRD §6.4)
-    if (deployment.mode === 'expo') {
+    if (deployment.mode === "expo") {
       await ensureEasConfig(repoPath);
     }
 
@@ -220,7 +209,7 @@ export class ProjectService {
       name,
       description: input.description ?? "",
       repoPath,
-      currentPhase: "design",
+      currentPhase: "dream",
       createdAt: now,
       updatedAt: now,
     };
@@ -247,7 +236,7 @@ export class ProjectService {
       name: entry.name,
       description: entry.description ?? "",
       repoPath: entry.repoPath,
-      currentPhase: "design",
+      currentPhase: "dream",
       createdAt: entry.createdAt,
       updatedAt,
     };

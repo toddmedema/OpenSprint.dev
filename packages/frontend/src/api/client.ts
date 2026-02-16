@@ -81,6 +81,23 @@ export const api = {
         body: JSON.stringify({ content }),
       }),
     getHistory: (projectId: string) => request<unknown>(`/projects/${projectId}/prd/history`),
+    upload: async (projectId: string, file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const url = `${BASE_URL}/projects/${projectId}/prd/upload`;
+      const response = await fetch(url, {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({
+          error: { code: "UNKNOWN", message: response.statusText },
+        }));
+        throw new Error(error.error?.message ?? "Upload failed");
+      }
+      const result = await response.json();
+      return result.data;
+    },
   },
 
   // ─── Plans ───

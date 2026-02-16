@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import type { ActiveAgent } from '@opensprint/shared';
-import { api } from '../api/client';
+import { useState, useEffect, useRef, useCallback } from "react";
+import type { ActiveAgent } from "@opensprint/shared";
+import { api } from "../api/client";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -35,19 +35,19 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
       }
     }
     if (open) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [open]);
 
   const phaseLabel = (phase: string) => {
     const m: Record<string, string> = {
-      design: 'Design',
-      plan: 'Plan',
-      build: 'Build',
-      validate: 'Validate',
-      coding: 'Coding',
-      review: 'Review',
+      dream: "Dream",
+      plan: "Plan",
+      build: "Build",
+      verify: "Verify",
+      coding: "Coding",
+      review: "Review",
     };
     return m[phase] ?? phase;
   };
@@ -64,12 +64,10 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
       >
         <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" aria-hidden />
         <span>
-          {agents.length > 0
-            ? `${agents.length} agent${agents.length === 1 ? '' : 's'} running`
-            : 'No agents running'}
+          {agents.length > 0 ? `${agents.length} agent${agents.length === 1 ? "" : "s"} running` : "No agents running"}
         </span>
         <svg
-          className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -84,17 +82,11 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
           role="listbox"
         >
           {agents.length === 0 ? (
-            <div className="px-4 py-6 text-center text-sm text-gray-500">
-              No agents running
-            </div>
+            <div className="px-4 py-6 text-center text-sm text-gray-500">No agents running</div>
           ) : (
             <ul className="divide-y divide-gray-100">
               {agents.map((agent) => (
-                <li
-                  key={agent.id}
-                  className="px-4 py-2.5 text-sm"
-                  role="option"
-                >
+                <li key={agent.id} className="px-4 py-2.5 text-sm" role="option">
                   <div className="font-medium text-gray-900">{agent.label || agent.id}</div>
                   <div className="text-gray-500 mt-0.5">{phaseLabel(agent.phase)}</div>
                 </li>

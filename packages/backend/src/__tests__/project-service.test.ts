@@ -39,7 +39,7 @@ describe("ProjectService", () => {
     expect(project.name).toBe("Test Project");
     expect(project.description).toBe("A test project");
     expect(project.repoPath).toBe(repoPath);
-    expect(project.currentPhase).toBe("design");
+    expect(project.currentPhase).toBe("dream");
 
     // Verify .opensprint directory structure
     const opensprintDir = path.join(repoPath, ".opensprint");

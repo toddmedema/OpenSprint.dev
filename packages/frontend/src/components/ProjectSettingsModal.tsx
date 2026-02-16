@@ -110,7 +110,8 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
           },
           deployment: {
             mode: deployment.mode,
-            expoConfig: deployment.mode === "expo" ? { channel: deployment.expoConfig?.channel ?? "preview" } : undefined,
+            expoConfig:
+              deployment.mode === "expo" ? { channel: deployment.expoConfig?.channel ?? "preview" } : undefined,
             customCommand: deployment.customCommand ?? undefined,
             webhookUrl: deployment.webhookUrl ?? undefined,
           },
@@ -364,7 +365,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                   )}
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900 mb-3">Planning Agent</h3>
-                    <p className="text-xs text-gray-500 mb-3">Used for Design conversations and Plan decomposition</p>
+                    <p className="text-xs text-gray-500 mb-3">Used for Dream conversations and Plan decomposition</p>
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -510,7 +511,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                           value={deployment.customCommand ?? ""}
                           onChange={(e) => updateDeployment({ customCommand: e.target.value || undefined })}
                         />
-                        <p className="mt-1 text-xs text-gray-500">Shell command run from project root after each task completion</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Shell command run from project root after each task completion
+                        </p>
                       </div>
                       <div className="text-sm text-gray-500 text-center">— or —</div>
                       <div>
@@ -522,7 +525,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                           value={deployment.webhookUrl ?? ""}
                           onChange={(e) => updateDeployment({ webhookUrl: e.target.value || undefined })}
                         />
-                        <p className="mt-1 text-xs text-gray-500">HTTP POST sent after each task completion (GitHub Actions, Vercel, etc.)</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          HTTP POST sent after each task completion (GitHub Actions, Vercel, etc.)
+                        </p>
                       </div>
                     </div>
                   )}

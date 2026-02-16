@@ -1,6 +1,6 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { v4 as uuid } from 'uuid';
+import fs from "fs/promises";
+import path from "path";
+import { v4 as uuid } from "uuid";
 import type {
   Conversation,
   ConversationMessage,
@@ -8,18 +8,18 @@ import type {
   ChatResponse,
   Prd,
   PrdSectionKey,
-} from '@opensprint/shared';
-import { OPENSPRINT_PATHS } from '@opensprint/shared';
-import { ProjectService } from './project.service.js';
-import { PrdService } from './prd.service.js';
-import { agentService } from './agent.service.js';
-import { AppError } from '../middleware/error-handler.js';
-import { hilService } from './hil-service.js';
-import { broadcastToProject } from '../websocket/index.js';
+} from "@opensprint/shared";
+import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import { ProjectService } from "./project.service.js";
+import { PrdService } from "./prd.service.js";
+import { agentService } from "./agent.service.js";
+import { AppError } from "../middleware/error-handler.js";
+import { hilService } from "./hil-service.js";
+import { broadcastToProject } from "../websocket/index.js";
 
-const ARCHITECTURE_SECTIONS = ['technical_architecture', 'data_model', 'api_contracts'] as const;
+const ARCHITECTURE_SECTIONS = ["technical_architecture", "data_model", "api_contracts"] as const;
 
-const DESIGN_SYSTEM_PROMPT = `You are an AI product design assistant for OpenSprint. You help users define their product vision and create a comprehensive Product Requirements Document (PRD).
+const DREAM_SYSTEM_PROMPT = `You are the Dream phase AI assistant for OpenSprint. You help users define their product vision and create a comprehensive Product Requirements Document (PRD).
 
 Your role is to:
 1. Ask clarifying questions about the user's product vision
@@ -47,6 +47,7 @@ Your role is to:
 2. Suggest improvements to acceptance criteria, technical approach, or scope
 3. Identify gaps, edge cases, or dependencies
 4. Propose refinements based on the user's feedback
+5. Create or refine UI/UX mockups (ASCII wireframes) when discussing visual aspects
 
 When the user asks you to update the Plan and you have a concrete revision, output it using this format:
 
@@ -54,7 +55,7 @@ When the user asks you to update the Plan and you have a concrete revision, outp
 <full markdown content of the revised Plan>
 [/PLAN_UPDATE]
 
-The Plan must follow the structure: Feature Title, Overview, Acceptance Criteria, Technical Approach, Dependencies, Data Model Changes, API Specification, UI/UX Requirements, Edge Cases, Testing Strategy, Estimated Complexity.
+The Plan must follow the structure: Feature Title, Overview, Acceptance Criteria, Technical Approach, Dependencies, Data Model Changes, API Specification, UI/UX Requirements, Mockups (ASCII wireframes of key screens/components), Edge Cases, Testing Strategy, Estimated Complexity.
 
 Only include a PLAN_UPDATE block when you are making substantive changes to the Plan. For questions, suggestions, or discussion, respond in natural language without a PLAN_UPDATE block.`;
 
@@ -69,18 +70,15 @@ export class ChatService {
   }
 
   /** Find or create a conversation for a given context */
-  private async getOrCreateConversation(
-    projectId: string,
-    context: string,
-  ): Promise<Conversation> {
+  private async getOrCreateConversation(projectId: string, context: string): Promise<Conversation> {
     const dir = await this.getConversationsDir(projectId);
 
     // Look for existing conversation with this context
     try {
       const files = await fs.readdir(dir);
       for (const file of files) {
-        if (file.endsWith('.json')) {
-          const data = await fs.readFile(path.join(dir, file), 'utf-8');
+        if (file.endsWith(".json")) {
+          const data = await fs.readFile(path.join(dir, file), "utf-8");
           const conv = JSON.parse(data) as Conversation;
           if (conv.context === context) {
             return conv;
@@ -94,7 +92,7 @@ export class ChatService {
     // Create new conversation
     const conversation: Conversation = {
       id: uuid(),
-      context: context as Conversation['context'],
+      context: context as Conversation["context"],
       messages: [],
     };
 
@@ -117,22 +115,22 @@ export class ChatService {
   private async buildPrdContext(projectId: string): Promise<string> {
     try {
       const prd = await this.prdService.getPrd(projectId);
-      let context = '## Current PRD State\n\n';
+      let context = "## Current PRD State\n\n";
       for (const [key, section] of Object.entries(prd.sections)) {
         if (section.content) {
-          context += `### ${key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}\n`;
+          context += `### ${key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}\n`;
           context += `${section.content}\n\n`;
         }
       }
-      return context || 'The PRD is currently empty. Help the user define their product.';
+      return context || "The PRD is currently empty. Help the user define their product.";
     } catch {
-      return 'No PRD exists yet. Help the user define their product.';
+      return "No PRD exists yet. Help the user define their product.";
     }
   }
 
   /** Strip leading ## N. Title header from PRD section content (UI already shows section title) */
   private stripSectionHeader(content: string): string {
-    return content.replace(/^##\s+[\d.]+\s*[^\n]*\n+/i, '').trim();
+    return content.replace(/^##\s+[\d.]+\s*[^\n]*\n+/i, "").trim();
   }
 
   /** Parse PRD updates from agent response */
@@ -152,9 +150,7 @@ export class ChatService {
 
   /** Strip PRD update blocks from response for display */
   private stripPrdUpdates(content: string): string {
-    return content
-      .replace(/\[PRD_UPDATE:\w+\][\s\S]*?\[\/PRD_UPDATE\]/g, '')
-      .trim();
+    return content.replace(/\[PRD_UPDATE:\w+\][\s\S]*?\[\/PRD_UPDATE\]/g, "").trim();
   }
 
   /** Parse Plan update from agent response (PRD §7.2.4 plan sidebar chat) */
@@ -165,9 +161,7 @@ export class ChatService {
 
   /** Strip Plan update block from response for display */
   private stripPlanUpdate(content: string): string {
-    return content
-      .replace(/\[PLAN_UPDATE\][\s\S]*?\[\/PLAN_UPDATE\]/g, '')
-      .trim();
+    return content.replace(/\[PLAN_UPDATE\][\s\S]*?\[\/PLAN_UPDATE\]/g, "").trim();
   }
 
   /** Get plan markdown content for plan context (avoids PlanService circular dep) */
@@ -175,9 +169,9 @@ export class ChatService {
     const project = await this.projectService.getProject(projectId);
     const planPath = path.join(project.repoPath, OPENSPRINT_PATHS.plans, `${planId}.md`);
     try {
-      return await fs.readFile(planPath, 'utf-8');
+      return await fs.readFile(planPath, "utf-8");
     } catch {
-      return '';
+      return "";
     }
   }
 
@@ -192,11 +186,11 @@ export class ChatService {
 
   /** Send a message to the planning agent */
   async sendMessage(projectId: string, body: ChatRequest): Promise<ChatResponse> {
-    if (body.message == null || String(body.message).trim() === '') {
-      throw new AppError(400, 'INVALID_INPUT', 'Chat message is required');
+    if (body.message == null || String(body.message).trim() === "") {
+      throw new AppError(400, "INVALID_INPUT", "Chat message is required");
     }
-    const context = body.context ?? 'design';
-    const isPlanContext = context.startsWith('plan:');
+    const context = body.context ?? "dream";
+    const isPlanContext = context.startsWith("plan:");
     const planId = isPlanContext ? context.slice(5) : null;
 
     const conversation = await this.getOrCreateConversation(projectId, context);
@@ -206,9 +200,7 @@ export class ChatService {
     if (!isPlanContext && body.prdSectionFocus) {
       const prd = await this.prdService.getPrd(projectId);
       const section = prd.sections[body.prdSectionFocus as keyof typeof prd.sections];
-      const sectionLabel = body.prdSectionFocus
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+      const sectionLabel = body.prdSectionFocus.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
       if (section?.content) {
         agentPrompt =
           `[User is focusing on the ${sectionLabel} section]\n\n` +
@@ -219,7 +211,7 @@ export class ChatService {
 
     // Add user message (store original for display; agent receives agentPrompt)
     const userMessage: ConversationMessage = {
-      role: 'user',
+      role: "user",
       content: body.message,
       timestamp: new Date().toISOString(),
     };
@@ -240,7 +232,7 @@ export class ChatService {
       systemPrompt = `${PLAN_REFINEMENT_SYSTEM_PROMPT}\n\n${planContext}\n\n---\n\n## PRD Reference\n\n${prdContext}`;
     } else {
       const prdContext = await this.buildPrdContext(projectId);
-      systemPrompt = DESIGN_SYSTEM_PROMPT + '\n\n' + prdContext;
+      systemPrompt = DREAM_SYSTEM_PROMPT + "\n\n" + prdContext;
     }
 
     // Assemble messages for AgentService.invokePlanningAgent
@@ -248,31 +240,36 @@ export class ChatService {
       role: m.role,
       content: m.content,
     }));
-    messages.push({ role: 'user', content: agentPrompt });
+    messages.push({ role: "user", content: agentPrompt });
 
     let responseContent: string;
 
     try {
-      console.log('[chat] Invoking planning agent', { type: agentConfig.type, model: agentConfig.model ?? 'default', context, messagesLen: messages.length });
+      console.log("[chat] Invoking planning agent", {
+        type: agentConfig.type,
+        model: agentConfig.model ?? "default",
+        context,
+        messagesLen: messages.length,
+      });
       const response = await agentService.invokePlanningAgent({
         config: agentConfig,
         messages,
         systemPrompt,
       });
 
-      console.log('[chat] Planning agent returned', { contentLen: response.content?.length ?? 0 });
+      console.log("[chat] Planning agent returned", { contentLen: response.content?.length ?? 0 });
       responseContent = response.content;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      console.error('Agent invocation failed:', error);
+      console.error("Agent invocation failed:", error);
       responseContent =
-        'I was unable to connect to the planning agent.\n\n' +
+        "I was unable to connect to the planning agent.\n\n" +
         `**Error:** ${msg}\n\n` +
-        '**What to try:** Open Project Settings → Agent Config. Ensure your API key is set, the CLI is installed, and the model is valid.';
+        "**What to try:** Open Project Settings → Agent Config. Ensure your API key is set, the CLI is installed, and the model is valid.";
     }
 
     let displayContent: string;
-    const prdChanges: ChatResponse['prdChanges'] = [];
+    const prdChanges: ChatResponse["prdChanges"] = [];
 
     if (isPlanContext && planId) {
       // Plan context: parse PLAN_UPDATE, apply, strip from display
@@ -280,14 +277,14 @@ export class ChatService {
       displayContent = this.stripPlanUpdate(responseContent).trim() || responseContent;
       if (planUpdate) {
         await this.writePlanContent(projectId, planId, planUpdate);
-        broadcastToProject(projectId, { type: 'plan.updated', planId });
+        broadcastToProject(projectId, { type: "plan.updated", planId });
       }
     } else {
-      // Design context: parse PRD updates, apply, strip from display
+      // Dream context: parse PRD updates, apply, strip from display
       const prdUpdates = this.parsePrdUpdates(responseContent);
       displayContent = this.stripPrdUpdates(responseContent) || responseContent;
       if (prdUpdates.length > 0) {
-        const changes = await this.prdService.updateSections(projectId, prdUpdates, 'design');
+        const changes = await this.prdService.updateSections(projectId, prdUpdates, "dream");
         for (const change of changes) {
           prdChanges.push({
             section: change.section,
@@ -295,7 +292,7 @@ export class ChatService {
             newVersion: change.newVersion,
           });
           broadcastToProject(projectId, {
-            type: 'prd.updated',
+            type: "prd.updated",
             section: change.section,
             version: change.newVersion,
           });
@@ -304,16 +301,17 @@ export class ChatService {
     }
 
     const assistantMessage: ConversationMessage = {
-      role: 'assistant',
+      role: "assistant",
       content: displayContent,
       timestamp: new Date().toISOString(),
-      prdChanges: prdChanges.length > 0
-        ? prdChanges.map((c) => ({
-            section: c.section,
-            previousVersion: c.previousVersion,
-            newVersion: c.newVersion,
-          }))
-        : undefined,
+      prdChanges:
+        prdChanges.length > 0
+          ? prdChanges.map((c) => ({
+              section: c.section,
+              previousVersion: c.previousVersion,
+              newVersion: c.newVersion,
+            }))
+          : undefined,
     };
     conversation.messages.push(assistantMessage);
 
@@ -334,17 +332,11 @@ export class ChatService {
    * Append a direct-edit message to the design conversation when the user edits the PRD inline.
    * Syncs the edit into conversation context so the agent is aware of user-made changes (PRD §7.1.5).
    */
-  async addDirectEditMessage(
-    projectId: string,
-    section: string,
-    _content: string,
-  ): Promise<void> {
-    const conversation = await this.getOrCreateConversation(projectId, 'design');
-    const sectionLabel = section
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+  async addDirectEditMessage(projectId: string, section: string, _content: string): Promise<void> {
+    const conversation = await this.getOrCreateConversation(projectId, "dream");
+    const sectionLabel = section.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     const message: ConversationMessage = {
-      role: 'user',
+      role: "user",
       content: `I edited the ${sectionLabel} section of the PRD directly. The updated content is now in the living document.`,
       timestamp: new Date().toISOString(),
     };
@@ -353,7 +345,7 @@ export class ChatService {
   }
 
   /**
-   * When a Plan is shipped, invoke the planning agent to review the Plan against the PRD
+   * When a Plan is approved for build, invoke the planning agent to review the Plan against the PRD
    * and update any affected sections. PRD §15.1 Living PRD Synchronization.
    */
   async syncPrdFromPlanShip(projectId: string, planId: string, planContent: string): Promise<void> {
@@ -361,9 +353,9 @@ export class ChatService {
     const agentConfig = settings.planningAgent;
     const prdContext = await this.buildPrdContext(projectId);
 
-    const systemPrompt = `You are a PRD synchronization assistant for OpenSprint. A Plan has just been shipped.
+    const systemPrompt = `You are a PRD synchronization assistant for OpenSprint. A Plan has just been approved for build.
 
-Your task: Review the shipped Plan against the current PRD. Update any PRD sections that should reflect the Plan's decisions, scope, technical approach, or acceptance criteria. The PRD is the living document; it should stay aligned with what is being built.
+Your task: Review the approved Plan against the current PRD. Update any PRD sections that should reflect the Plan's decisions, scope, technical approach, or acceptance criteria. The PRD is the living document; it should stay aligned with what is being built.
 
 Output updates using this format:
 [PRD_UPDATE:section_key]
@@ -376,13 +368,13 @@ Do NOT include a top-level section header (e.g. "## 1. Executive Summary") in th
 
 Only output PRD_UPDATE blocks for sections that need changes. If no updates are needed, respond briefly without any PRD_UPDATE blocks.`;
 
-    const prompt = `Review this shipped Plan (${planId}) and update the PRD as needed.\n\n## Shipped Plan\n\n${planContent}`;
+    const prompt = `Review this approved Plan (${planId}) and update the PRD as needed.\n\n## Approved Plan\n\n${planContent}`;
 
     const fullContext = `${systemPrompt}\n\n## Current PRD\n\n${prdContext}`;
 
     const response = await agentService.invokePlanningAgent({
       config: agentConfig,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: "user", content: prompt }],
       systemPrompt: fullContext,
     });
 
@@ -392,10 +384,10 @@ Only output PRD_UPDATE blocks for sections that need changes. If no updates are 
     const filtered = await this.filterArchitectureUpdatesWithHil(projectId, prdUpdates, `Plan "${planId}" updates`);
     if (filtered.length === 0) return;
 
-    const changes = await this.prdService.updateSections(projectId, filtered, 'plan');
+    const changes = await this.prdService.updateSections(projectId, filtered, "plan");
     for (const change of changes) {
       broadcastToProject(projectId, {
-        type: 'prd.updated',
+        type: "prd.updated",
         section: change.section,
         version: change.newVersion,
       });
@@ -403,7 +395,7 @@ Only output PRD_UPDATE blocks for sections that need changes. If no updates are 
   }
 
   /**
-   * When Validate feedback is categorized as a scope change and the user approves via HIL,
+   * When Verify feedback is categorized as a scope change and the user approves via HIL,
    * invoke the planning agent to review the feedback against the PRD and update affected
    * sections. PRD §7.4.2, §15.1 Living PRD Synchronization.
    */
@@ -433,7 +425,7 @@ Only output PRD_UPDATE blocks for sections that need changes. If no updates are 
 
     const response = await agentService.invokePlanningAgent({
       config: agentConfig,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: "user", content: prompt }],
       systemPrompt: fullContext,
     });
 
@@ -443,14 +435,14 @@ Only output PRD_UPDATE blocks for sections that need changes. If no updates are 
     const filtered = await this.filterArchitectureUpdatesWithHil(
       projectId,
       prdUpdates,
-      `Scope change feedback: "${feedbackText.slice(0, 80)}${feedbackText.length > 80 ? '…' : ''}"`,
+      `Scope change feedback: "${feedbackText.slice(0, 80)}${feedbackText.length > 80 ? "…" : ""}"`,
     );
     if (filtered.length === 0) return;
 
-    const changes = await this.prdService.updateSections(projectId, filtered, 'validate');
+    const changes = await this.prdService.updateSections(projectId, filtered, "verify");
     for (const change of changes) {
       broadcastToProject(projectId, {
-        type: 'prd.updated',
+        type: "prd.updated",
         section: change.section,
         version: change.newVersion,
       });
@@ -477,11 +469,11 @@ Only output PRD_UPDATE blocks for sections that need changes. If no updates are 
 
     const { approved } = await hilService.evaluateDecision(
       projectId,
-      'architectureDecisions',
-      `PRD architecture update: ${contextDescription}. Sections: ${archUpdates.map((u) => u.section).join(', ')}`,
+      "architectureDecisions",
+      `PRD architecture update: ${contextDescription}. Sections: ${archUpdates.map((u) => u.section).join(", ")}`,
       [
-        { id: 'approve', label: 'Approve', description: 'Apply architecture changes to PRD' },
-        { id: 'reject', label: 'Reject', description: 'Skip architecture updates' },
+        { id: "approve", label: "Approve", description: "Apply architecture changes to PRD" },
+        { id: "reject", label: "Reject", description: "Skip architecture updates" },
       ],
       true, // default: apply when automated/notify_and_proceed
     );

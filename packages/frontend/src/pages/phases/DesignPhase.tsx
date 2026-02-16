@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import { api } from "../../api/client";
 import { useWebSocket } from "../../hooks/useWebSocket";
 
-interface DesignPhaseProps {
+interface DreamPhaseProps {
   projectId: string;
 }
 
@@ -17,7 +17,7 @@ interface Message {
 interface PrdChangeLogEntry {
   section: string;
   version: number;
-  source: "design" | "plan" | "build" | "validate";
+  source: "dream" | "plan" | "build" | "verify";
   timestamp: string;
   diff: string;
 }
@@ -43,7 +43,7 @@ function formatTimestamp(ts: string): string {
   return d.toLocaleDateString();
 }
 
-const RESIZE_STORAGE_KEY = "opensprint.design.chatPct";
+const RESIZE_STORAGE_KEY = "opensprint.dream.chatPct";
 const MIN_CHAT_PCT = 20;
 const MAX_CHAT_PCT = 80;
 
@@ -78,7 +78,7 @@ function getOrderedSections(prdContent: Record<string, string>): string[] {
   return [...ordered, ...rest];
 }
 
-export function DesignPhase({ projectId }: DesignPhaseProps) {
+export function DreamPhase({ projectId }: DreamPhaseProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -111,12 +111,15 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
   const startXRef = useRef(0);
   const startPctRef = useRef(50);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizingRef.current = true;
-    startXRef.current = e.clientX;
-    startPctRef.current = chatPct;
-  }, [chatPct]);
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isResizingRef.current = true;
+      startXRef.current = e.clientX;
+      startPctRef.current = chatPct;
+    },
+    [chatPct],
+  );
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -173,7 +176,7 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
   });
 
   const refetchConversation = useCallback(async () => {
-    const data = await api.chat.history(projectId, "design");
+    const data = await api.chat.history(projectId, "dream");
     const conv = data as { messages?: Message[] };
     if (conv?.messages) {
       setMessages(conv.messages);
@@ -209,7 +212,7 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
     try {
       const prdFocus = focusedSection;
       setFocusedSection(null);
-      const response = (await api.chat.send(projectId, userMessage.content, "design", prdFocus ?? undefined)) as {
+      const response = (await api.chat.send(projectId, userMessage.content, "dream", prdFocus ?? undefined)) as {
         message: string;
         prdChanges?: { section: string; previousVersion: number; newVersion: number }[];
       };
@@ -272,7 +275,7 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {messages.length === 0 && (
             <div className="text-center py-20">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Start designing your product</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Start dreaming up your product</h3>
               <p className="text-gray-500 max-w-md mx-auto">
                 Describe your product vision and the AI planning agent will help you build a comprehensive PRD through
                 conversation.
@@ -359,7 +362,7 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
 
         {Object.keys(prdContent).length === 0 ? (
           <div className="text-center py-10 text-gray-400 text-sm">
-            PRD sections will appear here as you design your product
+            PRD sections will appear here as you dream up your product
           </div>
         ) : (
           <div className="space-y-4 flex-1">
@@ -468,17 +471,13 @@ export function DesignPhase({ projectId }: DesignPhaseProps) {
                     className="text-xs bg-white rounded border border-gray-200 p-2"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-gray-800">
-                        {formatSectionKey(entry.section)}
-                      </span>
-                      <span className="text-gray-500 shrink-0">
-                        {formatTimestamp(entry.timestamp)}
-                      </span>
+                      <span className="font-medium text-gray-800">{formatSectionKey(entry.section)}</span>
+                      <span className="text-gray-500 shrink-0">{formatTimestamp(entry.timestamp)}</span>
                     </div>
                     <div className="mt-1 flex items-center gap-2">
                       <span
                         className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                          entry.source === "design"
+                          entry.source === "dream"
                             ? "bg-blue-100 text-blue-800"
                             : entry.source === "plan"
                               ? "bg-amber-100 text-amber-800"
