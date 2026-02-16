@@ -1,7 +1,14 @@
 import { exec } from 'child_process';
+import fs from 'fs/promises';
+import path from 'path';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
+
+/** Max time (ms) to wait for .git/index.lock to clear before removing it */
+const GIT_LOCK_TIMEOUT_MS = 15_000;
+/** Polling interval (ms) when waiting for git lock to clear */
+const GIT_LOCK_POLL_MS = 500;
 
 /**
  * Manages git branches for the task lifecycle:
@@ -24,6 +31,7 @@ export class BranchManager {
    * Used when retrying after review rejection (branch already has coding agent's work).
    */
   async createOrCheckoutBranch(repoPath: string, branchName: string): Promise<void> {
+    await this.waitForGitReady(repoPath);
     try {
       await execAsync(`git rev-parse --verify ${branchName}`, { cwd: repoPath });
       await this.checkout(repoPath, branchName);
@@ -137,6 +145,69 @@ export class BranchManager {
       { cwd: repoPath },
     );
     return stdout.trim().split('\n').filter(Boolean);
+  }
+
+  /**
+   * Wait for .git/index.lock to be released, removing it if stale.
+   * Prevents "Another git process seems to be running" errors when
+   * the previous agent's git operations haven't fully completed.
+   */
+  async waitForGitReady(repoPath: string): Promise<void> {
+    const lockPath = path.join(repoPath, '.git', 'index.lock');
+    const start = Date.now();
+
+    while (Date.now() - start < GIT_LOCK_TIMEOUT_MS) {
+      try {
+        await fs.access(lockPath);
+      } catch {
+        return; // Lock file doesn't exist — git is ready
+      }
+
+      const elapsed = Date.now() - start;
+      if (elapsed > GIT_LOCK_TIMEOUT_MS / 2) {
+        // After half the timeout, check if the lock is stale (older than 30s)
+        try {
+          const stat = await fs.stat(lockPath);
+          const lockAge = Date.now() - stat.mtimeMs;
+          if (lockAge > 30_000) {
+            console.warn(`[branch-manager] Removing stale .git/index.lock (age: ${Math.round(lockAge / 1000)}s)`);
+            await fs.unlink(lockPath);
+            return;
+          }
+        } catch {
+          return; // Lock disappeared while checking
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, GIT_LOCK_POLL_MS));
+    }
+
+    // Timeout reached — force-remove the lock as last resort
+    try {
+      console.warn('[branch-manager] Git lock wait timed out, force-removing .git/index.lock');
+      await fs.unlink(lockPath);
+    } catch {
+      // Lock may have been removed concurrently
+    }
+  }
+
+  /**
+   * Ensure we're on main with a clean working tree.
+   * Called before starting a new task to guarantee a safe starting state.
+   */
+  async ensureOnMain(repoPath: string): Promise<void> {
+    await this.waitForGitReady(repoPath);
+
+    const currentBranch = await this.getCurrentBranch(repoPath);
+    if (currentBranch !== 'main') {
+      console.warn(`[branch-manager] Expected main but on ${currentBranch}, switching to main`);
+      try {
+        await this.git(repoPath, 'reset --hard HEAD');
+        await this.git(repoPath, 'checkout main');
+      } catch {
+        await this.git(repoPath, 'checkout -f main');
+      }
+    }
   }
 
   private async git(repoPath: string, command: string): Promise<{ stdout: string; stderr: string }> {

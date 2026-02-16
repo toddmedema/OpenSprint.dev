@@ -54,7 +54,7 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
     [selectedAgent],
   );
 
-  const { connected, subscribeToAgent, unsubscribeFromAgent } = useWebSocket({
+  const { subscribeToAgent, unsubscribeFromAgent } = useWebSocket({
     projectId,
     onEvent: handleWsEvent,
   });
@@ -97,10 +97,7 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Agent Dashboard</h2>
-            <p className="text-sm text-gray-500">
-              Monitor and manage all agent instances
-              {connected && <span className="ml-2 text-green-500">Connected</span>}
-            </p>
+            <p className="text-sm text-gray-500">Monitor and manage all agent instances</p>
           </div>
           <div className="flex items-center gap-4">
             <div

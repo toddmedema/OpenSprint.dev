@@ -33,6 +33,8 @@ export interface InvokeCodingAgentOptions {
   onOutput: (chunk: string) => void;
   /** Callback when agent process exits */
   onExit: (code: number | null) => void;
+  /** Human-readable agent role for logging (e.g. 'coder', 'code reviewer') */
+  agentRole?: string;
 }
 
 /** Return type for invokeCodingAgent — handle with kill() to terminate */
@@ -111,6 +113,7 @@ export class AgentService {
       options.cwd,
       options.onOutput,
       options.onExit,
+      options.agentRole,
     );
   }
 

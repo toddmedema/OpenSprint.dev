@@ -241,7 +241,10 @@ export class OrchestratorService {
         branchName: `opensprint/${task.id}`,
       });
 
-      // 4. Execute the coding phase
+      // 4. Ensure repo is on main with no stale git locks before starting
+      await this.branchManager.ensureOnMain(repoPath);
+
+      // 5. Execute the coding phase
       await this.executeCodingPhase(projectId, repoPath, task, undefined);
     } catch (error) {
       console.error(`Orchestrator loop error for project ${projectId}:`, error);
@@ -296,6 +299,7 @@ export class OrchestratorService {
 
       state.activeProcess = agentService.invokeCodingAgent(promptPath, settings.codingAgent, {
         cwd: repoPath,
+        agentRole: 'coder',
         onOutput: (chunk: string) => {
           state.outputLog.push(chunk);
           state.lastOutputTime = Date.now();
@@ -451,6 +455,7 @@ export class OrchestratorService {
         settings.codingAgent, // Use same agent for review in v1
         {
           cwd: repoPath,
+          agentRole: 'code reviewer',
           onOutput: (chunk: string) => {
             state.outputLog.push(chunk);
             state.lastOutputTime = Date.now();
@@ -500,6 +505,9 @@ export class OrchestratorService {
     const result = (await this.sessionManager.readResult(repoPath, task.id)) as ReviewAgentResult | null;
 
     if (result && result.status === "approved") {
+      // Wait for any lingering git operations from the agent subprocess to finish
+      await this.branchManager.waitForGitReady(repoPath);
+
       // Verify merge
       const merged = await this.branchManager.verifyMerge(repoPath, branchName);
       if (!merged) {
@@ -560,9 +568,9 @@ export class OrchestratorService {
         console.warn(`Deployment trigger failed for project ${projectId}:`, err);
       });
 
-      // Continue the loop
+      // Continue the loop (3s delay to let git operations fully settle)
       if (state.status.running) {
-        state.loopTimer = setTimeout(() => this.runLoop(projectId), 1000);
+        state.loopTimer = setTimeout(() => this.runLoop(projectId), 3000);
       }
     } else if (result && result.status === "rejected") {
       // Review rejected — retry coding with feedback
@@ -633,7 +641,8 @@ export class OrchestratorService {
 
     console.error(`Task ${task.id} failed: ${reason}`);
 
-    // Revert changes and return to main
+    // Wait for any lingering git operations, then revert and return to main
+    await this.branchManager.waitForGitReady(repoPath);
     await this.branchManager.revertAndReturnToMain(repoPath, branchName);
 
     // Archive failure session

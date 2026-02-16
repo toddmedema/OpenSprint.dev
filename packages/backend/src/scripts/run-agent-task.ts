@@ -144,6 +144,7 @@ If ./scripts/agent-chain.sh reports no more open tasks, you are done. Otherwise 
         agentDone = true;
         resolve(code ?? 1);
       },
+      'coder',
     );
 
     process.on('SIGINT', () => {

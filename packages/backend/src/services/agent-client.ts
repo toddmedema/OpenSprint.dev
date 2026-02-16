@@ -94,6 +94,7 @@ export class AgentClient {
   /**
    * Invoke agent with a task file (for Build phase).
    * Spawns the agent as a subprocess and streams output.
+   * @param agentRole - Human-readable role for logging (e.g. 'coder', 'code reviewer')
    */
   spawnWithTaskFile(
     config: AgentConfig,
@@ -101,6 +102,7 @@ export class AgentClient {
     cwd: string,
     onOutput: (chunk: string) => void,
     onExit: (code: number | null) => void | Promise<void>,
+    agentRole?: string,
   ): { kill: () => void } {
     let command: string;
     let args: string[];
@@ -144,6 +146,7 @@ export class AgentClient {
 
     console.log('[agent] Spawning agent subprocess', {
       type: config.type,
+      agentRole: agentRole ?? 'coder',
       command,
       taskFilePath,
       cwd,
