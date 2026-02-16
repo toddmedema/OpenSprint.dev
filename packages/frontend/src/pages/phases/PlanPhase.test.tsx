@@ -208,6 +208,29 @@ describe("PlanPhase Rebuild button", () => {
     expect(screen.queryByRole("button", { name: /rebuild/i })).not.toBeInTheDocument();
   });
 
+  it("hides Rebuild button when plan is complete but lastModified === shippedAt (no changes after ship)", () => {
+    const plans = [
+      {
+        ...basePlan,
+        status: "complete" as const,
+        completedTaskCount: 2,
+        metadata: {
+          ...basePlan.metadata,
+          shippedAt: "2026-02-16T10:00:00.000Z",
+        },
+        lastModified: "2026-02-16T10:00:00.000Z",
+      },
+    ];
+    const store = createStore(plans);
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    expect(screen.queryByRole("button", { name: /rebuild/i })).not.toBeInTheDocument();
+  });
+
   it("hides Rebuild button when plan is complete but lastModified is missing", () => {
     const plans = [
       {
