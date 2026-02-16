@@ -185,7 +185,7 @@ export class TaskService {
       return { taskClosed: false };
     }
 
-    await this.beads.close(project.repoPath, taskId, "Manually marked complete");
+    await this.beads.close(project.repoPath, taskId, "Manually marked complete", true);
     await this.beads.sync(project.repoPath);
     broadcastToProject(projectId, {
       type: "task.updated",
@@ -207,7 +207,7 @@ export class TaskService {
       if (allClosed) {
         const epicIssue = allIssues.find((i) => i.id === epicId);
         if (epicIssue && (epicIssue.status as string) !== "closed") {
-          await this.beads.close(project.repoPath, epicId, "All tasks completed");
+          await this.beads.close(project.repoPath, epicId, "All tasks completed", true);
           await this.beads.sync(project.repoPath);
           broadcastToProject(projectId, {
             type: "task.updated",

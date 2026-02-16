@@ -168,9 +168,13 @@ export class BeadsService {
     return this.parseJson(stdout);
   }
 
-  /** Close an issue (bd close returns a JSON array of closed issues, or sometimes empty output) */
-  async close(repoPath: string, id: string, reason: string): Promise<BeadsIssue> {
-    const stdout = await this.exec(repoPath, `close ${id} --reason "${reason.replace(/"/g, '\\"')}" --json`);
+  /** Close an issue (bd close returns a JSON array of closed issues, or sometimes empty output).
+   * @param force - If true, use --force to close even when blocked by open issues (e.g. manual mark complete).
+   */
+  async close(repoPath: string, id: string, reason: string, force = false): Promise<BeadsIssue> {
+    let cmd = `close ${id} --reason "${reason.replace(/"/g, '\\"')}" --json`;
+    if (force) cmd += " --force";
+    const stdout = await this.exec(repoPath, cmd);
     const arr = this.parseJsonArray(stdout);
     let result = arr[0];
     if (!result) {
