@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { api } from '../../api/client';
-import { useWebSocket } from '../../hooks/useWebSocket';
-import type { ServerEvent } from '@opensprint/shared';
+import { useState, useEffect, useCallback } from "react";
+import { api } from "../../api/client";
+import { useWebSocket } from "../../hooks/useWebSocket";
+import type { ServerEvent } from "@opensprint/shared";
 
 interface AgentDashboardProps {
   projectId: string;
@@ -33,23 +33,26 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
   const [orchestratorRunning, setOrchestratorRunning] = useState(false);
   const [stats, setStats] = useState({ totalCompleted: 0, totalFailed: 0, queueDepth: 0 });
 
-  const handleWsEvent = useCallback((event: ServerEvent) => {
-    switch (event.type) {
-      case 'agent.output':
-        if (event.taskId === selectedAgent) {
-          setAgentOutput((prev) => [...prev, event.chunk]);
-        }
-        break;
-      case 'build.status':
-        setOrchestratorRunning(event.running);
-        break;
-      case 'agent.started':
-      case 'agent.completed':
-        // Refresh agent list and status in real-time
-        loadStatus();
-        break;
-    }
-  }, [selectedAgent]);
+  const handleWsEvent = useCallback(
+    (event: ServerEvent) => {
+      switch (event.type) {
+        case "agent.output":
+          if (event.taskId === selectedAgent) {
+            setAgentOutput((prev) => [...prev, event.chunk]);
+          }
+          break;
+        case "build.status":
+          setOrchestratorRunning(event.running);
+          break;
+        case "agent.started":
+        case "agent.completed":
+          // Refresh agent list and status in real-time
+          loadStatus();
+          break;
+      }
+    },
+    [selectedAgent],
+  );
 
   const { connected, subscribeToAgent, unsubscribeFromAgent } = useWebSocket({
     projectId,
@@ -100,12 +103,12 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <div className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-              orchestratorRunning
-                ? 'bg-green-50 text-green-700'
-                : 'bg-gray-100 text-gray-500'
-            }`}>
-              {orchestratorRunning ? 'Running' : 'Paused'}
+            <div
+              className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+                orchestratorRunning ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              {orchestratorRunning ? "Running" : "Paused"}
             </div>
           </div>
         </div>
@@ -116,9 +119,7 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
         <div className="w-80 border-r border-gray-200 flex flex-col">
           {/* Performance Metrics */}
           <div className="p-4 border-b border-gray-200">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Performance
-            </h3>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Performance</h3>
             <div className="grid grid-cols-3 gap-3">
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600">{stats.totalCompleted}</div>
@@ -155,9 +156,7 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
             </h3>
 
             {agents.length === 0 ? (
-              <div className="text-center py-8 text-gray-400 text-sm">
-                No agents currently running
-              </div>
+              <div className="text-center py-8 text-gray-400 text-sm">No agents currently running</div>
             ) : (
               <div className="space-y-2">
                 {agents.map((agent) => (
@@ -166,25 +165,21 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
                     onClick={() => setSelectedAgent(agent.taskId)}
                     className={`w-full text-left p-3 rounded-lg border transition-colors ${
                       selectedAgent === agent.taskId
-                        ? 'border-brand-300 bg-brand-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? "border-brand-300 bg-brand-50"
+                        : "border-gray-200 hover:border-gray-300"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-gray-900 font-mono">
-                        {agent.taskId}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        agent.phase === 'coding'
-                          ? 'bg-purple-50 text-purple-700'
-                          : 'bg-orange-50 text-orange-700'
-                      }`}>
+                      <span className="text-sm font-medium text-gray-900 font-mono">{agent.taskId}</span>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full ${
+                          agent.phase === "coding" ? "bg-purple-50 text-purple-700" : "bg-orange-50 text-orange-700"
+                        }`}
+                      >
                         {agent.phase}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      Branch: {agent.branchName}
-                    </div>
+                    <div className="text-xs text-gray-500">Branch: {agent.branchName}</div>
                     <div className="text-xs text-gray-400 mt-1">
                       Started: {new Date(agent.startedAt).toLocaleTimeString()}
                     </div>
@@ -201,25 +196,16 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
             <>
               <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-green-400">
-                    Agent Output
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {selectedAgent}
-                  </span>
+                  <span className="text-xs font-mono text-green-400">Agent Output</span>
+                  <span className="text-xs text-gray-500">{selectedAgent}</span>
                 </div>
-                <button
-                  onClick={() => setSelectedAgent(null)}
-                  className="text-gray-500 hover:text-gray-300 text-xs"
-                >
+                <button onClick={() => setSelectedAgent(null)} className="text-gray-500 hover:text-gray-300 text-xs">
                   Close
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
                 <pre className="text-xs font-mono text-green-400 whitespace-pre-wrap">
-                  {agentOutput.length > 0
-                    ? agentOutput.join('')
-                    : 'Waiting for agent output...'}
+                  {agentOutput.length > 0 ? agentOutput.join("") : "Waiting for agent output..."}
                 </pre>
               </div>
             </>

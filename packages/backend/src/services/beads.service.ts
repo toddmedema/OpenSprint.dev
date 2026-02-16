@@ -39,11 +39,7 @@ export class BeadsService {
    * Execute a bd command in the context of a project directory.
    * Handles exec errors, timeouts, and surfaces stderr to caller.
    */
-  private async exec(
-    repoPath: string,
-    command: string,
-    options?: { timeout?: number },
-  ): Promise<string> {
+  private async exec(repoPath: string, command: string, options?: { timeout?: number }): Promise<string> {
     const timeout = options?.timeout ?? DEFAULT_TIMEOUT_MS;
     try {
       const { stdout } = await execAsync(`bd ${command}`, {
@@ -62,10 +58,8 @@ export class BeadsService {
         killed?: boolean;
         signal?: string;
       };
-      if (err.killed && err.signal === 'SIGTERM') {
-        throw new Error(
-          `Beads command timed out after ${timeout}ms: bd ${command}\n${err.stderr || err.message}`,
-        );
+      if (err.killed && err.signal === "SIGTERM") {
+        throw new Error(`Beads command timed out after ${timeout}ms: bd ${command}\n${err.stderr || err.message}`);
       }
       const stderr = err.stderr || err.stdout || err.message;
       throw new Error(`Beads command failed: bd ${command}\n${stderr}`);
@@ -82,17 +76,14 @@ export class BeadsService {
     args: string[] = [],
     options?: { timeout?: number },
   ): Promise<unknown> {
-    const fullCmd = [command, ...args].filter(Boolean).join(' ');
+    const fullCmd = [command, ...args].filter(Boolean).join(" ");
     const stdout = await this.exec(repoPath, fullCmd, options);
     const trimmed = stdout.trim();
     if (!trimmed) return null;
     try {
-      const jsonStart = trimmed.indexOf('{');
-      const arrStart = trimmed.indexOf('[');
-      const start =
-        jsonStart >= 0 && (arrStart < 0 || jsonStart < arrStart)
-          ? jsonStart
-          : arrStart;
+      const jsonStart = trimmed.indexOf("{");
+      const arrStart = trimmed.indexOf("[");
+      const start = jsonStart >= 0 && (arrStart < 0 || jsonStart < arrStart) ? jsonStart : arrStart;
       if (start >= 0) {
         return JSON.parse(trimmed.slice(start));
       }
@@ -207,9 +198,7 @@ export class BeadsService {
     const filtered: BeadsIssue[] = [];
     for (const task of rawTasks) {
       const blockers = await this.getBlockers(repoPath, task.id);
-      const allBlockersClosed =
-        blockers.length === 0 ||
-        blockers.every((bid) => idToStatus.get(bid) === "closed");
+      const allBlockersClosed = blockers.length === 0 || blockers.every((bid) => idToStatus.get(bid) === "closed");
       if (allBlockersClosed) {
         filtered.push(task);
       }
@@ -254,7 +243,14 @@ export class BeadsService {
   async getBlockers(repoPath: string, id: string): Promise<string[]> {
     try {
       const issue = await this.show(repoPath, id);
-      const deps = (issue.dependencies as Array<{ id?: string; issue_id?: string; depends_on_id?: string; type?: string; dependency_type?: string }>) ?? [];
+      const deps =
+        (issue.dependencies as Array<{
+          id?: string;
+          issue_id?: string;
+          depends_on_id?: string;
+          type?: string;
+          dependency_type?: string;
+        }>) ?? [];
       return deps
         .filter((d) => (d.type ?? d.dependency_type) === "blocks")
         .map((d) => d.depends_on_id ?? d.issue_id ?? d.id ?? "")

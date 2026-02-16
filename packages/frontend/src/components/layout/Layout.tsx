@@ -7,15 +7,17 @@ interface LayoutProps {
   project?: Project | null;
   currentPhase?: ProjectPhase;
   onPhaseChange?: (phase: ProjectPhase) => void;
+  onProjectSaved?: () => void;
 }
 
-export function Layout({ children, project, currentPhase, onPhaseChange }: LayoutProps) {
+export function Layout({ children, project, currentPhase, onPhaseChange, onProjectSaved }: LayoutProps) {
   return (
     <div className="h-full flex flex-col bg-white">
       <Navbar
         project={project}
         currentPhase={currentPhase}
         onPhaseChange={onPhaseChange}
+        onProjectSaved={onProjectSaved}
       />
       <main className="flex-1 overflow-hidden bg-white">{children}</main>
     </div>

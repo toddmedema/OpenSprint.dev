@@ -1,7 +1,7 @@
-import { v4 as uuid } from 'uuid';
-import type { HilConfig, HilNotificationMode } from '@opensprint/shared';
-import { ProjectService } from './project.service.js';
-import { broadcastToProject } from '../websocket/index.js';
+import { v4 as uuid } from "uuid";
+import type { HilConfig, HilNotificationMode } from "@opensprint/shared";
+import { ProjectService } from "./project.service.js";
+import { broadcastToProject } from "../websocket/index.js";
 
 type HilCategory = keyof HilConfig;
 
@@ -47,21 +47,21 @@ export class HilService {
     const mode = settings.hilConfig[category];
 
     const defaultOptions = options || [
-      { id: 'approve', label: 'Approve', description: 'Proceed with this decision' },
-      { id: 'reject', label: 'Reject', description: 'Do not proceed' },
+      { id: "approve", label: "Approve", description: "Proceed with this decision" },
+      { id: "reject", label: "Reject", description: "Do not proceed" },
     ];
 
     switch (mode) {
-      case 'automated':
+      case "automated":
         // Log and proceed automatically with default
         console.log(`[HIL] Automated decision for ${category}: ${description}`);
         return { approved: defaultApproved };
 
-      case 'notify_and_proceed': {
+      case "notify_and_proceed": {
         // Notify user but proceed immediately with default (PRD §6.5.2)
         const request = this.createRequest(projectId, category, description, defaultOptions);
         broadcastToProject(projectId, {
-          type: 'hil.request',
+          type: "hil.request",
           requestId: request.id,
           category,
           description,
@@ -72,11 +72,11 @@ export class HilService {
         return { approved: defaultApproved };
       }
 
-      case 'requires_approval': {
+      case "requires_approval": {
         // Block until user responds (PRD §6.5.2)
         const request = this.createRequest(projectId, category, description, defaultOptions);
         broadcastToProject(projectId, {
-          type: 'hil.request',
+          type: "hil.request",
           requestId: request.id,
           category,
           description,
@@ -84,7 +84,7 @@ export class HilService {
           blocking: true,
         });
         broadcastToProject(projectId, {
-          type: 'build.awaiting_approval',
+          type: "build.awaiting_approval",
           awaiting: true,
           category,
           description,
@@ -116,7 +116,7 @@ export class HilService {
     }
 
     broadcastToProject(request.projectId, {
-      type: 'build.awaiting_approval',
+      type: "build.awaiting_approval",
       awaiting: false,
     });
 
@@ -132,16 +132,14 @@ export class HilService {
     }
 
     this.pendingRequests.delete(requestId);
-    console.log(`[HIL] Request ${requestId} resolved: ${approved ? 'approved' : 'rejected'}`);
+    console.log(`[HIL] Request ${requestId} resolved: ${approved ? "approved" : "rejected"}`);
   }
 
   /**
    * Get all pending requests for a project.
    */
   getPendingRequests(projectId: string): HilRequest[] {
-    return Array.from(this.pendingRequests.values()).filter(
-      (r) => r.projectId === projectId && !r.resolved,
-    );
+    return Array.from(this.pendingRequests.values()).filter((r) => r.projectId === projectId && !r.resolved);
   }
 
   private createRequest(

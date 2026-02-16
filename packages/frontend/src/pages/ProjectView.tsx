@@ -87,6 +87,10 @@ export function ProjectView() {
     dispatch(clearHilNotification());
   };
 
+  const handleProjectSaved = () => {
+    if (projectId) dispatch(fetchProject(projectId));
+  };
+
   // Loading state
   if (projectLoading && !project) {
     return (
@@ -117,7 +121,7 @@ export function ProjectView() {
 
   return (
     <>
-      <Layout project={project} currentPhase={currentPhase} onPhaseChange={handlePhaseChange}>
+      <Layout project={project} currentPhase={currentPhase} onPhaseChange={handlePhaseChange} onProjectSaved={handleProjectSaved}>
         {/* Mount ALL phases simultaneously, toggle visibility with CSS */}
         {VALID_PHASES.map((phase) => (
           <div key={phase} style={{ display: phase === currentPhase ? "contents" : "none" }}>

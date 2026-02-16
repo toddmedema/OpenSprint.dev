@@ -79,5 +79,24 @@ describe('BranchManager', () => {
 
       warnSpy.mockRestore();
     });
+
+    it('should create WIP commit on task branch (agent termination scenario)', async () => {
+      await execAsync('git init', { cwd: repoPath });
+      await execAsync('git branch -M main', { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, 'README'), 'initial');
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+      await execAsync('git checkout -b opensprint/task-xyz', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, 'src/newfile.ts'), 'partial work');
+
+      const result = await branchManager.commitWip(repoPath, 'task-xyz');
+      expect(result).toBe(true);
+
+      const { stdout } = await execAsync('git log -1 --oneline', { cwd: repoPath });
+      expect(stdout).toContain('WIP: task-xyz');
+      const { stdout: branchOut } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: repoPath });
+      expect(branchOut.trim()).toBe('opensprint/task-xyz');
+    });
   });
 });
