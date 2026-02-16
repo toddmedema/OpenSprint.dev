@@ -174,4 +174,63 @@ Test task directory creation.
     await fs.access(prdPath);
     await fs.access(planPath);
   });
+
+  it("POST /tasks/:taskId/prepare with phase=review generates review prompt per PRD §12.3", {
+    timeout: 20000,
+  }, async () => {
+    const app = createApp();
+
+    const planRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send({
+        title: "Review Prompt Test",
+        content: `# Review Test
+
+## Overview
+Test review prompt generation.
+
+## Acceptance Criteria
+- Review prompt matches PRD §12.3
+- Do NOT merge instruction present
+
+## Technical Approach
+- Use ContextAssembler with phase review
+`,
+        complexity: "low",
+        tasks: [{ title: "Task Y", description: "Implement Y", priority: 0, dependsOn: [] }],
+      });
+
+    expect(planRes.status).toBe(201);
+    const plan = planRes.body.data;
+    const gateTaskId = plan.metadata.gateTaskId;
+    const project = await projectService.getProject(projectId);
+    await beads.close(project.repoPath, gateTaskId, "Plan shipped");
+
+    const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+    const tasks = tasksRes.body.data ?? [];
+    const taskY = tasks.find((t: { title: string }) => t.title === "Task Y");
+    expect(taskY).toBeDefined();
+
+    const prepareRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/build/tasks/${taskY.id}/prepare`)
+      .set("Content-Type", "application/json")
+      .send({ phase: "review", createBranch: false });
+
+    expect(prepareRes.status).toBe(201);
+    const { taskDir } = prepareRes.body.data;
+    const promptPath = path.join(taskDir, "prompt.md");
+    const configPath = path.join(taskDir, "config.json");
+
+    const prompt = await fs.readFile(promptPath, "utf-8");
+    expect(prompt).toContain("# Review Task: Task Y");
+    expect(prompt).toContain("Review the implementation of this task against its specification and acceptance criteria");
+    expect(prompt).toContain("The orchestrator has already committed them before invoking you");
+    expect(prompt).toContain('Do NOT merge — the orchestrator will merge after you exit');
+    expect(prompt).toContain('status "approved"');
+    expect(prompt).toContain('status "rejected"');
+    expect(prompt).toContain("provide specific, actionable feedback");
+
+    const config = JSON.parse(await fs.readFile(configPath, "utf-8"));
+    expect(config.phase).toBe("review");
+  });
 });

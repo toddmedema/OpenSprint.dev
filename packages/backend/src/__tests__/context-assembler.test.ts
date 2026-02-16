@@ -254,4 +254,72 @@ User authentication.
     expect(context.dependencyOutputs[0].diff).toBe('diff from dep task');
     expect(context.dependencyOutputs[0].summary).toBe('Implemented login endpoint');
   });
+
+  it('should generate review prompt per PRD §12.3 when phase is review', async () => {
+    const plansDir = path.join(repoPath, OPENSPRINT_PATHS.plans);
+    await fs.mkdir(plansDir, { recursive: true });
+    const planContent = `# Feature: Auth
+
+## Overview
+User authentication.
+
+## Acceptance Criteria
+
+- User can log in with email/password
+- JWT tokens are issued on success
+
+## Technical Approach
+
+- Use bcrypt for password hashing
+`;
+    await fs.writeFile(path.join(plansDir, 'auth.md'), planContent);
+
+    const config = {
+      taskId: 'bd-a3f8.2',
+      repoPath,
+      branch: 'opensprint/bd-a3f8.2',
+      testCommand: 'npm test',
+      attempt: 1,
+      phase: 'review' as const,
+      previousFailure: null as string | null,
+      reviewFeedback: null as string | null,
+    };
+
+    const context = {
+      taskId: config.taskId,
+      title: 'Implement JWT validation',
+      description: 'Add JWT validation middleware',
+      planContent,
+      prdExcerpt: '# Product Requirements\n\nTest product.',
+      dependencyOutputs: [] as Array<{ taskId: string; diff: string; summary: string }>,
+    };
+
+    const taskDir = await assembler.assembleTaskDirectory(repoPath, config.taskId, config, context);
+
+    const prompt = await fs.readFile(path.join(taskDir, 'prompt.md'), 'utf-8');
+
+    // Per PRD §12.3: Review agent prompt structure
+    expect(prompt).toContain('# Review Task: Implement JWT validation');
+    expect(prompt).toContain('## Objective');
+    expect(prompt).toContain('Review the implementation of this task against its specification and acceptance criteria');
+    expect(prompt).toContain('## Task Specification');
+    expect(prompt).toContain('Add JWT validation middleware');
+    expect(prompt).toContain('## Acceptance Criteria');
+    expect(prompt).toContain('User can log in with email/password');
+    expect(prompt).toContain('## Implementation');
+    expect(prompt).toContain('The coding agent has produced changes on branch `opensprint/bd-a3f8.2`');
+    expect(prompt).toContain('The orchestrator has already committed them before invoking you');
+    expect(prompt).toContain('Run `git diff main...opensprint/bd-a3f8.2` to review the committed changes');
+    expect(prompt).toContain('## Instructions');
+    expect(prompt).toContain('1. Review the diff between main and the task branch using `git diff main...opensprint/bd-a3f8.2`');
+    expect(prompt).toContain('2. Verify the implementation meets ALL acceptance criteria');
+    expect(prompt).toContain('3. Verify tests exist and cover the ticket scope');
+    expect(prompt).toContain('4. Run `npm test` and confirm all tests pass');
+    expect(prompt).toContain('5. Check code quality');
+    // PRD §12.3: Do NOT merge — orchestrator will merge after exit
+    expect(prompt).toContain('6. If approving: write your result to `.opensprint/active/bd-a3f8.2/result.json` with status "approved"');
+    expect(prompt).toContain('Do NOT merge — the orchestrator will merge after you exit');
+    expect(prompt).toContain('7. If rejecting: write your result to `.opensprint/active/bd-a3f8.2/result.json` with status "rejected"');
+    expect(prompt).toContain('provide specific, actionable feedback');
+  });
 });

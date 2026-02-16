@@ -94,7 +94,9 @@ export class AgentService {
   }
 
   /**
-   * Invoke the coding agent with a file-based prompt.
+   * Invoke the coding or review agent with a file-based prompt (PRD §12.4).
+   * Used for both phases: when phase is "coding", prompt.md contains the task spec;
+   * when phase is "review", prompt.md contains the review spec per §12.3.
    * Spawns the agent as a subprocess and streams output.
    * Returns a handle with kill() to terminate the process.
    */

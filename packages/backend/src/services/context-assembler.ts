@@ -319,16 +319,16 @@ export class ContextAssembler {
     }
 
     prompt += `## Implementation\n\n`;
-    prompt += `The coding agent has committed changes on branch \`${config.branch}\`.\n`;
-    prompt += `Run \`git diff main...${config.branch}\` to review the changes.\n\n`;
+    prompt += `The coding agent has produced changes on branch \`${config.branch}\`. The orchestrator has already committed them before invoking you.\n`;
+    prompt += `Run \`git diff main...${config.branch}\` to review the committed changes.\n\n`;
     prompt += `## Instructions\n\n`;
     prompt += `1. Review the diff between main and the task branch using \`git diff main...${config.branch}\`.\n`;
     prompt += `2. Verify the implementation meets ALL acceptance criteria.\n`;
     prompt += `3. Verify tests exist and cover the ticket scope (not just happy paths).\n`;
     prompt += `4. Run \`${config.testCommand}\` and confirm all tests pass.\n`;
     prompt += `5. Check code quality: no obvious bugs, reasonable error handling, consistent style.\n`;
-    prompt += `6. If approving: merge the branch to main (\`git checkout main && git merge ${config.branch}\`) and write your result to \`.opensprint/active/${config.taskId}/result.json\` with status "approved".\n`;
-    prompt += `7. If rejecting: do NOT merge. Write your result to \`.opensprint/active/${config.taskId}/result.json\` with status "rejected" and provide specific, actionable feedback.\n\n`;
+    prompt += `6. If approving: write your result to \`.opensprint/active/${config.taskId}/result.json\` with status "approved". Do NOT merge — the orchestrator will merge after you exit.\n`;
+    prompt += `7. If rejecting: write your result to \`.opensprint/active/${config.taskId}/result.json\` with status "rejected" and provide specific, actionable feedback.\n\n`;
 
     return prompt;
   }
