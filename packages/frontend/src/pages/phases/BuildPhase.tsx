@@ -209,7 +209,7 @@ export function BuildPhase({ projectId, initialTaskId, onInitialTaskConsumed }: 
     [projectId, selectedTask],
   );
 
-  // Apply initial task selection when navigating from Validate (e.g. clicking an issue ID)
+  // Apply initial task selection when navigating from Verify (e.g. clicking an issue ID)
   useEffect(() => {
     if (initialTaskId) {
       setSelectedTask(initialTaskId);
@@ -244,10 +244,7 @@ export function BuildPhase({ projectId, initialTaskId, onInitialTaskConsumed }: 
 
   useEffect(() => {
     setError(null);
-    Promise.all([
-      api.tasks.list(projectId),
-      api.plans.list(projectId),
-    ])
+    Promise.all([api.tasks.list(projectId), api.plans.list(projectId)])
       .then(([tasksData, plansData]) => {
         setTasks((tasksData as TaskCard[]) ?? []);
         setPlans((plansData as Plan[]) ?? []);

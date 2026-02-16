@@ -4,7 +4,7 @@ This project uses **bd** (beads) for all task and issue tracking. Run `bd onboar
 
 ## Project Overview
 
-OpenSprint is a web application that guides users through the full software development lifecycle using AI agents. It has four phases: Design, Plan, Build, and Validate. The PRD is at `PRD.md`.
+OpenSprint is a web application that guides users through the full software development lifecycle using AI agents. It has four phases: Dream, Plan, Build, and Verify. The PRD is at `PRD.md`.
 
 **Tech stack:** Node.js + TypeScript (backend), React + TypeScript (frontend).
 
@@ -33,6 +33,7 @@ bd sync                           # Sync with git
 ## Issue Hierarchy
 
 Beads supports hierarchical IDs for organizing work:
+
 - `opensprint.dev-xxxx` — Epic (feature-level)
 - `opensprint.dev-xxxx.0` — Gating task (plan approval gate)
 - `opensprint.dev-xxxx.1` — Task under that epic
@@ -59,6 +60,7 @@ Beads supports hierarchical IDs for organizing work:
 7. **Hand off** — Provide context for next session
 
 **CRITICAL RULES:**
+
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing — that leaves work stranded locally
 - NEVER say "ready to push when you are" — YOU must push

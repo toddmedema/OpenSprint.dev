@@ -8,10 +8,7 @@ interface DependencyGraphProps {
 }
 
 /** Compute critical path edges (longest path in DAG). Returns Set of "from->to" keys. */
-function computeCriticalPathEdges(
-  planIds: string[],
-  edges: { from: string; to: string }[]
-): Set<string> {
+function computeCriticalPathEdges(planIds: string[], edges: { from: string; to: string }[]): Set<string> {
   const incoming = new Map<string, string[]>();
   const outgoing = new Map<string, string[]>();
   for (const id of planIds) {
@@ -128,7 +125,7 @@ export function DependencyGraph({ graph, onPlanClick }: DependencyGraphProps) {
         d3
           .forceLink(linkData)
           .id((d) => (d as { id: string }).id)
-          .distance(80)
+          .distance(80),
       )
       .force("charge", d3.forceManyBody().strength(-200))
       .force("center", d3.forceCenter(width / 2, height / 2))
@@ -143,9 +140,7 @@ export function DependencyGraph({ graph, onPlanClick }: DependencyGraphProps) {
       .attr("stroke", (d) => (d.isCritical ? "#dc2626" : "#d1d5db"))
       .attr("stroke-width", (d) => (d.isCritical ? 2.5 : 1.5))
       .attr("stroke-opacity", (d) => (d.isCritical ? 0.9 : 0.5))
-      .attr("marker-end", (d) =>
-        d.isCritical ? "url(#arrow-critical)" : "url(#arrow-normal)"
-      );
+      .attr("marker-end", (d) => (d.isCritical ? "url(#arrow-critical)" : "url(#arrow-normal)"));
 
     const node = g
       .append("g")
@@ -173,13 +168,13 @@ export function DependencyGraph({ graph, onPlanClick }: DependencyGraphProps) {
             const n = d as d3.SimulationNodeDatum & { fx?: number; fy?: number };
             n.fx = undefined;
             n.fy = undefined;
-          }) as never
+          }) as never,
       )
       .on("click", (_, d) => onPlanClick?.(d.plan));
 
     const statusColors: Record<string, { fill: string; stroke: string }> = {
       planning: { fill: "#fef3c7", stroke: "#f59e0b" },
-      shipped: { fill: "#dbeafe", stroke: "#3b82f6" },
+      building: { fill: "#dbeafe", stroke: "#3b82f6" },
       complete: { fill: "#d1fae5", stroke: "#10b981" },
     };
 
@@ -281,7 +276,7 @@ export function DependencyGraph({ graph, onPlanClick }: DependencyGraphProps) {
       <svg ref={svgRef} className="block" />
       {computeCriticalPathEdges(
         graph.plans.map((p) => p.metadata.planId),
-        graph.edges
+        graph.edges,
       ).size > 0 && (
         <div className="px-3 py-1.5 text-xs text-gray-500 border-t border-gray-100 flex items-center gap-2">
           <span className="inline-block w-3 h-0.5 bg-red-500 rounded" />

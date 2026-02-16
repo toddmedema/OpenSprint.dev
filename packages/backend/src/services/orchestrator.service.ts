@@ -1,5 +1,5 @@
-import fs from 'fs/promises';
-import path from 'path';
+import fs from "fs/promises";
+import path from "path";
 import type {
   OrchestratorStatus,
   AgentPhase,
@@ -7,23 +7,23 @@ import type {
   CodingAgentResult,
   ReviewAgentResult,
   TestResults,
-} from '@opensprint/shared';
+} from "@opensprint/shared";
 import {
   OPENSPRINT_PATHS,
   DEFAULT_RETRY_LIMIT,
   AGENT_INACTIVITY_TIMEOUT_MS,
   getTestCommandForFramework,
-} from '@opensprint/shared';
-import { BeadsService, type BeadsIssue } from './beads.service.js';
-import { ProjectService } from './project.service.js';
-import { agentService } from './agent.service.js';
-import { deploymentService } from './deployment-service.js';
-import { hilService } from './hil-service.js';
-import { BranchManager } from './branch-manager.js';
-import { ContextAssembler } from './context-assembler.js';
-import { SessionManager } from './session-manager.js';
-import { TestRunner } from './test-runner.js';
-import { broadcastToProject, sendAgentOutputToProject } from '../websocket/index.js';
+} from "@opensprint/shared";
+import { BeadsService, type BeadsIssue } from "./beads.service.js";
+import { ProjectService } from "./project.service.js";
+import { agentService } from "./agent.service.js";
+import { deploymentService } from "./deployment-service.js";
+import { hilService } from "./hil-service.js";
+import { BranchManager } from "./branch-manager.js";
+import { ContextAssembler } from "./context-assembler.js";
+import { SessionManager } from "./session-manager.js";
+import { TestRunner } from "./test-runner.js";
+import { broadcastToProject, sendAgentOutputToProject } from "../websocket/index.js";
 
 interface RetryContext {
   previousFailure?: string;
@@ -67,10 +67,10 @@ export class OrchestratorService {
         lastOutputTime: 0,
         inactivityTimer: null,
         outputLog: [],
-        startedAt: '',
+        startedAt: "",
         attempt: 1,
-        lastCodingDiff: '',
-        lastCodingSummary: '',
+        lastCodingDiff: "",
+        lastCodingSummary: "",
         lastTestResults: null,
       });
     }
@@ -94,16 +94,16 @@ export class OrchestratorService {
     const state = this.getState(projectId);
 
     if (state.status.running) {
-      console.log('[orchestrator] Already running for project', projectId);
+      console.log("[orchestrator] Already running for project", projectId);
       return state.status;
     }
 
-    console.log('[orchestrator] Starting build loop for project', projectId);
+    console.log("[orchestrator] Starting build loop for project", projectId);
     state.status.running = true;
 
     // Broadcast status
     broadcastToProject(projectId, {
-      type: 'build.status',
+      type: "build.status",
       running: true,
       currentTask: null,
       queueDepth: state.status.queueDepth,
@@ -132,7 +132,7 @@ export class OrchestratorService {
     }
 
     broadcastToProject(projectId, {
-      type: 'build.status',
+      type: "build.status",
       running: false,
       currentTask: state.status.currentTask,
       queueDepth: state.status.queueDepth,
@@ -160,19 +160,19 @@ export class OrchestratorService {
       // 1. Poll bd ready for next task
       let readyTasks = await this.beads.ready(repoPath);
 
-      // Filter out Plan approval gate tasks — they are closed by user "Ship it!", not by agents
-      readyTasks = readyTasks.filter((t) => (t.title ?? '') !== 'Plan approval gate');
+      // Filter out Plan approval gate tasks — they are closed by user "Build It!", not by agents
+      readyTasks = readyTasks.filter((t) => (t.title ?? "") !== "Plan approval gate");
       // Filter out epics — they are containers, not work items; agents implement tasks/bugs
-      readyTasks = readyTasks.filter((t) => (t.issue_type ?? t.type) !== 'epic');
+      readyTasks = readyTasks.filter((t) => (t.issue_type ?? t.type) !== "epic");
 
       state.status.queueDepth = readyTasks.length;
 
       if (readyTasks.length === 0) {
-        console.log('[orchestrator] No ready tasks, polling again in 5s', { projectId });
+        console.log("[orchestrator] No ready tasks, polling again in 5s", { projectId });
         // No tasks available, poll again in 5 seconds
         state.loopTimer = setTimeout(() => this.runLoop(projectId), 5000);
         broadcastToProject(projectId, {
-          type: 'build.status',
+          type: "build.status",
           running: true,
           currentTask: null,
           queueDepth: 0,
@@ -188,62 +188,61 @@ export class OrchestratorService {
           task = t;
           break;
         }
-        console.log('[orchestrator] Skipping task (blockers not all closed)', {
+        console.log("[orchestrator] Skipping task (blockers not all closed)", {
           projectId,
           taskId: t.id,
           title: t.title,
         });
       }
       if (!task) {
-        console.log('[orchestrator] No task with all blockers closed, polling again in 5s', {
+        console.log("[orchestrator] No task with all blockers closed, polling again in 5s", {
           projectId,
         });
         state.loopTimer = setTimeout(() => this.runLoop(projectId), 5000);
         broadcastToProject(projectId, {
-          type: 'build.status',
+          type: "build.status",
           running: true,
           currentTask: null,
           queueDepth: 0,
         });
         return;
       }
-      console.log('[orchestrator] Picking task', { projectId, taskId: task.id, title: task.title });
+      console.log("[orchestrator] Picking task", { projectId, taskId: task.id, title: task.title });
 
       // 3. Assign the task
       await this.beads.update(repoPath, task.id, {
-        status: 'in_progress',
-        assignee: 'agent-1',
+        status: "in_progress",
+        assignee: "agent-1",
       });
 
       state.status.currentTask = task.id;
-      state.status.currentPhase = 'coding';
+      state.status.currentPhase = "coding";
       state.attempt = 1;
 
       broadcastToProject(projectId, {
-        type: 'task.updated',
+        type: "task.updated",
         taskId: task.id,
-        status: 'in_progress',
-        assignee: 'agent-1',
+        status: "in_progress",
+        assignee: "agent-1",
       });
 
       broadcastToProject(projectId, {
-        type: 'build.status',
+        type: "build.status",
         running: true,
         currentTask: task.id,
-        currentPhase: 'coding',
+        currentPhase: "coding",
         queueDepth: readyTasks.length - 1,
       });
 
       broadcastToProject(projectId, {
-        type: 'agent.started',
+        type: "agent.started",
         taskId: task.id,
-        phase: 'coding',
+        phase: "coding",
         branchName: `opensprint/${task.id}`,
       });
 
       // 4. Execute the coding phase
       await this.executeCodingPhase(projectId, repoPath, task, undefined);
-
     } catch (error) {
       console.error(`Orchestrator loop error for project ${projectId}:`, error);
       // Retry loop after delay
@@ -273,12 +272,7 @@ export class OrchestratorService {
       }
 
       // Assemble context via ContextBuilder (given taskId)
-      const context = await this.contextAssembler.buildContext(
-        repoPath,
-        task.id,
-        this.beads,
-        this.branchManager,
-      );
+      const context = await this.contextAssembler.buildContext(repoPath, task.id, this.beads, this.branchManager);
 
       const config: ActiveTaskConfig = {
         taskId: task.id,
@@ -289,7 +283,7 @@ export class OrchestratorService {
           return cmd || 'echo "No test command configured"';
         })(),
         attempt: state.attempt,
-        phase: 'coding',
+        phase: "coding",
         previousFailure: retryContext?.previousFailure ?? null,
         reviewFeedback: retryContext?.reviewFeedback ?? null,
       };
@@ -302,29 +296,25 @@ export class OrchestratorService {
 
       // Spawn the coding agent
       const taskDir = this.sessionManager.getActiveDir(repoPath, task.id);
-      const promptPath = path.join(taskDir, 'prompt.md');
+      const promptPath = path.join(taskDir, "prompt.md");
 
-      state.activeProcess = agentService.invokeCodingAgent(
-        promptPath,
-        settings.codingAgent,
-        {
-          cwd: repoPath,
-          onOutput: (chunk: string) => {
-            state.outputLog.push(chunk);
-            state.lastOutputTime = Date.now();
-            sendAgentOutputToProject(projectId, task.id, chunk);
-          },
-          onExit: async (code: number | null) => {
-            state.activeProcess = null;
-            if (state.inactivityTimer) {
-              clearInterval(state.inactivityTimer);
-              state.inactivityTimer = null;
-            }
-
-            await this.handleCodingComplete(projectId, repoPath, task, branchName, code);
-          },
+      state.activeProcess = agentService.invokeCodingAgent(promptPath, settings.codingAgent, {
+        cwd: repoPath,
+        onOutput: (chunk: string) => {
+          state.outputLog.push(chunk);
+          state.lastOutputTime = Date.now();
+          sendAgentOutputToProject(projectId, task.id, chunk);
         },
-      );
+        onExit: async (code: number | null) => {
+          state.activeProcess = null;
+          if (state.inactivityTimer) {
+            clearInterval(state.inactivityTimer);
+            state.inactivityTimer = null;
+          }
+
+          await this.handleCodingComplete(projectId, repoPath, task, branchName, code);
+        },
+      });
 
       // Start inactivity monitoring
       state.inactivityTimer = setInterval(async () => {
@@ -337,7 +327,6 @@ export class OrchestratorService {
           }
         }
       }, 30000); // Check every 30 seconds
-
     } catch (error) {
       console.error(`Coding phase failed for task ${task.id}:`, error);
       await this.handleTaskFailure(projectId, repoPath, task, branchName, String(error), null);
@@ -354,11 +343,11 @@ export class OrchestratorService {
     const state = this.getState(projectId);
 
     // Check for result.json
-    const result = await this.sessionManager.readResult(repoPath, task.id) as CodingAgentResult | null;
+    const result = (await this.sessionManager.readResult(repoPath, task.id)) as CodingAgentResult | null;
 
-    if (result && result.status === 'success') {
+    if (result && result.status === "success") {
       state.lastCodingDiff = await this.branchManager.getDiff(repoPath, branchName);
-      state.lastCodingSummary = result.summary ?? '';
+      state.lastCodingSummary = result.summary ?? "";
 
       const settings = await this.projectService.getSettings(projectId);
       const testCommand = getTestCommandForFramework(settings.testFramework) || undefined;
@@ -378,18 +367,18 @@ export class OrchestratorService {
       state.lastTestResults = testResults;
 
       // Move to review phase (coding-to-review transition)
-      state.status.currentPhase = 'review';
+      state.status.currentPhase = "review";
       broadcastToProject(projectId, {
-        type: 'task.updated',
+        type: "task.updated",
         taskId: task.id,
-        status: 'in_progress',
-        assignee: 'agent-1',
+        status: "in_progress",
+        assignee: "agent-1",
       });
       broadcastToProject(projectId, {
-        type: 'build.status',
+        type: "build.status",
         running: true,
         currentTask: task.id,
-        currentPhase: 'review',
+        currentPhase: "review",
         queueDepth: state.status.queueDepth,
       });
 
@@ -421,24 +410,16 @@ export class OrchestratorService {
           return cmd || 'echo "No test command configured"';
         })(),
         attempt: state.attempt,
-        phase: 'review',
+        phase: "review",
         previousFailure: null,
         reviewFeedback: null,
       };
 
       const taskDir = this.sessionManager.getActiveDir(repoPath, task.id);
-      await fs.writeFile(
-        path.join(taskDir, 'config.json'),
-        JSON.stringify(config, null, 2),
-      );
+      await fs.writeFile(path.join(taskDir, "config.json"), JSON.stringify(config, null, 2));
 
       // Generate review prompt (ContextBuilder assembles plan, PRD; deps not needed for review)
-      const context = await this.contextAssembler.buildContext(
-        repoPath,
-        task.id,
-        this.beads,
-        this.branchManager,
-      );
+      const context = await this.contextAssembler.buildContext(repoPath, task.id, this.beads, this.branchManager);
       await this.contextAssembler.assembleTaskDirectory(repoPath, task.id, config, context);
 
       state.startedAt = new Date().toISOString();
@@ -446,13 +427,13 @@ export class OrchestratorService {
       state.lastOutputTime = Date.now();
 
       broadcastToProject(projectId, {
-        type: 'agent.started',
+        type: "agent.started",
         taskId: task.id,
-        phase: 'review',
+        phase: "review",
         branchName,
       });
 
-      const promptPath = path.join(taskDir, 'prompt.md');
+      const promptPath = path.join(taskDir, "prompt.md");
 
       state.activeProcess = agentService.invokeCodingAgent(
         promptPath,
@@ -487,7 +468,6 @@ export class OrchestratorService {
           }
         }
       }, 30000);
-
     } catch (error) {
       console.error(`Review phase failed for task ${task.id}:`, error);
       await this.handleTaskFailure(projectId, repoPath, task, branchName, String(error), null);
@@ -502,17 +482,17 @@ export class OrchestratorService {
     exitCode: number | null,
   ): Promise<void> {
     const state = this.getState(projectId);
-    const result = await this.sessionManager.readResult(repoPath, task.id) as ReviewAgentResult | null;
+    const result = (await this.sessionManager.readResult(repoPath, task.id)) as ReviewAgentResult | null;
 
-    if (result && result.status === 'approved') {
+    if (result && result.status === "approved") {
       // Verify merge
       const merged = await this.branchManager.verifyMerge(repoPath, branchName);
       if (!merged) {
         // Review agent should have merged; if not, try to merge
         try {
-          await this.branchManager.checkout(repoPath, 'main');
-          const { exec } = await import('child_process');
-          const { promisify } = await import('util');
+          await this.branchManager.checkout(repoPath, "main");
+          const { exec } = await import("child_process");
+          const { promisify } = await import("util");
           const execAsync = promisify(exec);
           await execAsync(`git merge ${branchName}`, { cwd: repoPath });
         } catch {
@@ -521,17 +501,17 @@ export class OrchestratorService {
       }
 
       // Close the task in beads
-      await this.beads.close(repoPath, task.id, result.summary || 'Implemented and reviewed');
+      await this.beads.close(repoPath, task.id, result.summary || "Implemented and reviewed");
 
       // Archive session (include coding diff, summary, and test results for Build tab display and dependency context)
       const session = await this.sessionManager.createSession(repoPath, {
         taskId: task.id,
         attempt: state.attempt,
         agentType: (await this.projectService.getSettings(projectId)).codingAgent.type,
-        agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || '',
+        agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || "",
         gitBranch: branchName,
-        status: 'approved',
-        outputLog: state.outputLog.join(''),
+        status: "approved",
+        outputLog: state.outputLog.join(""),
         gitDiff: state.lastCodingDiff,
         summary: state.lastCodingSummary || undefined,
         testResults: state.lastTestResults ?? undefined,
@@ -547,16 +527,16 @@ export class OrchestratorService {
       state.status.currentPhase = null;
 
       broadcastToProject(projectId, {
-        type: 'task.updated',
+        type: "task.updated",
         taskId: task.id,
-        status: 'closed',
+        status: "closed",
         assignee: null,
       });
 
       broadcastToProject(projectId, {
-        type: 'agent.completed',
+        type: "agent.completed",
         taskId: task.id,
-        status: 'approved',
+        status: "approved",
         testResults: state.lastTestResults,
       });
 
@@ -569,8 +549,7 @@ export class OrchestratorService {
       if (state.status.running) {
         state.loopTimer = setTimeout(() => this.runLoop(projectId), 1000);
       }
-
-    } else if (result && result.status === 'rejected') {
+    } else if (result && result.status === "rejected") {
       // Review rejected — retry coding with feedback
       state.attempt += 1;
       const retryLimit = DEFAULT_RETRY_LIMIT;
@@ -583,19 +562,16 @@ export class OrchestratorService {
           taskId: task.id,
           attempt: state.attempt - 1,
           agentType: (await this.projectService.getSettings(projectId)).codingAgent.type,
-          agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || '',
+          agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || "",
           gitBranch: branchName,
-          status: 'rejected',
-          outputLog: state.outputLog.join(''),
+          status: "rejected",
+          outputLog: state.outputLog.join(""),
           failureReason: result.summary,
           startedAt: state.startedAt,
         });
         await this.sessionManager.archiveSession(repoPath, task.id, state.attempt - 1, session);
 
-        const reviewFeedback = [
-          result.summary,
-          ...(result.issues ?? []),
-        ].filter(Boolean).join('\n');
+        const reviewFeedback = [result.summary, ...(result.issues ?? [])].filter(Boolean).join("\n");
 
         await this.executeCodingPhase(projectId, repoPath, task, {
           reviewFeedback,
@@ -603,8 +579,8 @@ export class OrchestratorService {
         });
       } else {
         // Retry limit reached — escalate per HIL config (PRD §9.2)
-        const reason = `Review rejected ${state.attempt - 1} times. Issues: ${result.issues?.join('; ') || result.summary}`;
-        const reviewFeedback = [result.summary, ...(result.issues ?? [])].filter(Boolean).join('\n');
+        const reason = `Review rejected ${state.attempt - 1} times. Issues: ${result.issues?.join("; ") || result.summary}`;
+        const reviewFeedback = [result.summary, ...(result.issues ?? [])].filter(Boolean).join("\n");
         const shouldRetry = await this.escalateRetryLimit(projectId, task.id, reason);
 
         if (shouldRetry) {
@@ -650,10 +626,10 @@ export class OrchestratorService {
       taskId: task.id,
       attempt: state.attempt,
       agentType: (await this.projectService.getSettings(projectId)).codingAgent.type,
-      agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || '',
+      agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || "",
       gitBranch: branchName,
-      status: 'failed',
-      outputLog: state.outputLog.join(''),
+      status: "failed",
+      outputLog: state.outputLog.join(""),
       failureReason: reason,
       testResults: testResults ?? undefined,
       startedAt: state.startedAt,
@@ -682,8 +658,8 @@ export class OrchestratorService {
         // Return task to Ready queue
         try {
           await this.beads.update(repoPath, task.id, {
-            status: 'open',
-            assignee: '',
+            status: "open",
+            assignee: "",
           });
         } catch {
           // Task might already be in the right state
@@ -694,16 +670,16 @@ export class OrchestratorService {
         state.status.currentPhase = null;
 
         broadcastToProject(projectId, {
-          type: 'task.updated',
+          type: "task.updated",
           taskId: task.id,
-          status: 'open',
+          status: "open",
           assignee: null,
         });
 
         broadcastToProject(projectId, {
-          type: 'agent.completed',
+          type: "agent.completed",
           taskId: task.id,
-          status: 'failed',
+          status: "failed",
           testResults: null,
         });
 
@@ -719,20 +695,16 @@ export class OrchestratorService {
    * For automated/notify_and_proceed: logs/notifies and returns false.
    * For requires_approval: waits for user; true = retry, false = return to queue.
    */
-  private async escalateRetryLimit(
-    projectId: string,
-    taskId: string,
-    reason: string,
-  ): Promise<boolean> {
+  private async escalateRetryLimit(projectId: string, taskId: string, reason: string): Promise<boolean> {
     const description = `Task ${taskId} reached retry limit: ${reason}`;
     const options = [
-      { id: 'retry', label: 'Retry', description: 'Give the agent another attempt' },
-      { id: 'queue', label: 'Return to queue', description: 'Leave task in Ready for manual intervention' },
+      { id: "retry", label: "Retry", description: "Give the agent another attempt" },
+      { id: "queue", label: "Return to queue", description: "Leave task in Ready for manual intervention" },
     ];
 
     const { approved } = await hilService.evaluateDecision(
       projectId,
-      'testFailuresAndRetries',
+      "testFailuresAndRetries",
       description,
       options,
       false, // default: return to queue (don't retry) per PRD §9.1

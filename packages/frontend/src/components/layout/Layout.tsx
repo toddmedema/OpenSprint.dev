@@ -11,13 +11,13 @@ interface LayoutProps {
 
 export function Layout({ children, project, currentPhase, onPhaseChange }: LayoutProps) {
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-white">
       <Navbar
         project={project}
         currentPhase={currentPhase}
         onPhaseChange={onPhaseChange}
       />
-      <main className="flex-1 overflow-hidden">{children}</main>
+      <main className="flex-1 overflow-hidden bg-white">{children}</main>
     </div>
   );
 }

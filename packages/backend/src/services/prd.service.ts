@@ -95,7 +95,7 @@ export class PrdService {
     projectId: string,
     sectionKey: string,
     content: string,
-    source: PrdChangeLogEntry["source"] = "design",
+    source: PrdChangeLogEntry["source"] = "dream",
   ): Promise<{ section: PrdSection; previousVersion: number; newVersion: number }> {
     this.validateSectionKey(sectionKey);
     const prd = await this.loadPrd(projectId);
@@ -133,7 +133,7 @@ export class PrdService {
   async updateSections(
     projectId: string,
     updates: Array<{ section: PrdSectionKey; content: string }>,
-    source: PrdChangeLogEntry["source"] = "design",
+    source: PrdChangeLogEntry["source"] = "dream",
   ): Promise<Array<{ section: string; previousVersion: number; newVersion: number }>> {
     const prd = await this.loadPrd(projectId);
     const changes: Array<{ section: string; previousVersion: number; newVersion: number }> = [];

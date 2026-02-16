@@ -1,4 +1,7 @@
 import { Router, Request } from 'express';
+import multer from 'multer';
+import mammoth from 'mammoth';
+import { PDFParse } from 'pdf-parse';
 import { PrdService } from '../services/prd.service.js';
 import { ChatService } from '../services/chat.service.js';
 import { broadcastToProject } from '../websocket/index.js';
@@ -6,6 +9,7 @@ import type { ApiResponse, Prd, PrdSection, PrdChangeLogEntry } from '@opensprin
 
 const prdService = new PrdService();
 const chatService = new ChatService();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 export const prdRouter = Router({ mergeParams: true });
 
@@ -61,8 +65,8 @@ prdRouter.put('/:section', async (req: Request<SectionParams>, res, next) => {
     const result = await prdService.updateSection(
       req.params.projectId,
       req.params.section,
-      String(content),
-      (source as 'design' | 'plan' | 'build' | 'validate') || 'design',
+      content,
+      (source as 'dream' | 'plan' | 'build' | 'verify') || 'dream',
     );
 
     // Sync direct edit to conversation context (PRD §7.1.5)
@@ -86,6 +90,50 @@ prdRouter.put('/:section', async (req: Request<SectionParams>, res, next) => {
         newVersion: result.newVersion,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /projects/:projectId/prd/upload — Upload a PRD document (.md, .docx, .pdf)
+prdRouter.post('/upload', upload.single('file'), async (req: Request<ProjectParams>, res, next) => {
+  try {
+    const file = (req as unknown as { file?: Express.Multer.File }).file;
+    if (!file) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'No file provided' } });
+      return;
+    }
+
+    const ext = file.originalname.split('.').pop()?.toLowerCase();
+    let extractedText: string;
+
+    switch (ext) {
+      case 'md': {
+        extractedText = file.buffer.toString('utf-8');
+        break;
+      }
+      case 'docx': {
+        const result = await mammoth.extractRawText({ buffer: file.buffer });
+        extractedText = result.value;
+        break;
+      }
+      case 'pdf': {
+        const parser = new PDFParse({ data: file.buffer });
+        const result = await parser.getText();
+        extractedText = result.text;
+        break;
+      }
+      default:
+        res.status(400).json({
+          error: { code: 'BAD_REQUEST', message: 'Unsupported file type. Use .md, .docx, or .pdf' },
+        });
+        return;
+    }
+
+    const body: ApiResponse<{ text: string; filename: string }> = {
+      data: { text: extractedText, filename: file.originalname },
+    };
+    res.json(body);
   } catch (err) {
     next(err);
   }

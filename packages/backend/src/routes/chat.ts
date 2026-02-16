@@ -1,6 +1,6 @@
-import { Router, Request } from 'express';
-import { ChatService } from '../services/chat.service.js';
-import type { ApiResponse, ChatRequest, ChatResponse, Conversation } from '@opensprint/shared';
+import { Router, Request } from "express";
+import { ChatService } from "../services/chat.service.js";
+import type { ApiResponse, ChatRequest, ChatResponse, Conversation } from "@opensprint/shared";
 
 const chatService = new ChatService();
 
@@ -9,12 +9,16 @@ export const chatRouter = Router({ mergeParams: true });
 type ProjectParams = { projectId: string };
 
 // POST /projects/:projectId/chat — Send a message to the planning agent
-chatRouter.post('/', async (req: Request<ProjectParams>, res, next) => {
+chatRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
   try {
     const body = req.body as ChatRequest;
-    console.log('[chat] POST received', { projectId: req.params.projectId, context: body.context ?? 'design', messageLen: body.message?.length ?? 0 });
+    console.log("[chat] POST received", {
+      projectId: req.params.projectId,
+      context: body.context ?? "dream",
+      messageLen: body.message?.length ?? 0,
+    });
     const response = await chatService.sendMessage(req.params.projectId, body);
-    console.log('[chat] POST completed', { projectId: req.params.projectId });
+    console.log("[chat] POST completed", { projectId: req.params.projectId });
     const result: ApiResponse<ChatResponse> = { data: response };
     res.json(result);
   } catch (err) {
@@ -23,9 +27,9 @@ chatRouter.post('/', async (req: Request<ProjectParams>, res, next) => {
 });
 
 // GET /projects/:projectId/chat/history — Get conversation history
-chatRouter.get('/history', async (req: Request<ProjectParams>, res, next) => {
+chatRouter.get("/history", async (req: Request<ProjectParams>, res, next) => {
   try {
-    const context = (req.query.context as string) || 'design';
+    const context = (req.query.context as string) || "dream";
     const conversation = await chatService.getHistory(req.params.projectId, context);
     const result: ApiResponse<Conversation> = { data: conversation };
     res.json(result);

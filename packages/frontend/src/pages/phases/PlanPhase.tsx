@@ -22,7 +22,6 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
   const [dependencyGraph, setDependencyGraph] = useState<PlanDependencyGraph | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
-  const [decomposing, setDecomposing] = useState(false);
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
@@ -42,22 +41,10 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
     return planList;
   }, [projectId]);
 
-  const handleDecompose = async () => {
-    setError(null);
-    setDecomposing(true);
-    try {
-      await api.plans.decompose(projectId);
-      await refreshPlans();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "AI decomposition failed";
-      setError(msg);
-    } finally {
-      setDecomposing(false);
-    }
-  };
-
   useEffect(() => {
-    refreshPlans().catch(console.error).finally(() => setLoading(false));
+    refreshPlans()
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, [refreshPlans]);
 
   const handleShip = async (planId: string) => {
@@ -66,7 +53,7 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
       await api.plans.ship(projectId, planId);
       await refreshPlans();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to ship plan";
+      const msg = err instanceof Error ? err.message : "Failed to start build";
       setError(msg);
     }
   };
@@ -77,7 +64,7 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
       await api.plans.reship(projectId, planId);
       await refreshPlans();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to re-ship plan";
+      const msg = err instanceof Error ? err.message : "Failed to rebuild plan";
       setError(msg);
     }
   };
@@ -150,7 +137,7 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
 
   const statusColors: Record<string, string> = {
     planning: "bg-yellow-50 text-yellow-700",
-    shipped: "bg-blue-50 text-blue-700",
+    building: "bg-blue-50 text-blue-700",
     complete: "bg-green-50 text-green-700",
   };
 
@@ -169,32 +156,15 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
         {/* Dependency Graph */}
         <div className="card p-6 mb-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Dependency Graph</h3>
-          <DependencyGraph
-            graph={dependencyGraph}
-            onPlanClick={setSelectedPlan}
-          />
+          <DependencyGraph graph={dependencyGraph} onPlanClick={setSelectedPlan} />
         </div>
 
         {/* Plan Cards */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Feature Plans</h2>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleDecompose}
-              disabled={decomposing}
-              className="btn-primary text-sm"
-            >
-              {decomposing ? "Decomposing…" : "Decompose from PRD"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowAddPlanModal(true)}
-              className="btn-primary text-sm"
-            >
-              Add Plan
-            </button>
-          </div>
+          <button type="button" onClick={() => setShowAddPlanModal(true)} className="btn-primary text-sm">
+            Add Plan
+          </button>
         </div>
 
         {loading ? (
@@ -202,25 +172,12 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
         ) : plans.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-gray-500 mb-4">
-              No plans yet. Use AI to decompose the PRD into feature plans and tasks, or add a plan manually.
+              No plans yet. Use &ldquo;Plan it&rdquo; from the Dream phase to decompose the PRD into feature plans and
+              tasks, or add a plan manually.
             </p>
-            <div className="flex gap-2 justify-center">
-              <button
-                type="button"
-                onClick={handleDecompose}
-                disabled={decomposing}
-                className="btn-primary"
-              >
-                {decomposing ? "Decomposing…" : "Decompose from PRD"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAddPlanModal(true)}
-                className="btn-primary"
-              >
-                Add Plan
-              </button>
-            </div>
+            <button type="button" onClick={() => setShowAddPlanModal(true)} className="btn-primary">
+              Add Plan
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -245,9 +202,7 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
                   <span>{plan.taskCount} tasks</span>
                   <span>{plan.completedTaskCount} completed</span>
                   <span className="capitalize">{plan.metadata.complexity} complexity</span>
-                  {plan.dependencyCount > 0 && (
-                    <span>{plan.dependencyCount} deps</span>
-                  )}
+                  {plan.dependencyCount > 0 && <span>{plan.dependencyCount} deps</span>}
                 </div>
 
                 {plan.status === "planning" && (
@@ -258,7 +213,7 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
                     }}
                     className="btn-primary text-xs w-full"
                   >
-                    Ship it!
+                    Build It!
                   </button>
                 )}
                 {plan.status === "complete" && (
@@ -269,7 +224,7 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
                     }}
                     className="btn-secondary text-xs w-full"
                   >
-                    Re-ship
+                    Rebuild
                   </button>
                 )}
               </div>
@@ -279,11 +234,7 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
       </div>
 
       {showAddPlanModal && (
-        <AddPlanModal
-          projectId={projectId}
-          onClose={() => setShowAddPlanModal(false)}
-          onCreated={handlePlanCreated}
-        />
+        <AddPlanModal projectId={projectId} onClose={() => setShowAddPlanModal(false)} onCreated={handlePlanCreated} />
       )}
 
       {/* Sidebar: Plan Detail + Chat (PRD §7.2.4) */}
@@ -296,29 +247,52 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto flex flex-col min-h-0">
+          {/* Scrollable content area: plan + mockups + chat messages */}
+          <div className="flex-1 overflow-y-auto min-h-0">
             {/* Plan markdown */}
-            <div className="p-4 border-b border-gray-200 shrink-0">
+            <div className="p-4 border-b border-gray-200">
               <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Plan</h4>
-              <div className="prose prose-sm max-w-none bg-white p-4 rounded-lg border text-xs max-h-48 overflow-y-auto">
+              <div className="prose prose-sm max-w-none bg-white p-4 rounded-lg border text-xs">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedPlan.content || "_No content yet_"}</ReactMarkdown>
               </div>
             </div>
 
-            {/* Chat */}
-            <div className="flex-1 flex flex-col min-h-0 p-4">
+            {/* Mockups */}
+            {selectedPlan.metadata.mockups && selectedPlan.metadata.mockups.length > 0 && (
+              <div className="p-4 border-b border-gray-200">
+                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Mockups</h4>
+                <div className="space-y-3">
+                  {selectedPlan.metadata.mockups.map((mockup, i) => (
+                    <div key={i} className="bg-white rounded-lg border overflow-hidden">
+                      <div className="px-3 py-1.5 bg-gray-50 border-b">
+                        <span className="text-xs font-medium text-gray-700">{mockup.title}</span>
+                      </div>
+                      <pre className="p-3 text-xs leading-tight text-gray-800 overflow-x-auto font-mono whitespace-pre">
+                        {mockup.content}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Chat messages */}
+            <div className="p-4">
               <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Refine with AI</h4>
-              <div className="flex-1 overflow-y-auto space-y-3 mb-4 min-h-0">
+              <div className="space-y-3">
                 {chatMessages.length === 0 && (
                   <p className="text-sm text-gray-500">
-                    Chat with the planning agent to refine this plan. Ask questions, suggest changes, or request updates.
+                    Chat with the planning agent to refine this plan. Ask questions, suggest changes, or request
+                    updates.
                   </p>
                 )}
                 {chatMessages.map((msg, i) => (
                   <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                        msg.role === "user" ? "bg-brand-600 text-white" : "bg-white border border-gray-200 text-gray-900"
+                        msg.role === "user"
+                          ? "bg-brand-600 text-white"
+                          : "bg-white border border-gray-200 text-gray-900"
                       }`}
                     >
                       <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -334,34 +308,41 @@ export function PlanPhase({ projectId }: PlanPhaseProps) {
                 )}
                 <div ref={messagesEndRef} />
               </div>
+            </div>
+          </div>
 
-              {chatError && (
-                <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 flex justify-between items-center">
-                  <span>{chatError}</span>
-                  <button type="button" onClick={() => setChatError(null)} className="text-red-500 hover:text-red-700 underline">
-                    Dismiss
-                  </button>
-                </div>
-              )}
-
-              <div className="flex gap-2 shrink-0">
-                <input
-                  type="text"
-                  className="input flex-1 text-sm"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendChat()}
-                  placeholder="Refine this plan..."
-                  disabled={chatSending}
-                />
+          {/* Pinned chat input at bottom */}
+          <div className="shrink-0 border-t border-gray-200 p-4 bg-gray-50">
+            {chatError && (
+              <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 flex justify-between items-center">
+                <span>{chatError}</span>
                 <button
-                  onClick={handleSendChat}
-                  disabled={chatSending || !chatInput.trim()}
-                  className="btn-primary text-sm py-2 px-3 disabled:opacity-50"
+                  type="button"
+                  onClick={() => setChatError(null)}
+                  className="text-red-500 hover:text-red-700 underline"
                 >
-                  Send
+                  Dismiss
                 </button>
               </div>
+            )}
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="input flex-1 text-sm"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendChat()}
+                placeholder="Refine this plan..."
+                disabled={chatSending}
+              />
+              <button
+                onClick={handleSendChat}
+                disabled={chatSending || !chatInput.trim()}
+                className="btn-primary text-sm py-2 px-3 disabled:opacity-50"
+              >
+                Send
+              </button>
             </div>
           </div>
         </div>

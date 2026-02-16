@@ -71,7 +71,7 @@ describe("PrdService", () => {
       "test-project",
       "executive_summary",
       "Updated summary content",
-      "design",
+      "dream",
     );
 
     expect(result.previousVersion).toBe(1);
@@ -84,7 +84,7 @@ describe("PrdService", () => {
     expect(prd.sections.executive_summary.version).toBe(2);
     expect(prd.changeLog).toHaveLength(1);
     expect(prd.changeLog[0].section).toBe("executive_summary");
-    expect(prd.changeLog[0].source).toBe("design");
+    expect(prd.changeLog[0].source).toBe("dream");
     expect(prd.changeLog[0].version).toBe(2);
     expect(prd.changeLog[0].timestamp).toBeDefined();
     expect(prd.changeLog[0].diff).toMatch(/lines|chars|Initial content|Content removed|No changes/);
@@ -115,12 +115,7 @@ describe("PrdService", () => {
     delete (prdWithoutChangeLog as { changeLog?: unknown }).changeLog;
     await fs.writeFile(prdPath, JSON.stringify(prdWithoutChangeLog, null, 2));
 
-    const result = await prdService.updateSection(
-      "test-project",
-      "executive_summary",
-      "Migrated content",
-      "design",
-    );
+    const result = await prdService.updateSection("test-project", "executive_summary", "Migrated content", "dream");
     expect(result.newVersion).toBe(2);
 
     const prd = await prdService.getPrd("test-project");
@@ -129,12 +124,12 @@ describe("PrdService", () => {
   });
 
   it("should get change history", async () => {
-    await prdService.updateSection("test-project", "executive_summary", "v2", "design");
+    await prdService.updateSection("test-project", "executive_summary", "v2", "dream");
     await prdService.updateSection("test-project", "executive_summary", "v3", "plan");
 
     const history = await prdService.getHistory("test-project");
     expect(history).toHaveLength(2);
-    expect(history[0].source).toBe("design");
+    expect(history[0].source).toBe("dream");
     expect(history[1].source).toBe("plan");
   });
 });

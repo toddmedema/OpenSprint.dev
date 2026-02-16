@@ -58,21 +58,17 @@ describe("Chat REST API", () => {
   });
 
   it("GET /projects/:id/chat/history should return empty conversation when none exists", async () => {
-    const res = await request(app).get(
-      `${API_PREFIX}/projects/${projectId}/chat/history`
-    );
+    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/chat/history`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
     expect(res.body.data.id).toBeDefined();
-    expect(res.body.data.context).toBe("design");
+    expect(res.body.data.context).toBe("dream");
     expect(res.body.data.messages).toEqual([]);
   });
 
   it("GET /projects/:id/chat/history should accept context query param", async () => {
-    const res = await request(app).get(
-      `${API_PREFIX}/projects/${projectId}/chat/history?context=plan:auth-plan`
-    );
+    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/chat/history?context=plan:auth-plan`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.context).toBe("plan:auth-plan");
@@ -105,7 +101,7 @@ Let me know if you'd like to refine this further.`;
 
     const res = await request(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
-      .send({ message: "Help me write an executive summary", context: "design" });
+      .send({ message: "Help me write an executive summary", context: "dream" });
 
     expect(res.status).toBe(200);
     expect(res.body.data.message).not.toContain("[PRD_UPDATE:");
@@ -115,12 +111,10 @@ Let me know if you'd like to refine this further.`;
     expect(res.body.data.prdChanges).toHaveLength(1);
     expect(res.body.data.prdChanges[0].section).toBe("executive_summary");
 
-    const prdRes = await request(app).get(
-      `${API_PREFIX}/projects/${projectId}/prd/executive_summary`
-    );
+    const prdRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`);
     expect(prdRes.status).toBe(200);
     expect(prdRes.body.data.content).toContain(
-      "OpenSprint is a web application that guides users through the full software development lifecycle using AI agents"
+      "OpenSprint is a web application that guides users through the full software development lifecycle using AI agents",
     );
   });
 
@@ -145,7 +139,7 @@ Hope that helps!`;
 
     const res = await request(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
-      .send({ message: "Update both sections", context: "design" });
+      .send({ message: "Update both sections", context: "dream" });
 
     expect(res.status).toBe(200);
     expect(res.body.data.prdChanges).toHaveLength(2);
@@ -153,14 +147,10 @@ Hope that helps!`;
     expect(sections).toContain("executive_summary");
     expect(sections).toContain("problem_statement");
 
-    const execRes = await request(app).get(
-      `${API_PREFIX}/projects/${projectId}/prd/executive_summary`
-    );
+    const execRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`);
     expect(execRes.body.data.content).toContain("Product A helps users do X");
 
-    const problemRes = await request(app).get(
-      `${API_PREFIX}/projects/${projectId}/prd/problem_statement`
-    );
+    const problemRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/problem_statement`);
     expect(problemRes.body.data.content).toContain("Users currently face Y");
   });
 
@@ -171,7 +161,7 @@ Hope that helps!`;
 
     const res = await request(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
-      .send({ message: "What should I include?", context: "design" });
+      .send({ message: "What should I include?", context: "dream" });
 
     expect(res.status).toBe(200);
     expect(res.body.data.prdChanges).toBeUndefined();
@@ -185,9 +175,7 @@ Hope that helps!`;
 
     expect(postRes.status).toBe(200);
 
-    const getRes = await request(app).get(
-      `${API_PREFIX}/projects/${projectId}/chat/history`
-    );
+    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/chat/history`);
 
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.messages).toHaveLength(2);
@@ -198,27 +186,21 @@ Hope that helps!`;
   });
 
   it("POST /projects/:id/chat should return 400 when message is empty", async () => {
-    const res = await request(app)
-      .post(`${API_PREFIX}/projects/${projectId}/chat`)
-      .send({ message: "" });
+    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/chat`).send({ message: "" });
 
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("INVALID_INPUT");
   });
 
   it("POST /projects/:id/chat should return 400 when message is missing", async () => {
-    const res = await request(app)
-      .post(`${API_PREFIX}/projects/${projectId}/chat`)
-      .send({});
+    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/chat`).send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("INVALID_INPUT");
   });
 
   it("conversation should be stored in .opensprint/conversations/", async () => {
-    await request(app)
-      .post(`${API_PREFIX}/projects/${projectId}/chat`)
-      .send({ message: "Test message" });
+    await request(app).post(`${API_PREFIX}/projects/${projectId}/chat`).send({ message: "Test message" });
 
     const convDir = path.join(repoPath, OPENSPRINT_PATHS.conversations);
     const files = await fs.readdir(convDir);
@@ -229,7 +211,7 @@ Hope that helps!`;
     const content = await fs.readFile(path.join(convDir, jsonFile!), "utf-8");
     const conv = JSON.parse(content);
     expect(conv.id).toBeDefined();
-    expect(conv.context).toBe("design");
+    expect(conv.context).toBe("dream");
     expect(conv.messages).toHaveLength(2);
   });
 });

@@ -1,6 +1,6 @@
-import { Router, Request } from 'express';
-import { PlanService } from '../services/plan.service.js';
-import type { ApiResponse, Plan, PlanDependencyGraph } from '@opensprint/shared';
+import { Router, Request } from "express";
+import { PlanService } from "../services/plan.service.js";
+import type { ApiResponse, Plan, PlanDependencyGraph } from "@opensprint/shared";
 
 const planService = new PlanService();
 
@@ -10,7 +10,7 @@ type ProjectParams = { projectId: string };
 type PlanParams = { projectId: string; planId: string };
 
 // POST /projects/:projectId/plans/decompose — AI decompose PRD into plans + tasks (must be before :planId)
-plansRouter.post('/decompose', async (req: Request<ProjectParams>, res, next) => {
+plansRouter.post("/decompose", async (req: Request<ProjectParams>, res, next) => {
   try {
     const result = await planService.decomposeFromPrd(req.params.projectId);
     const body: ApiResponse<{ created: number; plans: Plan[] }> = { data: result };
@@ -21,7 +21,7 @@ plansRouter.post('/decompose', async (req: Request<ProjectParams>, res, next) =>
 });
 
 // GET /projects/:projectId/plans — List all Plans
-plansRouter.get('/', async (req: Request<ProjectParams>, res, next) => {
+plansRouter.get("/", async (req: Request<ProjectParams>, res, next) => {
   try {
     const plans = await planService.listPlans(req.params.projectId);
     const body: ApiResponse<Plan[]> = { data: plans };
@@ -32,7 +32,7 @@ plansRouter.get('/', async (req: Request<ProjectParams>, res, next) => {
 });
 
 // POST /projects/:projectId/plans — Create a new Plan
-plansRouter.post('/', async (req: Request<ProjectParams>, res, next) => {
+plansRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
   try {
     const plan = await planService.createPlan(req.params.projectId, req.body);
     const body: ApiResponse<Plan> = { data: plan };
@@ -43,7 +43,7 @@ plansRouter.post('/', async (req: Request<ProjectParams>, res, next) => {
 });
 
 // GET /projects/:projectId/plans/dependencies — Get dependency graph
-plansRouter.get('/dependencies', async (req: Request<ProjectParams>, res, next) => {
+plansRouter.get("/dependencies", async (req: Request<ProjectParams>, res, next) => {
   try {
     const graph = await planService.getDependencyGraph(req.params.projectId);
     const body: ApiResponse<PlanDependencyGraph> = { data: graph };
@@ -54,7 +54,7 @@ plansRouter.get('/dependencies', async (req: Request<ProjectParams>, res, next) 
 });
 
 // GET /projects/:projectId/plans/:planId — Get Plan details
-plansRouter.get('/:planId', async (req: Request<PlanParams>, res, next) => {
+plansRouter.get("/:planId", async (req: Request<PlanParams>, res, next) => {
   try {
     const plan = await planService.getPlan(req.params.projectId, req.params.planId);
     const body: ApiResponse<Plan> = { data: plan };
@@ -65,7 +65,7 @@ plansRouter.get('/:planId', async (req: Request<PlanParams>, res, next) => {
 });
 
 // PUT /projects/:projectId/plans/:planId — Update Plan markdown
-plansRouter.put('/:planId', async (req: Request<PlanParams>, res, next) => {
+plansRouter.put("/:planId", async (req: Request<PlanParams>, res, next) => {
   try {
     const plan = await planService.updatePlan(req.params.projectId, req.params.planId, req.body);
     const body: ApiResponse<Plan> = { data: plan };
@@ -75,8 +75,8 @@ plansRouter.put('/:planId', async (req: Request<PlanParams>, res, next) => {
   }
 });
 
-// POST /projects/:projectId/plans/:planId/ship — Ship the Plan
-plansRouter.post('/:planId/ship', async (req: Request<PlanParams>, res, next) => {
+// POST /projects/:projectId/plans/:planId/ship — Build It! (approve Plan for build)
+plansRouter.post("/:planId/ship", async (req: Request<PlanParams>, res, next) => {
   try {
     const plan = await planService.shipPlan(req.params.projectId, req.params.planId);
     const body: ApiResponse<Plan> = { data: plan };
@@ -86,8 +86,8 @@ plansRouter.post('/:planId/ship', async (req: Request<PlanParams>, res, next) =>
   }
 });
 
-// POST /projects/:projectId/plans/:planId/reship — Re-ship an updated Plan
-plansRouter.post('/:planId/reship', async (req: Request<PlanParams>, res, next) => {
+// POST /projects/:projectId/plans/:planId/reship — Rebuild an updated Plan
+plansRouter.post("/:planId/reship", async (req: Request<PlanParams>, res, next) => {
   try {
     const plan = await planService.reshipPlan(req.params.projectId, req.params.planId);
     const body: ApiResponse<Plan> = { data: plan };

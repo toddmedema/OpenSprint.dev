@@ -125,8 +125,10 @@ export function ProjectSetup() {
         deployment: {
           mode: deploymentMode,
           expoConfig: deploymentMode === "expo" ? { channel: "preview" } : undefined,
-          customCommand: deploymentMode === "custom" && customDeployCommand.trim() ? customDeployCommand.trim() : undefined,
-          webhookUrl: deploymentMode === "custom" && customDeployWebhook.trim() ? customDeployWebhook.trim() : undefined,
+          customCommand:
+            deploymentMode === "custom" && customDeployCommand.trim() ? customDeployCommand.trim() : undefined,
+          webhookUrl:
+            deploymentMode === "custom" && customDeployWebhook.trim() ? customDeployWebhook.trim() : undefined,
         },
         hilConfig,
         testFramework: testFramework === "none" ? null : testFramework,
@@ -301,7 +303,7 @@ export function ProjectSetup() {
               )}
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Planning Agent</h3>
-                <p className="text-xs text-gray-500 mb-3">Used for Design conversations and Plan decomposition</p>
+                <p className="text-xs text-gray-500 mb-3">Used for Dream conversations and Plan decomposition</p>
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -441,7 +443,9 @@ export function ProjectSetup() {
                       value={customDeployCommand}
                       onChange={(e) => setCustomDeployCommand(e.target.value)}
                     />
-                    <p className="mt-1 text-xs text-gray-500">Shell command run from project root after each task completion</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Shell command run from project root after each task completion
+                    </p>
                   </div>
                   <div className="text-sm text-gray-500 text-center">— or —</div>
                   <div>
@@ -453,7 +457,9 @@ export function ProjectSetup() {
                       value={customDeployWebhook}
                       onChange={(e) => setCustomDeployWebhook(e.target.value)}
                     />
-                    <p className="mt-1 text-xs text-gray-500">HTTP POST sent after each task completion (GitHub Actions, Vercel, etc.)</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      HTTP POST sent after each task completion (GitHub Actions, Vercel, etc.)
+                    </p>
                   </div>
                 </div>
               )}
@@ -467,12 +473,13 @@ export function ProjectSetup() {
                 <p className="text-xs text-gray-500 mb-3">
                   OpenSprint uses this to run tests during the Build phase. We detect from your project when possible.
                 </p>
-                {detectingFramework && (
-                  <p className="text-sm text-gray-500 mb-2">Detecting from project...</p>
-                )}
+                {detectingFramework && <p className="text-sm text-gray-500 mb-2">Detecting from project...</p>}
                 {!detectingFramework && detectedFramework && (
                   <p className="text-sm text-green-600 mb-2">
-                    Detected: <strong>{TEST_FRAMEWORKS.find((f) => f.id === detectedFramework)?.label ?? detectedFramework}</strong>
+                    Detected:{" "}
+                    <strong>
+                      {TEST_FRAMEWORKS.find((f) => f.id === detectedFramework)?.label ?? detectedFramework}
+                    </strong>
                   </p>
                 )}
                 <select
@@ -583,7 +590,7 @@ export function ProjectSetup() {
                   <dd className="font-medium">
                     {testFramework === "none"
                       ? "None"
-                      : TEST_FRAMEWORKS.find((f) => f.id === testFramework)?.label ?? testFramework}
+                      : (TEST_FRAMEWORKS.find((f) => f.id === testFramework)?.label ?? testFramework)}
                   </dd>
                 </div>
               </dl>

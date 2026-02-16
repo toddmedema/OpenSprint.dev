@@ -43,6 +43,17 @@ Endpoints and contracts for this feature.
 
 User interface and experience requirements.
 
+## Mockups
+
+\`\`\`
++------------------+
+| Header           |
++------------------+
+| Content area     |
+|                  |
++------------------+
+\`\`\`
+
 ## Edge Cases and Error Handling
 
 How to handle errors and edge cases.
