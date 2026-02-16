@@ -380,9 +380,7 @@ export class OrchestratorService {
     }
     const { recovered } = orphanResult;
     if (recovered.length > 0) {
-      console.warn(
-        `[orchestrator] Recovered ${recovered.length} orphaned task(s) on startup: ${recovered.join(", ")}`,
-      );
+      console.warn(`[orchestrator] Recovered ${recovered.length} orphaned task(s) on startup: ${recovered.join(", ")}`);
     }
 
     // Crash recovery: check for persisted state from a previous run
@@ -615,7 +613,7 @@ export class OrchestratorService {
 
       state.activeProcess = agentService.invokeCodingAgent(promptPath, settings.codingAgent, {
         cwd: wtPath,
-        agentRole: 'coder',
+        agentRole: "coder",
         onOutput: (chunk: string) => {
           state.outputLog.push(chunk);
           state.lastOutputTime = Date.now();
@@ -641,7 +639,8 @@ export class OrchestratorService {
         if (elapsed > AGENT_INACTIVITY_TIMEOUT_MS) {
           console.warn(`Agent timeout for task ${task.id}: ${elapsed}ms of inactivity`);
           if (state.activeProcess) {
-            this.branchManager.commitWip(wtPath, task.id)
+            this.branchManager
+              .commitWip(wtPath, task.id)
               .then(() => state.activeProcess?.kill())
               .catch((err) => {
                 console.error(`[orchestrator] Inactivity handler failed for ${task.id}:`, err);
@@ -776,27 +775,23 @@ export class OrchestratorService {
 
       const promptPath = path.join(taskDir, "prompt.md");
 
-      state.activeProcess = agentService.invokeReviewAgent(
-        promptPath,
-        settings.codingAgent,
-        {
-          cwd: wtPath,
-          onOutput: (chunk: string) => {
-            state.outputLog.push(chunk);
-            state.lastOutputTime = Date.now();
-            sendAgentOutputToProject(projectId, task.id, chunk);
-          },
-          onExit: async (code: number | null) => {
-            state.activeProcess = null;
-            if (state.inactivityTimer) {
-              clearInterval(state.inactivityTimer);
-              state.inactivityTimer = null;
-            }
-
-            await this.handleReviewComplete(projectId, repoPath, task, branchName, code);
-          },
+      state.activeProcess = agentService.invokeReviewAgent(promptPath, settings.codingAgent, {
+        cwd: wtPath,
+        onOutput: (chunk: string) => {
+          state.outputLog.push(chunk);
+          state.lastOutputTime = Date.now();
+          sendAgentOutputToProject(projectId, task.id, chunk);
         },
-      );
+        onExit: async (code: number | null) => {
+          state.activeProcess = null;
+          if (state.inactivityTimer) {
+            clearInterval(state.inactivityTimer);
+            state.inactivityTimer = null;
+          }
+
+          await this.handleReviewComplete(projectId, repoPath, task, branchName, code);
+        },
+      });
 
       // Persist state with review agent PID for crash recovery (PRDv2 §5.8)
       await this.persistState(projectId, repoPath);
@@ -807,7 +802,8 @@ export class OrchestratorService {
         if (elapsed > AGENT_INACTIVITY_TIMEOUT_MS) {
           console.warn(`Agent timeout for task ${task.id}: ${elapsed}ms of inactivity`);
           if (state.activeProcess) {
-            this.branchManager.commitWip(wtPath, task.id)
+            this.branchManager
+              .commitWip(wtPath, task.id)
               .then(() => state.activeProcess?.kill())
               .catch((err) => {
                 console.error(`[orchestrator] Inactivity handler failed for ${task.id}:`, err);
@@ -919,7 +915,10 @@ export class OrchestratorService {
 
       // Mark loop as idle, then re-trigger after a short delay to let git settle
       state.loopActive = false;
-      state.loopTimer = setTimeout(() => this.nudge(projectId), 3000);
+      state.loopTimer = setTimeout(() => {
+        state.loopTimer = null;
+        this.nudge(projectId);
+      }, 3000);
     } else if (result && result.status === "rejected") {
       // Review rejected — treat as a failure for progressive backoff (PRDv2 §9.1)
       const reason = `Review rejected: ${result.issues?.join("; ") || result.summary}`;
@@ -1007,11 +1006,9 @@ export class OrchestratorService {
     await this.beads.setCumulativeAttempts(repoPath, task.id, cumulativeAttempts);
 
     // Add failure comment for audit trail
-    await this.beads.comment(
-      repoPath,
-      task.id,
-      `Attempt ${cumulativeAttempts} failed: ${reason.slice(0, 500)}`,
-    ).catch((err) => console.warn("[orchestrator] Failed to add failure comment:", err));
+    await this.beads
+      .comment(repoPath, task.id, `Attempt ${cumulativeAttempts} failed: ${reason.slice(0, 500)}`)
+      .catch((err) => console.warn("[orchestrator] Failed to add failure comment:", err));
 
     const isDemotionPoint = cumulativeAttempts % BACKOFF_FAILURE_THRESHOLD === 0;
 
@@ -1076,7 +1073,10 @@ export class OrchestratorService {
 
         // Mark loop idle and schedule next iteration
         state.loopActive = false;
-        state.loopTimer = setTimeout(() => this.nudge(projectId), 2000);
+        state.loopTimer = setTimeout(() => {
+          state.loopTimer = null;
+          this.nudge(projectId);
+        }, 2000);
       }
     }
   }
@@ -1094,9 +1094,7 @@ export class OrchestratorService {
   ): Promise<void> {
     const state = this.getState(projectId);
 
-    console.log(
-      `[orchestrator] Blocking ${task.id} after ${cumulativeAttempts} cumulative failures at max priority`,
-    );
+    console.log(`[orchestrator] Blocking ${task.id} after ${cumulativeAttempts} cumulative failures at max priority`);
 
     try {
       await this.beads.addLabel(repoPath, task.id, "blocked");
@@ -1141,7 +1139,10 @@ export class OrchestratorService {
 
     // Mark loop idle and schedule next iteration
     state.loopActive = false;
-    state.loopTimer = setTimeout(() => this.nudge(projectId), 2000);
+    state.loopTimer = setTimeout(() => {
+      state.loopTimer = null;
+      this.nudge(projectId);
+    }, 2000);
   }
 }
 

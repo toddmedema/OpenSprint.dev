@@ -271,6 +271,8 @@ export class BranchManager {
    * Create an isolated git worktree for a task.
    * Creates the branch from main if it doesn't exist, removes stale worktrees,
    * then creates a fresh worktree at /tmp/opensprint-worktrees/<taskId>.
+   * After creation, symlinks node_modules from the main repo so dependencies
+   * (vitest, etc.) are available for test execution.
    * Returns the worktree path.
    */
   async createTaskWorktree(repoPath: string, taskId: string): Promise<string> {
@@ -290,7 +292,48 @@ export class BranchManager {
     // Create worktree
     await fs.mkdir(path.dirname(wtPath), { recursive: true });
     await this.git(repoPath, `worktree add ${wtPath} ${branchName}`);
+
+    // Symlink node_modules from main repo so dependencies are available in the worktree.
+    // Git worktrees only contain tracked files; node_modules is gitignored.
+    await this.symlinkNodeModules(repoPath, wtPath);
+
     return wtPath;
+  }
+
+  /**
+   * Symlink node_modules directories from the main repo into a worktree.
+   * Handles both root node_modules and any per-package node_modules
+   * (e.g. .vite caches in workspace packages).
+   */
+  private async symlinkNodeModules(repoPath: string, wtPath: string): Promise<void> {
+    // Symlink root node_modules
+    const srcRoot = path.join(repoPath, 'node_modules');
+    const destRoot = path.join(wtPath, 'node_modules');
+    try {
+      await fs.access(srcRoot);
+      await fs.symlink(srcRoot, destRoot, 'junction');
+    } catch (err) {
+      console.warn('[branch-manager] Failed to symlink root node_modules:', err);
+    }
+
+    // Symlink per-package node_modules (for .vite caches etc.)
+    try {
+      const packagesDir = path.join(repoPath, 'packages');
+      const entries = await fs.readdir(packagesDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const srcPkg = path.join(packagesDir, entry.name, 'node_modules');
+        const destPkg = path.join(wtPath, 'packages', entry.name, 'node_modules');
+        try {
+          await fs.access(srcPkg);
+          await fs.symlink(srcPkg, destPkg, 'junction');
+        } catch {
+          // Package doesn't have node_modules — skip
+        }
+      }
+    } catch {
+      // No packages directory or other issue — non-critical
+    }
   }
 
   /**

@@ -1,16 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AgentService } from '../services/agent.service.js';
-import type { AgentConfig } from '@opensprint/shared';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { AgentService } from "../services/agent.service.js";
+import type { AgentConfig } from "@opensprint/shared";
 
-const mockSpawnWithTaskFile = vi.fn();
+const { mockSpawnWithTaskFile } = vi.hoisted(() => ({
+  mockSpawnWithTaskFile: vi.fn(),
+}));
 
-vi.mock('../services/agent-client.js', () => ({
+vi.mock("../services/agent-client.js", () => ({
   AgentClient: vi.fn().mockImplementation(() => ({
     spawnWithTaskFile: mockSpawnWithTaskFile,
   })),
 }));
 
-describe('AgentService', () => {
+describe("AgentService", () => {
   let service: AgentService;
 
   beforeEach(() => {
@@ -18,18 +20,18 @@ describe('AgentService', () => {
     vi.clearAllMocks();
   });
 
-  describe('invokeReviewAgent', () => {
-    it('should invoke review agent with code reviewer role per PRD §12.3', () => {
+  describe("invokeReviewAgent", () => {
+    it("should invoke review agent with code reviewer role per PRD §12.3", () => {
       const mockHandle = { kill: vi.fn(), pid: 12345 };
       mockSpawnWithTaskFile.mockReturnValue(mockHandle);
 
-      const config: AgentConfig = { type: 'claude', model: 'claude-sonnet-4', cliCommand: null };
-      const promptPath = '/proj/.opensprint/active/bd-a3f8.2/prompt.md';
+      const config: AgentConfig = { type: "claude", model: "claude-sonnet-4", cliCommand: null };
+      const promptPath = "/proj/.opensprint/active/bd-a3f8.2/prompt.md";
       const onOutput = vi.fn();
       const onExit = vi.fn();
 
       const handle = service.invokeReviewAgent(promptPath, config, {
-        cwd: '/proj',
+        cwd: "/proj",
         onOutput,
         onExit,
       });
@@ -37,26 +39,26 @@ describe('AgentService', () => {
       expect(mockSpawnWithTaskFile).toHaveBeenCalledWith(
         config,
         promptPath,
-        '/proj',
+        "/proj",
         onOutput,
         onExit,
-        'code reviewer'
+        "code reviewer",
       );
       expect(handle).toBe(mockHandle);
     });
 
-    it('should allow override of agentRole when provided', () => {
+    it("should allow override of agentRole when provided", () => {
       const mockHandle = { kill: vi.fn(), pid: 12345 };
       mockSpawnWithTaskFile.mockReturnValue(mockHandle);
 
-      const config: AgentConfig = { type: 'cursor', model: null, cliCommand: null };
-      const promptPath = '/proj/.opensprint/active/task-1/prompt.md';
+      const config: AgentConfig = { type: "cursor", model: null, cliCommand: null };
+      const promptPath = "/proj/.opensprint/active/task-1/prompt.md";
 
       service.invokeReviewAgent(promptPath, config, {
-        cwd: '/proj',
+        cwd: "/proj",
         onOutput: vi.fn(),
         onExit: vi.fn(),
-        agentRole: 'senior reviewer',
+        agentRole: "senior reviewer",
       });
 
       expect(mockSpawnWithTaskFile).toHaveBeenCalledWith(
@@ -65,7 +67,7 @@ describe('AgentService', () => {
         expect.anything(),
         expect.anything(),
         expect.anything(),
-        'senior reviewer'
+        "senior reviewer",
       );
     });
   });

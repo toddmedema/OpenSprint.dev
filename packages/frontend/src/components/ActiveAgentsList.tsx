@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import type { ActiveAgent } from "@opensprint/shared";
 import { api } from "../api/client";
+import { getProjectPhasePath } from "../lib/phaseRouting";
+import { useAppDispatch } from "../store";
+import { setSelectedTaskId } from "../store/slices/buildSlice";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -12,6 +16,8 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
   const [agents, setAgents] = useState<ActiveAgent[]>([]);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const dispatch = useAppDispatch();
 
   const fetchAgents = useCallback(async () => {
     try {
@@ -86,9 +92,21 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
           ) : (
             <ul className="divide-y divide-gray-100">
               {agents.map((agent) => (
-                <li key={agent.id} className="px-4 py-2.5 text-sm" role="option">
-                  <div className="font-medium text-gray-900">{agent.label || agent.id}</div>
-                  <div className="text-gray-500 mt-0.5">{phaseLabel(agent.phase)}</div>
+                <li key={agent.id} role="option">
+                  <button
+                    type="button"
+                    className="w-full px-4 py-2.5 text-sm text-left hover:bg-gray-50 transition-colors"
+                    onClick={() => {
+                      dispatch(setSelectedTaskId(agent.id));
+                      navigate(getProjectPhasePath(projectId, "build"));
+                      setOpen(false);
+                    }}
+                  >
+                    <div className="font-medium text-gray-900">{agent.label || agent.id}</div>
+                    <div className="text-gray-500 mt-0.5">
+                      {phaseLabel(agent.phase)} &middot; <span className="text-gray-400">{agent.id}</span>
+                    </div>
+                  </button>
                 </li>
               ))}
             </ul>
