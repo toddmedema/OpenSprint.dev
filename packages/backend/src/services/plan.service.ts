@@ -282,6 +282,14 @@ export class PlanService {
       throw new AppError(404, 'PLAN_NOT_FOUND', `Plan '${planId}' not found`);
     }
 
+    let lastModified: string | undefined;
+    try {
+      const stat = await fs.stat(mdPath);
+      lastModified = stat.mtime.toISOString();
+    } catch {
+      // Ignore - lastModified remains undefined
+    }
+
     let metadata: PlanMetadata;
     try {
       const metaData = await fs.readFile(metaPath, 'utf-8');
@@ -316,6 +324,7 @@ export class PlanService {
       taskCount: total,
       completedTaskCount: completed,
       dependencyCount,
+      lastModified,
     };
   }
 
