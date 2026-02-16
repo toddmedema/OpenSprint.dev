@@ -14,15 +14,16 @@ READY_JSON=$(bd ready --json 2>/dev/null || echo "[]")
 READY_TASKS=$(echo "$READY_JSON" | jq 'if type == "array" then [.[] | select((.title // "") != "Plan approval gate") | select((.issue_type // .type // "") != "epic")] else [] end' 2>/dev/null)
 
 # Find first task with all blockers closed (bd ready may return in_progress blockers as resolved)
+# Use while-read with process substitution to avoid word-splitting JSON on spaces
 NEXT_TASK=""
-for task in $(echo "$READY_TASKS" | jq -c '.[]' 2>/dev/null); do
+while IFS= read -r task; do
   TID=$(echo "$task" | jq -r '.id')
   if npm run check-blockers -w packages/backend -- "$TID" 2>/dev/null; then
     NEXT_TASK="$task"
     break
   fi
   echo "⏭️  Skipping $TID: not all blockers closed"
-done
+done < <(echo "$READY_TASKS" | jq -c '.[]' 2>/dev/null)
 
 if [[ -z "$NEXT_TASK" || "$NEXT_TASK" == "null" ]]; then
   echo "✅ No ready bd tasks (all have unresolved blockers). Agent chain complete."
@@ -60,6 +61,28 @@ if command -v agent &>/dev/null; then
     exit $EXIT_CODE
   fi
   echo "✅ Agent finished for $TASK_ID"
+
+  # 5. Post-agent: commit, close task, push, and continue chain.
+  #    The agent may or may not have done these itself — this is the safety net.
+
+  # Commit any uncommitted work the agent left behind
+  if ! git diff --quiet HEAD 2>/dev/null || ! git diff --cached --quiet HEAD 2>/dev/null; then
+    echo "📦 Committing agent's uncommitted changes..."
+    git add -A
+    git commit -m "Complete $TASK_ID: $TASK_TITLE" || true
+  fi
+
+  # Mark the task done (idempotent — no-op if agent already did it)
+  bd update "$TASK_ID" --status done 2>/dev/null || true
+
+  # Sync beads and push
+  bd sync 2>/dev/null || true
+  git push -u origin "opensprint/${TASK_ID}" 2>/dev/null || true
+
+  # 6. Continue the chain — exec replaces this process to avoid deep recursion
+  echo ""
+  echo "🔄 Continuing agent chain..."
+  exec ./scripts/agent-chain.sh
 else
   echo "⚠️  Cursor CLI (agent) not installed. Install with:"
   echo "   curl https://cursor.com/install -fsSL | bash"
