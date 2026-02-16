@@ -6,49 +6,33 @@ import { OPENSPRINT_PATHS } from '@opensprint/shared';
 import { AppError } from '../middleware/error-handler.js';
 import { ProjectService } from './project.service.js';
 import { AgentClient } from './agent-client.js';
-import { BeadsService } from './beads.service.js';
 import { hilService } from './hil-service.js';
 import { ChatService } from './chat.service.js';
 import { PlanService } from './plan.service.js';
+import { PrdService } from './prd.service.js';
 import { broadcastToProject } from '../websocket/index.js';
 
 const FEEDBACK_CATEGORIZATION_PROMPT = `You are an AI assistant that categorizes user feedback about a software product.
 
-Given the user's feedback text, determine:
+Given the user's feedback text, the PRD (Product Requirements Document), and available plans, determine:
 1. The category: "bug" (something broken), "feature" (new capability request), "ux" (usability improvement), or "scope" (fundamental change to requirements)
 2. Which feature/plan it relates to (if identifiable) — use the planId from the available plans list
-3. A suggested title for a task to address it
+3. One or more suggested task titles to address the feedback (array of strings)
 
 Respond in JSON format:
 {
   "category": "bug" | "feature" | "ux" | "scope",
-  "suggestedTitle": "Short task title",
-  "suggestedDescription": "Detailed task description",
-  "mappedPlanId": "plan-id-if-identifiable or null"
+  "mappedPlanId": "plan-id-if-identifiable or null",
+  "task_titles": ["Short task title 1", "Short task title 2"]
 }`;
 
 export class FeedbackService {
   private projectService = new ProjectService();
   private agentClient = new AgentClient();
-  private beads = new BeadsService();
   private hilService = hilService;
   private chatService = new ChatService();
   private planService = new PlanService();
-
-  /** Resolve plan ID (e.g. "user-auth") to bead epic ID for discovered-from dependency */
-  private async resolvePlanIdToBeadEpicId(
-    repoPath: string,
-    planId: string,
-  ): Promise<string | null> {
-    try {
-      const metaPath = path.join(repoPath, OPENSPRINT_PATHS.plans, `${planId}.meta.json`);
-      const data = await fs.readFile(metaPath, 'utf-8');
-      const meta = JSON.parse(data) as { beadEpicId?: string };
-      return meta.beadEpicId && meta.beadEpicId.trim() ? meta.beadEpicId : null;
-    } catch {
-      return null;
-    }
-  }
+  private prdService = new PrdService();
 
   /** Get feedback directory for a project */
   private async getFeedbackDir(projectId: string): Promise<string> {
@@ -83,7 +67,7 @@ export class FeedbackService {
     return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  /** Submit new feedback with AI categorization and task creation */
+  /** Submit new feedback with AI categorization and mapping */
   async submitFeedback(
     projectId: string,
     body: FeedbackSubmitRequest,
@@ -118,6 +102,31 @@ export class FeedbackService {
     return item;
   }
 
+  /** Build PRD context for AI (relevant sections as markdown) */
+  private async getPrdContextForCategorization(projectId: string): Promise<string> {
+    try {
+      const prd = await this.prdService.getPrd(projectId);
+      const sections = prd.sections;
+      const parts: string[] = [];
+      const keys = [
+        'executive_summary',
+        'feature_list',
+        'technical_architecture',
+        'data_model',
+      ] as const;
+      for (const key of keys) {
+        const section = sections[key];
+        if (section?.content?.trim()) {
+          parts.push(`## ${key}\n${section.content.trim()}`);
+        }
+      }
+      if (parts.length === 0) return 'No PRD content available.';
+      return `# PRD (Product Requirements Document)\n\n${parts.join('\n\n')}`;
+    } catch {
+      return 'No PRD available.';
+    }
+  }
+
   /** Build plan context for AI mapping (planId, title from first heading) */
   private async getPlanContextForCategorization(projectId: string): Promise<string> {
     try {
@@ -133,26 +142,48 @@ export class FeedbackService {
     }
   }
 
-  /** AI categorization and task creation */
+  /** AI categorization and mapping (bead task creation is done in srl.4) */
   private async categorizeFeedback(projectId: string, item: FeedbackItem): Promise<void> {
     const settings = await this.projectService.getSettings(projectId);
     const project = await this.projectService.getProject(projectId);
-    const planContext = await this.getPlanContextForCategorization(projectId);
+    const [prdContext, planContext] = await Promise.all([
+      this.getPrdContextForCategorization(projectId),
+      this.getPlanContextForCategorization(projectId),
+    ]);
+
+    let plans: { metadata: { planId: string } }[] = [];
+    try {
+      plans = await this.planService.listPlans(projectId);
+    } catch {
+      // Ignore
+    }
+    const firstPlanId = plans.length > 0 ? plans[0].metadata.planId : null;
 
     try {
       const response = await this.agentClient.invoke({
         config: settings.planningAgent,
-        prompt: `${planContext}\n\nCategorize this feedback:\n\n"${item.text}"`,
+        prompt: `# PRD\n\n${prdContext}\n\n# Plans\n\n${planContext}\n\n# Feedback to categorize\n\n"${item.text}"`,
         systemPrompt: FEEDBACK_CATEGORIZATION_PROMPT,
         cwd: project.repoPath,
       });
 
-      // Parse AI response
+      // Parse AI response; fallback: default to bug, map to first plan (PRD §7.4.2 edge case)
       const jsonMatch = response.content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        item.category = parsed.category as FeedbackCategory;
-        item.mappedPlanId = parsed.mappedPlanId || null;
+        const validCategories: FeedbackCategory[] = ['bug', 'feature', 'ux', 'scope'];
+        item.category = validCategories.includes(parsed.category)
+          ? (parsed.category as FeedbackCategory)
+          : 'bug';
+        item.mappedPlanId = parsed.mappedPlanId || firstPlanId;
+
+        // task_titles: array of strings; support legacy suggestedTitle
+        const taskTitles = Array.isArray(parsed.task_titles)
+          ? parsed.task_titles.filter((t: unknown) => typeof t === 'string')
+          : parsed.suggestedTitle
+            ? [String(parsed.suggestedTitle)]
+            : [item.text.slice(0, 80)];
+        (item as FeedbackItem & { taskTitles?: string[] }).taskTitles = taskTitles;
 
         // Handle scope changes with HIL (PRD §7.4.2, §15.1)
         if (item.category === 'scope') {
@@ -179,33 +210,9 @@ export class FeedbackService {
             await this.chatService.syncPrdFromScopeChangeFeedback(projectId, item.text);
           } catch (err) {
             console.error('[feedback] PRD sync on scope-change approval failed:', err);
-            // Continue with task creation; PRD can be updated manually
           }
         }
 
-        // Resolve plan ID to bead epic ID for parent-child and discovered-from (PRD §7.4.2, §14)
-        const beadEpicId = item.mappedPlanId
-          ? await this.resolvePlanIdToBeadEpicId(project.repoPath, item.mappedPlanId)
-          : null;
-
-        // Create a beads task from the feedback — as child of epic when mapped (PRD §7.4.2)
-        const taskResult = await this.beads.create(
-          project.repoPath,
-          parsed.suggestedTitle || item.text.slice(0, 80),
-          {
-            type: item.category === 'bug' ? 'bug' : 'task',
-            description: parsed.suggestedDescription || item.text,
-            priority: item.category === 'bug' ? 1 : 2,
-            parentId: beadEpicId ?? undefined,
-          },
-        );
-
-        // Note: When parentId is set, beads creates a parent-child dependency automatically.
-        // Adding a separate discovered-from dep between child and parent would cause a deadlock
-        // (beads rejects: "Children inherit dependency on parent completion via hierarchy").
-        // The parent-child relationship already captures that this task was discovered from the plan.
-
-        item.createdTaskIds = [taskResult.id];
         item.status = 'mapped';
 
         // Broadcast feedback mapping
@@ -215,9 +222,24 @@ export class FeedbackService {
           planId: item.mappedPlanId || '',
           taskIds: item.createdTaskIds,
         });
+      } else {
+        // Parse failed: default to bug, map to first plan
+        item.category = 'bug';
+        item.mappedPlanId = firstPlanId;
+        (item as FeedbackItem & { taskTitles?: string[] }).taskTitles = [item.text.slice(0, 80)];
+        item.status = 'mapped';
+        broadcastToProject(projectId, {
+          type: 'feedback.mapped',
+          feedbackId: item.id,
+          planId: item.mappedPlanId || '',
+          taskIds: item.createdTaskIds,
+        });
       }
     } catch (error) {
       console.error(`AI categorization failed for feedback ${item.id}:`, error);
+      item.category = 'bug';
+      item.mappedPlanId = firstPlanId;
+      (item as FeedbackItem & { taskTitles?: string[] }).taskTitles = [item.text.slice(0, 80)];
       item.status = 'mapped';
       broadcastToProject(projectId, {
         type: 'feedback.mapped',

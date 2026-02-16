@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import fs from "fs/promises";
 import path from "path";
@@ -6,6 +6,26 @@ import os from "os";
 import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG, OPENSPRINT_PATHS } from "@opensprint/shared";
+
+vi.mock("../services/agent-client.js", () => ({
+  AgentClient: vi.fn().mockImplementation(() => ({
+    invoke: vi.fn().mockResolvedValue({
+      content: JSON.stringify({
+        category: "feature",
+        mappedPlanId: null,
+        task_titles: ["Add requested feature"],
+      }),
+    }),
+  })),
+}));
+
+vi.mock("../services/hil-service.js", () => ({
+  hilService: { evaluateDecision: vi.fn().mockResolvedValue({ approved: false }) },
+}));
+
+vi.mock("../websocket/index.js", () => ({
+  broadcastToProject: vi.fn(),
+}));
 
 describe("Feedback REST API", () => {
   let app: ReturnType<typeof createApp>;

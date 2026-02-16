@@ -1,11 +1,26 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { FeedbackService } from "../services/feedback.service.js";
 import { ProjectService } from "../services/project.service.js";
-import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
-import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import type { FeedbackItem } from "@opensprint/shared";
+import { DEFAULT_HIL_CONFIG, OPENSPRINT_PATHS } from "@opensprint/shared";
+
+const mockInvoke = vi.fn();
+vi.mock("../services/agent-client.js", () => ({
+  AgentClient: vi.fn().mockImplementation(() => ({
+    invoke: (opts: { prompt?: string }) => mockInvoke(opts),
+  })),
+}));
+
+vi.mock("../services/hil-service.js", () => ({
+  hilService: { evaluateDecision: vi.fn().mockResolvedValue({ approved: false }) },
+}));
+
+vi.mock("../websocket/index.js", () => ({
+  broadcastToProject: vi.fn(),
+}));
 
 describe("FeedbackService", () => {
   let feedbackService: FeedbackService;
@@ -15,6 +30,7 @@ describe("FeedbackService", () => {
   let originalHome: string | undefined;
 
   beforeEach(async () => {
+    vi.clearAllMocks();
     feedbackService = new FeedbackService();
     projectService = new ProjectService();
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-feedback-test-"));
@@ -91,5 +107,91 @@ describe("FeedbackService", () => {
     expect(items).toHaveLength(1);
     expect(items[0].createdTaskIds).toEqual([]);
     expect(items[0].status).toBe("pending");
+  });
+
+  it("should categorize feedback via planning agent with PRD and plans context", async () => {
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "feature",
+        mappedPlanId: "auth-plan",
+        task_titles: ["Add dark mode toggle", "Implement theme persistence"],
+      }),
+    });
+
+    const item = await feedbackService.submitFeedback(projectId, {
+      text: "Users want dark mode",
+    });
+
+    expect(item.status).toBe("pending");
+    expect(item.id).toBeDefined();
+
+    // Wait for async categorization
+    await new Promise((r) => setTimeout(r, 50));
+
+    const updated = await feedbackService.getFeedback(projectId, item.id);
+    expect(updated.status).toBe("mapped");
+    expect(updated.category).toBe("feature");
+    expect(updated.mappedPlanId).toBe("auth-plan");
+    expect((updated as FeedbackItem & { taskTitles?: string[] }).taskTitles).toEqual([
+      "Add dark mode toggle",
+      "Implement theme persistence",
+    ]);
+    expect(updated.createdTaskIds).toEqual([]);
+
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    const prompt = mockInvoke.mock.calls[0][0]?.prompt ?? "";
+    expect(prompt).toContain("# PRD");
+    expect(prompt).toContain("# Plans");
+    expect(prompt).toContain("Users want dark mode");
+  });
+
+  it("should support legacy suggestedTitle when task_titles is missing", async () => {
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "bug",
+        mappedPlanId: null,
+        suggestedTitle: "Fix login button",
+      }),
+    });
+
+    const item = await feedbackService.submitFeedback(projectId, {
+      text: "Login button broken",
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const updated = await feedbackService.getFeedback(projectId, item.id);
+    expect(updated.category).toBe("bug");
+    expect((updated as FeedbackItem & { taskTitles?: string[] }).taskTitles).toEqual(["Fix login button"]);
+  });
+
+  it("should fallback to bug and first plan when agent returns invalid JSON", async () => {
+    mockInvoke.mockResolvedValue({ content: "This is not valid JSON at all" });
+
+    const item = await feedbackService.submitFeedback(projectId, {
+      text: "Something broke",
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const updated = await feedbackService.getFeedback(projectId, item.id);
+    expect(updated.status).toBe("mapped");
+    expect(updated.category).toBe("bug");
+    expect((updated as FeedbackItem & { taskTitles?: string[] }).taskTitles).toEqual(["Something broke"]);
+  });
+
+  it("should fallback to bug when agent throws", async () => {
+    mockInvoke.mockRejectedValue(new Error("Agent timeout"));
+
+    const item = await feedbackService.submitFeedback(projectId, {
+      text: "Random feedback",
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const updated = await feedbackService.getFeedback(projectId, item.id);
+    expect(updated.status).toBe("mapped");
+    expect(updated.category).toBe("bug");
+    expect((updated as FeedbackItem & { taskTitles?: string[] }).taskTitles).toEqual(["Random feedback"]);
   });
 });
