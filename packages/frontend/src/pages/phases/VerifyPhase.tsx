@@ -118,13 +118,10 @@ export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhasePro
   const handleSubmit = async () => {
     if (!input.trim() || submitting) return;
     const text = input.trim();
-    const result = await dispatch(
-      submitFeedback({ projectId, text, images: images.length > 0 ? images : undefined }),
-    );
-    if (submitFeedback.fulfilled.match(result)) {
-      setInput("");
-      setImages([]);
-    }
+    const imagePayload = images.length > 0 ? images : undefined;
+    setInput("");
+    setImages([]);
+    await dispatch(submitFeedback({ projectId, text, images: imagePayload }));
   };
 
   return (

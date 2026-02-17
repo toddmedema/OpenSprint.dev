@@ -150,6 +150,31 @@ describe("verifySlice", () => {
       await dispatchPromise;
     });
 
+    it("shows feedback immediately (optimistically) before API returns", async () => {
+      let resolveApi: (v: FeedbackItem) => void;
+      const apiPromise = new Promise<FeedbackItem>((r) => {
+        resolveApi = r;
+      });
+      vi.mocked(api.feedback.submit).mockReturnValue(apiPromise as never);
+      const store = createStore();
+      const dispatchPromise = store.dispatch(
+        submitFeedback({ projectId: "proj-1", text: "Bug in login" }),
+      );
+
+      const stateBeforeResolve = store.getState().verify;
+      expect(stateBeforeResolve.feedback).toHaveLength(1);
+      expect(stateBeforeResolve.feedback[0].text).toBe("Bug in login");
+      expect(stateBeforeResolve.feedback[0].status).toBe("pending");
+      expect(stateBeforeResolve.feedback[0].id).toMatch(/^temp-/);
+
+      resolveApi!(mockFeedback);
+      await dispatchPromise;
+
+      const stateAfterResolve = store.getState().verify;
+      expect(stateAfterResolve.feedback[0].id).toBe("fb-1");
+      expect(stateAfterResolve.feedback[0].text).toBe("Great feature");
+    });
+
     it("prepends new feedback and clears submitting on fulfilled", async () => {
       const existingFeedback: FeedbackItem = {
         ...mockFeedback,
@@ -185,6 +210,21 @@ describe("verifySlice", () => {
 
       expect(store.getState().verify.submitting).toBe(false);
       expect(store.getState().verify.error).toBe("Submit failed");
+    });
+
+    it("removes optimistic feedback when submit is rejected", async () => {
+      vi.mocked(api.feedback.submit).mockRejectedValue(new Error("Submit failed"));
+      const store = createStore();
+      const dispatchPromise = store.dispatch(
+        submitFeedback({ projectId: "proj-1", text: "Failed feedback" }),
+      );
+
+      expect(store.getState().verify.feedback).toHaveLength(1);
+      expect(store.getState().verify.feedback[0].text).toBe("Failed feedback");
+
+      await dispatchPromise;
+
+      expect(store.getState().verify.feedback).toHaveLength(0);
     });
 
     it("uses fallback error message when error has no message", async () => {

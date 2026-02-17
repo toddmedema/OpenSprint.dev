@@ -42,6 +42,9 @@ export const recategorizeFeedback = createAsyncThunk(
   },
 );
 
+/** Prefix for optimistic feedback IDs; replaced when API returns */
+const OPTIMISTIC_ID_PREFIX = "temp-";
+
 const verifySlice = createSlice({
   name: "verify",
   initialState,
@@ -71,18 +74,44 @@ const verifySlice = createSlice({
         state.loading = false;
         state.error = action.error.message ?? "Failed to load feedback";
       })
-      // submitFeedback
-      .addCase(submitFeedback.pending, (state) => {
+      // submitFeedback — optimistic: show feedback immediately, replace on fulfilled, remove on rejected
+      .addCase(submitFeedback.pending, (state, action) => {
         state.submitting = true;
         state.error = null;
+        const { text, images } = action.meta.arg;
+        const requestId = action.meta.requestId;
+        const optimistic: FeedbackItem = {
+          id: `${OPTIMISTIC_ID_PREFIX}${requestId}`,
+          text,
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: new Date().toISOString(),
+          ...(images?.length ? { images } : {}),
+        };
+        state.feedback.unshift(optimistic);
       })
       .addCase(submitFeedback.fulfilled, (state, action) => {
         state.submitting = false;
-        state.feedback.unshift(action.payload);
+        const requestId = action.meta.requestId;
+        const tempId = `${OPTIMISTIC_ID_PREFIX}${requestId}`;
+        const idx = state.feedback.findIndex((f) => f.id === tempId);
+        if (idx !== -1) {
+          state.feedback[idx] = action.payload;
+        } else {
+          state.feedback.unshift(action.payload);
+        }
       })
       .addCase(submitFeedback.rejected, (state, action) => {
         state.submitting = false;
         state.error = action.error.message ?? "Failed to submit feedback";
+        const requestId = action.meta.requestId;
+        const tempId = `${OPTIMISTIC_ID_PREFIX}${requestId}`;
+        const idx = state.feedback.findIndex((f) => f.id === tempId);
+        if (idx !== -1) {
+          state.feedback.splice(idx, 1);
+        }
       })
       // recategorizeFeedback
       .addCase(recategorizeFeedback.fulfilled, (state, action) => {
