@@ -10,7 +10,8 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
 # 0. Pre-flight: recover orphaned tasks (in_progress + agent assignee but no active process)
-npm run recover-orphans -w packages/backend 2>/dev/null || true
+# Logs a warning when recovering orphaned tasks for observability
+npm run recover-orphans -w packages/backend || true
 
 # 1. Get next ready task (dependency-aware, priority-sorted)
 READY_JSON=$(bd ready --json 2>/dev/null || echo "[]")

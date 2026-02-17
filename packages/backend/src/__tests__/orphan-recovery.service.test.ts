@@ -141,4 +141,35 @@ describe('OrphanRecoveryService', () => {
     );
     warnSpy.mockRestore();
   });
+
+  it('should commit uncommitted changes as WIP before removing worktree', async () => {
+    const taskId = 'task-wip';
+    const wtPath = path.join(os.tmpdir(), 'opensprint-worktrees', taskId);
+
+    // Create branch and worktree with uncommitted changes
+    await execAsync(`git branch opensprint/${taskId} main`, { cwd: repoPath });
+    await fs.mkdir(path.dirname(wtPath), { recursive: true });
+    await execAsync(`git worktree add ${wtPath} opensprint/${taskId}`, { cwd: repoPath });
+    await fs.writeFile(path.join(wtPath, 'orphan-wip.txt'), 'uncommitted work');
+    // Do NOT commit — simulate agent killed mid-edit
+
+    mockListInProgress = [{ id: taskId, status: 'in_progress', assignee: 'agent-1' }];
+
+    const { recovered } = await service.recoverOrphanedTasks(repoPath);
+
+    expect(recovered).toContain(taskId);
+
+    // Verify WIP was committed: branch should have the file committed
+    const { stdout } = await execAsync(`git log -1 --oneline opensprint/${taskId}`, { cwd: repoPath });
+    expect(stdout).toContain('WIP');
+    const { stdout: fileContent } = await execAsync(
+      `git show opensprint/${taskId}:orphan-wip.txt`,
+      { cwd: repoPath },
+    );
+    expect(fileContent.trim()).toBe('uncommitted work');
+
+    // Clean up
+    await execAsync(`git worktree prune`, { cwd: repoPath }).catch(() => {});
+    await execAsync(`git branch -D opensprint/${taskId}`, { cwd: repoPath }).catch(() => {});
+  });
 });

@@ -1,10 +1,12 @@
+import fs from "fs/promises";
 import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { BranchManager } from "./branch-manager.js";
 
 /**
  * Orphan recovery: detect and retry abandoned IN_PROGRESS tasks.
  * When an agent is killed, its task remains in_progress with no active process.
- * This service resets them to open so they re-enter the ready queue.
+ * This service: (1) commits any uncommitted changes on the task branch as WIP,
+ * (2) resets the task status to open so it re-enters the ready queue.
  *
  * IMPORTANT: This service never checks out branches. The task branch is preserved
  * on disk (and on the remote if it was pushed). When the task is retried, the
@@ -55,6 +57,15 @@ export class OrphanRecoveryService {
   }
 
   private async recoverOne(repoPath: string, task: BeadsIssue): Promise<void> {
+    const wtPath = this.branchManager.getWorktreePath(task.id);
+    try {
+      await fs.access(wtPath);
+      // Worktree exists — commit any uncommitted changes as WIP before removing
+      await this.branchManager.commitWip(wtPath, task.id);
+    } catch {
+      // Worktree may not exist — that's fine
+    }
+
     // Clean up any stale worktree for this task (safe no-op if none exists)
     try {
       await this.branchManager.removeTaskWorktree(repoPath, task.id);
