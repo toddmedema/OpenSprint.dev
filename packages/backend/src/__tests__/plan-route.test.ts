@@ -134,6 +134,22 @@ describe("Plan REST endpoints - task decomposition", () => {
     expect(res.body.data.metadata.gateTaskId).toBeDefined();
   });
 
+  it("POST /projects/:id/plans with incomplete template (missing sections) still creates plan (warn only, don't block)", async () => {
+    const app = createApp();
+    const planBody = {
+      title: "Minimal Feature",
+      content: "# Minimal Feature\n\n## Overview\n\nOnly overview.",
+      complexity: "low",
+    };
+
+    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+
+    expect(res.status).toBe(201);
+    expect(res.body.data).toBeDefined();
+    expect(res.body.data.metadata.planId).toBe("minimal-feature");
+    // Validation warns but does not block — plan is created successfully
+  });
+
   it("POST /projects/:id/plans without complexity should agent-evaluate and use result", {
     timeout: 10000,
   }, async () => {

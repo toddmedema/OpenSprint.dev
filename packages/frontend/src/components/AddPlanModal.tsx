@@ -2,60 +2,7 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { CloseButton } from "./CloseButton";
 import type { Plan } from "@opensprint/shared";
-
-function defaultPlanContent(title: string): string {
-  return `# ${title}
-
-## Overview
-
-Brief description of the feature and its purpose.
-
-## Acceptance Criteria
-
-- [ ] Criterion 1
-- [ ] Criterion 2
-- [ ] Criterion 3
-
-## Technical Approach
-
-Describe the technical implementation approach.
-
-## Dependencies
-
-References to other Plans this feature depends on (if any).
-
-## Data Model Changes
-
-Schema or data model updates required.
-
-## API Specification
-
-Endpoints and contracts for this feature.
-
-## UI/UX Requirements
-
-User interface and experience requirements.
-
-## Mockups
-
-\`\`\`
-+------------------+
-| Header           |
-+------------------+
-| Content area     |
-|                  |
-+------------------+
-\`\`\`
-
-## Edge Cases and Error Handling
-
-How to handle errors and edge cases.
-
-## Testing Strategy
-
-How this feature will be tested.
-`;
-}
+import { getPlanTemplate } from "@opensprint/shared";
 
 interface AddPlanModalProps {
   projectId: string;
@@ -74,7 +21,7 @@ export function AddPlanModal({ projectId, onClose, onCreated }: AddPlanModalProp
     if (!value.trim()) {
       setContent("");
     } else if (!content.trim()) {
-      setContent(defaultPlanContent(value));
+      setContent(getPlanTemplate(value));
     }
   };
 
@@ -90,7 +37,7 @@ export function AddPlanModal({ projectId, onClose, onCreated }: AddPlanModalProp
     try {
       const plan = await api.plans.create(projectId, {
         title: trimmedTitle,
-        content: content.trim() || defaultPlanContent(trimmedTitle),
+        content: content.trim() || getPlanTemplate(trimmedTitle),
       });
       onCreated(plan);
       onClose();
