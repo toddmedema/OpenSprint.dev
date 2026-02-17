@@ -1,51 +1,53 @@
-import { spawn, exec } from 'child_process';
-import { readFileSync } from 'fs';
-import { promisify } from 'util';
-import type { AgentConfig } from '@opensprint/shared';
-import { AppError } from '../middleware/error-handler.js';
-import { ErrorCodes } from '../middleware/error-codes.js';
+import { spawn, exec } from "child_process";
+import { readFileSync } from "fs";
+import { promisify } from "util";
+import type { AgentConfig } from "@opensprint/shared";
+import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 
 const execAsync = promisify(exec);
 
 /** Format raw agent errors into user-friendly messages with remediation hints */
-function formatAgentError(agentType: 'claude' | 'cursor' | 'custom', raw: string): string {
+function formatAgentError(agentType: "claude" | "cursor" | "custom", raw: string): string {
   const lower = raw.toLowerCase();
 
   // Cursor: authentication
-  if (agentType === 'cursor' && (lower.includes('authentication required') || lower.includes("run 'agent login'"))) {
-    return (
-      'Cursor agent requires authentication. Either run `agent login` in your terminal, or add CURSOR_API_KEY to your project .env file. Get a key from Cursor → Settings → Integrations → User API Keys.'
-    );
+  if (
+    agentType === "cursor" &&
+    (lower.includes("authentication required") || lower.includes("run 'agent login'"))
+  ) {
+    return "Cursor agent requires authentication. Either run `agent login` in your terminal, or add CURSOR_API_KEY to your project .env file. Get a key from Cursor → Settings → Integrations → User API Keys.";
   }
 
   // Cursor/Claude: command not found (ENOENT)
-  if (lower.includes('enoent') || lower.includes('command not found') || lower.includes('not found')) {
-    if (agentType === 'cursor') {
-      return (
-        'Cursor agent CLI was not found. Install: curl https://cursor.com/install -fsS | bash. Then restart your terminal.'
-      );
+  if (
+    lower.includes("enoent") ||
+    lower.includes("command not found") ||
+    lower.includes("not found")
+  ) {
+    if (agentType === "cursor") {
+      return "Cursor agent CLI was not found. Install: curl https://cursor.com/install -fsS | bash. Then restart your terminal.";
     }
-    if (agentType === 'claude') {
-      return (
-        'claude CLI was not found. Install it from https://docs.anthropic.com/cli or via npm: npm install -g @anthropic-ai/cli'
-      );
+    if (agentType === "claude") {
+      return "claude CLI was not found. Install it from https://docs.anthropic.com/cli or via npm: npm install -g @anthropic-ai/cli";
     }
   }
 
   // Model-related errors
-  if (lower.includes('model') && (lower.includes('invalid') || lower.includes('not found') || lower.includes('unknown'))) {
-    return (
-      `${raw} If using Cursor, run \`agent models\` in your terminal to list available models, then update the model in Project Settings → Agent Config.`
-    );
+  if (
+    lower.includes("model") &&
+    (lower.includes("invalid") || lower.includes("not found") || lower.includes("unknown"))
+  ) {
+    return `${raw} If using Cursor, run \`agent models\` in your terminal to list available models, then update the model in Project Settings → Agent Config.`;
   }
 
   // Timeout
-  if (lower.includes('timeout') || lower.includes('etimedout')) {
+  if (lower.includes("timeout") || lower.includes("etimedout")) {
     return `Agent timed out after 2 minutes. ${raw}`;
   }
 
   // API key / 401
-  if (lower.includes('api key') || lower.includes('401') || lower.includes('unauthorized')) {
+  if (lower.includes("api key") || lower.includes("401") || lower.includes("unauthorized")) {
     return `${raw} Check that your API key is set in .env and valid.`;
   }
 
@@ -60,7 +62,7 @@ export interface AgentInvokeOptions {
   /** System-level instructions */
   systemPrompt?: string;
   /** Conversation history for context */
-  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   /** Working directory for CLI agents */
   cwd?: string;
   /** Callback for streaming output chunks */
@@ -82,16 +84,21 @@ export class AgentClient {
    */
   async invoke(options: AgentInvokeOptions): Promise<AgentResponse> {
     switch (options.config.type) {
-      case 'claude':
+      case "claude":
         return this.invokeClaudeCli(options);
-      case 'cursor':
+      case "cursor":
         return this.invokeCursorCli(options);
-      case 'custom':
+      case "custom":
         return this.invokeCustomCli(options);
       default:
-        throw new AppError(400, ErrorCodes.AGENT_UNSUPPORTED_TYPE, `Unsupported agent type: ${options.config.type}`, {
-          agentType: options.config.type,
-        });
+        throw new AppError(
+          400,
+          ErrorCodes.AGENT_UNSUPPORTED_TYPE,
+          `Unsupported agent type: ${options.config.type}`,
+          {
+            agentType: options.config.type,
+          }
+        );
     }
   }
 
@@ -106,56 +113,79 @@ export class AgentClient {
     cwd: string,
     onOutput: (chunk: string) => void,
     onExit: (code: number | null) => void | Promise<void>,
-    agentRole?: string,
+    agentRole?: string
   ): { kill: () => void; pid: number | null } {
     let command: string;
     let args: string[];
 
     switch (config.type) {
-      case 'claude':
-        command = 'claude';
-        args = ['--task-file', taskFilePath];
+      case "claude":
+        command = "claude";
+        args = ["--task-file", taskFilePath];
         if (config.model) {
-          args.push('--model', config.model);
+          args.push("--model", config.model);
         }
         break;
-      case 'cursor': {
+      case "cursor": {
         // Cursor agent uses --print with prompt as positional arg (no --input)
         let taskContent: string;
         try {
-          taskContent = readFileSync(taskFilePath, 'utf-8');
+          taskContent = readFileSync(taskFilePath, "utf-8");
         } catch (readErr) {
           const msg = readErr instanceof Error ? readErr.message : String(readErr);
-          throw new AppError(500, ErrorCodes.AGENT_TASK_FILE_READ_FAILED, `Could not read task file: ${taskFilePath}. ${msg}`, {
-            taskFilePath,
-            cause: readErr instanceof Error ? readErr.message : String(readErr),
-          });
+          throw new AppError(
+            500,
+            ErrorCodes.AGENT_TASK_FILE_READ_FAILED,
+            `Could not read task file: ${taskFilePath}. ${msg}`,
+            {
+              taskFilePath,
+              cause: readErr instanceof Error ? readErr.message : String(readErr),
+            }
+          );
         }
-        command = 'agent';
-        args = ['--print', '--output-format', 'stream-json', '--stream-partial-output', '--workspace', cwd, '--trust'];
+        command = "agent";
+        args = [
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--stream-partial-output",
+          "--workspace",
+          cwd,
+          "--trust",
+        ];
         if (config.model) {
-          args.push('--model', config.model);
+          args.push("--model", config.model);
         }
         args.push(taskContent);
         break;
       }
-      case 'custom':
+      case "custom": {
         if (!config.cliCommand) {
-          throw new AppError(400, ErrorCodes.AGENT_CLI_REQUIRED, 'Custom agent requires a CLI command');
+          throw new AppError(
+            400,
+            ErrorCodes.AGENT_CLI_REQUIRED,
+            "Custom agent requires a CLI command"
+          );
         }
-        const parts = config.cliCommand.split(' ');
+        const parts = config.cliCommand.split(" ");
         command = parts[0];
         args = [...parts.slice(1), taskFilePath];
         break;
+      }
       default:
-        throw new AppError(400, ErrorCodes.AGENT_UNSUPPORTED_TYPE, `Unsupported agent type: ${config.type}`, {
-          agentType: config.type,
-        });
+        throw new AppError(
+          400,
+          ErrorCodes.AGENT_UNSUPPORTED_TYPE,
+          `Unsupported agent type: ${config.type}`,
+          {
+            agentType: config.type,
+          }
+        );
     }
 
-    console.log('[agent] Spawning agent subprocess', {
+    console.log("[agent] Spawning agent subprocess", {
       type: config.type,
-      agentRole: agentRole ?? 'coder',
+      agentRole: agentRole ?? "coder",
       command,
       taskFilePath,
       cwd,
@@ -163,35 +193,35 @@ export class AgentClient {
 
     const child = spawn(command, args, {
       cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env },
       detached: true,
     });
 
-    child.stdout.on('data', (data: Buffer) => {
+    child.stdout.on("data", (data: Buffer) => {
       onOutput(data.toString());
     });
 
-    child.stderr.on('data', (data: Buffer) => {
+    child.stderr.on("data", (data: Buffer) => {
       onOutput(data.toString());
     });
 
-    child.on('close', (code) => {
+    child.on("close", (code) => {
       Promise.resolve(onExit(code)).catch((err) => {
-        console.error('[agent-client] onExit callback failed:', err);
+        console.error("[agent-client] onExit callback failed:", err);
       });
     });
 
-    child.on('error', (err: NodeJS.ErrnoException) => {
+    child.on("error", (err: NodeJS.ErrnoException) => {
       const friendly =
-        err.code === 'ENOENT' && config.type === 'cursor'
-          ? 'Cursor agent not found. Install: curl https://cursor.com/install -fsS | bash'
-          : err.code === 'ENOENT' && config.type === 'claude'
-            ? 'claude CLI not found. Install from https://docs.anthropic.com/cli'
+        err.code === "ENOENT" && config.type === "cursor"
+          ? "Cursor agent not found. Install: curl https://cursor.com/install -fsS | bash"
+          : err.code === "ENOENT" && config.type === "claude"
+            ? "claude CLI not found. Install from https://docs.anthropic.com/cli"
             : err.message;
       onOutput(`[Agent error: ${friendly}]\n`);
       Promise.resolve(onExit(1)).catch((exitErr) => {
-        console.error('[agent-client] onExit callback failed:', exitErr);
+        console.error("[agent-client] onExit callback failed:", exitErr);
       });
     });
 
@@ -200,18 +230,18 @@ export class AgentClient {
       kill: () => {
         try {
           // Kill the entire process group (negative PID) since agent is detached
-          process.kill(-child.pid!, 'SIGTERM');
+          process.kill(-child.pid!, "SIGTERM");
         } catch {
-          child.kill('SIGTERM');
+          child.kill("SIGTERM");
         }
         setTimeout(() => {
           try {
             if (!child.killed) {
-              process.kill(-child.pid!, 'SIGKILL');
+              process.kill(-child.pid!, "SIGKILL");
             }
           } catch {
             if (!child.killed) {
-              child.kill('SIGKILL');
+              child.kill("SIGKILL");
             }
           }
         }, 5000);
@@ -225,26 +255,26 @@ export class AgentClient {
     const { config, prompt, systemPrompt, conversationHistory } = options;
 
     // Build conversation context for Claude CLI
-    let fullPrompt = '';
+    let fullPrompt = "";
     if (systemPrompt) {
-      fullPrompt += systemPrompt + '\n\n';
+      fullPrompt += systemPrompt + "\n\n";
     }
     if (conversationHistory) {
       for (const msg of conversationHistory) {
-        fullPrompt += `${msg.role === 'user' ? 'Human' : 'Assistant'}: ${msg.content}\n\n`;
+        fullPrompt += `${msg.role === "user" ? "Human" : "Assistant"}: ${msg.content}\n\n`;
       }
     }
     fullPrompt += `Human: ${prompt}\n\nAssistant:`;
 
     try {
-      const modelArg = config.model ? `--model ${config.model}` : '';
+      const modelArg = config.model ? `--model ${config.model}` : "";
       const { stdout } = await execAsync(
         `claude ${modelArg} --print "${fullPrompt.replace(/"/g, '\\"')}"`,
         {
           cwd: options.cwd || process.cwd(),
           timeout: 120000,
           maxBuffer: 10 * 1024 * 1024,
-        },
+        }
       );
 
       const content = stdout.trim();
@@ -256,8 +286,8 @@ export class AgentClient {
     } catch (error: unknown) {
       const err = error as { message: string; stderr?: string };
       const raw = err.stderr || err.message;
-      throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, formatAgentError('claude', raw), {
-        agentType: 'claude',
+      throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, formatAgentError("claude", raw), {
+        agentType: "claude",
         raw,
       });
     }
@@ -267,13 +297,13 @@ export class AgentClient {
     const { config, prompt, systemPrompt, conversationHistory } = options;
 
     // Build full prompt (Cursor agent uses --print with positional prompt, not --input)
-    let fullPrompt = '';
+    let fullPrompt = "";
     if (systemPrompt) {
-      fullPrompt += systemPrompt + '\n\n';
+      fullPrompt += systemPrompt + "\n\n";
     }
     if (conversationHistory) {
       for (const msg of conversationHistory) {
-        fullPrompt += `${msg.role === 'user' ? 'Human' : 'Assistant'}: ${msg.content}\n\n`;
+        fullPrompt += `${msg.role === "user" ? "Human" : "Assistant"}: ${msg.content}\n\n`;
       }
     }
     fullPrompt += `Human: ${prompt}\n\nAssistant:`;
@@ -282,33 +312,57 @@ export class AgentClient {
     // $, quotes in the prompt can crash or hang the shell. Spawn passes the prompt
     // as a single argv with no shell. Also enables live streaming to the terminal.
     const cwd = options.cwd || process.cwd();
-    const args = ['-p', '--force', '--trust', '--mode', 'ask', fullPrompt];
+    const args = ["-p", "--force", "--trust", "--mode", "ask", fullPrompt];
     if (config.model) {
-      args.splice(1, 0, '--model', config.model);
+      args.splice(1, 0, "--model", config.model);
     }
 
     const hasCursorKey = Boolean(process.env.CURSOR_API_KEY);
-    console.log('[agent] Cursor CLI starting', { model: config.model ?? 'default', promptLen: fullPrompt.length, cwd, CURSOR_API_KEY: hasCursorKey ? 'set' : 'NOT SET' });
+    console.log("[agent] Cursor CLI starting", {
+      model: config.model ?? "default",
+      promptLen: fullPrompt.length,
+      cwd,
+      CURSOR_API_KEY: hasCursorKey ? "set" : "NOT SET",
+    });
 
     try {
       const content = await this.runCursorAgentSpawn(args, cwd);
-      console.log('[agent] Cursor CLI completed', { outputLen: content.length });
+      console.log("[agent] Cursor CLI completed", { outputLen: content.length });
       if (options.onChunk) {
         options.onChunk(content);
       }
       return { content };
     } catch (error: unknown) {
-      const err = error as { message: string; stderr?: string; killed?: boolean; signal?: string };
-      console.error('[agent] Cursor CLI failed:', err.message, err.stderr ? `stderr: ${String(err.stderr).slice(0, 300)}` : '');
-      const isTimeout = err.killed && err.signal === 'SIGTERM';
+      // Detect timeout: either an AppError from runCursorAgentSpawn with isTimeout in details,
+      // or a raw ChildProcess error with killed+SIGTERM (from spawn 'error' event).
+      const isAppErr = error instanceof AppError;
+      const appDetails = isAppErr
+        ? (error.details as Record<string, unknown> | undefined)
+        : undefined;
+      const isTimeout = isAppErr
+        ? Boolean(appDetails?.isTimeout)
+        : Boolean(
+            (error as { killed?: boolean }).killed &&
+            (error as { signal?: string }).signal === "SIGTERM"
+          );
+
       const raw = isTimeout
-        ? `The Cursor agent (Composer 1.5) may hang on some prompts. Try a different model in Project Settings, or use Claude instead.`
-        : (err.stderr || err.message);
-      throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, formatAgentError('cursor', raw), {
-        agentType: 'cursor',
-        raw,
-        isTimeout,
-      });
+        ? `The Cursor agent timed out. Try a different model in Project Settings, or use Claude instead.`
+        : isAppErr
+          ? error.message
+          : (error as { stderr?: string }).stderr || (error as Error).message;
+
+      console.error("[agent] Cursor CLI failed:", raw, isTimeout ? "(timeout)" : "");
+      throw new AppError(
+        isTimeout ? 504 : 502,
+        ErrorCodes.AGENT_INVOKE_FAILED,
+        formatAgentError("cursor", raw),
+        {
+          agentType: "cursor",
+          raw,
+          isTimeout,
+        }
+      );
     }
   }
 
@@ -316,29 +370,35 @@ export class AgentClient {
   private runCursorAgentSpawn(args: string[], cwd: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const TIMEOUT_MS = 120_000;
-      let stdout = '';
-      let stderr = '';
+      let stdout = "";
+      let stderr = "";
 
-      const child = spawn('agent', args, {
+      const child = spawn("agent", args, {
         cwd,
-        env: { ...process.env, CURSOR_API_KEY: process.env.CURSOR_API_KEY || '' },
-        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, CURSOR_API_KEY: process.env.CURSOR_API_KEY || "" },
+        stdio: ["ignore", "pipe", "pipe"],
       });
 
       const timeout = setTimeout(() => {
         if (child.killed) return;
-        child.kill('SIGTERM');
+        child.kill("SIGTERM");
         setTimeout(() => {
-          if (!child.killed) child.kill('SIGKILL');
+          if (!child.killed) child.kill("SIGKILL");
         }, 3000);
         if (stdout.trim()) {
           resolve(stdout.trim());
         } else {
           reject(
-            new AppError(504, ErrorCodes.AGENT_INVOKE_FAILED, `Cursor CLI timed out. stderr: ${stderr.slice(0, 500)}`, {
-              agentType: 'cursor',
-              stderr: stderr.slice(0, 500),
-            }),
+            new AppError(
+              504,
+              ErrorCodes.AGENT_INVOKE_FAILED,
+              `Cursor CLI timed out after ${TIMEOUT_MS / 1000}s. stderr: ${stderr.slice(0, 500)}`,
+              {
+                agentType: "cursor",
+                isTimeout: true,
+                stderr: stderr.slice(0, 500),
+              }
+            )
           );
         }
       }, TIMEOUT_MS);
@@ -353,34 +413,39 @@ export class AgentClient {
         }
       };
 
-      child.stdout?.on('data', (data: Buffer) => {
+      child.stdout?.on("data", (data: Buffer) => {
         const chunk = data.toString();
         stdout += chunk;
         safeWrite(process.stdout, chunk);
       });
 
-      child.stderr?.on('data', (data: Buffer) => {
+      child.stderr?.on("data", (data: Buffer) => {
         const chunk = data.toString();
         stderr += chunk;
         safeWrite(process.stderr, chunk);
       });
 
-      child.on('close', (code, signal) => {
+      child.on("close", (code) => {
         clearTimeout(timeout);
         if (code === 0 || stdout.trim()) {
           resolve(stdout.trim());
         } else {
           reject(
-            new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, `Cursor CLI failed: code=${code} stderr=${stderr.slice(0, 500)}`, {
-              agentType: 'cursor',
-              exitCode: code,
-              stderr: stderr.slice(0, 500),
-            }),
+            new AppError(
+              502,
+              ErrorCodes.AGENT_INVOKE_FAILED,
+              `Cursor CLI failed: code=${code} stderr=${stderr.slice(0, 500)}`,
+              {
+                agentType: "cursor",
+                exitCode: code,
+                stderr: stderr.slice(0, 500),
+              }
+            )
           );
         }
       });
 
-      child.on('error', (err) => {
+      child.on("error", (err) => {
         clearTimeout(timeout);
         reject(err);
       });
@@ -391,18 +456,15 @@ export class AgentClient {
     const { config, prompt } = options;
 
     if (!config.cliCommand) {
-      throw new AppError(400, ErrorCodes.AGENT_CLI_REQUIRED, 'Custom agent requires a CLI command');
+      throw new AppError(400, ErrorCodes.AGENT_CLI_REQUIRED, "Custom agent requires a CLI command");
     }
 
     try {
-      const { stdout } = await execAsync(
-        `${config.cliCommand} "${prompt.replace(/"/g, '\\"')}"`,
-        {
-          cwd: options.cwd || process.cwd(),
-          timeout: 120000,
-          maxBuffer: 10 * 1024 * 1024,
-        },
-      );
+      const { stdout } = await execAsync(`${config.cliCommand} "${prompt.replace(/"/g, '\\"')}"`, {
+        cwd: options.cwd || process.cwd(),
+        timeout: 120000,
+        maxBuffer: 10 * 1024 * 1024,
+      });
 
       const content = stdout.trim();
       if (options.onChunk) {
@@ -413,8 +475,8 @@ export class AgentClient {
     } catch (error: unknown) {
       const err = error as { message: string; stderr?: string };
       const raw = err.stderr || err.message;
-      throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, formatAgentError('custom', raw), {
-        agentType: 'custom',
+      throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, formatAgentError("custom", raw), {
+        agentType: "custom",
         raw,
       });
     }
