@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import type { FeedbackItem } from "@opensprint/shared";
 import { useAppDispatch, useAppSelector } from "../../store";
-import { submitFeedback, recategorizeFeedback, setVerifyError } from "../../store/slices/verifySlice";
+import { submitFeedback, setVerifyError } from "../../store/slices/verifySlice";
 
 const MAX_IMAGES = 5;
 const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
@@ -49,7 +49,6 @@ export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhasePro
   /* ── Local UI state (preserved by mount-all) ── */
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
-  const [recategorizingId, setRecategorizingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addImagesFromFiles = useCallback(async (files: FileList | File[]) => {
@@ -126,13 +125,6 @@ export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhasePro
       setInput("");
       setImages([]);
     }
-  };
-
-  const handleRecategorize = async (feedbackId: string) => {
-    if (recategorizingId) return;
-    setRecategorizingId(feedbackId);
-    await dispatch(recategorizeFeedback({ projectId, feedbackId }));
-    setRecategorizingId(null);
   };
 
   return (
@@ -253,12 +245,6 @@ export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhasePro
               <div key={item.id} className="card p-4">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-xs font-medium text-gray-500">Feedback</p>
-                      <span className="text-xs font-mono text-gray-400" title={item.id}>
-                        {item.id}
-                      </span>
-                    </div>
                     <p className="text-sm text-gray-900">{item.text}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -274,25 +260,13 @@ export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhasePro
                         Categorizing…
                       </span>
                     ) : (
-                      <>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            categoryColors[item.category] ?? "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {getFeedbackTypeLabel(item)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleRecategorize(item.id)}
-                          disabled={recategorizingId === item.id}
-                          className="btn-secondary text-xs py-1 px-2 disabled:opacity-50"
-                          title="Re-run AI categorization (use if mapping was wrong)"
-                          aria-label={`Recategorize feedback ${item.id}`}
-                        >
-                          {recategorizingId === item.id ? "Recategorizing…" : "Recategorize"}
-                        </button>
-                      </>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          categoryColors[item.category] ?? "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {getFeedbackTypeLabel(item)}
+                      </span>
                     )}
                   </div>
                 </div>

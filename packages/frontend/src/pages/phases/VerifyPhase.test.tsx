@@ -311,13 +311,11 @@ describe("VerifyPhase feedback input", () => {
     );
 
     expect(screen.getByText(/Feedback History \(1\)/)).toBeInTheDocument();
-    // Feedback label and original feedback text are shown on each card
-    expect(screen.getByText("Feedback")).toBeInTheDocument();
     expect(screen.getByText("Login button is broken")).toBeInTheDocument();
     expect(screen.getByText("plan-1")).toBeInTheDocument();
   });
 
-  it("shows Feedback label and feedback text on each feedback card", () => {
+  it("shows feedback text on each feedback card", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
@@ -362,60 +360,9 @@ describe("VerifyPhase feedback input", () => {
       </Provider>,
     );
 
-    expect(screen.getByText("Feedback")).toBeInTheDocument();
     expect(
       screen.getByText("The login form doesn't show an error when password is wrong"),
     ).toBeInTheDocument();
-    expect(screen.getByText("fb-1")).toBeInTheDocument();
-  });
-
-  it("shows feedback ID on each feedback card", () => {
-    const feedbackId = "675f1ce9-b5df-46dd-87ca-edcff2bb45cf";
-    const storeWithFeedback = configureStore({
-      reducer: {
-        project: projectReducer,
-        verify: verifyReducer,
-      },
-      preloadedState: {
-        project: {
-          data: {
-            id: "proj-1",
-            name: "Test Project",
-            description: "",
-            repoPath: "/tmp/test",
-            currentPhase: "verify",
-            createdAt: "",
-            updatedAt: "",
-          },
-          loading: false,
-          error: null,
-        },
-        verify: {
-          feedback: [
-            {
-              id: feedbackId,
-              text: "Sample feedback text",
-              category: "bug",
-              mappedPlanId: "plan-1",
-              createdTaskIds: [],
-              status: "mapped",
-              createdAt: new Date().toISOString(),
-            },
-          ],
-          loading: false,
-          submitting: false,
-          error: null,
-        },
-      },
-    });
-
-    render(
-      <Provider store={storeWithFeedback}>
-        <VerifyPhase projectId="proj-1" />
-      </Provider>,
-    );
-
-    expect(screen.getByText(feedbackId)).toBeInTheDocument();
   });
 
   it("displays loading state from Redux when loading feedback", () => {
@@ -866,113 +813,6 @@ describe("VerifyPhase feedback input", () => {
     // Original feedback text is always shown on all cards
     expect(screen.getByText("This text should not appear")).toBeInTheDocument();
     expect(screen.getByText("This text should appear")).toBeInTheDocument();
-  });
-
-  it("shows Recategorize button for mapped feedback and calls recategorize API on click", async () => {
-    const user = userEvent.setup();
-    const storeWithFeedback = configureStore({
-      reducer: {
-        project: projectReducer,
-        verify: verifyReducer,
-      },
-      preloadedState: {
-        project: {
-          data: {
-            id: "proj-1",
-            name: "Test Project",
-            description: "",
-            repoPath: "/tmp/test",
-            currentPhase: "verify",
-            createdAt: "",
-            updatedAt: "",
-          },
-          loading: false,
-          error: null,
-        },
-        verify: {
-          feedback: [
-            {
-              id: "fb-mapped",
-              text: "Login button broken",
-              category: "bug",
-              mappedPlanId: "plan-1",
-              createdTaskIds: [],
-              status: "mapped",
-              createdAt: new Date().toISOString(),
-            },
-          ],
-          loading: false,
-          submitting: false,
-          error: null,
-        },
-      },
-    });
-
-    render(
-      <Provider store={storeWithFeedback}>
-        <VerifyPhase projectId="proj-1" />
-      </Provider>,
-    );
-
-    const recategorizeBtn = screen.getByRole("button", {
-      name: /Recategorize feedback fb-mapped/i,
-    });
-    expect(recategorizeBtn).toBeInTheDocument();
-    expect(recategorizeBtn).toHaveTextContent("Recategorize");
-
-    await user.click(recategorizeBtn);
-
-    await waitFor(() => {
-      expect(mockFeedbackRecategorize).toHaveBeenCalledWith("proj-1", "fb-mapped");
-    });
-  });
-
-  it("does not show Recategorize button for pending feedback", () => {
-    const storeWithPending = configureStore({
-      reducer: {
-        project: projectReducer,
-        verify: verifyReducer,
-      },
-      preloadedState: {
-        project: {
-          data: {
-            id: "proj-1",
-            name: "Test Project",
-            description: "",
-            repoPath: "/tmp/test",
-            currentPhase: "verify",
-            createdAt: "",
-            updatedAt: "",
-          },
-          loading: false,
-          error: null,
-        },
-        verify: {
-          feedback: [
-            {
-              id: "fb-pending",
-              text: "Pending feedback",
-              category: "bug",
-              mappedPlanId: null,
-              createdTaskIds: [],
-              status: "pending",
-              createdAt: new Date().toISOString(),
-            },
-          ],
-          loading: false,
-          submitting: false,
-          error: null,
-        },
-      },
-    });
-
-    render(
-      <Provider store={storeWithPending}>
-        <VerifyPhase projectId="proj-1" />
-      </Provider>,
-    );
-
-    expect(screen.queryByRole("button", { name: /Recategorize/i })).not.toBeInTheDocument();
   });
 
   it("displays images in feedback history when present", () => {
