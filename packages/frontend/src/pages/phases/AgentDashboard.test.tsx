@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import { AgentDashboard } from "./AgentDashboard";
@@ -42,6 +42,13 @@ function renderAgentDashboard() {
 describe("AgentDashboard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockBuildStatus.mockResolvedValue({
+      running: false,
+      totalCompleted: 0,
+      totalFailed: 0,
+      queueDepth: 0,
+    });
+    mockAgentsActive.mockResolvedValue([]);
   });
 
   it("renders header with title and subtitle", async () => {
@@ -49,18 +56,28 @@ describe("AgentDashboard", () => {
 
     expect(screen.getByText("Agent Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Monitor and manage all agent instances")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(mockBuildStatus).toHaveBeenCalledWith("proj-1");
+    });
   });
 
-  it("does not render redundant Connected text in top bar", () => {
+  it("does not render redundant Connected text in top bar", async () => {
     renderAgentDashboard();
 
     expect(screen.queryByText("Connected")).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(mockBuildStatus).toHaveBeenCalled();
+    });
   });
 
   it("fetches build status on mount", async () => {
     renderAgentDashboard();
 
-    expect(mockBuildStatus).toHaveBeenCalledWith("proj-1");
-    expect(mockAgentsActive).toHaveBeenCalledWith("proj-1");
+    await waitFor(() => {
+      expect(mockBuildStatus).toHaveBeenCalledWith("proj-1");
+      expect(mockAgentsActive).toHaveBeenCalledWith("proj-1");
+    });
   });
 });

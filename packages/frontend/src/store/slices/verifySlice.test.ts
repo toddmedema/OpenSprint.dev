@@ -1,0 +1,246 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { configureStore } from "@reduxjs/toolkit";
+import verifyReducer, {
+  setFeedback,
+  setVerifyError,
+  resetVerify,
+  fetchFeedback,
+  submitFeedback,
+  recategorizeFeedback,
+  type VerifyState,
+} from "./verifySlice";
+import type { FeedbackItem } from "@opensprint/shared";
+
+vi.mock("../../api/client", () => ({
+  api: {
+    feedback: {
+      list: vi.fn(),
+      submit: vi.fn(),
+      recategorize: vi.fn(),
+    },
+  },
+}));
+
+import { api } from "../../api/client";
+
+const mockFeedback: FeedbackItem = {
+  id: "fb-1",
+  text: "Great feature",
+  category: "feature",
+  mappedPlanId: null,
+  createdTaskIds: [],
+  status: "pending",
+  images: [],
+  createdAt: "2025-01-01T00:00:00Z",
+};
+
+describe("verifySlice", () => {
+  beforeEach(() => {
+    vi.mocked(api.feedback.list).mockReset();
+    vi.mocked(api.feedback.submit).mockReset();
+    vi.mocked(api.feedback.recategorize).mockReset();
+  });
+
+  function createStore() {
+    return configureStore({ reducer: { verify: verifyReducer } });
+  }
+
+  describe("initial state", () => {
+    it("has correct initial state", () => {
+      const store = createStore();
+      const state = store.getState().verify as VerifyState;
+      expect(state.feedback).toEqual([]);
+      expect(state.loading).toBe(false);
+      expect(state.submitting).toBe(false);
+      expect(state.error).toBeNull();
+    });
+  });
+
+  describe("reducers", () => {
+    it("setFeedback sets feedback array", () => {
+      const store = createStore();
+      const feedback = [mockFeedback];
+      store.dispatch(setFeedback(feedback));
+      expect(store.getState().verify.feedback).toEqual(feedback);
+    });
+
+    it("setVerifyError sets error", () => {
+      const store = createStore();
+      store.dispatch(setVerifyError("Something went wrong"));
+      expect(store.getState().verify.error).toBe("Something went wrong");
+      store.dispatch(setVerifyError(null));
+      expect(store.getState().verify.error).toBeNull();
+    });
+
+    it("resetVerify resets to initial state", () => {
+      const store = createStore();
+      store.dispatch(setFeedback([mockFeedback]));
+      store.dispatch(setVerifyError("error"));
+
+      store.dispatch(resetVerify());
+      const state = store.getState().verify as VerifyState;
+      expect(state.feedback).toEqual([]);
+      expect(state.loading).toBe(false);
+      expect(state.submitting).toBe(false);
+      expect(state.error).toBeNull();
+    });
+  });
+
+  describe("fetchFeedback thunk", () => {
+    it("sets loading true on pending", async () => {
+      let resolveApi: (v: FeedbackItem[]) => void;
+      const apiPromise = new Promise<FeedbackItem[]>((r) => {
+        resolveApi = r;
+      });
+      vi.mocked(api.feedback.list).mockReturnValue(apiPromise as never);
+      const store = createStore();
+      const dispatchPromise = store.dispatch(fetchFeedback("proj-1"));
+
+      expect(store.getState().verify.loading).toBe(true);
+      expect(store.getState().verify.error).toBeNull();
+
+      resolveApi!([mockFeedback]);
+      await dispatchPromise;
+    });
+
+    it("stores feedback on fulfilled", async () => {
+      vi.mocked(api.feedback.list).mockResolvedValue([mockFeedback] as never);
+      const store = createStore();
+      await store.dispatch(fetchFeedback("proj-1"));
+
+      expect(store.getState().verify.feedback).toEqual([mockFeedback]);
+      expect(store.getState().verify.loading).toBe(false);
+      expect(api.feedback.list).toHaveBeenCalledWith("proj-1");
+    });
+
+    it("sets error on rejected", async () => {
+      vi.mocked(api.feedback.list).mockRejectedValue(new Error("Network error"));
+      const store = createStore();
+      await store.dispatch(fetchFeedback("proj-1"));
+
+      expect(store.getState().verify.loading).toBe(false);
+      expect(store.getState().verify.error).toBe("Network error");
+    });
+
+    it("uses fallback error message when error has no message", async () => {
+      vi.mocked(api.feedback.list).mockRejectedValue(new Error());
+      const store = createStore();
+      await store.dispatch(fetchFeedback("proj-1"));
+
+      expect(store.getState().verify.error).toBe("Failed to load feedback");
+    });
+  });
+
+  describe("submitFeedback thunk", () => {
+    it("sets submitting true on pending", async () => {
+      let resolveApi: (v: FeedbackItem) => void;
+      const apiPromise = new Promise<FeedbackItem>((r) => {
+        resolveApi = r;
+      });
+      vi.mocked(api.feedback.submit).mockReturnValue(apiPromise as never);
+      const store = createStore();
+      const dispatchPromise = store.dispatch(
+        submitFeedback({ projectId: "proj-1", text: "Great work!" }),
+      );
+
+      expect(store.getState().verify.submitting).toBe(true);
+      expect(store.getState().verify.error).toBeNull();
+
+      resolveApi!(mockFeedback);
+      await dispatchPromise;
+    });
+
+    it("prepends new feedback and clears submitting on fulfilled", async () => {
+      const existingFeedback: FeedbackItem = {
+        ...mockFeedback,
+        id: "fb-2",
+        text: "Older feedback",
+      };
+      const newFeedback: FeedbackItem = {
+        ...mockFeedback,
+        id: "fb-3",
+        text: "New feedback",
+      };
+      vi.mocked(api.feedback.submit).mockResolvedValue(newFeedback as never);
+      const store = createStore();
+      store.dispatch(setFeedback([existingFeedback]));
+      await store.dispatch(
+        submitFeedback({ projectId: "proj-1", text: "New feedback" }),
+      );
+
+      const state = store.getState().verify;
+      expect(state.submitting).toBe(false);
+      expect(state.feedback).toHaveLength(2);
+      expect(state.feedback[0]).toEqual(newFeedback);
+      expect(state.feedback[1]).toEqual(existingFeedback);
+      expect(api.feedback.submit).toHaveBeenCalledWith("proj-1", "New feedback", undefined);
+    });
+
+    it("sets error on rejected", async () => {
+      vi.mocked(api.feedback.submit).mockRejectedValue(new Error("Submit failed"));
+      const store = createStore();
+      await store.dispatch(
+        submitFeedback({ projectId: "proj-1", text: "Feedback" }),
+      );
+
+      expect(store.getState().verify.submitting).toBe(false);
+      expect(store.getState().verify.error).toBe("Submit failed");
+    });
+
+    it("uses fallback error message when error has no message", async () => {
+      vi.mocked(api.feedback.submit).mockRejectedValue(new Error());
+      const store = createStore();
+      await store.dispatch(
+        submitFeedback({ projectId: "proj-1", text: "Feedback" }),
+      );
+
+      expect(store.getState().verify.error).toBe("Failed to submit feedback");
+    });
+  });
+
+  describe("recategorizeFeedback thunk", () => {
+    it("updates feedback item in array on fulfilled", async () => {
+      const updatedFeedback: FeedbackItem = {
+        ...mockFeedback,
+        category: "bug" as const,
+      };
+      vi.mocked(api.feedback.recategorize).mockResolvedValue(updatedFeedback as never);
+      const store = createStore();
+      store.dispatch(setFeedback([mockFeedback]));
+      await store.dispatch(
+        recategorizeFeedback({ projectId: "proj-1", feedbackId: "fb-1" }),
+      );
+
+      expect(store.getState().verify.feedback[0].category).toBe("bug");
+      expect(api.feedback.recategorize).toHaveBeenCalledWith("proj-1", "fb-1");
+    });
+
+    it("does not add item when not found in array", async () => {
+      const otherFeedback: FeedbackItem = {
+        ...mockFeedback,
+        id: "fb-other",
+        category: "bug" as const,
+      };
+      vi.mocked(api.feedback.recategorize).mockResolvedValue(otherFeedback as never);
+      const store = createStore();
+      store.dispatch(setFeedback([mockFeedback]));
+      await store.dispatch(
+        recategorizeFeedback({ projectId: "proj-1", feedbackId: "fb-other" }),
+      );
+
+      expect(store.getState().verify.feedback).toHaveLength(1);
+      expect(store.getState().verify.feedback[0].id).toBe("fb-1");
+    });
+
+    it("sets error on rejected", async () => {
+      vi.mocked(api.feedback.recategorize).mockRejectedValue(new Error("Recategorize failed"));
+      const store = createStore();
+      store.dispatch(setFeedback([mockFeedback]));
+      await store.dispatch(
+        recategorizeFeedback({ projectId: "proj-1", feedbackId: "fb-1" }),
+      );
+
+      expect(store.getState().verify.error).toBe("Recategorize failed");
+    });
+  });
+});
