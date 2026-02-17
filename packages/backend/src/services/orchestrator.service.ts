@@ -141,6 +141,8 @@ interface OrchestratorState {
   infraRetries: number;
   /** Raw test output from the last test run (for richer retry context) */
   lastTestOutput: string;
+  /** True when agent was killed due to inactivity timeout (for failure type classification) */
+  killedDueToTimeout: boolean;
 }
 
 /**
@@ -178,6 +180,7 @@ export class OrchestratorService {
         activeWorktreePath: null,
         infraRetries: 0,
         lastTestOutput: "",
+        killedDueToTimeout: false,
       });
     }
     return this.state.get(projectId)!;
@@ -682,6 +685,7 @@ export class OrchestratorService {
     retryContext?: RetryContext,
   ): Promise<void> {
     const state = this.getState(projectId);
+    state.killedDueToTimeout = false;
     const settings = await this.projectService.getSettings(projectId);
     const branchName = `opensprint/${task.id}`;
 
@@ -804,6 +808,7 @@ export class OrchestratorService {
         if (elapsed > AGENT_INACTIVITY_TIMEOUT_MS) {
           console.warn(`Agent timeout for task ${task.id}: ${elapsed}ms of inactivity`);
           if (state.activeProcess) {
+            state.killedDueToTimeout = true;
             this.branchManager
               .commitWip(wtPath, task.id)
               .then(() => state.activeProcess?.kill())
@@ -844,7 +849,12 @@ export class OrchestratorService {
 
     // Determine failure type when agent didn't produce a result
     if (!result) {
-      const failureType: FailureType = exitCode === 143 || exitCode === 137 ? "agent_crash" : "no_result";
+      const failureType: FailureType = state.killedDueToTimeout
+        ? "timeout"
+        : exitCode === 143 || exitCode === 137
+          ? "agent_crash"
+          : "no_result";
+      state.killedDueToTimeout = false;
       await this.handleTaskFailure(
         projectId,
         repoPath,
@@ -932,6 +942,7 @@ export class OrchestratorService {
     branchName: string,
   ): Promise<void> {
     const state = this.getState(projectId);
+    state.killedDueToTimeout = false;
     const settings = await this.projectService.getSettings(projectId);
     const wtPath = state.activeWorktreePath ?? repoPath;
 
@@ -1048,6 +1059,7 @@ export class OrchestratorService {
         if (elapsed > AGENT_INACTIVITY_TIMEOUT_MS) {
           console.warn(`Agent timeout for task ${task.id}: ${elapsed}ms of inactivity`);
           if (state.activeProcess) {
+            state.killedDueToTimeout = true;
             this.branchManager
               .commitWip(wtPath, task.id)
               .then(() => state.activeProcess?.kill())
@@ -1127,7 +1139,12 @@ export class OrchestratorService {
         reviewFeedback,
       );
     } else {
-      const failureType: FailureType = exitCode === 143 || exitCode === 137 ? "agent_crash" : "no_result";
+      const failureType: FailureType = state.killedDueToTimeout
+        ? "timeout"
+        : exitCode === 143 || exitCode === 137
+          ? "agent_crash"
+          : "no_result";
+      state.killedDueToTimeout = false;
       await this.handleTaskFailure(
         projectId,
         repoPath,

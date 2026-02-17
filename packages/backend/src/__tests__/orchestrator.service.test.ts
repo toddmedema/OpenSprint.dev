@@ -819,5 +819,183 @@ describe("OrchestratorService", () => {
       // Second call to createTaskWorktree for retry
       expect(mockCreateTaskWorktree.mock.calls.length).toBeGreaterThanOrEqual(1);
     });
+
+    it("retries when coding agent returns result.json status failed (coding_failure)", async () => {
+      const task = {
+        id: "task-coding-fail",
+        title: "Task with coding failure",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-coding-fail");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(repoPath, "wt-coding-fail", ".opensprint", "active", "task-coding-fail"),
+      );
+      mockBuildContext.mockResolvedValue({});
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockReadResult.mockResolvedValue({
+        status: "failed",
+        summary: "Could not implement feature due to API limitations",
+      });
+
+      let onExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeCodingAgent.mockImplementation(
+        (
+          _p: string,
+          _c: unknown,
+          opts: { onExit?: (code: number | null) => Promise<void> },
+        ) => {
+          onExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12345 };
+        },
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      mockBeadsSetCumulativeAttempts.mockResolvedValue(undefined);
+
+      await onExit(1);
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(mockBeadsComment).toHaveBeenCalledWith(
+        repoPath,
+        "task-coding-fail",
+        expect.stringContaining("Attempt 1 failed [coding_failure]"),
+      );
+      expect(mockArchiveSession).toHaveBeenCalled();
+      expect(mockBeadsSetCumulativeAttempts).toHaveBeenCalledWith(
+        repoPath,
+        "task-coding-fail",
+        1,
+      );
+
+      // Retry should pass previousFailure to assembleTaskDirectory
+      const assembleCalls = mockAssembleTaskDirectory.mock.calls;
+      const retryCall = assembleCalls.find(
+        (c: unknown[]) =>
+          Array.isArray(c) &&
+          c[2] &&
+          typeof c[2] === "object" &&
+          "previousFailure" in (c[2] as object) &&
+          (c[2] as { previousFailure: string | null }).previousFailure !== null,
+      );
+      expect(retryCall).toBeDefined();
+      const retryConfig = retryCall![2] as { previousFailure: string | null };
+      expect(retryConfig.previousFailure).toContain("API limitations");
+    });
+
+    it("retries with agent_crash when coding agent exits without result (exit 143)", async () => {
+      const task = {
+        id: "task-no-result",
+        title: "Task with agent crash",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-no-result");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(repoPath, "wt-no-result", ".opensprint", "active", "task-no-result"),
+      );
+      mockBuildContext.mockResolvedValue({});
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockReadResult.mockResolvedValue(null);
+
+      let onExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeCodingAgent.mockImplementation(
+        (
+          _p: string,
+          _c: unknown,
+          opts: { onExit?: (code: number | null) => Promise<void> },
+        ) => {
+          onExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12345 };
+        },
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      await onExit(143);
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(mockBeadsComment).toHaveBeenCalledWith(
+        repoPath,
+        "task-no-result",
+        expect.stringContaining("Attempt 1 failed [agent_crash]"),
+      );
+      expect(mockArchiveSession).toHaveBeenCalled();
+      expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, "task-no-result");
+      expect(mockCreateTaskWorktree.mock.calls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("retries with no_result when coding agent exits without result (non-SIGTERM exit)", async () => {
+      const task = {
+        id: "task-no-result-other",
+        title: "Task with unexpected exit",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-no-result-other");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(
+          repoPath,
+          "wt-no-result-other",
+          ".opensprint",
+          "active",
+          "task-no-result-other",
+        ),
+      );
+      mockBuildContext.mockResolvedValue({});
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockReadResult.mockResolvedValue(null);
+
+      let onExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeCodingAgent.mockImplementation(
+        (
+          _p: string,
+          _c: unknown,
+          opts: { onExit?: (code: number | null) => Promise<void> },
+        ) => {
+          onExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12345 };
+        },
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      await onExit(1);
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(mockBeadsComment).toHaveBeenCalledWith(
+        repoPath,
+        "task-no-result-other",
+        expect.stringContaining("Attempt 1 failed [no_result]"),
+      );
+    });
   });
 });
