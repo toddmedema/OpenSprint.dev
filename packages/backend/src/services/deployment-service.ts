@@ -64,7 +64,7 @@ export class DeploymentService {
 
   /**
    * Deploy using Expo.dev / EAS.
-   * OTA update to preview channel for Verify phase (PRD §6.4).
+   * OTA update to preview channel for Eval phase (PRD §6.4).
    */
   private async deployExpo(repoPath: string, config: DeploymentConfig): Promise<DeploymentResult> {
     try {
