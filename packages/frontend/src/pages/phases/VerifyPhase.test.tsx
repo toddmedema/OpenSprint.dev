@@ -349,7 +349,7 @@ describe("VerifyPhase feedback input", () => {
     });
   });
 
-  it("shows loading spinner instead of category chip for pending feedback", () => {
+  it("suppresses category display when feedback status is pending", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
@@ -394,13 +394,13 @@ describe("VerifyPhase feedback input", () => {
       </Provider>,
     );
 
-    expect(screen.getByLabelText("Categorizing feedback")).toBeInTheDocument();
+    // Category is suppressed when pending — no category chip, no spinner
     expect(screen.queryByText("Bug")).not.toBeInTheDocument();
-    expect(screen.queryByText("Pending")).not.toBeInTheDocument();
-    expect(screen.queryByText("Mapped")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Categorizing feedback")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Retry/i })).toBeInTheDocument();
   });
 
-  it("shows category chip for mapped feedback and spinner for pending in mixed list", () => {
+  it("shows category chip for mapped feedback and suppresses category for pending in mixed list", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
@@ -454,9 +454,10 @@ describe("VerifyPhase feedback input", () => {
       </Provider>,
     );
 
-    expect(screen.getByLabelText("Categorizing feedback")).toBeInTheDocument();
-    expect(screen.getByText("Feature")).toBeInTheDocument();
+    // Pending: category suppressed (no Bug chip)
     expect(screen.queryByText("Bug")).not.toBeInTheDocument();
+    // Mapped: category shown
+    expect(screen.getByText("Feature")).toBeInTheDocument();
   });
 
   it("shows category chip (Bug/Feature/UX/Scope) for mapped feedback", () => {
