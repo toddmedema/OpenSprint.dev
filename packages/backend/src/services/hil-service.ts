@@ -5,6 +5,9 @@ import { broadcastToProject } from "../websocket/index.js";
 
 type HilCategory = keyof HilConfig;
 
+/** Internal HIL category for test failures — always automated, never configurable (PRD §6.5.1) */
+export type HilDecisionCategory = HilCategory | "testFailuresAndRetries";
+
 /** Optional metadata for scope-change HIL requests (AI-generated summary) */
 export interface ScopeChangeHilMetadata {
   scopeChangeSummary: string;
@@ -43,12 +46,18 @@ export class HilService {
    */
   async evaluateDecision(
     projectId: string,
-    category: HilCategory,
+    category: HilDecisionCategory,
     description: string,
     options?: Array<{ id: string; label: string; description: string }>,
     defaultApproved = true,
     scopeChangeMetadata?: ScopeChangeHilMetadata,
   ): Promise<{ approved: boolean; notes?: string }> {
+    // PRD §6.5.1: Test failures are always automated — never configurable
+    if (category === "testFailuresAndRetries") {
+      console.log(`[HIL] Automated decision for testFailuresAndRetries: ${description}`);
+      return { approved: defaultApproved };
+    }
+
     const settings = await this.projectService.getSettings(projectId);
     const mode = settings.hilConfig[category];
 

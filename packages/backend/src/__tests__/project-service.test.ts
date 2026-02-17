@@ -262,7 +262,6 @@ describe("ProjectService", () => {
     expect(settings.hilConfig.scopeChanges).toBe("automated");
     expect(settings.hilConfig.architectureDecisions).toBe("requires_approval");
     expect(settings.hilConfig.dependencyModifications).toBe("automated");
-    expect(settings.hilConfig.testFailuresAndRetries).toBe("automated");
   });
 
   it("should reject path that already has .opensprint", async () => {
@@ -379,6 +378,56 @@ describe("ProjectService", () => {
     // Verify persistence
     const reloaded = await projectService.getSettings(project.id);
     expect(reloaded.codingAgentByComplexity?.high?.model).toBe("claude-opus-5");
+  });
+
+  it("should strip testFailuresAndRetries from hilConfig in updateSettings (PRD §6.5.1)", async () => {
+    const repoPath = path.join(tempDir, "hil-strip");
+    const project = await projectService.createProject({
+      name: "HIL Strip",
+      description: "",
+      repoPath,
+      planningAgent: { type: "claude", model: null, cliCommand: null },
+      codingAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    const updated = await projectService.updateSettings(project.id, {
+      hilConfig: {
+        ...DEFAULT_HIL_CONFIG,
+        testFailuresAndRetries: "requires_approval",
+      } as typeof DEFAULT_HIL_CONFIG & { testFailuresAndRetries: string },
+    });
+
+    expect(updated.hilConfig).not.toHaveProperty("testFailuresAndRetries");
+    expect(updated.hilConfig.scopeChanges).toBe("requires_approval");
+
+    const reloaded = await projectService.getSettings(project.id);
+    expect(reloaded.hilConfig).not.toHaveProperty("testFailuresAndRetries");
+  });
+
+  it("should strip testFailuresAndRetries from hilConfig when reading settings (PRD §6.5.1)", async () => {
+    const repoPath = path.join(tempDir, "hil-read-strip");
+    const project = await projectService.createProject({
+      name: "HIL Read Strip",
+      description: "",
+      repoPath,
+      planningAgent: { type: "claude", model: null, cliCommand: null },
+      codingAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    // Manually write settings with legacy testFailuresAndRetries
+    const settingsPath = path.join(repoPath, ".opensprint", "settings.json");
+    const raw = await fs.readFile(settingsPath, "utf-8");
+    const settings = JSON.parse(raw);
+    settings.hilConfig.testFailuresAndRetries = "requires_approval";
+    await fs.writeFile(settingsPath, JSON.stringify(settings));
+
+    const fetched = await projectService.getSettings(project.id);
+    expect(fetched.hilConfig).not.toHaveProperty("testFailuresAndRetries");
+    expect(fetched.hilConfig.scopeChanges).toBe("requires_approval");
   });
 
   it("should reject invalid agent config in codingAgentByComplexity", async () => {

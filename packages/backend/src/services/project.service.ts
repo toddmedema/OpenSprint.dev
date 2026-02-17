@@ -47,14 +47,28 @@ function normalizeDeployment(input: CreateProjectRequest["deployment"]): Deploym
   };
 }
 
-/** Normalize HIL config: merge partial input with defaults (PRD §6.5) */
-function normalizeHilConfig(input: CreateProjectRequest["hilConfig"]): HilConfig {
+/** Normalize HIL config: merge partial input with defaults (PRD §6.5). Only valid keys are used. Test failures are always automated (PRD §6.5.1) — not configurable, so testFailuresAndRetries is never in HilConfig. */
+const HIL_CONFIG_KEYS: (keyof HilConfig)[] = [
+  "scopeChanges",
+  "architectureDecisions",
+  "dependencyModifications",
+];
+
+function normalizeHilConfig(input: CreateProjectRequest["hilConfig"] | Record<string, unknown>): HilConfig {
   if (!input) return DEFAULT_HIL_CONFIG;
-  const defined = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
-  return {
+  const defined = Object.fromEntries(
+    HIL_CONFIG_KEYS.filter((k) => (input as Record<string, unknown>)[k] !== undefined).map((k) => [
+      k,
+      (input as Record<string, unknown>)[k],
+    ]),
+  );
+  const result = {
     ...DEFAULT_HIL_CONFIG,
     ...defined,
   };
+  // Strip legacy testFailuresAndRetries if present (PRD §6.5.1: never persisted)
+  const { testFailuresAndRetries: _legacy, ...clean } = result as HilConfig & { testFailuresAndRetries?: unknown };
+  return clean as HilConfig;
 }
 
 export class ProjectService {
@@ -343,7 +357,11 @@ export class ProjectService {
     const settingsPath = path.join(repoPath, OPENSPRINT_PATHS.settings);
     try {
       const raw = await fs.readFile(settingsPath, "utf-8");
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw) as ProjectSettings;
+      return {
+        ...parsed,
+        hilConfig: normalizeHilConfig(parsed.hilConfig ?? {}),
+      };
     } catch {
       throw new AppError(404, ErrorCodes.SETTINGS_NOT_FOUND, "Project settings not found");
     }
@@ -405,12 +423,16 @@ export class ProjectService {
       }
     }
 
+    const hilConfig = normalizeHilConfig(
+      (updates.hilConfig ?? current.hilConfig) as CreateProjectRequest["hilConfig"],
+    );
     const updated: ProjectSettings = {
       ...current,
       ...updates,
       planningAgent,
       codingAgent,
       codingAgentByComplexity,
+      hilConfig,
     };
     const settingsPath = path.join(repoPath, OPENSPRINT_PATHS.settings);
     await writeJsonAtomic(settingsPath, updated);

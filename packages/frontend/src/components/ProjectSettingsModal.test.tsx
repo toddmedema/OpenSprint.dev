@@ -40,7 +40,6 @@ const mockSettings = {
     scopeChanges: "requires_approval" as const,
     architectureDecisions: "requires_approval" as const,
     dependencyModifications: "requires_approval" as const,
-    testFailuresAndRetries: "requires_approval" as const,
   },
 };
 
@@ -196,5 +195,18 @@ describe("ProjectSettingsModal", () => {
         reviewMode: "never",
       })
     );
+  });
+
+  it("Autonomy tab shows only configurable HIL categories (PRD §6.5.1: no testFailuresAndRetries)", async () => {
+    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await screen.findByText("Project Settings");
+
+    const autonomyTab = screen.getByRole("button", { name: "Autonomy" });
+    await userEvent.click(autonomyTab);
+
+    expect(screen.getByText("Scope Changes")).toBeInTheDocument();
+    expect(screen.getByText("Architecture Decisions")).toBeInTheDocument();
+    expect(screen.getByText("Dependency Modifications")).toBeInTheDocument();
+    expect(screen.queryByText(/Test Failures|testFailuresAndRetries/i)).not.toBeInTheDocument();
   });
 });
