@@ -80,25 +80,25 @@ describe("HomeScreen", () => {
     expect(window.location.pathname).toBe("/projects/new");
   });
 
-  it("project grid has improved spacing (gap-6 lg:gap-8)", async () => {
+  it("project grid has improved spacing (gap-8 lg:gap-12)", async () => {
     mockProjectsList.mockResolvedValue([mockProject]);
 
     renderHomeScreen();
 
     await screen.findByText("My Project");
     const grid = screen.getByText("My Project").closest(".grid");
-    expect(grid).toHaveClass("gap-6");
-    expect(grid).toHaveClass("lg:gap-8");
+    expect(grid).toHaveClass("gap-8");
+    expect(grid).toHaveClass("lg:gap-12");
   });
 
-  it("project cards have increased padding (p-6)", async () => {
+  it("project cards have increased padding (p-8)", async () => {
     mockProjectsList.mockResolvedValue([mockProject]);
 
     renderHomeScreen();
 
     await screen.findByText("My Project");
     const card = screen.getByRole("link", { name: /my project/i });
-    expect(card).toHaveClass("p-6");
+    expect(card).toHaveClass("p-8");
   });
 
   it("project card links to correct phase path", async () => {
