@@ -14,7 +14,7 @@ import {
 import { wsSend } from "../../store/middleware/websocketMiddleware";
 import { CloseButton } from "../../components/CloseButton";
 import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
-import { EpicTaskTable, TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
+import { BuildEpicCard, TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
 
 interface BuildPhaseProps {
   projectId: string;
@@ -247,10 +247,17 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
           ) : implTasks.length === 0 ? (
             <div className="text-center py-10 text-gray-500">No tasks yet. Ship a Plan to start generating tasks.</div>
           ) : (
-            <EpicTaskTable
-              swimlanes={swimlanes}
-              onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
-            />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {swimlanes.map((lane) => (
+                <BuildEpicCard
+                  key={lane.epicId || "other"}
+                  epicId={lane.epicId}
+                  epicTitle={lane.epicTitle}
+                  tasks={lane.tasks}
+                  onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
+                />
+              ))}
+            </div>
           )}
         </div>
       </div>
