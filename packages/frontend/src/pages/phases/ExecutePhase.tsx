@@ -390,7 +390,7 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
               <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
                 {isDoneTask ? "Done work artifacts" : "Live agent output"}
               </h4>
-              <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden min-h-[200px]">
+              <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden min-h-[200px] max-h-[400px] flex flex-col">
                 {isDoneTask ? (
                   archivedLoading ? (
                     <div className="p-4 text-gray-400 text-sm">Loading archived sessions...</div>
@@ -400,8 +400,8 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
                     <ArchivedSessionView sessions={archivedSessions} />
                   )
                 ) : (
-                  <>
-                    <pre className="p-4 text-xs font-mono whitespace-pre-wrap text-green-400 min-h-[120px]">
+                  <div className="flex flex-col min-h-0 flex-1">
+                    <pre className="p-4 text-xs font-mono whitespace-pre-wrap text-green-400 min-h-[120px] overflow-y-auto flex-1 min-h-0" data-testid="live-agent-output">
                       {agentOutput.length > 0 ? agentOutput.join("") : "Waiting for agent output..."}
                     </pre>
                     {completionState && (
@@ -423,7 +423,7 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
                         )}
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
               </div>

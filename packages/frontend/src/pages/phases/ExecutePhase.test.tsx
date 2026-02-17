@@ -40,7 +40,12 @@ const basePlan = {
 
 function createStore(
   tasks: { id: string; kanbanColumn: string; epicId: string; title: string; priority: number; assignee: string | null }[],
-  buildOverrides?: Partial<{ orchestratorRunning: boolean; selectedTaskId: string | null; awaitingApproval: boolean }>,
+  buildOverrides?: Partial<{
+    orchestratorRunning: boolean;
+    selectedTaskId: string | null;
+    awaitingApproval: boolean;
+    agentOutput: string[];
+  }>,
 ) {
   return configureStore({
     reducer: {
@@ -331,6 +336,33 @@ describe("ExecutePhase Redux integration", () => {
     });
 
     expect(screen.getByRole("separator", { name: "Resize sidebar", hidden: true })).toBeInTheDocument();
+  });
+
+  it("live agent output area is scrollable (overflow-y-auto) and does not auto-scroll when content grows", async () => {
+    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
+    const tasks = [
+      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+    ];
+    const store = createStore(tasks, {
+      selectedTaskId: "epic-1.1",
+      agentOutput: ["Line 1\n", "Line 2\n", "Line 3\n"],
+    });
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    await vi.waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
+    });
+
+    const liveOutput = screen.getByTestId("live-agent-output");
+    expect(liveOutput).toBeInTheDocument();
+    expect(liveOutput).toHaveClass("overflow-y-auto");
+    expect(liveOutput).toHaveTextContent("Line 1");
+    expect(liveOutput).toHaveTextContent("Line 2");
+    expect(liveOutput).toHaveTextContent("Line 3");
   });
 });
 
