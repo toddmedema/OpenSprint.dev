@@ -124,4 +124,25 @@ describe("PrdChatPanel", () => {
 
     expect(onCollapsedChange).toHaveBeenCalledWith(false);
   });
+
+  it("applies dark mode classes when html has data-theme=dark", () => {
+    document.documentElement.setAttribute("data-theme", "dark");
+    render(
+      <PrdChatPanel
+        {...defaultProps}
+        variant="inline"
+        messages={[{ role: "assistant", content: "Hello", timestamp: "" }]}
+      />,
+    );
+
+    const sidebar = screen.getByTestId("prd-chat-sidebar");
+    expect(sidebar).toHaveClass("dark:bg-gray-800");
+    expect(sidebar).toHaveClass("dark:border-gray-700");
+
+    const assistantBubble = screen.getByText("Hello").closest("div");
+    expect(assistantBubble).toHaveClass("dark:bg-gray-700");
+    expect(assistantBubble).toHaveClass("dark:text-gray-200");
+
+    document.documentElement.removeAttribute("data-theme");
+  });
 });

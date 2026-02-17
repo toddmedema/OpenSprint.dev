@@ -70,13 +70,13 @@ export function PrdChatPanel({
   if (isCollapsed) {
     return (
       <div
-        className="flex flex-col h-full w-12 min-w-[48px] border-l border-gray-200 bg-gray-50 shrink-0 overflow-hidden items-center justify-center"
+        className="flex flex-col h-full w-12 min-w-[48px] border-l border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shrink-0 overflow-hidden items-center justify-center"
         data-testid="prd-chat-sidebar"
       >
         <button
           type="button"
           onClick={() => onCollapsedChange?.(false)}
-          className="flex flex-col items-center gap-1 p-2 text-gray-600 hover:text-brand-600 hover:bg-gray-100 rounded-lg transition-colors"
+          className="flex flex-col items-center gap-1 p-2 text-gray-600 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           title="Expand Discuss"
           aria-label="Expand Discuss sidebar"
         >
@@ -107,7 +107,7 @@ export function PrdChatPanel({
   }
 
   const containerClass = isInline
-    ? "flex flex-col h-full w-[380px] min-w-[320px] border-l border-gray-200 bg-gray-50 shrink-0 overflow-hidden"
+    ? "flex flex-col h-full w-[380px] min-w-[320px] border-l border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shrink-0 overflow-hidden"
     : "fixed bottom-6 right-6 w-96 h-[520px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col z-40 overflow-hidden animate-slide-up-fade";
 
   const headerTitle = isInline ? "Discuss" : "Chat with AI";
@@ -115,17 +115,17 @@ export function PrdChatPanel({
   return (
     <div className={containerClass} data-testid={isInline ? "prd-chat-sidebar" : undefined}>
       {/* Chat header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0">
         <div className="flex items-center gap-2">
           <SparklesIcon className="w-4 h-4 text-brand-500" />
-          <span className="text-sm font-semibold text-gray-800">{headerTitle}</span>
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{headerTitle}</span>
         </div>
         {isInline ? (
           onCollapsedChange && (
             <button
               type="button"
               onClick={() => onCollapsedChange(true)}
-              className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-colors"
+              className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
               title="Collapse Discuss"
               aria-label="Collapse Discuss sidebar"
             >
@@ -139,7 +139,7 @@ export function PrdChatPanel({
               onClearSelectionContext();
             }}
             ariaLabel="Close chat panel"
-            className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-colors"
+            className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
             size="w-4 h-4"
           />
         )}
@@ -148,7 +148,7 @@ export function PrdChatPanel({
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && (
-          <div className="text-center py-8 text-gray-500 text-sm">
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
             <ChatIcon className="w-8 h-8 mx-auto mb-2 opacity-40" />
             <p>Ask questions or refine your PRD</p>
           </div>
@@ -162,7 +162,7 @@ export function PrdChatPanel({
               className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                 msg.role === "user"
                   ? "bg-brand-600 text-white"
-                  : "bg-gray-100 text-gray-800"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
               }`}
             >
               <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -171,11 +171,11 @@ export function PrdChatPanel({
         ))}
         {sending && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-2xl px-3.5 py-2.5 text-sm text-gray-500">
+            <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl px-3.5 py-2.5 text-sm text-gray-500 dark:text-gray-400">
               <span className="flex gap-1">
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce [animation-delay:0ms]" />
+                <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce [animation-delay:150ms]" />
+                <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce [animation-delay:300ms]" />
               </span>
             </div>
           </div>
@@ -185,7 +185,7 @@ export function PrdChatPanel({
 
       {/* Selection context indicator */}
       {selectionContext && (
-        <div className="mx-3 mb-1 px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-xs">
+        <div className="mx-3 mb-1 px-3 py-2 bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-700 rounded-lg text-xs">
           <div className="flex items-center justify-between mb-1">
             <span className="font-medium text-brand-700 dark:text-brand-400">
               Discussing: {formatSectionKey(selectionContext.section)}
@@ -193,11 +193,11 @@ export function PrdChatPanel({
             <CloseButton
               onClick={onClearSelectionContext}
               ariaLabel="Clear selection"
-              className="p-0.5 text-brand-500 hover:text-brand-600 hover:bg-transparent"
+              className="p-0.5 text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-transparent"
               size="w-3 h-3"
             />
           </div>
-          <p className="text-brand-600 line-clamp-2 italic">
+          <p className="text-brand-600 dark:text-brand-400 line-clamp-2 italic">
             &ldquo;{selectionContext.text}&rdquo;
           </p>
         </div>
@@ -205,7 +205,7 @@ export function PrdChatPanel({
 
       {/* Error banner */}
       {error && (
-        <div className="mx-3 mb-1 p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+        <div className="mx-3 mb-1 p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-300">
           {error}
           <button type="button" onClick={onDismissError} className="ml-1 underline">
             Dismiss
@@ -214,12 +214,12 @@ export function PrdChatPanel({
       )}
 
       {/* Input */}
-      <div className="p-3 border-t border-gray-200 shrink-0">
+      <div className="p-3 border-t border-gray-200 dark:border-gray-700 shrink-0">
         <div className="flex gap-2">
           <input
             ref={inputRef}
             type="text"
-            className="flex-1 rounded-xl border-0 py-2.5 px-3.5 text-sm text-gray-900 bg-white shadow-sm ring-1 ring-inset ring-gray-200 placeholder:text-gray-500 focus:ring-2 focus:ring-inset focus:ring-brand-500"
+            className="flex-1 rounded-xl border-0 py-2.5 px-3.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 shadow-sm ring-1 ring-inset ring-gray-200 dark:ring-gray-600 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-brand-500"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => {
