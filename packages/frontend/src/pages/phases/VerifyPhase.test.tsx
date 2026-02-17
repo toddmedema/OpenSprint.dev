@@ -319,6 +319,56 @@ describe("VerifyPhase feedback input", () => {
     expect(
       screen.getByText("The login form doesn't show an error when password is wrong"),
     ).toBeInTheDocument();
+    expect(screen.getByText("fb-1")).toBeInTheDocument();
+  });
+
+  it("shows feedback ID on each feedback card", () => {
+    const feedbackId = "675f1ce9-b5df-46dd-87ca-edcff2bb45cf";
+    const storeWithFeedback = configureStore({
+      reducer: {
+        project: projectReducer,
+        validate: validateReducer,
+      },
+      preloadedState: {
+        project: {
+          data: {
+            id: "proj-1",
+            name: "Test Project",
+            description: "",
+            repoPath: "/tmp/test",
+            currentPhase: "verify",
+            createdAt: "",
+            updatedAt: "",
+          },
+          loading: false,
+          error: null,
+        },
+        validate: {
+          feedback: [
+            {
+              id: feedbackId,
+              text: "Sample feedback text",
+              category: "bug",
+              mappedPlanId: "plan-1",
+              createdTaskIds: [],
+              status: "mapped",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          loading: false,
+          submitting: false,
+          error: null,
+        },
+      },
+    });
+
+    render(
+      <Provider store={storeWithFeedback}>
+        <VerifyPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    expect(screen.getByText(feedbackId)).toBeInTheDocument();
   });
 
   it("displays loading state from Redux when loading feedback", () => {

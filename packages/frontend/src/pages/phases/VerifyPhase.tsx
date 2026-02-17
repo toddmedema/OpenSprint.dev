@@ -249,7 +249,12 @@ export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhasePro
               <div key={item.id} className="card p-4">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-500 mb-0.5">Feedback</p>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-xs font-medium text-gray-500">Feedback</p>
+                      <span className="text-xs font-mono text-gray-400" title={item.id}>
+                        {item.id}
+                      </span>
+                    </div>
                     <p className="text-sm text-gray-900">{item.text}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
