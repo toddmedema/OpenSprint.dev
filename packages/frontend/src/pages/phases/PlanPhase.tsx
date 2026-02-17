@@ -397,7 +397,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
               {tasksSectionExpanded && (
                 <div className="px-4 pb-4 space-y-2">
                   {planTasks.length === 0 ? (
-                    <p className="text-sm text-gray-500">No tasks yet. Click &ldquo;Execute It!&rdquo; to auto-generate tasks from this plan, or use the AI chat to refine the plan first.</p>
+                    <p className="text-sm text-gray-500">No tasks yet. Click &ldquo;Execute!&rdquo; to auto-generate tasks from this plan, or use the AI chat to refine the plan first.</p>
                   ) : (
                     planTasks.map((task) => (
                       <button

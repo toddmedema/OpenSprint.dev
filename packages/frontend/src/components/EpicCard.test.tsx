@@ -160,7 +160,7 @@ describe("EpicCard", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
-  it("shows Execute It! button when plan status is planning", () => {
+  it("shows Execute! button when plan status is planning", () => {
     const plan: Plan = { ...basePlan, status: "planning" };
     render(
       <EpicCard
@@ -174,10 +174,10 @@ describe("EpicCard", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /execute it!/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /execute!/i })).toBeInTheDocument();
   });
 
-  it("calls onShip when Execute It! is clicked", async () => {
+  it("calls onShip when Execute! is clicked", async () => {
     const onShip = vi.fn();
     const user = userEvent.setup();
     const plan: Plan = { ...basePlan, status: "planning" };
@@ -193,11 +193,11 @@ describe("EpicCard", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /execute it!/i }));
+    await user.click(screen.getByRole("button", { name: /execute!/i }));
     expect(onShip).toHaveBeenCalledTimes(1);
   });
 
-  it("shows Rebuild button when plan is complete and modified after ship", () => {
+  it("shows Re-execute button when plan is complete and modified after ship", () => {
     const plan: Plan = {
       ...basePlan,
       status: "complete",
@@ -220,10 +220,10 @@ describe("EpicCard", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /rebuild/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /re-execute/i })).toBeInTheDocument();
   });
 
-  it("calls onReship when Rebuild is clicked", async () => {
+  it("calls onReship when Re-execute is clicked", async () => {
     const onReship = vi.fn();
     const user = userEvent.setup();
     const plan: Plan = {
@@ -248,7 +248,7 @@ describe("EpicCard", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /rebuild/i }));
+    await user.click(screen.getByRole("button", { name: /re-execute/i }));
     expect(onReship).toHaveBeenCalledTimes(1);
   });
 

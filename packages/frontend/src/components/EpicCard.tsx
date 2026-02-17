@@ -166,7 +166,7 @@ export function EpicCard({
             disabled={!!executingPlanId}
             className="btn-primary text-xs w-full py-2 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg font-medium"
           >
-            {executingPlanId === plan.metadata.planId ? "Executing…" : "Execute It!"}
+            {executingPlanId === plan.metadata.planId ? "Executing…" : "Execute!"}
           </button>
         )}
         {plan.status === "complete" &&

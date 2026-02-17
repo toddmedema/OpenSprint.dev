@@ -354,13 +354,13 @@ describe("PlanPhase inline editing", () => {
   });
 });
 
-describe("PlanPhase Rebuild button", () => {
+describe("PlanPhase Re-execute button", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("shows Rebuild button when plan is complete and lastModified > shippedAt", () => {
+  it("shows Re-execute button when plan is complete and lastModified > shippedAt", () => {
     const plans = [
       {
         ...basePlan,
@@ -383,7 +383,7 @@ describe("PlanPhase Rebuild button", () => {
     expect(screen.getByRole("button", { name: /re-execute/i })).toBeInTheDocument();
   });
 
-  it("hides Rebuild button when plan is complete but lastModified <= shippedAt", () => {
+  it("hides Re-execute button when plan is complete but lastModified <= shippedAt", () => {
     const plans = [
       {
         ...basePlan,
@@ -406,7 +406,7 @@ describe("PlanPhase Rebuild button", () => {
     expect(screen.queryByRole("button", { name: /re-execute/i })).not.toBeInTheDocument();
   });
 
-  it("hides Rebuild button when plan is complete but lastModified === shippedAt (no changes after ship)", () => {
+  it("hides Re-execute button when plan is complete but lastModified === shippedAt (no changes after ship)", () => {
     const plans = [
       {
         ...basePlan,
@@ -429,7 +429,7 @@ describe("PlanPhase Rebuild button", () => {
     expect(screen.queryByRole("button", { name: /re-execute/i })).not.toBeInTheDocument();
   });
 
-  it("hides Rebuild button when plan is complete but lastModified is missing", () => {
+  it("hides Re-execute button when plan is complete but lastModified is missing", () => {
     const plans = [
       {
         ...basePlan,
@@ -452,7 +452,7 @@ describe("PlanPhase Rebuild button", () => {
     expect(screen.queryByRole("button", { name: /re-execute/i })).not.toBeInTheDocument();
   });
 
-  it("hides Rebuild button when plan is complete but shippedAt is null", () => {
+  it("hides Re-execute button when plan is complete but shippedAt is null", () => {
     const plans = [
       {
         ...basePlan,
@@ -482,7 +482,7 @@ describe("PlanPhase executePlan thunk", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("dispatches executePlan thunk when Execute It! is clicked", async () => {
+  it("dispatches executePlan thunk when Execute! is clicked", async () => {
     const plans = [
       {
         ...basePlan,
@@ -498,7 +498,7 @@ describe("PlanPhase executePlan thunk", () => {
       </Provider>,
     );
 
-    const executeButton = screen.getByRole("button", { name: /execute it!/i });
+    const executeButton = screen.getByRole("button", { name: /execute!/i });
     await user.click(executeButton);
 
     expect(mockExecute).toHaveBeenCalledWith("proj-1", "archive-test-feature");
