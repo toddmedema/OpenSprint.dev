@@ -32,7 +32,7 @@ interface SelectionInfo {
   rect: DOMRect;
 }
 
-/* ── Constants ──────────────────────────────────────────── */
+/* ── Constants ──────────────────────────────────────────────── */
 
 const EXAMPLE_IDEAS = [
   "A multiplayer Jeopardy game for phones where friends compete in real-time",
@@ -356,7 +356,7 @@ export function SpecPhase({ projectId, onNavigateToPlan }: SpecPhaseProps) {
               onClick={handleInitialSubmit}
               disabled={sending || !initialInput.trim()}
               className="absolute bottom-4 right-4 w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-md"
-              title="Dream it"
+              title="Spec it"
             >
               <SendIcon className="w-4 h-4" />
             </button>

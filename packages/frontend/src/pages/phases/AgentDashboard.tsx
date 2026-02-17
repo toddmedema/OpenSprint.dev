@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../../api/client";
 import { useAppDispatch, useAppSelector } from "../../store";
-import { setSelectedTaskId } from "../../store/slices/buildSlice";
+import { setSelectedTaskId } from "../../store/slices/executeSlice";
 import { wsSend } from "../../store/middleware/websocketMiddleware";
 import { CloseButton } from "../../components/CloseButton";
 
@@ -24,10 +24,10 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
   const [currentTask, setCurrentTask] = useState<string | null>(null);
   const [stats, setStats] = useState({ totalDone: 0, totalFailed: 0, queueDepth: 0 });
 
-  const agentOutput = useAppSelector((s) => s.build.agentOutput);
+  const agentOutput = useAppSelector((s) => s.execute.agentOutput);
 
   const loadStatus = useCallback(() => {
-    api.build.status(projectId).then((data: unknown) => {
+    api.execute.status(projectId).then((data: unknown) => {
       const status = data as {
         currentTask: string | null;
         totalDone: number;

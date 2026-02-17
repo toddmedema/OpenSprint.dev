@@ -1,13 +1,13 @@
 /**
- * @deprecated Use verifySlice instead. This file re-exports from verifySlice for backward compatibility.
+ * @deprecated Use ensureSlice instead. This file re-exports from ensureSlice for backward compatibility.
  */
 export {
-  type VerifyState,
+  type EnsureState,
   fetchFeedback,
   submitFeedback,
   recategorizeFeedback,
   setFeedback,
-  setVerifyError,
-  resetVerify,
-} from "./verifySlice";
-export { default } from "./verifySlice";
+  setEnsureError,
+  resetEnsure,
+} from "./ensureSlice";
+export { default } from "./ensureSlice";

@@ -9,7 +9,7 @@ export type TaskCard = Pick<
   "id" | "title" | "kanbanColumn" | "priority" | "assignee" | "epicId" | "testResults"
 >;
 
-export interface BuildState {
+export interface ExecuteState {
   tasks: Task[];
   plans: Plan[];
   orchestratorRunning: boolean;
@@ -30,7 +30,7 @@ export interface BuildState {
   error: string | null;
 }
 
-const initialState: BuildState = {
+const initialState: ExecuteState = {
   tasks: [],
   plans: [],
   orchestratorRunning: false,
@@ -48,12 +48,12 @@ const initialState: BuildState = {
   error: null,
 };
 
-export const fetchTasks = createAsyncThunk("build/fetchTasks", async (projectId: string) => {
+export const fetchTasks = createAsyncThunk("execute/fetchTasks", async (projectId: string) => {
   return api.tasks.list(projectId);
 });
 
-export const fetchBuildPlans = createAsyncThunk(
-  "build/fetchBuildPlans",
+export const fetchExecutePlans = createAsyncThunk(
+  "execute/fetchExecutePlans",
   async (projectId: string, { dispatch }) => {
     const graph = await api.plans.list(projectId);
     dispatch(setPlansAndGraph({ plans: graph.plans, dependencyGraph: graph }));
@@ -61,29 +61,29 @@ export const fetchBuildPlans = createAsyncThunk(
   },
 );
 
-export const fetchBuildStatus = createAsyncThunk(
-  "build/fetchBuildStatus",
+export const fetchExecuteStatus = createAsyncThunk(
+  "execute/fetchExecuteStatus",
   async (projectId: string) => {
     return api.execute.status(projectId);
   },
 );
 
 export const fetchTaskDetail = createAsyncThunk(
-  "build/fetchTaskDetail",
+  "execute/fetchTaskDetail",
   async ({ projectId, taskId }: { projectId: string; taskId: string }) => {
     return api.tasks.get(projectId, taskId);
   },
 );
 
 export const fetchArchivedSessions = createAsyncThunk(
-  "build/fetchArchivedSessions",
+  "execute/fetchArchivedSessions",
   async ({ projectId, taskId }: { projectId: string; taskId: string }) => {
     return (await api.tasks.sessions(projectId, taskId)) ?? [];
   },
 );
 
 export const markTaskDone = createAsyncThunk(
-  "build/markTaskDone",
+  "execute/markTaskDone",
   async ({ projectId, taskId }: { projectId: string; taskId: string }, { dispatch }) => {
     await api.tasks.markDone(projectId, taskId);
     const [tasksData, plansGraph] = await Promise.all([
@@ -97,8 +97,8 @@ export const markTaskDone = createAsyncThunk(
 
 const MAX_AGENT_OUTPUT = 5000;
 
-const buildSlice = createSlice({
-  name: "build",
+const executeSlice = createSlice({
+  name: "execute",
   initialState,
   reducers: {
     setSelectedTaskId(state, action: PayloadAction<string | null>) {
@@ -155,10 +155,10 @@ const buildSlice = createSlice({
     setTasks(state, action: PayloadAction<Task[]>) {
       state.tasks = action.payload;
     },
-    setBuildError(state, action: PayloadAction<string | null>) {
+    setExecuteError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
     },
-    resetBuild() {
+    resetExecute() {
       return initialState;
     },
   },
@@ -177,32 +177,32 @@ const buildSlice = createSlice({
         state.loading = false;
         state.error = action.error.message ?? "Failed to load tasks";
       })
-      // fetchBuildPlans
-      .addCase(fetchBuildPlans.pending, (state) => {
+      // fetchExecutePlans
+      .addCase(fetchExecutePlans.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchBuildPlans.fulfilled, (state, action) => {
+      .addCase(fetchExecutePlans.fulfilled, (state, action) => {
         state.plans = action.payload;
         state.loading = false;
       })
-      .addCase(fetchBuildPlans.rejected, (state, action) => {
+      .addCase(fetchExecutePlans.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message ?? "Failed to load plans";
       })
-      // fetchBuildStatus
-      .addCase(fetchBuildStatus.pending, (state) => {
+      // fetchExecuteStatus
+      .addCase(fetchExecuteStatus.pending, (state) => {
         state.statusLoading = true;
         state.error = null;
       })
-      .addCase(fetchBuildStatus.fulfilled, (state, action) => {
+      .addCase(fetchExecuteStatus.fulfilled, (state, action) => {
         state.orchestratorRunning = action.payload.currentTask !== null || action.payload.queueDepth > 0;
         state.awaitingApproval = action.payload.awaitingApproval ?? false;
         state.statusLoading = false;
       })
-      .addCase(fetchBuildStatus.rejected, (state, action) => {
+      .addCase(fetchExecuteStatus.rejected, (state, action) => {
         state.statusLoading = false;
-        state.error = action.error.message ?? "Failed to load build status";
+        state.error = action.error.message ?? "Failed to load execute status";
       })
       // fetchTaskDetail
       .addCase(fetchTaskDetail.pending, (state) => {
@@ -265,7 +265,7 @@ export const {
   setCompletionState,
   taskUpdated,
   setTasks,
-  setBuildError,
-  resetBuild,
-} = buildSlice.actions;
-export default buildSlice.reducer;
+  setExecuteError,
+  resetExecute,
+} = executeSlice.actions;
+export default executeSlice.reducer;

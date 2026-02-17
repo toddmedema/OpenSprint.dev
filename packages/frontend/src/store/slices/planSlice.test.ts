@@ -290,7 +290,7 @@ describe("planSlice", () => {
       const store = createStore();
       await store.dispatch(shipPlan({ projectId: "proj-1", planId: "plan-123" }));
 
-      expect(store.getState().plan.error).toBe("Failed to start build");
+      expect(store.getState().plan.error).toBe("Failed to start execute");
     });
   });
 

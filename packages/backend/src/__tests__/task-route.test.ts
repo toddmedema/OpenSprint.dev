@@ -149,7 +149,7 @@ Test task directory creation.
       expect(taskX).toBeDefined();
 
       const prepareRes = await request(app)
-        .post(`${API_PREFIX}/projects/${projectId}/build/tasks/${taskX.id}/prepare`)
+        .post(`${API_PREFIX}/projects/${projectId}/execute/tasks/${taskX.id}/prepare`)
         .set("Content-Type", "application/json")
         .send({ createBranch: false });
 
@@ -215,7 +215,7 @@ Test review prompt generation.
     expect(taskY).toBeDefined();
 
     const prepareRes = await request(app)
-      .post(`${API_PREFIX}/projects/${projectId}/build/tasks/${taskY.id}/prepare`)
+      .post(`${API_PREFIX}/projects/${projectId}/execute/tasks/${taskY.id}/prepare`)
       .set("Content-Type", "application/json")
       .send({ phase: "review", createBranch: false });
 

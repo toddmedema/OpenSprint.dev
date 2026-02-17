@@ -20,14 +20,14 @@ function createPlan(id: string, status: PlanStatus): Plan {
 }
 
 describe("sortPlansByStatus", () => {
-  it("sorts plans by status order: planning → building → done", () => {
+  it("sorts plans by status order: planning → building → complete", () => {
     const plans = [
-      createPlan("plan-done", "done"),
+      createPlan("plan-done", "complete"),
       createPlan("plan-planning", "planning"),
       createPlan("plan-building", "building"),
     ];
     const sorted = sortPlansByStatus(plans);
-    expect(sorted.map((p) => p.status)).toEqual(["planning", "building", "done"]);
+    expect(sorted.map((p) => p.status)).toEqual(["planning", "building", "complete"]);
     expect(sorted.map((p) => p.metadata.planId)).toEqual(["plan-planning", "plan-building", "plan-done"]);
   });
 
@@ -43,12 +43,12 @@ describe("sortPlansByStatus", () => {
 
   it("returns new array without mutating input", () => {
     const plans = [
-      createPlan("plan-done", "done"),
+      createPlan("plan-done", "complete"),
       createPlan("plan-planning", "planning"),
     ];
     const sorted = sortPlansByStatus(plans);
     expect(sorted).not.toBe(plans);
-    expect(plans.map((p) => p.status)).toEqual(["done", "planning"]);
+    expect(plans.map((p) => p.status)).toEqual(["complete", "planning"]);
   });
 
   it("handles empty array", () => {

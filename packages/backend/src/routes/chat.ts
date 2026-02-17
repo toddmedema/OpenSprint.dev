@@ -14,7 +14,7 @@ chatRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
     const body = req.body as ChatRequest;
     console.log("[chat] POST received", {
       projectId: req.params.projectId,
-      context: body.context ?? "dream",
+      context: body.context ?? "spec",
       messageLen: body.message?.length ?? 0,
     });
     const response = await chatService.sendMessage(req.params.projectId, body);
@@ -29,7 +29,7 @@ chatRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
 // GET /projects/:projectId/chat/history — Get conversation history
 chatRouter.get("/history", async (req: Request<ProjectParams>, res, next) => {
   try {
-    const context = (req.query.context as string) || "dream";
+    const context = (req.query.context as string) || "spec";
     const conversation = await chatService.getHistory(req.params.projectId, context);
     const result: ApiResponse<Conversation> = { data: conversation };
     res.json(result);

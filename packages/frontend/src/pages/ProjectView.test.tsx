@@ -6,10 +6,10 @@ import { configureStore } from "@reduxjs/toolkit";
 import { ProjectView } from "./ProjectView";
 import projectReducer from "../store/slices/projectSlice";
 import websocketReducer from "../store/slices/websocketSlice";
-import designReducer from "../store/slices/designSlice";
+import specReducer from "../store/slices/specSlice";
 import planReducer from "../store/slices/planSlice";
-import buildReducer from "../store/slices/buildSlice";
-import verifyReducer from "../store/slices/verifySlice";
+import executeReducer from "../store/slices/executeSlice";
+import ensureReducer from "../store/slices/ensureSlice";
 
 // Mock websocket middleware to prevent connection attempts
 const mockWsConnect = vi.fn((payload: unknown) => ({ type: "ws/connect", payload }));
@@ -24,11 +24,11 @@ vi.mock("../store/middleware/websocketMiddleware", () => ({
 // Mock API
 vi.mock("../api/client", () => ({
   api: {
-    projects: { get: vi.fn().mockResolvedValue({ id: "proj-1", name: "Test", currentPhase: "dream" }) },
+    projects: { get: vi.fn().mockResolvedValue({ id: "proj-1", name: "Test", currentPhase: "spec" }) },
     prd: { get: vi.fn().mockResolvedValue({}), getHistory: vi.fn().mockResolvedValue([]) },
     plans: { list: vi.fn().mockResolvedValue({ plans: [], edges: [] }) },
     tasks: { list: vi.fn().mockResolvedValue([]) },
-    build: { status: vi.fn().mockResolvedValue({}) },
+    execute: { status: vi.fn().mockResolvedValue({}) },
     feedback: { list: vi.fn().mockResolvedValue([]) },
     chat: { history: vi.fn().mockResolvedValue({ messages: [] }) },
   },
@@ -45,10 +45,10 @@ function createStore() {
     reducer: {
       project: projectReducer,
       websocket: websocketReducer,
-      design: designReducer,
+      spec: specReducer,
       plan: planReducer,
-      build: buildReducer,
-      verify: verifyReducer,
+      execute: executeReducer,
+      ensure: ensureReducer,
     },
     preloadedState: {
       project: {
@@ -57,7 +57,7 @@ function createStore() {
           name: "Test Project",
           description: "",
           repoPath: "/tmp/test",
-          currentPhase: "dream",
+          currentPhase: "spec",
           createdAt: "",
           updatedAt: "",
         },
@@ -86,32 +86,32 @@ describe("ProjectView URL behavior", () => {
     vi.clearAllMocks();
   });
 
-  it("redirects /projects/:id to /projects/:id/dream", async () => {
+  it("redirects /projects/:id to /projects/:id/spec", async () => {
     renderWithRouter("/projects/proj-1");
 
     await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/projects/proj-1/dream");
+      expect(screen.getByTestId("location")).toHaveTextContent("/projects/proj-1/spec");
     });
   });
 
-  it("redirects invalid phase slug to /projects/:id/dream", async () => {
+  it("redirects invalid phase slug to /projects/:id/spec", async () => {
     renderWithRouter("/projects/proj-1/invalid-phase");
 
     await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/projects/proj-1/dream");
+      expect(screen.getByTestId("location")).toHaveTextContent("/projects/proj-1/spec");
     });
   });
 
   it("does not redirect when phase slug is valid", async () => {
-    renderWithRouter("/projects/proj-1/build");
+    renderWithRouter("/projects/proj-1/execute");
 
     await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/projects/proj-1/build");
+      expect(screen.getByTestId("location")).toHaveTextContent("/projects/proj-1/execute");
     });
   });
 
   it("displays project when at valid phase URL", async () => {
-    renderWithRouter("/projects/proj-1/dream");
+    renderWithRouter("/projects/proj-1/spec");
 
     await waitFor(() => {
       expect(screen.getByText("Test Project")).toBeInTheDocument();
@@ -125,7 +125,7 @@ describe("ProjectView upfront loading and mount-all", () => {
   });
 
   it("dispatches wsConnect and all fetch thunks on mount", async () => {
-    renderWithRouter("/projects/proj-1/dream");
+    renderWithRouter("/projects/proj-1/spec");
 
     await waitFor(() => {
       expect(mockWsConnect).toHaveBeenCalledWith({ projectId: "proj-1" });
@@ -137,13 +137,13 @@ describe("ProjectView upfront loading and mount-all", () => {
     expect(mockedApi.prd.getHistory).toHaveBeenCalledWith("proj-1");
     expect(mockedApi.plans.list).toHaveBeenCalledWith("proj-1");
     expect(mockedApi.tasks.list).toHaveBeenCalledWith("proj-1");
-    expect(mockedApi.build.status).toHaveBeenCalledWith("proj-1");
+    expect(mockedApi.execute.status).toHaveBeenCalledWith("proj-1");
     expect(mockedApi.feedback.list).toHaveBeenCalledWith("proj-1");
-    expect(mockedApi.chat.history).toHaveBeenCalledWith("proj-1", "dream");
+    expect(mockedApi.chat.history).toHaveBeenCalledWith("proj-1", "spec");
   });
 
   it("dispatches wsDisconnect on unmount", async () => {
-    const { unmount } = renderWithRouter("/projects/proj-1/dream");
+    const { unmount } = renderWithRouter("/projects/proj-1/spec");
     await waitFor(() => expect(mockWsConnect).toHaveBeenCalled());
 
     unmount();
@@ -151,18 +151,19 @@ describe("ProjectView upfront loading and mount-all", () => {
     expect(mockWsDisconnect).toHaveBeenCalled();
   });
 
-  it("renders all 4 phase components with CSS display toggle", async () => {
-    renderWithRouter("/projects/proj-1/build");
+  it("renders all 5 phase components with CSS display toggle", async () => {
+    renderWithRouter("/projects/proj-1/execute");
 
     await waitFor(() => {
       expect(screen.getByText("Test Project")).toBeInTheDocument();
     });
 
-    // All 4 phase wrappers should be mounted; build is visible (flex), others hidden (none)
-    expect(screen.getByTestId("phase-dream")).toBeInTheDocument();
+    // All 4 phase wrappers should be mounted; execute is visible (flex), others hidden (none)
+    expect(screen.getByTestId("phase-spec")).toBeInTheDocument();
     expect(screen.getByTestId("phase-plan")).toBeInTheDocument();
-    expect(screen.getByTestId("phase-build")).toBeInTheDocument();
-    expect(screen.getByTestId("phase-verify")).toBeInTheDocument();
+    expect(screen.getByTestId("phase-execute")).toBeInTheDocument();
+    expect(screen.getByTestId("phase-ensure")).toBeInTheDocument();
+    expect(screen.getByTestId("phase-deploy")).toBeInTheDocument();
   });
 
   it("active phase wrapper has flex-1 min-h-0 for bounded height and independent page/sidebar scroll", async () => {
@@ -196,27 +197,27 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
     expect(state.plan.selectedPlanId).toBe("opensprint.dev-abc");
   });
 
-  it("dispatches setSelectedTaskId when loading build phase with task param", async () => {
+  it("dispatches setSelectedTaskId when loading execute phase with task param", async () => {
     const store = createStore();
-    renderWithRouter("/projects/proj-1/build?task=opensprint.dev-xyz.1", store);
+    renderWithRouter("/projects/proj-1/execute?task=opensprint.dev-xyz.1", store);
 
     await waitFor(() => {
       expect(screen.getByText("Test Project")).toBeInTheDocument();
     });
 
     const state = store.getState();
-    expect(state.build.selectedTaskId).toBe("opensprint.dev-xyz.1");
+    expect(state.execute.selectedTaskId).toBe("opensprint.dev-xyz.1");
   });
 
-  it("preserves selected task when switching from build to plan and back to build", async () => {
+  it("preserves selected task when switching from execute to plan and back to execute", async () => {
     const store = configureStore({
       reducer: {
         project: projectReducer,
         websocket: websocketReducer,
-        design: designReducer,
+        spec: specReducer,
         plan: planReducer,
-        build: buildReducer,
-        verify: verifyReducer,
+        execute: executeReducer,
+        ensure: ensureReducer,
       },
       preloadedState: {
         project: {
@@ -225,14 +226,14 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
             name: "Test Project",
             description: "",
             repoPath: "/tmp/test",
-            currentPhase: "build",
+            currentPhase: "execute",
             createdAt: "",
             updatedAt: "",
           },
           loading: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -251,7 +252,7 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
         },
       },
     });
-    renderWithRouter("/projects/proj-1/build?task=opensprint.dev-xyz.1", store);
+    renderWithRouter("/projects/proj-1/execute?task=opensprint.dev-xyz.1", store);
 
     await waitFor(() => {
       expect(screen.getByText("Test Project")).toBeInTheDocument();
@@ -267,11 +268,11 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
     });
 
     // selectedTaskId should still be in Redux (preserved)
-    expect(store.getState().build.selectedTaskId).toBe("opensprint.dev-xyz.1");
+    expect(store.getState().execute.selectedTaskId).toBe("opensprint.dev-xyz.1");
 
     // User clicks Build in navbar — should land with task param
-    const buildButton = screen.getByRole("button", { name: /^build$/i });
-    buildButton.click();
+    const executeButton = screen.getByRole("button", { name: /^execute$/i });
+    executeButton.click();
 
     await waitFor(() => {
       const loc = screen.getByTestId("location").textContent;
@@ -279,15 +280,15 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
     });
   });
 
-  it("preserves selected plan when switching from plan to build and back to plan", async () => {
+  it("preserves selected plan when switching from plan to execute and back to plan", async () => {
     const store = configureStore({
       reducer: {
         project: projectReducer,
         websocket: websocketReducer,
-        design: designReducer,
+        spec: specReducer,
         plan: planReducer,
-        build: buildReducer,
-        verify: verifyReducer,
+        execute: executeReducer,
+        ensure: ensureReducer,
       },
       preloadedState: {
         project: {
@@ -324,12 +325,12 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
     });
 
     // User clicks Build in navbar — selection is preserved
-    const buildButton = screen.getByRole("button", { name: /^build$/i });
-    buildButton.click();
+    const executeButton = screen.getByRole("button", { name: /^execute$/i });
+    executeButton.click();
 
     await waitFor(() => {
       const loc = screen.getByTestId("location").textContent;
-      expect(loc).toContain("/build");
+      expect(loc).toContain("/execute");
     });
 
     // selectedPlanId should still be in Redux (preserved)
@@ -350,10 +351,10 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
       reducer: {
         project: projectReducer,
         websocket: websocketReducer,
-        design: designReducer,
+        spec: specReducer,
         plan: planReducer,
-        build: buildReducer,
-        verify: verifyReducer,
+        execute: executeReducer,
+        ensure: ensureReducer,
       },
       preloadedState: {
         project: {

@@ -17,7 +17,7 @@ export interface PlanState {
   decomposing: boolean;
   /** Plan status for Dream CTA (plan/replan/none) */
   planStatus: PlanStatusResponse | null;
-  /** Plan ID currently being shipped (Build It!) — for loading state */
+  /** Plan ID currently being shipped (Execute It!) — for loading state */
   shippingPlanId: string | null;
   /** Plan ID currently being reshipped (Rebuild) — for loading state */
   reshippingPlanId: string | null;
@@ -184,7 +184,7 @@ const planSlice = createSlice({
       })
       .addCase(shipPlan.rejected, (state, action) => {
         state.shippingPlanId = null;
-        state.error = action.error.message ?? "Failed to start build";
+        state.error = action.error.message ?? "Failed to start execute";
       })
       .addCase(reshipPlan.pending, (state, action) => {
         state.reshippingPlanId = action.meta.arg.planId;

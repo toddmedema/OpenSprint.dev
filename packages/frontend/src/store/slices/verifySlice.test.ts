@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { configureStore } from "@reduxjs/toolkit";
-import verifyReducer, {
+import ensureReducer, {
   setFeedback,
-  setVerifyError,
-  resetVerify,
+  setEnsureError,
+  resetEnsure,
   fetchFeedback,
   submitFeedback,
   recategorizeFeedback,
-  type VerifyState,
-} from "./verifySlice";
+  type EnsureState,
+} from "./ensureSlice";
 import type { FeedbackItem } from "@opensprint/shared";
 
 vi.mock("../../api/client", () => ({
@@ -34,7 +34,7 @@ const mockFeedback: FeedbackItem = {
   createdAt: "2025-01-01T00:00:00Z",
 };
 
-describe("verifySlice", () => {
+describe("ensureSlice", () => {
   beforeEach(() => {
     vi.mocked(api.feedback.list).mockReset();
     vi.mocked(api.feedback.submit).mockReset();
@@ -42,13 +42,13 @@ describe("verifySlice", () => {
   });
 
   function createStore() {
-    return configureStore({ reducer: { verify: verifyReducer } });
+    return configureStore({ reducer: { ensure: ensureReducer } });
   }
 
   describe("initial state", () => {
     it("has correct initial state", () => {
       const store = createStore();
-      const state = store.getState().verify as VerifyState;
+      const state = store.getState().ensure as EnsureState;
       expect(state.feedback).toEqual([]);
       expect(state.loading).toBe(false);
       expect(state.submitting).toBe(false);
@@ -61,24 +61,24 @@ describe("verifySlice", () => {
       const store = createStore();
       const feedback = [mockFeedback];
       store.dispatch(setFeedback(feedback));
-      expect(store.getState().verify.feedback).toEqual(feedback);
+      expect(store.getState().ensure.feedback).toEqual(feedback);
     });
 
-    it("setVerifyError sets error", () => {
+    it("setEnsureError sets error", () => {
       const store = createStore();
-      store.dispatch(setVerifyError("Something went wrong"));
-      expect(store.getState().verify.error).toBe("Something went wrong");
-      store.dispatch(setVerifyError(null));
-      expect(store.getState().verify.error).toBeNull();
+      store.dispatch(setEnsureError("Something went wrong"));
+      expect(store.getState().ensure.error).toBe("Something went wrong");
+      store.dispatch(setEnsureError(null));
+      expect(store.getState().ensure.error).toBeNull();
     });
 
-    it("resetVerify resets to initial state", () => {
+    it("resetEnsure resets to initial state", () => {
       const store = createStore();
       store.dispatch(setFeedback([mockFeedback]));
-      store.dispatch(setVerifyError("error"));
+      store.dispatch(setEnsureError("error"));
 
-      store.dispatch(resetVerify());
-      const state = store.getState().verify as VerifyState;
+      store.dispatch(resetEnsure());
+      const state = store.getState().ensure as EnsureState;
       expect(state.feedback).toEqual([]);
       expect(state.loading).toBe(false);
       expect(state.submitting).toBe(false);
@@ -96,8 +96,8 @@ describe("verifySlice", () => {
       const store = createStore();
       const dispatchPromise = store.dispatch(fetchFeedback("proj-1"));
 
-      expect(store.getState().verify.loading).toBe(true);
-      expect(store.getState().verify.error).toBeNull();
+      expect(store.getState().ensure.loading).toBe(true);
+      expect(store.getState().ensure.error).toBeNull();
 
       resolveApi!([mockFeedback]);
       await dispatchPromise;
@@ -108,8 +108,8 @@ describe("verifySlice", () => {
       const store = createStore();
       await store.dispatch(fetchFeedback("proj-1"));
 
-      expect(store.getState().verify.feedback).toEqual([mockFeedback]);
-      expect(store.getState().verify.loading).toBe(false);
+      expect(store.getState().ensure.feedback).toEqual([mockFeedback]);
+      expect(store.getState().ensure.loading).toBe(false);
       expect(api.feedback.list).toHaveBeenCalledWith("proj-1");
     });
 
@@ -118,8 +118,8 @@ describe("verifySlice", () => {
       const store = createStore();
       await store.dispatch(fetchFeedback("proj-1"));
 
-      expect(store.getState().verify.loading).toBe(false);
-      expect(store.getState().verify.error).toBe("Network error");
+      expect(store.getState().ensure.loading).toBe(false);
+      expect(store.getState().ensure.error).toBe("Network error");
     });
 
     it("uses fallback error message when error has no message", async () => {
@@ -127,7 +127,7 @@ describe("verifySlice", () => {
       const store = createStore();
       await store.dispatch(fetchFeedback("proj-1"));
 
-      expect(store.getState().verify.error).toBe("Failed to load feedback");
+      expect(store.getState().ensure.error).toBe("Failed to load feedback");
     });
   });
 
@@ -143,8 +143,8 @@ describe("verifySlice", () => {
         submitFeedback({ projectId: "proj-1", text: "Great work!" }),
       );
 
-      expect(store.getState().verify.submitting).toBe(true);
-      expect(store.getState().verify.error).toBeNull();
+      expect(store.getState().ensure.submitting).toBe(true);
+      expect(store.getState().ensure.error).toBeNull();
 
       resolveApi!(mockFeedback);
       await dispatchPromise;
@@ -161,7 +161,7 @@ describe("verifySlice", () => {
         submitFeedback({ projectId: "proj-1", text: "Bug in login" }),
       );
 
-      const stateBeforeResolve = store.getState().verify;
+      const stateBeforeResolve = store.getState().ensure;
       expect(stateBeforeResolve.feedback).toHaveLength(1);
       expect(stateBeforeResolve.feedback[0].text).toBe("Bug in login");
       expect(stateBeforeResolve.feedback[0].status).toBe("pending");
@@ -170,7 +170,7 @@ describe("verifySlice", () => {
       resolveApi!(mockFeedback);
       await dispatchPromise;
 
-      const stateAfterResolve = store.getState().verify;
+      const stateAfterResolve = store.getState().ensure;
       expect(stateAfterResolve.feedback[0].id).toBe("fb-1");
       expect(stateAfterResolve.feedback[0].text).toBe("Great feature");
     });
@@ -193,7 +193,7 @@ describe("verifySlice", () => {
         submitFeedback({ projectId: "proj-1", text: "New feedback" }),
       );
 
-      const state = store.getState().verify;
+      const state = store.getState().ensure;
       expect(state.submitting).toBe(false);
       expect(state.feedback).toHaveLength(2);
       expect(state.feedback[0]).toEqual(newFeedback);
@@ -224,7 +224,7 @@ describe("verifySlice", () => {
         submitFeedback({ projectId: "proj-1", text: "Reply text", parentId: "fb-parent" }),
       );
 
-      const stateBeforeResolve = store.getState().verify;
+      const stateBeforeResolve = store.getState().ensure;
       const optimistic = stateBeforeResolve.feedback.find((f) => f.text === "Reply text");
       expect(optimistic).toBeDefined();
       expect(optimistic!.parent_id).toBe("fb-parent");
@@ -241,8 +241,8 @@ describe("verifySlice", () => {
         submitFeedback({ projectId: "proj-1", text: "Feedback" }),
       );
 
-      expect(store.getState().verify.submitting).toBe(false);
-      expect(store.getState().verify.error).toBe("Submit failed");
+      expect(store.getState().ensure.submitting).toBe(false);
+      expect(store.getState().ensure.error).toBe("Submit failed");
     });
 
     it("removes optimistic feedback when submit is rejected", async () => {
@@ -252,12 +252,12 @@ describe("verifySlice", () => {
         submitFeedback({ projectId: "proj-1", text: "Failed feedback" }),
       );
 
-      expect(store.getState().verify.feedback).toHaveLength(1);
-      expect(store.getState().verify.feedback[0].text).toBe("Failed feedback");
+      expect(store.getState().ensure.feedback).toHaveLength(1);
+      expect(store.getState().ensure.feedback[0].text).toBe("Failed feedback");
 
       await dispatchPromise;
 
-      expect(store.getState().verify.feedback).toHaveLength(0);
+      expect(store.getState().ensure.feedback).toHaveLength(0);
     });
 
     it("uses fallback error message when error has no message", async () => {
@@ -267,7 +267,7 @@ describe("verifySlice", () => {
         submitFeedback({ projectId: "proj-1", text: "Feedback" }),
       );
 
-      expect(store.getState().verify.error).toBe("Failed to submit feedback");
+      expect(store.getState().ensure.error).toBe("Failed to submit feedback");
     });
   });
 
@@ -284,7 +284,7 @@ describe("verifySlice", () => {
         recategorizeFeedback({ projectId: "proj-1", feedbackId: "fb-1" }),
       );
 
-      expect(store.getState().verify.feedback[0].category).toBe("bug");
+      expect(store.getState().ensure.feedback[0].category).toBe("bug");
       expect(api.feedback.recategorize).toHaveBeenCalledWith("proj-1", "fb-1");
     });
 
@@ -301,8 +301,8 @@ describe("verifySlice", () => {
         recategorizeFeedback({ projectId: "proj-1", feedbackId: "fb-other" }),
       );
 
-      expect(store.getState().verify.feedback).toHaveLength(1);
-      expect(store.getState().verify.feedback[0].id).toBe("fb-1");
+      expect(store.getState().ensure.feedback).toHaveLength(1);
+      expect(store.getState().ensure.feedback[0].id).toBe("fb-1");
     });
 
     it("sets error on rejected", async () => {
@@ -313,7 +313,7 @@ describe("verifySlice", () => {
         recategorizeFeedback({ projectId: "proj-1", feedbackId: "fb-1" }),
       );
 
-      expect(store.getState().verify.error).toBe("Recategorize failed");
+      expect(store.getState().ensure.error).toBe("Recategorize failed");
     });
   });
 });

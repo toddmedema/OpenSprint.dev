@@ -8,10 +8,10 @@ import {
 } from "./websocketMiddleware";
 import projectReducer from "../slices/projectSlice";
 import websocketReducer from "../slices/websocketSlice";
-import designReducer from "../slices/designSlice";
+import specReducer from "../slices/specSlice";
 import planReducer from "../slices/planSlice";
-import buildReducer from "../slices/buildSlice";
-import verifyReducer from "../slices/verifySlice";
+import executeReducer from "../slices/executeSlice";
+import ensureReducer from "../slices/ensureSlice";
 
 /** Mock WebSocket that allows controlling open/close/message events */
 class MockWebSocket {
@@ -98,10 +98,10 @@ describe("websocketMiddleware", () => {
       reducer: {
         project: projectReducer,
         websocket: websocketReducer,
-        design: designReducer,
+        spec: specReducer,
         plan: planReducer,
-        build: buildReducer,
-        verify: verifyReducer,
+        execute: executeReducer,
+        ensure: ensureReducer,
       },
       middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({
@@ -217,7 +217,7 @@ describe("websocketMiddleware", () => {
   });
 
   describe("ServerEvent handling", () => {
-    it("dispatches to design and plan slices on prd.updated (fetchPrd, fetchPrdHistory, fetchDesignChat, fetchPlanStatus)", async () => {
+    it("dispatches to spec and plan slices on prd.updated (fetchPrd, fetchPrdHistory, fetchSpecChat, fetchPlanStatus)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
       wsInstance!.simulateOpen();
@@ -226,7 +226,7 @@ describe("websocketMiddleware", () => {
       const { api } = await import("../../api/client");
       vi.mocked(api.prd.get).mockResolvedValue({ sections: { overview: { content: "Updated" } } });
       vi.mocked(api.prd.getHistory).mockResolvedValue([
-        { section: "overview", version: 2, source: "dream", timestamp: "2025-01-01", diff: "+Updated" },
+        { section: "overview", version: 2, source: "spec", timestamp: "2025-01-01", diff: "+Updated" },
       ]);
       vi.mocked(api.chat.history).mockResolvedValue({
         messages: [{ role: "assistant", content: "Done", timestamp: "2025-01-01" }],
@@ -242,14 +242,14 @@ describe("websocketMiddleware", () => {
       await vi.waitFor(() => {
         expect(api.prd.get).toHaveBeenCalledWith("proj-1");
         expect(api.prd.getHistory).toHaveBeenCalledWith("proj-1");
-        expect(api.chat.history).toHaveBeenCalledWith("proj-1", "dream");
+        expect(api.chat.history).toHaveBeenCalledWith("proj-1", "spec");
         expect(api.projects.getPlanStatus).toHaveBeenCalledWith("proj-1");
       });
 
       await vi.waitFor(() => {
-        expect(store.getState().design.prdContent).toEqual({ overview: "Updated" });
-        expect(store.getState().design.prdHistory).toHaveLength(1);
-        expect(store.getState().design.messages).toHaveLength(1);
+        expect(store.getState().spec.prdContent).toEqual({ overview: "Updated" });
+        expect(store.getState().spec.prdHistory).toHaveLength(1);
+        expect(store.getState().spec.messages).toHaveLength(1);
         expect(store.getState().plan.planStatus).toEqual({
           hasPlanningRun: false,
           prdChangedSinceLastRun: false,
@@ -298,13 +298,13 @@ describe("websocketMiddleware", () => {
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
-      const { setSelectedTaskId } = await import("../slices/buildSlice");
+      const { setSelectedTaskId } = await import("../slices/executeSlice");
       store.dispatch(setSelectedTaskId("task-1"));
 
       wsInstance!.simulateMessage({ type: "agent.output", taskId: "task-1", chunk: "Hello world" });
 
       await vi.waitFor(() => {
-        expect(store.getState().build.agentOutput).toContain("Hello world");
+        expect(store.getState().execute.agentOutput).toContain("Hello world");
       });
     });
 
@@ -314,7 +314,7 @@ describe("websocketMiddleware", () => {
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
-      const { setSelectedTaskId } = await import("../slices/buildSlice");
+      const { setSelectedTaskId } = await import("../slices/executeSlice");
       store.dispatch(setSelectedTaskId("task-1"));
 
       wsInstance!.simulateMessage({
@@ -325,7 +325,7 @@ describe("websocketMiddleware", () => {
       });
 
       await vi.waitFor(() => {
-        const state = store.getState().build.completionState;
+        const state = store.getState().execute.completionState;
         expect(state?.status).toBe("done");
         expect(state?.testResults?.passed).toBe(5);
       });
@@ -345,8 +345,8 @@ describe("websocketMiddleware", () => {
       });
 
       await vi.waitFor(() => {
-        expect(store.getState().build.orchestratorRunning).toBe(true);
-        expect(store.getState().build.awaitingApproval).toBe(true);
+        expect(store.getState().execute.orchestratorRunning).toBe(true);
+        expect(store.getState().execute.awaitingApproval).toBe(true);
       });
     });
 
@@ -363,13 +363,13 @@ describe("websocketMiddleware", () => {
       });
 
       await vi.waitFor(() => {
-        expect(store.getState().build.orchestratorRunning).toBe(false);
+        expect(store.getState().execute.orchestratorRunning).toBe(false);
       });
     });
 
     it("dispatches taskUpdated on task.updated for optimistic update, then fetchTasks", async () => {
       const store = createStore();
-      const { setTasks } = await import("../slices/buildSlice");
+      const { setTasks } = await import("../slices/executeSlice");
       store.dispatch(
         setTasks([
           {
@@ -406,7 +406,7 @@ describe("websocketMiddleware", () => {
       });
 
       await vi.waitFor(() => {
-        const task = store.getState().build.tasks.find((t) => t.id === "task-1");
+        const task = store.getState().execute.tasks.find((t) => t.id === "task-1");
         expect(task?.kanbanColumn).toBe("in_progress");
         expect(task?.assignee).toBe("agent-1");
       });
@@ -557,7 +557,7 @@ describe("websocketMiddleware", () => {
       wsInstance!.simulateMessage({ type: "prd.updated", section: "overview", version: 2 });
 
       await vi.waitFor(() => {
-        expect(store.getState().design.prdContent).toEqual({ overview: "After reconnect" });
+        expect(store.getState().spec.prdContent).toEqual({ overview: "After reconnect" });
         expect(api.projects.getPlanStatus).toHaveBeenCalledWith("proj-1");
       });
       vi.useRealTimers();

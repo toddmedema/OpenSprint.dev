@@ -7,7 +7,7 @@ import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
-describe("Build API", () => {
+describe("Execute API", () => {
   let app: ReturnType<typeof createApp>;
   let projectService: ProjectService;
   let tempDir: string;
@@ -17,7 +17,7 @@ describe("Build API", () => {
   beforeEach(async () => {
     app = createApp();
     projectService = new ProjectService();
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-build-route-test-"));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-execute-route-test-"));
     originalHome = process.env.HOME;
     process.env.HOME = tempDir;
 
@@ -39,10 +39,10 @@ describe("Build API", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  describe("GET /projects/:projectId/build/status", () => {
+  describe("GET /projects/:projectId/execute/status", () => {
     it("should return orchestrator status for existing project", async () => {
       const res = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/build/status`,
+        `${API_PREFIX}/projects/${projectId}/execute/status`,
       );
 
       expect(res.status).toBe(200);
@@ -60,7 +60,7 @@ describe("Build API", () => {
 
     it("should return 404 for non-existent project", async () => {
       const res = await request(app).get(
-        `${API_PREFIX}/projects/nonexistent-id/build/status`,
+        `${API_PREFIX}/projects/nonexistent-id/execute/status`,
       );
 
       expect(res.status).toBe(404);
@@ -69,10 +69,10 @@ describe("Build API", () => {
     });
   });
 
-  describe("POST /projects/:projectId/build/nudge", () => {
+  describe("POST /projects/:projectId/execute/nudge", () => {
     it("should accept nudge and return status", async () => {
       const res = await request(app)
-        .post(`${API_PREFIX}/projects/${projectId}/build/nudge`);
+        .post(`${API_PREFIX}/projects/${projectId}/execute/nudge`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
@@ -82,7 +82,7 @@ describe("Build API", () => {
 
     it("should return 404 for non-existent project", async () => {
       const res = await request(app)
-        .post(`${API_PREFIX}/projects/nonexistent-id/build/nudge`);
+        .post(`${API_PREFIX}/projects/nonexistent-id/execute/nudge`);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();

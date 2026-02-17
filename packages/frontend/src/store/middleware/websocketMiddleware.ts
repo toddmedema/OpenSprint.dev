@@ -2,7 +2,7 @@ import type { Middleware, ThunkDispatch, UnknownAction } from "@reduxjs/toolkit"
 import { createAction } from "@reduxjs/toolkit";
 import type { ServerEvent, ClientEvent } from "@opensprint/shared";
 import { setConnected, setHilRequest, setHilNotification } from "../slices/websocketSlice";
-import { fetchPrd, fetchPrdHistory, fetchDesignChat } from "../slices/designSlice";
+import { fetchPrd, fetchPrdHistory, fetchSpecChat } from "../slices/specSlice";
 import { fetchPlanStatus } from "../slices/planSlice";
 import { fetchPlans, fetchSinglePlan } from "../slices/planSlice";
 import {
@@ -12,8 +12,8 @@ import {
   setAwaitingApproval,
   setCompletionState,
   taskUpdated,
-} from "../slices/buildSlice";
-import { fetchFeedback } from "../slices/verifySlice";
+} from "../slices/executeSlice";
+import { fetchFeedback } from "../slices/ensureSlice";
 
 type StoreDispatch = ThunkDispatch<unknown, unknown, UnknownAction>;
 
@@ -115,7 +115,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
       case "prd.updated":
         d(fetchPrd(projectId));
         d(fetchPrdHistory(projectId));
-        d(fetchDesignChat(projectId));
+        d(fetchSpecChat(projectId));
         d(fetchPlanStatus(projectId));
         break;
 

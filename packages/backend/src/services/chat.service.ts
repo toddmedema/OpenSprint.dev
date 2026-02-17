@@ -192,7 +192,7 @@ export class ChatService {
     if (body.message == null || String(body.message).trim() === "") {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "Chat message is required");
     }
-    const context = body.context ?? "dream";
+    const context = body.context ?? "spec";
     const isPlanContext = context.startsWith("plan:");
     const planId = isPlanContext ? context.slice(5) : null;
 
@@ -298,7 +298,7 @@ export class ChatService {
       const prdUpdates = this.parsePrdUpdates(responseContent);
       displayContent = this.stripPrdUpdates(responseContent) || responseContent;
       if (prdUpdates.length > 0) {
-        const changes = await this.prdService.updateSections(projectId, prdUpdates, "dream");
+        const changes = await this.prdService.updateSections(projectId, prdUpdates, "spec");
         for (const change of changes) {
           prdChanges.push({
             section: change.section,
@@ -347,7 +347,7 @@ export class ChatService {
    * Syncs the edit into conversation context so the agent is aware of user-made changes (PRD §7.1.5).
    */
   async addDirectEditMessage(projectId: string, section: string, _content: string): Promise<void> {
-    const conversation = await this.getOrCreateConversation(projectId, "dream");
+    const conversation = await this.getOrCreateConversation(projectId, "spec");
     const sectionLabel = section.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     const message: ConversationMessage = {
       role: "user",
@@ -461,7 +461,7 @@ Only output PRD_UPDATE blocks for sections that need changes. If no updates are 
     );
     if (filtered.length === 0) return;
 
-    const changes = await this.prdService.updateSections(projectId, filtered, "verify");
+    const changes = await this.prdService.updateSections(projectId, filtered, "ensure");
     for (const change of changes) {
       broadcastToProject(projectId, {
         type: "prd.updated",

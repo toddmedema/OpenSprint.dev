@@ -4,9 +4,9 @@ import { PLAN_STATUS_ORDER } from "../constants/index.js";
 export type PlanComplexity = "low" | "medium" | "high" | "very_high";
 
 /** Plan status derived from beads epic state */
-export type PlanStatus = "planning" | "building" | "done";
+export type PlanStatus = "planning" | "building" | "complete";
 
-/** Sort plans by status order (planning → building → done) */
+/** Sort plans by status order (planning → building → complete) */
 export function sortPlansByStatus<T extends { status: PlanStatus }>(plans: T[]): T[] {
   return [...plans].sort((a, b) => {
     const orderA = PLAN_STATUS_ORDER[a.status] ?? 999;

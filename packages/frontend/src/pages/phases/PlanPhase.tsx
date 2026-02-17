@@ -21,7 +21,7 @@ import { DependencyGraph } from "../../components/DependencyGraph";
 import { PlanDetailContent } from "../../components/plan/PlanDetailContent";
 import { EpicCard } from "../../components/EpicCard";
 import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
-import { fetchTasks } from "../../store/slices/buildSlice";
+import { fetchTasks } from "../../store/slices/executeSlice";
 
 export const DEPENDENCY_GRAPH_EXPANDED_KEY = "opensprint-plan-dependencyGraphExpanded";
 
@@ -64,7 +64,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   const reshippingPlanId = useAppSelector((s) => s.plan.reshippingPlanId);
   const archivingPlanId = useAppSelector((s) => s.plan.archivingPlanId);
   const error = useAppSelector((s) => s.plan.error);
-  const buildTasks = useAppSelector((s) => s.build.tasks);
+  const executeTasks = useAppSelector((s) => s.execute.tasks);
 
   /* ── Local UI state (preserved by mount-all) ── */
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
@@ -107,24 +107,24 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     if (!selectedPlan?.metadata.beadEpicId) return [];
     const epicId = selectedPlan.metadata.beadEpicId;
     const gateTaskId = selectedPlan.metadata.gateTaskId;
-    return buildTasks.filter(
+    return executeTasks.filter(
       (t) => t.epicId === epicId && t.id !== gateTaskId
     );
-  }, [selectedPlan?.metadata.beadEpicId, selectedPlan?.metadata.gateTaskId, buildTasks]);
+  }, [selectedPlan?.metadata.beadEpicId, selectedPlan?.metadata.gateTaskId, executeTasks]);
 
   const planIdToTasks = useMemo(() => {
-    const map = new Map<string, typeof buildTasks>();
+    const map = new Map<string, typeof executeTasks>();
     for (const plan of plans) {
       const epicId = plan.metadata.beadEpicId;
       const gateTaskId = plan.metadata.gateTaskId;
       if (!epicId) continue;
-      const tasks = buildTasks.filter(
+      const tasks = executeTasks.filter(
         (t) => t.epicId === epicId && t.id !== gateTaskId
       );
       map.set(plan.metadata.planId, tasks);
     }
     return map;
-  }, [plans, buildTasks]);
+  }, [plans, executeTasks]);
   const planContext = selectedPlan ? `plan:${selectedPlan.metadata.planId}` : null;
   const currentChatMessages = planContext ? (chatMessages[planContext] ?? []) : [];
 
@@ -269,7 +269,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                 <option value="all">All</option>
                 <option value="planning">Planning</option>
                 <option value="building">Building</option>
-                <option value="done">Done</option>
+                <option value="complete">Complete</option>
               </select>
             )}
           </div>
@@ -283,7 +283,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         ) : plans.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-gray-500 mb-4">
-              No plans yet. Use &ldquo;Plan it&rdquo; from the Dream phase to decompose the PRD into feature plans and
+              No plans yet. Use &ldquo;Plan it&rdquo; from the Spec phase to decompose the PRD into feature plans and
               tasks, or add a plan manually.
             </p>
             <button type="button" onClick={() => setShowAddPlanModal(true)} className="btn-primary">
@@ -397,7 +397,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
               {tasksSectionExpanded && (
                 <div className="px-4 pb-4 space-y-2">
                   {planTasks.length === 0 ? (
-                    <p className="text-sm text-gray-500">No tasks yet. Click &ldquo;Build It!&rdquo; to auto-generate tasks from this plan, or use the AI chat to refine the plan first.</p>
+                    <p className="text-sm text-gray-500">No tasks yet. Click &ldquo;Execute It!&rdquo; to auto-generate tasks from this plan, or use the AI chat to refine the plan first.</p>
                   ) : (
                     planTasks.map((task) => (
                       <button

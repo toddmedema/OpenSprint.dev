@@ -5,8 +5,8 @@ import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import { VerifyPhase, FEEDBACK_COLLAPSED_KEY_PREFIX } from "./VerifyPhase";
 import projectReducer from "../../store/slices/projectSlice";
-import verifyReducer from "../../store/slices/verifySlice";
-import buildReducer from "../../store/slices/buildSlice";
+import ensureReducer from "../../store/slices/ensureSlice";
+import executeReducer from "../../store/slices/executeSlice";
 
 const mockFeedbackList = vi.fn().mockResolvedValue([]);
 const mockFeedbackSubmit = vi.fn().mockResolvedValue({
@@ -42,8 +42,8 @@ function createStore() {
   return configureStore({
     reducer: {
       project: projectReducer,
-      verify: verifyReducer,
-      build: buildReducer,
+      ensure: ensureReducer,
+      execute: executeReducer,
     },
     preloadedState: {
       project: {
@@ -59,7 +59,7 @@ function createStore() {
         loading: false,
         error: null,
       },
-      verify: {
+      ensure: {
         feedback: [],
         loading: false,
         submitting: false,
@@ -271,8 +271,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -288,7 +288,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -322,8 +322,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -339,7 +339,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -381,8 +381,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -398,7 +398,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-empty",
@@ -430,8 +430,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -447,7 +447,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -479,8 +479,8 @@ describe("VerifyPhase feedback input", () => {
     const storeLoading = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -496,7 +496,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [],
           loading: true,
           submitting: false,
@@ -519,8 +519,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithError = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -536,7 +536,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [],
           loading: false,
           submitting: false,
@@ -563,8 +563,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -580,7 +580,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -615,8 +615,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -632,7 +632,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-pending",
@@ -676,8 +676,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -693,7 +693,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-bug",
@@ -758,8 +758,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -775,7 +775,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -809,8 +809,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -826,7 +826,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-mapped",
@@ -869,8 +869,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -886,7 +886,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-with-img",
@@ -922,8 +922,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -939,7 +939,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -987,8 +987,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithTasks = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1004,7 +1004,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -1020,7 +1020,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [
             {
               id: "opensprint.dev-abc.1",
@@ -1090,12 +1090,12 @@ describe("VerifyPhase feedback input", () => {
     expect(screen.getByText("In Progress")).toBeInTheDocument();
   });
 
-  it("shows Backlog status for tasks not yet in build tasks", () => {
+  it("shows Backlog status for tasks not yet in execute tasks", () => {
     const storeWithUnmappedTask = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1111,7 +1111,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -1127,7 +1127,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -1161,8 +1161,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1178,7 +1178,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -1194,7 +1194,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -1229,8 +1229,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1246,7 +1246,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -1262,7 +1262,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -1300,8 +1300,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1317,7 +1317,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -1333,7 +1333,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -1371,8 +1371,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1388,7 +1388,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -1404,7 +1404,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -1454,8 +1454,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1471,7 +1471,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -1487,7 +1487,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -1527,8 +1527,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1544,7 +1544,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -1560,7 +1560,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -1598,8 +1598,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithNested = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1615,7 +1615,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-parent",
@@ -1644,7 +1644,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -1681,8 +1681,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithReplies = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1698,7 +1698,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-parent",
@@ -1727,7 +1727,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -1760,8 +1760,8 @@ describe("VerifyPhase feedback input", () => {
     const storeWithMultipleReplies = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1777,7 +1777,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-parent",
@@ -1817,7 +1817,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -1846,12 +1846,12 @@ describe("VerifyPhase feedback input", () => {
     expect(screen.getByRole("button", { name: /Collapse \(2 replies\)/i })).toBeInTheDocument();
   });
 
-  it("shows backlog icon for task not in build tasks", () => {
+  it("shows backlog icon for task not in execute tasks", () => {
     const storeWithUnknownTask = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1867,7 +1867,7 @@ describe("VerifyPhase feedback input", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-1",
@@ -1883,7 +1883,7 @@ describe("VerifyPhase feedback input", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -1945,8 +1945,8 @@ describe("VerifyPhase feedback collapsed state persistence", () => {
     const storeWithReplies = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -1962,7 +1962,7 @@ describe("VerifyPhase feedback collapsed state persistence", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-parent",
@@ -1991,7 +1991,7 @@ describe("VerifyPhase feedback collapsed state persistence", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,
@@ -2041,8 +2041,8 @@ describe("VerifyPhase feedback collapsed state persistence", () => {
     const storeWithReplies = configureStore({
       reducer: {
         project: projectReducer,
-        verify: verifyReducer,
-        build: buildReducer,
+        ensure: ensureReducer,
+        execute: executeReducer,
       },
       preloadedState: {
         project: {
@@ -2058,7 +2058,7 @@ describe("VerifyPhase feedback collapsed state persistence", () => {
           loading: false,
           error: null,
         },
-        verify: {
+        ensure: {
           feedback: [
             {
               id: "fb-parent",
@@ -2087,7 +2087,7 @@ describe("VerifyPhase feedback collapsed state persistence", () => {
           submitting: false,
           error: null,
         },
-        build: {
+        execute: {
           tasks: [],
           plans: [],
           orchestratorRunning: false,

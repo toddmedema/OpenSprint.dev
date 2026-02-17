@@ -39,11 +39,11 @@ export const API_PREFIX = "/api/v1";
 /** Kanban columns in display order */
 export const KANBAN_COLUMNS = ["planning", "backlog", "ready", "in_progress", "in_review", "done"] as const;
 
-/** Plan status display order (planning → building → done) */
-export const PLAN_STATUS_ORDER: Record<"planning" | "building" | "done", number> = {
+/** Plan status display order (planning → building → complete) */
+export const PLAN_STATUS_ORDER: Record<"planning" | "building" | "complete", number> = {
   planning: 0,
   building: 1,
-  done: 2,
+  complete: 2,
 };
 
 /** Task priority labels */

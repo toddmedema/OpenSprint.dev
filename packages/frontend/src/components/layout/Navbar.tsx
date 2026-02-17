@@ -15,10 +15,11 @@ interface NavbarProps {
 }
 
 const phases: { key: ProjectPhase; label: string }[] = [
-  { key: "dream", label: "Dream" },
+  { key: "spec", label: "Spec" },
   { key: "plan", label: "Plan" },
-  { key: "build", label: "Build" },
-  { key: "verify", label: "Verify" },
+  { key: "execute", label: "Execute" },
+  { key: "ensure", label: "Ensure" },
+  { key: "deploy", label: "Deploy" },
 ];
 
 export function Navbar({ project, currentPhase, onPhaseChange, onProjectSaved }: NavbarProps) {
@@ -93,7 +94,7 @@ export function Navbar({ project, currentPhase, onPhaseChange, onProjectSaved }:
                     aria-selected={p.id === project?.id}
                     onClick={() => {
                       setDropdownOpen(false);
-                      navigate(getProjectPhasePath(p.id, currentPhase ?? "dream"));
+                      navigate(getProjectPhasePath(p.id, currentPhase ?? "spec"));
                     }}
                     className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
                       p.id === project?.id ? "bg-brand-50 text-brand-700 font-medium" : "text-gray-700"

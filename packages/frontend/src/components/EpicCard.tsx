@@ -34,7 +34,7 @@ const statusConfig: Record<
       </svg>
     ),
   },
-  done: {
+  complete: {
     badge: "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/60",
     accent: "bg-emerald-500",
     icon: (
@@ -166,10 +166,10 @@ export function EpicCard({
             disabled={!!shippingPlanId}
             className="btn-primary text-xs w-full py-2 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg font-medium"
           >
-            {shippingPlanId === plan.metadata.planId ? "Building…" : "Build It!"}
+            {shippingPlanId === plan.metadata.planId ? "Executing…" : "Execute It!"}
           </button>
         )}
-        {plan.status === "done" &&
+        {plan.status === "complete" &&
           plan.metadata.shippedAt &&
           plan.lastModified &&
           plan.lastModified > plan.metadata.shippedAt && (

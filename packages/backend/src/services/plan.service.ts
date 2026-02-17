@@ -390,7 +390,7 @@ export class PlanService {
       : { total: 0, done: 0 };
 
     if (metadata.shippedAt) {
-      status = total > 0 && done === total ? "done" : "building";
+      status = total > 0 && done === total ? "complete" : "building";
     }
 
     const edges = await this.buildDependencyEdgesFromProject(projectId);

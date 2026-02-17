@@ -6,7 +6,7 @@ import { configureStore } from "@reduxjs/toolkit";
 import { PlanPhase, DEPENDENCY_GRAPH_EXPANDED_KEY } from "./PlanPhase";
 import projectReducer from "../../store/slices/projectSlice";
 import planReducer from "../../store/slices/planSlice";
-import buildReducer from "../../store/slices/buildSlice";
+import executeReducer from "../../store/slices/executeSlice";
 
 const mockArchive = vi.fn().mockResolvedValue(undefined);
 const mockShip = vi.fn().mockResolvedValue(undefined);
@@ -104,7 +104,7 @@ function createStore(plansOverride?: typeof basePlan[]) {
     reducer: {
       project: projectReducer,
       plan: planReducer,
-      build: buildReducer,
+      execute: executeReducer,
     },
     preloadedState: {
       plan: {
@@ -120,7 +120,7 @@ function createStore(plansOverride?: typeof basePlan[]) {
         archivingPlanId: null,
         error: null,
       },
-      build: {
+      execute: {
         tasks: [
           {
             id: "epic-1.1",
@@ -364,7 +364,7 @@ describe("PlanPhase Rebuild button", () => {
     const plans = [
       {
         ...basePlan,
-        status: "done" as const,
+        status: "complete" as const,
         doneTaskCount: 2,
         metadata: {
           ...basePlan.metadata,
@@ -387,7 +387,7 @@ describe("PlanPhase Rebuild button", () => {
     const plans = [
       {
         ...basePlan,
-        status: "done" as const,
+        status: "complete" as const,
         doneTaskCount: 2,
         metadata: {
           ...basePlan.metadata,
@@ -410,7 +410,7 @@ describe("PlanPhase Rebuild button", () => {
     const plans = [
       {
         ...basePlan,
-        status: "done" as const,
+        status: "complete" as const,
         doneTaskCount: 2,
         metadata: {
           ...basePlan.metadata,
@@ -433,7 +433,7 @@ describe("PlanPhase Rebuild button", () => {
     const plans = [
       {
         ...basePlan,
-        status: "done" as const,
+        status: "complete" as const,
         doneTaskCount: 2,
         metadata: {
           ...basePlan.metadata,
@@ -456,7 +456,7 @@ describe("PlanPhase Rebuild button", () => {
     const plans = [
       {
         ...basePlan,
-        status: "done" as const,
+        status: "complete" as const,
         doneTaskCount: 2,
         metadata: {
           ...basePlan.metadata,
@@ -482,7 +482,7 @@ describe("PlanPhase shipPlan thunk", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("dispatches shipPlan thunk when Build It! is clicked", async () => {
+  it("dispatches shipPlan thunk when Execute It! is clicked", async () => {
     const plans = [
       {
         ...basePlan,
@@ -498,8 +498,8 @@ describe("PlanPhase shipPlan thunk", () => {
       </Provider>,
     );
 
-    const buildButton = screen.getByRole("button", { name: /build it!/i });
-    await user.click(buildButton);
+    const executeButton = screen.getByRole("button", { name: /execute it!/i });
+    await user.click(executeButton);
 
     expect(mockShip).toHaveBeenCalledWith("proj-1", "archive-test-feature");
   });
@@ -515,7 +515,7 @@ describe("PlanPhase reshipPlan thunk", () => {
     const plans = [
       {
         ...basePlan,
-        status: "done" as const,
+        status: "complete" as const,
         doneTaskCount: 2,
         metadata: {
           ...basePlan.metadata,
@@ -545,12 +545,12 @@ describe("PlanPhase plan sorting and status filter", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("sorts plans by status order: planning, building, done", () => {
+  it("sorts plans by status order: planning, building, complete", () => {
     const plans = [
       {
         ...basePlan,
         metadata: { ...basePlan.metadata, planId: "done-feature" },
-        status: "done" as const,
+        status: "complete" as const,
       },
       {
         ...basePlan,
@@ -645,7 +645,7 @@ describe("PlanPhase plan sorting and status filter", () => {
     );
 
     const filter = screen.getByRole("combobox", { name: /filter plans by status/i });
-    await user.selectOptions(filter, "done");
+    await user.selectOptions(filter, "complete");
 
     expect(screen.getByText(/no plans match/i)).toBeInTheDocument();
   });

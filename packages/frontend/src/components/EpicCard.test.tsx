@@ -160,7 +160,7 @@ describe("EpicCard", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
-  it("shows Build It! button when plan status is planning", () => {
+  it("shows Execute It! button when plan status is planning", () => {
     const plan: Plan = { ...basePlan, status: "planning" };
     render(
       <EpicCard
@@ -174,10 +174,10 @@ describe("EpicCard", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /build it!/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /execute it!/i })).toBeInTheDocument();
   });
 
-  it("calls onShip when Build It! is clicked", async () => {
+  it("calls onShip when Execute It! is clicked", async () => {
     const onShip = vi.fn();
     const user = userEvent.setup();
     const plan: Plan = { ...basePlan, status: "planning" };
@@ -193,14 +193,14 @@ describe("EpicCard", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /build it!/i }));
+    await user.click(screen.getByRole("button", { name: /execute it!/i }));
     expect(onShip).toHaveBeenCalledTimes(1);
   });
 
   it("shows Rebuild button when plan is complete and modified after ship", () => {
     const plan: Plan = {
       ...basePlan,
-      status: "done",
+      status: "complete",
       doneTaskCount: 3,
       metadata: {
         ...basePlan.metadata,
@@ -228,7 +228,7 @@ describe("EpicCard", () => {
     const user = userEvent.setup();
     const plan: Plan = {
       ...basePlan,
-      status: "done",
+      status: "complete",
       doneTaskCount: 3,
       metadata: {
         ...basePlan.metadata,

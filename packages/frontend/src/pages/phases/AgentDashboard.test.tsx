@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import { AgentDashboard } from "./AgentDashboard";
-import buildReducer from "../../store/slices/buildSlice";
+import executeReducer from "../../store/slices/executeSlice";
 
 const mockBuildStatus = vi.fn().mockResolvedValue({
   running: false,
@@ -16,7 +16,7 @@ const mockAgentsActive = vi.fn().mockResolvedValue([]);
 
 vi.mock("../../api/client", () => ({
   api: {
-    build: {
+    execute: {
       status: (...args: unknown[]) => mockBuildStatus(...args),
     },
     agents: {
@@ -27,7 +27,7 @@ vi.mock("../../api/client", () => ({
 
 function createStore() {
   return configureStore({
-    reducer: { build: buildReducer },
+    reducer: { execute: executeReducer },
   });
 }
 
@@ -72,7 +72,7 @@ describe("AgentDashboard", () => {
     });
   });
 
-  it("fetches build status on mount", async () => {
+  it("fetches execute status on mount", async () => {
     renderAgentDashboard();
 
     await waitFor(() => {

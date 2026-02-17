@@ -11,17 +11,18 @@ import {
 import { useAppDispatch, useAppSelector } from "../store";
 import { fetchProject, resetProject } from "../store/slices/projectSlice";
 import { resetWebsocket, clearHilRequest, clearHilNotification } from "../store/slices/websocketSlice";
-import { fetchDesignChat, fetchPrd, fetchPrdHistory, resetDesign } from "../store/slices/designSlice";
+import { fetchSpecChat, fetchPrd, fetchPrdHistory, resetSpec } from "../store/slices/specSlice";
 import { fetchPlans, resetPlan, setSelectedPlanId } from "../store/slices/planSlice";
-import { fetchTasks, fetchBuildStatus, resetBuild, setSelectedTaskId } from "../store/slices/buildSlice";
-import { fetchFeedback, resetVerify } from "../store/slices/verifySlice";
+import { fetchTasks, fetchExecuteStatus, resetExecute, setSelectedTaskId } from "../store/slices/executeSlice";
+import { fetchFeedback, resetEnsure } from "../store/slices/ensureSlice";
 import { wsConnect, wsDisconnect, wsSend } from "../store/middleware/websocketMiddleware";
 import { Layout } from "../components/layout/Layout";
 import { HilApprovalModal } from "../components/HilApprovalModal";
-import { DreamPhase } from "./phases/DreamPhase";
+import { SpecPhase } from "./phases/SpecPhase";
 import { PlanPhase } from "./phases/PlanPhase";
-import { BuildPhase } from "./phases/BuildPhase";
-import { VerifyPhase } from "./phases/VerifyPhase";
+import { ExecutePhase } from "./phases/ExecutePhase";
+import { EnsurePhase } from "./phases/VerifyPhase";
+import { DeployPhase } from "./phases/DeployPhase";
 
 const CATEGORY_LABELS: Record<string, string> = {
   scopeChanges: "Scope Changes",
@@ -35,11 +36,11 @@ export function ProjectView() {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
-  const redirectTo = projectId && !isValidPhaseSlug(phaseSlug) ? getProjectPhasePath(projectId, "dream") : null;
+  const redirectTo = projectId && !isValidPhaseSlug(phaseSlug) ? getProjectPhasePath(projectId, "spec") : null;
 
   const currentPhase = phaseFromSlug(phaseSlug);
   const selectedPlanId = useAppSelector((s) => s.plan.selectedPlanId);
-  const selectedTaskId = useAppSelector((s) => s.build.selectedTaskId);
+  const selectedTaskId = useAppSelector((s) => s.execute.selectedTaskId);
 
   const project = useAppSelector((s) => s.project.data);
   const projectLoading = useAppSelector((s) => s.project.loading);
@@ -53,21 +54,21 @@ export function ProjectView() {
 
     dispatch(wsConnect({ projectId }));
     dispatch(fetchProject(projectId));
-    dispatch(fetchDesignChat(projectId));
+    dispatch(fetchSpecChat(projectId));
     dispatch(fetchPrd(projectId));
     dispatch(fetchPrdHistory(projectId));
     dispatch(fetchPlans(projectId));
     dispatch(fetchTasks(projectId));
-    dispatch(fetchBuildStatus(projectId));
+    dispatch(fetchExecuteStatus(projectId));
     dispatch(fetchFeedback(projectId));
 
     return () => {
       dispatch(wsDisconnect());
       dispatch(resetProject());
       dispatch(resetWebsocket());
-      dispatch(resetDesign());
+      dispatch(resetSpec());
       dispatch(resetPlan());
-      dispatch(resetBuild());
+      dispatch(resetExecute());
       dispatch(resetVerify());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,14 +81,14 @@ export function ProjectView() {
   useEffect(() => {
     const { plan, task } = parseDetailParams(location.search);
     if (plan && currentPhase === "plan") dispatch(setSelectedPlanId(plan));
-    if (task && currentPhase === "build") dispatch(setSelectedTaskId(task));
+    if (task && currentPhase === "execute") dispatch(setSelectedTaskId(task));
   }, [location.search, currentPhase, dispatch]);
 
   // Sync Redux selection → URL when user selects plan/task (shareable links)
   useEffect(() => {
     const path = getProjectPhasePath(projectId, currentPhase, {
       plan: currentPhase === "plan" ? selectedPlanId ?? undefined : undefined,
-      task: currentPhase === "build" ? selectedTaskId ?? undefined : undefined,
+      task: currentPhase === "execute" ? selectedTaskId ?? undefined : undefined,
     });
     const currentPath = location.pathname + location.search;
     if (path !== currentPath) {
@@ -108,7 +109,7 @@ export function ProjectView() {
 
   const handleNavigateToBuildTask = (taskId: string) => {
     dispatch(setSelectedTaskId(taskId));
-    navigate(getProjectPhasePath(projectId, "build", { task: taskId }));
+    navigate(getProjectPhasePath(projectId, "execute", { task: taskId }));
   };
 
   const handleNavigateToPlan = (planId: string) => {
@@ -175,14 +176,15 @@ export function ProjectView() {
             style={{ display: phase === currentPhase ? "flex" : "none" }}
             className={phase === currentPhase ? "flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col" : undefined}
           >
-            {phase === "dream" && (
-              <DreamPhase projectId={projectId} onNavigateToPlan={() => handlePhaseChange("plan")} />
+            {phase === "spec" && (
+              <SpecPhase projectId={projectId} onNavigateToPlan={() => handlePhaseChange("plan")} />
             )}
             {phase === "plan" && <PlanPhase projectId={projectId} onNavigateToBuildTask={handleNavigateToBuildTask} />}
-            {phase === "build" && <BuildPhase projectId={projectId} onNavigateToPlan={handleNavigateToPlan} />}
-            {phase === "verify" && (
-              <VerifyPhase projectId={projectId} onNavigateToBuildTask={handleNavigateToBuildTask} />
+            {phase === "execute" && <ExecutePhase projectId={projectId} onNavigateToPlan={handleNavigateToPlan} />}
+            {phase === "ensure" && (
+              <EnsurePhase projectId={projectId} onNavigateToBuildTask={handleNavigateToBuildTask} />
             )}
+            {phase === "deploy" && <DeployPhase projectId={projectId} />}
           </div>
         ))}
       </Layout>

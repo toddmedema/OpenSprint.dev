@@ -3,8 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
-import { DreamPhase } from "./DreamPhase";
-import designReducer from "../../store/slices/designSlice";
+import { SpecPhase } from "./DreamPhase";
+import specReducer from "../../store/slices/specSlice";
 import planReducer, { decomposePlans } from "../../store/slices/planSlice";
 
 const mockChatSend = vi.fn();
@@ -60,7 +60,7 @@ vi.mock("../../api/client", () => ({
 }));
 
 function createStore(preloadedState?: {
-  design?: {
+  spec?: {
     messages?: { role: "user" | "assistant"; content: string; timestamp: string }[];
     prdContent?: Record<string, string>;
     prdHistory?: unknown[];
@@ -69,14 +69,14 @@ function createStore(preloadedState?: {
 }) {
   return configureStore({
     reducer: {
-      design: designReducer,
+      spec: specReducer,
       plan: planReducer,
     },
     preloadedState: {
-      design: {
-        messages: preloadedState?.design?.messages ?? [],
-        prdContent: preloadedState?.design?.prdContent ?? {},
-        prdHistory: preloadedState?.design?.prdHistory ?? [],
+      spec: {
+        messages: preloadedState?.spec?.messages ?? [],
+        prdContent: preloadedState?.spec?.prdContent ?? {},
+        prdHistory: preloadedState?.spec?.prdHistory ?? [],
         sendingChat: false,
         savingSections: [],
         error: null,
@@ -101,12 +101,12 @@ function createStore(preloadedState?: {
 function renderDreamPhase(store = createStore()) {
   return render(
     <Provider store={store}>
-      <DreamPhase projectId="proj-1" />
+      <SpecPhase projectId="proj-1" />
     </Provider>,
   );
 }
 
-describe("DreamPhase with designSlice", () => {
+describe("SpecPhase with specSlice", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockChatSend.mockResolvedValue({ message: "Response" });
@@ -142,7 +142,7 @@ describe("DreamPhase with designSlice", () => {
       await user.click(screen.getByTitle("Dream it"));
 
       await waitFor(() => {
-        expect(mockChatSend).toHaveBeenCalledWith("proj-1", "A todo app", "dream", undefined);
+        expect(mockChatSend).toHaveBeenCalledWith("proj-1", "A todo app", "spec", undefined);
       });
     });
 
@@ -154,7 +154,7 @@ describe("DreamPhase with designSlice", () => {
       await user.keyboard("{Enter}");
 
       await waitFor(() => {
-        expect(mockChatSend).toHaveBeenCalledWith("proj-1", "A fitness app", "dream", undefined);
+        expect(mockChatSend).toHaveBeenCalledWith("proj-1", "A fitness app", "spec", undefined);
       });
     });
 
@@ -199,7 +199,7 @@ describe("DreamPhase with designSlice", () => {
         expect(mockChatSend).toHaveBeenCalledWith(
           "proj-1",
           expect.stringContaining("Here's my existing product requirements document"),
-          "dream",
+          "spec",
           undefined,
         );
       });
@@ -251,7 +251,7 @@ describe("DreamPhase with designSlice", () => {
   describe("PRD document view", () => {
     it("renders PRD sections when prdContent exists", () => {
       const store = createStore({
-        design: {
+        spec: {
           prdContent: {
             executive_summary: "Summary text",
             goals_and_metrics: "Goals text",
@@ -270,7 +270,7 @@ describe("DreamPhase with designSlice", () => {
     it("dispatches savePrdSection when user edits section (debounced autosave)", async () => {
       const user = userEvent.setup();
       const store = createStore({
-        design: { prdContent: { overview: "Original content" } },
+        spec: { prdContent: { overview: "Original content" } },
       });
       renderDreamPhase(store);
 
@@ -289,7 +289,7 @@ describe("DreamPhase with designSlice", () => {
 
     it("displays chat and messages in split-pane when PRD exists", () => {
       const store = createStore({
-        design: {
+        spec: {
           prdContent: { overview: "Content" },
           messages: [
             { role: "user", content: "Hello", timestamp: "2025-01-01" },
@@ -307,7 +307,7 @@ describe("DreamPhase with designSlice", () => {
 
     it("displays split-pane with light mode theme (PRD left, Discuss right)", () => {
       const store = createStore({
-        design: { prdContent: { overview: "Content" } },
+        spec: { prdContent: { overview: "Content" } },
       });
       const { container } = renderDreamPhase(store);
       // Main split-pane wrapper uses light mode bg-gray-50
@@ -321,7 +321,7 @@ describe("DreamPhase with designSlice", () => {
     it("collapses and expands Discuss sidebar when collapse/expand buttons are clicked", async () => {
       const user = userEvent.setup();
       const store = createStore({
-        design: { prdContent: { overview: "Content" } },
+        spec: { prdContent: { overview: "Content" } },
       });
       renderDreamPhase(store);
 
@@ -343,7 +343,7 @@ describe("DreamPhase with designSlice", () => {
 
     it("shows Plan it when planStatus.action is plan", async () => {
       const store = createStore({
-        design: { prdContent: { overview: "Content" } },
+        spec: { prdContent: { overview: "Content" } },
         plan: { planStatus: { hasPlanningRun: false, prdChangedSinceLastRun: false, action: "plan" } },
       });
       renderDreamPhase(store);
@@ -355,7 +355,7 @@ describe("DreamPhase with designSlice", () => {
 
     it("shows Replan it when planStatus.action is replan", async () => {
       const store = createStore({
-        design: { prdContent: { overview: "Content" } },
+        spec: { prdContent: { overview: "Content" } },
         plan: { planStatus: { hasPlanningRun: true, prdChangedSinceLastRun: true, action: "replan" } },
       });
       renderDreamPhase(store);
@@ -367,7 +367,7 @@ describe("DreamPhase with designSlice", () => {
 
     it("hides CTA button when planStatus.action is none", async () => {
       const store = createStore({
-        design: { prdContent: { overview: "Content" } },
+        spec: { prdContent: { overview: "Content" } },
         plan: { planStatus: { hasPlanningRun: true, prdChangedSinceLastRun: false, action: "none" } },
       });
       renderDreamPhase(store);
@@ -379,7 +379,7 @@ describe("DreamPhase with designSlice", () => {
 
     it("hides CTA button when planStatus is null (loading)", () => {
       const store = createStore({
-        design: { prdContent: { overview: "Content" } },
+        spec: { prdContent: { overview: "Content" } },
         plan: { planStatus: null },
       });
       renderDreamPhase(store);
@@ -389,7 +389,7 @@ describe("DreamPhase with designSlice", () => {
 
     it("fetches plan-status on Dream load when PRD exists", async () => {
       const store = createStore({
-        design: { prdContent: { overview: "Content" } },
+        spec: { prdContent: { overview: "Content" } },
       });
       renderDreamPhase(store);
       await waitFor(() => {
@@ -403,7 +403,7 @@ describe("DreamPhase with designSlice", () => {
         () => new Promise<void>((r) => { resolveDecompose = r; }),
       );
       const store = createStore({
-        design: { prdContent: { overview: "Content" } },
+        spec: { prdContent: { overview: "Content" } },
         plan: { planStatus: { hasPlanningRun: false, prdChangedSinceLastRun: false, action: "plan" } },
       });
       renderDreamPhase(store);
@@ -422,7 +422,7 @@ describe("DreamPhase with designSlice", () => {
     it("dispatches fetchPlanStatus after savePrdSection succeeds", async () => {
       const user = userEvent.setup();
       const store = createStore({
-        design: {
+        spec: {
           prdContent: {
             executive_summary: "Original",
             goals_and_metrics: "Goals",
@@ -452,7 +452,7 @@ describe("DreamPhase with designSlice", () => {
     it("saves multiple sections independently (multi-section edits)", async () => {
       const user = userEvent.setup();
       const store = createStore({
-        design: {
+        spec: {
           prdContent: {
             executive_summary: "Summary",
             goals_and_metrics: "Goals",

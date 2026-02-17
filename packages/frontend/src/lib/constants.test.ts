@@ -12,20 +12,21 @@ describe("constants", () => {
   });
 
   describe("PRD_SOURCE_COLORS", () => {
-    it("has colors for dream, plan, build, verify", () => {
-      expect(PRD_SOURCE_COLORS.dream).toBe("bg-blue-100 text-blue-800");
+    it("has colors for spec, plan, execute, ensure, deploy", () => {
+      expect(PRD_SOURCE_COLORS.spec).toBe("bg-blue-100 text-blue-800");
       expect(PRD_SOURCE_COLORS.plan).toBe("bg-amber-100 text-amber-800");
-      expect(PRD_SOURCE_COLORS.build).toBe("bg-green-100 text-green-800");
-      expect(PRD_SOURCE_COLORS.verify).toBe("bg-purple-100 text-purple-800");
+      expect(PRD_SOURCE_COLORS.execute).toBe("bg-green-100 text-green-800");
+      expect(PRD_SOURCE_COLORS.ensure).toBe("bg-purple-100 text-purple-800");
+      expect(PRD_SOURCE_COLORS.deploy).toBe("bg-slate-100 text-slate-800");
     });
   });
 
   describe("getPrdSourceColor", () => {
     it("returns known source colors", () => {
-      expect(getPrdSourceColor("dream")).toBe("bg-blue-100 text-blue-800");
+      expect(getPrdSourceColor("spec")).toBe("bg-blue-100 text-blue-800");
       expect(getPrdSourceColor("plan")).toBe("bg-amber-100 text-amber-800");
-      expect(getPrdSourceColor("build")).toBe("bg-green-100 text-green-800");
-      expect(getPrdSourceColor("verify")).toBe("bg-purple-100 text-purple-800");
+      expect(getPrdSourceColor("execute")).toBe("bg-green-100 text-green-800");
+      expect(getPrdSourceColor("ensure")).toBe("bg-purple-100 text-purple-800");
     });
 
     it("returns default purple for unknown sources", () => {

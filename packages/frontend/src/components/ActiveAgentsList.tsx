@@ -6,7 +6,7 @@ import { api } from "../api/client";
 import { getProjectPhasePath } from "../lib/phaseRouting";
 import { formatUptime } from "../lib/formatting";
 import { useAppDispatch } from "../store";
-import { setSelectedTaskId } from "../store/slices/buildSlice";
+import { setSelectedTaskId } from "../store/slices/executeSlice";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -79,10 +79,11 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
 
   const phaseLabel = (phase: string) => {
     const m: Record<string, string> = {
-      dream: "Dream",
+      spec: "Spec",
       plan: "Plan",
-      build: "Build",
-      verify: "Verify",
+      execute: "Execute",
+      ensure: "Ensure",
+      deploy: "Deploy",
       coding: "Coding",
       review: "Review",
     };

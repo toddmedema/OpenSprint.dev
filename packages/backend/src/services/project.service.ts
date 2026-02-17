@@ -88,7 +88,7 @@ export class ProjectService {
           name: entry.name,
           description: entry.description ?? "",
           repoPath: entry.repoPath,
-          currentPhase: "dream",
+          currentPhase: "spec",
           createdAt: entry.createdAt,
           updatedAt: stat.mtime.toISOString(),
           progressPercent,
@@ -235,7 +235,7 @@ export class ProjectService {
       name,
       description: input.description ?? "",
       repoPath,
-      currentPhase: "dream",
+      currentPhase: "spec",
       createdAt: now,
       updatedAt: now,
     };
@@ -277,7 +277,7 @@ export class ProjectService {
       name: entry.name,
       description: entry.description ?? "",
       repoPath: entry.repoPath,
-      currentPhase: "dream",
+      currentPhase: "spec",
       createdAt: entry.createdAt,
       updatedAt,
     };

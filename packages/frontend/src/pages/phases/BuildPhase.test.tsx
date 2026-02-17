@@ -6,7 +6,7 @@ import { configureStore } from "@reduxjs/toolkit";
 import { BuildPhase } from "./BuildPhase";
 import projectReducer from "../../store/slices/projectSlice";
 import planReducer from "../../store/slices/planSlice";
-import buildReducer from "../../store/slices/buildSlice";
+import executeReducer from "../../store/slices/executeSlice";
 const mockGet = vi.fn().mockResolvedValue({});
 const mockMarkDone = vi.fn().mockResolvedValue(undefined);
 
@@ -18,7 +18,7 @@ vi.mock("../../api/client", () => ({
       sessions: vi.fn().mockResolvedValue([]),
       markDone: (...args: unknown[]) => mockMarkDone(...args),
     },
-    build: {
+    execute: {
       status: vi.fn().mockResolvedValue({}),
     },
   },
@@ -46,7 +46,7 @@ function createStore(
     reducer: {
       project: projectReducer,
       plan: planReducer,
-      build: buildReducer,
+      execute: executeReducer,
     },
     preloadedState: {
       plan: {
@@ -61,7 +61,7 @@ function createStore(
         archivingPlanId: null,
         error: null,
       },
-      build: {
+      execute: {
         tasks,
         plans: [],
         awaitingApproval: false,
@@ -256,7 +256,7 @@ describe("BuildPhase Redux integration", () => {
     const backdrop = screen.getByRole("button", { name: "Dismiss task detail", hidden: true });
     await user.click(backdrop);
 
-    expect(store.getState().build.selectedTaskId).toBeNull();
+    expect(store.getState().execute.selectedTaskId).toBeNull();
   });
 
   it("closes task detail panel when X close button is clicked", async () => {
@@ -279,7 +279,7 @@ describe("BuildPhase Redux integration", () => {
     const closeBtn = screen.getByRole("button", { name: "Close task detail" });
     await user.click(closeBtn);
 
-    expect(store.getState().build.selectedTaskId).toBeNull();
+    expect(store.getState().execute.selectedTaskId).toBeNull();
   });
 
   it("has kanban scroll area with min-h-0 and overflow-auto for independent scroll", () => {

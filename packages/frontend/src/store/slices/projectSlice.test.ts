@@ -12,7 +12,7 @@ const mockProject: Project = {
   name: "Test Project",
   description: "A test project",
   repoPath: "/path/to/repo",
-  currentPhase: "dream",
+  currentPhase: "spec",
   createdAt: "2025-01-01T00:00:00Z",
   updatedAt: "2025-01-01T00:00:00Z",
 };

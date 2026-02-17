@@ -2,20 +2,20 @@ import { configureStore } from "@reduxjs/toolkit";
 import { useDispatch, useSelector } from "react-redux";
 import projectReducer from "./slices/projectSlice";
 import websocketReducer from "./slices/websocketSlice";
-import designReducer from "./slices/designSlice";
+import specReducer from "./slices/specSlice";
 import planReducer from "./slices/planSlice";
-import buildReducer from "./slices/buildSlice";
-import verifyReducer from "./slices/verifySlice";
+import executeReducer from "./slices/executeSlice";
+import ensureReducer from "./slices/ensureSlice";
 import { websocketMiddleware } from "./middleware/websocketMiddleware";
 
 export const store = configureStore({
   reducer: {
     project: projectReducer,
     websocket: websocketReducer,
-    design: designReducer,
+    spec: specReducer,
     plan: planReducer,
-    build: buildReducer,
-    verify: verifyReducer,
+    execute: executeReducer,
+    ensure: ensureReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -1,13 +1,13 @@
 import type { ProjectPhase } from "@opensprint/shared";
 
-export const VALID_PHASES: ProjectPhase[] = ["dream", "plan", "build", "verify"];
+export const VALID_PHASES: ProjectPhase[] = ["spec", "plan", "execute", "ensure", "deploy"];
 
 /**
- * Parses a URL slug into a valid ProjectPhase. Returns "dream" for invalid or missing slugs.
+ * Parses a URL slug into a valid ProjectPhase. Returns "spec" for invalid or missing slugs.
  */
 export function phaseFromSlug(slug: string | undefined): ProjectPhase {
   if (slug && VALID_PHASES.includes(slug as ProjectPhase)) return slug as ProjectPhase;
-  return "dream";
+  return "spec";
 }
 
 /**

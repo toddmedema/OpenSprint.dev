@@ -30,7 +30,7 @@ vi.mock("../../api/client", () => ({
       markDone: vi.fn(),
     },
     plans: { list: vi.fn() },
-    build: {
+    execute: {
       status: vi.fn(),
     },
   },
@@ -90,7 +90,7 @@ describe("buildSlice", () => {
     vi.mocked(api.tasks.sessions).mockReset();
     vi.mocked(api.tasks.markDone).mockReset();
     vi.mocked(api.plans.list).mockReset();
-    vi.mocked(api.build.status).mockReset();
+    vi.mocked(api.execute.status).mockReset();
   });
 
   function createStore() {
@@ -234,7 +234,7 @@ describe("buildSlice", () => {
 
   describe("fetchBuildStatus thunk", () => {
     it("sets orchestratorRunning and awaitingApproval on fulfilled", async () => {
-      vi.mocked(api.build.status).mockResolvedValue(mockOrchestratorStatus as never);
+      vi.mocked(api.execute.status).mockResolvedValue(mockOrchestratorStatus as never);
       const store = createStore();
       await store.dispatch(fetchBuildStatus("proj-1"));
       expect(store.getState().build.orchestratorRunning).toBe(true);
@@ -242,7 +242,7 @@ describe("buildSlice", () => {
     });
 
     it("sets orchestratorRunning false when idle", async () => {
-      vi.mocked(api.build.status).mockResolvedValue({
+      vi.mocked(api.execute.status).mockResolvedValue({
         currentTask: null,
         currentPhase: null,
         queueDepth: 0,

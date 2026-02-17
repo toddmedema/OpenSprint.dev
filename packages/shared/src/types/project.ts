@@ -1,5 +1,5 @@
-/** The four lifecycle phases of an OpenSprint project */
-export type ProjectPhase = "dream" | "plan" | "build" | "verify";
+/** The five lifecycle phases of an OpenSprint project (SPEED) */
+export type ProjectPhase = "spec" | "plan" | "execute" | "ensure" | "deploy";
 
 /** Core project entity */
 export interface Project {

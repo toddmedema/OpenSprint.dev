@@ -20,10 +20,11 @@ export type PrdSectionKey = (typeof PRD_SECTION_ORDER)[number];
 
 /** Tailwind class pairs for PRD change log source badges (bg-* text-*). */
 export const PRD_SOURCE_COLORS: Record<string, string> = {
-  dream: "bg-blue-100 text-blue-800",
+  spec: "bg-blue-100 text-blue-800",
   plan: "bg-amber-100 text-amber-800",
-  build: "bg-green-100 text-green-800",
-  verify: "bg-purple-100 text-purple-800",
+  execute: "bg-green-100 text-green-800",
+  ensure: "bg-purple-100 text-purple-800",
+  deploy: "bg-slate-100 text-slate-800",
 };
 
 /** Default color for unknown PRD sources. */

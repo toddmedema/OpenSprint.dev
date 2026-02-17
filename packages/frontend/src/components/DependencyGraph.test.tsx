@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { DependencyGraph } from "./DependencyGraph";
 import type { PlanDependencyGraph } from "@opensprint/shared";
 
-const mockPlan = (planId: string, status: "planning" | "building" | "done" = "planning") => ({
+const mockPlan = (planId: string, status: "planning" | "building" | "complete" = "planning") => ({
   metadata: {
     planId,
     beadEpicId: `epic-${planId}`,
@@ -121,7 +121,7 @@ describe("DependencyGraph", () => {
       plans: [
         mockPlan("planning-plan", "planning"),
         mockPlan("building-plan", "building"),
-        mockPlan("done-plan", "done"),
+        mockPlan("done-plan", "complete"),
       ],
       edges: [],
     };

@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { configureStore } from "@reduxjs/toolkit";
-import verifyReducer, {
+import ensureReducer, {
   fetchFeedback,
   submitFeedback,
-  resetVerify,
+  resetEnsure,
   setFeedback,
-  setVerifyError,
-  type VerifyState,
-} from "./verifySlice";
+  setEnsureError,
+  type EnsureState,
+} from "./ensureSlice";
 import type { FeedbackItem } from "@opensprint/shared";
 
 const mockFeedbackItem: FeedbackItem = {
@@ -39,8 +39,8 @@ describe("verifySlice", () => {
 
   describe("initial state", () => {
     it("has correct initial state", () => {
-      const store = configureStore({ reducer: { verify: verifyReducer } });
-      const state = store.getState().verify as VerifyState;
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
+      const state = store.getState().ensure as EnsureState;
       expect(state.feedback).toEqual([]);
       expect(state.loading).toBe(false);
       expect(state.submitting).toBe(false);
@@ -50,29 +50,29 @@ describe("verifySlice", () => {
 
   describe("reducers", () => {
     it("setFeedback updates feedback array", () => {
-      const store = configureStore({ reducer: { verify: verifyReducer } });
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
       store.dispatch(setFeedback([mockFeedbackItem]));
 
-      const state = store.getState().verify as VerifyState;
+      const state = store.getState().ensure as EnsureState;
       expect(state.feedback).toEqual([mockFeedbackItem]);
     });
 
-    it("setVerifyError updates error", () => {
-      const store = configureStore({ reducer: { verify: verifyReducer } });
-      store.dispatch(setVerifyError("Something went wrong"));
+    it("setEnsureError updates error", () => {
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
+      store.dispatch(setEnsureError("Something went wrong"));
 
-      const state = store.getState().verify as VerifyState;
+      const state = store.getState().ensure as EnsureState;
       expect(state.error).toBe("Something went wrong");
     });
 
-    it("resetVerify restores initial state", () => {
-      const store = configureStore({ reducer: { verify: verifyReducer } });
+    it("resetEnsure restores initial state", () => {
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
       store.dispatch(setFeedback([mockFeedbackItem]));
-      store.dispatch(setVerifyError("Error"));
+      store.dispatch(setEnsureError("Error"));
 
-      store.dispatch(resetVerify());
+      store.dispatch(resetEnsure());
 
-      const state = store.getState().verify as VerifyState;
+      const state = store.getState().ensure as EnsureState;
       expect(state.feedback).toEqual([]);
       expect(state.loading).toBe(false);
       expect(state.submitting).toBe(false);
@@ -87,10 +87,10 @@ describe("verifySlice", () => {
         resolveApi = r;
       });
       vi.mocked(api.feedback.list).mockReturnValue(apiPromise as never);
-      const store = configureStore({ reducer: { verify: verifyReducer } });
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
       const dispatchPromise = store.dispatch(fetchFeedback("proj-1"));
 
-      const state = store.getState().verify as VerifyState;
+      const state = store.getState().ensure as EnsureState;
       expect(state.loading).toBe(true);
       expect(state.error).toBeNull();
       expect(state.feedback).toEqual([]);
@@ -101,10 +101,10 @@ describe("verifySlice", () => {
 
     it("stores feedback and clears loading on fulfilled", async () => {
       vi.mocked(api.feedback.list).mockResolvedValue([mockFeedbackItem]);
-      const store = configureStore({ reducer: { verify: verifyReducer } });
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
       await store.dispatch(fetchFeedback("proj-1"));
 
-      const state = store.getState().verify as VerifyState;
+      const state = store.getState().ensure as EnsureState;
       expect(state.feedback).toEqual([mockFeedbackItem]);
       expect(state.loading).toBe(false);
       expect(state.error).toBeNull();
@@ -112,7 +112,7 @@ describe("verifySlice", () => {
 
     it("calls api.feedback.list with projectId", async () => {
       vi.mocked(api.feedback.list).mockResolvedValue([]);
-      const store = configureStore({ reducer: { verify: verifyReducer } });
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
       await store.dispatch(fetchFeedback("proj-abc-123"));
 
       expect(api.feedback.list).toHaveBeenCalledWith("proj-abc-123");
@@ -120,10 +120,10 @@ describe("verifySlice", () => {
 
     it("sets error and clears loading on rejected", async () => {
       vi.mocked(api.feedback.list).mockRejectedValue(new Error("Network error"));
-      const store = configureStore({ reducer: { verify: verifyReducer } });
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
       await store.dispatch(fetchFeedback("proj-1"));
 
-      const state = store.getState().verify as VerifyState;
+      const state = store.getState().ensure as EnsureState;
       expect(state.loading).toBe(false);
       expect(state.error).toBe("Network error");
       expect(state.feedback).toEqual([]);
@@ -131,10 +131,10 @@ describe("verifySlice", () => {
 
     it("uses fallback error message when error has no message", async () => {
       vi.mocked(api.feedback.list).mockRejectedValue(new Error());
-      const store = configureStore({ reducer: { verify: verifyReducer } });
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
       await store.dispatch(fetchFeedback("proj-1"));
 
-      const state = store.getState().verify as VerifyState;
+      const state = store.getState().ensure as EnsureState;
       expect(state.error).toBe("Failed to load feedback");
     });
   });
@@ -146,12 +146,12 @@ describe("verifySlice", () => {
         resolveApi = r;
       });
       vi.mocked(api.feedback.submit).mockReturnValue(apiPromise as never);
-      const store = configureStore({ reducer: { verify: verifyReducer } });
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
       const dispatchPromise = store.dispatch(
         submitFeedback({ projectId: "proj-1", text: "Bug report" }),
       );
 
-      const state = store.getState().verify as VerifyState;
+      const state = store.getState().ensure as EnsureState;
       expect(state.submitting).toBe(true);
       expect(state.error).toBeNull();
 
@@ -161,12 +161,12 @@ describe("verifySlice", () => {
 
     it("prepends new feedback and clears submitting on fulfilled", async () => {
       vi.mocked(api.feedback.submit).mockResolvedValue(mockFeedbackItem);
-      const store = configureStore({ reducer: { verify: verifyReducer } });
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
       store.dispatch(setFeedback([{ ...mockFeedbackItem, id: "fb-0", text: "Existing" }]));
 
       await store.dispatch(submitFeedback({ projectId: "proj-1", text: "New feedback" }));
 
-      const state = store.getState().verify as VerifyState;
+      const state = store.getState().ensure as EnsureState;
       expect(state.feedback).toHaveLength(2);
       expect(state.feedback[0]).toEqual(mockFeedbackItem);
       expect(state.feedback[1].text).toBe("Existing");
@@ -175,7 +175,7 @@ describe("verifySlice", () => {
 
     it("calls api.feedback.submit with projectId, text, and optional images", async () => {
       vi.mocked(api.feedback.submit).mockResolvedValue(mockFeedbackItem);
-      const store = configureStore({ reducer: { verify: verifyReducer } });
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
       await store.dispatch(
         submitFeedback({
           projectId: "proj-1",
@@ -194,10 +194,10 @@ describe("verifySlice", () => {
 
     it("sets error and clears submitting on rejected", async () => {
       vi.mocked(api.feedback.submit).mockRejectedValue(new Error("Submit failed"));
-      const store = configureStore({ reducer: { verify: verifyReducer } });
+      const store = configureStore({ reducer: { ensure: ensureReducer } });
       await store.dispatch(submitFeedback({ projectId: "proj-1", text: "Feedback" }));
 
-      const state = store.getState().verify as VerifyState;
+      const state = store.getState().ensure as EnsureState;
       expect(state.submitting).toBe(false);
       expect(state.error).toBe("Submit failed");
     });

@@ -66,7 +66,7 @@ prdRouter.put('/:section', async (req: Request<SectionParams>, res, next) => {
       req.params.projectId,
       req.params.section,
       content,
-      (source as 'dream' | 'plan' | 'build' | 'verify') || 'dream',
+      (source as 'spec' | 'plan' | 'execute' | 'ensure' | 'deploy') || 'spec',
     );
 
     // Sync direct edit to conversation context (PRD §7.1.5)

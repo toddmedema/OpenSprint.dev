@@ -11,25 +11,26 @@ import {
 
 describe("phaseRouting", () => {
   describe("phaseFromSlug", () => {
-    it("returns dream for undefined slug", () => {
-      expect(phaseFromSlug(undefined)).toBe("dream");
+    it("returns spec for undefined slug", () => {
+      expect(phaseFromSlug(undefined)).toBe("spec");
     });
 
-    it("returns dream for empty string", () => {
-      expect(phaseFromSlug("")).toBe("dream");
+    it("returns spec for empty string", () => {
+      expect(phaseFromSlug("")).toBe("spec");
     });
 
     it("returns phase for valid slugs", () => {
-      expect(phaseFromSlug("dream")).toBe("dream");
+      expect(phaseFromSlug("spec")).toBe("spec");
       expect(phaseFromSlug("plan")).toBe("plan");
-      expect(phaseFromSlug("build")).toBe("build");
-      expect(phaseFromSlug("verify")).toBe("verify");
+      expect(phaseFromSlug("execute")).toBe("execute");
+      expect(phaseFromSlug("ensure")).toBe("ensure");
+      expect(phaseFromSlug("deploy")).toBe("deploy");
     });
 
-    it("returns dream for invalid slugs", () => {
-      expect(phaseFromSlug("invalid")).toBe("dream");
-      expect(phaseFromSlug("design")).toBe("dream");
-      expect(phaseFromSlug("validate")).toBe("dream");
+    it("returns spec for invalid slugs", () => {
+      expect(phaseFromSlug("invalid")).toBe("spec");
+      expect(phaseFromSlug("design")).toBe("spec");
+      expect(phaseFromSlug("validate")).toBe("spec");
     });
   });
 
@@ -44,24 +45,26 @@ describe("phaseRouting", () => {
     });
 
     it("returns true for valid slugs", () => {
-      expect(isValidPhaseSlug("dream")).toBe(true);
+      expect(isValidPhaseSlug("spec")).toBe(true);
       expect(isValidPhaseSlug("plan")).toBe(true);
-      expect(isValidPhaseSlug("build")).toBe(true);
-      expect(isValidPhaseSlug("verify")).toBe(true);
+      expect(isValidPhaseSlug("execute")).toBe(true);
+      expect(isValidPhaseSlug("ensure")).toBe(true);
+      expect(isValidPhaseSlug("deploy")).toBe(true);
     });
   });
 
   describe("getProjectPhasePath", () => {
     it("builds path with explicit phase for all phases", () => {
-      expect(getProjectPhasePath("proj-123", "dream")).toBe("/projects/proj-123/dream");
+      expect(getProjectPhasePath("proj-123", "spec")).toBe("/projects/proj-123/spec");
       expect(getProjectPhasePath("proj-123", "plan")).toBe("/projects/proj-123/plan");
-      expect(getProjectPhasePath("proj-123", "build")).toBe("/projects/proj-123/build");
-      expect(getProjectPhasePath("proj-123", "verify")).toBe("/projects/proj-123/verify");
+      expect(getProjectPhasePath("proj-123", "execute")).toBe("/projects/proj-123/execute");
+      expect(getProjectPhasePath("proj-123", "ensure")).toBe("/projects/proj-123/ensure");
+      expect(getProjectPhasePath("proj-123", "deploy")).toBe("/projects/proj-123/deploy");
     });
 
     it("handles different project IDs", () => {
-      expect(getProjectPhasePath("abc", "dream")).toBe("/projects/abc/dream");
-      expect(getProjectPhasePath("uuid-xyz-789", "build")).toBe("/projects/uuid-xyz-789/build");
+      expect(getProjectPhasePath("abc", "spec")).toBe("/projects/abc/spec");
+      expect(getProjectPhasePath("uuid-xyz-789", "execute")).toBe("/projects/uuid-xyz-789/execute");
     });
 
     it("appends plan param for Plan phase deep linking", () => {
@@ -70,18 +73,18 @@ describe("phaseRouting", () => {
       );
     });
 
-    it("appends task param for Build phase deep linking", () => {
-      expect(getProjectPhasePath("proj-1", "build", { task: "opensprint.dev-abc.1" })).toBe(
-        "/projects/proj-1/build?task=opensprint.dev-abc.1",
+    it("appends task param for Execute phase deep linking", () => {
+      expect(getProjectPhasePath("proj-1", "execute", { task: "opensprint.dev-abc.1" })).toBe(
+        "/projects/proj-1/execute?task=opensprint.dev-abc.1",
       );
     });
 
     it("appends both plan and task when provided", () => {
-      const path = getProjectPhasePath("proj-1", "build", {
+      const path = getProjectPhasePath("proj-1", "execute", {
         plan: "opensprint.dev-abc",
         task: "opensprint.dev-abc.1",
       });
-      expect(path).toContain("/projects/proj-1/build?");
+      expect(path).toContain("/projects/proj-1/execute?");
       expect(path).toContain("plan=opensprint.dev-abc");
       expect(path).toContain("task=opensprint.dev-abc.1");
     });
@@ -129,7 +132,7 @@ describe("phaseRouting", () => {
 
   describe("VALID_PHASES", () => {
     it("contains all four phases in order", () => {
-      expect(VALID_PHASES).toEqual(["dream", "plan", "build", "verify"]);
+      expect(VALID_PHASES).toEqual(["spec", "plan", "execute", "ensure", "deploy"]);
     });
   });
 });

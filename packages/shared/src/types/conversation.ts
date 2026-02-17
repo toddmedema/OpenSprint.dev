@@ -1,5 +1,5 @@
 /** Conversation context — which phase/plan it belongs to */
-export type ConversationContext = "dream" | `plan:${string}`;
+export type ConversationContext = "spec" | `plan:${string}`;
 
 /** A message in a conversation */
 export interface ConversationMessage {

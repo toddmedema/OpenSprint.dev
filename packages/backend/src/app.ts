@@ -5,7 +5,7 @@ import { projectsRouter } from "./routes/projects.js";
 import { prdRouter } from "./routes/prd.js";
 import { plansRouter } from "./routes/plans.js";
 import { chatRouter } from "./routes/chat.js";
-import { buildRouter } from "./routes/build.js";
+import { executeRouter } from "./routes/execute.js";
 import { agentsRouter } from "./routes/agents.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { feedbackRouter } from "./routes/feedback.js";
@@ -32,7 +32,7 @@ export function createApp() {
   app.use(`${API_PREFIX}/projects/:projectId/prd`, prdRouter);
   app.use(`${API_PREFIX}/projects/:projectId/plans`, plansRouter);
   app.use(`${API_PREFIX}/projects/:projectId/chat`, chatRouter);
-  app.use(`${API_PREFIX}/projects/:projectId/build`, buildRouter);
+  app.use(`${API_PREFIX}/projects/:projectId/execute`, executeRouter);
   app.use(`${API_PREFIX}/projects/:projectId/agents`, agentsRouter);
   app.use(`${API_PREFIX}/projects/:projectId/tasks`, tasksRouter);
   app.use(`${API_PREFIX}/projects/:projectId/feedback`, feedbackRouter);

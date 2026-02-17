@@ -178,9 +178,9 @@ export const api = {
       }),
   },
 
-  // ─── Build ───
-  build: {
-    status: (projectId: string) => request<OrchestratorStatus>(`/projects/${projectId}/build/status`),
+  // ─── Execute ───
+  execute: {
+    status: (projectId: string) => request<OrchestratorStatus>(`/projects/${projectId}/execute/status`),
   },
 
   // ─── Feedback ───

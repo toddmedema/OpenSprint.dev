@@ -6,10 +6,11 @@ import { getProjectPhasePath } from "../lib/phaseRouting";
 import type { Project } from "@opensprint/shared";
 
 const PHASE_LABELS: Record<string, string> = {
-  dream: "Dream",
+  spec: "Spec",
   plan: "Plan",
-  build: "Build",
-  verify: "Verify",
+  execute: "Execute",
+  ensure: "Ensure",
+  deploy: "Deploy",
 };
 
 function ProjectCard({ project }: { project: Project }) {

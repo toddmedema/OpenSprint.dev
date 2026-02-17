@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import type { FeedbackItem, KanbanColumn } from "@opensprint/shared";
 import { useAppDispatch, useAppSelector } from "../../store";
-import { submitFeedback, setVerifyError } from "../../store/slices/verifySlice";
+import { submitFeedback, setEnsureError } from "../../store/slices/ensureSlice";
 import { TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
 
 /** Reply icon (message turn / corner up-right) */
@@ -28,7 +28,7 @@ const MAX_IMAGES = 5;
 const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
 
-export const FEEDBACK_COLLAPSED_KEY_PREFIX = "opensprint-verify-feedback-collapsed";
+export const FEEDBACK_COLLAPSED_KEY_PREFIX = "opensprint-ensure-feedback-collapsed";
 
 function getFeedbackCollapsedKey(projectId: string): string {
   return `${FEEDBACK_COLLAPSED_KEY_PREFIX}-${projectId}`;
@@ -69,7 +69,7 @@ function isImageFile(file: File): boolean {
   return ACCEPTED_IMAGE_TYPES.includes(file.type);
 }
 
-interface VerifyPhaseProps {
+interface EnsurePhaseProps {
   projectId: string;
   onNavigateToBuildTask?: (taskId: string) => void;
 }
@@ -207,7 +207,7 @@ function FeedbackCard({
                   type="button"
                   onClick={() => onNavigateToBuildTask(taskId)}
                   className="inline-flex items-center gap-1.5 rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-brand-600 hover:bg-brand-50 hover:text-brand-700 underline transition-colors"
-                  title={`Go to ${taskId} on Build tab (${statusLabel})`}
+                  title={`Go to ${taskId} on Execute tab (${statusLabel})`}
                 >
                   <TaskStatusBadge column={column} size="xs" />
                   <span className="text-gray-500 font-sans font-normal no-underline" aria-label={`Status: ${statusLabel}`}>
@@ -322,22 +322,22 @@ function FeedbackCard({
   );
 }
 
-export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhaseProps) {
+export function EnsurePhase({ projectId, onNavigateToBuildTask }: EnsurePhaseProps) {
   const dispatch = useAppDispatch();
 
   /* ── Redux state ── */
-  const feedback = useAppSelector((s) => s.verify.feedback);
-  const buildTasks = useAppSelector((s) => s.build.tasks);
-  const loading = useAppSelector((s) => s.verify.loading);
-  const submitting = useAppSelector((s) => s.verify.submitting);
-  const error = useAppSelector((s) => s.verify.error);
+  const feedback = useAppSelector((s) => s.ensure.feedback);
+  const executeTasks = useAppSelector((s) => s.execute.tasks);
+  const loading = useAppSelector((s) => s.ensure.loading);
+  const submitting = useAppSelector((s) => s.ensure.submitting);
+  const error = useAppSelector((s) => s.ensure.error);
 
   const getTaskColumn = useCallback(
     (taskId: string): KanbanColumn => {
-      const task = buildTasks.find((t) => t.id === taskId);
+      const task = executeTasks.find((t) => t.id === taskId);
       return task?.kanbanColumn ?? "backlog";
     },
-    [buildTasks],
+    [executeTasks],
   );
 
   /* ── Local UI state (preserved by mount-all) ── */
@@ -449,13 +449,13 @@ export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhasePro
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex justify-between items-center">
             <span>{error}</span>
-            <button type="button" onClick={() => dispatch(setVerifyError(null))} className="text-red-500 hover:text-red-700 underline">
+            <button type="button" onClick={() => dispatch(setEnsureError(null))} className="text-red-500 hover:text-red-700 underline">
               Dismiss
             </button>
           </div>
         )}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Verify</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Ensure</h2>
           <p className="text-sm text-gray-500">
             Test your application and report feedback. The AI will map issues to the right features and create tickets
             automatically.
