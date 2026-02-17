@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { ChatIcon, CloseIcon, SendIcon, SparklesIcon } from "../icons/PrdIcons";
+import { ChatIcon, SendIcon, SparklesIcon } from "../icons/PrdIcons";
+import { CloseButton } from "../CloseButton";
 import { formatSectionKey } from "../../lib/formatting";
 
 export interface ChatMessage {
@@ -80,16 +81,14 @@ export function PrdChatPanel({
           <SparklesIcon className="w-4 h-4 text-brand-500" />
           <span className="text-sm font-semibold text-gray-800">Chat with AI</span>
         </div>
-        <button
-          type="button"
+        <CloseButton
           onClick={() => {
             onOpenChange(false);
             onClearSelectionContext();
           }}
-          className="w-7 h-7 rounded-full hover:bg-gray-200 flex items-center justify-center transition-colors"
-        >
-          <CloseIcon className="w-4 h-4 text-gray-500" />
-        </button>
+          className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-colors"
+          size="w-4 h-4"
+        />
       </div>
 
       {/* Messages */}
@@ -137,13 +136,12 @@ export function PrdChatPanel({
             <span className="font-medium text-brand-700">
               Discussing: {formatSectionKey(selectionContext.section)}
             </span>
-            <button
-              type="button"
+            <CloseButton
               onClick={onClearSelectionContext}
-              className="text-brand-400 hover:text-brand-600"
-            >
-              <CloseIcon className="w-3 h-3" />
-            </button>
+              ariaLabel="Clear selection"
+              className="p-0.5 text-brand-400 hover:text-brand-600 hover:bg-transparent"
+              size="w-3 h-3"
+            />
           </div>
           <p className="text-brand-600 line-clamp-2 italic">
             &ldquo;{selectionContext.text}&rdquo;

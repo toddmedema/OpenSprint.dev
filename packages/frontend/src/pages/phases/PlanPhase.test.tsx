@@ -175,7 +175,7 @@ describe("PlanPhase Redux integration", () => {
     await user.click(screen.getAllByRole("button", { name: /add feature/i })[0]);
     expect(screen.getByText("Feature Title")).toBeInTheDocument();
 
-    const closeButtons = screen.getAllByRole("button", { name: "X" });
+    const closeButtons = screen.getAllByRole("button", { name: "Close" });
     await user.click(closeButtons[0]);
 
     expect(screen.queryByText("Feature Title")).not.toBeInTheDocument();
