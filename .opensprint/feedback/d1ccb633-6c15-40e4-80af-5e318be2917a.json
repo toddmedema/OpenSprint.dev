@@ -1,0 +1,15 @@
+{
+  "id": "d1ccb633-6c15-40e4-80af-5e318be2917a",
+  "text": "When a user submits feedback, it should appear immediately in the feedback history (as soon as the backend confirms received) so that they have visual feedback. While the agent is categorizing and creating the ticket, hide everything on the card except the feedback text, and show a loading spinner on the top right of the card.",
+  "category": "ux",
+  "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
+  "createdTaskIds": [
+    "opensprint.dev-srl.15"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T07:53:43.882Z",
+  "taskTitles": [
+    "Show feedback immediately in history with loading state during categorization"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-bem"
+}

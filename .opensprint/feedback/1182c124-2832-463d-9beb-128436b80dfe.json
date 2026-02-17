@@ -1,0 +1,15 @@
+{
+  "id": "1182c124-2832-463d-9beb-128436b80dfe",
+  "text": "\"Add Feature\" modal should not prompt the user for complexity; once the feature is submitted, and again when the user clicks \"build it\", an agent should evaluate the complexity and assign the complexity score to it.",
+  "category": "feature",
+  "mappedPlanId": "plan-phase-feature-decomposition",
+  "createdTaskIds": [
+    "opensprint.dev-1zx"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T07:50:48.170Z",
+  "taskTitles": [
+    "Replace manual complexity input with agent-evaluated complexity in Add Feature flow"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-9h1"
+}

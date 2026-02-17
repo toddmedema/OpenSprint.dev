@@ -1,0 +1,15 @@
+{
+  "id": "69a2dbbe-b105-4547-8ea7-2e4ad85c0040",
+  "text": "UI bug: The agents running dropdown appears beneath the Build sidebar. On the plan page, it correctly appears on top of the sidebar. Perhaps we can standardize the sidebar implementation?",
+  "category": "bug",
+  "mappedPlanId": "build-phase-kanban-and-task-listing",
+  "createdTaskIds": [
+    "opensprint.dev-cxx.12"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T07:51:58.598Z",
+  "taskTitles": [
+    "Fix agents running dropdown z-index beneath Build sidebar"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-1l3"
+}

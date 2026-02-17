@@ -1,0 +1,15 @@
+{
+  "id": "5c677292-ac1f-4cf2-9940-1486e6f1512d",
+  "text": "Update anywhere that we use the term \"Complete\" to use the term \"Done\" instead, as it's shorter",
+  "category": "ux",
+  "mappedPlanId": "agent-invocation-service",
+  "createdTaskIds": [
+    "opensprint.dev-z0v.9"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T08:03:55.587Z",
+  "taskTitles": [
+    "Replace 'Complete' with 'Done' throughout UI and code"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-ar7"
+}

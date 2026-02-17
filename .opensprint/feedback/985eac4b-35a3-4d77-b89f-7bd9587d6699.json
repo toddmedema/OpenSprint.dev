@@ -1,0 +1,15 @@
+{
+  "id": "985eac4b-35a3-4d77-b89f-7bd9587d6699",
+  "text": "UI improvement: On the plan and build phases, users should be able to drag the sidebars to be wider or narrower, and the width should be saved to local storage and remembered any time a sidebar is opened (suggestion - min width of 200px, max width of 80% of screen width - but please look up best practices)",
+  "category": "ux",
+  "mappedPlanId": "agent-invocation-service",
+  "createdTaskIds": [
+    "opensprint.dev-z0v.8"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T07:55:51.109Z",
+  "taskTitles": [
+    "Add resizable sidebars with persisted width in Plan and Build phases"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-9mh"
+}

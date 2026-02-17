@@ -1,7 +1,7 @@
 {
   "planningAgent": {
     "type": "cursor",
-    "model": "composer-1.5",
+    "model": "claude-4.6-opus-high-thinking",
     "cliCommand": null
   },
   "codingAgent": {
@@ -18,5 +18,17 @@
     "dependencyModifications": "automated",
     "testFailuresAndRetries": "automated"
   },
-  "testFramework": null
+  "testFramework": null,
+  "codingAgentByComplexity": {
+    "high": {
+      "type": "cursor",
+      "model": "claude-opus-4-6",
+      "cliCommand": null
+    },
+    "very_high": {
+      "type": "cursor",
+      "model": "claude-4.6-opus-high-thinking",
+      "cliCommand": null
+    }
+  }
 }
