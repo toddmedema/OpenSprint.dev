@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { BranchManager } from "./branch-manager.js";
+import { heartbeatService } from "./heartbeat.service.js";
 
 /**
  * Orphan recovery: detect and retry abandoned IN_PROGRESS tasks.
@@ -15,6 +16,42 @@ import { BranchManager } from "./branch-manager.js";
 export class OrphanRecoveryService {
   private beads = new BeadsService();
   private branchManager = new BranchManager();
+
+  /**
+   * Recover tasks identified by stale heartbeat files (> 2 min old).
+   * Complements recoverOrphanedTasks by finding orphaned worktrees via heartbeat age.
+   *
+   * @param repoPath - Path to the project repository (with .beads)
+   * @param excludeTaskId - Optional task ID to exclude
+   */
+  async recoverFromStaleHeartbeats(
+    repoPath: string,
+    excludeTaskId?: string | null,
+  ): Promise<{ recovered: string[] }> {
+    const worktreeBase = this.branchManager.getWorktreeBasePath();
+    const stale = await heartbeatService.findStaleHeartbeats(worktreeBase);
+    const recovered: string[] = [];
+
+    for (const { taskId } of stale) {
+      if (excludeTaskId && taskId === excludeTaskId) continue;
+      try {
+        const task = await this.beads.show(repoPath, taskId);
+        if (task.status === "in_progress") {
+          await this.recoverOne(repoPath, task);
+          recovered.push(taskId);
+        }
+      } catch {
+        // Task may not exist in beads — just clean up worktree
+        try {
+          await this.branchManager.removeTaskWorktree(repoPath, taskId);
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    return { recovered };
+  }
 
   /**
    * Recover orphaned tasks: in_progress + agent assignee but no active process.

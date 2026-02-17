@@ -11,11 +11,16 @@ const execAsync = promisify(exec);
 // Mock BeadsService
 let mockListInProgress: { id: string; status: string; assignee: string }[] = [];
 let mockUpdateCalls: Array<{ id: string; status: string; assignee: string }> = [];
+let mockShowResult: { id: string; status: string } | null = null;
 
 vi.mock('../services/beads.service.js', () => {
   return {
     BeadsService: class MockBeadsService {
       listInProgressWithAgentAssignee = vi.fn().mockImplementation(() => Promise.resolve(mockListInProgress));
+      show = vi.fn().mockImplementation(async (_repo: string, id: string) => {
+        if (mockShowResult && mockShowResult.id === id) return mockShowResult;
+        throw new Error('Task not found');
+      });
       update = vi.fn().mockImplementation(async (_repo: string, id: string, opts: { status?: string; assignee?: string }) => {
         mockUpdateCalls.push({ id, status: opts.status ?? '', assignee: opts.assignee ?? '' });
         return { id, status: opts.status ?? 'open', assignee: opts.assignee ?? '' };
@@ -44,6 +49,7 @@ describe('OrphanRecoveryService', () => {
     await execAsync('git add -A && git commit -m "init"', { cwd: repoPath });
     mockListInProgress = [];
     mockUpdateCalls = [];
+    mockShowResult = null;
   });
 
   afterEach(async () => {
@@ -171,5 +177,64 @@ describe('OrphanRecoveryService', () => {
     // Clean up
     await execAsync(`git worktree prune`, { cwd: repoPath }).catch(() => {});
     await execAsync(`git branch -D opensprint/${taskId}`, { cwd: repoPath }).catch(() => {});
+  });
+
+  describe('recoverFromStaleHeartbeats', () => {
+    it('recovers tasks with stale heartbeat files', async () => {
+      const taskId = 'task-stale-hb';
+      const worktreeBase = path.join(os.tmpdir(), 'opensprint-worktrees');
+      const wtPath = path.join(worktreeBase, taskId);
+
+      await execAsync(`git branch opensprint/${taskId} main`, { cwd: repoPath });
+      await fs.mkdir(path.dirname(wtPath), { recursive: true });
+      await execAsync(`git worktree add ${wtPath} opensprint/${taskId}`, { cwd: repoPath });
+      await fs.mkdir(path.join(wtPath, '.opensprint', 'active', taskId), { recursive: true });
+      await fs.writeFile(
+        path.join(wtPath, '.opensprint', 'active', taskId, 'heartbeat.json'),
+        JSON.stringify({
+          pid: 12345,
+          lastOutputTimestamp: 0,
+          heartbeatTimestamp: Date.now() - 3 * 60 * 1000, // 3 min ago
+        }),
+      );
+
+      mockShowResult = { id: taskId, status: 'in_progress' };
+
+      const { recovered } = await service.recoverFromStaleHeartbeats(repoPath);
+
+      expect(recovered).toContain(taskId);
+      expect(mockUpdateCalls.some((c) => c.id === taskId && c.status === 'open')).toBe(true);
+
+      await execAsync(`git worktree remove ${wtPath} --force`, { cwd: repoPath }).catch(() => {});
+      await execAsync(`git branch -D opensprint/${taskId}`, { cwd: repoPath }).catch(() => {});
+    });
+
+    it('excludes task when excludeTaskId is provided', async () => {
+      const taskId = 'task-exclude';
+      const worktreeBase = path.join(os.tmpdir(), 'opensprint-worktrees');
+      const wtPath = path.join(worktreeBase, taskId);
+
+      await execAsync(`git branch opensprint/${taskId} main`, { cwd: repoPath });
+      await fs.mkdir(path.dirname(wtPath), { recursive: true });
+      await execAsync(`git worktree add ${wtPath} opensprint/${taskId}`, { cwd: repoPath });
+      await fs.mkdir(path.join(wtPath, '.opensprint', 'active', taskId), { recursive: true });
+      await fs.writeFile(
+        path.join(wtPath, '.opensprint', 'active', taskId, 'heartbeat.json'),
+        JSON.stringify({
+          pid: 1,
+          lastOutputTimestamp: 0,
+          heartbeatTimestamp: Date.now() - 3 * 60 * 1000,
+        }),
+      );
+
+      mockShowResult = { id: taskId, status: 'in_progress' };
+
+      const { recovered } = await service.recoverFromStaleHeartbeats(repoPath, taskId);
+
+      expect(recovered).not.toContain(taskId);
+
+      await execAsync(`git worktree remove ${wtPath} --force`, { cwd: repoPath }).catch(() => {});
+      await execAsync(`git branch -D opensprint/${taskId}`, { cwd: repoPath }).catch(() => {});
+    });
   });
 });

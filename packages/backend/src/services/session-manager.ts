@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { OPENSPRINT_PATHS } from '@opensprint/shared';
+import { heartbeatService } from './heartbeat.service.js';
 import type { AgentSession, AgentSessionStatus, TestResults, AgentType } from '@opensprint/shared';
 
 /**
@@ -111,10 +112,14 @@ export class SessionManager {
       JSON.stringify(session, null, 2),
     );
 
+    // Clean up heartbeat file before archiving (not useful in archive)
+    await heartbeatService.deleteHeartbeat(worktreePath ?? repoPath, taskId);
+
     // Copy active directory contents to session archive
     try {
       const files = await fs.readdir(activeDirSource);
       for (const file of files) {
+        if (file === OPENSPRINT_PATHS.heartbeat) continue; // Skip heartbeat (already deleted)
         const srcPath = path.join(activeDirSource, file);
         const destPath = path.join(sessionDir, file);
         const stat = await fs.stat(srcPath);

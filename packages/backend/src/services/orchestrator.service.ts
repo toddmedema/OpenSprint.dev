@@ -14,6 +14,7 @@ import {
   BACKOFF_FAILURE_THRESHOLD,
   MAX_PRIORITY_BEFORE_BLOCK,
   AGENT_INACTIVITY_TIMEOUT_MS,
+  HEARTBEAT_INTERVAL_MS,
   getTestCommandForFramework,
 } from "@opensprint/shared";
 import { BeadsService, type BeadsIssue } from "./beads.service.js";
@@ -25,6 +26,7 @@ import { ContextAssembler } from "./context-assembler.js";
 import { SessionManager } from "./session-manager.js";
 import { TestRunner } from "./test-runner.js";
 import { orphanRecoveryService } from "./orphan-recovery.service.js";
+import { heartbeatService } from "./heartbeat.service.js";
 import { broadcastToProject, sendAgentOutputToProject } from "../websocket/index.js";
 
 /**
@@ -120,6 +122,7 @@ interface OrchestratorState {
   activeProcess: { kill: () => void; pid: number | null } | null;
   lastOutputTime: number;
   inactivityTimer: ReturnType<typeof setInterval> | null;
+  heartbeatTimer: ReturnType<typeof setInterval> | null;
   outputLog: string[];
   startedAt: string;
   attempt: number;
@@ -161,6 +164,7 @@ export class OrchestratorService {
         activeProcess: null,
         lastOutputTime: 0,
         inactivityTimer: null,
+        heartbeatTimer: null,
         outputLog: [],
         startedAt: "",
         attempt: 1,
@@ -440,6 +444,10 @@ export class OrchestratorService {
       clearInterval(state.inactivityTimer);
       state.inactivityTimer = null;
     }
+    if (state.heartbeatTimer) {
+      clearInterval(state.heartbeatTimer);
+      state.heartbeatTimer = null;
+    }
     if (state.activeProcess) {
       try {
         state.activeProcess.kill();
@@ -478,7 +486,15 @@ export class OrchestratorService {
       console.error("[orchestrator] Orphan recovery failed:", err);
       orphanResult = { recovered: [] };
     }
-    const { recovered } = orphanResult;
+    // Stale heartbeat recovery: identify orphaned tasks via heartbeat files > 2 min old
+    let staleHeartbeatResult: { recovered: string[] };
+    try {
+      staleHeartbeatResult = await orphanRecoveryService.recoverFromStaleHeartbeats(repoPath, excludeTaskId);
+    } catch (err) {
+      console.error("[orchestrator] Stale heartbeat recovery failed:", err);
+      staleHeartbeatResult = { recovered: [] };
+    }
+    const recovered = [...new Set([...orphanResult.recovered, ...staleHeartbeatResult.recovered])];
     if (recovered.length > 0) {
       console.warn(`[orchestrator] Recovered ${recovered.length} orphaned task(s) on startup: ${recovered.join(", ")}`);
     }
@@ -733,6 +749,11 @@ export class OrchestratorService {
             clearInterval(state.inactivityTimer);
             state.inactivityTimer = null;
           }
+          if (state.heartbeatTimer) {
+            clearInterval(state.heartbeatTimer);
+            state.heartbeatTimer = null;
+          }
+          await heartbeatService.deleteHeartbeat(wtPath, task.id);
 
           await this.handleCodingComplete(projectId, repoPath, task, branchName, code);
         },
@@ -741,9 +762,45 @@ export class OrchestratorService {
       // Persist state with agent PID for crash recovery (PRDv2 §5.8)
       await this.persistState(projectId, repoPath);
 
+      // Start heartbeat writing (every 10 seconds)
+      state.heartbeatTimer = setInterval(() => {
+        if (!state.activeProcess) return;
+        heartbeatService
+          .writeHeartbeat(wtPath, task.id, {
+            pid: state.activeProcess.pid ?? 0,
+            lastOutputTimestamp: state.lastOutputTime,
+            heartbeatTimestamp: Date.now(),
+          })
+          .catch(() => {});
+      }, HEARTBEAT_INTERVAL_MS);
+
       // Start inactivity monitoring (commit WIP in worktree before killing)
+      // Also check heartbeat: if process is dead (pid check) but timer hasn't fired, recover immediately
       state.inactivityTimer = setInterval(() => {
         const elapsed = Date.now() - state.lastOutputTime;
+        const proc = state.activeProcess;
+        const pidDead = proc && proc.pid !== null && !isPidAlive(proc.pid);
+        if (pidDead) {
+          console.warn(`Agent process dead for task ${task.id} (PID ${proc.pid}), recovering immediately`);
+          if (state.inactivityTimer) {
+            clearInterval(state.inactivityTimer);
+            state.inactivityTimer = null;
+          }
+          if (state.heartbeatTimer) {
+            clearInterval(state.heartbeatTimer);
+            state.heartbeatTimer = null;
+          }
+          state.activeProcess = null;
+          heartbeatService.deleteHeartbeat(wtPath, task.id).catch(() => {});
+          this.branchManager
+            .commitWip(wtPath, task.id)
+            .then(() => this.handleCodingComplete(projectId, repoPath, task, branchName, null))
+            .catch((err) => {
+              console.error(`[orchestrator] Post-death handler failed for ${task.id}:`, err);
+              this.handleCodingComplete(projectId, repoPath, task, branchName, null);
+            });
+          return;
+        }
         if (elapsed > AGENT_INACTIVITY_TIMEOUT_MS) {
           console.warn(`Agent timeout for task ${task.id}: ${elapsed}ms of inactivity`);
           if (state.activeProcess) {
@@ -926,6 +983,11 @@ export class OrchestratorService {
             clearInterval(state.inactivityTimer);
             state.inactivityTimer = null;
           }
+          if (state.heartbeatTimer) {
+            clearInterval(state.heartbeatTimer);
+            state.heartbeatTimer = null;
+          }
+          await heartbeatService.deleteHeartbeat(wtPath, task.id);
 
           await this.handleReviewComplete(projectId, repoPath, task, branchName, code);
         },
@@ -934,9 +996,45 @@ export class OrchestratorService {
       // Persist state with review agent PID for crash recovery (PRDv2 §5.8)
       await this.persistState(projectId, repoPath);
 
+      // Start heartbeat writing (every 10 seconds)
+      state.heartbeatTimer = setInterval(() => {
+        if (!state.activeProcess) return;
+        heartbeatService
+          .writeHeartbeat(wtPath, task.id, {
+            pid: state.activeProcess.pid ?? 0,
+            lastOutputTimestamp: state.lastOutputTime,
+            heartbeatTimestamp: Date.now(),
+          })
+          .catch(() => {});
+      }, HEARTBEAT_INTERVAL_MS);
+
       // Start inactivity monitoring (commit WIP in worktree before killing)
+      // Also check heartbeat: if process is dead (pid check) but timer hasn't fired, recover immediately
       state.inactivityTimer = setInterval(() => {
         const elapsed = Date.now() - state.lastOutputTime;
+        const proc = state.activeProcess;
+        const pidDead = proc && proc.pid !== null && !isPidAlive(proc.pid);
+        if (pidDead) {
+          console.warn(`Agent process dead for task ${task.id} (PID ${proc.pid}), recovering immediately`);
+          if (state.inactivityTimer) {
+            clearInterval(state.inactivityTimer);
+            state.inactivityTimer = null;
+          }
+          if (state.heartbeatTimer) {
+            clearInterval(state.heartbeatTimer);
+            state.heartbeatTimer = null;
+          }
+          state.activeProcess = null;
+          heartbeatService.deleteHeartbeat(wtPath, task.id).catch(() => {});
+          this.branchManager
+            .commitWip(wtPath, task.id)
+            .then(() => this.handleReviewComplete(projectId, repoPath, task, branchName, null))
+            .catch((err) => {
+              console.error(`[orchestrator] Post-death handler failed for ${task.id}:`, err);
+              this.handleReviewComplete(projectId, repoPath, task, branchName, null);
+            });
+          return;
+        }
         if (elapsed > AGENT_INACTIVITY_TIMEOUT_MS) {
           console.warn(`Agent timeout for task ${task.id}: ${elapsed}ms of inactivity`);
           if (state.activeProcess) {

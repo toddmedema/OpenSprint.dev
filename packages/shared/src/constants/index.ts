@@ -11,7 +11,14 @@ export const OPENSPRINT_PATHS = {
   active: `${OPENSPRINT_DIR}/active`,
   settings: `${OPENSPRINT_DIR}/settings.json`,
   orchestratorState: `${OPENSPRINT_DIR}/orchestrator-state.json`,
+  heartbeat: "heartbeat.json",
 } as const;
+
+/** Heartbeat interval in milliseconds (10 seconds) */
+export const HEARTBEAT_INTERVAL_MS = 10_000;
+
+/** Heartbeat considered stale after 2 minutes of no updates */
+export const HEARTBEAT_STALE_MS = 2 * 60 * 1000;
 
 /** Agent timeout in milliseconds (5 minutes of inactivity) */
 export const AGENT_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;

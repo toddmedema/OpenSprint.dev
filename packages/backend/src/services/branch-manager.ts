@@ -264,7 +264,8 @@ export class BranchManager {
 
   // ─── Git Worktree Operations ───
 
-  private getWorktreeBasePath(): string {
+  /** Base directory for task worktrees (used by heartbeat stale detection) */
+  getWorktreeBasePath(): string {
     return path.join(os.tmpdir(), "opensprint-worktrees");
   }
 
