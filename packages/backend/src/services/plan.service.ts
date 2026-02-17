@@ -12,7 +12,12 @@ import type {
   Prd,
   CrossEpicDependenciesResponse,
 } from "@opensprint/shared";
-import { OPENSPRINT_PATHS, getEpicId } from "@opensprint/shared";
+import {
+  OPENSPRINT_PATHS,
+  getEpicId,
+  PLAN_MARKDOWN_SECTIONS,
+  validatePlanContent,
+} from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { gitCommitQueue } from "./git-commit-queue.service.js";
@@ -28,6 +33,8 @@ import { activeAgentsService } from "./active-agents.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 
+const PLAN_TEMPLATE_STRUCTURE = PLAN_MARKDOWN_SECTIONS.join(", ");
+
 const DECOMPOSE_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. You analyze Product Requirements Documents (PRDs) and suggest a breakdown into discrete, implementable features (Plans).
 
 Your task: Given the full PRD, produce a feature decomposition. For each feature:
@@ -37,18 +44,10 @@ Your task: Given the full PRD, produce a feature decomposition. For each feature
 4. Recommend implementation order (foundational/risky first)
 5. Create at least one UI/UX mockup per Plan using ASCII wireframes
 
-Plan markdown must follow this structure (PRD §7.2.3):
-- Feature Title
-- Overview
-- Acceptance Criteria (testable conditions)
-- Technical Approach
-- Dependencies (references to other Plans if any)
-- Data Model Changes
-- API Specification
-- UI/UX Requirements
-- Edge Cases and Error Handling
-- Testing Strategy
-- Estimated Complexity (low/medium/high/very_high)
+Plan markdown MUST follow this structure (PRD §7.2.3). Each plan's content must include these sections in order:
+${PLAN_MARKDOWN_SECTIONS.map((s) => `- ## ${s}`).join("\n")}
+
+Template structure: ${PLAN_TEMPLATE_STRUCTURE}
 
 Tasks should be atomic, implementable in one agent session, with clear acceptance criteria in the description.
 
@@ -456,6 +455,12 @@ export class PlanService {
     // Write markdown
     await fs.writeFile(path.join(plansDir, `${planId}.md`), body.content);
 
+    // Validate against template (warn only, don't block) — PRD §7.2.3
+    const validation = validatePlanContent(body.content);
+    if (validation.warnings.length > 0) {
+      console.warn(`[plan] Plan ${planId} validation: ${validation.warnings.join("; ")}`);
+    }
+
     // Create beads epic
     const epicResult = await this.beads.create(repoPath, body.title, { type: "epic" });
     const epicId = epicResult.id;
@@ -539,6 +544,13 @@ export class PlanService {
   async updatePlan(projectId: string, planId: string, body: { content: string }): Promise<Plan> {
     const plansDir = await this.getPlansDir(projectId);
     await fs.writeFile(path.join(plansDir, `${planId}.md`), body.content);
+
+    // Validate against template (warn only, don't block) — PRD §7.2.3
+    const validation = validatePlanContent(body.content);
+    if (validation.warnings.length > 0) {
+      console.warn(`[plan] Plan ${planId} validation on update: ${validation.warnings.join("; ")}`);
+    }
+
     return this.getPlan(projectId, planId);
   }
 

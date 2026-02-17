@@ -5,7 +5,7 @@ import os from "os";
 import { PlanService } from "../services/plan.service.js";
 import { ProjectService } from "../services/project.service.js";
 import { BeadsService } from "../services/beads.service.js";
-import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import { OPENSPRINT_PATHS, PLAN_MARKDOWN_SECTIONS } from "@opensprint/shared";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 const mockInvoke = vi.fn();
@@ -125,6 +125,7 @@ describe("Plan suggestPlans (POST /plans/suggest)", () => {
       expect.stringMatching(/^plan-suggest-.*-/),
       projectId,
       "plan",
+      "planner",
       "Feature decomposition (suggest)",
       expect.any(String),
     );
@@ -206,5 +207,30 @@ describe("Plan suggestPlans (POST /plans/suggest)", () => {
 
     expect(mockRegister).toHaveBeenCalledTimes(1);
     expect(mockUnregister).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes Plan template structure (PRD §7.2.3) in system prompt to agent", { timeout: 10000 }, async () => {
+    mockInvoke.mockResolvedValueOnce({
+      content: JSON.stringify({
+        plans: [
+          {
+            title: "Test",
+            content: "# Test\n\n## Overview\n\nText.",
+            complexity: "low",
+            mockups: [{ title: "M", content: "x" }],
+            tasks: [],
+          },
+        ],
+      }),
+    });
+
+    await planService.suggestPlans(projectId);
+
+    const invokeCall = mockInvoke.mock.calls[0][0];
+    const systemPrompt = invokeCall.systemPrompt as string;
+    for (const section of PLAN_MARKDOWN_SECTIONS) {
+      expect(systemPrompt).toContain(`## ${section}`);
+    }
+    expect(systemPrompt).toContain("PRD §7.2.3");
   });
 });

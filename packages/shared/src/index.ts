@@ -16,5 +16,8 @@ export * from './types/websocket.js';
 // Constants
 export * from './constants/index.js';
 
+// Plan template (PRD §7.2.3)
+export * from './plan-template.js';
+
 // Bead ID utilities
 export * from './bead-ids.js';
