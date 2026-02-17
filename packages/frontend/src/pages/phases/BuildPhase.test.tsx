@@ -297,7 +297,7 @@ describe("BuildPhase Redux integration", () => {
     expect(scrollArea).toHaveClass("min-h-0");
   });
 
-  it("has root with flex flex-1 min-h-0 for proper fill and independent page/sidebar scroll", () => {
+  it("has root with flex flex-1 min-h-0 min-w-0 for proper fill and independent page/sidebar scroll", () => {
     const tasks = [
       { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
     ];
@@ -311,6 +311,7 @@ describe("BuildPhase Redux integration", () => {
     expect(root).toHaveClass("flex");
     expect(root).toHaveClass("flex-1");
     expect(root).toHaveClass("min-h-0");
+    expect(root).toHaveClass("min-w-0");
   });
 
   it("renders resizable sidebar with resize handle when a task is selected", async () => {

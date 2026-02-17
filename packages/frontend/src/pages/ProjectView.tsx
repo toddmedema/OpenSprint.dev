@@ -165,12 +165,15 @@ export function ProjectView() {
         onPhaseChange={handlePhaseChange}
         onProjectSaved={handleProjectSaved}
       >
-        {/* Mount ALL phases simultaneously, toggle visibility with CSS */}
+        {/* Mount ALL phases simultaneously, toggle visibility with CSS.
+            Active phase uses flex container with flex-1 min-h-0 to establish bounded height
+            so main content and sidebar can scroll independently. */}
         {VALID_PHASES.map((phase) => (
           <div
             key={phase}
             data-testid={`phase-${phase}`}
-            style={{ display: phase === currentPhase ? "contents" : "none" }}
+            style={{ display: phase === currentPhase ? "flex" : "none" }}
+            className={phase === currentPhase ? "flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col" : undefined}
           >
             {phase === "dream" && (
               <DreamPhase projectId={projectId} onNavigateToPlan={() => handlePhaseChange("plan")} />

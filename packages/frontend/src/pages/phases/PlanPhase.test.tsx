@@ -236,7 +236,7 @@ describe("PlanPhase archive", () => {
     expect(mainContent).toHaveClass("min-h-0");
   });
 
-  it("has root with flex flex-1 min-h-0 for proper fill and independent page/sidebar scroll", () => {
+  it("has root with flex flex-1 min-h-0 min-w-0 for proper fill and independent page/sidebar scroll", () => {
     const store = createStore();
     const { container } = render(
       <Provider store={store}>
@@ -247,6 +247,7 @@ describe("PlanPhase archive", () => {
     expect(root).toHaveClass("flex");
     expect(root).toHaveClass("flex-1");
     expect(root).toHaveClass("min-h-0");
+    expect(root).toHaveClass("min-w-0");
   });
 
   it("renders resizable sidebar with resize handle when a plan is selected", () => {

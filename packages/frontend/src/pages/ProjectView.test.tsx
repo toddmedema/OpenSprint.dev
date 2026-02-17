@@ -158,11 +158,24 @@ describe("ProjectView upfront loading and mount-all", () => {
       expect(screen.getByText("Test Project")).toBeInTheDocument();
     });
 
-    // All 4 phase wrappers should be mounted; build is visible (contents), others hidden (none)
+    // All 4 phase wrappers should be mounted; build is visible (flex), others hidden (none)
     expect(screen.getByTestId("phase-dream")).toBeInTheDocument();
     expect(screen.getByTestId("phase-plan")).toBeInTheDocument();
     expect(screen.getByTestId("phase-build")).toBeInTheDocument();
     expect(screen.getByTestId("phase-verify")).toBeInTheDocument();
+  });
+
+  it("active phase wrapper has flex-1 min-h-0 for bounded height and independent page/sidebar scroll", async () => {
+    renderWithRouter("/projects/proj-1/plan");
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Project")).toBeInTheDocument();
+    });
+
+    const planPhaseWrapper = screen.getByTestId("phase-plan");
+    expect(planPhaseWrapper).toHaveClass("flex-1");
+    expect(planPhaseWrapper).toHaveClass("min-h-0");
+    expect(planPhaseWrapper).toHaveClass("overflow-hidden");
   });
 });
 
