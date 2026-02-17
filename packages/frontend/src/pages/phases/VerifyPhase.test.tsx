@@ -1,3 +1,7 @@
+/**
+ * EnsurePhase tests — VerifyPhase renamed to EnsurePhase per SPEED phase names.
+ * This file tests EnsurePhase component. Filename VerifyPhase.test.tsx retained for compatibility.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

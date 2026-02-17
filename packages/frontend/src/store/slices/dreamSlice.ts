@@ -1,169 +1,19 @@
-import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import type { PrdChangeLogEntry } from "@opensprint/shared";
-import { api } from "../../api/client";
-import { parsePrdSections } from "../../lib/prdUtils";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string;
-}
-
-export interface DreamState {
-  messages: Message[];
-  prdContent: Record<string, string>;
-  prdHistory: PrdChangeLogEntry[];
-  sendingChat: boolean;
-  savingSection: string | null;
-  error: string | null;
-}
-
-const initialState: DreamState = {
-  messages: [],
-  prdContent: {},
-  prdHistory: [],
-  sendingChat: false,
-  savingSection: null,
-  error: null,
-};
-
-export const fetchDreamChat = createAsyncThunk("dream/fetchChat", async (projectId: string) => {
-  const conv = await api.chat.history(projectId, "dream");
-  return conv?.messages ?? [];
-});
-
-export const fetchPrd = createAsyncThunk("dream/fetchPrd", async (projectId: string) => {
-  const data = await api.prd.get(projectId);
-  return parsePrdSections(data);
-});
-
-export const fetchPrdHistory = createAsyncThunk("dream/fetchPrdHistory", async (projectId: string) => {
-  const data = await api.prd.getHistory(projectId);
-  return data ?? [];
-});
-
-export const sendDreamMessage = createAsyncThunk(
-  "dream/sendMessage",
-  async ({ projectId, message, prdSectionFocus }: { projectId: string; message: string; prdSectionFocus?: string }) => {
-    return api.chat.send(projectId, message, "dream", prdSectionFocus);
-  },
-);
-
-export const savePrdSection = createAsyncThunk(
-  "dream/savePrdSection",
-  async ({ projectId, section, content }: { projectId: string; section: string; content: string }) => {
-    await api.prd.updateSection(projectId, section, content);
-    return { section, content };
-  },
-);
-
-export const uploadPrdFile = createAsyncThunk(
-  "dream/uploadPrdFile",
-  async ({ projectId, file }: { projectId: string; file: File }) => {
-    const ext = file.name.split(".").pop()?.toLowerCase();
-
-    if (ext === "md") {
-      const text = await file.text();
-      const prompt = `Here's my existing product requirements document. Please analyze it and generate a structured PRD from it:\n\n${text}`;
-      const response = await api.chat.send(projectId, prompt, "dream");
-      return { response, fileName: file.name };
-    } else if (ext === "docx" || ext === "pdf") {
-      const result = await api.prd.upload(projectId, file);
-      if (result.text) {
-        const prompt = `Here's my existing product requirements document. Please analyze it and generate a structured PRD from it:\n\n${result.text}`;
-        const response = await api.chat.send(projectId, prompt, "dream");
-        return { response, fileName: file.name };
-      }
-      return { response: null, fileName: file.name };
-    }
-
-    throw new Error("Unsupported file type. Please use .md, .docx, or .pdf");
-  },
-);
-
-const dreamSlice = createSlice({
-  name: "dream",
-  initialState,
-  reducers: {
-    addUserMessage(state, action: PayloadAction<Message>) {
-      state.messages.push(action.payload);
-    },
-    setDreamError(state, action: PayloadAction<string | null>) {
-      state.error = action.payload;
-    },
-    setPrdContent(state, action: PayloadAction<Record<string, string>>) {
-      state.prdContent = action.payload;
-    },
-    setPrdHistory(state, action: PayloadAction<PrdChangeLogEntry[]>) {
-      state.prdHistory = action.payload;
-    },
-    resetDream() {
-      return initialState;
-    },
-  },
-  extraReducers: (builder) => {
-    builder
-      // fetchDreamChat
-      .addCase(fetchDreamChat.fulfilled, (state, action) => {
-        state.messages = action.payload;
-      })
-      // fetchPrd
-      .addCase(fetchPrd.fulfilled, (state, action) => {
-        state.prdContent = action.payload;
-      })
-      // fetchPrdHistory
-      .addCase(fetchPrdHistory.fulfilled, (state, action) => {
-        state.prdHistory = action.payload;
-      })
-      // sendDreamMessage
-      .addCase(sendDreamMessage.pending, (state) => {
-        state.sendingChat = true;
-        state.error = null;
-      })
-      .addCase(sendDreamMessage.fulfilled, (state, action) => {
-        state.sendingChat = false;
-        state.messages.push({
-          role: "assistant",
-          content: action.payload.message,
-          timestamp: new Date().toISOString(),
-        });
-      })
-      .addCase(sendDreamMessage.rejected, (state, action) => {
-        state.sendingChat = false;
-        state.error = action.error.message ?? "Failed to send message";
-      })
-      // savePrdSection
-      .addCase(savePrdSection.pending, (state, action) => {
-        state.savingSection = action.meta.arg.section;
-      })
-      .addCase(savePrdSection.fulfilled, (state) => {
-        state.savingSection = null;
-      })
-      .addCase(savePrdSection.rejected, (state, action) => {
-        state.savingSection = null;
-        state.error = action.error.message ?? "Failed to save PRD section";
-      })
-      // uploadPrdFile
-      .addCase(uploadPrdFile.pending, (state) => {
-        state.sendingChat = true;
-        state.error = null;
-      })
-      .addCase(uploadPrdFile.fulfilled, (state, action) => {
-        state.sendingChat = false;
-        if (action.payload.response) {
-          state.messages.push({
-            role: "assistant",
-            content: action.payload.response.message,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      })
-      .addCase(uploadPrdFile.rejected, (state, action) => {
-        state.sendingChat = false;
-        state.error = action.error.message ?? "Failed to process uploaded file";
-      });
-  },
-});
-
-export const { addUserMessage, setDreamError, setPrdContent, setPrdHistory, resetDream } = dreamSlice.actions;
-export default dreamSlice.reducer;
+/**
+ * @deprecated Use specSlice — dream phase renamed to spec per SPEED phase names.
+ * This file re-exports from specSlice for backward compatibility.
+ */
+export {
+  fetchSpecChat as fetchDreamChat,
+  fetchPrd,
+  fetchPrdHistory,
+  sendSpecMessage as sendDreamMessage,
+  savePrdSection,
+  uploadPrdFile,
+  addUserMessage,
+  setSpecError as setDreamError,
+  setPrdContent,
+  setPrdHistory,
+  resetSpec as resetDream,
+} from "./specSlice";
+export type { SpecState as DreamState } from "./specSlice";
+export { default } from "./specSlice";
