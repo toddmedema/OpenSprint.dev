@@ -527,6 +527,41 @@ describe("websocketMiddleware", () => {
       });
       vi.useRealTimers();
     });
+
+    it("handles prd.updated after reconnect", async () => {
+      vi.useFakeTimers();
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      const firstWs = wsInstance;
+      wsInstance!.simulateClose();
+      await vi.waitFor(() => !store.getState().websocket.connected);
+
+      vi.advanceTimersByTime(1000);
+      await vi.waitFor(() => wsInstance !== firstWs);
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      const { api } = await import("../../api/client");
+      vi.mocked(api.prd.get).mockResolvedValue({ sections: { overview: { content: "After reconnect" } } });
+      vi.mocked(api.prd.getHistory).mockResolvedValue([]);
+      vi.mocked(api.chat.history).mockResolvedValue({ messages: [] });
+      vi.mocked(api.projects.getPlanStatus).mockResolvedValue({
+        hasPlanningRun: false,
+        prdChangedSinceLastRun: false,
+        action: "plan",
+      });
+
+      wsInstance!.simulateMessage({ type: "prd.updated", section: "overview", version: 2 });
+
+      await vi.waitFor(() => {
+        expect(store.getState().design.prdContent).toEqual({ overview: "After reconnect" });
+        expect(api.projects.getPlanStatus).toHaveBeenCalledWith("proj-1");
+      });
+      vi.useRealTimers();
+    });
   });
 
   describe("action passthrough", () => {

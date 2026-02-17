@@ -199,4 +199,150 @@ describe("Plan status endpoint and planning run creation", () => {
       action: "replan",
     });
   });
+
+  it("planning run stores prd_snapshot and plans_created for replan diff", {
+    timeout: 15000,
+  }, async () => {
+    mockDecomposeInvoke.mockResolvedValueOnce({
+      content: JSON.stringify({
+        plans: [
+          {
+            title: "Feature A",
+            content: "# Feature A",
+            complexity: "low",
+            mockups: [],
+            tasks: [{ title: "Task 1", description: "d1", priority: 0, dependsOn: [] }],
+          },
+        ],
+      }),
+    });
+
+    const project = await projectService.getProject(projectId);
+    const prdPath = path.join(project.repoPath, OPENSPRINT_PATHS.prd);
+    await fs.mkdir(path.dirname(prdPath), { recursive: true });
+    const prdContent = {
+      version: 1,
+      sections: {
+        executive_summary: { content: "Original PRD", version: 1, updated_at: new Date().toISOString() },
+      },
+      changeLog: [],
+    };
+    await fs.writeFile(prdPath, JSON.stringify(prdContent), "utf-8");
+
+    const app = createApp();
+    const decomposeRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/decompose`);
+    expect(decomposeRes.status).toBe(201);
+
+    const runsDir = path.join(project.repoPath, OPENSPRINT_PATHS.planningRuns);
+    const runFiles = await fs.readdir(runsDir);
+    expect(runFiles.length).toBe(1);
+
+    const runData = JSON.parse(
+      await fs.readFile(path.join(runsDir, runFiles[0]), "utf-8"),
+    );
+    expect(runData).toMatchObject({
+      id: expect.any(String),
+      created_at: expect.any(String),
+      prd_snapshot: expect.objectContaining({
+        sections: expect.objectContaining({
+          executive_summary: expect.objectContaining({ content: "Original PRD" }),
+        }),
+      }),
+      plans_created: expect.any(Array),
+    });
+    expect(runData.plans_created.length).toBe(1);
+  });
+
+  it("replan diff: plan-status returns replan when only one section changes", {
+    timeout: 15000,
+  }, async () => {
+    mockDecomposeInvoke.mockResolvedValueOnce({
+      content: JSON.stringify({
+        plans: [
+          {
+            title: "Feature",
+            content: "# Feature",
+            complexity: "medium",
+            mockups: [],
+            tasks: [{ title: "T1", description: "d", priority: 0, dependsOn: [] }],
+          },
+        ],
+      }),
+    });
+
+    const project = await projectService.getProject(projectId);
+    const prdPath = path.join(project.repoPath, OPENSPRINT_PATHS.prd);
+    await fs.mkdir(path.dirname(prdPath), { recursive: true });
+    await fs.writeFile(
+      prdPath,
+      JSON.stringify({
+        version: 1,
+        sections: {
+          executive_summary: { content: "Section A", version: 1, updated_at: new Date().toISOString() },
+          goals_and_metrics: { content: "Section B", version: 1, updated_at: new Date().toISOString() },
+        },
+        changeLog: [],
+      }),
+      "utf-8",
+    );
+
+    const app = createApp();
+    await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/decompose`);
+
+    await fs.writeFile(
+      prdPath,
+      JSON.stringify({
+        version: 1,
+        sections: {
+          executive_summary: { content: "Section A modified", version: 2, updated_at: new Date().toISOString() },
+          goals_and_metrics: { content: "Section B", version: 1, updated_at: new Date().toISOString() },
+        },
+        changeLog: [],
+      }),
+      "utf-8",
+    );
+
+    const statusRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.data.action).toBe("replan");
+    expect(statusRes.body.data.prdChangedSinceLastRun).toBe(true);
+  });
+
+  it("plan-status uses latest run when multiple runs exist", async () => {
+    const project = await projectService.getProject(projectId);
+    const prdPath = path.join(project.repoPath, OPENSPRINT_PATHS.prd);
+    const runsDir = path.join(project.repoPath, OPENSPRINT_PATHS.planningRuns);
+    await fs.mkdir(path.dirname(prdPath), { recursive: true });
+    await fs.mkdir(runsDir, { recursive: true });
+
+    const prdContent = {
+      version: 1,
+      sections: {
+        executive_summary: { content: "v1", version: 1, updated_at: new Date().toISOString() },
+      },
+      changeLog: [],
+    };
+    await fs.writeFile(prdPath, JSON.stringify(prdContent), "utf-8");
+
+    const olderRun = {
+      id: "run-older",
+      created_at: "2025-01-01T00:00:00Z",
+      prd_snapshot: prdContent,
+      plans_created: ["plan-1"],
+    };
+    const newerRun = {
+      id: "run-newer",
+      created_at: "2025-01-02T00:00:00Z",
+      prd_snapshot: prdContent,
+      plans_created: ["plan-2"],
+    };
+    await fs.writeFile(path.join(runsDir, "run-older.json"), JSON.stringify(olderRun), "utf-8");
+    await fs.writeFile(path.join(runsDir, "run-newer.json"), JSON.stringify(newerRun), "utf-8");
+
+    const app = createApp();
+    const statusRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.data.hasPlanningRun).toBe(true);
+    expect(statusRes.body.data.action).toBe("none");
+  });
 });

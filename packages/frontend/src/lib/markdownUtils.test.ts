@@ -73,5 +73,29 @@ describe("markdownUtils", () => {
       expect(roundTripped).toContain("item 2");
       expect(roundTripped).toContain("item 3");
     });
+
+    it("preserves links through round-trip", async () => {
+      const original = "See [OpenSprint](https://opensprint.dev) for more.";
+      const html = await markdownToHtml(original);
+      const roundTripped = htmlToMarkdown(html);
+      expect(roundTripped).toContain("OpenSprint");
+      expect(roundTripped).toContain("https://opensprint.dev");
+    });
+
+    it("preserves code blocks through round-trip", async () => {
+      const original = "```js\nconst x = 1;\n```";
+      const html = await markdownToHtml(original);
+      const roundTripped = htmlToMarkdown(html);
+      expect(roundTripped).toContain("const");
+      expect(roundTripped).toContain("x = 1");
+    });
+
+    it("preserves nested formatting through round-trip", async () => {
+      const original = "**Bold with *italic* inside**";
+      const html = await markdownToHtml(original);
+      const roundTripped = htmlToMarkdown(html);
+      expect(roundTripped).toContain("Bold");
+      expect(roundTripped).toContain("italic");
+    });
   });
 });

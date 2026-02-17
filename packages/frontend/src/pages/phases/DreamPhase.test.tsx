@@ -5,7 +5,7 @@ import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import { DreamPhase } from "./DreamPhase";
 import designReducer from "../../store/slices/designSlice";
-import planReducer from "../../store/slices/planSlice";
+import planReducer, { decomposePlans } from "../../store/slices/planSlice";
 
 const mockChatSend = vi.fn();
 const mockChatHistory = vi.fn();
@@ -240,6 +240,95 @@ describe("DreamPhase with designSlice", () => {
       renderDreamPhase(store);
       await waitFor(() => {
         expect(mockGetPlanStatus).toHaveBeenCalledWith("proj-1");
+      });
+    });
+
+    it("disables CTA button during decomposing", async () => {
+      let resolveDecompose: () => void;
+      mockPlansDecompose.mockImplementation(
+        () => new Promise<void>((r) => { resolveDecompose = r; }),
+      );
+      const store = createStore({
+        design: { prdContent: { overview: "Content" } },
+        plan: { planStatus: { hasPlanningRun: false, prdChangedSinceLastRun: false, action: "plan" } },
+      });
+      renderDreamPhase(store);
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /Plan it/i })).toBeInTheDocument();
+      });
+
+      store.dispatch(decomposePlans("proj-1"));
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /Planning/i })).toBeDisabled();
+      });
+      resolveDecompose!();
+      mockPlansDecompose.mockResolvedValue({ created: 2, plans: [] });
+    });
+
+    it("dispatches fetchPlanStatus after savePrdSection succeeds", async () => {
+      const user = userEvent.setup();
+      const store = createStore({
+        design: {
+          prdContent: {
+            executive_summary: "Original",
+            goals_and_metrics: "Goals",
+          },
+        },
+      });
+      mockPrdUpdateSection.mockResolvedValue(undefined);
+      renderDreamPhase(store);
+
+      const inputA = screen.getByTestId("prd-input-executive_summary");
+      await user.clear(inputA);
+      await user.type(inputA, "Updated summary");
+
+      await waitFor(() => {
+        expect(mockPrdUpdateSection).toHaveBeenCalledWith(
+          "proj-1",
+          "executive_summary",
+          "Updated summary",
+        );
+      });
+
+      await waitFor(() => {
+        expect(mockGetPlanStatus).toHaveBeenCalledWith("proj-1");
+      });
+    });
+
+    it("saves multiple sections independently (multi-section edits)", async () => {
+      const user = userEvent.setup();
+      const store = createStore({
+        design: {
+          prdContent: {
+            executive_summary: "Summary",
+            goals_and_metrics: "Goals",
+            feature_list: "Features",
+          },
+        },
+      });
+      mockPrdUpdateSection.mockResolvedValue(undefined);
+      renderDreamPhase(store);
+
+      const input1 = screen.getByTestId("prd-input-executive_summary");
+      const input2 = screen.getByTestId("prd-input-goals_and_metrics");
+      await user.clear(input1);
+      await user.type(input1, "New summary");
+      await user.clear(input2);
+      await user.type(input2, "New goals");
+
+      await waitFor(() => {
+        expect(mockPrdUpdateSection).toHaveBeenCalledWith(
+          "proj-1",
+          "executive_summary",
+          "New summary",
+        );
+      });
+      await waitFor(() => {
+        expect(mockPrdUpdateSection).toHaveBeenCalledWith(
+          "proj-1",
+          "goals_and_metrics",
+          "New goals",
+        );
       });
     });
   });
