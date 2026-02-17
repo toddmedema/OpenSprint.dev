@@ -96,8 +96,14 @@ export function ProjectView() {
   }, [projectId, currentPhase, selectedPlanId, selectedTaskId, location.pathname, location.search, navigate]);
 
   const handlePhaseChange = (phase: ProjectPhase) => {
-    if (phase !== "build") dispatch(setSelectedTaskId(null));
-    navigate(getProjectPhasePath(projectId, phase));
+    // Preserve detail panel selection when switching phases — include plan/task in URL so
+    // returning to a phase restores the detail panel
+    navigate(
+      getProjectPhasePath(projectId, phase, {
+        plan: phase === "plan" ? selectedPlanId ?? undefined : undefined,
+        task: phase === "build" ? selectedTaskId ?? undefined : undefined,
+      }),
+    );
   };
 
   const handleNavigateToBuildTask = (taskId: string) => {

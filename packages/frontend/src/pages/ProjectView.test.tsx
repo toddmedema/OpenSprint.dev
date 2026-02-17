@@ -195,6 +195,143 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
     expect(state.build.selectedTaskId).toBe("opensprint.dev-xyz.1");
   });
 
+  it("preserves selected task when switching from build to plan and back to build", async () => {
+    const store = configureStore({
+      reducer: {
+        project: projectReducer,
+        websocket: websocketReducer,
+        design: designReducer,
+        plan: planReducer,
+        build: buildReducer,
+        verify: verifyReducer,
+      },
+      preloadedState: {
+        project: {
+          data: {
+            id: "proj-1",
+            name: "Test Project",
+            description: "",
+            repoPath: "/tmp/test",
+            currentPhase: "build",
+            createdAt: "",
+            updatedAt: "",
+          },
+          loading: false,
+          error: null,
+        },
+        build: {
+          tasks: [],
+          plans: [],
+          orchestratorRunning: false,
+          awaitingApproval: false,
+          selectedTaskId: "opensprint.dev-xyz.1",
+          taskDetail: null,
+          taskDetailLoading: false,
+          agentOutput: [],
+          completionState: null,
+          archivedSessions: [],
+          archivedLoading: false,
+          markCompleteLoading: false,
+          statusLoading: false,
+          loading: false,
+          error: null,
+        },
+      },
+    });
+    renderWithRouter("/projects/proj-1/build?task=opensprint.dev-xyz.1", store);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Project")).toBeInTheDocument();
+    });
+
+    // User clicks Plan in navbar — selection is preserved
+    const planButton = screen.getByRole("button", { name: /^plan$/i });
+    planButton.click();
+
+    await waitFor(() => {
+      const loc = screen.getByTestId("location").textContent;
+      expect(loc).toContain("/plan");
+    });
+
+    // selectedTaskId should still be in Redux (preserved)
+    expect(store.getState().build.selectedTaskId).toBe("opensprint.dev-xyz.1");
+
+    // User clicks Build in navbar — should land with task param
+    const buildButton = screen.getByRole("button", { name: /^build$/i });
+    buildButton.click();
+
+    await waitFor(() => {
+      const loc = screen.getByTestId("location").textContent;
+      expect(loc).toContain("task=opensprint.dev-xyz.1");
+    });
+  });
+
+  it("preserves selected plan when switching from plan to build and back to plan", async () => {
+    const store = configureStore({
+      reducer: {
+        project: projectReducer,
+        websocket: websocketReducer,
+        design: designReducer,
+        plan: planReducer,
+        build: buildReducer,
+        verify: verifyReducer,
+      },
+      preloadedState: {
+        project: {
+          data: {
+            id: "proj-1",
+            name: "Test Project",
+            description: "",
+            repoPath: "/tmp/test",
+            currentPhase: "plan",
+            createdAt: "",
+            updatedAt: "",
+          },
+          loading: false,
+          error: null,
+        },
+        plan: {
+          selectedPlanId: "opensprint.dev-abc",
+          plans: [],
+          dependencyGraph: null,
+          chatMessages: {},
+          loading: false,
+          decomposing: false,
+          shippingPlanId: null,
+          reshippingPlanId: null,
+          archivingPlanId: null,
+          error: null,
+        },
+      },
+    });
+    renderWithRouter("/projects/proj-1/plan?plan=opensprint.dev-abc", store);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Project")).toBeInTheDocument();
+    });
+
+    // User clicks Build in navbar — selection is preserved
+    const buildButton = screen.getByRole("button", { name: /^build$/i });
+    buildButton.click();
+
+    await waitFor(() => {
+      const loc = screen.getByTestId("location").textContent;
+      expect(loc).toContain("/build");
+    });
+
+    // selectedPlanId should still be in Redux (preserved)
+    expect(store.getState().plan.selectedPlanId).toBe("opensprint.dev-abc");
+
+    // User clicks Plan in navbar — should land with plan param
+    const planButton = screen.getByRole("button", { name: /^plan$/i });
+    planButton.click();
+
+    await waitFor(() => {
+      const loc = screen.getByTestId("location").textContent;
+      expect(loc).toContain("plan=opensprint.dev-abc");
+    });
+  });
+
   it("syncs selected plan to URL when on plan phase", async () => {
     const store = configureStore({
       reducer: {
