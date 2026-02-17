@@ -140,6 +140,54 @@ describe('BranchManager', () => {
     });
   });
 
+  describe('captureUncommittedDiff', () => {
+    it('should capture uncommitted changes in working tree', async () => {
+      await execAsync('git init', { cwd: repoPath });
+      await execAsync('git branch -M main', { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, 'README'), 'initial');
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, 'uncommitted.ts'), 'partial work');
+
+      const diff = await branchManager.captureUncommittedDiff(repoPath);
+      expect(diff).toContain('uncommitted.ts');
+      expect(diff).toContain('partial work');
+    });
+
+    it('should return empty string when no uncommitted changes', async () => {
+      await execAsync('git init', { cwd: repoPath });
+      await execAsync('git branch -M main', { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, 'README'), 'initial');
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const diff = await branchManager.captureUncommittedDiff(repoPath);
+      expect(diff).toBe('');
+    });
+
+    it('should capture staged changes', async () => {
+      await execAsync('git init', { cwd: repoPath });
+      await execAsync('git branch -M main', { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, 'README'), 'initial');
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, 'staged.ts'), 'staged content');
+      await execAsync('git add staged.ts', { cwd: repoPath });
+
+      const diff = await branchManager.captureUncommittedDiff(repoPath);
+      expect(diff).toContain('staged.ts');
+      expect(diff).toContain('staged content');
+    });
+
+    it('should return empty string for non-git path', async () => {
+      const diff = await branchManager.captureUncommittedDiff('/nonexistent/path');
+      expect(diff).toBe('');
+    });
+  });
+
   describe('worktree operations', () => {
     let worktreePaths: string[] = [];
 

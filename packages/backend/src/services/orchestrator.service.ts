@@ -974,6 +974,16 @@ export class OrchestratorService {
       const reason = `Review rejected: ${result.issues?.join("; ") || result.summary}`;
       const reviewFeedback = formatReviewFeedback(result);
 
+      // Capture git diff before archiving (branch diff + uncommitted)
+      let gitDiff = "";
+      try {
+        const branchDiff = await this.branchManager.captureBranchDiff(repoPath, branchName);
+        const uncommittedDiff = await this.branchManager.captureUncommittedDiff(wtPath);
+        gitDiff = [branchDiff, uncommittedDiff].filter(Boolean).join("\n\n--- Uncommitted changes ---\n\n");
+      } catch {
+        // Best-effort capture
+      }
+
       // Archive rejection session before handling failure
       const session = await this.sessionManager.createSession(repoPath, {
         taskId: task.id,
@@ -984,6 +994,7 @@ export class OrchestratorService {
         status: "rejected",
         outputLog: state.outputLog.join(""),
         failureReason: result.summary,
+        gitDiff: gitDiff || undefined,
         startedAt: state.startedAt,
       });
       await this.sessionManager.archiveSession(repoPath, task.id, state.attempt, session, wtPath);
@@ -1146,10 +1157,17 @@ export class OrchestratorService {
 
     console.error(`Task ${task.id} failed [${failureType}] (attempt ${cumulativeAttempts}): ${reason}`);
 
-    // Capture diff before any cleanup (for richer retry context)
+    // Capture diff before any cleanup (for richer retry context and session archive)
     let previousDiff = "";
+    let gitDiff = "";
     try {
-      previousDiff = await this.branchManager.captureBranchDiff(repoPath, branchName);
+      const branchDiff = await this.branchManager.captureBranchDiff(repoPath, branchName);
+      previousDiff = branchDiff;
+      let uncommittedDiff = "";
+      if (wtPath) {
+        uncommittedDiff = await this.branchManager.captureUncommittedDiff(wtPath);
+      }
+      gitDiff = [branchDiff, uncommittedDiff].filter(Boolean).join("\n\n--- Uncommitted changes ---\n\n");
     } catch {
       // Branch may not exist
     }
@@ -1165,9 +1183,10 @@ export class OrchestratorService {
       outputLog: state.outputLog.join(""),
       failureReason: reason,
       testResults: testResults ?? undefined,
+      gitDiff: gitDiff || undefined,
       startedAt: state.startedAt,
     });
-    await this.sessionManager.archiveSession(repoPath, task.id, cumulativeAttempts, session);
+    await this.sessionManager.archiveSession(repoPath, task.id, cumulativeAttempts, session, wtPath ?? undefined);
 
     // Add failure comment for audit trail (PRD §7.3.2: rejection feedback as bead comment)
     const commentText =

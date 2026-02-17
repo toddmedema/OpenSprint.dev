@@ -245,6 +245,23 @@ export class BranchManager {
     }
   }
 
+  /**
+   * Capture uncommitted changes (working tree + staged) in the given path.
+   * Use worktree path when agent runs in a worktree.
+   * Returns empty string if no uncommitted changes or on error.
+   */
+  async captureUncommittedDiff(gitPath: string): Promise<string> {
+    try {
+      const { stdout } = await execAsync("git diff HEAD", {
+        cwd: gitPath,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      return stdout;
+    } catch {
+      return "";
+    }
+  }
+
   // ─── Git Worktree Operations ───
 
   private getWorktreeBasePath(): string {
