@@ -43,11 +43,20 @@ const mockPlansGet = vi.fn().mockResolvedValue({
   completedTaskCount: 0,
   dependencyCount: 0,
 });
+const mockPlansCreate = vi.fn().mockResolvedValue({
+  metadata: { planId: "new-feature", beadEpicId: "e1", gateTaskId: "e1.0", complexity: "medium" },
+  content: "# New Feature\n\nContent.",
+  status: "planning",
+  taskCount: 0,
+  completedTaskCount: 0,
+  dependencyCount: 0,
+});
 vi.mock("../../api/client", () => ({
   api: {
     plans: {
       list: (...args: unknown[]) => mockPlansList(...args),
       get: (...args: unknown[]) => mockPlansGet(...args),
+      create: (...args: unknown[]) => mockPlansCreate(...args),
       archive: (...args: unknown[]) => mockArchive(...args),
       ship: (...args: unknown[]) => mockShip(...args),
       reship: (...args: unknown[]) => mockReship(...args),

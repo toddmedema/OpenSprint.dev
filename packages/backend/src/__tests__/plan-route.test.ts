@@ -127,6 +127,46 @@ describe("Plan REST endpoints - task decomposition", () => {
     expect(res.body.data.metadata.gateTaskId).toBeDefined();
   });
 
+  it("POST /projects/:id/plans without complexity should agent-evaluate and use result", {
+    timeout: 10000,
+  }, async () => {
+    mockSuggestInvoke.mockResolvedValueOnce({
+      content: JSON.stringify({ complexity: "high" }),
+    });
+
+    const app = createApp();
+    const planBody = {
+      title: "Complex Feature",
+      content: "# Complex Feature\n\n## Overview\n\nMulti-system integration with auth, API, and UI.",
+    };
+    // Intentionally omit complexity - backend should agent-evaluate
+
+    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.metadata.complexity).toBe("high");
+    expect(mockSuggestInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("POST /projects/:id/plans without complexity falls back to medium when agent returns invalid JSON", {
+    timeout: 10000,
+  }, async () => {
+    mockSuggestInvoke.mockResolvedValueOnce({
+      content: "I cannot produce valid JSON.",
+    });
+
+    const app = createApp();
+    const planBody = {
+      title: "Simple Feature",
+      content: "# Simple\n\nOverview.",
+    };
+
+    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.metadata.complexity).toBe("medium");
+  });
+
   it("GET /projects/:id/plans/:planId returns lastModified (plan markdown file mtime)", async () => {
     const app = createApp();
     const planBody = {

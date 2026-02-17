@@ -2,14 +2,6 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { CloseButton } from "./CloseButton";
 import type { Plan } from "@opensprint/shared";
-import type { PlanComplexity } from "@opensprint/shared";
-
-const COMPLEXITY_OPTIONS: { value: PlanComplexity; label: string }[] = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "very_high", label: "Very High" },
-];
 
 function defaultPlanContent(title: string): string {
   return `# ${title}
@@ -74,7 +66,6 @@ interface AddPlanModalProps {
 export function AddPlanModal({ projectId, onClose, onCreated }: AddPlanModalProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [complexity, setComplexity] = useState<PlanComplexity>("medium");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,7 +91,6 @@ export function AddPlanModal({ projectId, onClose, onCreated }: AddPlanModalProp
       const plan = await api.plans.create(projectId, {
         title: trimmedTitle,
         content: content.trim() || defaultPlanContent(trimmedTitle),
-        complexity,
       });
       onCreated(plan);
       onClose();
@@ -140,21 +130,6 @@ export function AddPlanModal({ projectId, onClose, onCreated }: AddPlanModalProp
               placeholder="e.g. User Authentication"
               autoFocus
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Complexity</label>
-            <select
-              className="input"
-              value={complexity}
-              onChange={(e) => setComplexity(e.target.value as PlanComplexity)}
-            >
-              {COMPLEXITY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div>

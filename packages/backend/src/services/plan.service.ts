@@ -7,6 +7,7 @@ import type {
   PlanDependencyGraph,
   PlanDependencyEdge,
   SuggestedPlan,
+  PlanComplexity,
 } from "@opensprint/shared";
 import { OPENSPRINT_PATHS, getEpicId } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
@@ -104,6 +105,20 @@ Rules:
 - If nothing is implemented, return {"taskIdsToClose": [], "reason": "No existing implementation found"}.
 - Be conservative: only include tasks where the implementation clearly exists. When in doubt, leave the task open.`;
 
+const COMPLEXITY_EVALUATION_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. Your task is to evaluate the implementation complexity of a feature plan based on its title and content.
+
+Consider: scope of work, technical risk, number of components, integration points, data model changes, API surface, UI complexity, and testing effort.
+
+Respond with ONLY valid JSON in this exact format (no markdown wrapper):
+{"complexity": "low" | "medium" | "high" | "very_high"}
+
+- low: Small, isolated change; few files; minimal risk
+- medium: Moderate scope; several components; standard patterns
+- high: Large feature; many integrations; non-trivial architecture
+- very_high: Major undertaking; high risk; complex dependencies; significant refactoring`;
+
+const VALID_COMPLEXITIES: PlanComplexity[] = ["low", "medium", "high", "very_high"];
+
 export class PlanService {
   private projectService = new ProjectService();
   private beads = new BeadsService();
@@ -121,6 +136,45 @@ export class PlanService {
   private async getRepoPath(projectId: string): Promise<string> {
     const project = await this.projectService.getProject(projectId);
     return project.repoPath;
+  }
+
+  /**
+   * Evaluate plan complexity using the planning agent. Returns "medium" on parse failure.
+   */
+  async evaluateComplexity(projectId: string, title: string, content: string): Promise<PlanComplexity> {
+    const repoPath = await this.getRepoPath(projectId);
+    const settings = await this.projectService.getSettings(projectId);
+
+    const prompt = `Evaluate the implementation complexity of this feature plan.\n\n## Title\n${title}\n\n## Content\n${content}`;
+
+    const agentId = `plan-complexity-${projectId}-${Date.now()}`;
+    activeAgentsService.register(agentId, projectId, "plan", "Complexity evaluation", new Date().toISOString());
+
+    let response;
+    try {
+      response = await this.agentClient.invoke({
+        config: settings.planningAgent,
+        prompt,
+        systemPrompt: COMPLEXITY_EVALUATION_SYSTEM_PROMPT,
+        cwd: repoPath,
+      });
+    } finally {
+      activeAgentsService.unregister(agentId);
+    }
+
+    const jsonMatch = response.content.match(/\{[\s\S]*"complexity"[\s\S]*\}/);
+    if (!jsonMatch) return "medium";
+
+    try {
+      const parsed = JSON.parse(jsonMatch[0]) as { complexity?: string };
+      const c = parsed.complexity;
+      if (c && VALID_COMPLEXITIES.includes(c as PlanComplexity)) {
+        return c as PlanComplexity;
+      }
+    } catch {
+      // fall through to default
+    }
+    return "medium";
   }
 
   /** Count tasks under an epic from beads (implementation tasks only, excludes gating .0) */
@@ -360,6 +414,15 @@ export class PlanService {
     const plansDir = await this.getPlansDir(projectId);
     await fs.mkdir(plansDir, { recursive: true });
 
+    // Resolve complexity: use provided value if valid, else agent-evaluate
+    let complexity: PlanComplexity;
+    const provided = body.complexity as PlanComplexity | undefined;
+    if (provided && VALID_COMPLEXITIES.includes(provided)) {
+      complexity = provided;
+    } else {
+      complexity = await this.evaluateComplexity(projectId, body.title, body.content);
+    }
+
     // Generate plan ID from title
     const planId = body.title
       .toLowerCase()
@@ -425,7 +488,7 @@ export class PlanService {
       beadEpicId: epicId,
       gateTaskId,
       shippedAt: null,
-      complexity: (body.complexity as PlanMetadata["complexity"]) || "medium",
+      complexity,
       mockups: mockups.length > 0 ? mockups : undefined,
     };
 
