@@ -56,6 +56,23 @@ Respond with ONLY valid JSON in this exact format. You may use a markdown code b
 
 complexity: low, medium, high, or very_high. priority: 0=highest. dependsOn: array of task titles this task depends on (blocked by). dependsOnPlans: array of other plan titles (slugified, e.g. "user-auth") this plan depends on - use empty array if none. mockups: array of {title, content} — ASCII wireframes illustrating the UI; at least one required per plan.`;
 
+const AUTO_REVIEW_SYSTEM_PROMPT = `You are an auto-review agent for OpenSprint. After a plan is decomposed from a PRD, you review the generated plans and tasks against the existing codebase to identify what is already implemented.
+
+Your task: Given the list of created plans/tasks and a summary of the repository structure and key files, identify which tasks are ALREADY IMPLEMENTED in the codebase. Only mark tasks as implemented when there is clear evidence in the code (e.g., the described functionality exists, the API endpoint is present, the component is built).
+
+Respond with ONLY valid JSON in this exact format (no markdown wrapper):
+{
+  "taskIdsToClose": ["<bead-task-id-1>", "<bead-task-id-2>"],
+  "reason": "Brief explanation of what was found"
+}
+
+Rules:
+- taskIdsToClose: array of beads task IDs (e.g. bd-a3f8.1, opensprint.dev-xyz.2) that are already implemented. Use the exact IDs from the plan/task summary.
+- Do NOT include gate tasks (IDs ending in .0) — those are closed by user "Build It!" action.
+- Do NOT include epic IDs — only close individual implementation tasks.
+- If nothing is implemented, return {"taskIdsToClose": [], "reason": "No existing implementation found"}.
+- Be conservative: only include tasks where the implementation clearly exists. When in doubt, leave the task open.`;
+
 export class PlanService {
   private projectService = new ProjectService();
   private beads = new BeadsService();
@@ -551,6 +568,163 @@ export class PlanService {
     return this.getPlan(projectId, planId);
   }
 
+  /** Build a summary of the codebase structure for the auto-review agent (file tree, key files). */
+  private async buildCodebaseContext(repoPath: string): Promise<string> {
+    const SKIP_DIRS = new Set([".git", "node_modules", ".next", "dist", "build", "__pycache__", ".venv"]);
+    const MAX_FILES = 150;
+    const MAX_FILE_SIZE = 2000;
+
+    async function walk(dir: string, prefix: string, files: string[]): Promise<void> {
+      if (files.length >= MAX_FILES) return;
+      try {
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        for (const e of entries) {
+          if (files.length >= MAX_FILES) break;
+          const rel = prefix + e.name;
+          if (e.isDirectory()) {
+            if (!SKIP_DIRS.has(e.name) && !e.name.startsWith(".")) {
+              await walk(path.join(dir, e.name), rel + "/", files);
+            }
+          } else {
+            files.push(rel);
+          }
+        }
+      } catch {
+        // Ignore permission errors
+      }
+    }
+
+    const files: string[] = [];
+    await walk(repoPath, "", files);
+    let context = "## Repository file structure\n\n```\n" + files.slice(0, MAX_FILES).join("\n") + "\n```\n\n";
+
+    // Include key config/source files for context (truncated, max 8 files)
+    const keyPatterns = ["package.json", "tsconfig.json", "src/", "app/", "lib/"];
+    let keyFileCount = 0;
+    for (const f of files) {
+      if (context.length > 12000 || keyFileCount >= 8) break;
+      if (keyPatterns.some((p) => f.includes(p)) && (f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".json"))) {
+        try {
+          const fullPath = path.join(repoPath, f);
+          const stat = await fs.stat(fullPath);
+          if (stat.size > MAX_FILE_SIZE * 10) continue;
+          const content = await fs.readFile(fullPath, "utf-8");
+          const excerpt = content.slice(0, MAX_FILE_SIZE);
+          context += `### ${f}\n\n\`\`\`\n${excerpt}${content.length > MAX_FILE_SIZE ? "\n... (truncated)" : ""}\n\`\`\`\n\n`;
+          keyFileCount++;
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    }
+    return context;
+  }
+
+  /** Build plan/task summary for the auto-review agent. */
+  private async buildPlanTaskSummary(repoPath: string, createdPlans: Plan[]): Promise<string> {
+    const allIssues = await this.beads.listAll(repoPath);
+    const lines: string[] = [];
+
+    for (const plan of createdPlans) {
+      const epicId = plan.metadata.beadEpicId;
+      if (!epicId) continue;
+      const tasks = allIssues.filter(
+        (i: BeadsIssue) =>
+          i.id.startsWith(epicId + ".") &&
+          i.id !== plan.metadata.gateTaskId &&
+          (i.issue_type ?? i.type) !== "epic",
+      );
+      lines.push(`## Plan: ${plan.metadata.planId} (epic: ${epicId})`);
+      for (const t of tasks) {
+        lines.push(`- **${t.id}**: ${t.title}`);
+        if (t.description) lines.push(`  Description: ${String(t.description).slice(0, 200)}`);
+      }
+      lines.push("");
+    }
+    return lines.join("\n");
+  }
+
+  /**
+   * Auto-review: invoke planning agent to compare created plans against the codebase
+   * and mark already-implemented tasks as done. Best-effort; failures are logged, not thrown.
+   */
+  private async autoReviewPlanAgainstRepo(projectId: string, createdPlans: Plan[]): Promise<void> {
+    if (createdPlans.length === 0) return;
+
+    const repoPath = await this.getRepoPath(projectId);
+    const settings = await this.projectService.getSettings(projectId);
+    const validTaskIds = new Set<string>();
+
+    for (const plan of createdPlans) {
+      if (!plan.metadata.beadEpicId) continue;
+      const allIssues = await this.beads.listAll(repoPath);
+      const tasks = allIssues.filter(
+        (i: BeadsIssue) =>
+          i.id.startsWith(plan.metadata.beadEpicId + ".") &&
+          i.id !== plan.metadata.gateTaskId &&
+          (i.issue_type ?? i.type) !== "epic",
+      );
+      for (const t of tasks) {
+        validTaskIds.add(t.id);
+      }
+    }
+
+    if (validTaskIds.size === 0) return;
+
+    try {
+      const codebaseContext = await this.buildCodebaseContext(repoPath);
+      const planSummary = await this.buildPlanTaskSummary(repoPath, createdPlans);
+
+      const prompt = `Review the following plans and tasks against the codebase. Identify which tasks are already implemented.\n\n## Created plans and tasks\n\n${planSummary}\n\n${codebaseContext}`;
+
+      const response = await this.agentClient.invoke({
+        config: settings.planningAgent,
+        prompt,
+        systemPrompt: AUTO_REVIEW_SYSTEM_PROMPT,
+        cwd: repoPath,
+      });
+
+      const jsonMatch = response.content.match(/\{[\s\S]*"taskIdsToClose"[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.warn("[plan] Auto-review agent did not return valid JSON, skipping");
+        return;
+      }
+
+      let parsed: { taskIdsToClose?: string[]; reason?: string };
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        console.warn("[plan] Auto-review agent JSON parse failed, skipping");
+        return;
+      }
+
+      const ids = parsed.taskIdsToClose ?? [];
+      const toClose = ids.filter((id) => validTaskIds.has(id) && !id.endsWith(".0"));
+
+      for (const taskId of toClose) {
+        try {
+          await this.beads.close(repoPath, taskId, "Already implemented (auto-review)");
+          await this.beads.sync(repoPath);
+          broadcastToProject(projectId, {
+            type: "task.updated",
+            taskId,
+            status: "closed",
+            assignee: null,
+          });
+        } catch (err) {
+          console.warn(`[plan] Auto-review: failed to close task ${taskId}:`, err);
+        }
+      }
+
+      if (toClose.length > 0) {
+        console.log(`[plan] Auto-review marked ${toClose.length} task(s) as done: ${toClose.join(", ")}`);
+      }
+    } catch (err) {
+      console.error("[plan] Auto-review against repo failed:", err);
+      // Decompose succeeded; auto-review is best-effort
+    }
+  }
+
   /** Build PRD context string for agent prompts */
   private async buildPrdContext(projectId: string): Promise<string> {
     try {
@@ -639,6 +813,14 @@ export class PlanService {
         })),
       });
       created.push(plan);
+    }
+
+    // Auto-review: invoke second agent to mark already-implemented tasks as done
+    try {
+      await this.autoReviewPlanAgainstRepo(projectId, created);
+    } catch (err) {
+      console.error("[plan] Auto-review after decompose failed:", err);
+      // Decompose succeeded; auto-review is best-effort
     }
 
     return { created: created.length, plans: created };
