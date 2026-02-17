@@ -10,6 +10,7 @@ import specReducer from "../store/slices/specSlice";
 import planReducer from "../store/slices/planSlice";
 import executeReducer from "../store/slices/executeSlice";
 import ensureReducer from "../store/slices/ensureSlice";
+import deployReducer from "../store/slices/deploySlice";
 
 // Mock websocket middleware to prevent connection attempts
 const mockWsConnect = vi.fn((payload: unknown) => ({ type: "ws/connect", payload }));
@@ -31,6 +32,10 @@ vi.mock("../api/client", () => ({
     execute: { status: vi.fn().mockResolvedValue({}) },
     feedback: { list: vi.fn().mockResolvedValue([]) },
     chat: { history: vi.fn().mockResolvedValue({ messages: [] }) },
+    deploy: {
+      status: vi.fn().mockResolvedValue({ activeDeployId: null, currentDeploy: null }),
+      history: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 
@@ -49,6 +54,7 @@ function createStore() {
       plan: planReducer,
       execute: executeReducer,
       ensure: ensureReducer,
+      deploy: deployReducer,
     },
     preloadedState: {
       project: {
@@ -116,6 +122,31 @@ describe("ProjectView URL behavior", () => {
     await waitFor(() => {
       expect(screen.getByText("Test Project")).toBeInTheDocument();
     });
+  });
+
+  it("adds spec-phase-light to document when on spec phase (dream page light mode)", async () => {
+    document.documentElement.classList.remove("spec-phase-light");
+    const { unmount } = renderWithRouter("/projects/proj-1/spec");
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Project")).toBeInTheDocument();
+    });
+
+    expect(document.documentElement.classList.contains("spec-phase-light")).toBe(true);
+
+    unmount();
+    expect(document.documentElement.classList.contains("spec-phase-light")).toBe(false);
+  });
+
+  it("does not add spec-phase-light when on plan phase", async () => {
+    document.documentElement.classList.remove("spec-phase-light");
+    renderWithRouter("/projects/proj-1/plan");
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Project")).toBeInTheDocument();
+    });
+
+    expect(document.documentElement.classList.contains("spec-phase-light")).toBe(false);
   });
 });
 
@@ -218,6 +249,7 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
         plan: planReducer,
         execute: executeReducer,
         ensure: ensureReducer,
+        deploy: deployReducer,
       },
       preloadedState: {
         project: {
@@ -289,6 +321,7 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
         plan: planReducer,
         execute: executeReducer,
         ensure: ensureReducer,
+        deploy: deployReducer,
       },
       preloadedState: {
         project: {
@@ -355,6 +388,7 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
         plan: planReducer,
         execute: executeReducer,
         ensure: ensureReducer,
+        deploy: deployReducer,
       },
       preloadedState: {
         project: {

@@ -38,9 +38,27 @@ html[data-theme="dark"] {
   html:not([data-theme]) {
     @apply bg-gray-50 text-gray-900;
   }
-  html[data-theme="dark"] {
-    @apply bg-gray-900 text-gray-100;
-  }
+html[data-theme="dark"] {
+  @apply bg-gray-900 text-gray-100;
+}
+
+/* Spec phase (dream) always uses light mode per feedback */
+html.spec-phase-light {
+  @apply bg-gray-50 text-gray-900;
+}
+html.spec-phase-light {
+  --color-bg: #f9fafb;
+  --color-bg-elevated: #ffffff;
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+  --color-surface: #ffffff;
+  --color-border: #e5e7eb;
+  --color-border-subtle: #f3f4f6;
+  --color-ring: #d1d5db;
+  --color-input-bg: #ffffff;
+  --color-input-text: #111827;
+  --color-input-placeholder: #9ca3af;
+}
   body {
     @apply antialiased;
   }

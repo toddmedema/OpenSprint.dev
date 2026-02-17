@@ -47,6 +47,17 @@ export function ProjectView() {
 
   const currentPhase = phaseFromSlug(phaseSlug);
   const selectedPlanId = useAppSelector((s) => s.plan.selectedPlanId);
+
+  /* Spec phase (dream) always uses light mode per feedback h2ayj0 */
+  useEffect(() => {
+    const el = document.documentElement;
+    if (currentPhase === "spec") {
+      el.classList.add("spec-phase-light");
+    } else {
+      el.classList.remove("spec-phase-light");
+    }
+    return () => el.classList.remove("spec-phase-light");
+  }, [currentPhase]);
   const selectedTaskId = useAppSelector((s) => s.execute.selectedTaskId);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
