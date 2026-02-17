@@ -536,8 +536,64 @@ describe("VerifyPhase feedback input", () => {
     expect(screen.getByText("Feature")).toBeInTheDocument();
     expect(screen.getByText("UX")).toBeInTheDocument();
     expect(screen.getByText("Scope")).toBeInTheDocument();
+    // Mapped status label is hidden — no "Mapped" chip or "Mapped to plan" text
     expect(screen.queryByText("Mapped")).not.toBeInTheDocument();
     expect(screen.queryByText("Pending")).not.toBeInTheDocument();
+    // Plan ID is shown without "Mapped" prefix
+    expect(screen.getByText(/Plan:/)).toBeInTheDocument();
+    expect(screen.getByText("plan-1")).toBeInTheDocument();
+  });
+
+  it("does not show Mapped status label on mapped feedback items", () => {
+    const storeWithFeedback = configureStore({
+      reducer: {
+        project: projectReducer,
+        validate: validateReducer,
+      },
+      preloadedState: {
+        project: {
+          data: {
+            id: "proj-1",
+            name: "Test Project",
+            description: "",
+            repoPath: "/tmp/test",
+            currentPhase: "verify",
+            createdAt: "",
+            updatedAt: "",
+          },
+          loading: false,
+          error: null,
+        },
+        validate: {
+          feedback: [
+            {
+              id: "fb-1",
+              text: "Login button broken",
+              category: "bug",
+              mappedPlanId: "auth-plan",
+              createdTaskIds: [],
+              status: "mapped",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          loading: false,
+          submitting: false,
+          error: null,
+        },
+      },
+    });
+
+    render(
+      <Provider store={storeWithFeedback}>
+        <VerifyPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    // Mapped status label must be hidden — no "Mapped" anywhere in status/chip area
+    expect(screen.queryByText("Mapped")).not.toBeInTheDocument();
+    // Plan ID shown as "Plan: auth-plan" (not "Mapped to plan:")
+    expect(screen.getByText(/Plan:/)).toBeInTheDocument();
+    expect(screen.getByText("auth-plan")).toBeInTheDocument();
   });
 
   it("displays images in feedback history when present", () => {
