@@ -9,6 +9,9 @@ import planReducer from "../../store/slices/planSlice";
 import buildReducer from "../../store/slices/buildSlice";
 
 const mockArchive = vi.fn().mockResolvedValue(undefined);
+const mockShip = vi.fn().mockResolvedValue(undefined);
+const mockReship = vi.fn().mockResolvedValue(undefined);
+const mockChatSend = vi.fn().mockResolvedValue({ message: "AI response" });
 const mockPlansList = vi.fn().mockResolvedValue({
   plans: [
     {
@@ -46,9 +49,14 @@ vi.mock("../../api/client", () => ({
       list: (...args: unknown[]) => mockPlansList(...args),
       get: (...args: unknown[]) => mockPlansGet(...args),
       archive: (...args: unknown[]) => mockArchive(...args),
+      ship: (...args: unknown[]) => mockShip(...args),
+      reship: (...args: unknown[]) => mockReship(...args),
     },
     tasks: { list: vi.fn().mockResolvedValue([]) },
-    chat: { history: vi.fn().mockResolvedValue({ messages: [] }) },
+    chat: {
+      history: vi.fn().mockResolvedValue({ messages: [] }),
+      send: (...args: unknown[]) => mockChatSend(...args),
+    },
   },
 }));
 
@@ -121,6 +129,40 @@ function createStore(plansOverride?: typeof basePlan[]) {
     },
   });
 }
+
+describe("PlanPhase Redux integration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("renders plans from Redux state via useAppSelector", () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    expect(screen.getByText(/archive-test-feature/i)).toBeInTheDocument();
+    expect(screen.getByText(/archive test/i)).toBeInTheDocument();
+  });
+
+  it("keeps chatInput and showAddPlanModal as local state (Add Feature opens modal)", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    const addButton = screen.getAllByRole("button", { name: /add feature/i })[0];
+    await user.click(addButton);
+
+    expect(screen.getByText("Feature Title")).toBeInTheDocument();
+  });
+});
 
 describe("PlanPhase archive", () => {
   beforeEach(() => {
@@ -275,5 +317,96 @@ describe("PlanPhase Rebuild button", () => {
     );
 
     expect(screen.queryByRole("button", { name: /rebuild/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("PlanPhase shipPlan thunk", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("dispatches shipPlan thunk when Build It! is clicked", async () => {
+    const plans = [
+      {
+        ...basePlan,
+        status: "planning" as const,
+        metadata: { ...basePlan.metadata },
+      },
+    ];
+    const store = createStore(plans);
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    const buildButton = screen.getByRole("button", { name: /build it!/i });
+    await user.click(buildButton);
+
+    expect(mockShip).toHaveBeenCalledWith("proj-1", "archive-test-feature");
+  });
+});
+
+describe("PlanPhase reshipPlan thunk", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("dispatches reshipPlan thunk when Rebuild is clicked", async () => {
+    const plans = [
+      {
+        ...basePlan,
+        status: "complete" as const,
+        completedTaskCount: 2,
+        metadata: {
+          ...basePlan.metadata,
+          shippedAt: "2026-02-16T08:00:00.000Z",
+        },
+        lastModified: "2026-02-16T10:00:00.000Z",
+      },
+    ];
+    const store = createStore(plans);
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    const rebuildButton = screen.getByRole("button", { name: /rebuild/i });
+    await user.click(rebuildButton);
+
+    expect(mockReship).toHaveBeenCalledWith("proj-1", "archive-test-feature");
+  });
+});
+
+describe("PlanPhase sendPlanMessage thunk", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("dispatches sendPlanMessage thunk when chat message is sent", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    const chatInput = screen.getByPlaceholderText(/refine this plan/i);
+    await user.type(chatInput, "Add more detail to the auth section");
+    const sendButton = screen.getByRole("button", { name: /send/i });
+    await user.click(sendButton);
+
+    expect(mockChatSend).toHaveBeenCalledWith(
+      "proj-1",
+      "Add more detail to the auth section",
+      "plan:archive-test-feature",
+    );
   });
 });
