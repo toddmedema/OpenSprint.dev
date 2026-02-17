@@ -622,7 +622,7 @@ describe("FeedbackService", () => {
     });
   });
 
-  describe("Ensure phase agent registry", () => {
+  describe("Eval phase agent registry", () => {
     it("should register and unregister Feedback categorization agent on success", async () => {
       mockInvoke.mockResolvedValue({
         content: JSON.stringify({

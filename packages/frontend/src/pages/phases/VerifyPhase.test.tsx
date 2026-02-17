@@ -1,6 +1,6 @@
 /**
- * EnsurePhase tests — VerifyPhase renamed to EnsurePhase per SPEED phase names.
- * This file tests EnsurePhase component. Filename VerifyPhase.test.tsx retained for compatibility.
+ * EvalPhase tests — VerifyPhase renamed to EvalPhase (Ensure→Eval per feedback).
+ * This file tests EvalPhase component. Filename VerifyPhase.test.tsx retained for compatibility.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";

@@ -2,11 +2,11 @@
 
 ## Overview
 
-Align the OpenSprint codebase with PRD v2.0, which introduces the five-phase **SPEED** workflow (Spec, Plan, Execute, Ensure, Deploy), replacing the previous four-phase Dream/Plan/Build/Verify model. This epic covers the global rename, new Deploy phase, named agent roles (9 total), new planning-slot agents (Harmonizer, Summarizer, Auditor, Delta Planner), API/WebSocket renames, cross-epic dependency UX, serialized git commit queue, and various internal alignment items.
+Align the OpenSprint codebase with PRD v2.0, which introduces the five-phase **SPEED** workflow (Spec, Plan, Execute, Eval, Deploy), replacing the previous four-phase Dream/Plan/Build/Verify model. This epic covers the global rename, new Deploy phase, named agent roles (9 total), new planning-slot agents (Harmonizer, Summarizer, Auditor, Delta Planner), API/WebSocket renames, cross-epic dependency UX, serialized git commit queue, and various internal alignment items.
 
 ## Acceptance Criteria
 
-1. All UI labels, routes, types, and API endpoints use the SPEED phase names (Spec, Plan, Execute, Ensure, Deploy).
+1. All UI labels, routes, types, and API endpoints use the SPEED phase names (Spec, Plan, Execute, Eval, Deploy).
 2. The PRD.md file is updated to v2.0 with all new sections (Deploy phase, named agents, git concurrency, etc.).
 3. The Deploy phase has a fully functional UI tab with deploy button, history, live logs, and rollback.
 4. All 9 named agent roles are defined in types and used in orchestrator prompts and frontend display.
@@ -25,7 +25,7 @@ The work is sequenced as a strict dependency chain — each task builds on the p
 Copy the new PRD from ~/Downloads/PRD.md, replacing the existing file. This is the foundation all other tasks reference.
 
 ### Task 2: Global phase rename (60k.3)
-Rename across the entire stack: `ProjectPhase` type, `ConversationContext`, `PrdChangeLogEntry.source`, `PlanStatus` (done→complete), Navbar tabs, HomeScreen labels, phaseRouting, PRD_SOURCE_COLORS, component filenames (DreamPhase→SpecPhase, BuildPhase→ExecutePhase, VerifyPhase→EnsurePhase), Redux slice names, backend route paths, shared schemas and constants. Update all imports and test files.
+Rename across the entire stack: `ProjectPhase` type, `ConversationContext`, `PrdChangeLogEntry.source`, `PlanStatus` (done→complete), Navbar tabs, HomeScreen labels, phaseRouting, PRD_SOURCE_COLORS, component filenames (DreamPhase→SpecPhase, BuildPhase→ExecutePhase, VerifyPhase→EvalPhase), Redux slice names, backend route paths, shared schemas and constants. Update all imports and test files.
 
 ### Task 3: API endpoint and WebSocket event renames (60k.4)
 REST: `/build/status` → `/execute/status`, `/plans/:planId/ship` → `/plans/:planId/execute`, `/plans/:planId/reship` → `/plans/:planId/re-execute`. WebSocket: `build.status` → `execute.status`, `agent.done` → `agent.completed`. Add deploy events. Remove `build.awaiting_approval`. Update all frontend API call sites and backend route handlers.
@@ -60,7 +60,7 @@ None — this is a standalone epic.
 
 ## Data Model Changes
 
-- `ProjectPhase`: `"dream" | "plan" | "build" | "verify"` → `"spec" | "plan" | "execute" | "ensure" | "deploy"`
+- `ProjectPhase`: `"dream" | "plan" | "build" | "verify"` → `"spec" | "plan" | "execute" | "eval" | "deploy"`
 - `PlanStatus`: `"done"` → `"complete"`
 - `ConversationContext`: `"dream"` → `"spec"`
 - New `AgentRole` type with 9 values
@@ -74,7 +74,7 @@ See PRD v2.0 Sections 11.1 and 11.2 for the full updated API and WebSocket event
 ## UI/UX Requirements
 
 - Navbar adds a 5th "Deploy" tab
-- Phase route paths update to `/spec`, `/plan`, `/execute`, `/ensure`, `/deploy`
+- Phase route paths update to `/spec`, `/plan`, `/execute`, `/eval`, `/deploy`
 - "Build It!" button becomes "Execute!"
 - Cross-epic dependency confirmation modal on Execute!
 - Deploy tab: deploy button, history list, live log panel, rollback
