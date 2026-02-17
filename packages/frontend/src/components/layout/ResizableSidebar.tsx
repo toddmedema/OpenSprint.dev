@@ -176,7 +176,7 @@ export function ResizableSidebar({
           <div className="w-1 h-12 rounded-full bg-gray-300 group-hover:bg-brand-500/60 opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
       )}
-      <div className="flex flex-col flex-1 min-w-0">{children}</div>
+      <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">{children}</div>
     </div>
   );
 }

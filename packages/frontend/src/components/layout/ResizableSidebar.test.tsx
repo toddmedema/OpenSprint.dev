@@ -168,6 +168,18 @@ describe("ResizableSidebar", () => {
     expect(container).toHaveStyle({ width: "200px" });
   });
 
+  it("has inner wrapper with min-h-0 and overflow-hidden for independent sidebar scroll", () => {
+    render(
+      <ResizableSidebar storageKey={STORAGE_KEY}>
+        <span>Content</span>
+      </ResizableSidebar>,
+    );
+
+    const innerWrapper = screen.getByText("Content").parentElement;
+    expect(innerWrapper).toHaveClass("min-h-0");
+    expect(innerWrapper).toHaveClass("overflow-hidden");
+  });
+
   it("clamps persisted width when above max (80% viewport)", () => {
     const originalInnerWidth = window.innerWidth;
     Object.defineProperty(window, "innerWidth", { value: 1000, writable: true });
