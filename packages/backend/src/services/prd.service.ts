@@ -4,6 +4,7 @@ import type { Prd, PrdSection, PrdChangeLogEntry, PrdSectionKey } from "@openspr
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 
 const PRD_SECTION_KEYS: PrdSectionKey[] = [
@@ -40,7 +41,7 @@ export class PrdService {
       }
       return parsed;
     } catch {
-      throw new AppError(404, "PRD_NOT_FOUND", "PRD not found for this project");
+      throw new AppError(404, ErrorCodes.PRD_NOT_FOUND, "PRD not found for this project");
     }
   }
 
@@ -84,7 +85,7 @@ export class PrdService {
     const prd = await this.loadPrd(projectId);
     const section = prd.sections[sectionKey as PrdSectionKey];
     if (!section) {
-      throw new AppError(404, "SECTION_NOT_FOUND", `PRD section '${sectionKey}' not found`);
+      throw new AppError(404, ErrorCodes.SECTION_NOT_FOUND, `PRD section '${sectionKey}' not found`, { sectionKey });
     }
     return section;
   }

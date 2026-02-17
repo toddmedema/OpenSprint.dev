@@ -1,6 +1,8 @@
 import { Router, Request } from "express";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ApiResponse } from "@opensprint/shared";
+import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 
 export interface ModelOption {
   id: string;
@@ -58,7 +60,10 @@ modelsRouter.get("/", async (req: Request, res, next) => {
             : response.status === 403
               ? " Your API key may not have access to models."
               : "";
-        throw new Error(`Cursor API error ${response.status}: ${text}${hint}`);
+        throw new AppError(response.status >= 500 ? 502 : response.status, ErrorCodes.CURSOR_API_ERROR, `Cursor API error ${response.status}: ${text}${hint}`, {
+          status: response.status,
+          responsePreview: text.slice(0, 200),
+        });
       }
 
       const body = (await response.json()) as { models?: string[] };

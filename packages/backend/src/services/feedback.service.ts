@@ -4,6 +4,7 @@ import { v4 as uuid } from 'uuid';
 import type { FeedbackItem, FeedbackSubmitRequest, FeedbackCategory } from '@opensprint/shared';
 import { OPENSPRINT_PATHS } from '@opensprint/shared';
 import { AppError } from '../middleware/error-handler.js';
+import { ErrorCodes } from '../middleware/error-codes.js';
 import { ProjectService } from './project.service.js';
 import { AgentClient } from './agent-client.js';
 import { hilService } from './hil-service.js';
@@ -70,7 +71,7 @@ export class FeedbackService {
   ): Promise<FeedbackItem> {
     const text = typeof body?.text === 'string' ? body.text.trim() : '';
     if (!text) {
-      throw new AppError(400, 'INVALID_INPUT', 'Feedback text is required');
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, 'Feedback text is required');
     }
     const feedbackDir = await this.getFeedbackDir(projectId);
     await fs.mkdir(feedbackDir, { recursive: true });
@@ -456,7 +457,7 @@ export class FeedbackService {
     } catch (err) {
       const nodeErr = err as NodeJS.ErrnoException;
       if (nodeErr?.code === 'ENOENT') {
-        throw new AppError(404, 'FEEDBACK_NOT_FOUND', `Feedback '${feedbackId}' not found`);
+        throw new AppError(404, ErrorCodes.FEEDBACK_NOT_FOUND, `Feedback '${feedbackId}' not found`, { feedbackId });
       }
       throw err;
     }

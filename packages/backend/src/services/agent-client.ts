@@ -1,7 +1,9 @@
 import { spawn, exec } from 'child_process';
 import { readFileSync } from 'fs';
 import { promisify } from 'util';
-import type { AgentType, AgentConfig } from '@opensprint/shared';
+import type { AgentConfig } from '@opensprint/shared';
+import { AppError } from '../middleware/error-handler.js';
+import { ErrorCodes } from '../middleware/error-codes.js';
 
 const execAsync = promisify(exec);
 
@@ -87,7 +89,9 @@ export class AgentClient {
       case 'custom':
         return this.invokeCustomCli(options);
       default:
-        throw new Error(`Unsupported agent type: ${options.config.type}`);
+        throw new AppError(400, ErrorCodes.AGENT_UNSUPPORTED_TYPE, `Unsupported agent type: ${options.config.type}`, {
+          agentType: options.config.type,
+        });
     }
   }
 
@@ -122,7 +126,10 @@ export class AgentClient {
           taskContent = readFileSync(taskFilePath, 'utf-8');
         } catch (readErr) {
           const msg = readErr instanceof Error ? readErr.message : String(readErr);
-          throw new Error(`Could not read task file: ${taskFilePath}. ${msg}`);
+          throw new AppError(500, ErrorCodes.AGENT_TASK_FILE_READ_FAILED, `Could not read task file: ${taskFilePath}. ${msg}`, {
+            taskFilePath,
+            cause: readErr instanceof Error ? readErr.message : String(readErr),
+          });
         }
         command = 'agent';
         args = ['--print', '--output-format', 'stream-json', '--stream-partial-output', '--workspace', cwd, '--trust'];
@@ -134,14 +141,16 @@ export class AgentClient {
       }
       case 'custom':
         if (!config.cliCommand) {
-          throw new Error('Custom agent requires a CLI command');
+          throw new AppError(400, ErrorCodes.AGENT_CLI_REQUIRED, 'Custom agent requires a CLI command');
         }
         const parts = config.cliCommand.split(' ');
         command = parts[0];
         args = [...parts.slice(1), taskFilePath];
         break;
       default:
-        throw new Error(`Unsupported agent type: ${config.type}`);
+        throw new AppError(400, ErrorCodes.AGENT_UNSUPPORTED_TYPE, `Unsupported agent type: ${config.type}`, {
+          agentType: config.type,
+        });
     }
 
     console.log('[agent] Spawning agent subprocess', {
@@ -247,7 +256,10 @@ export class AgentClient {
     } catch (error: unknown) {
       const err = error as { message: string; stderr?: string };
       const raw = err.stderr || err.message;
-      throw new Error(formatAgentError('claude', raw));
+      throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, formatAgentError('claude', raw), {
+        agentType: 'claude',
+        raw,
+      });
     }
   }
 
@@ -292,7 +304,11 @@ export class AgentClient {
       const raw = isTimeout
         ? `The Cursor agent (Composer 1.5) may hang on some prompts. Try a different model in Project Settings, or use Claude instead.`
         : (err.stderr || err.message);
-      throw new Error(formatAgentError('cursor', raw));
+      throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, formatAgentError('cursor', raw), {
+        agentType: 'cursor',
+        raw,
+        isTimeout,
+      });
     }
   }
 
@@ -318,10 +334,12 @@ export class AgentClient {
         if (stdout.trim()) {
           resolve(stdout.trim());
         } else {
-          const err = new Error(`Cursor CLI timed out. stderr: ${stderr.slice(0, 500)}`) as Error & { killed?: boolean; signal?: string };
-          err.killed = true;
-          err.signal = 'SIGTERM';
-          reject(err);
+          reject(
+            new AppError(504, ErrorCodes.AGENT_INVOKE_FAILED, `Cursor CLI timed out. stderr: ${stderr.slice(0, 500)}`, {
+              agentType: 'cursor',
+              stderr: stderr.slice(0, 500),
+            }),
+          );
         }
       }, TIMEOUT_MS);
 
@@ -352,9 +370,13 @@ export class AgentClient {
         if (code === 0 || stdout.trim()) {
           resolve(stdout.trim());
         } else {
-          const err = new Error(`Cursor CLI failed: code=${code} stderr=${stderr.slice(0, 500)}`) as Error & { stderr?: string };
-          err.stderr = stderr;
-          reject(err);
+          reject(
+            new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, `Cursor CLI failed: code=${code} stderr=${stderr.slice(0, 500)}`, {
+              agentType: 'cursor',
+              exitCode: code,
+              stderr: stderr.slice(0, 500),
+            }),
+          );
         }
       });
 
@@ -369,7 +391,7 @@ export class AgentClient {
     const { config, prompt } = options;
 
     if (!config.cliCommand) {
-      throw new Error('Custom agent requires a CLI command');
+      throw new AppError(400, ErrorCodes.AGENT_CLI_REQUIRED, 'Custom agent requires a CLI command');
     }
 
     try {
@@ -391,7 +413,10 @@ export class AgentClient {
     } catch (error: unknown) {
       const err = error as { message: string; stderr?: string };
       const raw = err.stderr || err.message;
-      throw new Error(formatAgentError('custom', raw));
+      throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, formatAgentError('custom', raw), {
+        agentType: 'custom',
+        raw,
+      });
     }
   }
 }

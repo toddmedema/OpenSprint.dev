@@ -9,6 +9,7 @@ import type { DeploymentConfig, HilConfig, PlanComplexity } from "@opensprint/sh
 import { BeadsService } from "./beads.service.js";
 import { ensureEasConfig } from "./eas-config.js";
 import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 import * as projectIndex from "./project-index.js";
 import { parseAgentConfig } from "../schemas/agent-config.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
@@ -97,10 +98,10 @@ export class ProjectService {
     const name = (input.name ?? "").trim();
     const repoPath = (input.repoPath ?? "").trim();
     if (!name) {
-      throw new AppError(400, "INVALID_INPUT", "Project name is required");
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Project name is required");
     }
     if (!repoPath) {
-      throw new AppError(400, "INVALID_INPUT", "Repository path is required");
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Repository path is required");
     }
 
     // Validate agent config schema
@@ -111,7 +112,7 @@ export class ProjectService {
       codingAgent = parseAgentConfig(input.codingAgent, "codingAgent");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Invalid agent configuration";
-      throw new AppError(400, "INVALID_AGENT_CONFIG", msg);
+      throw new AppError(400, ErrorCodes.INVALID_AGENT_CONFIG, msg);
     }
 
     const id = uuid();
@@ -121,7 +122,7 @@ export class ProjectService {
     const opensprintDir = path.join(repoPath, OPENSPRINT_DIR);
     try {
       await fs.access(opensprintDir);
-      throw new AppError(400, "ALREADY_OPENSPRINT_PROJECT", `Path already contains an OpenSprint project: ${repoPath}`);
+      throw new AppError(400, ErrorCodes.ALREADY_OPENSPRINT_PROJECT, `Path already contains an OpenSprint project: ${repoPath}`, { repoPath });
     } catch (err) {
       if (err instanceof AppError) throw err;
       // Directory doesn't exist — proceed
@@ -143,7 +144,7 @@ export class ProjectService {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.toLowerCase().includes("already initialized")) {
-        throw new AppError(500, "BEADS_INIT_FAILED", `Failed to initialize beads: ${msg}`);
+        throw new AppError(500, ErrorCodes.BEADS_INIT_FAILED, `Failed to initialize beads: ${msg}`, { cause: msg });
       }
     }
 
@@ -217,7 +218,7 @@ export class ProjectService {
     const entries = await projectIndex.getProjects();
     const entry = entries.find((p) => p.id === id);
     if (!entry) {
-      throw new AppError(404, "PROJECT_NOT_FOUND", `Project ${id} not found`);
+      throw new AppError(404, ErrorCodes.PROJECT_NOT_FOUND, `Project ${id} not found`, { projectId: id });
     }
 
     let updatedAt = new Date().toISOString();
@@ -271,7 +272,7 @@ export class ProjectService {
       const raw = await fs.readFile(settingsPath, "utf-8");
       return JSON.parse(raw);
     } catch {
-      throw new AppError(404, "SETTINGS_NOT_FOUND", "Project settings not found");
+      throw new AppError(404, ErrorCodes.SETTINGS_NOT_FOUND, "Project settings not found");
     }
   }
 
@@ -288,7 +289,7 @@ export class ProjectService {
         planningAgent = parseAgentConfig(updates.planningAgent, "planningAgent");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Invalid planning agent configuration";
-        throw new AppError(400, "INVALID_AGENT_CONFIG", msg);
+        throw new AppError(400, ErrorCodes.INVALID_AGENT_CONFIG, msg);
       }
     }
     if (updates.codingAgent !== undefined) {
@@ -296,7 +297,7 @@ export class ProjectService {
         codingAgent = parseAgentConfig(updates.codingAgent, "codingAgent");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Invalid coding agent configuration";
-        throw new AppError(400, "INVALID_AGENT_CONFIG", msg);
+        throw new AppError(400, ErrorCodes.INVALID_AGENT_CONFIG, msg);
       }
     }
 
@@ -315,7 +316,7 @@ export class ProjectService {
             codingAgentByComplexity[key as PlanComplexity] = parseAgentConfig(value, "codingAgent");
           } catch (err) {
             const msg = err instanceof Error ? err.message : `Invalid agent config for ${key}`;
-            throw new AppError(400, "INVALID_AGENT_CONFIG", msg);
+            throw new AppError(400, ErrorCodes.INVALID_AGENT_CONFIG, msg);
           }
         }
         if (Object.keys(codingAgentByComplexity).length === 0) {

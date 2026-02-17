@@ -28,12 +28,13 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
     return;
   }
 
-  // Unexpected errors — in development, include the actual message for debugging
+  // Unexpected errors — in development, include message and stack for debugging
   const isDev = process.env.NODE_ENV !== "production";
   const body: ApiErrorResponse = {
     error: {
       code: "INTERNAL_ERROR",
       message: isDev && err.message ? err.message : "An unexpected error occurred",
+      details: isDev && err.stack ? { stack: err.stack } : undefined,
     },
   };
   res.status(500).json(body);

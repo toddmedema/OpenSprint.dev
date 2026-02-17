@@ -3,6 +3,8 @@ import type { Task, AgentSession, KanbanColumn, TaskDependency } from "@openspri
 import { getTestCommandForFramework } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { BeadsService } from "./beads.service.js";
+import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 import { SessionManager } from "./session-manager.js";
 import { orchestratorService } from "./orchestrator.service.js";
 import { broadcastToProject } from "../websocket/index.js";
@@ -170,7 +172,10 @@ export class TaskService {
     const project = await this.projectService.getProject(projectId);
     const session = await this.sessionManager.readSession(project.repoPath, taskId, attempt);
     if (!session) {
-      throw new Error(`Session ${taskId}-${attempt} not found`);
+      throw new AppError(404, ErrorCodes.SESSION_NOT_FOUND, `Session ${taskId}-${attempt} not found`, {
+        taskId,
+        attempt,
+      });
     }
     return session;
   }

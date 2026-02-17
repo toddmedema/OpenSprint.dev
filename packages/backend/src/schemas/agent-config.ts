@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 
 /** Agent type: claude, cursor, or custom CLI (PRD §6.3) */
 const agentTypeSchema = z.enum(["claude", "cursor", "custom"]);
@@ -25,8 +27,11 @@ export function parseAgentConfig(
   const result = agentConfigSchema.safeParse(value);
   if (!result.success) {
     const first = result.error.issues[0];
-    const path = first.path.length ? `${field}.${first.path.join(".")}` : field;
-    throw new Error(`Invalid ${path}: ${first.message}`);
+    const pathStr = first.path.length ? `${field}.${first.path.join(".")}` : field;
+    throw new AppError(400, ErrorCodes.INVALID_AGENT_CONFIG, `Invalid ${pathStr}: ${first.message}`, {
+      field,
+      validationError: first.message,
+    });
   }
   return result.data;
 }

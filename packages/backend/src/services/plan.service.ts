@@ -8,6 +8,7 @@ import { ChatService } from "./chat.service.js";
 import { PrdService } from "./prd.service.js";
 import { AgentClient } from "./agent-client.js";
 import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 
@@ -103,7 +104,8 @@ export class PlanService {
       );
       const completed = children.filter((issue: BeadsIssue) => (issue.status as string) === "closed").length;
       return { total: children.length, completed };
-    } catch {
+    } catch (err) {
+      console.warn("[plan] countTasks failed, using default:", err instanceof Error ? err.message : err);
       return { total: 0, completed: 0 };
     }
   }
@@ -143,8 +145,8 @@ export class PlanService {
           }
         }
       }
-    } catch {
-      // Beads may not be available
+    } catch (err) {
+      console.warn("[plan] buildDependencyEdges: beads unavailable:", err instanceof Error ? err.message : err);
     }
 
     for (const plan of plans) {
@@ -182,13 +184,13 @@ export class PlanService {
           try {
             const plan = await this.getPlan(projectId, planId);
             plans.push(plan);
-          } catch {
-            // Skip broken plans
+          } catch (err) {
+            console.warn(`[plan] Skipping broken plan ${planId}:`, err instanceof Error ? err.message : err);
           }
         }
       }
-    } catch {
-      // No plans directory yet
+    } catch (err) {
+      console.warn("[plan] No plans directory or read failed:", err instanceof Error ? err.message : err);
     }
 
     const edges = await this.buildDependencyEdges(plans, repoPath);
@@ -274,8 +276,8 @@ export class PlanService {
           }
         }
       }
-    } catch {
-      // Beads may not be available
+    } catch (err) {
+      console.warn("[plan] buildDependencyEdgesFromProject: beads unavailable:", err instanceof Error ? err.message : err);
     }
 
     // 2. Parse Plan markdown for "## Dependencies" section
@@ -306,7 +308,7 @@ export class PlanService {
     try {
       content = await fs.readFile(mdPath, "utf-8");
     } catch {
-      throw new AppError(404, "PLAN_NOT_FOUND", `Plan '${planId}' not found`);
+      throw new AppError(404, ErrorCodes.PLAN_NOT_FOUND, `Plan '${planId}' not found`, { planId });
     }
 
     let lastModified: string | undefined;
@@ -465,7 +467,7 @@ export class PlanService {
     const plansDir = await this.getPlansDir(projectId);
 
     if (!plan.metadata.gateTaskId) {
-      throw new AppError(400, "NO_GATE_TASK", "Plan has no gating task to close");
+      throw new AppError(400, ErrorCodes.NO_GATE_TASK, "Plan has no gating task to close");
     }
 
     // Close the gating task
@@ -501,7 +503,7 @@ export class PlanService {
 
       const hasInProgress = children.some((issue: BeadsIssue) => issue.status === "in_progress");
       if (hasInProgress) {
-        throw new AppError(400, "TASKS_IN_PROGRESS", "Cannot rebuild while tasks are In Progress or In Review");
+        throw new AppError(400, ErrorCodes.TASKS_IN_PROGRESS, "Cannot rebuild while tasks are In Progress or In Review");
       }
 
       const allDone = children.every((issue: BeadsIssue) => issue.status === "closed");
@@ -513,7 +515,7 @@ export class PlanService {
           await this.beads.delete(repoPath, child.id);
         }
       } else if (!allDone && children.length > 0) {
-        throw new AppError(400, "TASKS_NOT_COMPLETE", "All tasks must be Done before rebuilding (or none started)");
+        throw new AppError(400, ErrorCodes.TASKS_NOT_COMPLETE, "All tasks must be Done before rebuilding (or none started)");
       }
     }
 
@@ -533,7 +535,7 @@ export class PlanService {
     const repoPath = await this.getRepoPath(projectId);
 
     if (!plan.metadata.beadEpicId) {
-      throw new AppError(400, "NO_EPIC", "Plan has no epic; cannot archive");
+      throw new AppError(400, ErrorCodes.NO_EPIC, "Plan has no epic; cannot archive");
     }
 
     const allIssues = await this.beads.listAll(repoPath);
@@ -731,7 +733,8 @@ export class PlanService {
         }
       }
       return context || "The PRD is currently empty.";
-    } catch {
+    } catch (err) {
+      console.warn("[plan] buildPrdContext: PRD unavailable:", err instanceof Error ? err.message : err);
       return "No PRD exists yet.";
     }
   }
@@ -760,8 +763,9 @@ export class PlanService {
     if (!jsonMatch) {
       throw new AppError(
         400,
-        "DECOMPOSE_PARSE_FAILED",
+        ErrorCodes.DECOMPOSE_PARSE_FAILED,
         "Planning agent did not return valid decomposition JSON. Response: " + response.content.slice(0, 500),
+        { responsePreview: response.content.slice(0, 500) },
       );
     }
 
@@ -777,14 +781,14 @@ export class PlanService {
     try {
       parsed = JSON.parse(jsonMatch[0]);
     } catch {
-      throw new AppError(400, "DECOMPOSE_JSON_INVALID", "Could not parse decomposition JSON from agent response");
+      throw new AppError(400, ErrorCodes.DECOMPOSE_JSON_INVALID, "Could not parse decomposition JSON from agent response");
     }
 
     const planSpecs = parsed.plans ?? [];
     if (planSpecs.length === 0) {
       throw new AppError(
         400,
-        "DECOMPOSE_EMPTY",
+        ErrorCodes.DECOMPOSE_EMPTY,
         "Planning agent returned no plans. Ensure the PRD has sufficient content.",
       );
     }

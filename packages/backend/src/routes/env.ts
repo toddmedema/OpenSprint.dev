@@ -4,6 +4,7 @@ import { readFile, writeFile, access } from "node:fs/promises";
 import { constants } from "node:fs";
 import type { ApiResponse } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 
 const ALLOWED_KEYS = ["ANTHROPIC_API_KEY", "CURSOR_API_KEY"] as const;
 
@@ -67,14 +68,14 @@ envRouter.post("/keys", async (req: Request, res, next) => {
   try {
     const { key, value } = req.body as { key?: string; value?: string };
     if (!key || typeof value !== "string") {
-      throw new AppError(400, "INVALID_INPUT", "key and value are required");
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "key and value are required");
     }
     if (!ALLOWED_KEYS.includes(key as (typeof ALLOWED_KEYS)[number])) {
-      throw new AppError(400, "INVALID_KEY", `Only ${ALLOWED_KEYS.join(", ")} can be set via this endpoint`);
+      throw new AppError(400, ErrorCodes.INVALID_KEY, `Only ${ALLOWED_KEYS.join(", ")} can be set via this endpoint`);
     }
     const trimmed = value.trim();
     if (!trimmed) {
-      throw new AppError(400, "INVALID_INPUT", "value cannot be empty");
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "value cannot be empty");
     }
 
     const envPath = await getEnvPath();
@@ -100,7 +101,7 @@ envRouter.post("/keys", async (req: Request, res, next) => {
           : code === "EROFS"
             ? " Read-only filesystem. Cannot write .env."
             : "";
-      throw new AppError(500, "ENV_WRITE_FAILED", `Failed to save API key to .env: ${msg}${hint}`);
+      throw new AppError(500, ErrorCodes.ENV_WRITE_FAILED, `Failed to save API key to .env: ${msg}${hint}`, { cause: msg });
     }
 
     process.env[key] = trimmed;

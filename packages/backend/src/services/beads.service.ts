@@ -1,6 +1,8 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import type { TaskType, TaskPriority } from "@opensprint/shared";
+import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 
 const execAsync = promisify(exec);
 
@@ -59,10 +61,16 @@ export class BeadsService {
         signal?: string;
       };
       if (err.killed && err.signal === "SIGTERM") {
-        throw new Error(`Beads command timed out after ${timeout}ms: bd ${command}\n${err.stderr || err.message}`);
+        throw new AppError(504, ErrorCodes.BEADS_TIMEOUT, `Beads command timed out after ${timeout}ms: bd ${command}\n${err.stderr || err.message}`, {
+          command: `bd ${command}`,
+          timeout,
+        });
       }
       const stderr = err.stderr || err.stdout || err.message;
-      throw new Error(`Beads command failed: bd ${command}\n${stderr}`);
+      throw new AppError(502, ErrorCodes.BEADS_COMMAND_FAILED, `Beads command failed: bd ${command}\n${stderr}`, {
+        command: `bd ${command}`,
+        stderr,
+      });
     }
   }
 
@@ -89,7 +97,9 @@ export class BeadsService {
       }
       return JSON.parse(trimmed);
     } catch {
-      throw new Error(`Failed to parse beads JSON output: ${trimmed.slice(0, 200)}`);
+      throw new AppError(502, ErrorCodes.BEADS_PARSE_FAILED, `Failed to parse beads JSON output: ${trimmed.slice(0, 200)}`, {
+        outputPreview: trimmed.slice(0, 200),
+      });
     }
   }
 
@@ -101,7 +111,9 @@ export class BeadsService {
       if (jsonStart >= 0) {
         return JSON.parse(stdout.slice(jsonStart));
       }
-      throw new Error(`Failed to parse beads JSON output: ${stdout}`);
+      throw new AppError(502, ErrorCodes.BEADS_PARSE_FAILED, `Failed to parse beads JSON output: ${stdout}`, {
+        outputPreview: stdout.slice(0, 200),
+      });
     }
   }
 
@@ -117,7 +129,9 @@ export class BeadsService {
       if (stdout.trim() === "" || stdout.trim() === "[]") {
         return [];
       }
-      throw new Error(`Failed to parse beads JSON array output: ${stdout}`);
+      throw new AppError(502, ErrorCodes.BEADS_PARSE_FAILED, `Failed to parse beads JSON array output: ${stdout}`, {
+        outputPreview: stdout.slice(0, 200),
+      });
     }
   }
 
@@ -191,7 +205,10 @@ export class BeadsService {
       }
     }
     if ((result.status as string) !== "closed") {
-      throw new Error(`Beads close did not persist: issue ${id} still has status "${result.status ?? "undefined"}"`);
+      throw new AppError(502, ErrorCodes.BEADS_CLOSE_FAILED, `Beads close did not persist: issue ${id} still has status "${result.status ?? "undefined"}"`, {
+        issueId: id,
+        status: result.status,
+      });
     }
     return result;
   }
@@ -252,7 +269,7 @@ export class BeadsService {
     const arr = this.parseJsonArray(stdout);
     const first = arr[0];
     if (first) return first;
-    throw new Error(`Issue ${id} not found`);
+    throw new AppError(404, ErrorCodes.ISSUE_NOT_FOUND, `Issue ${id} not found`, { issueId: id });
   }
 
   /**

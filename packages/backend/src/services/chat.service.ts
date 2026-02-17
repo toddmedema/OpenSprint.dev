@@ -14,6 +14,7 @@ import { ProjectService } from "./project.service.js";
 import { PrdService } from "./prd.service.js";
 import { agentService } from "./agent.service.js";
 import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 import { hilService } from "./hil-service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
@@ -186,7 +187,7 @@ export class ChatService {
   /** Send a message to the planning agent */
   async sendMessage(projectId: string, body: ChatRequest): Promise<ChatResponse> {
     if (body.message == null || String(body.message).trim() === "") {
-      throw new AppError(400, "INVALID_INPUT", "Chat message is required");
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Chat message is required");
     }
     const context = body.context ?? "dream";
     const isPlanContext = context.startsWith("plan:");

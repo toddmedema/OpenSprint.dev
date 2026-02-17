@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { AgentConfig } from '@opensprint/shared';
 import { AgentClient } from './agent-client.js';
+import { AppError } from '../middleware/error-handler.js';
+import { ErrorCodes } from '../middleware/error-codes.js';
 
 /** Message for planning agent (user or assistant) */
 export interface PlanningMessage {
@@ -56,7 +58,9 @@ export class AgentService {
     if (!this.anthropic) {
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey?.trim()) {
-        throw new Error(
+        throw new AppError(
+          400,
+          ErrorCodes.ANTHROPIC_API_KEY_MISSING,
           'ANTHROPIC_API_KEY is not set. Add it to your .env file or Project Settings. Get a key from https://console.anthropic.com/',
         );
       }
