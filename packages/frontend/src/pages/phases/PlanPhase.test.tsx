@@ -223,6 +223,18 @@ describe("PlanPhase archive", () => {
     expect(archiveButton).toBeInTheDocument();
   });
 
+  it("has main content area with overflow-y-auto and min-w-0 for independent scroll", () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>,
+    );
+    const mainContent = screen.getByText("Feature Plans").closest(".overflow-y-auto");
+    expect(mainContent).toBeInTheDocument();
+    expect(mainContent).toHaveClass("min-w-0");
+  });
+
   it("renders resizable sidebar with resize handle when a plan is selected", () => {
     const store = createStore();
     render(

@@ -282,6 +282,21 @@ describe("BuildPhase Redux integration", () => {
     expect(store.getState().build.selectedTaskId).toBeNull();
   });
 
+  it("has kanban scroll area with min-h-0 and overflow-auto for independent scroll", () => {
+    const tasks = [
+      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+    ];
+    const store = createStore(tasks);
+    render(
+      <Provider store={store}>
+        <BuildPhase projectId="proj-1" />
+      </Provider>,
+    );
+    const scrollArea = document.querySelector(".overflow-auto.min-h-0");
+    expect(scrollArea).toBeInTheDocument();
+    expect(scrollArea).toHaveClass("min-h-0");
+  });
+
   it("renders resizable sidebar with resize handle when a task is selected", async () => {
     mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
     const tasks = [

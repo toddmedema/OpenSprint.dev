@@ -154,7 +154,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   };
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-h-0 overflow-hidden">
       {error && (
         <div className="mx-4 mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex justify-between items-center">
           <span>{error}</span>
@@ -164,7 +164,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         </div>
       )}
       {/* Main content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 min-w-0 overflow-y-auto p-6">
         {/* Dependency Graph */}
         <div className="card p-6 mb-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Dependency Graph</h3>
