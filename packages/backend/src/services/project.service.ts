@@ -47,7 +47,7 @@ function normalizeDeployment(input: CreateProjectRequest["deployment"]): Deploym
   };
 }
 
-/** Normalize HIL config: merge partial input with defaults (PRD §6.5). Only valid keys are used; testFailuresAndRetries is never configurable (PRD §6.5.1). */
+/** Normalize HIL config: merge partial input with defaults (PRD §6.5). Only valid keys are used. Test failures are always automated (PRD §6.5.1) — not configurable, so testFailuresAndRetries is never in HilConfig. */
 const HIL_CONFIG_KEYS: (keyof HilConfig)[] = [
   "scopeChanges",
   "architectureDecisions",
@@ -62,10 +62,13 @@ function normalizeHilConfig(input: CreateProjectRequest["hilConfig"] | Record<st
       (input as Record<string, unknown>)[k],
     ]),
   );
-  return {
+  const result = {
     ...DEFAULT_HIL_CONFIG,
     ...defined,
   };
+  // Strip legacy testFailuresAndRetries if present (PRD §6.5.1: never persisted)
+  const { testFailuresAndRetries: _legacy, ...clean } = result as HilConfig & { testFailuresAndRetries?: unknown };
+  return clean as HilConfig;
 }
 
 export class ProjectService {
