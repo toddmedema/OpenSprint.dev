@@ -9,6 +9,7 @@ import {
 import projectReducer from "../slices/projectSlice";
 import websocketReducer from "../slices/websocketSlice";
 import dreamReducer from "../slices/dreamSlice";
+import designReducer from "../slices/designSlice";
 import planReducer from "../slices/planSlice";
 import buildReducer from "../slices/buildSlice";
 import verifyReducer from "../slices/verifySlice";
@@ -98,6 +99,7 @@ describe("websocketMiddleware", () => {
         project: projectReducer,
         websocket: websocketReducer,
         dream: dreamReducer,
+        design: designReducer,
         plan: planReducer,
         build: buildReducer,
         verify: verifyReducer,
@@ -216,19 +218,33 @@ describe("websocketMiddleware", () => {
   });
 
   describe("ServerEvent handling", () => {
-    it("dispatches to domain slices on prd.updated", async () => {
+    it("dispatches to design slice on prd.updated (fetchPrd, fetchPrdHistory, fetchDesignChat)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
       const { api } = await import("../../api/client");
+      vi.mocked(api.prd.get).mockResolvedValue({ sections: { overview: { content: "Updated" } } });
+      vi.mocked(api.prd.getHistory).mockResolvedValue([
+        { section: "overview", version: 2, source: "dream", timestamp: "2025-01-01", diff: "+Updated" },
+      ]);
+      vi.mocked(api.chat.history).mockResolvedValue({
+        messages: [{ role: "assistant", content: "Done", timestamp: "2025-01-01" }],
+      });
+
       wsInstance!.simulateMessage({ type: "prd.updated", section: "overview", version: 2 });
 
       await vi.waitFor(() => {
         expect(api.prd.get).toHaveBeenCalledWith("proj-1");
         expect(api.prd.getHistory).toHaveBeenCalledWith("proj-1");
         expect(api.chat.history).toHaveBeenCalledWith("proj-1", "dream");
+      });
+
+      await vi.waitFor(() => {
+        expect(store.getState().design.prdContent).toEqual({ overview: "Updated" });
+        expect(store.getState().design.prdHistory).toHaveLength(1);
+        expect(store.getState().design.messages).toHaveLength(1);
       });
     });
 

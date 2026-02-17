@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import projectReducer from "./slices/projectSlice";
 import websocketReducer from "./slices/websocketSlice";
 import dreamReducer from "./slices/dreamSlice";
+import designReducer from "./slices/designSlice";
 import planReducer from "./slices/planSlice";
 import buildReducer from "./slices/buildSlice";
 import verifyReducer from "./slices/verifySlice";
@@ -13,6 +14,7 @@ export const store = configureStore({
     project: projectReducer,
     websocket: websocketReducer,
     dream: dreamReducer,
+    design: designReducer,
     plan: planReducer,
     build: buildReducer,
     verify: verifyReducer,
