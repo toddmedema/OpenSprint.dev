@@ -32,7 +32,7 @@ export function Navbar({ project, currentPhase, onPhaseChange, onProjectSaved }:
     if (dropdownOpen) {
       api.projects
         .list()
-        .then((data) => setProjects(data as Project[]))
+        .then(setProjects)
         .catch(console.error);
     }
   }, [dropdownOpen]);

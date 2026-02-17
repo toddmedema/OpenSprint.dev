@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { KanbanColumn, AgentSession, Plan } from "@opensprint/shared";
+import type { KanbanColumn, AgentSession, Plan, Task } from "@opensprint/shared";
 import { KANBAN_COLUMNS, PRIORITY_LABELS } from "@opensprint/shared";
 import { useAppDispatch, useAppSelector } from "../../store";
 import {
@@ -20,16 +20,6 @@ interface BuildPhaseProps {
   projectId: string;
   /** Called when user clicks plan link in task detail; navigates to Plan phase and selects the plan */
   onNavigateToPlan?: (planId: string) => void;
-}
-
-interface TaskCard {
-  id: string;
-  title: string;
-  kanbanColumn: KanbanColumn;
-  priority: number;
-  assignee: string | null;
-  epicId: string | null;
-  testResults?: { passed: number; failed: number; skipped: number; total: number } | null;
 }
 
 const columnLabels: Record<KanbanColumn, string> = {
@@ -208,7 +198,7 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
   const dispatch = useAppDispatch();
 
   /* ── Redux state ── */
-  const tasks = useAppSelector((s) => s.build.tasks) as TaskCard[];
+  const tasks = useAppSelector((s) => s.build.tasks);
   const plans = useAppSelector((s) => s.plan.plans);
   const awaitingApproval = useAppSelector((s) => s.build.awaitingApproval);
   const selectedTask = useAppSelector((s) => s.build.selectedTaskId);
@@ -256,8 +246,7 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
   const implTasks = useMemo(
     () =>
       tasks.filter((t) => {
-        const task = t as TaskCard & { type?: string };
-        const isEpic = task.type === "epic";
+        const isEpic = t.type === "epic";
         const isGating = /\.0$/.test(t.id);
         return !isEpic && !isGating;
       }),
@@ -270,16 +259,16 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
       epicIdToTitle.set(p.metadata.beadEpicId, getEpicTitleFromPlan(p));
     });
 
-    const byEpic = new Map<string | null, TaskCard[]>();
+    const byEpic = new Map<string | null, Task[]>();
     for (const t of implTasks) {
       const key = t.epicId ?? null;
       if (!byEpic.has(key)) byEpic.set(key, []);
       byEpic.get(key)!.push(t);
     }
 
-    const allDone = (tasks: TaskCard[]) => tasks.length > 0 && tasks.every((t) => t.kanbanColumn === "done");
+    const allDone = (tasks: Task[]) => tasks.length > 0 && tasks.every((t) => t.kanbanColumn === "done");
 
-    const result: { epicId: string; epicTitle: string; tasks: TaskCard[] }[] = [];
+    const result: { epicId: string; epicTitle: string; tasks: Task[] }[] = [];
     for (const plan of plans) {
       const epicId = plan.metadata.beadEpicId;
       if (!epicId) continue;
@@ -367,7 +356,7 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
                   acc[col] = lane.tasks.filter((t) => t.kanbanColumn === col);
                   return acc;
                 },
-                {} as Record<KanbanColumn, TaskCard[]>,
+                {} as Record<KanbanColumn, Task[]>,
               );
               return (
                 <div key={lane.epicId || "other"} className="border border-gray-200 rounded-lg overflow-hidden">

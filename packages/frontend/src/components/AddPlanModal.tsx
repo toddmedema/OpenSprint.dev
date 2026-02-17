@@ -102,7 +102,7 @@ export function AddPlanModal({ projectId, onClose, onCreated }: AddPlanModalProp
         content: content.trim() || defaultPlanContent(trimmedTitle),
         complexity,
       });
-      onCreated(plan as Plan);
+      onCreated(plan);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create plan");

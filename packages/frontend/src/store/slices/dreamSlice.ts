@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
+import type { PrdChangeLogEntry } from "@opensprint/shared";
 import { api } from "../../api/client";
 import { parsePrdSections } from "../../lib/prdUtils";
 
@@ -6,14 +7,6 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
-}
-
-interface PrdChangeLogEntry {
-  section: string;
-  version: number;
-  source: "dream" | "plan" | "build" | "verify";
-  timestamp: string;
-  diff: string;
 }
 
 export interface DreamState {
@@ -35,8 +28,7 @@ const initialState: DreamState = {
 };
 
 export const fetchDreamChat = createAsyncThunk("dream/fetchChat", async (projectId: string) => {
-  const data = await api.chat.history(projectId, "dream");
-  const conv = data as { messages?: Message[] };
+  const conv = await api.chat.history(projectId, "dream");
   return conv?.messages ?? [];
 });
 
@@ -47,17 +39,13 @@ export const fetchPrd = createAsyncThunk("dream/fetchPrd", async (projectId: str
 
 export const fetchPrdHistory = createAsyncThunk("dream/fetchPrdHistory", async (projectId: string) => {
   const data = await api.prd.getHistory(projectId);
-  return (data as PrdChangeLogEntry[]) ?? [];
+  return data ?? [];
 });
 
 export const sendDreamMessage = createAsyncThunk(
   "dream/sendMessage",
   async ({ projectId, message, prdSectionFocus }: { projectId: string; message: string; prdSectionFocus?: string }) => {
-    const response = (await api.chat.send(projectId, message, "dream", prdSectionFocus)) as {
-      message: string;
-      prdChanges?: { section: string; previousVersion: number; newVersion: number }[];
-    };
-    return response;
+    return api.chat.send(projectId, message, "dream", prdSectionFocus);
   },
 );
 
@@ -77,20 +65,13 @@ export const uploadPrdFile = createAsyncThunk(
     if (ext === "md") {
       const text = await file.text();
       const prompt = `Here's my existing product requirements document. Please analyze it and generate a structured PRD from it:\n\n${text}`;
-      const response = (await api.chat.send(projectId, prompt, "dream")) as {
-        message: string;
-        prdChanges?: { section: string; previousVersion: number; newVersion: number }[];
-      };
+      const response = await api.chat.send(projectId, prompt, "dream");
       return { response, fileName: file.name };
     } else if (ext === "docx" || ext === "pdf") {
       const result = await api.prd.upload(projectId, file);
-      const uploadResult = result as { text?: string; message?: string };
-      if (uploadResult.text) {
-        const prompt = `Here's my existing product requirements document. Please analyze it and generate a structured PRD from it:\n\n${uploadResult.text}`;
-        const response = (await api.chat.send(projectId, prompt, "dream")) as {
-          message: string;
-          prdChanges?: { section: string; previousVersion: number; newVersion: number }[];
-        };
+      if (result.text) {
+        const prompt = `Here's my existing product requirements document. Please analyze it and generate a structured PRD from it:\n\n${result.text}`;
+        const response = await api.chat.send(projectId, prompt, "dream");
         return { response, fileName: file.name };
       }
       return { response: null, fileName: file.name };

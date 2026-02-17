@@ -27,6 +27,19 @@ export interface PrdChangeLogEntry {
   diff: string;
 }
 
+/** PRD section update response */
+export interface PrdSectionUpdateResult {
+  section: PrdSection;
+  previousVersion: number;
+  newVersion: number;
+}
+
+/** PRD upload response */
+export interface PrdUploadResult {
+  text: string;
+  filename: string;
+}
+
 /** Full PRD document stored at .opensprint/prd.json */
 export interface Prd {
   version: number;

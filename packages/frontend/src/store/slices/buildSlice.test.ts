@@ -21,7 +21,7 @@ import buildReducer, {
   type BuildState,
 } from "./buildSlice";
 import planReducer, { setPlansAndGraph } from "./planSlice";
-import type { Plan, PlanDependencyGraph, AgentSession } from "@opensprint/shared";
+import type { Plan, PlanDependencyGraph, AgentSession, Task } from "@opensprint/shared";
 
 vi.mock("../../api/client", () => ({
   api: {
@@ -42,13 +42,20 @@ vi.mock("../../api/client", () => ({
 
 import { api } from "../../api/client";
 
-const mockTaskCard = {
+const mockTask: Task = {
   id: "task-1",
   title: "Task 1",
-  kanbanColumn: "backlog" as const,
+  description: "",
+  type: "task",
+  status: "open",
   priority: 1,
-  assignee: null as string | null,
+  assignee: null,
+  labels: [],
+  dependencies: [],
   epicId: "epic-1",
+  kanbanColumn: "backlog",
+  createdAt: "2024-01-01T00:00:00Z",
+  updatedAt: "2024-01-01T00:00:00Z",
 };
 
 const mockPlan: Plan = {
@@ -119,7 +126,7 @@ describe("buildSlice", () => {
   describe("reducers", () => {
     it("setSelectedTaskId sets selected task and clears related state", () => {
       const store = createStore();
-      store.dispatch(setTasks([mockTaskCard]));
+      store.dispatch(setTasks([mockTask]));
       store.dispatch(setSelectedTaskId("task-1"));
       expect(store.getState().build.selectedTaskId).toBe("task-1");
       store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: "output" }));
@@ -171,7 +178,7 @@ describe("buildSlice", () => {
 
     it("taskUpdated updates task in array", () => {
       const store = createStore();
-      store.dispatch(setTasks([mockTaskCard]));
+      store.dispatch(setTasks([mockTask]));
       store.dispatch(taskUpdated({ taskId: "task-1", status: "in_progress", assignee: "agent-1" }));
       const task = store.getState().build.tasks[0];
       expect(task.kanbanColumn).toBe("in_progress");
@@ -180,7 +187,7 @@ describe("buildSlice", () => {
 
     it("setTasks replaces tasks", () => {
       const store = createStore();
-      store.dispatch(setTasks([mockTaskCard]));
+      store.dispatch(setTasks([mockTask]));
       expect(store.getState().build.tasks).toHaveLength(1);
       store.dispatch(setTasks([]));
       expect(store.getState().build.tasks).toEqual([]);
@@ -194,7 +201,7 @@ describe("buildSlice", () => {
 
     it("resetBuild resets to initial state", () => {
       const store = createStore();
-      store.dispatch(setTasks([mockTaskCard]));
+      store.dispatch(setTasks([mockTask]));
       store.dispatch(setSelectedTaskId("task-1"));
       store.dispatch(resetBuild());
       const state = store.getState().build as BuildState;
@@ -205,10 +212,10 @@ describe("buildSlice", () => {
 
   describe("fetchTasks thunk", () => {
     it("stores tasks on fulfilled", async () => {
-      vi.mocked(api.tasks.list).mockResolvedValue([mockTaskCard] as never);
+      vi.mocked(api.tasks.list).mockResolvedValue([mockTask] as never);
       const store = createStore();
       await store.dispatch(fetchTasks("proj-1"));
-      expect(store.getState().build.tasks).toEqual([mockTaskCard]);
+      expect(store.getState().build.tasks).toEqual([mockTask]);
       expect(api.tasks.list).toHaveBeenCalledWith("proj-1");
     });
 
@@ -325,7 +332,7 @@ describe("buildSlice", () => {
   describe("markTaskComplete thunk", () => {
     it("updates tasks and plan slice on fulfilled", async () => {
       vi.mocked(api.tasks.markComplete).mockResolvedValue({ taskClosed: true } as never);
-      vi.mocked(api.tasks.list).mockResolvedValue([{ ...mockTaskCard, kanbanColumn: "done" }] as never);
+      vi.mocked(api.tasks.list).mockResolvedValue([{ ...mockTask, kanbanColumn: "done" }] as never);
       vi.mocked(api.plans.list).mockResolvedValue(mockGraph as never);
       const store = createStore();
       await store.dispatch(markTaskComplete({ projectId: "proj-1", taskId: "task-1" }));

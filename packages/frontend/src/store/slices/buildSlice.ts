@@ -3,18 +3,14 @@ import type { AgentSession, Task, KanbanColumn, Plan, OrchestratorStatus } from 
 import { api } from "../../api/client";
 import { setPlansAndGraph } from "./planSlice";
 
-interface TaskCard {
-  id: string;
-  title: string;
-  kanbanColumn: KanbanColumn;
-  priority: number;
-  assignee: string | null;
-  epicId: string | null;
-  testResults?: { passed: number; failed: number; skipped: number; total: number } | null;
-}
+/** Task display shape for kanban (subset of Task) */
+export type TaskCard = Pick<
+  Task,
+  "id" | "title" | "kanbanColumn" | "priority" | "assignee" | "epicId" | "testResults"
+>;
 
 export interface BuildState {
-  tasks: TaskCard[];
+  tasks: Task[];
   plans: Plan[];
   orchestratorRunning: boolean;
   awaitingApproval: boolean;
@@ -57,7 +53,7 @@ const initialState: BuildState = {
 };
 
 export const fetchTasks = createAsyncThunk("build/fetchTasks", async (projectId: string) => {
-  return (await api.tasks.list(projectId)) as TaskCard[];
+  return api.tasks.list(projectId);
 });
 
 export const fetchBuildPlans = createAsyncThunk(
@@ -65,42 +61,42 @@ export const fetchBuildPlans = createAsyncThunk(
   async (projectId: string, { dispatch }) => {
     const graph = await api.plans.list(projectId);
     dispatch(setPlansAndGraph({ plans: graph.plans, dependencyGraph: graph }));
-    return graph.plans as Plan[];
+    return graph.plans;
   },
 );
 
 export const fetchBuildStatus = createAsyncThunk(
   "build/fetchBuildStatus",
   async (projectId: string) => {
-    return (await api.build.status(projectId)) as OrchestratorStatus;
+    return api.build.status(projectId);
   },
 );
 
 export const fetchTaskDetail = createAsyncThunk(
   "build/fetchTaskDetail",
   async ({ projectId, taskId }: { projectId: string; taskId: string }) => {
-    return (await api.tasks.get(projectId, taskId)) as Task;
+    return api.tasks.get(projectId, taskId);
   },
 );
 
 export const fetchArchivedSessions = createAsyncThunk(
   "build/fetchArchivedSessions",
   async ({ projectId, taskId }: { projectId: string; taskId: string }) => {
-    return ((await api.tasks.sessions(projectId, taskId)) as AgentSession[]) ?? [];
+    return (await api.tasks.sessions(projectId, taskId)) ?? [];
   },
 );
 
 export const startBuild = createAsyncThunk(
   "build/startBuild",
   async (projectId: string) => {
-    return (await api.build.nudge(projectId)) as OrchestratorStatus;
+    return api.build.nudge(projectId);
   },
 );
 
 export const pauseBuild = createAsyncThunk(
   "build/pauseBuild",
   async (projectId: string) => {
-    return (await api.build.pause(projectId)) as OrchestratorStatus;
+    return api.build.pause(projectId);
   },
 );
 
@@ -113,7 +109,7 @@ export const markTaskComplete = createAsyncThunk(
       api.plans.list(projectId),
     ]);
     dispatch(setPlansAndGraph({ plans: plansGraph.plans, dependencyGraph: plansGraph }));
-    return { tasks: (tasksData as TaskCard[]) ?? [] };
+    return { tasks: tasksData ?? [] };
   },
 );
 
@@ -174,7 +170,7 @@ const buildSlice = createSlice({
         }
       }
     },
-    setTasks(state, action: PayloadAction<TaskCard[]>) {
+    setTasks(state, action: PayloadAction<Task[]>) {
       state.tasks = action.payload;
     },
     setBuildError(state, action: PayloadAction<string | null>) {

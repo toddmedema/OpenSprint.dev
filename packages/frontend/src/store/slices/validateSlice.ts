@@ -17,7 +17,7 @@ const initialState: ValidateState = {
 };
 
 export const fetchFeedback = createAsyncThunk("validate/fetchFeedback", async (projectId: string) => {
-  return (await api.feedback.list(projectId)) as FeedbackItem[];
+  return api.feedback.list(projectId);
 });
 
 export const submitFeedback = createAsyncThunk(
@@ -31,14 +31,14 @@ export const submitFeedback = createAsyncThunk(
     text: string;
     images?: string[];
   }) => {
-    return (await api.feedback.submit(projectId, text, images)) as FeedbackItem;
+    return api.feedback.submit(projectId, text, images);
   },
 );
 
 export const recategorizeFeedback = createAsyncThunk(
   "validate/recategorizeFeedback",
   async ({ projectId, feedbackId }: { projectId: string; feedbackId: string }) => {
-    return (await api.feedback.recategorize(projectId, feedbackId)) as FeedbackItem;
+    return api.feedback.recategorize(projectId, feedbackId);
   },
 );
 

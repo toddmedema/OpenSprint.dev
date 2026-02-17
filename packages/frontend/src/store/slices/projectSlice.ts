@@ -15,7 +15,7 @@ const initialState: ProjectState = {
 };
 
 export const fetchProject = createAsyncThunk("project/fetch", async (projectId: string) => {
-  return (await api.projects.get(projectId)) as Project;
+  return api.projects.get(projectId);
 });
 
 const projectSlice = createSlice({

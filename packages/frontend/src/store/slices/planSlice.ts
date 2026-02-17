@@ -66,14 +66,14 @@ export const reshipPlan = createAsyncThunk(
 export const archivePlan = createAsyncThunk(
   "plan/archive",
   async ({ projectId, planId }: { projectId: string; planId: string }) => {
-    return (await api.plans.archive(projectId, planId)) as Plan;
+    return api.plans.archive(projectId, planId);
   },
 );
 
 export const fetchPlanChat = createAsyncThunk(
   "plan/fetchChat",
   async ({ projectId, context }: { projectId: string; context: string }) => {
-    const conv = (await api.chat.history(projectId, context)) as { messages?: Message[] };
+    const conv = await api.chat.history(projectId, context);
     return { context, messages: conv?.messages ?? [] };
   },
 );
@@ -81,7 +81,7 @@ export const fetchPlanChat = createAsyncThunk(
 export const sendPlanMessage = createAsyncThunk(
   "plan/sendMessage",
   async ({ projectId, message, context }: { projectId: string; message: string; context: string }) => {
-    const response = (await api.chat.send(projectId, message, context)) as { message: string };
+    const response = await api.chat.send(projectId, message, context);
     return { context, response };
   },
 );
@@ -89,7 +89,7 @@ export const sendPlanMessage = createAsyncThunk(
 export const fetchSinglePlan = createAsyncThunk(
   "plan/fetchSingle",
   async ({ projectId, planId }: { projectId: string; planId: string }) => {
-    return (await api.plans.get(projectId, planId)) as Plan;
+    return api.plans.get(projectId, planId);
   },
 );
 

@@ -1,4 +1,26 @@
-import type { ApiResult, Project } from "@opensprint/shared";
+import type {
+  Project,
+  CreateProjectRequest,
+  UpdateProjectRequest,
+  ProjectSettings,
+  Prd,
+  PrdSection,
+  PrdChangeLogEntry,
+  PrdSectionUpdateResult,
+  PrdUploadResult,
+  Plan,
+  PlanDependencyGraph,
+  CreatePlanRequest,
+  UpdatePlanRequest,
+  Task,
+  AgentSession,
+  OrchestratorStatus,
+  FeedbackItem,
+  ChatRequest,
+  ChatResponse,
+  Conversation,
+  ActiveAgent,
+} from "@opensprint/shared";
 
 const BASE_URL = "/api/v1";
 
@@ -51,20 +73,20 @@ export const api = {
   },
   projects: {
     list: () => request<Project[]>("/projects"),
-    get: (id: string) => request<unknown>(`/projects/${id}`),
-    create: (data: unknown) =>
-      request<unknown>("/projects", {
+    get: (id: string) => request<Project>(`/projects/${id}`),
+    create: (data: CreateProjectRequest) =>
+      request<Project>("/projects", {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    update: (id: string, data: unknown) =>
-      request<unknown>(`/projects/${id}`, {
+    update: (id: string, data: UpdateProjectRequest) =>
+      request<Project>(`/projects/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),
       }),
-    getSettings: (id: string) => request<unknown>(`/projects/${id}/settings`),
-    updateSettings: (id: string, data: unknown) =>
-      request<unknown>(`/projects/${id}/settings`, {
+    getSettings: (id: string) => request<ProjectSettings>(`/projects/${id}/settings`),
+    updateSettings: (id: string, data: Partial<ProjectSettings>) =>
+      request<ProjectSettings>(`/projects/${id}/settings`, {
         method: "PUT",
         body: JSON.stringify(data),
       }),
@@ -73,15 +95,16 @@ export const api = {
 
   // ─── PRD ───
   prd: {
-    get: (projectId: string) => request<unknown>(`/projects/${projectId}/prd`),
-    getSection: (projectId: string, section: string) => request<unknown>(`/projects/${projectId}/prd/${section}`),
+    get: (projectId: string) => request<Prd>(`/projects/${projectId}/prd`),
+    getSection: (projectId: string, section: string) =>
+      request<PrdSection>(`/projects/${projectId}/prd/${section}`),
     updateSection: (projectId: string, section: string, content: string) =>
-      request<unknown>(`/projects/${projectId}/prd/${section}`, {
+      request<PrdSectionUpdateResult>(`/projects/${projectId}/prd/${section}`, {
         method: "PUT",
         body: JSON.stringify({ content }),
       }),
-    getHistory: (projectId: string) => request<unknown>(`/projects/${projectId}/prd/history`),
-    upload: async (projectId: string, file: File) => {
+    getHistory: (projectId: string) => request<PrdChangeLogEntry[]>(`/projects/${projectId}/prd/history`),
+    upload: async (projectId: string, file: File): Promise<PrdUploadResult> => {
       const formData = new FormData();
       formData.append("file", file);
       const url = `${BASE_URL}/projects/${projectId}/prd/upload`;
@@ -96,53 +119,52 @@ export const api = {
         throw new Error(error.error?.message ?? "Upload failed");
       }
       const result = await response.json();
-      return result.data;
+      return result.data as PrdUploadResult;
     },
   },
 
   // ─── Plans ───
   plans: {
-    list: (projectId: string) =>
-      request<import("@opensprint/shared").PlanDependencyGraph>(`/projects/${projectId}/plans`),
+    list: (projectId: string) => request<PlanDependencyGraph>(`/projects/${projectId}/plans`),
     decompose: (projectId: string) =>
-      request<{ created: number; plans: unknown[] }>(`/projects/${projectId}/plans/decompose`, {
+      request<{ created: number; plans: Plan[] }>(`/projects/${projectId}/plans/decompose`, {
         method: "POST",
       }),
-    get: (projectId: string, planId: string) => request<unknown>(`/projects/${projectId}/plans/${planId}`),
-    create: (projectId: string, data: unknown) =>
-      request<unknown>(`/projects/${projectId}/plans`, {
+    get: (projectId: string, planId: string) => request<Plan>(`/projects/${projectId}/plans/${planId}`),
+    create: (projectId: string, data: CreatePlanRequest) =>
+      request<Plan>(`/projects/${projectId}/plans`, {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    update: (projectId: string, planId: string, data: unknown) =>
-      request<unknown>(`/projects/${projectId}/plans/${planId}`, {
+    update: (projectId: string, planId: string, data: UpdatePlanRequest) =>
+      request<Plan>(`/projects/${projectId}/plans/${planId}`, {
         method: "PUT",
         body: JSON.stringify(data),
       }),
     ship: (projectId: string, planId: string) =>
-      request<unknown>(`/projects/${projectId}/plans/${planId}/ship`, {
+      request<Plan>(`/projects/${projectId}/plans/${planId}/ship`, {
         method: "POST",
       }),
     reship: (projectId: string, planId: string) =>
-      request<unknown>(`/projects/${projectId}/plans/${planId}/reship`, {
+      request<Plan>(`/projects/${projectId}/plans/${planId}/reship`, {
         method: "POST",
       }),
     archive: (projectId: string, planId: string) =>
-      request<unknown>(`/projects/${projectId}/plans/${planId}/archive`, {
+      request<Plan>(`/projects/${projectId}/plans/${planId}/archive`, {
         method: "POST",
       }),
-    dependencies: (projectId: string) => request<unknown>(`/projects/${projectId}/plans/dependencies`),
+    dependencies: (projectId: string) => request<PlanDependencyGraph>(`/projects/${projectId}/plans/dependencies`),
   },
 
   // ─── Tasks ───
   tasks: {
-    list: (projectId: string) => request<unknown[]>(`/projects/${projectId}/tasks`),
-    ready: (projectId: string) => request<unknown[]>(`/projects/${projectId}/tasks/ready`),
-    get: (projectId: string, taskId: string) => request<unknown>(`/projects/${projectId}/tasks/${taskId}`),
+    list: (projectId: string) => request<Task[]>(`/projects/${projectId}/tasks`),
+    ready: (projectId: string) => request<Task[]>(`/projects/${projectId}/tasks/ready`),
+    get: (projectId: string, taskId: string) => request<Task>(`/projects/${projectId}/tasks/${taskId}`),
     sessions: (projectId: string, taskId: string) =>
-      request<unknown[]>(`/projects/${projectId}/tasks/${taskId}/sessions`),
+      request<AgentSession[]>(`/projects/${projectId}/tasks/${taskId}/sessions`),
     session: (projectId: string, taskId: string, attempt: number) =>
-      request<unknown>(`/projects/${projectId}/tasks/${taskId}/sessions/${attempt}`),
+      request<AgentSession>(`/projects/${projectId}/tasks/${taskId}/sessions/${attempt}`),
     markComplete: (projectId: string, taskId: string) =>
       request<{ taskClosed: boolean; epicClosed?: boolean }>(`/projects/${projectId}/tasks/${taskId}/complete`, {
         method: "POST",
@@ -151,28 +173,29 @@ export const api = {
 
   // ─── Build ───
   build: {
-    status: (projectId: string) => request<unknown>(`/projects/${projectId}/build/status`),
+    status: (projectId: string) => request<OrchestratorStatus>(`/projects/${projectId}/build/status`),
     nudge: (projectId: string) =>
-      request<unknown>(`/projects/${projectId}/build/nudge`, {
+      request<OrchestratorStatus>(`/projects/${projectId}/build/nudge`, {
         method: "POST",
       }),
     pause: (projectId: string) =>
-      request<unknown>(`/projects/${projectId}/build/pause`, {
+      request<OrchestratorStatus>(`/projects/${projectId}/build/pause`, {
         method: "POST",
       }),
   },
 
   // ─── Feedback ───
   feedback: {
-    list: (projectId: string) => request<unknown[]>(`/projects/${projectId}/feedback`),
+    list: (projectId: string) => request<FeedbackItem[]>(`/projects/${projectId}/feedback`),
     submit: (projectId: string, text: string, images?: string[]) =>
-      request<unknown>(`/projects/${projectId}/feedback`, {
+      request<FeedbackItem>(`/projects/${projectId}/feedback`, {
         method: "POST",
         body: JSON.stringify(images?.length ? { text, images } : { text }),
       }),
-    get: (projectId: string, feedbackId: string) => request<unknown>(`/projects/${projectId}/feedback/${feedbackId}`),
+    get: (projectId: string, feedbackId: string) =>
+      request<FeedbackItem>(`/projects/${projectId}/feedback/${feedbackId}`),
     recategorize: (projectId: string, feedbackId: string) =>
-      request<unknown>(`/projects/${projectId}/feedback/${feedbackId}/recategorize`, {
+      request<FeedbackItem>(`/projects/${projectId}/feedback/${feedbackId}/recategorize`, {
         method: "POST",
       }),
   },
@@ -193,18 +216,17 @@ export const api = {
 
   // ─── Agents ───
   agents: {
-    active: (projectId: string) =>
-      request<import("@opensprint/shared").ActiveAgent[]>(`/projects/${projectId}/agents/active`),
+    active: (projectId: string) => request<ActiveAgent[]>(`/projects/${projectId}/agents/active`),
   },
 
   // ─── Chat ───
   chat: {
     send: (projectId: string, message: string, context?: string, prdSectionFocus?: string) =>
-      request<unknown>(`/projects/${projectId}/chat`, {
+      request<ChatResponse>(`/projects/${projectId}/chat`, {
         method: "POST",
-        body: JSON.stringify({ message, context, prdSectionFocus }),
+        body: JSON.stringify({ message, context, prdSectionFocus } satisfies Partial<ChatRequest>),
       }),
     history: (projectId: string, context?: string) =>
-      request<unknown>(`/projects/${projectId}/chat/history${context ? `?context=${context}` : ""}`),
+      request<Conversation>(`/projects/${projectId}/chat/history${context ? `?context=${context}` : ""}`),
   },
 };

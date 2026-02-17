@@ -47,3 +47,17 @@ export interface PlanDependencyGraph {
   plans: Plan[];
   edges: PlanDependencyEdge[];
 }
+
+/** Plan creation request */
+export interface CreatePlanRequest {
+  title: string;
+  content: string;
+  complexity?: PlanComplexity;
+  mockups?: PlanMockup[];
+  tasks?: Array<{ title: string; description: string; priority?: number; dependsOn?: string[] }>;
+}
+
+/** Plan update request (content only) */
+export interface UpdatePlanRequest {
+  content: string;
+}

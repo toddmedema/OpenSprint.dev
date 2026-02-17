@@ -41,5 +41,12 @@ export interface CreateProjectRequest {
   testFramework?: string | null;
 }
 
+/** Project update request (partial fields) */
+export interface UpdateProjectRequest {
+  name?: string;
+  description?: string;
+  repoPath?: string;
+}
+
 // Forward references for agent/deployment config — defined in settings.ts
 import type { AgentConfigInput, DeploymentConfigInput, HilConfigInput } from "./settings.js";

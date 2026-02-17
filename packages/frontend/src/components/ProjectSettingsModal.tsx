@@ -50,7 +50,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
       .getSettings(project.id)
       .then((data) => {
         if (!cancelled) {
-          setSettings(data as ProjectSettings);
+          setSettings(data);
         }
       })
       .catch((err) => {
