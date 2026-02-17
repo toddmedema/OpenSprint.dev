@@ -108,6 +108,8 @@ User authentication.
     expect(prompt).toContain('context/plan.md');
     expect(prompt).toContain('context/prd_excerpt.md');
     expect(prompt).toContain('context/deps/');
+    expect(prompt).toContain('Commit after each meaningful change');
+    expect(prompt).toContain('Do not wait until the end to commit');
   });
 
   it('should include Review Feedback section in coding prompt when reviewFeedback is provided', async () => {

@@ -297,7 +297,7 @@ export class ContextAssembler {
     }
 
     prompt += `${config.useExistingBranch ? '4' : '3'}. Write comprehensive tests (unit, and integration where applicable).\n`;
-    prompt += `${config.useExistingBranch ? '5' : '4'}. **Commit early and often** — after each logical unit of work (e.g., after implementing a function, after writing its tests). Use descriptive commit messages. This protects your work if the process is interrupted.\n`;
+    prompt += `${config.useExistingBranch ? '5' : '4'}. **Commit after each meaningful change** — with descriptive WIP messages. Do not wait until the end to commit. (e.g., after implementing a function, after writing its tests). This protects your work if the process is interrupted.\n`;
     prompt += `${config.useExistingBranch ? '6' : '5'}. Run \`${config.testCommand}\` and ensure all tests pass.\n`;
     prompt += `${config.useExistingBranch ? '7' : '6'}. Write your result to \`.opensprint/active/${config.taskId}/result.json\` using this exact JSON format:\n`;
     prompt += `   \`\`\`json\n`;

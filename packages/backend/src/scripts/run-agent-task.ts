@@ -113,6 +113,10 @@ async function main(): Promise<number> {
   // Append agent-chain completion instructions (CLI flow)
   const chainInstructions = `
 
+## During Work
+
+Commit after each meaningful change with descriptive WIP messages. Do not wait until the end to commit.
+
 ## When Done (agent-chain flow)
 
 Run these steps to complete the task and continue the chain:

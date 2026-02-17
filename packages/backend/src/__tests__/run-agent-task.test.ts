@@ -6,6 +6,8 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
+import fs from 'fs/promises';
+import path from 'path';
 import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -50,5 +52,13 @@ describe('run-agent-task WIP commit on SIGTERM', () => {
     } finally {
       await fs.rm(repoPath, { recursive: true, force: true }).catch(() => {});
     }
+  });
+
+  it('chain instructions include incremental commit guidance', async () => {
+    const scriptPath = path.join(__dirname, '../scripts/run-agent-task.ts');
+    const content = await fs.readFile(scriptPath, 'utf-8');
+    expect(content).toContain('## During Work');
+    expect(content).toContain('Commit after each meaningful change with descriptive WIP messages');
+    expect(content).toContain('Do not wait until the end to commit');
   });
 });
