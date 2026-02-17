@@ -159,6 +159,38 @@ describe("Feedback REST API", () => {
     expect(res.body.data.createdTaskIds).toEqual(["bd-xyz.1"]);
   });
 
+  it("POST /projects/:id/feedback should create reply with parent_id and depth", async () => {
+    const feedbackDir = path.join(tempDir, "my-project", OPENSPRINT_PATHS.feedback);
+    await fs.mkdir(feedbackDir, { recursive: true });
+    const parentItem = {
+      id: "parent1",
+      text: "Original feedback",
+      category: "bug",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "mapped",
+      createdAt: new Date().toISOString(),
+    };
+    await fs.writeFile(path.join(feedbackDir, "parent1.json"), JSON.stringify(parentItem), "utf-8");
+
+    const res = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/feedback`)
+      .send({ text: "Reply to original", parent_id: "parent1" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.parent_id).toBe("parent1");
+    expect(res.body.data.depth).toBe(1);
+  });
+
+  it("POST /projects/:id/feedback should return 404 when parent_id not found", async () => {
+    const res = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/feedback`)
+      .send({ text: "Reply to missing", parent_id: "nonexistent" });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error?.code).toBe("FEEDBACK_NOT_FOUND");
+  });
+
   it("GET /projects/:id/feedback/:feedbackId should return 404 when not found", async () => {
     const res = await request(app).get(
       `${API_PREFIX}/projects/${projectId}/feedback/nonexistent-id`

@@ -186,10 +186,14 @@ export const api = {
   // ─── Feedback ───
   feedback: {
     list: (projectId: string) => request<FeedbackItem[]>(`/projects/${projectId}/feedback`),
-    submit: (projectId: string, text: string, images?: string[]) =>
+    submit: (projectId: string, text: string, images?: string[], parentId?: string | null) =>
       request<FeedbackItem>(`/projects/${projectId}/feedback`, {
         method: "POST",
-        body: JSON.stringify(images?.length ? { text, images } : { text }),
+        body: JSON.stringify({
+          text,
+          ...(images?.length ? { images } : {}),
+          ...(parentId ? { parent_id: parentId } : {}),
+        }),
       }),
     get: (projectId: string, feedbackId: string) =>
       request<FeedbackItem>(`/projects/${projectId}/feedback/${feedbackId}`),

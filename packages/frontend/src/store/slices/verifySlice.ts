@@ -26,12 +26,14 @@ export const submitFeedback = createAsyncThunk(
     projectId,
     text,
     images,
+    parentId,
   }: {
     projectId: string;
     text: string;
     images?: string[];
+    parentId?: string | null;
   }) => {
-    return api.feedback.submit(projectId, text, images);
+    return api.feedback.submit(projectId, text, images, parentId);
   },
 );
 
@@ -78,8 +80,10 @@ const verifySlice = createSlice({
       .addCase(submitFeedback.pending, (state, action) => {
         state.submitting = true;
         state.error = null;
-        const { text, images } = action.meta.arg;
+        const { text, images, parentId } = action.meta.arg;
         const requestId = action.meta.requestId;
+        const parent = parentId ? state.feedback.find((f) => f.id === parentId) : null;
+        const depth = parent ? (parent.depth ?? 0) + 1 : 0;
         const optimistic: FeedbackItem = {
           id: `${OPTIMISTIC_ID_PREFIX}${requestId}`,
           text,
@@ -89,6 +93,8 @@ const verifySlice = createSlice({
           status: "pending",
           createdAt: new Date().toISOString(),
           ...(images?.length ? { images } : {}),
+          parent_id: parentId ?? null,
+          depth,
         };
         state.feedback.unshift(optimistic);
       })

@@ -188,6 +188,7 @@ describe("verifySlice", () => {
         "proj-1",
         "Bug with screenshot",
         ["data:image/png;base64,abc"],
+        undefined,
       );
     });
 

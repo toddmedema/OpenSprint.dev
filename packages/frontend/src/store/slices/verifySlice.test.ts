@@ -198,7 +198,40 @@ describe("verifySlice", () => {
       expect(state.feedback).toHaveLength(2);
       expect(state.feedback[0]).toEqual(newFeedback);
       expect(state.feedback[1]).toEqual(existingFeedback);
-      expect(api.feedback.submit).toHaveBeenCalledWith("proj-1", "New feedback", undefined);
+      expect(api.feedback.submit).toHaveBeenCalledWith("proj-1", "New feedback", undefined, undefined);
+    });
+
+    it("passes parentId to API and includes parent_id and depth in optimistic payload", async () => {
+      const parentFeedback: FeedbackItem = {
+        ...mockFeedback,
+        id: "fb-parent",
+        text: "Original",
+        parent_id: null,
+        depth: 0,
+      };
+      const replyFeedback: FeedbackItem = {
+        ...mockFeedback,
+        id: "fb-reply",
+        text: "Reply text",
+        parent_id: "fb-parent",
+        depth: 1,
+      };
+      vi.mocked(api.feedback.submit).mockResolvedValue(replyFeedback as never);
+      const store = createStore();
+      store.dispatch(setFeedback([parentFeedback]));
+
+      const dispatchPromise = store.dispatch(
+        submitFeedback({ projectId: "proj-1", text: "Reply text", parentId: "fb-parent" }),
+      );
+
+      const stateBeforeResolve = store.getState().verify;
+      const optimistic = stateBeforeResolve.feedback.find((f) => f.text === "Reply text");
+      expect(optimistic).toBeDefined();
+      expect(optimistic!.parent_id).toBe("fb-parent");
+      expect(optimistic!.depth).toBe(1);
+
+      await dispatchPromise;
+      expect(api.feedback.submit).toHaveBeenCalledWith("proj-1", "Reply text", undefined, "fb-parent");
     });
 
     it("sets error on rejected", async () => {

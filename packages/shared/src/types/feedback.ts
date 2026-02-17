@@ -19,4 +19,8 @@ export interface FeedbackItem {
   feedbackSourceBeadId?: string;
   /** Base64-encoded image attachments (data URLs or raw base64) */
   images?: string[];
+  /** ID of the parent feedback item (null for top-level feedback). PRD §7.4.1 threaded replies */
+  parent_id?: string | null;
+  /** Nesting depth computed from the parent chain (0 for top-level). PRD §7.4.1 */
+  depth?: number;
 }

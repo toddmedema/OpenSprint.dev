@@ -40,4 +40,6 @@ export interface FeedbackSubmitRequest {
   text: string;
   /** Base64-encoded image attachments (data URLs or raw base64) */
   images?: string[];
+  /** ID of the parent feedback item when creating a reply. PRD §7.4.1 threaded replies */
+  parent_id?: string | null;
 }

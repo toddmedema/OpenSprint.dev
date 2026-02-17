@@ -104,6 +104,33 @@ describe("FeedbackService", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
+  it("should normalize parent_id and depth for legacy feedback items", async () => {
+    const repoPath = path.join(tempDir, "my-project");
+    const feedbackDir = path.join(repoPath, OPENSPRINT_PATHS.feedback);
+    await fs.mkdir(feedbackDir, { recursive: true });
+
+    const legacyItem = {
+      id: "fb-legacy",
+      text: "Old feedback without parent_id",
+      category: "bug",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "mapped",
+      createdAt: new Date().toISOString(),
+    };
+    await fs.writeFile(
+      path.join(feedbackDir, "fb-legacy.json"),
+      JSON.stringify(legacyItem),
+      "utf-8",
+    );
+
+    const items = await feedbackService.listFeedback(projectId);
+
+    expect(items).toHaveLength(1);
+    expect(items[0].parent_id).toBeNull();
+    expect(items[0].depth).toBe(0);
+  });
+
   it("should list feedback items with createdTaskIds for Build tab navigation", async () => {
     const repoPath = path.join(tempDir, "my-project");
     const feedbackDir = path.join(repoPath, OPENSPRINT_PATHS.feedback);
@@ -157,6 +184,70 @@ describe("FeedbackService", () => {
     expect(items).toHaveLength(1);
     expect(items[0].createdTaskIds).toEqual([]);
     expect(items[0].status).toBe("pending");
+  });
+
+  it("should create reply with parent_id and depth when parent exists", async () => {
+    feedbackIdSequence = ["parent1", "child01"];
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "bug",
+        mappedPlanId: null,
+        task_titles: ["Fix reply"],
+      }),
+    });
+
+    const parent = await feedbackService.submitFeedback(projectId, { text: "Original bug" });
+    expect(parent.parent_id).toBeNull();
+    expect(parent.depth).toBe(0);
+
+    const reply = await feedbackService.submitFeedback(projectId, {
+      text: "Same issue on mobile",
+      parent_id: parent.id,
+    });
+
+    expect(reply.parent_id).toBe(parent.id);
+    expect(reply.depth).toBe(1);
+  });
+
+  it("should throw 404 when parent_id references non-existent feedback", async () => {
+    await expect(
+      feedbackService.submitFeedback(projectId, {
+        text: "Reply to missing parent",
+        parent_id: "nonexistent",
+      })
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      code: "FEEDBACK_NOT_FOUND",
+    });
+  });
+
+  it("should pass parent context to categorization agent for replies", async () => {
+    feedbackIdSequence = ["parent2", "child02"];
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "bug",
+        mappedPlanId: "auth-plan",
+        task_titles: ["Fix on mobile too"],
+      }),
+    });
+
+    const parent = await feedbackService.submitFeedback(projectId, {
+      text: "Login broken on desktop",
+    });
+
+    const reply = await feedbackService.submitFeedback(projectId, {
+      text: "Same on mobile",
+      parent_id: parent.id,
+    });
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
+    const replyPrompt = mockInvoke.mock.calls[1][0]?.prompt ?? "";
+    expect(replyPrompt).toContain("Parent feedback (this is a reply)");
+    expect(replyPrompt).toContain("Login broken on desktop");
+    expect(replyPrompt).toContain("Parent category:");
+    expect(replyPrompt).toContain("Same on mobile");
   });
 
   it("should assign short 6-char alphanumeric feedback IDs", async () => {

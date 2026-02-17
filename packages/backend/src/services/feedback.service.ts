@@ -60,7 +60,7 @@ export class FeedbackService {
     return path.join(project.repoPath, OPENSPRINT_PATHS.feedback);
   }
 
-  /** List all feedback items */
+  /** List all feedback items. Normalizes legacy items to include parent_id and depth (PRD §7.4.1). */
   async listFeedback(projectId: string): Promise<FeedbackItem[]> {
     const feedbackDir = await this.getFeedbackDir(projectId);
     const items: FeedbackItem[] = [];
@@ -70,7 +70,11 @@ export class FeedbackService {
       for (const file of files) {
         if (file.endsWith('.json')) {
           const data = await fs.readFile(path.join(feedbackDir, file), 'utf-8');
-          items.push(JSON.parse(data) as FeedbackItem);
+          const item = JSON.parse(data) as FeedbackItem;
+          // Ensure parent_id and depth for client tree building (legacy items may lack these)
+          if (item.parent_id === undefined) item.parent_id = null;
+          if (item.depth === undefined) item.depth = 0;
+          items.push(item);
         }
       }
     } catch {
@@ -93,6 +97,21 @@ export class FeedbackService {
     await fs.mkdir(feedbackDir, { recursive: true });
     const id = await this.generateUniqueFeedbackId(feedbackDir);
 
+    // Validate parent_id when creating a reply (PRD §7.4.1)
+    const parentId = typeof body?.parent_id === 'string' && body.parent_id.trim() ? body.parent_id.trim() : null;
+    let parent: FeedbackItem | null = null;
+    let depth = 0;
+    if (parentId) {
+      try {
+        parent = await this.getFeedback(projectId, parentId);
+        depth = (parent.depth ?? 0) + 1;
+      } catch {
+        throw new AppError(404, ErrorCodes.FEEDBACK_NOT_FOUND, `Parent feedback '${parentId}' not found`, {
+          feedbackId: parentId,
+        });
+      }
+    }
+
     // Validate and normalize image attachments (base64 strings)
     const images: string[] = [];
     if (Array.isArray(body?.images)) {
@@ -105,7 +124,7 @@ export class FeedbackService {
       }
     }
 
-    // Create initial feedback item
+    // Create initial feedback item (PRD §7.4.1: parent_id null for top-level, depth 0)
     const item: FeedbackItem = {
       id,
       text,
@@ -115,6 +134,8 @@ export class FeedbackService {
       status: 'pending',
       createdAt: new Date().toISOString(),
       ...(images.length > 0 && { images }),
+      parent_id: parentId ?? null,
+      depth,
     };
 
     // Save immediately
@@ -196,10 +217,21 @@ export class FeedbackService {
     }
     const firstPlanId = plans.length > 0 ? plans[0].metadata.planId : null;
 
+    // Build parent context for replies (PRD §7.4.1: agent receives parent content, category, metadata)
+    let parentContext = '';
+    if (item.parent_id) {
+      try {
+        const parentItem = await this.getFeedback(projectId, item.parent_id);
+        parentContext = `\n\n# Parent feedback (this is a reply)\n\nParent content: "${parentItem.text}"\nParent category: ${parentItem.category}\nParent mappedPlanId: ${parentItem.mappedPlanId ?? 'null'}\n`;
+      } catch {
+        // Parent not found — proceed without parent context
+      }
+    }
+
     try {
       const response = await this.agentClient.invoke({
         config: settings.planningAgent,
-        prompt: `# PRD\n\n${prdContext}\n\n# Plans\n\n${planContext}\n\n# Feedback to categorize\n\n"${item.text}"`,
+        prompt: `# PRD\n\n${prdContext}\n\n# Plans\n\n${planContext}${parentContext}\n\n# Feedback to categorize\n\n"${item.text}"`,
         systemPrompt: FEEDBACK_CATEGORIZATION_PROMPT,
         cwd: project.repoPath,
       });
@@ -475,12 +507,15 @@ export class FeedbackService {
     return item;
   }
 
-  /** Get a single feedback item */
+  /** Get a single feedback item. Normalizes legacy items (parent_id, depth). */
   async getFeedback(projectId: string, feedbackId: string): Promise<FeedbackItem> {
     const feedbackDir = await this.getFeedbackDir(projectId);
     try {
       const data = await fs.readFile(path.join(feedbackDir, `${feedbackId}.json`), 'utf-8');
-      return JSON.parse(data) as FeedbackItem;
+      const item = JSON.parse(data) as FeedbackItem;
+      if (item.parent_id === undefined) item.parent_id = null;
+      if (item.depth === undefined) item.depth = 0;
+      return item;
     } catch (err) {
       const nodeErr = err as NodeJS.ErrnoException;
       if (nodeErr?.code === 'ENOENT') {
