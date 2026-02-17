@@ -1,0 +1,17 @@
+{
+  "id": "cee17763-4215-4b84-9378-f9226380f618",
+  "text": "Replace all \"Close\" text when closing sidebars and modals with \"X\"",
+  "category": "ux",
+  "mappedPlanId": "agent-invocation-service",
+  "createdTaskIds": [
+    "opensprint.dev-z0v.1",
+    "opensprint.dev-6dr"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T04:41:17.479Z",
+  "taskTitles": [
+    "Replace Close text with X in sidebars and modals",
+    "Standardize close controls: use X icon instead of Close text"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-adx"
+}

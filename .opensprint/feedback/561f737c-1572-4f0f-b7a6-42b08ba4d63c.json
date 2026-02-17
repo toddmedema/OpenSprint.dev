@@ -1,0 +1,17 @@
+{
+  "id": "561f737c-1572-4f0f-b7a6-42b08ba4d63c",
+  "text": "On \"mapped\" feedback, do not showed the \"mapped\" text",
+  "category": "ux",
+  "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
+  "createdTaskIds": [
+    "opensprint.dev-srl.10",
+    "opensprint.dev-srl.11"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T04:42:02.758Z",
+  "taskTitles": [
+    "Hide 'mapped' status label on mapped feedback items in Verify feed",
+    "Remove redundant 'mapped' text from feedback display in Verify tab"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-7vz"
+}

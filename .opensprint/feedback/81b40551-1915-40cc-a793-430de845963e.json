@@ -1,0 +1,15 @@
+{
+  "id": "81b40551-1915-40cc-a793-430de845963e",
+  "text": "It looks like the old name for the \"Verify\" tab, \"Validate\" is still being used in some places in the code - I just saw it in the running agent who was categorizing feedback. Can you please look through the codebase and replace any old uses of \"Validate\" with the new \"Verify\" phase name?",
+  "category": "bug",
+  "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
+  "createdTaskIds": [
+    "opensprint.dev-srl.14"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T06:10:36.315Z",
+  "taskTitles": [
+    "Replace all 'Validate' references with 'Verify' phase name in codebase"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-e53"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "8a8ea561-32dc-40c9-9e4c-0b1ad3665ce9",
+  "text": "Top bar of build page: Remove pause/play icons (and clean up any now-unused dependencies from the code), and show the task count for each stage and total (e.g. ## Ready, ## In Progress, ## Done, ## Total)",
+  "category": "ux",
+  "mappedPlanId": "build-phase-kanban-and-task-listing",
+  "createdTaskIds": [
+    "opensprint.dev-cxx.9",
+    "opensprint.dev-cxx.10"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T04:44:02.507Z",
+  "taskTitles": [
+    "Remove pause/play icons from Build page top bar and clean up unused dependencies",
+    "Add task count display per stage (Ready, In Progress, Done) and total to Build page top bar"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-cqh"
+}

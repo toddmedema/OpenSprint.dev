@@ -1,0 +1,17 @@
+{
+  "id": "675f1ce9-b5df-46dd-87ca-edcff2bb45cf",
+  "text": "Please update the feedback cards to also include the feedback's text",
+  "category": "bug",
+  "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
+  "createdTaskIds": [
+    "opensprint.dev-srl.12",
+    "opensprint.dev-srl.13"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T05:51:33.764Z",
+  "taskTitles": [
+    "Display original feedback text on Verify phase feedback cards",
+    "Add feedback text to feedback card UI in Verify tab"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-8nk"
+}

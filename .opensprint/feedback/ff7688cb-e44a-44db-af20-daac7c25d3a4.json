@@ -1,0 +1,15 @@
+{
+  "id": "ff7688cb-e44a-44db-af20-daac7c25d3a4",
+  "text": "Update the build and plan tabs such that if you have a detail pane open, it updates the URL to include the ID of the plan / task that's currently open. Loading / refreshing the page with that ID in the URL should auto-open that detail pane. Closing the detail pane should remove the ID from the URL",
+  "category": "ux",
+  "mappedPlanId": "agent-invocation-service",
+  "createdTaskIds": [
+    "opensprint.dev-z0v.7"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T06:09:33.934Z",
+  "taskTitles": [
+    "Add URL deep linking for Plan and Build detail panes"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-e38"
+}

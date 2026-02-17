@@ -1,0 +1,17 @@
+{
+  "id": "b62cc604-a9f2-4d90-8575-2bf3247f312f",
+  "text": "When a Verify feedback card is still pending, do not show its category",
+  "category": "ux",
+  "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
+  "createdTaskIds": [
+    "opensprint.dev-boe",
+    "opensprint.dev-srl.9"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-17T04:41:37.785Z",
+  "taskTitles": [
+    "Hide category on pending Verify feedback cards",
+    "Suppress category display when feedback status is pending"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-oup"
+}
