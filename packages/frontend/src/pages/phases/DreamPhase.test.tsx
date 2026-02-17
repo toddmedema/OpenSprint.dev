@@ -191,20 +191,22 @@ describe("DreamPhase with designSlice", () => {
       });
       renderDreamPhase(store);
 
-      // Chat is always visible in split-pane (left pane)
+      // Chat is always visible in split-pane (right pane)
       expect(screen.getByTestId("prd-chat-sidebar")).toBeInTheDocument();
       expect(screen.getByText("Hello")).toBeInTheDocument();
       expect(screen.getByText("Hi there!")).toBeInTheDocument();
     });
 
-    it("displays split-pane with theme-aware styling for light and dark mode", () => {
+    it("displays split-pane with light mode theme (PRD left, chat right)", () => {
       const store = createStore({
         design: { prdContent: { overview: "Content" } },
       });
       const { container } = renderDreamPhase(store);
-      // Main split-pane wrapper includes dark mode classes for correct display in both themes
-      const splitPane = container.querySelector("[class*='dark:bg-gray-900']");
+      // Main split-pane wrapper uses light mode bg-gray-50
+      const splitPane = container.querySelector("[class*='bg-gray-50']");
       expect(splitPane).toBeInTheDocument();
+      // Chat sidebar is on the right (PrdChatPanel with variant inline)
+      expect(screen.getByTestId("prd-chat-sidebar")).toBeInTheDocument();
     });
 
     it("shows Plan it when planStatus.action is plan", async () => {
