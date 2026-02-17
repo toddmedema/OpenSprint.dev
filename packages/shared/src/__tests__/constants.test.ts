@@ -1,8 +1,27 @@
 import { describe, it, expect } from "vitest";
 import {
+  KANBAN_COLUMNS,
   getTestCommandForFramework,
   resolveTestCommand,
 } from "../constants/index.js";
+
+describe("KANBAN_COLUMNS", () => {
+  it("includes blocked status", () => {
+    expect(KANBAN_COLUMNS).toContain("blocked");
+  });
+
+  it("includes all expected columns in display order", () => {
+    expect(KANBAN_COLUMNS).toEqual([
+      "planning",
+      "backlog",
+      "ready",
+      "in_progress",
+      "in_review",
+      "done",
+      "blocked",
+    ]);
+  });
+});
 
 describe("getTestCommandForFramework", () => {
   it("returns empty string for null", () => {

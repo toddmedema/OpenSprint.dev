@@ -7,6 +7,7 @@ import executeReducer, {
   fetchTaskDetail,
   fetchArchivedSessions,
   markTaskDone,
+  unblockTask,
   setSelectedTaskId,
   appendAgentOutput,
   setOrchestratorRunning,
@@ -343,6 +344,33 @@ describe("executeSlice", () => {
       await store.dispatch(markTaskDone({ projectId: "proj-1", taskId: "task-1" }));
       expect(store.getState().execute.tasks[0].kanbanColumn).toBe("done");
       expect(api.tasks.markDone).toHaveBeenCalledWith("proj-1", "task-1");
+    });
+  });
+
+  describe("unblockTask thunk", () => {
+    it("updates tasks and plan slice on fulfilled", async () => {
+      vi.mocked(api.tasks.unblock).mockResolvedValue({ taskUnblocked: true } as never);
+      vi.mocked(api.tasks.list).mockResolvedValue([
+        { ...mockTask, id: "task-1", kanbanColumn: "backlog" },
+      ] as never);
+      vi.mocked(api.plans.list).mockResolvedValue(mockGraph as never);
+      const store = createStore();
+      store.dispatch(setTasks([{ ...mockTask, kanbanColumn: "blocked" }]));
+      store.dispatch(setSelectedTaskId("task-1"));
+      await store.dispatch(unblockTask({ projectId: "proj-1", taskId: "task-1" }));
+      expect(store.getState().execute.tasks[0].kanbanColumn).toBe("backlog");
+      expect(api.tasks.unblock).toHaveBeenCalledWith("proj-1", "task-1", {});
+    });
+
+    it("passes resetAttempts when provided", async () => {
+      vi.mocked(api.tasks.unblock).mockResolvedValue({ taskUnblocked: true } as never);
+      vi.mocked(api.tasks.list).mockResolvedValue([{ ...mockTask, kanbanColumn: "backlog" }] as never);
+      vi.mocked(api.plans.list).mockResolvedValue(mockGraph as never);
+      const store = createStore();
+      await store.dispatch(
+        unblockTask({ projectId: "proj-1", taskId: "task-1", resetAttempts: true }),
+      );
+      expect(api.tasks.unblock).toHaveBeenCalledWith("proj-1", "task-1", { resetAttempts: true });
     });
   });
 });
