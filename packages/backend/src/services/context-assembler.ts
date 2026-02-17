@@ -4,6 +4,7 @@ import { OPENSPRINT_PATHS } from '@opensprint/shared';
 import type { ActiveTaskConfig } from '@opensprint/shared';
 import { BranchManager } from './branch-manager.js';
 import type { BeadsService } from './beads.service.js';
+import type { BeadsIssue } from './beads.service.js';
 
 export interface TaskContext {
   taskId: string;
@@ -114,6 +115,31 @@ export class ContextAssembler {
   }
 
   /**
+   * Get plan content for a task by resolving its parent epic's plan path.
+   * Returns empty string if the task has no parent or the parent has no plan path.
+   */
+  async getPlanContentForTask(
+    repoPath: string,
+    task: BeadsIssue,
+    beads: BeadsService,
+  ): Promise<string> {
+    const parentId = beads.getParentId(task.id);
+    if (parentId) {
+      try {
+        const parent = await beads.show(repoPath, parentId);
+        const desc = parent.description as string;
+        if (desc?.startsWith('.opensprint/plans/')) {
+          const planId = path.basename(desc, '.md');
+          return this.readPlanContent(repoPath, planId);
+        }
+      } catch {
+        // Parent might not exist
+      }
+    }
+    return '';
+  }
+
+  /**
    * Build full context for a task given only taskId (ContextBuilder per feature decomposition).
    * - Gets Plan path from epic description, reads Plan markdown
    * - Extracts relevant PRD sections
@@ -129,21 +155,9 @@ export class ContextAssembler {
     const title = task.title ?? '';
     const description = (task.description as string) ?? '';
 
-    // Get Plan path from epic (parent's description)
-    let planContent = '# Plan\n\nNo plan content available.';
-    const parentId = beads.getParentId(taskId);
-    if (parentId) {
-      try {
-        const parent = await beads.show(repoPath, parentId);
-        const desc = parent.description as string;
-        if (desc?.startsWith('.opensprint/plans/')) {
-          const planId = path.basename(desc, '.md');
-          planContent = await this.readPlanContent(repoPath, planId);
-        }
-      } catch {
-        // Parent might not exist
-      }
-    }
+    const planContent =
+      (await this.getPlanContentForTask(repoPath, task, beads)) ||
+      '# Plan\n\nNo plan content available.';
 
     const prdExcerpt = await this.extractPrdExcerpt(repoPath);
     const dependencyTaskIds = await beads.getBlockers(repoPath, taskId);

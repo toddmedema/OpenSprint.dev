@@ -246,7 +246,9 @@ export class TaskService {
     }
 
     const prdExcerpt = await this.contextAssembler.extractPrdExcerpt(repoPath);
-    const planContent = await this.getPlanContentForTask(repoPath, issue);
+    const planContent =
+      (await this.contextAssembler.getPlanContentForTask(repoPath, issue, this.beads)) ||
+      '# Plan\n\nNo plan content available.';
     const blockerIds = await this.beads.getBlockers(repoPath, taskId);
     const dependencyOutputs = await this.contextAssembler.collectDependencyOutputs(repoPath, blockerIds);
 
@@ -271,22 +273,5 @@ export class TaskService {
     });
 
     return path.resolve(taskDir);
-  }
-
-  private async getPlanContentForTask(repoPath: string, task: BeadsIssue): Promise<string> {
-    const parentId = this.beads.getParentId(task.id);
-    if (parentId) {
-      try {
-        const parent = await this.beads.show(repoPath, parentId);
-        const desc = parent.description as string;
-        if (desc?.startsWith(".opensprint/plans/")) {
-          const planId = path.basename(desc, ".md");
-          return this.contextAssembler.readPlanContent(repoPath, planId);
-        }
-      } catch {
-        // Parent might not exist
-      }
-    }
-    return "";
   }
 }

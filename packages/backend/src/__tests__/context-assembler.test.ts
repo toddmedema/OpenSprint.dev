@@ -200,6 +200,69 @@ User authentication.
     expect(content).toContain('Login flow.');
   });
 
+  it('should getPlanContentForTask return plan content when parent epic has plan path', async () => {
+    const plansDir = path.join(repoPath, OPENSPRINT_PATHS.plans);
+    await fs.mkdir(plansDir, { recursive: true });
+    await fs.writeFile(path.join(plansDir, 'auth.md'), '# Auth Plan\n\nLogin flow.');
+
+    const mockBeads = {
+      getParentId: (taskId: string) => {
+        const lastDot = taskId.lastIndexOf('.');
+        if (lastDot <= 0) return null;
+        return taskId.slice(0, lastDot);
+      },
+      show: async (_repoPath: string, id: string) => {
+        if (id === 'bd-a3f8') {
+          return { id: 'bd-a3f8', description: '.opensprint/plans/auth.md' };
+        }
+        throw new Error(`Unknown id: ${id}`);
+      },
+    };
+
+    const task = { id: 'bd-a3f8.1', title: 'Implement login', description: '' };
+    const content = await assembler.getPlanContentForTask(repoPath, task as any, mockBeads as any);
+    expect(content).toContain('Auth Plan');
+    expect(content).toContain('Login flow.');
+  });
+
+  it('should getPlanContentForTask return empty string when task has no parent', async () => {
+    const mockBeads = {
+      getParentId: () => null,
+    };
+
+    const task = { id: 'bd-a3f8', title: 'Epic', description: '' };
+    const content = await assembler.getPlanContentForTask(repoPath, task as any, mockBeads as any);
+    expect(content).toBe('');
+  });
+
+  it('should getPlanContentForTask return empty string when parent has no plan path', async () => {
+    const mockBeads = {
+      getParentId: (taskId: string) => {
+        const lastDot = taskId.lastIndexOf('.');
+        if (lastDot <= 0) return null;
+        return taskId.slice(0, lastDot);
+      },
+      show: async () => ({ id: 'bd-a3f8', description: 'Some other description' }),
+    };
+
+    const task = { id: 'bd-a3f8.1', title: 'Implement login', description: '' };
+    const content = await assembler.getPlanContentForTask(repoPath, task as any, mockBeads as any);
+    expect(content).toBe('');
+  });
+
+  it('should getPlanContentForTask return empty string when parent does not exist', async () => {
+    const mockBeads = {
+      getParentId: () => 'bd-nonexistent',
+      show: async () => {
+        throw new Error('Parent not found');
+      },
+    };
+
+    const task = { id: 'bd-a3f8.1', title: 'Implement login', description: '' };
+    const content = await assembler.getPlanContentForTask(repoPath, task as any, mockBeads as any);
+    expect(content).toBe('');
+  });
+
   it('should collect dependency outputs from approved sessions', async () => {
     const sessionsDir = path.join(repoPath, OPENSPRINT_PATHS.sessions);
     await fs.mkdir(path.join(sessionsDir, 'bd-a3f8.1-1'), { recursive: true });

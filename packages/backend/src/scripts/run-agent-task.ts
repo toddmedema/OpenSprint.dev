@@ -10,7 +10,7 @@
 import path from 'path';
 import fs from 'fs/promises';
 import { config as loadEnv } from 'dotenv';
-import { BeadsService, type BeadsIssue } from '../services/beads.service.js';
+import { BeadsService } from '../services/beads.service.js';
 import { ContextAssembler } from '../services/context-assembler.js';
 import { AgentClient } from '../services/agent-client.js';
 import { BranchManager } from '../services/branch-manager.js';
@@ -53,22 +53,6 @@ async function loadSettings(): Promise<ProjectSettings> {
   }
 }
 
-async function getPlanContentForTask(beads: BeadsService, task: BeadsIssue): Promise<string> {
-  const parentId = beads.getParentId(task.id);
-  if (!parentId) return '';
-  try {
-    const parent = await beads.show(repoPath, parentId);
-    const desc = parent.description as string;
-    if (desc?.startsWith('.opensprint/plans/')) {
-      const planId = path.basename(desc, '.md');
-      return contextAssembler.readPlanContent(repoPath, planId);
-    }
-  } catch {
-    // Parent might not exist
-  }
-  return '';
-}
-
 const beads = new BeadsService();
 const contextAssembler = new ContextAssembler();
 const agentClient = new AgentClient();
@@ -81,7 +65,9 @@ async function main(): Promise<number> {
   const task = await beads.show(repoPath, taskId);
   const taskComplexity = await getPlanComplexityForTask(repoPath, task);
   const codingAgent = getCodingAgentForComplexity(settings, taskComplexity);
-  const planContent = await getPlanContentForTask(beads, task);
+  const planContent =
+    (await contextAssembler.getPlanContentForTask(repoPath, task, beads)) ||
+    '# Plan\n\nNo plan content available.';
   const blockers = await beads.getBlockers(repoPath, taskId);
   const prdExcerpt = await contextAssembler.extractPrdExcerpt(repoPath);
   const dependencyOutputs = await contextAssembler.collectDependencyOutputs(repoPath, blockers);
