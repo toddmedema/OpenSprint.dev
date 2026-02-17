@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { OPENSPRINT_PATHS, HEARTBEAT_STALE_MS } from "@opensprint/shared";
+import { writeJsonAtomic } from "../utils/file-utils.js";
 
 /** Heartbeat file contents written during agent execution */
 export interface HeartbeatData {
@@ -32,12 +33,10 @@ export class HeartbeatService {
   ): Promise<void> {
     const heartbeatPath = this.getHeartbeatPath(repoPath, taskId);
     const dir = path.dirname(heartbeatPath);
-    const tmpPath = heartbeatPath + ".tmp";
 
     try {
       await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(tmpPath, JSON.stringify(data, null, 2));
-      await fs.rename(tmpPath, heartbeatPath);
+      await writeJsonAtomic(heartbeatPath, data);
     } catch (err) {
       console.warn("[heartbeat] Failed to write heartbeat:", err);
     }

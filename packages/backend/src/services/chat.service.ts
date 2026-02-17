@@ -16,6 +16,7 @@ import { agentService } from "./agent.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { hilService } from "./hil-service.js";
 import { broadcastToProject } from "../websocket/index.js";
+import { writeJsonAtomic } from "../utils/file-utils.js";
 
 const ARCHITECTURE_SECTIONS = ["technical_architecture", "data_model", "api_contracts"] as const;
 
@@ -105,10 +106,8 @@ export class ChatService {
   /** Save a conversation to disk */
   private async saveConversation(projectId: string, conversation: Conversation): Promise<void> {
     const dir = await this.getConversationsDir(projectId);
-    const tmpPath = path.join(dir, `${conversation.id}.json.tmp`);
     const finalPath = path.join(dir, `${conversation.id}.json`);
-    await fs.writeFile(tmpPath, JSON.stringify(conversation, null, 2));
-    await fs.rename(tmpPath, finalPath);
+    await writeJsonAtomic(finalPath, conversation);
   }
 
   /** Build context string from current PRD */

@@ -11,6 +11,7 @@ import { ensureEasConfig } from "./eas-config.js";
 import { AppError } from "../middleware/error-handler.js";
 import * as projectIndex from "./project-index.js";
 import { parseAgentConfig } from "../schemas/agent-config.js";
+import { writeJsonAtomic } from "../utils/file-utils.js";
 
 const execAsync = promisify(exec);
 
@@ -46,13 +47,6 @@ function normalizeHilConfig(input: CreateProjectRequest["hilConfig"]): HilConfig
 
 export class ProjectService {
   private beads = new BeadsService();
-
-  /** Atomic JSON write */
-  private async writeJson(filePath: string, data: unknown): Promise<void> {
-    const tmpPath = filePath + ".tmp";
-    await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
-    await fs.rename(tmpPath, filePath);
-  }
 
   /** Compute overall progress from beads tasks (done / total, excluding epics and gating tasks) */
   private async computeProgressPercent(repoPath: string): Promise<number> {
@@ -163,7 +157,7 @@ export class ProjectService {
     // Write initial PRD with all sections
     const prdPath = path.join(repoPath, OPENSPRINT_PATHS.prd);
     const emptySection = () => ({ content: "", version: 0, updatedAt: now });
-    await this.writeJson(prdPath, {
+    await writeJsonAtomic(prdPath, {
       version: 0,
       sections: {
         executive_summary: emptySection(),
@@ -191,7 +185,7 @@ export class ProjectService {
       testFramework: input.testFramework ?? null,
     };
     const settingsPath = path.join(repoPath, OPENSPRINT_PATHS.settings);
-    await this.writeJson(settingsPath, settings);
+    await writeJsonAtomic(settingsPath, settings);
 
     // Create eas.json for Expo projects (PRD §6.4)
     if (deployment.mode === "expo") {
@@ -338,7 +332,7 @@ export class ProjectService {
       codingAgentByComplexity,
     };
     const settingsPath = path.join(repoPath, OPENSPRINT_PATHS.settings);
-    await this.writeJson(settingsPath, updated);
+    await writeJsonAtomic(settingsPath, updated);
     return updated;
   }
 

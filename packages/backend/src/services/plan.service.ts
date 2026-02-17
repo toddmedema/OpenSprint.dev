@@ -9,6 +9,7 @@ import { PrdService } from "./prd.service.js";
 import { AgentClient } from "./agent-client.js";
 import { AppError } from "../middleware/error-handler.js";
 import { broadcastToProject } from "../websocket/index.js";
+import { writeJsonAtomic } from "../utils/file-utils.js";
 
 const DECOMPOSE_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. You analyze Product Requirements Documents (PRDs) and suggest a breakdown into discrete, implementable features (Plans).
 
@@ -90,13 +91,6 @@ export class PlanService {
   private async getRepoPath(projectId: string): Promise<string> {
     const project = await this.projectService.getProject(projectId);
     return project.repoPath;
-  }
-
-  /** Atomic JSON write */
-  private async writeJson(filePath: string, data: unknown): Promise<void> {
-    const tmpPath = filePath + ".tmp";
-    await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
-    await fs.rename(tmpPath, filePath);
   }
 
   /** Count tasks under an epic from beads (implementation tasks only, excludes gating .0) */
@@ -445,7 +439,7 @@ export class PlanService {
       mockups: mockups.length > 0 ? mockups : undefined,
     };
 
-    await this.writeJson(path.join(plansDir, `${planId}.meta.json`), metadata);
+    await writeJsonAtomic(path.join(plansDir, `${planId}.meta.json`), metadata);
 
     return {
       metadata,
@@ -479,7 +473,7 @@ export class PlanService {
 
     // Update metadata
     plan.metadata.shippedAt = new Date().toISOString();
-    await this.writeJson(path.join(plansDir, `${planId}.meta.json`), plan.metadata);
+    await writeJsonAtomic(path.join(plansDir, `${planId}.meta.json`), plan.metadata);
 
     // Living PRD sync: invoke planning agent to review Plan vs PRD and update affected sections (PRD §15.1)
     try {

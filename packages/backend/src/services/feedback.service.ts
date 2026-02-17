@@ -12,6 +12,7 @@ import { PlanService } from './plan.service.js';
 import { PrdService } from './prd.service.js';
 import { BeadsService, type BeadsIssue } from './beads.service.js';
 import { broadcastToProject } from '../websocket/index.js';
+import { writeJsonAtomic } from '../utils/file-utils.js';
 
 const FEEDBACK_CATEGORIZATION_PROMPT = `You are an AI assistant that categorizes user feedback about a software product.
 
@@ -40,13 +41,6 @@ export class FeedbackService {
   private async getFeedbackDir(projectId: string): Promise<string> {
     const project = await this.projectService.getProject(projectId);
     return path.join(project.repoPath, OPENSPRINT_PATHS.feedback);
-  }
-
-  /** Atomic JSON write */
-  private async writeJson(filePath: string, data: unknown): Promise<void> {
-    const tmpPath = filePath + '.tmp';
-    await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
-    await fs.rename(tmpPath, filePath);
   }
 
   /** List all feedback items */
@@ -107,7 +101,7 @@ export class FeedbackService {
     };
 
     // Save immediately
-    await this.writeJson(path.join(feedbackDir, `${id}.json`), item);
+    await writeJsonAtomic(path.join(feedbackDir, `${id}.json`), item);
 
     // Invoke planning agent for categorization (async)
     this.categorizeFeedback(projectId, item).catch((err) => {
@@ -411,7 +405,7 @@ export class FeedbackService {
 
   private async saveFeedback(projectId: string, item: FeedbackItem): Promise<void> {
     const feedbackDir = await this.getFeedbackDir(projectId);
-    await this.writeJson(path.join(feedbackDir, `${item.id}.json`), item);
+    await writeJsonAtomic(path.join(feedbackDir, `${item.id}.json`), item);
   }
 
   /**

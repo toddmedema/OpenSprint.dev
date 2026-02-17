@@ -6,6 +6,7 @@
 import fs from "fs/promises";
 import path from "path";
 import type { ProjectIndex, ProjectIndexEntry } from "@opensprint/shared";
+import { writeJsonAtomic } from "../utils/file-utils.js";
 
 function getProjectIndexPaths(): { dir: string; file: string } {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
@@ -32,9 +33,7 @@ async function loadIndex(): Promise<ProjectIndex> {
 async function saveIndex(index: ProjectIndex): Promise<void> {
   const { dir, file } = getProjectIndexPaths();
   await fs.mkdir(dir, { recursive: true });
-  const tmpPath = file + ".tmp";
-  await fs.writeFile(tmpPath, JSON.stringify(index, null, 2), "utf-8");
-  await fs.rename(tmpPath, file);
+  await writeJsonAtomic(file, index);
 }
 
 /**

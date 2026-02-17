@@ -4,6 +4,7 @@ import type { Prd, PrdSection, PrdChangeLogEntry, PrdSectionKey } from "@openspr
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { AppError } from "../middleware/error-handler.js";
+import { writeJsonAtomic } from "../utils/file-utils.js";
 
 const PRD_SECTION_KEYS: PrdSectionKey[] = [
   "executive_summary",
@@ -46,9 +47,7 @@ export class PrdService {
   /** Save the PRD to disk (atomic write) */
   private async savePrd(projectId: string, prd: Prd): Promise<void> {
     const prdPath = await this.getPrdPath(projectId);
-    const tmpPath = prdPath + ".tmp";
-    await fs.writeFile(tmpPath, JSON.stringify(prd, null, 2));
-    await fs.rename(tmpPath, prdPath);
+    await writeJsonAtomic(prdPath, prd);
   }
 
   /** Validate a section key */

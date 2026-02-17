@@ -28,6 +28,7 @@ import { TestRunner } from "./test-runner.js";
 import { orphanRecoveryService } from "./orphan-recovery.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { broadcastToProject, sendAgentOutputToProject } from "../websocket/index.js";
+import { writeJsonAtomic } from "../utils/file-utils.js";
 
 /**
  * Failure types for smarter recovery routing.
@@ -216,11 +217,9 @@ export class OrchestratorService {
     };
 
     const statePath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorState);
-    const tmpPath = statePath + ".tmp";
     try {
       await fs.mkdir(path.dirname(statePath), { recursive: true });
-      await fs.writeFile(tmpPath, JSON.stringify(persisted, null, 2));
-      await fs.rename(tmpPath, statePath);
+      await writeJsonAtomic(statePath, persisted);
     } catch (err) {
       console.warn("[orchestrator] Failed to persist state:", err);
     }
