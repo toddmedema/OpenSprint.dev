@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { ProjectService } from "../services/project.service.js";
-import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
+import { DEFAULT_HIL_CONFIG, DEFAULT_REVIEW_MODE } from "@opensprint/shared";
 
 describe("ProjectService", () => {
   let projectService: ProjectService;
@@ -60,6 +60,7 @@ describe("ProjectService", () => {
     expect(settings.codingAgent.type).toBe("claude");
     expect(settings.hilConfig).toEqual(DEFAULT_HIL_CONFIG);
     expect(settings.testFramework).toBeNull();
+    expect(settings.reviewMode).toBe(DEFAULT_REVIEW_MODE);
 
     // Verify prd.json
     const prdPath = path.join(repoPath, ".opensprint", "prd.json");

@@ -14,6 +14,7 @@ import {
   OPENSPRINT_PATHS,
   DEFAULT_HIL_CONFIG,
   DEFAULT_DEPLOYMENT_CONFIG,
+  DEFAULT_REVIEW_MODE,
 } from "@opensprint/shared";
 import type { DeploymentConfig, HilConfig, PlanComplexity } from "@opensprint/shared";
 import { BeadsService } from "./beads.service.js";
@@ -210,6 +211,7 @@ export class ProjectService {
       deployment,
       hilConfig,
       testFramework: input.testFramework ?? null,
+      reviewMode: DEFAULT_REVIEW_MODE,
     };
     const settingsPath = path.join(repoPath, OPENSPRINT_PATHS.settings);
     await writeJsonAtomic(settingsPath, settings);

@@ -142,4 +142,59 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByPlaceholderText("sk-ant-...")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
   });
+
+  it("shows Code Review section with updated helptext and default review mode", async () => {
+    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await screen.findByText("Project Settings");
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Code Review");
+    expect(
+      screen.getByText(/After the coding agent completes a task, a review agent can validate/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Rejected work is sent back to the coding agent with feedback/)).toBeInTheDocument();
+
+    const reviewModeSelect = screen.getByTestId("review-mode-select");
+    expect(reviewModeSelect).toHaveValue("always");
+  });
+
+  it("uses Always as default when settings have no reviewMode", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, reviewMode: undefined });
+
+    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await screen.findByText("Project Settings");
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Code Review");
+    const reviewModeSelect = screen.getByTestId("review-mode-select");
+    expect(reviewModeSelect).toHaveValue("always");
+  });
+
+  it("saves reviewMode when changed and Save is clicked", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, reviewMode: "always" });
+
+    render(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
+    await screen.findByText("Project Settings");
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Code Review");
+    const reviewModeSelect = screen.getByTestId("review-mode-select");
+    await userEvent.selectOptions(reviewModeSelect, "never");
+
+    const saveButton = screen.getByRole("button", { name: "Save Changes" });
+    await userEvent.click(saveButton);
+
+    expect(mockUpdateSettings).toHaveBeenCalledWith(
+      "proj-1",
+      expect.objectContaining({
+        reviewMode: "never",
+      })
+    );
+  });
 });

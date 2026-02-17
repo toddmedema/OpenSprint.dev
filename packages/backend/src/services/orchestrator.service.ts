@@ -16,6 +16,7 @@ import {
   AGENT_INACTIVITY_TIMEOUT_MS,
   HEARTBEAT_INTERVAL_MS,
   getTestCommandForFramework,
+  DEFAULT_REVIEW_MODE,
 } from "@opensprint/shared";
 import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { ProjectService } from "./project.service.js";
@@ -942,7 +943,7 @@ export class OrchestratorService {
       await this.branchManager.commitWip(wtPath, task.id);
 
       // Check reviewMode setting to decide whether to invoke the review agent
-      const reviewMode = settings.reviewMode ?? "never";
+      const reviewMode = settings.reviewMode ?? DEFAULT_REVIEW_MODE;
 
       if (reviewMode === "never") {
         // Skip review — go straight to merge

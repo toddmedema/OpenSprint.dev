@@ -4,7 +4,7 @@ import { CloseButton } from "./CloseButton";
 import { ModelSelect } from "./ModelSelect";
 import { api } from "../api/client";
 import type { Project, ProjectSettings, AgentType, DeploymentMode, HilNotificationMode, AgentConfig, PlanComplexity, ReviewMode } from "@opensprint/shared";
-import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
+import { DEFAULT_HIL_CONFIG, DEFAULT_REVIEW_MODE } from "@opensprint/shared";
 
 interface ProjectSettingsModalProps {
   project: Project;
@@ -119,7 +119,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
             webhookUrl: deployment.webhookUrl ?? undefined,
           },
           hilConfig,
-          reviewMode: settings?.reviewMode ?? "never",
+          reviewMode: settings?.reviewMode ?? DEFAULT_REVIEW_MODE,
         }),
       ]);
       onSaved?.();
@@ -469,19 +469,26 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900 mb-1">Code Review</h3>
                     <p className="text-xs text-gray-500 mb-3">
-                      When enabled, a review agent verifies the coding agent&apos;s work before merging to main.
-                      Rejected work is sent back to the coding agent with feedback.
+                      After the coding agent completes a task, a review agent can validate the implementation against
+                      the ticket specification, verify tests pass and cover the scope, and check code quality. Rejected
+                      work is sent back to the coding agent with feedback for improvement.
                     </p>
                     <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
                       <div>
                         <p className="text-sm font-medium text-gray-900">Review Mode</p>
-                        <p className="text-xs text-gray-500">When to run the review agent after coding completes</p>
+                        <p className="text-xs text-gray-500">
+                          Never: merge directly. Always: run review after every success. On Failure Only: run review only
+                          when the task has had previous failures.
+                        </p>
                       </div>
                       <select
+                        data-testid="review-mode-select"
                         className="input w-48"
-                        value={settings?.reviewMode ?? "never"}
+                        value={settings?.reviewMode ?? DEFAULT_REVIEW_MODE}
                         onChange={(e) =>
-                          setSettings((s) => (s ? { ...s, reviewMode: e.target.value as ReviewMode } : null))
+                          setSettings((s) =>
+                            s ? { ...s, reviewMode: e.target.value as ReviewMode } : null
+                          )
                         }
                       >
                         <option value="never">Never</option>
