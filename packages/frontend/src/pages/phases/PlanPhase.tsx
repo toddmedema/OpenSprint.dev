@@ -18,6 +18,7 @@ import {
 import { AddPlanModal } from "../../components/AddPlanModal";
 import { CloseButton } from "../../components/CloseButton";
 import { DependencyGraph } from "../../components/DependencyGraph";
+import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
 import { fetchTasks } from "../../store/slices/buildSlice";
 
 interface PlanPhaseProps {
@@ -248,7 +249,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
 
       {/* Sidebar: Plan Detail + Chat */}
       {selectedPlan && (
-        <div className="w-[420px] border-l border-gray-200 flex flex-col bg-gray-50">
+        <ResizableSidebar storageKey="plan" defaultWidth={420}>
           <div className="flex items-center justify-between p-4 border-b border-gray-200 shrink-0">
             <h3 className="font-semibold text-gray-900">{selectedPlan.metadata.planId.replace(/-/g, " ")}</h3>
             <div className="flex items-center gap-2">
@@ -427,7 +428,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
               </button>
             </div>
           </div>
-        </div>
+        </ResizableSidebar>
       )}
     </div>
   );

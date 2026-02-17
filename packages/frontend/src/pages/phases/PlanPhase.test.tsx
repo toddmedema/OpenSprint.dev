@@ -209,6 +209,17 @@ describe("PlanPhase archive", () => {
     expect(archiveButton).toBeInTheDocument();
   });
 
+  it("renders resizable sidebar with resize handle when a plan is selected", () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    expect(screen.getByRole("separator", { name: "Resize sidebar" })).toBeInTheDocument();
+  });
+
   it("calls archive API when archive button is clicked", async () => {
     const store = createStore();
     const user = userEvent.setup();

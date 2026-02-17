@@ -281,6 +281,25 @@ describe("BuildPhase Redux integration", () => {
 
     expect(store.getState().build.selectedTaskId).toBeNull();
   });
+
+  it("renders resizable sidebar with resize handle when a task is selected", async () => {
+    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
+    const tasks = [
+      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <Provider store={store}>
+        <BuildPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    await vi.waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
+    });
+
+    expect(screen.getByRole("separator", { name: "Resize sidebar", hidden: true })).toBeInTheDocument();
+  });
 });
 
 describe("BuildPhase task detail plan link", () => {

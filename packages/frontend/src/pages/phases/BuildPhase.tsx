@@ -13,6 +13,7 @@ import {
 } from "../../store/slices/buildSlice";
 import { wsSend } from "../../store/middleware/websocketMiddleware";
 import { CloseButton } from "../../components/CloseButton";
+import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
 import { KanbanBoard, TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
 
 interface BuildPhaseProps {
@@ -264,14 +265,11 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
             aria-label="Dismiss task detail"
           />
           {/* Task detail panel: overlay on narrow, sidebar on md+ */}
-          <div
-            className={`
-              flex flex-col bg-gray-50 shrink-0
-              fixed md:static inset-y-0 right-0 z-50 w-full max-w-[420px] md:max-w-none md:w-[420px]
-              md:border-l border-gray-200
-              shadow-xl md:shadow-none
-              animate-slide-in-right md:animate-none
-            `}
+          <ResizableSidebar
+            storageKey="build"
+            defaultWidth={420}
+            responsive
+            className="fixed md:static inset-y-0 right-0 z-50 md:border-l border-gray-200 shadow-xl md:shadow-none animate-slide-in-right md:animate-none"
           >
             <div className="flex items-center justify-between p-4 border-b border-gray-200 shrink-0">
               <div className="min-w-0 flex-1 pr-2">
@@ -411,7 +409,7 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
               </div>
               </div>
             </div>
-          </div>
+          </ResizableSidebar>
         </>
       )}
     </div>
