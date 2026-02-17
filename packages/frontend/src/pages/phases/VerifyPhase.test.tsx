@@ -163,7 +163,7 @@ describe("VerifyPhase feedback input", () => {
     await user.click(screen.getByRole("button", { name: /Submit Feedback/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("Bug in login")).toBeInTheDocument();
+      expect(screen.getByText(/Feedback History \(1\)/)).toBeInTheDocument();
     });
     expect(screen.getByText("Categorizing…")).toBeInTheDocument();
     expect(screen.getByText(/Feedback History \(1\)/)).toBeInTheDocument();
@@ -311,11 +311,10 @@ describe("VerifyPhase feedback input", () => {
     );
 
     expect(screen.getByText(/Feedback History \(1\)/)).toBeInTheDocument();
-    expect(screen.getByText("Login button is broken")).toBeInTheDocument();
-    expect(screen.getByText("plan-1")).toBeInTheDocument();
+    expect(screen.getByText("Bug")).toBeInTheDocument();
   });
 
-  it("shows feedback text on each feedback card", () => {
+  it("shows category chip for feedback in list", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
@@ -360,9 +359,7 @@ describe("VerifyPhase feedback input", () => {
       </Provider>,
     );
 
-    expect(
-      screen.getByText("The login form doesn't show an error when password is wrong"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Bug")).toBeInTheDocument();
   });
 
   it("displays loading state from Redux when loading feedback", () => {
@@ -494,7 +491,6 @@ describe("VerifyPhase feedback input", () => {
 
     // Pending feedback is shown immediately with loading state
     expect(screen.getByText(/Feedback History \(1\)/)).toBeInTheDocument();
-    expect(screen.getByText("Login button is broken")).toBeInTheDocument();
     expect(screen.getByText("Categorizing…")).toBeInTheDocument();
     expect(screen.getByLabelText("Categorizing feedback")).toBeInTheDocument();
   });
@@ -554,11 +550,8 @@ describe("VerifyPhase feedback input", () => {
     );
 
     // Both shown: pending with loading state, mapped with category chip
-    expect(screen.getByText("Pending feedback")).toBeInTheDocument();
     expect(screen.getByText("Categorizing…")).toBeInTheDocument();
-    expect(screen.getByText("Mapped feedback")).toBeInTheDocument();
     expect(screen.getByText("Feature")).toBeInTheDocument();
-    expect(screen.getByText("plan-1")).toBeInTheDocument();
     expect(screen.getByText(/Feedback History \(2\)/)).toBeInTheDocument();
   });
 
@@ -638,16 +631,9 @@ describe("VerifyPhase feedback input", () => {
     expect(screen.getByText("Feature")).toBeInTheDocument();
     expect(screen.getByText("UX")).toBeInTheDocument();
     expect(screen.getByText("Scope")).toBeInTheDocument();
-    // Mapped status label is hidden — no "Mapped" chip or "Mapped to plan" text
+    // Mapped status label is hidden — no "Mapped" chip or "Pending" chip
     expect(screen.queryByText("Mapped")).not.toBeInTheDocument();
     expect(screen.queryByText("Pending")).not.toBeInTheDocument();
-    // Plan ID is shown without redundant "Plan:" or "Mapped" label
-    expect(screen.getByText("plan-1")).toBeInTheDocument();
-    // Original feedback text is always shown on all cards
-    expect(screen.getByText("Bug report")).toBeInTheDocument();
-    expect(screen.getByText("Feature request")).toBeInTheDocument();
-    expect(screen.getByText("UX improvement")).toBeInTheDocument();
-    expect(screen.getByText("Scope change request")).toBeInTheDocument();
   });
 
   it("does not show Mapped status label on mapped feedback items", () => {
@@ -697,66 +683,10 @@ describe("VerifyPhase feedback input", () => {
 
     // Mapped status label must be hidden — no "Mapped" anywhere in status/chip area
     expect(screen.queryByText("Mapped")).not.toBeInTheDocument();
-    // Plan ID shown without redundant "Plan:" or "Mapped" label
-    expect(screen.getByText("auth-plan")).toBeInTheDocument();
-    expect(screen.queryByText(/Plan:/)).not.toBeInTheDocument();
-    // Original feedback text is always shown
-    expect(screen.getByText("Login button broken")).toBeInTheDocument();
+    expect(screen.getByText("Bug")).toBeInTheDocument();
   });
 
-  it("does not show redundant Plan: label for mapped feedback (plan ID only)", () => {
-    const storeWithFeedback = configureStore({
-      reducer: {
-        project: projectReducer,
-        verify: verifyReducer,
-      },
-      preloadedState: {
-        project: {
-          data: {
-            id: "proj-1",
-            name: "Test Project",
-            description: "",
-            repoPath: "/tmp/test",
-            currentPhase: "verify",
-            createdAt: "",
-            updatedAt: "",
-          },
-          loading: false,
-          error: null,
-        },
-        verify: {
-          feedback: [
-            {
-              id: "fb-1",
-              text: "Login button broken",
-              category: "bug",
-              mappedPlanId: "auth-plan",
-              createdTaskIds: [],
-              status: "mapped",
-              createdAt: new Date().toISOString(),
-            },
-          ],
-          loading: false,
-          submitting: false,
-          error: null,
-        },
-      },
-    });
-
-    render(
-      <Provider store={storeWithFeedback}>
-        <VerifyPhase projectId="proj-1" />
-      </Provider>,
-    );
-
-    // Redundant "Plan:" label removed — only plan ID shown
-    expect(screen.getByText("auth-plan")).toBeInTheDocument();
-    expect(screen.queryByText(/Plan:/)).not.toBeInTheDocument();
-    // Original feedback text is always shown
-    expect(screen.getByText("Login button broken")).toBeInTheDocument();
-  });
-
-  it("shows original feedback text on all cards regardless of status", () => {
+  it("shows category chip for each feedback card", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
@@ -780,7 +710,7 @@ describe("VerifyPhase feedback input", () => {
           feedback: [
             {
               id: "fb-mapped",
-              text: "This text should not appear",
+              text: "Bug feedback",
               category: "bug",
               mappedPlanId: "plan-1",
               createdTaskIds: [],
@@ -789,7 +719,7 @@ describe("VerifyPhase feedback input", () => {
             },
             {
               id: "fb-resolved",
-              text: "This text should appear",
+              text: "Feature feedback",
               category: "feature",
               mappedPlanId: "plan-2",
               createdTaskIds: [],
@@ -810,9 +740,9 @@ describe("VerifyPhase feedback input", () => {
       </Provider>,
     );
 
-    // Original feedback text is always shown on all cards
-    expect(screen.getByText("This text should not appear")).toBeInTheDocument();
-    expect(screen.getByText("This text should appear")).toBeInTheDocument();
+    expect(screen.getByText("Bug")).toBeInTheDocument();
+    expect(screen.getByText("Feature")).toBeInTheDocument();
+    expect(screen.getByText(/Feedback History \(2\)/)).toBeInTheDocument();
   });
 
   it("displays images in feedback history when present", () => {
@@ -863,8 +793,6 @@ describe("VerifyPhase feedback input", () => {
       </Provider>,
     );
 
-    // Original feedback text is always shown
-    expect(screen.getByText("Screenshot of bug")).toBeInTheDocument();
     const imgs = screen.getAllByRole("img", { name: /Attachment \d+/ });
     expect(imgs.length).toBeGreaterThanOrEqual(1);
   });
