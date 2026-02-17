@@ -1753,7 +1753,97 @@ describe("VerifyPhase feedback input", () => {
       </Provider>,
     );
 
-    expect(screen.getByRole("button", { name: /Collapse \(1\)/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Collapse \(1 reply\)/i })).toBeInTheDocument();
+  });
+
+  it("shows plural 'replies' when feedback has multiple replies", () => {
+    const storeWithMultipleReplies = configureStore({
+      reducer: {
+        project: projectReducer,
+        verify: verifyReducer,
+        build: buildReducer,
+      },
+      preloadedState: {
+        project: {
+          data: {
+            id: "proj-1",
+            name: "Test Project",
+            description: "",
+            repoPath: "/tmp/test",
+            currentPhase: "verify",
+            createdAt: "",
+            updatedAt: "",
+          },
+          loading: false,
+          error: null,
+        },
+        verify: {
+          feedback: [
+            {
+              id: "fb-parent",
+              text: "Parent",
+              category: "bug",
+              mappedPlanId: null,
+              createdTaskIds: [],
+              status: "mapped",
+              parent_id: null,
+              depth: 0,
+              createdAt: "2026-01-01T10:00:00Z",
+            },
+            {
+              id: "fb-child1",
+              text: "First reply",
+              category: "bug",
+              mappedPlanId: null,
+              createdTaskIds: [],
+              status: "mapped",
+              parent_id: "fb-parent",
+              depth: 1,
+              createdAt: "2026-01-01T11:00:00Z",
+            },
+            {
+              id: "fb-child2",
+              text: "Second reply",
+              category: "bug",
+              mappedPlanId: null,
+              createdTaskIds: [],
+              status: "mapped",
+              parent_id: "fb-parent",
+              depth: 1,
+              createdAt: "2026-01-01T12:00:00Z",
+            },
+          ],
+          loading: false,
+          submitting: false,
+          error: null,
+        },
+        build: {
+          tasks: [],
+          plans: [],
+          orchestratorRunning: false,
+          awaitingApproval: false,
+          selectedTaskId: null,
+          taskDetail: null,
+          taskDetailLoading: false,
+          agentOutput: [],
+          completionState: null,
+          archivedSessions: [],
+          archivedLoading: false,
+          markDoneLoading: false,
+          statusLoading: false,
+          loading: false,
+          error: null,
+        },
+      },
+    });
+
+    render(
+      <Provider store={storeWithMultipleReplies}>
+        <VerifyPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    expect(screen.getByRole("button", { name: /Collapse \(2 replies\)/i })).toBeInTheDocument();
   });
 
   it("shows backlog icon for task not in build tasks", () => {

@@ -222,7 +222,7 @@ function FeedbackCard({
               className="ml-2 inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 hover:text-gray-800 transition-colors"
               aria-label={isCollapsed ? "Expand replies" : "Collapse replies"}
             >
-              {isCollapsed ? "Expand" : "Collapse"} ({children.length})
+              {isCollapsed ? "Expand" : "Collapse"} ({children.length} {children.length === 1 ? "reply" : "replies"})
             </button>
           )}
         </div>
