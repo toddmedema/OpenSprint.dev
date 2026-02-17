@@ -349,6 +349,126 @@ describe("VerifyPhase feedback input", () => {
     });
   });
 
+  it("shows Pending chip for unmapped feedback (status pending)", () => {
+    const storeWithFeedback = configureStore({
+      reducer: {
+        project: projectReducer,
+        validate: validateReducer,
+      },
+      preloadedState: {
+        project: {
+          data: {
+            id: "proj-1",
+            name: "Test Project",
+            description: "",
+            repoPath: "/tmp/test",
+            currentPhase: "verify",
+            createdAt: "",
+            updatedAt: "",
+          },
+          loading: false,
+          error: null,
+        },
+        validate: {
+          feedback: [
+            {
+              id: "fb-1",
+              text: "Login button is broken",
+              category: "bug",
+              mappedPlanId: null,
+              createdTaskIds: [],
+              status: "pending",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          loading: false,
+          submitting: false,
+          error: null,
+        },
+      },
+    });
+
+    render(
+      <Provider store={storeWithFeedback}>
+        <VerifyPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.queryByText("Bug")).not.toBeInTheDocument();
+    expect(screen.queryByText("Mapped")).not.toBeInTheDocument();
+  });
+
+  it("shows mapped type chip (Bug/Feature/UX) for mapped feedback, not Mapped chip", () => {
+    const storeWithFeedback = configureStore({
+      reducer: {
+        project: projectReducer,
+        validate: validateReducer,
+      },
+      preloadedState: {
+        project: {
+          data: {
+            id: "proj-1",
+            name: "Test Project",
+            description: "",
+            repoPath: "/tmp/test",
+            currentPhase: "verify",
+            createdAt: "",
+            updatedAt: "",
+          },
+          loading: false,
+          error: null,
+        },
+        validate: {
+          feedback: [
+            {
+              id: "fb-bug",
+              text: "Bug report",
+              category: "bug",
+              mappedPlanId: "plan-1",
+              createdTaskIds: [],
+              status: "mapped",
+              createdAt: new Date().toISOString(),
+            },
+            {
+              id: "fb-feature",
+              text: "Feature request",
+              category: "feature",
+              mappedPlanId: "plan-2",
+              createdTaskIds: [],
+              status: "mapped",
+              createdAt: new Date().toISOString(),
+            },
+            {
+              id: "fb-ux",
+              text: "UX improvement",
+              category: "ux",
+              mappedPlanId: "plan-3",
+              createdTaskIds: [],
+              status: "resolved",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          loading: false,
+          submitting: false,
+          error: null,
+        },
+      },
+    });
+
+    render(
+      <Provider store={storeWithFeedback}>
+        <VerifyPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    expect(screen.getByText("Bug")).toBeInTheDocument();
+    expect(screen.getByText("Feature")).toBeInTheDocument();
+    expect(screen.getByText("UX")).toBeInTheDocument();
+    expect(screen.queryByText("Mapped")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pending")).not.toBeInTheDocument();
+  });
+
   it("displays images in feedback history when present", () => {
     const storeWithFeedback = configureStore({
       reducer: {

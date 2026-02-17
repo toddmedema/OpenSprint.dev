@@ -32,11 +32,11 @@ const categoryColors: Record<string, string> = {
   scope: "bg-yellow-50 text-yellow-700",
 };
 
-const statusColors: Record<string, string> = {
-  pending: "bg-gray-100 text-gray-600",
-  mapped: "bg-blue-100 text-blue-700",
-  resolved: "bg-green-100 text-green-700",
-};
+/** Display label for feedback type chip: "Pending" until mapped, then category (Bug/Feature/UX/Scope) */
+function getFeedbackTypeLabel(item: FeedbackItem): string {
+  if (item.status === "pending") return "Pending";
+  return item.category === "ux" ? "UX" : item.category.charAt(0).toUpperCase() + item.category.slice(1);
+}
 
 export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhaseProps) {
   const dispatch = useAppDispatch();
@@ -248,18 +248,13 @@ export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhasePro
                   <p className="text-sm text-gray-900 flex-1">{item.text}</p>
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
-                        categoryColors[item.category] ?? "bg-gray-100 text-gray-600"
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                        item.status === "pending"
+                          ? "bg-gray-100 text-gray-600"
+                          : categoryColors[item.category] ?? "bg-gray-100 text-gray-600"
                       }`}
                     >
-                      {item.category}
-                    </span>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
-                        statusColors[item.status] ?? "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {item.status}
+                      {getFeedbackTypeLabel(item)}
                     </span>
                     {item.status === "pending" && (
                       <button
