@@ -10,8 +10,6 @@ import {
   markTaskComplete,
   setSelectedTaskId,
   setBuildError,
-  startBuild,
-  pauseBuild,
 } from "../../store/slices/buildSlice";
 import { wsSend } from "../../store/middleware/websocketMiddleware";
 import { CloseButton } from "../../components/CloseButton";
@@ -58,59 +56,6 @@ function StatusIcon({ col, size = "sm", title }: { col: KanbanColumn; size?: "sm
     );
   }
   return <span className={`${dim} rounded-full shrink-0 ${columnColors[col]}`} title={title} />;
-}
-
-function PlayIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <path d="M8 5v14l11-7z" />
-    </svg>
-  );
-}
-
-function PauseIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-    </svg>
-  );
-}
-
-function BuildControls({ projectId }: { projectId: string }) {
-  const dispatch = useAppDispatch();
-  const startBuildLoading = useAppSelector((s) => s.build.startBuildLoading);
-  const pauseBuildLoading = useAppSelector((s) => s.build.pauseBuildLoading);
-  const orchestratorRunning = useAppSelector((s) => s.build.orchestratorRunning);
-
-  const handleStart = () => dispatch(startBuild(projectId));
-  const handlePause = () => dispatch(pauseBuild(projectId));
-
-  const pauseEnabled = orchestratorRunning && !pauseBuildLoading;
-
-  return (
-    <div className="flex items-center gap-1" role="group" aria-label="Build controls">
-      <button
-        type="button"
-        onClick={handleStart}
-        disabled={startBuildLoading}
-        className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        title="Pick up next task"
-        aria-label="Pick up next task"
-      >
-        <PlayIcon className="w-5 h-5" />
-      </button>
-      <button
-        type="button"
-        onClick={handlePause}
-        disabled={!pauseEnabled}
-        className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors disabled:text-gray-300"
-        title={pauseEnabled ? "Pause build" : "Orchestrator runs continuously"}
-        aria-label={pauseEnabled ? "Pause build" : "Pause (orchestrator runs continuously)"}
-      >
-        <PauseIcon className="w-5 h-5" />
-      </button>
-    </div>
-  );
 }
 
 function ArchivedSessionView({ sessions }: { sessions: AgentSession[] }) {
@@ -328,7 +273,6 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <BuildControls projectId={projectId} />
             {awaitingApproval && <span className="text-sm font-medium text-amber-600">Awaiting approval…</span>}
           </div>
         </div>
