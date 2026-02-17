@@ -1,16 +1,24 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 const STORAGE_PREFIX = "opensprint-sidebar-width-";
+
+/** Default min width per UX best practices (readable content, usable drag handle) */
+const DEFAULT_MIN_WIDTH = 200;
+
+/** Default max width as fraction of viewport (leaves main content visible) */
+const DEFAULT_MAX_WIDTH_PERCENT = 0.8;
 
 export interface ResizableSidebarProps {
   /** Unique key for localStorage persistence (e.g. "plan", "build") */
   storageKey: string;
   /** Default width in pixels when no persisted value exists */
   defaultWidth?: number;
-  /** Minimum width in pixels */
+  /** Minimum width in pixels (default 200) */
   minWidth?: number;
-  /** Maximum width in pixels */
+  /** Maximum width in pixels; if unset, uses maxWidthPercent of viewport */
   maxWidth?: number;
+  /** Max width as fraction of viewport (0–1), used when maxWidth not set (default 0.8) */
+  maxWidthPercent?: number;
   /** Sidebar content */
   children: React.ReactNode;
   /** Additional class names for the sidebar container */
@@ -21,13 +29,20 @@ export interface ResizableSidebarProps {
   responsive?: boolean;
 }
 
-function loadPersistedWidth(storageKey: string, defaultWidth: number): number {
+function loadPersistedWidth(
+  storageKey: string,
+  defaultWidth: number,
+  minWidth: number,
+  maxWidth: number,
+): number {
   if (typeof window === "undefined") return defaultWidth;
   try {
     const stored = localStorage.getItem(STORAGE_PREFIX + storageKey);
     if (stored) {
       const parsed = parseInt(stored, 10);
-      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return Math.round(Math.min(maxWidth, Math.max(minWidth, parsed)));
+      }
     }
   } catch {
     // ignore
@@ -44,23 +59,55 @@ function savePersistedWidth(storageKey: string, width: number): void {
   }
 }
 
+function useViewportWidth(): number {
+  const [width, setWidth] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth : 1024,
+  );
+  useEffect(() => {
+    const handleResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  return width;
+}
+
 /**
  * A right-side sidebar with a draggable left edge. Width is persisted to localStorage.
  * Used in Plan and Build phases for the plan detail and task detail panels.
+ * Min 200px, max 80% of viewport by default (per UX best practices).
  */
 export function ResizableSidebar({
   storageKey,
   defaultWidth = 420,
-  minWidth = 280,
-  maxWidth = 800,
+  minWidth = DEFAULT_MIN_WIDTH,
+  maxWidth: maxWidthProp,
+  maxWidthPercent = DEFAULT_MAX_WIDTH_PERCENT,
   children,
   className = "",
   visible = true,
   responsive = false,
 }: ResizableSidebarProps) {
+  const viewportWidth = useViewportWidth();
+  const maxWidth =
+    maxWidthProp ??
+    Math.max(minWidth, Math.round(viewportWidth * maxWidthPercent));
+
   const [width, setWidth] = useState(() =>
-    loadPersistedWidth(storageKey, defaultWidth),
+    loadPersistedWidth(storageKey, defaultWidth, minWidth, maxWidth),
   );
+
+  // Re-clamp width when viewport changes (e.g. window resize)
+  useEffect(() => {
+    setWidth((w) => {
+      const clamped = Math.min(maxWidth, Math.max(minWidth, w));
+      if (clamped !== w) {
+        savePersistedWidth(storageKey, clamped);
+        return clamped;
+      }
+      return w;
+    });
+  }, [minWidth, maxWidth, storageKey]);
+
   const startXRef = useRef<number>(0);
   const startWidthRef = useRef<number>(0);
   const currentWidthRef = useRef<number>(width);
@@ -98,11 +145,14 @@ export function ResizableSidebar({
   );
 
   const widthStyle = responsive
-    ? { ["--sidebar-width" as string]: `${width}px` }
+    ? {
+        ["--sidebar-width" as string]: `${width}px`,
+        ["--sidebar-mobile-max" as string]: `${defaultWidth}px`,
+      }
     : { width: visible ? width : 0, minWidth: visible ? width : 0 };
 
   const responsiveClasses = responsive
-    ? "w-full max-w-[420px] md:max-w-none md:w-[var(--sidebar-width)]"
+    ? "w-full max-w-[var(--sidebar-mobile-max,420px)] md:max-w-none md:w-[var(--sidebar-width)]"
     : "";
 
   const borderClass = responsive ? "" : "border-l border-gray-200";

@@ -85,7 +85,7 @@ describe("ResizableSidebar", () => {
 
     const container = screen.getByText("Content").closest(".relative");
     expect(container).toHaveClass("w-full");
-    expect(container).toHaveClass("max-w-[420px]");
+    expect(container).toHaveClass("max-w-[var(--sidebar-mobile-max,420px)]");
     expect(container).toHaveClass("md:max-w-none");
     expect(container).toHaveClass("md:w-[var(--sidebar-width)]");
   });
@@ -136,5 +136,52 @@ describe("ResizableSidebar", () => {
     expect(handle).toHaveAttribute("aria-valuenow", "420");
     expect(handle).toHaveAttribute("aria-valuemin", "280");
     expect(handle).toHaveAttribute("aria-valuemax", "800");
+  });
+
+  it("uses min 200px and max 80% viewport by default", () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { value: 1000, writable: true });
+
+    render(
+      <ResizableSidebar storageKey={STORAGE_KEY}>
+        <span>Content</span>
+      </ResizableSidebar>,
+    );
+
+    const handle = screen.getByRole("separator", { name: "Resize sidebar" });
+    expect(handle).toHaveAttribute("aria-valuemin", "200");
+    expect(handle).toHaveAttribute("aria-valuemax", "800"); // 80% of 1000
+
+    Object.defineProperty(window, "innerWidth", { value: originalInnerWidth, writable: true });
+  });
+
+  it("clamps persisted width to min/max when loading", () => {
+    localStorageMock[`opensprint-sidebar-width-${STORAGE_KEY}`] = "150"; // below min 200
+
+    render(
+      <ResizableSidebar storageKey={STORAGE_KEY} minWidth={200} maxWidth={800}>
+        <span>Content</span>
+      </ResizableSidebar>,
+    );
+
+    const container = screen.getByText("Content").closest(".relative");
+    expect(container).toHaveStyle({ width: "200px" });
+  });
+
+  it("clamps persisted width when above max (80% viewport)", () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { value: 1000, writable: true });
+    localStorageMock[`opensprint-sidebar-width-${STORAGE_KEY}`] = "900"; // above 80% of 1000 = 800
+
+    render(
+      <ResizableSidebar storageKey={STORAGE_KEY}>
+        <span>Content</span>
+      </ResizableSidebar>,
+    );
+
+    const container = screen.getByText("Content").closest(".relative");
+    expect(container).toHaveStyle({ width: "800px" });
+
+    Object.defineProperty(window, "innerWidth", { value: originalInnerWidth, writable: true });
   });
 });
