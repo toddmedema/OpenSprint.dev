@@ -12,7 +12,7 @@ describe("Layout", () => {
     expect(screen.getByTestId("child")).toBeInTheDocument();
   });
 
-  it("has main with min-h-0 and overflow-hidden for independent phase scroll", () => {
+  it("has main with flex flex-col min-h-0 and overflow-hidden for independent phase scroll", () => {
     render(
       <Layout>
         <span>Content</span>
@@ -20,6 +20,8 @@ describe("Layout", () => {
     );
     const main = document.querySelector("main");
     expect(main).toBeInTheDocument();
+    expect(main).toHaveClass("flex");
+    expect(main).toHaveClass("flex-col");
     expect(main).toHaveClass("min-h-0");
     expect(main).toHaveClass("overflow-hidden");
   });
