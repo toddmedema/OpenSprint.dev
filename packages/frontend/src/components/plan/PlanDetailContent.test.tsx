@@ -54,9 +54,16 @@ describe("PlanDetailContent", () => {
     expect(screen.queryByRole("heading", { name: /^plan$/i })).not.toBeInTheDocument();
   });
 
+  it("does not show redundant Plan in title input placeholder or aria-label (context is Plan phase)", () => {
+    render(<PlanDetailContent plan={mockPlan} onContentSave={onContentSave} />);
+    const titleInput = screen.getByRole("textbox", { name: /title/i });
+    expect(titleInput).toHaveAttribute("placeholder", "Title");
+    expect(titleInput).toHaveAttribute("aria-label", "Title");
+  });
+
   it("renders inline editable title derived from first line", () => {
     render(<PlanDetailContent plan={mockPlan} onContentSave={onContentSave} />);
-    const titleInput = screen.getByRole("textbox", { name: /plan title/i });
+    const titleInput = screen.getByRole("textbox", { name: /title/i });
     expect(titleInput).toHaveValue("Plan Phase - Feature Decomposition");
   });
 
@@ -69,7 +76,7 @@ describe("PlanDetailContent", () => {
   it("calls onContentSave when title is changed and blurred", async () => {
     const user = userEvent.setup();
     render(<PlanDetailContent plan={mockPlan} onContentSave={onContentSave} />);
-    const titleInput = screen.getByRole("textbox", { name: /plan title/i });
+    const titleInput = screen.getByRole("textbox", { name: /title/i });
     await user.clear(titleInput);
     await user.type(titleInput, "New Title");
     titleInput.blur();
@@ -97,7 +104,7 @@ describe("PlanDetailContent", () => {
 
   it("disables title input when saving", () => {
     render(<PlanDetailContent plan={mockPlan} onContentSave={onContentSave} saving />);
-    expect(screen.getByRole("textbox", { name: /plan title/i })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: /title/i })).toBeDisabled();
   });
 
   it("uses first line as title when content has no # heading", () => {
@@ -106,7 +113,7 @@ describe("PlanDetailContent", () => {
       content: "Plain content without heading",
     };
     render(<PlanDetailContent plan={planNoHeading} onContentSave={onContentSave} />);
-    const titleInput = screen.getByRole("textbox", { name: /plan title/i });
+    const titleInput = screen.getByRole("textbox", { name: /title/i });
     expect(titleInput).toHaveValue("Plain content without heading");
   });
 
@@ -116,14 +123,14 @@ describe("PlanDetailContent", () => {
       content: "",
     };
     render(<PlanDetailContent plan={planEmptyContent} onContentSave={onContentSave} />);
-    const titleInput = screen.getByRole("textbox", { name: /plan title/i });
+    const titleInput = screen.getByRole("textbox", { name: /title/i });
     expect(titleInput).toHaveValue("Plan Phase Feature Decomposition");
   });
 
   it("saves with formatted planId when user clears title and blurs", async () => {
     const user = userEvent.setup();
     render(<PlanDetailContent plan={mockPlan} onContentSave={onContentSave} />);
-    const titleInput = screen.getByRole("textbox", { name: /plan title/i });
+    const titleInput = screen.getByRole("textbox", { name: /title/i });
     await user.clear(titleInput);
     titleInput.blur();
 
@@ -136,7 +143,7 @@ describe("PlanDetailContent", () => {
 
   it("renders title input with theme-aware styling for light/dark mode", () => {
     render(<PlanDetailContent plan={mockPlan} onContentSave={onContentSave} />);
-    const titleInput = screen.getByRole("textbox", { name: /plan title/i });
+    const titleInput = screen.getByRole("textbox", { name: /title/i });
     expect(titleInput.className).toMatch(/text-gray-900/);
     expect(titleInput.className).toMatch(/dark:text-gray-100/);
   });

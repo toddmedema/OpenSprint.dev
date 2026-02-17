@@ -101,8 +101,8 @@ export function PlanDetailContent({
           onKeyDown={handleTitleKeyDown}
           disabled={saving}
           className="w-full font-semibold text-gray-900 dark:text-gray-100 bg-transparent border border-transparent rounded px-2 py-1 -ml-2 hover:border-gray-200 dark:hover:border-gray-600 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-colors disabled:opacity-50"
-          placeholder="Plan title"
-          aria-label="Plan title"
+          placeholder="Title"
+          aria-label="Title"
         />
         {saving && (
           <span className="text-xs text-gray-500 dark:text-gray-400" aria-live="polite">

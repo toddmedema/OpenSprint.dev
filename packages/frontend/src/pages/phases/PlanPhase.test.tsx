@@ -308,7 +308,7 @@ describe("PlanPhase inline editing", () => {
       </Provider>,
     );
 
-    expect(screen.getByRole("textbox", { name: /plan title/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /title/i })).toBeInTheDocument();
     expect(container.querySelector('[data-prd-section="plan-body"]')).toBeInTheDocument();
   });
 
@@ -336,7 +336,7 @@ describe("PlanPhase inline editing", () => {
       </Provider>,
     );
 
-    const titleInput = screen.getByRole("textbox", { name: /plan title/i });
+    const titleInput = screen.getByRole("textbox", { name: /title/i });
     await user.clear(titleInput);
     await user.type(titleInput, "New Title");
     titleInput.blur();
