@@ -10,9 +10,7 @@ describe("orchestrator rejection flow", () => {
         summary: "Tests do not adequately cover the ticket scope.",
         notes: "",
       };
-      expect(formatReviewFeedback(result)).toBe(
-        "Tests do not adequately cover the ticket scope.",
-      );
+      expect(formatReviewFeedback(result)).toBe("Tests do not adequately cover the ticket scope.");
     });
 
     it("formats result with summary and issues", () => {
@@ -49,6 +47,36 @@ describe("orchestrator rejection flow", () => {
         notes: "   ",
       };
       expect(formatReviewFeedback(result)).toBe("Rejected.");
+    });
+
+    it("handles missing summary gracefully", () => {
+      const result = {
+        status: "rejected",
+        notes: "",
+      } as unknown as ReviewAgentResult;
+      expect(formatReviewFeedback(result)).toBe(
+        "Review rejected (no details provided by review agent)."
+      );
+    });
+
+    it("handles missing summary but with issues", () => {
+      const result = {
+        status: "rejected",
+        issues: ["Tests are missing"],
+        notes: "",
+      } as unknown as ReviewAgentResult;
+      const formatted = formatReviewFeedback(result);
+      expect(formatted).toContain("Issues to address:");
+      expect(formatted).toContain("- Tests are missing");
+    });
+
+    it("handles completely empty result", () => {
+      const result = {
+        status: "rejected",
+      } as unknown as ReviewAgentResult;
+      expect(formatReviewFeedback(result)).toBe(
+        "Review rejected (no details provided by review agent)."
+      );
     });
   });
 });

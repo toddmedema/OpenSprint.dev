@@ -111,7 +111,10 @@ function isPidAlive(pid: number): boolean {
 
 /** Format review rejection result into actionable feedback for the coding agent retry prompt. Exported for testing. */
 export function formatReviewFeedback(result: ReviewAgentResult): string {
-  const parts: string[] = [result.summary];
+  const parts: string[] = [];
+  if (result.summary) {
+    parts.push(result.summary);
+  }
   if (result.issues && result.issues.length > 0) {
     parts.push("\n\nIssues to address:");
     for (const issue of result.issues) {
@@ -120,6 +123,9 @@ export function formatReviewFeedback(result: ReviewAgentResult): string {
   }
   if (result.notes?.trim()) {
     parts.push(`\n\nNotes: ${result.notes.trim()}`);
+  }
+  if (parts.length === 0) {
+    return "Review rejected (no details provided by review agent).";
   }
   return parts.join("");
 }
@@ -279,7 +285,8 @@ export class OrchestratorService {
     const state = this.getState(projectId);
 
     // Restore aggregate counters from persisted state
-    state.status.totalDone = persisted.totalDone ?? (persisted as { totalCompleted?: number }).totalCompleted ?? 0;
+    state.status.totalDone =
+      persisted.totalDone ?? (persisted as { totalCompleted?: number }).totalCompleted ?? 0;
     state.status.totalFailed = persisted.totalFailed;
 
     if (!persisted.currentTaskId || !persisted.branchName) {
@@ -364,7 +371,8 @@ export class OrchestratorService {
     repoPath: string,
     taskId: string,
     branchName: string,
-    worktreePath?: string | null
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _worktreePath?: string | null
   ): Promise<void> {
     const state = this.getState(projectId);
     console.log(
@@ -543,7 +551,8 @@ export class OrchestratorService {
       await this.recoverFromPersistedState(projectId, repoPath, persisted);
     } else if (persisted) {
       // Persisted state exists but no active task — restore counters and clean up
-      state.status.totalDone = persisted.totalDone ?? (persisted as { totalCompleted?: number }).totalCompleted ?? 0;
+      state.status.totalDone =
+        persisted.totalDone ?? (persisted as { totalCompleted?: number }).totalCompleted ?? 0;
       state.status.totalFailed = persisted.totalFailed;
       await this.clearPersistedState(repoPath);
     }
@@ -1231,11 +1240,13 @@ export class OrchestratorService {
       task.id
     )) as ReviewAgentResult | null;
 
-    // Normalize status: agents sometimes write "approve"/"success" instead of "approved"
+    // Normalize status: agents sometimes write variants like "approve"/"reject" instead of "approved"/"rejected"
     if (result && result.status) {
       const normalized = String(result.status).toLowerCase().trim();
       if (["approve", "success", "accept", "accepted"].includes(normalized)) {
         (result as { status: string }).status = "approved";
+      } else if (["reject", "fail", "failed"].includes(normalized)) {
+        (result as { status: string }).status = "rejected";
       }
     }
 
@@ -1243,7 +1254,7 @@ export class OrchestratorService {
       await this.performMergeAndDone(projectId, repoPath, task, branchName);
     } else if (result && result.status === "rejected") {
       // Review rejected — add feedback to bead, trigger coding retry with feedback in prompt (PRD §7.3.2)
-      const reason = `Review rejected: ${result.issues?.join("; ") || result.summary}`;
+      const reason = `Review rejected: ${result.issues?.join("; ") || result.summary || "No details provided"}`;
       const reviewFeedback = formatReviewFeedback(result);
 
       // Capture git diff before archiving (branch diff + uncommitted)
@@ -1267,7 +1278,7 @@ export class OrchestratorService {
         gitBranch: branchName,
         status: "rejected",
         outputLog: state.outputLog.join(""),
-        failureReason: result.summary,
+        failureReason: result.summary || "Review rejected (no summary provided)",
         gitDiff: gitDiff || undefined,
         startedAt: state.startedAt,
       });

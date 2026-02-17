@@ -2,10 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
-import {
-  OrchestratorService,
-  formatReviewFeedback,
-} from "../services/orchestrator.service.js";
+import { OrchestratorService, formatReviewFeedback } from "../services/orchestrator.service.js";
 import type { ReviewAgentResult } from "@opensprint/shared";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 
@@ -16,8 +13,7 @@ const mockSendAgentOutputToProject = vi.fn();
 
 vi.mock("../websocket/index.js", () => ({
   broadcastToProject: (...args: unknown[]) => mockBroadcastToProject(...args),
-  sendAgentOutputToProject: (...args: unknown[]) =>
-    mockSendAgentOutputToProject(...args),
+  sendAgentOutputToProject: (...args: unknown[]) => mockSendAgentOutputToProject(...args),
 }));
 
 const mockBeadsReady = vi.fn();
@@ -208,9 +204,7 @@ describe("OrchestratorService", () => {
         summary: "Tests do not adequately cover the ticket scope.",
         notes: "",
       };
-      expect(formatReviewFeedback(result)).toBe(
-        "Tests do not adequately cover the ticket scope.",
-      );
+      expect(formatReviewFeedback(result)).toBe("Tests do not adequately cover the ticket scope.");
     });
 
     it("formats result with summary and issues", () => {
@@ -225,6 +219,15 @@ describe("OrchestratorService", () => {
       expect(formatted).toContain("Issues to address:");
       expect(formatted).toContain("- Missing error handling");
       expect(formatted).toContain("- Tests do not cover edge cases");
+    });
+
+    it("handles missing summary gracefully", () => {
+      const result = {
+        status: "rejected",
+      } as unknown as ReviewAgentResult;
+      expect(formatReviewFeedback(result)).toBe(
+        "Review rejected (no details provided by review agent)."
+      );
     });
   });
 
@@ -282,7 +285,7 @@ describe("OrchestratorService", () => {
           type: "execute.status",
           currentTask: null,
           queueDepth: 0,
-        }),
+        })
       );
     });
 
@@ -299,7 +302,9 @@ describe("OrchestratorService", () => {
       mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
       mockCreateTaskWorktree.mockResolvedValue(path.join(repoPath, "wt-1"));
-      mockGetActiveDir.mockReturnValue(path.join(repoPath, "wt-1", ".opensprint", "active", "task-1"));
+      mockGetActiveDir.mockReturnValue(
+        path.join(repoPath, "wt-1", ".opensprint", "active", "task-1")
+      );
       mockBuildContext.mockResolvedValue({});
       mockAssembleTaskDirectory.mockResolvedValue(undefined);
 
@@ -316,13 +321,12 @@ describe("OrchestratorService", () => {
       await orchestrator.ensureRunning(projectId);
 
       // First nudge starts the loop. Second nudge while loop is active should return early.
-      const broadcastCallsBefore = mockBroadcastToProject.mock.calls.length;
       orchestrator.nudge(projectId);
       orchestrator.nudge(projectId);
       await new Promise((r) => setTimeout(r, 200));
       // Should not have started a second runLoop - we'd see duplicate agent.started if so
       const agentStartedCalls = mockBroadcastToProject.mock.calls.filter(
-        (c: [string, { type?: string }]) => c[1]?.type === "agent.started",
+        (c: [string, { type?: string }]) => c[1]?.type === "agent.started"
       );
       expect(agentStartedCalls.length).toBeLessThanOrEqual(1);
     });
@@ -371,7 +375,7 @@ describe("OrchestratorService", () => {
       expect(mockBeadsComment).toHaveBeenCalledWith(
         repoPath,
         "task-crashed",
-        "Agent crashed (backend restart). No committed work found, task requeued.",
+        "Agent crashed (backend restart). No committed work found, task requeued."
       );
 
       // Should have requeued task
@@ -388,7 +392,7 @@ describe("OrchestratorService", () => {
           taskId: "task-crashed",
           status: "open",
           assignee: null,
-        }),
+        })
       );
     });
 
@@ -426,7 +430,7 @@ describe("OrchestratorService", () => {
       expect(mockBeadsComment).toHaveBeenCalledWith(
         repoPath,
         "task-crashed-2",
-        "Agent crashed (backend restart). Branch preserved with 2 commits for next attempt.",
+        "Agent crashed (backend restart). Branch preserved with 2 commits for next attempt."
       );
 
       // Should still requeue
@@ -464,7 +468,7 @@ describe("OrchestratorService", () => {
 
       // State file should be cleared
       await expect(
-        fs.access(path.join(repoPath, OPENSPRINT_PATHS.orchestratorState)),
+        fs.access(path.join(repoPath, OPENSPRINT_PATHS.orchestratorState))
       ).rejects.toThrow();
     });
   });
@@ -489,7 +493,7 @@ describe("OrchestratorService", () => {
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
       mockCreateTaskWorktree.mockResolvedValue(wtPathComplete);
       mockGetActiveDir.mockReturnValue(
-        path.join(repoPath, "wt-complete", ".opensprint", "active", "task-complete-1"),
+        path.join(repoPath, "wt-complete", ".opensprint", "active", "task-complete-1")
       );
       mockBuildContext.mockResolvedValue({});
       mockAssembleTaskDirectory.mockResolvedValue(undefined);
@@ -503,14 +507,10 @@ describe("OrchestratorService", () => {
 
       let onExit: (code: number | null) => Promise<void> = async () => {};
       mockInvokeCodingAgent.mockImplementation(
-        (
-          _p: string,
-          _c: unknown,
-          opts: { onExit?: (code: number | null) => Promise<void> },
-        ) => {
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
           onExit = opts.onExit ?? (async () => {});
           return { kill: vi.fn(), pid: 12345 };
-        },
+        }
       );
 
       await orchestrator.ensureRunning(projectId);
@@ -527,22 +527,15 @@ describe("OrchestratorService", () => {
       await new Promise((r) => setTimeout(r, 300));
 
       // Should have merged and closed
-      expect(mockBeadsClose).toHaveBeenCalledWith(
-        repoPath,
-        "task-complete-1",
-        "Done",
-      );
-      expect(mockMergeToMain).toHaveBeenCalledWith(
-        repoPath,
-        "opensprint/task-complete-1",
-      );
+      expect(mockBeadsClose).toHaveBeenCalledWith(repoPath, "task-complete-1", "Done");
+      expect(mockMergeToMain).toHaveBeenCalledWith(repoPath, "opensprint/task-complete-1");
       expect(mockBroadcastToProject).toHaveBeenCalledWith(
         projectId,
         expect.objectContaining({
           type: "agent.completed",
           taskId: "task-complete-1",
           status: "approved",
-        }),
+        })
       );
     });
 
@@ -569,7 +562,7 @@ describe("OrchestratorService", () => {
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
       mockCreateTaskWorktree.mockResolvedValue(wtPath);
       mockGetActiveDir.mockReturnValue(
-        path.join(wtPath, ".opensprint", "active", "task-review-approve"),
+        path.join(wtPath, ".opensprint", "active", "task-review-approve")
       );
       mockBuildContext.mockResolvedValue({});
       mockAssembleTaskDirectory.mockResolvedValue(undefined);
@@ -591,26 +584,18 @@ describe("OrchestratorService", () => {
 
       let codingOnExit: (code: number | null) => Promise<void> = async () => {};
       mockInvokeCodingAgent.mockImplementation(
-        (
-          _p: string,
-          _c: unknown,
-          opts: { onExit?: (code: number | null) => Promise<void> },
-        ) => {
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
           codingOnExit = opts.onExit ?? (async () => {});
           return { kill: vi.fn(), pid: 12345 };
-        },
+        }
       );
 
       let reviewOnExit: (code: number | null) => Promise<void> = async () => {};
       mockInvokeReviewAgent.mockImplementation(
-        (
-          _p: string,
-          _c: unknown,
-          opts: { onExit?: (code: number | null) => Promise<void> },
-        ) => {
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
           reviewOnExit = opts.onExit ?? (async () => {});
           return { kill: vi.fn(), pid: 12346 };
-        },
+        }
       );
 
       await orchestrator.ensureRunning(projectId);
@@ -635,14 +620,11 @@ describe("OrchestratorService", () => {
       await new Promise((r) => setTimeout(r, 300));
 
       // On result.json approved: merge and Done
-      expect(mockMergeToMain).toHaveBeenCalledWith(
-        repoPath,
-        "opensprint/task-review-approve",
-      );
+      expect(mockMergeToMain).toHaveBeenCalledWith(repoPath, "opensprint/task-review-approve");
       expect(mockBeadsClose).toHaveBeenCalledWith(
         repoPath,
         "task-review-approve",
-        "Implemented feature",
+        "Implemented feature"
       );
       expect(mockBroadcastToProject).toHaveBeenCalledWith(
         projectId,
@@ -651,7 +633,7 @@ describe("OrchestratorService", () => {
           taskId: "task-review-approve",
           status: "closed",
           assignee: null,
-        }),
+        })
       );
       expect(mockBroadcastToProject).toHaveBeenCalledWith(
         projectId,
@@ -659,7 +641,7 @@ describe("OrchestratorService", () => {
           type: "agent.completed",
           taskId: "task-review-approve",
           status: "approved",
-        }),
+        })
       );
     });
 
@@ -686,7 +668,7 @@ describe("OrchestratorService", () => {
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
       mockCreateTaskWorktree.mockResolvedValue(wtPath);
       mockGetActiveDir.mockReturnValue(
-        path.join(wtPath, ".opensprint", "active", "task-approve-normalize"),
+        path.join(wtPath, ".opensprint", "active", "task-approve-normalize")
       );
       mockBuildContext.mockResolvedValue({});
       mockAssembleTaskDirectory.mockResolvedValue(undefined);
@@ -704,26 +686,18 @@ describe("OrchestratorService", () => {
 
       let codingOnExit: (code: number | null) => Promise<void> = async () => {};
       mockInvokeCodingAgent.mockImplementation(
-        (
-          _p: string,
-          _c: unknown,
-          opts: { onExit?: (code: number | null) => Promise<void> },
-        ) => {
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
           codingOnExit = opts.onExit ?? (async () => {});
           return { kill: vi.fn(), pid: 12345 };
-        },
+        }
       );
 
       let reviewOnExit: (code: number | null) => Promise<void> = async () => {};
       mockInvokeReviewAgent.mockImplementation(
-        (
-          _p: string,
-          _c: unknown,
-          opts: { onExit?: (code: number | null) => Promise<void> },
-        ) => {
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
           reviewOnExit = opts.onExit ?? (async () => {});
           return { kill: vi.fn(), pid: 12346 };
-        },
+        }
       );
 
       await orchestrator.ensureRunning(projectId);
@@ -738,15 +712,8 @@ describe("OrchestratorService", () => {
       await reviewOnExit(0);
       await new Promise((r) => setTimeout(r, 300));
 
-      expect(mockMergeToMain).toHaveBeenCalledWith(
-        repoPath,
-        "opensprint/task-approve-normalize",
-      );
-      expect(mockBeadsClose).toHaveBeenCalledWith(
-        repoPath,
-        "task-approve-normalize",
-        "Done",
-      );
+      expect(mockMergeToMain).toHaveBeenCalledWith(repoPath, "opensprint/task-approve-normalize");
+      expect(mockBeadsClose).toHaveBeenCalledWith(repoPath, "task-approve-normalize", "Done");
     });
   });
 
@@ -768,7 +735,7 @@ describe("OrchestratorService", () => {
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
       mockCreateTaskWorktree.mockResolvedValue(wtPath);
       mockGetActiveDir.mockReturnValue(
-        path.join(repoPath, "wt-fail", ".opensprint", "active", "task-test-fail"),
+        path.join(repoPath, "wt-fail", ".opensprint", "active", "task-test-fail")
       );
       mockBuildContext.mockResolvedValue({});
       mockAssembleTaskDirectory.mockResolvedValue(undefined);
@@ -783,14 +750,10 @@ describe("OrchestratorService", () => {
 
       let onExit: (code: number | null) => Promise<void> = async () => {};
       mockInvokeCodingAgent.mockImplementation(
-        (
-          _p: string,
-          _c: unknown,
-          opts: { onExit?: (code: number | null) => Promise<void> },
-        ) => {
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
           onExit = opts.onExit ?? (async () => {});
           return { kill: vi.fn(), pid: 12345 };
-        },
+        }
       );
 
       await orchestrator.ensureRunning(projectId);
@@ -805,18 +768,14 @@ describe("OrchestratorService", () => {
       expect(mockBeadsComment).toHaveBeenCalledWith(
         repoPath,
         "task-test-fail",
-        expect.stringContaining("Attempt 1 failed [test_failure]"),
+        expect.stringContaining("Attempt 1 failed [test_failure]")
       );
 
       // Should have archived session
       expect(mockArchiveSession).toHaveBeenCalled();
 
       // Should have set cumulative attempts for retry
-      expect(mockBeadsSetCumulativeAttempts).toHaveBeenCalledWith(
-        repoPath,
-        "task-test-fail",
-        1,
-      );
+      expect(mockBeadsSetCumulativeAttempts).toHaveBeenCalledWith(repoPath, "task-test-fail", 1);
 
       // Should retry (executeCodingPhase called again) - removeTaskWorktree then createTaskWorktree
       expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, "task-test-fail");
@@ -841,7 +800,7 @@ describe("OrchestratorService", () => {
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
       mockCreateTaskWorktree.mockResolvedValue(wtPath);
       mockGetActiveDir.mockReturnValue(
-        path.join(repoPath, "wt-coding-fail", ".opensprint", "active", "task-coding-fail"),
+        path.join(repoPath, "wt-coding-fail", ".opensprint", "active", "task-coding-fail")
       );
       mockBuildContext.mockResolvedValue({});
       mockAssembleTaskDirectory.mockResolvedValue(undefined);
@@ -852,14 +811,10 @@ describe("OrchestratorService", () => {
 
       let onExit: (code: number | null) => Promise<void> = async () => {};
       mockInvokeCodingAgent.mockImplementation(
-        (
-          _p: string,
-          _c: unknown,
-          opts: { onExit?: (code: number | null) => Promise<void> },
-        ) => {
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
           onExit = opts.onExit ?? (async () => {});
           return { kill: vi.fn(), pid: 12345 };
-        },
+        }
       );
 
       await orchestrator.ensureRunning(projectId);
@@ -873,14 +828,10 @@ describe("OrchestratorService", () => {
       expect(mockBeadsComment).toHaveBeenCalledWith(
         repoPath,
         "task-coding-fail",
-        expect.stringContaining("Attempt 1 failed [coding_failure]"),
+        expect.stringContaining("Attempt 1 failed [coding_failure]")
       );
       expect(mockArchiveSession).toHaveBeenCalled();
-      expect(mockBeadsSetCumulativeAttempts).toHaveBeenCalledWith(
-        repoPath,
-        "task-coding-fail",
-        1,
-      );
+      expect(mockBeadsSetCumulativeAttempts).toHaveBeenCalledWith(repoPath, "task-coding-fail", 1);
 
       // Retry should pass previousFailure to assembleTaskDirectory
       const assembleCalls = mockAssembleTaskDirectory.mock.calls;
@@ -890,7 +841,7 @@ describe("OrchestratorService", () => {
           c[2] &&
           typeof c[2] === "object" &&
           "previousFailure" in (c[2] as object) &&
-          (c[2] as { previousFailure: string | null }).previousFailure !== null,
+          (c[2] as { previousFailure: string | null }).previousFailure !== null
       );
       expect(retryCall).toBeDefined();
       const retryConfig = retryCall![2] as { previousFailure: string | null };
@@ -914,7 +865,7 @@ describe("OrchestratorService", () => {
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
       mockCreateTaskWorktree.mockResolvedValue(wtPath);
       mockGetActiveDir.mockReturnValue(
-        path.join(repoPath, "wt-no-result", ".opensprint", "active", "task-no-result"),
+        path.join(repoPath, "wt-no-result", ".opensprint", "active", "task-no-result")
       );
       mockBuildContext.mockResolvedValue({});
       mockAssembleTaskDirectory.mockResolvedValue(undefined);
@@ -922,14 +873,10 @@ describe("OrchestratorService", () => {
 
       let onExit: (code: number | null) => Promise<void> = async () => {};
       mockInvokeCodingAgent.mockImplementation(
-        (
-          _p: string,
-          _c: unknown,
-          opts: { onExit?: (code: number | null) => Promise<void> },
-        ) => {
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
           onExit = opts.onExit ?? (async () => {});
           return { kill: vi.fn(), pid: 12345 };
-        },
+        }
       );
 
       await orchestrator.ensureRunning(projectId);
@@ -941,7 +888,7 @@ describe("OrchestratorService", () => {
       expect(mockBeadsComment).toHaveBeenCalledWith(
         repoPath,
         "task-no-result",
-        expect.stringContaining("Attempt 1 failed [agent_crash]"),
+        expect.stringContaining("Attempt 1 failed [agent_crash]")
       );
       expect(mockArchiveSession).toHaveBeenCalled();
       expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, "task-no-result");
@@ -965,13 +912,7 @@ describe("OrchestratorService", () => {
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
       mockCreateTaskWorktree.mockResolvedValue(wtPath);
       mockGetActiveDir.mockReturnValue(
-        path.join(
-          repoPath,
-          "wt-no-result-other",
-          ".opensprint",
-          "active",
-          "task-no-result-other",
-        ),
+        path.join(repoPath, "wt-no-result-other", ".opensprint", "active", "task-no-result-other")
       );
       mockBuildContext.mockResolvedValue({});
       mockAssembleTaskDirectory.mockResolvedValue(undefined);
@@ -979,14 +920,10 @@ describe("OrchestratorService", () => {
 
       let onExit: (code: number | null) => Promise<void> = async () => {};
       mockInvokeCodingAgent.mockImplementation(
-        (
-          _p: string,
-          _c: unknown,
-          opts: { onExit?: (code: number | null) => Promise<void> },
-        ) => {
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
           onExit = opts.onExit ?? (async () => {});
           return { kill: vi.fn(), pid: 12345 };
-        },
+        }
       );
 
       await orchestrator.ensureRunning(projectId);
@@ -998,7 +935,7 @@ describe("OrchestratorService", () => {
       expect(mockBeadsComment).toHaveBeenCalledWith(
         repoPath,
         "task-no-result-other",
-        expect.stringContaining("Attempt 1 failed [no_result]"),
+        expect.stringContaining("Attempt 1 failed [no_result]")
       );
     });
   });
