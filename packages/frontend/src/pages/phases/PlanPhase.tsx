@@ -18,6 +18,7 @@ import {
 import { AddPlanModal } from "../../components/AddPlanModal";
 import { CloseButton } from "../../components/CloseButton";
 import { DependencyGraph } from "../../components/DependencyGraph";
+import { EpicCard } from "../../components/EpicCard";
 import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
 import { fetchTasks } from "../../store/slices/buildSlice";
 
@@ -59,6 +60,20 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
       (t) => t.epicId === epicId && t.id !== gateTaskId
     );
   }, [selectedPlan?.metadata.beadEpicId, selectedPlan?.metadata.gateTaskId, buildTasks]);
+
+  const planIdToTasks = useMemo(() => {
+    const map = new Map<string, typeof buildTasks>();
+    for (const plan of plans) {
+      const epicId = plan.metadata.beadEpicId;
+      const gateTaskId = plan.metadata.gateTaskId;
+      if (!epicId) continue;
+      const tasks = buildTasks.filter(
+        (t) => t.epicId === epicId && t.id !== gateTaskId
+      );
+      map.set(plan.metadata.planId, tasks);
+    }
+    return map;
+  }, [plans, buildTasks]);
   const planContext = selectedPlan ? `plan:${selectedPlan.metadata.planId}` : null;
   const currentChatMessages = planContext ? (chatMessages[planContext] ?? []) : [];
 
@@ -138,12 +153,6 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     setChatSending(false);
   };
 
-  const statusColors: Record<string, string> = {
-    planning: "bg-yellow-50 text-yellow-700",
-    building: "bg-blue-50 text-blue-700",
-    complete: "bg-green-50 text-green-700",
-  };
-
   return (
     <div className="flex h-full">
       {error && (
@@ -183,61 +192,18 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {plans.map((plan) => (
-              <div
+              <EpicCard
                 key={plan.metadata.planId}
-                className="card p-5 cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => handleSelectPlan(plan)}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900">{plan.metadata.planId.replace(/-/g, " ")}</h3>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
-                      statusColors[plan.status] ?? "bg-gray-100 text-gray-600"
-                    }`}
-                  >
-                    {plan.status}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-4 text-xs text-gray-500 mb-4">
-                  <span>{plan.taskCount} tasks</span>
-                  <span>{plan.completedTaskCount} completed</span>
-                  <span className="capitalize">{plan.metadata.complexity} complexity</span>
-                  {plan.dependencyCount > 0 && <span>{plan.dependencyCount} deps</span>}
-                </div>
-
-                {plan.status === "planning" && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleShip(plan.metadata.planId);
-                    }}
-                    disabled={!!shippingPlanId}
-                    className="btn-primary text-xs w-full disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {shippingPlanId === plan.metadata.planId ? "Building…" : "Build It!"}
-                  </button>
-                )}
-                {plan.status === "complete" &&
-                  plan.metadata.shippedAt &&
-                  plan.lastModified &&
-                  plan.lastModified > plan.metadata.shippedAt && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleReship(plan.metadata.planId);
-                      }}
-                      disabled={!!reshippingPlanId}
-                      className="btn-secondary text-xs w-full disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {reshippingPlanId === plan.metadata.planId ? "Rebuilding…" : "Rebuild"}
-                    </button>
-                  )}
-              </div>
+                plan={plan}
+                tasks={planIdToTasks.get(plan.metadata.planId) ?? []}
+                shippingPlanId={shippingPlanId}
+                reshippingPlanId={reshippingPlanId}
+                onSelect={() => handleSelectPlan(plan)}
+                onShip={() => handleShip(plan.metadata.planId)}
+                onReship={() => handleReship(plan.metadata.planId)}
+              />
             ))}
           </div>
         )}

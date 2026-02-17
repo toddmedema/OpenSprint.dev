@@ -145,6 +145,20 @@ describe("PlanPhase Redux integration", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
+  it("renders compact epic cards with progress bar and nested subtasks", () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    expect(screen.getByRole("progressbar", { name: /tasks completed/i })).toBeInTheDocument();
+    expect(screen.getByText("Task A")).toBeInTheDocument();
+    expect(screen.getByText("Task B")).toBeInTheDocument();
+    expect(screen.getByText(/0\/2 done/)).toBeInTheDocument();
+  });
+
   it("renders plans from Redux state via useAppSelector", () => {
     const store = createStore();
     render(
