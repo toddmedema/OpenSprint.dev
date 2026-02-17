@@ -248,7 +248,9 @@ export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhasePro
             {displayedFeedback.map((item: FeedbackItem) => (
               <div key={item.id} className="card p-4">
                 <div className="flex items-start justify-between mb-2">
-                  <p className="text-sm text-gray-900 flex-1">{item.text}</p>
+                  {item.status !== "mapped" && (
+                    <p className="text-sm text-gray-900 flex-1">{item.text}</p>
+                  )}
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
