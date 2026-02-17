@@ -1,6 +1,6 @@
 # OpenSprint
 
-**AI-powered platform that guides you from idea to working software.**
+**Build _good_ software at the speed of thought.**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Node.js >= 20](https://img.shields.io/badge/Node.js-%3E%3D20-green.svg)](https://nodejs.org/)
@@ -11,7 +11,7 @@
   <img src="docs/assets/hero-screenshot.png" alt="OpenSprint — Dream, Plan, Build, Verify" width="800" />
 </p>
 
-OpenSprint orchestrates AI agents across four phases — **Dream**, **Plan**, **Build**, and **Verify** — to transform a high-level product idea into working software with minimal manual intervention.
+OpenSprint orchestrates AI agents across four phases — **Dream**, **Plan**, **Build**, and **Verify** — to transform a high-level product idea into well-architected, working software with minimal manual intervention.
 
 ---
 
@@ -25,6 +25,8 @@ Building software with AI today is **fragmented and unstructured**. Developers u
 - **No feedback loop** — there is no structured way to validate completed work and feed findings back into development
 
 OpenSprint solves this by maintaining context across the entire lifecycle and automating the orchestration of AI development agents. Humans focus on _what_ to build and _why_; AI handles _how_.
+
+_OpenSprint_: The speed of a full-out open sprint. Agile methodology sprints of quick iteration and user feedback. Open source software. And a nod to OpenAI for starting this crazy new era.
 
 ---
 
