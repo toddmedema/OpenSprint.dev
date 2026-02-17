@@ -2,14 +2,19 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Layout } from "../components/layout/Layout";
 import { FolderBrowser } from "../components/FolderBrowser";
-import { ModelSelect } from "../components/ModelSelect";
 import {
   ProjectMetadataStep,
   isValidProjectMetadata,
-  type ProjectMetadataState,
+  RepositoryStep,
+  AgentsStep,
+  DeploymentStep,
+  TestingStep,
+  HilStep,
+  ConfirmStep,
 } from "../components/ProjectSetupWizard";
-import type { AgentType, DeploymentMode, HilNotificationMode } from "@opensprint/shared";
-import { DEFAULT_HIL_CONFIG, TEST_FRAMEWORKS } from "@opensprint/shared";
+import type { ProjectMetadataState } from "../components/ProjectSetupWizard";
+import type { AgentType, DeploymentMode, HilConfig } from "@opensprint/shared";
+import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 import { api } from "../api/client";
 
 type Step = "basics" | "repository" | "agents" | "deployment" | "testing" | "hil" | "confirm";
@@ -29,28 +34,29 @@ export function ProjectSetup() {
   const [step, setStep] = useState<Step>("basics");
   const [creating, setCreating] = useState(false);
 
-  // Wizard state — step 1: project metadata
   const [metadata, setMetadata] = useState<ProjectMetadataState>({ name: "", description: "" });
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [repoPath, setRepoPath] = useState("");
-  const [planningAgentType, setPlanningAgentType] = useState<AgentType>("claude");
-  const [planningModel, setPlanningModel] = useState("");
-  const [planningCliCommand, setPlanningCliCommand] = useState("");
-  const [codingAgentType, setCodingAgentType] = useState<AgentType>("claude");
-  const [codingModel, setCodingModel] = useState("");
-  const [codingCliCommand, setCodingCliCommand] = useState("");
+  const [planningAgent, setPlanningAgent] = useState({
+    type: "claude" as AgentType,
+    model: "",
+    cliCommand: "",
+  });
+  const [codingAgent, setCodingAgent] = useState({
+    type: "claude" as AgentType,
+    model: "",
+    cliCommand: "",
+  });
   const [deploymentMode, setDeploymentMode] = useState<DeploymentMode>("custom");
   const [customDeployCommand, setCustomDeployCommand] = useState("");
   const [customDeployWebhook, setCustomDeployWebhook] = useState("");
   const [testFramework, setTestFramework] = useState<string>("none");
-  const [hilConfig, setHilConfig] = useState(DEFAULT_HIL_CONFIG);
+  const [hilConfig, setHilConfig] = useState<HilConfig>(DEFAULT_HIL_CONFIG);
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
 
-  // Test framework detection
   const [detectedFramework, setDetectedFramework] = useState<string | null>(null);
   const [detectingFramework, setDetectingFramework] = useState(false);
 
-  // API key status (for agents step)
   const [envKeys, setEnvKeys] = useState<{ anthropic: boolean; cursor: boolean } | null>(null);
   const [savingKey, setSavingKey] = useState<"ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | null>(null);
   const [keyInput, setKeyInput] = useState<{ anthropic: string; cursor: string }>({ anthropic: "", cursor: "" });
@@ -67,7 +73,6 @@ export function ProjectSetup() {
       .catch(() => setEnvKeys(null));
   }, [step]);
 
-  // Detect test framework when entering testing step with a repo path
   useEffect(() => {
     if (step !== "testing" || !repoPath.trim()) return;
     setDetectingFramework(true);
@@ -113,14 +118,14 @@ export function ProjectSetup() {
         description: metadata.description.trim(),
         repoPath,
         planningAgent: {
-          type: planningAgentType,
-          model: planningAgentType === "custom" ? null : planningModel || null,
-          cliCommand: planningAgentType === "custom" && planningCliCommand.trim() ? planningCliCommand.trim() : null,
+          type: planningAgent.type,
+          model: planningAgent.type === "custom" ? null : planningAgent.model || null,
+          cliCommand: planningAgent.type === "custom" && planningAgent.cliCommand.trim() ? planningAgent.cliCommand.trim() : null,
         },
         codingAgent: {
-          type: codingAgentType,
-          model: codingAgentType === "custom" ? null : codingModel || null,
-          cliCommand: codingAgentType === "custom" && codingCliCommand.trim() ? codingCliCommand.trim() : null,
+          type: codingAgent.type,
+          model: codingAgent.type === "custom" ? null : codingAgent.model || null,
+          cliCommand: codingAgent.type === "custom" && codingAgent.cliCommand.trim() ? codingAgent.cliCommand.trim() : null,
         },
         deployment: {
           mode: deploymentMode,
@@ -147,7 +152,6 @@ export function ProjectSetup() {
       <div className="max-w-2xl mx-auto px-6 py-10">
         <h1 className="text-2xl font-bold text-gray-900 mb-8">Create New Project</h1>
 
-        {/* Step indicator */}
         <div className="flex items-center gap-2 mb-8">
           {STEPS.map((s, i) => (
             <div key={s.key} className="flex items-center gap-2">
@@ -166,7 +170,6 @@ export function ProjectSetup() {
           ))}
         </div>
 
-        {/* Step Content */}
         <div className="card p-6">
           {step === "basics" && (
             <ProjectMetadataStep
@@ -180,421 +183,65 @@ export function ProjectSetup() {
           )}
 
           {step === "repository" && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Repository Path</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    className="input font-mono text-sm flex-1"
-                    value={repoPath}
-                    onChange={(e) => setRepoPath(e.target.value)}
-                    placeholder="/Users/you/projects/my-app"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowFolderBrowser(true)}
-                    className="btn-secondary text-sm px-3 whitespace-nowrap flex items-center gap-1.5"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
-                      />
-                    </svg>
-                    Browse
-                  </button>
-                </div>
-                <p className="mt-1 text-xs text-gray-400">Absolute path where the project repo will be created</p>
-              </div>
-            </div>
+            <RepositoryStep
+              value={repoPath}
+              onChange={setRepoPath}
+              onBrowse={() => setShowFolderBrowser(true)}
+            />
           )}
 
           {step === "agents" && (
-            <div className="space-y-6">
-              {envKeys && (!envKeys.anthropic || !envKeys.cursor) && (
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
-                  <p className="text-sm text-amber-800">
-                    <strong>API keys required:</strong> Add <code className="font-mono text-xs">ANTHROPIC_API_KEY</code>{" "}
-                    and/or <code className="font-mono text-xs">CURSOR_API_KEY</code> to your project&apos;s{" "}
-                    <code className="font-mono text-xs">.env</code> file to use Claude and Cursor. Get keys from{" "}
-                    <a
-                      href="https://console.anthropic.com/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline hover:text-amber-900"
-                    >
-                      Anthropic Console
-                    </a>{" "}
-                    and{" "}
-                    <a
-                      href="https://cursor.com/settings"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline hover:text-amber-900"
-                    >
-                      Cursor → Integrations → User API Keys
-                    </a>
-                    .
-                  </p>
-                </div>
-              )}
-              {envKeys && (
-                <div className="space-y-3">
-                  {!envKeys.anthropic && (
-                    <div className="flex gap-2 items-end">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">
-                          ANTHROPIC_API_KEY (Claude)
-                        </label>
-                        <input
-                          type="password"
-                          className="input font-mono text-sm"
-                          placeholder="sk-ant-..."
-                          value={keyInput.anthropic}
-                          onChange={(e) => setKeyInput((p) => ({ ...p, anthropic: e.target.value }))}
-                          autoComplete="off"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleSaveKey("ANTHROPIC_API_KEY")}
-                        disabled={!keyInput.anthropic.trim() || savingKey !== null}
-                        className="btn-primary text-sm disabled:opacity-50"
-                      >
-                        {savingKey === "ANTHROPIC_API_KEY" ? "Saving…" : "Save"}
-                      </button>
-                    </div>
-                  )}
-                  {!envKeys.cursor && (
-                    <div className="flex gap-2 items-end">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">CURSOR_API_KEY</label>
-                        <input
-                          type="password"
-                          className="input font-mono text-sm"
-                          placeholder="key_..."
-                          value={keyInput.cursor}
-                          onChange={(e) => setKeyInput((p) => ({ ...p, cursor: e.target.value }))}
-                          autoComplete="off"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleSaveKey("CURSOR_API_KEY")}
-                        disabled={!keyInput.cursor.trim() || savingKey !== null}
-                        className="btn-primary text-sm disabled:opacity-50"
-                      >
-                        {savingKey === "CURSOR_API_KEY" ? "Saving…" : "Save"}
-                      </button>
-                    </div>
-                  )}
-                  {(envKeys.anthropic || envKeys.cursor) && (
-                    <p className="text-xs text-green-600">
-                      {envKeys.anthropic && envKeys.cursor
-                        ? "Both API keys configured."
-                        : envKeys.anthropic
-                          ? "Claude API key configured."
-                          : "Cursor API key configured."}
-                    </p>
-                  )}
-                </div>
-              )}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">Planning Agent</h3>
-                <p className="text-xs text-gray-500 mb-3">Used for Dream conversations and Plan decomposition</p>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Provider</label>
-                      <select
-                        className="input"
-                        value={planningAgentType}
-                        onChange={(e) => setPlanningAgentType(e.target.value as AgentType)}
-                      >
-                        <option value="claude">Claude</option>
-                        <option value="cursor">Cursor</option>
-                        <option value="custom">Custom CLI</option>
-                      </select>
-                    </div>
-                    {planningAgentType !== "custom" && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
-                        <ModelSelect
-                          provider={planningAgentType}
-                          value={planningModel || null}
-                          onChange={(id) => setPlanningModel(id ?? "")}
-                          refreshTrigger={modelRefreshTrigger}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {planningAgentType === "custom" && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">CLI command</label>
-                      <input
-                        type="text"
-                        className="input w-full font-mono text-sm"
-                        placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
-                        value={planningCliCommand}
-                        onChange={(e) => setPlanningCliCommand(e.target.value)}
-                      />
-                      <p className="mt-1 text-xs text-gray-500">
-                        Command invoked with prompt as argument. Must accept input and produce output.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <hr />
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">Coding Agent</h3>
-                <p className="text-xs text-gray-500 mb-3">Used for Build phase implementation and review</p>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Provider</label>
-                      <select
-                        className="input"
-                        value={codingAgentType}
-                        onChange={(e) => setCodingAgentType(e.target.value as AgentType)}
-                      >
-                        <option value="claude">Claude</option>
-                        <option value="cursor">Cursor</option>
-                        <option value="custom">Custom CLI</option>
-                      </select>
-                    </div>
-                    {codingAgentType !== "custom" && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
-                        <ModelSelect
-                          provider={codingAgentType}
-                          value={codingModel || null}
-                          onChange={(id) => setCodingModel(id ?? "")}
-                          refreshTrigger={modelRefreshTrigger}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {codingAgentType === "custom" && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">CLI command</label>
-                      <input
-                        type="text"
-                        className="input w-full font-mono text-sm"
-                        placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
-                        value={codingCliCommand}
-                        onChange={(e) => setCodingCliCommand(e.target.value)}
-                      />
-                      <p className="mt-1 text-xs text-gray-500">
-                        Command invoked with prompt as argument. Must accept input and produce output.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+            <AgentsStep
+              planningAgent={planningAgent}
+              codingAgent={codingAgent}
+              onPlanningAgentChange={setPlanningAgent}
+              onCodingAgentChange={setCodingAgent}
+              envKeys={envKeys}
+              keyInput={keyInput}
+              onKeyInputChange={(key, value) =>
+                setKeyInput((p) => ({ ...p, [key]: value }))
+              }
+              savingKey={savingKey}
+              onSaveKey={handleSaveKey}
+              modelRefreshTrigger={modelRefreshTrigger}
+            />
           )}
 
           {step === "deployment" && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Deployment Mode</label>
-                <div className="space-y-3">
-                  <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:border-brand-300 cursor-pointer transition-colors">
-                    <input
-                      type="radio"
-                      name="deployment"
-                      value="expo"
-                      checked={deploymentMode === "expo"}
-                      onChange={() => setDeploymentMode("expo")}
-                      className="mt-0.5"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Expo.dev</p>
-                      <p className="text-xs text-gray-500">Automatic deployment for React Native and web projects</p>
-                    </div>
-                  </label>
-                  <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:border-brand-300 cursor-pointer transition-colors">
-                    <input
-                      type="radio"
-                      name="deployment"
-                      value="custom"
-                      checked={deploymentMode === "custom"}
-                      onChange={() => setDeploymentMode("custom")}
-                      className="mt-0.5"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Custom Pipeline</p>
-                      <p className="text-xs text-gray-500">Command or webhook triggered after Build completion</p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-              {deploymentMode === "custom" && (
-                <div className="space-y-3 pt-2 border-t border-gray-200">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Deployment command</label>
-                    <input
-                      type="text"
-                      className="input w-full font-mono text-sm"
-                      placeholder="e.g. ./deploy.sh or vercel deploy --prod"
-                      value={customDeployCommand}
-                      onChange={(e) => setCustomDeployCommand(e.target.value)}
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      Shell command run from project root after each task completion
-                    </p>
-                  </div>
-                  <div className="text-sm text-gray-500 text-center">— or —</div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
-                    <input
-                      type="url"
-                      className="input w-full font-mono text-sm"
-                      placeholder="https://api.example.com/deploy"
-                      value={customDeployWebhook}
-                      onChange={(e) => setCustomDeployWebhook(e.target.value)}
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      HTTP POST sent after each task completion (GitHub Actions, Vercel, etc.)
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+            <DeploymentStep
+              mode={deploymentMode}
+              customCommand={customDeployCommand}
+              customWebhook={customDeployWebhook}
+              onModeChange={setDeploymentMode}
+              onCustomCommandChange={setCustomDeployCommand}
+              onCustomWebhookChange={setCustomDeployWebhook}
+            />
           )}
 
           {step === "testing" && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Test Framework</label>
-                <p className="text-xs text-gray-500 mb-3">
-                  OpenSprint uses this to run tests during the Build phase. We detect from your project when possible.
-                </p>
-                {detectingFramework && <p className="text-sm text-gray-500 mb-2">Detecting from project...</p>}
-                {!detectingFramework && detectedFramework && (
-                  <p className="text-sm text-green-600 mb-2">
-                    Detected:{" "}
-                    <strong>
-                      {TEST_FRAMEWORKS.find((f) => f.id === detectedFramework)?.label ?? detectedFramework}
-                    </strong>
-                  </p>
-                )}
-                <select
-                  className="input w-full"
-                  value={testFramework}
-                  onChange={(e) => setTestFramework(e.target.value)}
-                >
-                  {TEST_FRAMEWORKS.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            <TestingStep
+              value={testFramework}
+              onChange={setTestFramework}
+              detectingFramework={detectingFramework}
+              detectedFramework={detectedFramework}
+            />
           )}
 
           {step === "hil" && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-500 mb-4">
-                Configure when OpenSprint should pause for your input vs. proceed autonomously.
-              </p>
-              {(
-                [
-                  { key: "scopeChanges", label: "Scope Changes", desc: "Adds, removes, or alters features" },
-                  {
-                    key: "architectureDecisions",
-                    label: "Architecture Decisions",
-                    desc: "Tech stack, integrations, schema changes",
-                  },
-                  {
-                    key: "dependencyModifications",
-                    label: "Dependency Modifications",
-                    desc: "Task reordering and re-prioritization",
-                  },
-                  {
-                    key: "testFailuresAndRetries",
-                    label: "Test Failures & Retries",
-                    desc: "How to handle failing tests",
-                  },
-                ] as const
-              ).map((cat) => (
-                <div key={cat.key} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{cat.label}</p>
-                    <p className="text-xs text-gray-500">{cat.desc}</p>
-                  </div>
-                  <select
-                    className="input w-48"
-                    value={hilConfig[cat.key]}
-                    onChange={(e) => setHilConfig({ ...hilConfig, [cat.key]: e.target.value as HilNotificationMode })}
-                  >
-                    <option value="requires_approval">Requires Approval</option>
-                    <option value="notify_and_proceed">Notify & Proceed</option>
-                    <option value="automated">Automated</option>
-                  </select>
-                </div>
-              ))}
-            </div>
+            <HilStep value={hilConfig} onChange={setHilConfig} />
           )}
 
           {step === "confirm" && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-gray-900">Review your project setup</h3>
-              <dl className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">Name</dt>
-                  <dd className="font-medium">{metadata.name}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">Repository</dt>
-                  <dd className="font-mono text-xs">{repoPath}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">Planning Agent</dt>
-                  <dd className="font-medium capitalize">
-                    {planningAgentType === "custom"
-                      ? planningCliCommand.trim()
-                        ? `Custom: ${planningCliCommand.trim()}`
-                        : "Custom (not configured)"
-                      : `${planningAgentType}${planningModel ? ` (${planningModel})` : ""}`}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">Coding Agent</dt>
-                  <dd className="font-medium capitalize">
-                    {codingAgentType === "custom"
-                      ? codingCliCommand.trim()
-                        ? `Custom: ${codingCliCommand.trim()}`
-                        : "Custom (not configured)"
-                      : `${codingAgentType}${codingModel ? ` (${codingModel})` : ""}`}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">Deployment</dt>
-                  <dd className="font-medium">
-                    {deploymentMode === "custom"
-                      ? customDeployCommand.trim()
-                        ? `Custom: ${customDeployCommand.trim()}`
-                        : customDeployWebhook.trim()
-                          ? `Webhook: ${customDeployWebhook.trim()}`
-                          : "Custom (not configured)"
-                      : "Expo"}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">Test Framework</dt>
-                  <dd className="font-medium">
-                    {testFramework === "none"
-                      ? "None"
-                      : (TEST_FRAMEWORKS.find((f) => f.id === testFramework)?.label ?? testFramework)}
-                  </dd>
-                </div>
-              </dl>
-            </div>
+            <ConfirmStep
+              metadata={metadata}
+              repoPath={repoPath}
+              planningAgent={planningAgent}
+              codingAgent={codingAgent}
+              deploymentMode={deploymentMode}
+              customDeployCommand={customDeployCommand}
+              customDeployWebhook={customDeployWebhook}
+              testFramework={testFramework}
+            />
           )}
         </div>
 
@@ -610,7 +257,6 @@ export function ProjectSetup() {
             </button>
           </div>
         )}
-        {/* Navigation */}
         <div className="flex justify-between mt-6">
           <button
             onClick={() => {
@@ -627,8 +273,8 @@ export function ProjectSetup() {
               onClick={handleCreate}
               disabled={
                 creating ||
-                (planningAgentType === "custom" && !planningCliCommand.trim()) ||
-                (codingAgentType === "custom" && !codingCliCommand.trim())
+                (planningAgent.type === "custom" && !planningAgent.cliCommand.trim()) ||
+                (codingAgent.type === "custom" && !codingAgent.cliCommand.trim())
               }
               className="btn-primary disabled:opacity-50"
             >
@@ -654,8 +300,8 @@ export function ProjectSetup() {
               disabled={
                 (step === "repository" && !repoPath.trim()) ||
                 (step === "agents" &&
-                  ((planningAgentType === "custom" && !planningCliCommand.trim()) ||
-                    (codingAgentType === "custom" && !codingCliCommand.trim())))
+                  ((planningAgent.type === "custom" && !planningAgent.cliCommand.trim()) ||
+                    (codingAgent.type === "custom" && !codingAgent.cliCommand.trim())))
               }
               className="btn-primary disabled:opacity-50"
             >

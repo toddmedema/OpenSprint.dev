@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { KanbanColumn, AgentSession, Plan, Task } from "@opensprint/shared";
-import { KANBAN_COLUMNS, PRIORITY_LABELS } from "@opensprint/shared";
+import type { AgentSession, Plan, Task } from "@opensprint/shared";
+import { PRIORITY_LABELS } from "@opensprint/shared";
 import { useAppDispatch, useAppSelector } from "../../store";
 import {
   fetchTaskDetail,
@@ -13,49 +13,11 @@ import {
 } from "../../store/slices/buildSlice";
 import { wsSend } from "../../store/middleware/websocketMiddleware";
 import { CloseButton } from "../../components/CloseButton";
+import { KanbanBoard, TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
 
 interface BuildPhaseProps {
   projectId: string;
-  /** Called when user clicks plan link in task detail; navigates to Plan phase and selects the plan */
   onNavigateToPlan?: (planId: string) => void;
-}
-
-const columnLabels: Record<KanbanColumn, string> = {
-  planning: "Planning",
-  backlog: "Backlog",
-  ready: "Ready",
-  in_progress: "In Progress",
-  in_review: "In Review",
-  done: "Done",
-};
-
-const columnColors: Record<KanbanColumn, string> = {
-  planning: "bg-gray-400",
-  backlog: "bg-yellow-400",
-  ready: "bg-blue-400",
-  in_progress: "bg-purple-400",
-  in_review: "bg-orange-400",
-  done: "bg-green-400",
-};
-
-function StatusIcon({ col, size = "sm", title }: { col: KanbanColumn; size?: "sm" | "xs"; title?: string }) {
-  const dim = size === "sm" ? "w-2.5 h-2.5" : "w-2 h-2";
-  if (col === "done") {
-    return (
-      <span className="inline-flex" title={title}>
-        <svg
-          className={`${dim} shrink-0 text-green-500`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2.5}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-        </svg>
-      </span>
-    );
-  }
-  return <span className={`${dim} rounded-full shrink-0 ${columnColors[col]}`} title={title} />;
 }
 
 function ArchivedSessionView({ sessions }: { sessions: AgentSession[] }) {
@@ -70,7 +32,6 @@ function ArchivedSessionView({ sessions }: { sessions: AgentSession[] }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Session summary and selector */}
       <div className="px-4 py-2 border-b border-gray-700 flex items-center gap-4 text-xs flex-wrap">
         {sessions.length > 1 ? (
           <select
@@ -101,7 +62,6 @@ function ArchivedSessionView({ sessions }: { sessions: AgentSession[] }) {
           </span>
         )}
       </div>
-      {/* Tabs */}
       <div className="flex gap-2 px-4 py-2 border-b border-gray-700 shrink-0">
         <button
           type="button"
@@ -124,7 +84,6 @@ function ArchivedSessionView({ sessions }: { sessions: AgentSession[] }) {
           </button>
         )}
       </div>
-      {/* Content */}
       <pre className="flex-1 p-4 text-xs font-mono whitespace-pre-wrap overflow-y-auto">
         {activeTab === "output" ? session.outputLog || "(no output)" : session.gitDiff || "(no diff)"}
       </pre>
@@ -142,7 +101,6 @@ function getEpicTitleFromPlan(plan: Plan): string {
 export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
   const dispatch = useAppDispatch();
 
-  /* ── Redux state ── */
   const tasks = useAppSelector((s) => s.build.tasks);
   const plans = useAppSelector((s) => s.plan.plans);
   const awaitingApproval = useAppSelector((s) => s.build.awaitingApproval);
@@ -159,21 +117,18 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
   const selectedTaskData = selectedTask ? tasks.find((t) => t.id === selectedTask) : null;
   const isDoneTask = selectedTaskData?.kanbanColumn === "done";
 
-  // Fetch full task specification when a task is selected
   useEffect(() => {
     if (selectedTask) {
       dispatch(fetchTaskDetail({ projectId, taskId: selectedTask }));
     }
   }, [projectId, selectedTask, dispatch]);
 
-  // Fetch archived sessions when a done task is selected
   useEffect(() => {
     if (selectedTask && isDoneTask) {
       dispatch(fetchArchivedSessions({ projectId, taskId: selectedTask }));
     }
   }, [projectId, selectedTask, isDoneTask, dispatch]);
 
-  // Subscribe to agent output when a task is selected (only for in-progress/in-review)
   useEffect(() => {
     if (selectedTask && !isDoneTask) {
       dispatch(wsSend({ type: "agent.subscribe", taskId: selectedTask }));
@@ -261,108 +216,41 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
           </button>
         </div>
       )}
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 bg-white shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Build</h2>
-            <p className="text-sm text-gray-500">
-              {doneTasks}/{totalTasks} tasks completed · {inProgressTasks} in progress
-            </p>
+        <div className="px-6 py-4 border-b border-gray-200 bg-white shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Build</h2>
+              <p className="text-sm text-gray-500">
+                {doneTasks}/{totalTasks} tasks completed · {inProgressTasks} in progress
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {awaitingApproval && <span className="text-sm font-medium text-amber-600">Awaiting approval…</span>}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            {awaitingApproval && <span className="text-sm font-medium text-amber-600">Awaiting approval…</span>}
+          <div className="w-full bg-gray-100 rounded-full h-2">
+            <div
+              className="bg-brand-600 h-2 rounded-full transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
           </div>
         </div>
 
-        {/* Progress bar */}
-        <div className="w-full bg-gray-100 rounded-full h-2">
-          <div
-            className="bg-brand-600 h-2 rounded-full transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
+        <div className="flex-1 overflow-auto p-6">
+          {loading ? (
+            <div className="text-center py-10 text-gray-400">Loading tasks...</div>
+          ) : implTasks.length === 0 ? (
+            <div className="text-center py-10 text-gray-500">No tasks yet. Ship a Plan to start generating tasks.</div>
+          ) : (
+            <KanbanBoard
+              swimlanes={swimlanes}
+              onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
+            />
+          )}
         </div>
       </div>
 
-      {/* Kanban Board */}
-      <div className="flex-1 overflow-auto p-6">
-        {loading ? (
-          <div className="text-center py-10 text-gray-400">Loading tasks...</div>
-        ) : implTasks.length === 0 ? (
-          <div className="text-center py-10 text-gray-500">No tasks yet. Ship a Plan to start generating tasks.</div>
-        ) : (
-          <div className="space-y-6">
-            {swimlanes.map((lane) => {
-              const laneTasksByCol = KANBAN_COLUMNS.reduce(
-                (acc, col) => {
-                  acc[col] = lane.tasks.filter((t) => t.kanbanColumn === col);
-                  return acc;
-                },
-                {} as Record<KanbanColumn, Task[]>,
-              );
-              return (
-                <div key={lane.epicId || "other"} className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-700">{lane.epicTitle}</h3>
-                    <p className="text-xs text-gray-500">
-                      {lane.tasks.filter((t) => t.kanbanColumn === "done").length}/{lane.tasks.length} done
-                    </p>
-                  </div>
-                  <div className="flex gap-4 p-4 min-w-max overflow-x-auto">
-                    {KANBAN_COLUMNS.map((col) => (
-                      <div key={col} className="kanban-column flex-shrink-0 w-56">
-                        <div className="flex items-center gap-2 mb-2">
-                          <StatusIcon col={col} size="sm" title={columnLabels[col]} />
-                          <span className="text-xs font-semibold text-gray-600">{columnLabels[col]}</span>
-                          <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
-                            {laneTasksByCol[col].length}
-                          </span>
-                        </div>
-                        <div className="space-y-2">
-                          {laneTasksByCol[col].map((task) => (
-                            <div
-                              key={task.id}
-                              className="kanban-card cursor-pointer"
-                              onClick={() => dispatch(setSelectedTaskId(task.id))}
-                            >
-                              <p className="text-sm font-medium text-gray-900 mb-2">{task.title}</p>
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-gray-400 font-mono truncate" title={task.id}>
-                                  {task.id}
-                                </span>
-                                <span className="text-xs text-gray-500">
-                                  {PRIORITY_LABELS[task.priority] ?? "Medium"}
-                                </span>
-                              </div>
-                              {task.assignee && <div className="mt-2 text-xs text-brand-600">{task.assignee}</div>}
-                              {task.testResults && task.testResults.total > 0 && (
-                                <div
-                                  className={`mt-2 text-xs font-medium ${
-                                    task.testResults.failed > 0 ? "text-red-600" : "text-green-600"
-                                  }`}
-                                >
-                                  {task.testResults.passed} passed
-                                  {task.testResults.failed > 0 ? `, ${task.testResults.failed} failed` : ""}
-                                  {task.testResults.skipped > 0 ? `, ${task.testResults.skipped} skipped` : ""}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-      </div>
-
-      {/* Sidebar: Task Detail — matches Plan detail layout */}
       {selectedTask && (
         <div className="w-[420px] border-l border-gray-200 flex flex-col bg-gray-50 shrink-0">
           <div className="flex items-center justify-between p-4 border-b border-gray-200 shrink-0">
@@ -401,9 +289,7 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
             </div>
           </div>
 
-          {/* Scrollable content area */}
           <div className="flex-1 overflow-y-auto min-h-0">
-            {/* Task specification */}
             <div className="p-4 border-b border-gray-200">
               <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Task</h4>
               {taskDetailLoading ? (
@@ -417,7 +303,7 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
                     <span className="text-gray-400">·</span>
                     <span className="text-gray-500">{PRIORITY_LABELS[taskDetail.priority] ?? "Medium"}</span>
                     <span className="text-gray-400">·</span>
-                    <span className="text-gray-500">{columnLabels[taskDetail.kanbanColumn]}</span>
+                    <span className="text-gray-500">{COLUMN_LABELS[taskDetail.kanbanColumn]}</span>
                     {taskDetail.assignee && (
                       <>
                         <span className="text-gray-400">·</span>
@@ -447,7 +333,7 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
                                 onClick={() => dispatch(setSelectedTaskId(d.targetId))}
                                 className="inline-flex items-center gap-1.5 text-left hover:underline text-brand-600 hover:text-brand-500 transition-colors"
                               >
-                                <StatusIcon col={col} size="xs" title={columnLabels[col]} />
+                                <TaskStatusBadge column={col} size="xs" title={COLUMN_LABELS[col]} />
                                 <span className="truncate max-w-[200px]" title={label}>
                                   {label}
                                 </span>
@@ -463,7 +349,6 @@ export function BuildPhase({ projectId, onNavigateToPlan }: BuildPhaseProps) {
               )}
             </div>
 
-            {/* Live agent output or completed artifacts */}
             <div className="p-4">
               <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
                 {isDoneTask ? "Completed work artifacts" : "Live agent output"}
