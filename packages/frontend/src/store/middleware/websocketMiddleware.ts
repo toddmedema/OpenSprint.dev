@@ -185,7 +185,13 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         break;
 
       case "deploy.completed":
-        d(deployCompleted({ deployId: event.deployId, success: event.success }));
+        d(
+          deployCompleted({
+            deployId: event.deployId,
+            success: event.success,
+            fixEpicId: event.fixEpicId,
+          }),
+        );
         d(fetchDeployStatus(projectId));
         d(fetchDeployHistory(projectId));
         break;

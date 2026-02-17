@@ -25,4 +25,6 @@ export interface DeploymentRecord {
   previousDeployId?: string | null;
   /** Deploy ID that rolled back this deployment (set when status is rolled_back) */
   rolledBackBy?: string | null;
+  /** Beads epic ID for fix tasks when deployment failed due to pre-deploy test failures (PRD §7.5.2) */
+  fixEpicId?: string | null;
 }

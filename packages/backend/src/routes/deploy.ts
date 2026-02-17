@@ -1,11 +1,14 @@
 import { Router, Request } from "express";
 import { spawn, execSync } from "child_process";
 import type { ApiResponse, DeploymentRecord, DeploymentConfig, ProjectSettings } from "@opensprint/shared";
+import { resolveTestCommand } from "@opensprint/shared";
 import { deploymentService } from "../services/deployment-service.js";
 import { deployStorageService } from "../services/deploy-storage.service.js";
 import { ProjectService } from "../services/project.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { ensureEasConfig } from "../services/eas-config.js";
+import { testRunner } from "../services/test-runner.js";
+import { createFixEpicFromTestOutput } from "../services/deploy-fix-epic.service.js";
 
 const projectService = new ProjectService();
 
@@ -54,7 +57,7 @@ deployRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
 
     await deployStorageService.updateRecord(projectId, record.id, { status: "running" });
 
-    runDeployAsync(projectId, record.id, project.repoPath, settings.deployment).catch((err) => {
+    runDeployAsync(projectId, record.id, project.repoPath, settings).catch((err) => {
       console.error(`[deploy] Deploy ${record.id} failed:`, err);
     });
 
@@ -181,19 +184,62 @@ deployRouter.post("/:deployId/rollback", async (req: Request<DeployIdParams>, re
   }
 });
 
-/** Run deployment asynchronously with streaming output */
+/** Run deployment asynchronously with streaming output.
+ * PRD §7.5.2: Runs pre-deploy test suite first. If tests fail, creates fix epic via Planner and aborts.
+ */
 async function runDeployAsync(
   projectId: string,
   deployId: string,
   repoPath: string,
-  config: DeploymentConfig,
+  settings: ProjectSettings,
 ): Promise<void> {
+  const config = settings.deployment;
   const emit = (chunk: string) => {
     deployStorageService.appendLog(projectId, deployId, chunk);
     broadcastToProject(projectId, { type: "deploy.output", deployId, chunk });
   };
 
   try {
+    // PRD §7.5.2: Pre-deployment validation — run full test suite before deploying
+    const testCommand = resolveTestCommand(settings);
+    emit("Running pre-deployment tests...\n");
+    const testResult = await testRunner.runTestsWithOutput(repoPath, testCommand || undefined);
+
+    if (testResult.failed > 0 || testResult.total === 0) {
+      const failMsg =
+        testResult.total === 0
+          ? "No tests ran (test command may be misconfigured)"
+          : `${testResult.failed} test(s) failed`;
+      emit(`Pre-deployment tests failed: ${failMsg}\n`);
+      emit(testResult.rawOutput ? `\n--- Test output ---\n${testResult.rawOutput}\n` : "");
+
+      // Invoke Planner to create fix epic + tasks; create via beads, broadcast with fixEpicId
+      const fixResult = await createFixEpicFromTestOutput(
+        projectId,
+        repoPath,
+        testResult.rawOutput || failMsg,
+      );
+
+      await deployStorageService.updateRecord(projectId, deployId, {
+        status: "failed",
+        completedAt: new Date().toISOString(),
+        error: failMsg,
+        fixEpicId: fixResult?.epicId ?? null,
+      });
+      if (fixResult) {
+        emit(`Fix epic created: ${fixResult.epicId} (${fixResult.taskCount} tasks)\n`);
+      }
+      broadcastToProject(projectId, {
+        type: "deploy.completed",
+        deployId,
+        success: false,
+        fixEpicId: fixResult?.epicId ?? undefined,
+      });
+      return;
+    }
+
+    emit("All tests passed. Proceeding with deployment...\n");
+
     if (config.mode === "expo") {
       await ensureEasConfig(repoPath);
       const channel = config.expoConfig?.channel ?? "preview";

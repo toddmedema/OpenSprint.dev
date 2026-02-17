@@ -22,6 +22,11 @@ describe("Deploy API", () => {
     process.env.HOME = tempDir;
 
     const repoPath = path.join(tempDir, "my-project");
+    await fs.mkdir(repoPath, { recursive: true });
+    await fs.writeFile(
+      path.join(repoPath, "package.json"),
+      JSON.stringify({ name: "test", scripts: { test: "echo ok" } }),
+    );
     const project = await projectService.createProject({
       name: "Deploy Test Project",
       description: "For deploy API tests",

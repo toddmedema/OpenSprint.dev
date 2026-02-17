@@ -106,10 +106,15 @@ const deploySlice = createSlice({
     },
     deployCompleted(
       state,
-      action: PayloadAction<{ deployId: string; success: boolean }>,
+      action: PayloadAction<{ deployId: string; success: boolean; fixEpicId?: string | null }>,
     ) {
       if (state.activeDeployId === action.payload.deployId) {
         state.activeDeployId = null;
+      }
+      // Update history record with fixEpicId when present (for immediate UI update before refetch)
+      if (action.payload.fixEpicId) {
+        const rec = state.history.find((r) => r.id === action.payload.deployId);
+        if (rec) rec.fixEpicId = action.payload.fixEpicId;
       }
     },
     resetDeploy() {

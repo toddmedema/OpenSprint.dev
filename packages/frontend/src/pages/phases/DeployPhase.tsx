@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import type { DeploymentRecord } from "@opensprint/shared";
+import { getProjectPhasePath } from "../../lib/phaseRouting";
 import { useAppDispatch, useAppSelector } from "../../store";
 import {
   triggerDeploy,
@@ -47,6 +49,9 @@ function StatusBadge({ status }: { status: DeploymentRecord["status"] }) {
 
 export function DeployPhase({ projectId, onOpenSettings }: DeployPhaseProps) {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const { projectId: paramProjectId } = useParams<{ projectId: string }>();
+  const effectiveProjectId = projectId ?? paramProjectId ?? "";
   const [settings, setSettings] = useState<{ deployment: { mode: string; customCommand?: string; webhookUrl?: string; rollbackCommand?: string } } | null>(null);
 
   const history = useAppSelector((s) => s.deploy.history);
@@ -222,6 +227,20 @@ export function DeployPhase({ projectId, onOpenSettings }: DeployPhaseProps) {
               {selectedRecord?.error && (
                 <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
                   {selectedRecord.error}
+                  {selectedRecord.fixEpicId && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(getProjectPhasePath(effectiveProjectId, "execute"))
+                        }
+                        className="text-brand-600 hover:text-brand-700 font-medium underline"
+                        data-testid="fix-epic-link"
+                      >
+                        View fix epic ({selectedRecord.fixEpicId}) →
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

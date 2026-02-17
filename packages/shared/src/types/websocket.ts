@@ -107,6 +107,8 @@ export interface DeployCompletedEvent {
   type: 'deploy.completed';
   deployId: string;
   success: boolean;
+  /** Beads epic ID for fix tasks when failed due to pre-deploy test failures (PRD §7.5.2) */
+  fixEpicId?: string | null;
 }
 
 export interface DeployOutputEvent {

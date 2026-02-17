@@ -50,6 +50,25 @@ describe("deploySlice", () => {
     expect(state.activeDeployId).toBeNull();
   });
 
+  it("should update history record with fixEpicId when deployCompleted has fixEpicId", () => {
+    const history = [
+      {
+        id: "deploy-1",
+        projectId: "proj-1",
+        status: "failed" as const,
+        startedAt: "2025-01-01T12:00:00.000Z",
+        completedAt: "2025-01-01T12:01:00.000Z",
+        log: [],
+      },
+    ];
+    const stateWithHistory = deployReducer(undefined, { type: "unknown" });
+    let state = deployReducer(
+      { ...stateWithHistory, history },
+      deployCompleted({ deployId: "deploy-1", success: false, fixEpicId: "bd-abc123" }),
+    );
+    expect(state.history[0]).toMatchObject({ fixEpicId: "bd-abc123" });
+  });
+
   it("should handle setSelectedDeployId", () => {
     const state = deployReducer(undefined, setSelectedDeployId("deploy-456"));
     expect(state.selectedDeployId).toBe("deploy-456");

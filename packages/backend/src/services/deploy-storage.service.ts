@@ -63,7 +63,7 @@ export class DeployStorageService {
     projectId: string,
     deployId: string,
     updates: Partial<
-      Pick<DeploymentRecord, "status" | "completedAt" | "url" | "error" | "log" | "rolledBackBy">
+      Pick<DeploymentRecord, "status" | "completedAt" | "url" | "error" | "log" | "rolledBackBy" | "fixEpicId">
     >,
   ): Promise<DeploymentRecord | null> {
     const existing = await this.getRecord(projectId, deployId);

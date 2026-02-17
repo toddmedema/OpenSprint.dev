@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { DeployPhase } from "./DeployPhase";
 import deployReducer from "../../store/slices/deploySlice";
 import projectReducer from "../../store/slices/projectSlice";
@@ -41,6 +42,18 @@ function createStore(initialDeployState = {}) {
   });
 }
 
+function renderWithRouter(store: ReturnType<typeof createStore>, projectId = "proj-1") {
+  return render(
+    <Provider store={store}>
+      <MemoryRouter initialEntries={[`/projects/${projectId}/deploy`]}>
+        <Routes>
+          <Route path="/projects/:projectId/deploy" element={<DeployPhase projectId={projectId} />} />
+        </Routes>
+      </MemoryRouter>
+    </Provider>,
+  );
+}
+
 describe("DeployPhase", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -48,41 +61,25 @@ describe("DeployPhase", () => {
 
   it("renders Deploy! button", () => {
     const store = createStore();
-    render(
-      <Provider store={store}>
-        <DeployPhase projectId="proj-1" />
-      </Provider>,
-    );
+    renderWithRouter(store);
     expect(screen.getByTestId("deploy-button")).toHaveTextContent("Deploy!");
   });
 
   it("renders deployment history section", () => {
     const store = createStore();
-    render(
-      <Provider store={store}>
-        <DeployPhase projectId="proj-1" />
-      </Provider>,
-    );
+    renderWithRouter(store);
     expect(screen.getByText("Deployment History")).toBeInTheDocument();
   });
 
   it("shows empty state when no deployments", () => {
     const store = createStore();
-    render(
-      <Provider store={store}>
-        <DeployPhase projectId="proj-1" />
-      </Provider>,
-    );
+    renderWithRouter(store);
     expect(screen.getByText(/No deployments yet/)).toBeInTheDocument();
   });
 
   it("renders live log panel", () => {
     const store = createStore();
-    render(
-      <Provider store={store}>
-        <DeployPhase projectId="proj-1" />
-      </Provider>,
-    );
+    renderWithRouter(store);
     expect(screen.getByTestId("deploy-log")).toBeInTheDocument();
   });
 
@@ -100,11 +97,27 @@ describe("DeployPhase", () => {
         },
       ],
     });
-    render(
-      <Provider store={store}>
-        <DeployPhase projectId="proj-1" />
-      </Provider>,
-    );
+    renderWithRouter(store);
     expect(screen.getByText("rolled-back")).toBeInTheDocument();
+  });
+
+  it("shows fix epic link when deployment failed with fixEpicId", () => {
+    const store = createStore({
+      history: [
+        {
+          id: "deploy-1",
+          projectId: "proj-1",
+          status: "failed",
+          startedAt: "2025-01-01T12:00:00.000Z",
+          completedAt: "2025-01-01T12:01:00.000Z",
+          log: [],
+          error: "2 test(s) failed",
+          fixEpicId: "bd-abc123",
+        },
+      ],
+    });
+    renderWithRouter(store);
+    expect(screen.getByTestId("fix-epic-link")).toBeInTheDocument();
+    expect(screen.getByTestId("fix-epic-link")).toHaveTextContent(/View fix epic \(bd-abc123\)/);
   });
 });
