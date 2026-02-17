@@ -349,7 +349,7 @@ describe("VerifyPhase feedback input", () => {
     });
   });
 
-  it("shows category chip (Bug/Feature/UX/Scope) for all feedback, not Pending/Mapped", () => {
+  it("shows loading spinner instead of category chip for pending feedback", () => {
     const storeWithFeedback = configureStore({
       reducer: {
         project: projectReducer,
@@ -394,9 +394,69 @@ describe("VerifyPhase feedback input", () => {
       </Provider>,
     );
 
-    expect(screen.getByText("Bug")).toBeInTheDocument();
+    expect(screen.getByLabelText("Categorizing feedback")).toBeInTheDocument();
+    expect(screen.queryByText("Bug")).not.toBeInTheDocument();
     expect(screen.queryByText("Pending")).not.toBeInTheDocument();
     expect(screen.queryByText("Mapped")).not.toBeInTheDocument();
+  });
+
+  it("shows category chip for mapped feedback and spinner for pending in mixed list", () => {
+    const storeWithFeedback = configureStore({
+      reducer: {
+        project: projectReducer,
+        validate: validateReducer,
+      },
+      preloadedState: {
+        project: {
+          data: {
+            id: "proj-1",
+            name: "Test Project",
+            description: "",
+            repoPath: "/tmp/test",
+            currentPhase: "verify",
+            createdAt: "",
+            updatedAt: "",
+          },
+          loading: false,
+          error: null,
+        },
+        validate: {
+          feedback: [
+            {
+              id: "fb-pending",
+              text: "Pending feedback",
+              category: "bug",
+              mappedPlanId: null,
+              createdTaskIds: [],
+              status: "pending",
+              createdAt: new Date().toISOString(),
+            },
+            {
+              id: "fb-mapped",
+              text: "Mapped feedback",
+              category: "feature",
+              mappedPlanId: "plan-1",
+              createdTaskIds: [],
+              status: "mapped",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          loading: false,
+          submitting: false,
+          error: null,
+        },
+      },
+    });
+
+    render(
+      <Provider store={storeWithFeedback}>
+        <VerifyPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    expect(screen.getByLabelText("Categorizing feedback")).toBeInTheDocument();
+    expect(screen.getByText("Feature")).toBeInTheDocument();
+    expect(screen.queryByText("Bug")).not.toBeInTheDocument();
   });
 
   it("shows category chip (Bug/Feature/UX/Scope) for mapped feedback", () => {

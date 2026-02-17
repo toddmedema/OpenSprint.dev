@@ -246,13 +246,26 @@ export function VerifyPhase({ projectId, onNavigateToBuildTask }: VerifyPhasePro
                 <div className="flex items-start justify-between mb-2">
                   <p className="text-sm text-gray-900 flex-1">{item.text}</p>
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        categoryColors[item.category] ?? "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {getFeedbackTypeLabel(item)}
-                    </span>
+                    {item.status === "pending" ? (
+                      <span
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-50 text-amber-700"
+                        title="Categorizing..."
+                        aria-label="Categorizing feedback"
+                      >
+                        <span
+                          className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"
+                          aria-hidden
+                        />
+                      </span>
+                    ) : (
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          categoryColors[item.category] ?? "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {getFeedbackTypeLabel(item)}
+                      </span>
+                    )}
                     {item.status === "pending" && (
                       <button
                         type="button"
