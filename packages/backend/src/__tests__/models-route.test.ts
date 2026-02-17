@@ -3,6 +3,7 @@ import request from "supertest";
 import { createApp } from "../app.js";
 import { API_PREFIX } from "@opensprint/shared";
 import * as modelListCache from "../services/model-list-cache.js";
+import { clearInFlightFetches } from "../routes/models.js";
 
 const mockModelsList = vi.fn();
 
@@ -24,6 +25,7 @@ describe("Models API", () => {
   beforeEach(() => {
     app = createApp();
     modelListCache.clear();
+    clearInFlightFetches();
     originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
     originalCursorKey = process.env.CURSOR_API_KEY;
     vi.clearAllMocks();
@@ -132,6 +134,78 @@ describe("Models API", () => {
       const res = await request(app).get(`${API_PREFIX}/models`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
+    });
+
+    it("coalesces concurrent Cursor requests to avoid rate limits", async () => {
+      process.env.CURSOR_API_KEY = "cursor-test-key";
+      const fetchPromise = new Promise<{ ok: boolean; json: () => Promise<{ models: string[] }> }>((resolve) => {
+        setTimeout(
+          () =>
+            resolve({
+              ok: true,
+              json: () => Promise.resolve({ models: ["gpt-4", "claude-3"] }),
+            }),
+          10,
+        );
+      });
+      globalThis.fetch = vi.fn().mockReturnValue(fetchPromise);
+
+      const requests = [
+        request(app).get(`${API_PREFIX}/models?provider=cursor`),
+        request(app).get(`${API_PREFIX}/models?provider=cursor`),
+        request(app).get(`${API_PREFIX}/models?provider=cursor`),
+      ];
+
+      const results = await Promise.all(requests);
+      results.forEach((res) => {
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual([
+          { id: "gpt-4", displayName: "gpt-4" },
+          { id: "claude-3", displayName: "claude-3" },
+        ]);
+      });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns helpful message on Cursor 429 rate limit", async () => {
+      process.env.CURSOR_API_KEY = "cursor-test-key";
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: () => Promise.resolve("Rate limit exceeded"),
+      });
+
+      const res = await request(app).get(`${API_PREFIX}/models?provider=cursor`);
+      expect(res.status).toBe(429);
+      expect(res.body.error?.message).toContain("rate limit");
+      expect(res.body.error?.message).toContain("30 minutes");
+    });
+
+    it("coalesces concurrent Claude requests to avoid rate limits", async () => {
+      process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+      let resolveGen: () => void;
+      const genReady = new Promise<void>((r) => {
+        resolveGen = r;
+      });
+      async function* gen() {
+        await genReady;
+        yield { id: "claude-sonnet-4", display_name: "Claude Sonnet 4" };
+      }
+      mockModelsList.mockReturnValue(gen());
+
+      const requests = [
+        request(app).get(`${API_PREFIX}/models?provider=claude`),
+        request(app).get(`${API_PREFIX}/models?provider=claude`),
+      ];
+
+      resolveGen!();
+      const results = await Promise.all(requests);
+      results.forEach((res) => {
+        expect(res.status).toBe(200);
+        expect(res.body.data).toHaveLength(1);
+        expect(res.body.data[0].id).toBe("claude-sonnet-4");
+      });
+      expect(mockModelsList).toHaveBeenCalledTimes(1);
     });
   });
 });

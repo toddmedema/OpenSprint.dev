@@ -14,6 +14,14 @@ export const modelsRouter = Router();
 
 const CURSOR_MODELS_URL = "https://api.cursor.com/v0/models";
 
+/** In-flight fetches per provider to coalesce concurrent requests (avoids rate limits). */
+const inFlightFetches = new Map<string, Promise<ModelOption[]>>();
+
+/** Clear in-flight fetches (for tests). */
+export function clearInFlightFetches(): void {
+  inFlightFetches.clear();
+}
+
 async function fetchClaudeModels(apiKey: string): Promise<ModelOption[]> {
   const client = new Anthropic({ apiKey });
   const models: ModelOption[] = [];
@@ -40,7 +48,9 @@ async function fetchCursorModels(apiKey: string): Promise<ModelOption[]> {
         ? " Check that CURSOR_API_KEY in .env is valid. Get a key from Cursor → Settings → Integrations → User API Keys."
         : response.status === 403
           ? " Your API key may not have access to models."
-          : "";
+          : response.status === 429
+            ? " Cursor API rate limit hit. The app caches model lists for 30 minutes; try again shortly."
+            : "";
     throw new AppError(response.status >= 500 ? 502 : response.status, ErrorCodes.CURSOR_API_ERROR, `Cursor API error ${response.status}: ${text}${hint}`, {
       status: response.status,
       responsePreview: text.slice(0, 200),
@@ -52,6 +62,35 @@ async function fetchCursorModels(apiKey: string): Promise<ModelOption[]> {
     id,
     displayName: id,
   }));
+}
+
+/**
+ * Fetch models for a provider with request coalescing.
+ * Concurrent requests for the same provider share a single API call to avoid rate limits.
+ */
+async function getModelsWithCoalescing(
+  provider: "claude" | "cursor",
+  fetchFn: () => Promise<ModelOption[]>,
+): Promise<ModelOption[]> {
+  const cached = modelListCache.get<ModelOption[]>(provider);
+  if (cached !== undefined) return cached;
+
+  let promise = inFlightFetches.get(provider);
+  if (!promise) {
+    promise = fetchFn().then(
+      (models) => {
+        modelListCache.set(provider, models);
+        inFlightFetches.delete(provider);
+        return models;
+      },
+      (err) => {
+        inFlightFetches.delete(provider);
+        throw err;
+      },
+    );
+    inFlightFetches.set(provider, promise);
+  }
+  return promise;
 }
 
 // GET /models?provider=claude|cursor — List available models for the given provider
@@ -66,14 +105,7 @@ modelsRouter.get("/", async (req: Request, res, next) => {
         return;
       }
 
-      const cached = modelListCache.get<ModelOption[]>("claude");
-      if (cached !== undefined) {
-        res.json({ data: cached } as ApiResponse<ModelOption[]>);
-        return;
-      }
-
-      const models = await fetchClaudeModels(apiKey);
-      modelListCache.set("claude", models);
+      const models = await getModelsWithCoalescing("claude", () => fetchClaudeModels(apiKey));
       res.json({ data: models } as ApiResponse<ModelOption[]>);
       return;
     }
@@ -85,14 +117,7 @@ modelsRouter.get("/", async (req: Request, res, next) => {
         return;
       }
 
-      const cached = modelListCache.get<ModelOption[]>("cursor");
-      if (cached !== undefined) {
-        res.json({ data: cached } as ApiResponse<ModelOption[]>);
-        return;
-      }
-
-      const models = await fetchCursorModels(apiKey);
-      modelListCache.set("cursor", models);
+      const models = await getModelsWithCoalescing("cursor", () => fetchCursorModels(apiKey));
       res.json({ data: models } as ApiResponse<ModelOption[]>);
       return;
     }
