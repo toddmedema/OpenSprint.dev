@@ -10,7 +10,6 @@ export interface CrossEpicConfirmModalProps {
 }
 
 export function CrossEpicConfirmModal({
-  planId,
   prerequisitePlanIds,
   onConfirm,
   onCancel,
@@ -38,8 +37,8 @@ export function CrossEpicConfirmModal({
         {/* Content */}
         <div className="px-5 py-4 space-y-3">
           <p className="text-sm text-gray-700">
-            This feature requires{" "}
-            <span className="font-medium text-gray-900">{prereqList}</span> to be implemented first.
+            This feature requires <span className="font-medium text-gray-900">{prereqList}</span> to
+            be implemented first.
           </p>
           <p className="text-sm text-gray-600">
             Queueing will also queue those features in dependency order. Proceed?

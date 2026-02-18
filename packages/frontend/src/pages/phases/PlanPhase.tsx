@@ -79,7 +79,9 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [tasksSectionExpanded, setTasksSectionExpanded] = useState(true);
-  const [dependencyGraphExpanded, setDependencyGraphExpanded] = useState(loadDependencyGraphExpanded);
+  const [dependencyGraphExpanded, setDependencyGraphExpanded] = useState(
+    loadDependencyGraphExpanded
+  );
   const [savingPlanContentId, setSavingPlanContentId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -87,9 +89,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
 
   const filteredAndSortedPlans = useMemo(() => {
     const filtered =
-      statusFilter === "all"
-        ? plans
-        : plans.filter((p) => p.status === statusFilter);
+      statusFilter === "all" ? plans : plans.filter((p) => p.status === statusFilter);
     return sortPlansByStatus(filtered);
   }, [plans, statusFilter]);
 
@@ -101,7 +101,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         : dependencyGraph.plans.filter((p) => p.status === statusFilter);
     const filteredPlanIds = new Set(filteredPlans.map((p) => p.metadata.planId));
     const filteredEdges = dependencyGraph.edges.filter(
-      (e) => filteredPlanIds.has(e.from) && filteredPlanIds.has(e.to),
+      (e) => filteredPlanIds.has(e.from) && filteredPlanIds.has(e.to)
     );
     return {
       plans: sortPlansByStatus(filteredPlans),
@@ -113,9 +113,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     if (!selectedPlan?.metadata.beadEpicId) return [];
     const epicId = selectedPlan.metadata.beadEpicId;
     const gateTaskId = selectedPlan.metadata.gateTaskId;
-    return executeTasks.filter(
-      (t) => t.epicId === epicId && t.id !== gateTaskId
-    );
+    return executeTasks.filter((t) => t.epicId === epicId && t.id !== gateTaskId);
   }, [selectedPlan?.metadata.beadEpicId, selectedPlan?.metadata.gateTaskId, executeTasks]);
 
   const planIdToTasks = useMemo(() => {
@@ -124,15 +122,16 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
       const epicId = plan.metadata.beadEpicId;
       const gateTaskId = plan.metadata.gateTaskId;
       if (!epicId) continue;
-      const tasks = executeTasks.filter(
-        (t) => t.epicId === epicId && t.id !== gateTaskId
-      );
+      const tasks = executeTasks.filter((t) => t.epicId === epicId && t.id !== gateTaskId);
       map.set(plan.metadata.planId, tasks);
     }
     return map;
   }, [plans, executeTasks]);
   const planContext = selectedPlan ? `plan:${selectedPlan.metadata.planId}` : null;
-  const currentChatMessages = planContext ? (chatMessages[planContext] ?? []) : [];
+  const currentChatMessages = useMemo(
+    () => (planContext ? (chatMessages[planContext] ?? []) : []),
+    [planContext, chatMessages]
+  );
 
   // Fetch chat history when a plan is selected
   useEffect(() => {
@@ -169,9 +168,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     const { planId, prerequisitePlanIds } = crossEpicModal;
     setCrossEpicModal(null);
     dispatch(setPlanError(null));
-    const result = await dispatch(
-      executePlan({ projectId, planId, prerequisitePlanIds }),
-    );
+    const result = await dispatch(executePlan({ projectId, planId, prerequisitePlanIds }));
     if (executePlan.fulfilled.match(result)) {
       dispatch(fetchPlans(projectId));
     }
@@ -203,7 +200,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     (plan: Plan) => {
       dispatch(setSelectedPlanId(plan.metadata.planId));
     },
-    [dispatch],
+    [dispatch]
   );
 
   const handleClosePlan = useCallback(() => {
@@ -220,7 +217,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         dispatch(fetchPlans(projectId));
       }
     },
-    [dispatch, projectId, selectedPlanId],
+    [dispatch, projectId, selectedPlanId]
   );
 
   const handleSendChat = async () => {
@@ -232,7 +229,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     setChatError(null);
 
     const result = await dispatch(
-      sendPlanMessage({ projectId, message: text, context: planContext }),
+      sendPlanMessage({ projectId, message: text, context: planContext })
     );
 
     if (sendPlanMessage.fulfilled.match(result)) {
@@ -250,7 +247,11 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
       {error && (
         <div className="mx-4 mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex justify-between items-center shrink-0">
           <span>{error}</span>
-          <button type="button" onClick={() => dispatch(setPlanError(null))} className="text-red-500 hover:text-red-700 underline">
+          <button
+            type="button"
+            onClick={() => dispatch(setPlanError(null))}
+            className="text-red-500 hover:text-red-700 underline"
+          >
             Dismiss
           </button>
         </div>
@@ -277,7 +278,12 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
             </span>
           </button>
           {dependencyGraphExpanded && (
-            <div id="dependency-graph-content" role="region" aria-labelledby="dependency-graph-header" className="p-4 pt-0">
+            <div
+              id="dependency-graph-content"
+              role="region"
+              aria-labelledby="dependency-graph-header"
+              className="p-4 pt-0"
+            >
               <DependencyGraph graph={filteredDependencyGraph} onPlanClick={handleSelectPlan} />
             </div>
           )}
@@ -301,7 +307,11 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
               </select>
             )}
           </div>
-          <button type="button" onClick={() => setShowAddPlanModal(true)} className="btn-primary text-sm">
+          <button
+            type="button"
+            onClick={() => setShowAddPlanModal(true)}
+            className="btn-primary text-sm"
+          >
             Add Feature
           </button>
         </div>
@@ -311,8 +321,8 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         ) : plans.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-gray-500 mb-4">
-              No plans yet. Use &ldquo;Plan it&rdquo; from the Spec phase to decompose the PRD into feature plans and
-              tasks, or add a plan manually.
+              No plans yet. Use &ldquo;Plan it&rdquo; from the Spec phase to decompose the PRD into
+              feature plans and tasks, or add a plan manually.
             </p>
             <button type="button" onClick={() => setShowAddPlanModal(true)} className="btn-primary">
               Add Feature
@@ -321,7 +331,11 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         ) : filteredAndSortedPlans.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-gray-500">
-              No plans match the &ldquo;{statusFilter === "all" ? "All" : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}&rdquo; filter.
+              No plans match the &ldquo;
+              {statusFilter === "all"
+                ? "All"
+                : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+              &rdquo; filter.
             </p>
           </div>
         ) : (
@@ -343,7 +357,11 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
       </div>
 
       {showAddPlanModal && (
-        <AddPlanModal projectId={projectId} onClose={() => setShowAddPlanModal(false)} onCreated={handlePlanCreated} />
+        <AddPlanModal
+          projectId={projectId}
+          onClose={() => setShowAddPlanModal(false)}
+          onCreated={handlePlanCreated}
+        />
       )}
 
       {crossEpicModal && (
@@ -401,7 +419,9 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
             {/* Mockups */}
             {selectedPlan.metadata.mockups && selectedPlan.metadata.mockups.length > 0 && (
               <div className="p-4 border-b border-gray-200">
-                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Mockups</h4>
+                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                  Mockups
+                </h4>
                 <div className="space-y-3">
                   {selectedPlan.metadata.mockups.map((mockup, i) => (
                     <div key={i} className="bg-white rounded-lg border overflow-hidden">
@@ -427,14 +447,15 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                 <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   Tasks ({planTasks.length})
                 </h4>
-                <span className="text-gray-400 text-xs">
-                  {tasksSectionExpanded ? "▼" : "▶"}
-                </span>
+                <span className="text-gray-400 text-xs">{tasksSectionExpanded ? "▼" : "▶"}</span>
               </button>
               {tasksSectionExpanded && (
                 <div className="px-4 pb-4 space-y-2">
                   {planTasks.length === 0 ? (
-                    <p className="text-sm text-gray-500">No tasks yet. Click &ldquo;Execute!&rdquo; to auto-generate tasks from this plan, or use the AI chat to refine the plan first.</p>
+                    <p className="text-sm text-gray-500">
+                      No tasks yet. Click &ldquo;Execute!&rdquo; to auto-generate tasks from this
+                      plan, or use the AI chat to refine the plan first.
+                    </p>
                   ) : (
                     planTasks.map((task) => (
                       <button
@@ -447,7 +468,8 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                           className={`shrink-0 w-2 h-2 rounded-full ${
                             task.kanbanColumn === "done"
                               ? "bg-green-500"
-                              : task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review"
+                              : task.kanbanColumn === "in_progress" ||
+                                  task.kanbanColumn === "in_review"
                                 ? "bg-blue-500"
                                 : "bg-gray-300"
                           }`}
@@ -468,16 +490,21 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
 
             {/* Chat messages */}
             <div className="p-4">
-              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Refine with AI</h4>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
+                Refine with AI
+              </h4>
               <div className="space-y-3">
                 {currentChatMessages.length === 0 && (
                   <p className="text-sm text-gray-500">
-                    Chat with the planning agent to refine this plan. Ask questions, suggest changes, or request
-                    updates.
+                    Chat with the planning agent to refine this plan. Ask questions, suggest
+                    changes, or request updates.
                   </p>
                 )}
                 {currentChatMessages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div
+                    key={i}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
                     <div
                       className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                         msg.role === "user"

@@ -5,9 +5,6 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
-    "run-task": "tsx src/scripts/run-agent-task.ts",
-    "check-blockers": "tsx src/scripts/check-blockers-closed.ts",
-    "recover-orphans": "tsx src/scripts/recover-orphans.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",

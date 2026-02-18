@@ -6,7 +6,6 @@ import type {
   ConversationMessage,
   ChatRequest,
   ChatResponse,
-  Prd,
   PrdSectionKey,
 } from "@opensprint/shared";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
@@ -39,10 +38,7 @@ const SECTION_DISPLAY_NAMES: Record<string, string> = {
  * Build a user-friendly description for architecture decision HIL approval (PRD §6.5.1).
  * Prompts the user clearly about what architectural changes they are being asked to approve.
  */
-function buildArchitectureHilDescription(
-  contextDescription: string,
-  sections: string[],
-): string {
+function buildArchitectureHilDescription(contextDescription: string, sections: string[]): string {
   const sectionNames = sections
     .map((s) => SECTION_DISPLAY_NAMES[s] ?? s.replace(/_/g, " "))
     .join(", ");
@@ -210,7 +206,11 @@ export class ChatService {
   }
 
   /** Write plan markdown (avoids PlanService circular dep) */
-  private async writePlanContent(projectId: string, planId: string, content: string): Promise<void> {
+  private async writePlanContent(
+    projectId: string,
+    planId: string,
+    content: string
+  ): Promise<void> {
     const project = await this.projectService.getProject(projectId);
     const plansDir = path.join(project.repoPath, OPENSPRINT_PATHS.plans);
     await fs.mkdir(plansDir, { recursive: true });
@@ -234,7 +234,9 @@ export class ChatService {
     if (!isPlanContext && body.prdSectionFocus) {
       const prd = await this.prdService.getPrd(projectId);
       const section = prd.sections[body.prdSectionFocus as keyof typeof prd.sections];
-      const sectionLabel = body.prdSectionFocus.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      const sectionLabel = body.prdSectionFocus
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
       if (section?.content) {
         agentPrompt =
           `[User is focusing on the ${sectionLabel} section]\n\n` +
@@ -285,7 +287,14 @@ export class ChatService {
         : `design-chat-${projectId}-${conversation.id}-${Date.now()}`;
     const phase = isPlanContext ? "plan" : "design";
     const label = isPlanContext ? "Plan chat" : "Design chat";
-    activeAgentsService.register(agentId, projectId, phase, "dreamer", label, new Date().toISOString());
+    activeAgentsService.register(
+      agentId,
+      projectId,
+      phase,
+      "dreamer",
+      label,
+      new Date().toISOString()
+    );
 
     try {
       console.log("[chat] Invoking planning agent", {
@@ -403,7 +412,14 @@ export class ChatService {
     const systemPrompt = `You are the Harmonizer agent for OpenSprint (PRD §12.3.3). Review shipped Plans against the PRD and propose section updates.\n\n## Current PRD\n\n${prdContext}`;
 
     const agentId = `harmonizer-build-it-${projectId}-${planId}-${Date.now()}`;
-    activeAgentsService.register(agentId, projectId, "plan", "harmonizer", "Execute! PRD sync", new Date().toISOString());
+    activeAgentsService.register(
+      agentId,
+      projectId,
+      "plan",
+      "harmonizer",
+      "Execute! PRD sync",
+      new Date().toISOString()
+    );
 
     let response;
     try {
@@ -420,7 +436,11 @@ export class ChatService {
     const result = parseHarmonizerResult(response.content, legacyUpdates);
     if (!result || result.status === "no_changes_needed" || result.prdUpdates.length === 0) return;
 
-    const filtered = await this.filterArchitectureUpdatesWithHil(projectId, result.prdUpdates, `Plan "${planId}" updates`);
+    const filtered = await this.filterArchitectureUpdatesWithHil(
+      projectId,
+      result.prdUpdates,
+      `Plan "${planId}" updates`
+    );
     if (filtered.length === 0) return;
 
     const changes = await this.prdService.updateSections(projectId, filtered, "plan");
@@ -440,7 +460,7 @@ export class ChatService {
    */
   async getScopeChangeProposal(
     projectId: string,
-    feedbackText: string,
+    feedbackText: string
   ): Promise<{ summary: string; prdUpdates: HarmonizerPrdUpdate[] } | null> {
     const settings = await this.projectService.getSettings(projectId);
     const agentConfig = settings.planningAgent;
@@ -450,7 +470,14 @@ export class ChatService {
     const systemPrompt = `You are the Harmonizer agent for OpenSprint (PRD §12.3.3). Review scope-change feedback against the PRD and propose section updates.\n\n## Current PRD\n\n${prdContext}`;
 
     const agentId = `harmonizer-scope-preview-${projectId}-${Date.now()}`;
-    activeAgentsService.register(agentId, projectId, "plan", "harmonizer", "Scope-change proposal", new Date().toISOString());
+    activeAgentsService.register(
+      agentId,
+      projectId,
+      "plan",
+      "harmonizer",
+      "Scope-change proposal",
+      new Date().toISOString()
+    );
 
     let response;
     try {
@@ -465,7 +492,8 @@ export class ChatService {
 
     const legacyUpdates = this.parsePrdUpdates(response.content);
     const result = parseHarmonizerResultFull(response.content, legacyUpdates);
-    if (!result || result.status === "no_changes_needed" || result.prdUpdates.length === 0) return null;
+    if (!result || result.status === "no_changes_needed" || result.prdUpdates.length === 0)
+      return null;
 
     const summary =
       result.prdUpdates
@@ -485,10 +513,14 @@ export class ChatService {
   async applyScopeChangeUpdates(
     projectId: string,
     prdUpdates: HarmonizerPrdUpdate[],
-    contextDescription: string,
+    contextDescription: string
   ): Promise<void> {
     const baseUpdates = prdUpdates.map(({ section, content }) => ({ section, content }));
-    const filtered = await this.filterArchitectureUpdatesWithHil(projectId, baseUpdates, contextDescription);
+    const filtered = await this.filterArchitectureUpdatesWithHil(
+      projectId,
+      baseUpdates,
+      contextDescription
+    );
     if (filtered.length === 0) return;
 
     const changes = await this.prdService.updateSections(projectId, filtered, "eval");
@@ -516,7 +548,14 @@ export class ChatService {
     const systemPrompt = `You are the Harmonizer agent for OpenSprint (PRD §12.3.3). Review scope-change feedback against the PRD and propose section updates.\n\n## Current PRD\n\n${prdContext}`;
 
     const agentId = `harmonizer-scope-change-${projectId}-${Date.now()}`;
-    activeAgentsService.register(agentId, projectId, "plan", "harmonizer", "Scope-change PRD sync", new Date().toISOString());
+    activeAgentsService.register(
+      agentId,
+      projectId,
+      "plan",
+      "harmonizer",
+      "Scope-change PRD sync",
+      new Date().toISOString()
+    );
 
     let response;
     try {
@@ -536,7 +575,7 @@ export class ChatService {
     const filtered = await this.filterArchitectureUpdatesWithHil(
       projectId,
       result.prdUpdates,
-      `Scope change feedback: "${feedbackText.slice(0, 80)}${feedbackText.length > 80 ? "…" : ""}"`,
+      `Scope change feedback: "${feedbackText.slice(0, 80)}${feedbackText.length > 80 ? "…" : ""}"`
     );
     if (filtered.length === 0) return;
 
@@ -557,20 +596,20 @@ export class ChatService {
   private async filterArchitectureUpdatesWithHil(
     projectId: string,
     prdUpdates: Array<{ section: PrdSectionKey; content: string }>,
-    contextDescription: string,
+    contextDescription: string
   ): Promise<Array<{ section: PrdSectionKey; content: string }>> {
     const archUpdates = prdUpdates.filter((u) =>
-      ARCHITECTURE_SECTIONS.includes(u.section as (typeof ARCHITECTURE_SECTIONS)[number]),
+      ARCHITECTURE_SECTIONS.includes(u.section as (typeof ARCHITECTURE_SECTIONS)[number])
     );
     const nonArchUpdates = prdUpdates.filter(
-      (u) => !ARCHITECTURE_SECTIONS.includes(u.section as (typeof ARCHITECTURE_SECTIONS)[number]),
+      (u) => !ARCHITECTURE_SECTIONS.includes(u.section as (typeof ARCHITECTURE_SECTIONS)[number])
     );
 
     if (archUpdates.length === 0) return prdUpdates;
 
     const architectureDescription = buildArchitectureHilDescription(
       contextDescription,
-      archUpdates.map((u) => u.section),
+      archUpdates.map((u) => u.section)
     );
     const { approved } = await hilService.evaluateDecision(
       projectId,
@@ -580,7 +619,7 @@ export class ChatService {
         { id: "approve", label: "Approve", description: "Apply architecture changes to PRD" },
         { id: "reject", label: "Reject", description: "Skip architecture updates" },
       ],
-      true, // default: apply when automated/notify_and_proceed
+      true // default: apply when automated/notify_and_proceed
     );
 
     return approved ? prdUpdates : nonArchUpdates;

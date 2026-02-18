@@ -19,7 +19,7 @@ import executeReducer, {
   resetExecute,
   type ExecuteState,
 } from "./executeSlice";
-import planReducer, { setPlansAndGraph } from "./planSlice";
+import planReducer from "./planSlice";
 import type { Plan, PlanDependencyGraph, AgentSession, Task } from "@opensprint/shared";
 
 vi.mock("../../api/client", () => ({
@@ -152,14 +152,14 @@ describe("executeSlice", () => {
         appendAgentOutput({
           taskId: "task-1",
           chunk: '{"type":"tool_use","name":"edit","input":{}}\n',
-        }),
+        })
       );
       expect(store.getState().execute.agentOutput).toEqual([]);
       store.dispatch(
         appendAgentOutput({
           taskId: "task-1",
           chunk: '{"type":"text","text":"Creating file..."}\n',
-        }),
+        })
       );
       expect(store.getState().execute.agentOutput).toEqual(["Creating file..."]);
     });
@@ -186,7 +186,7 @@ describe("executeSlice", () => {
           taskId: "task-1",
           status: "approved",
           testResults: { passed: 5, failed: 0, skipped: 1, total: 6 },
-        }),
+        })
       );
       const state = store.getState().execute;
       expect(state.completionState?.status).toBe("approved");
@@ -364,11 +364,13 @@ describe("executeSlice", () => {
 
     it("passes resetAttempts when provided", async () => {
       vi.mocked(api.tasks.unblock).mockResolvedValue({ taskUnblocked: true } as never);
-      vi.mocked(api.tasks.list).mockResolvedValue([{ ...mockTask, kanbanColumn: "backlog" }] as never);
+      vi.mocked(api.tasks.list).mockResolvedValue([
+        { ...mockTask, kanbanColumn: "backlog" },
+      ] as never);
       vi.mocked(api.plans.list).mockResolvedValue(mockGraph as never);
       const store = createStore();
       await store.dispatch(
-        unblockTask({ projectId: "proj-1", taskId: "task-1", resetAttempts: true }),
+        unblockTask({ projectId: "proj-1", taskId: "task-1", resetAttempts: true })
       );
       expect(api.tasks.unblock).toHaveBeenCalledWith("proj-1", "task-1", { resetAttempts: true });
     });

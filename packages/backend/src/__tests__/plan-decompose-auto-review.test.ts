@@ -79,10 +79,14 @@ describe("Plan decompose with auto-review", () => {
       JSON.stringify({
         version: 1,
         sections: {
-          executive_summary: { content: "Test app", version: 1, updated_at: new Date().toISOString() },
+          executive_summary: {
+            content: "Test app",
+            version: 1,
+            updated_at: new Date().toISOString(),
+          },
         },
       }),
-      "utf-8",
+      "utf-8"
     );
   });
 
@@ -91,68 +95,83 @@ describe("Plan decompose with auto-review", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("invokes auto-review agent after decompose and closes identified tasks", { timeout: 15000 }, async () => {
-    // First invoke: decompose response
-    const decomposeResponse = {
-      content: JSON.stringify({
-        plans: [
-          {
-            title: "Backend API",
-            content: "# Backend API\n\n## Overview\n\nREST API.\n\n## Acceptance Criteria\n\n- Endpoints work",
-            complexity: "medium",
-            mockups: [{ title: "API", content: "GET /api" }],
-            tasks: [
-              { title: "Create health endpoint", description: "GET /health", priority: 0, dependsOn: [] },
-              { title: "Create users endpoint", description: "GET /users", priority: 1, dependsOn: [] },
-            ],
-          },
-        ],
-      }),
-    };
+  it(
+    "invokes auto-review agent after decompose and closes identified tasks",
+    { timeout: 15000 },
+    async () => {
+      // First invoke: decompose response
+      const decomposeResponse = {
+        content: JSON.stringify({
+          plans: [
+            {
+              title: "Backend API",
+              content:
+                "# Backend API\n\n## Overview\n\nREST API.\n\n## Acceptance Criteria\n\n- Endpoints work",
+              complexity: "medium",
+              mockups: [{ title: "API", content: "GET /api" }],
+              tasks: [
+                {
+                  title: "Create health endpoint",
+                  description: "GET /health",
+                  priority: 0,
+                  dependsOn: [],
+                },
+                {
+                  title: "Create users endpoint",
+                  description: "GET /users",
+                  priority: 1,
+                  dependsOn: [],
+                },
+              ],
+            },
+          ],
+        }),
+      };
 
-    // Second invoke: auto-review response (mark first task as already implemented)
-    let taskIdToClose = "";
-    mockInvoke
-      .mockResolvedValueOnce(decomposeResponse)
-      .mockImplementation(async (opts: { prompt?: string }) => {
-        // When auto-review runs, we need to return task IDs from the created plans
-        // We don't know them until after decompose - so we get them from beads
-        const allIssues = await beads.listAll(repoPath);
-        const implTasks = allIssues.filter(
-          (i: { id: string; issue_type?: string }) =>
-            (i.issue_type ?? i.type) !== "epic" && !i.id.endsWith(".0"),
-        );
-        taskIdToClose = implTasks[0]?.id ?? "";
-        return {
-          content: JSON.stringify({
-            taskIdsToClose: taskIdToClose ? [taskIdToClose] : [],
-            reason: "Health endpoint already exists in src/server.ts",
-          }),
-        };
-      });
+      // Second invoke: auto-review response (mark first task as already implemented)
+      let taskIdToClose = "";
+      mockInvoke
+        .mockResolvedValueOnce(decomposeResponse)
+        .mockImplementation(async (_opts: { prompt?: string }) => {
+          // When auto-review runs, we need to return task IDs from the created plans
+          // We don't know them until after decompose - so we get them from beads
+          const allIssues = await beads.listAll(repoPath);
+          const implTasks = allIssues.filter(
+            (i: { id: string; issue_type?: string }) =>
+              (i.issue_type ?? i.type) !== "epic" && !i.id.endsWith(".0")
+          );
+          taskIdToClose = implTasks[0]?.id ?? "";
+          return {
+            content: JSON.stringify({
+              taskIdsToClose: taskIdToClose ? [taskIdToClose] : [],
+              reason: "Health endpoint already exists in src/server.ts",
+            }),
+          };
+        });
 
-    const result = await planService.decomposeFromPrd(projectId);
+      const result = await planService.decomposeFromPrd(projectId);
 
-    expect(result.created).toBe(1);
-    expect(result.plans).toHaveLength(1);
+      expect(result.created).toBe(1);
+      expect(result.plans).toHaveLength(1);
 
-    // Verify agent was invoked twice (decompose + auto-review)
-    expect(mockInvoke).toHaveBeenCalledTimes(2);
+      // Verify agent was invoked twice (decompose + auto-review)
+      expect(mockInvoke).toHaveBeenCalledTimes(2);
 
-    // Verify auto-review closed the identified task
-    const allIssues = await beads.listAll(repoPath);
-    const closedTasks = allIssues.filter((i: { status: string }) => i.status === "closed");
-    // Gate task + one auto-reviewed task = at least 2 closed
-    expect(closedTasks.length).toBeGreaterThanOrEqual(1);
+      // Verify auto-review closed the identified task
+      const allIssues = await beads.listAll(repoPath);
+      const closedTasks = allIssues.filter((i: { status: string }) => i.status === "closed");
+      // Gate task + one auto-reviewed task = at least 2 closed
+      expect(closedTasks.length).toBeGreaterThanOrEqual(1);
 
-    const implTasks = allIssues.filter(
-      (i: { id: string; issue_type?: string }) =>
-        (i.issue_type ?? i.type) !== "epic" && !i.id.endsWith(".0"),
-    );
-    // At least one implementation task should be closed by auto-review
-    const autoReviewed = implTasks.filter((i: { status: string }) => i.status === "closed");
-    expect(autoReviewed.length).toBeGreaterThanOrEqual(1);
-  });
+      const implTasks = allIssues.filter(
+        (i: { id: string; issue_type?: string }) =>
+          (i.issue_type ?? i.type) !== "epic" && !i.id.endsWith(".0")
+      );
+      // At least one implementation task should be closed by auto-review
+      const autoReviewed = implTasks.filter((i: { status: string }) => i.status === "closed");
+      expect(autoReviewed.length).toBeGreaterThanOrEqual(1);
+    }
+  );
 
   it("continues when auto-review agent fails (best-effort)", { timeout: 15000 }, async () => {
     mockInvoke
@@ -226,56 +245,64 @@ describe("Plan decompose with auto-review", () => {
         projectId,
         "plan",
         "Feature decomposition",
-        expect.any(String),
+        expect.any(String)
       );
       expect(mockUnregister).toHaveBeenCalledWith(mockRegister.mock.calls[0][0]);
     });
 
-    it("should register and unregister for Plan auto-review when tasks exist", { timeout: 15000 }, async () => {
-      mockInvoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            plans: [
-              {
-                title: "Auto-Review Registry Test",
-                content: "# Test\n\nContent.",
-                complexity: "low",
-                mockups: [{ title: "UI", content: "Box" }],
-                tasks: [{ title: "Task 1", description: "Do it", priority: 0, dependsOn: [] }],
-              },
-            ],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({ taskIdsToClose: [], reason: "Nothing implemented" }),
-        });
+    it(
+      "should register and unregister for Plan auto-review when tasks exist",
+      { timeout: 15000 },
+      async () => {
+        mockInvoke
+          .mockResolvedValueOnce({
+            content: JSON.stringify({
+              plans: [
+                {
+                  title: "Auto-Review Registry Test",
+                  content: "# Test\n\nContent.",
+                  complexity: "low",
+                  mockups: [{ title: "UI", content: "Box" }],
+                  tasks: [{ title: "Task 1", description: "Do it", priority: 0, dependsOn: [] }],
+                },
+              ],
+            }),
+          })
+          .mockResolvedValueOnce({
+            content: JSON.stringify({ taskIdsToClose: [], reason: "Nothing implemented" }),
+          });
 
-      await planService.decomposeFromPrd(projectId);
+        await planService.decomposeFromPrd(projectId);
 
-      // First call: decompose (register plan-decompose, unregister)
-      // Second call: auto-review (register plan-auto-review, unregister)
-      expect(mockRegister).toHaveBeenCalledTimes(2);
-      expect(mockUnregister).toHaveBeenCalledTimes(2);
+        // First call: decompose (register plan-decompose, unregister)
+        // Second call: auto-review (register plan-auto-review, unregister)
+        expect(mockRegister).toHaveBeenCalledTimes(2);
+        expect(mockUnregister).toHaveBeenCalledTimes(2);
 
-      const decomposeCall = mockRegister.mock.calls.find((c) => c[0].startsWith("plan-decompose-"));
-      const autoReviewCall = mockRegister.mock.calls.find((c) => c[0].startsWith("plan-auto-review-"));
-      expect(decomposeCall).toBeDefined();
-      expect(decomposeCall).toEqual([
-        expect.stringMatching(/^plan-decompose-.*-/),
-        projectId,
-        "plan",
-        "Feature decomposition",
-        expect.any(String),
-      ]);
-      expect(autoReviewCall).toBeDefined();
-      expect(autoReviewCall).toEqual([
-        expect.stringMatching(/^plan-auto-review-.*-/),
-        projectId,
-        "plan",
-        "Plan auto-review",
-        expect.any(String),
-      ]);
-    });
+        const decomposeCall = mockRegister.mock.calls.find((c) =>
+          c[0].startsWith("plan-decompose-")
+        );
+        const autoReviewCall = mockRegister.mock.calls.find((c) =>
+          c[0].startsWith("plan-auto-review-")
+        );
+        expect(decomposeCall).toBeDefined();
+        expect(decomposeCall).toEqual([
+          expect.stringMatching(/^plan-decompose-.*-/),
+          projectId,
+          "plan",
+          "Feature decomposition",
+          expect.any(String),
+        ]);
+        expect(autoReviewCall).toBeDefined();
+        expect(autoReviewCall).toEqual([
+          expect.stringMatching(/^plan-auto-review-.*-/),
+          projectId,
+          "plan",
+          "Plan auto-review",
+          expect.any(String),
+        ]);
+      }
+    );
 
     it("should unregister even when decompose agent throws", { timeout: 15000 }, async () => {
       mockInvoke.mockRejectedValueOnce(new Error("Agent failed"));
@@ -288,41 +315,45 @@ describe("Plan decompose with auto-review", () => {
     });
   });
 
-  it("does not close tasks when auto-review returns empty taskIdsToClose", { timeout: 15000 }, async () => {
-    mockInvoke
-      .mockResolvedValueOnce({
-        content: JSON.stringify({
-          plans: [
-            {
-              title: "New Feature",
-              content: "# New\n\nOverview.",
-              complexity: "medium",
-              mockups: [{ title: "UI", content: "Box" }],
-              tasks: [
-                { title: "Implement X", description: "Build X", priority: 0, dependsOn: [] },
-              ],
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        content: JSON.stringify({
-          taskIdsToClose: [],
-          reason: "No existing implementation found",
-        }),
-      });
+  it(
+    "does not close tasks when auto-review returns empty taskIdsToClose",
+    { timeout: 15000 },
+    async () => {
+      mockInvoke
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            plans: [
+              {
+                title: "New Feature",
+                content: "# New\n\nOverview.",
+                complexity: "medium",
+                mockups: [{ title: "UI", content: "Box" }],
+                tasks: [
+                  { title: "Implement X", description: "Build X", priority: 0, dependsOn: [] },
+                ],
+              },
+            ],
+          }),
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            taskIdsToClose: [],
+            reason: "No existing implementation found",
+          }),
+        });
 
-    const result = await planService.decomposeFromPrd(projectId);
+      const result = await planService.decomposeFromPrd(projectId);
 
-    expect(result.created).toBe(1);
-    expect(mockInvoke).toHaveBeenCalledTimes(2);
+      expect(result.created).toBe(1);
+      expect(mockInvoke).toHaveBeenCalledTimes(2);
 
-    const allIssues = await beads.listAll(repoPath);
-    const implTasks = allIssues.filter(
-      (i: { id: string; issue_type?: string }) =>
-        (i.issue_type ?? i.type) !== "epic" && !i.id.endsWith(".0"),
-    );
-    // All implementation tasks should remain open (none closed by auto-review)
-    expect(implTasks.every((t: { status: string }) => t.status === "open")).toBe(true);
-  });
+      const allIssues = await beads.listAll(repoPath);
+      const implTasks = allIssues.filter(
+        (i: { id: string; issue_type?: string }) =>
+          (i.issue_type ?? i.type) !== "epic" && !i.id.endsWith(".0")
+      );
+      // All implementation tasks should remain open (none closed by auto-review)
+      expect(implTasks.every((t: { status: string }) => t.status === "open")).toBe(true);
+    }
+  );
 });

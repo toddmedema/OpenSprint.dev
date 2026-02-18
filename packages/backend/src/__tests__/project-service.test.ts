@@ -111,7 +111,7 @@ describe("ProjectService", () => {
         codingAgent: { type: "claude", model: null, cliCommand: null },
         deployment: { mode: "custom" },
         hilConfig: DEFAULT_HIL_CONFIG,
-      }),
+      })
     ).rejects.toMatchObject({ code: "INVALID_INPUT", message: "Project name is required" });
   });
 
@@ -125,14 +125,14 @@ describe("ProjectService", () => {
         codingAgent: { type: "claude", model: null, cliCommand: null },
         deployment: { mode: "custom" },
         hilConfig: DEFAULT_HIL_CONFIG,
-      }),
+      })
     ).rejects.toMatchObject({ code: "INVALID_INPUT", message: "Repository path is required" });
   });
 
   it("should create eas.json when deployment mode is expo", async () => {
     const repoPath = path.join(tempDir, "expo-project");
 
-    const project = await projectService.createProject({
+    await projectService.createProject({
       name: "Expo Project",
       description: "",
       repoPath,
@@ -154,7 +154,7 @@ describe("ProjectService", () => {
   it("should save testFramework when provided", async () => {
     const repoPath = path.join(tempDir, "jest-project");
 
-    const project = await projectService.createProject({
+    await projectService.createProject({
       name: "Jest Project",
       description: "",
       repoPath,
@@ -277,7 +277,7 @@ describe("ProjectService", () => {
         codingAgent: { type: "claude", model: null, cliCommand: null },
         deployment: { mode: "custom" },
         hilConfig: DEFAULT_HIL_CONFIG,
-      }),
+      })
     ).rejects.toMatchObject({ code: "ALREADY_OPENSPRINT_PROJECT" });
   });
 
@@ -293,7 +293,7 @@ describe("ProjectService", () => {
         codingAgent: { type: "claude", model: null, cliCommand: null },
         deployment: { mode: "custom" },
         hilConfig: DEFAULT_HIL_CONFIG,
-      }),
+      })
     ).rejects.toMatchObject({ code: "INVALID_AGENT_CONFIG" });
   });
 
@@ -309,7 +309,7 @@ describe("ProjectService", () => {
         codingAgent: { type: "cursor", model: 123 as unknown as string, cliCommand: null },
         deployment: { mode: "custom" },
         hilConfig: DEFAULT_HIL_CONFIG,
-      }),
+      })
     ).rejects.toMatchObject({ code: "INVALID_AGENT_CONFIG" });
   });
 
@@ -447,7 +447,7 @@ describe("ProjectService", () => {
         codingAgentByComplexity: {
           high: { type: "invalid" as "claude", model: null, cliCommand: null },
         },
-      }),
+      })
     ).rejects.toMatchObject({ code: "INVALID_AGENT_CONFIG" });
   });
 
@@ -466,7 +466,7 @@ describe("ProjectService", () => {
     await expect(
       projectService.updateSettings(project.id, {
         planningAgent: { type: "invalid" as "claude", model: null, cliCommand: null },
-      }),
+      })
     ).rejects.toMatchObject({ code: "INVALID_AGENT_CONFIG" });
   });
 });

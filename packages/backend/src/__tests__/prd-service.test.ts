@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import { PrdService } from "../services/prd.service.js";
-import { ProjectService } from "../services/project.service.js";
 
 vi.mock("../services/project.service.js", () => ({
   ProjectService: vi.fn().mockImplementation(() => ({
@@ -30,7 +29,11 @@ describe("PrdService", () => {
   const mockPrd = {
     version: 1,
     sections: {
-      executive_summary: { content: "Test summary", version: 1, updatedAt: "2026-01-01T00:00:00.000Z" },
+      executive_summary: {
+        content: "Test summary",
+        version: 1,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
       problem_statement: { content: "", version: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
       user_personas: { content: "", version: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
       goals_and_metrics: { content: "", version: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
@@ -38,7 +41,11 @@ describe("PrdService", () => {
       technical_architecture: { content: "", version: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
       data_model: { content: "", version: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
       api_contracts: { content: "", version: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
-      non_functional_requirements: { content: "", version: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
+      non_functional_requirements: {
+        content: "",
+        version: 0,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
       open_questions: { content: "", version: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
     },
     changeLog: [],
@@ -71,7 +78,9 @@ describe("PrdService", () => {
   });
 
   it("should reject invalid section keys", async () => {
-    await expect(prdService.getSection("test-project", "invalid_key")).rejects.toThrow("Invalid PRD section key");
+    await expect(prdService.getSection("test-project", "invalid_key")).rejects.toThrow(
+      "Invalid PRD section key"
+    );
   });
 
   it("should update a section with versioning and append to change log with diff", async () => {
@@ -79,7 +88,7 @@ describe("PrdService", () => {
       "test-project",
       "executive_summary",
       "Updated summary content",
-      "spec",
+      "spec"
     );
 
     expect(result.previousVersion).toBe(1);
@@ -105,7 +114,7 @@ describe("PrdService", () => {
         { section: "executive_summary", content: "New summary" },
         { section: "problem_statement", content: "New problem" },
       ],
-      "plan",
+      "plan"
     );
 
     expect(changes).toHaveLength(2);
@@ -123,7 +132,12 @@ describe("PrdService", () => {
     delete (prdWithoutChangeLog as { changeLog?: unknown }).changeLog;
     await fs.writeFile(prdPath, JSON.stringify(prdWithoutChangeLog, null, 2));
 
-    const result = await prdService.updateSection("test-project", "executive_summary", "Migrated content", "spec");
+    const result = await prdService.updateSection(
+      "test-project",
+      "executive_summary",
+      "Migrated content",
+      "spec"
+    );
     expect(result.newVersion).toBe(2);
 
     const prd = await prdService.getPrd("test-project");

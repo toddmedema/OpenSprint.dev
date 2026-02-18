@@ -1,44 +1,42 @@
-import type { AgentPhase, OrchestratorStatus, TestResults } from './agent.js';
-import type { FeedbackCategory } from './feedback.js';
-import type { HilNotificationMode } from './settings.js';
+import type { AgentPhase, TestResults } from "./agent.js";
 
 // ─── Server → Client Events ───
 
 export interface TaskUpdatedEvent {
-  type: 'task.updated';
+  type: "task.updated";
   taskId: string;
   status: string;
   assignee: string | null;
 }
 
 export interface AgentOutputEvent {
-  type: 'agent.output';
+  type: "agent.output";
   taskId: string;
   chunk: string;
 }
 
 export interface AgentStartedEvent {
-  type: 'agent.started';
+  type: "agent.started";
   taskId: string;
   phase: AgentPhase;
   branchName?: string;
 }
 
 export interface AgentCompletedEvent {
-  type: 'agent.completed';
+  type: "agent.completed";
   taskId: string;
   status: string;
   testResults: TestResults | null;
 }
 
 export interface PrdUpdatedEvent {
-  type: 'prd.updated';
+  type: "prd.updated";
   section: string;
   version: number;
 }
 
 export interface ExecuteStatusEvent {
-  type: 'execute.status';
+  type: "execute.status";
   currentTask: string | null;
   /** Coding vs review sub-phase for current task (PRD §7.3.2) */
   currentPhase?: AgentPhase | null;
@@ -58,7 +56,7 @@ export interface ScopeChangeProposedUpdate {
 }
 
 export interface HilRequestEvent {
-  type: 'hil.request';
+  type: "hil.request";
   requestId: string;
   category: string;
   description: string;
@@ -78,25 +76,25 @@ export interface HilOption {
 }
 
 export interface FeedbackMappedEvent {
-  type: 'feedback.mapped';
+  type: "feedback.mapped";
   feedbackId: string;
   planId: string;
   taskIds: string[];
 }
 
 export interface FeedbackResolvedEvent {
-  type: 'feedback.resolved';
+  type: "feedback.resolved";
   feedbackId: string;
 }
 
 export interface PlanUpdatedEvent {
-  type: 'plan.updated';
+  type: "plan.updated";
   planId: string;
 }
 
 /** Emitted when a task is blocked after progressive backoff exhaustion (PRDv2 §9.1) */
 export interface TaskBlockedEvent {
-  type: 'task.blocked';
+  type: "task.blocked";
   taskId: string;
   reason: string;
   cumulativeAttempts: number;
@@ -104,12 +102,12 @@ export interface TaskBlockedEvent {
 
 /** Deploy phase events (PRDv2 Deploy phase) */
 export interface DeployStartedEvent {
-  type: 'deploy.started';
+  type: "deploy.started";
   deployId: string;
 }
 
 export interface DeployCompletedEvent {
-  type: 'deploy.completed';
+  type: "deploy.completed";
   deployId: string;
   success: boolean;
   /** Beads epic ID for fix tasks when failed due to pre-deploy test failures (PRD §7.5.2) */
@@ -117,7 +115,7 @@ export interface DeployCompletedEvent {
 }
 
 export interface DeployOutputEvent {
-  type: 'deploy.output';
+  type: "deploy.output";
   deployId: string;
   chunk: string;
 }
@@ -142,24 +140,21 @@ export type ServerEvent =
 // ─── Client → Server Events ───
 
 export interface AgentSubscribeEvent {
-  type: 'agent.subscribe';
+  type: "agent.subscribe";
   taskId: string;
 }
 
 export interface AgentUnsubscribeEvent {
-  type: 'agent.unsubscribe';
+  type: "agent.unsubscribe";
   taskId: string;
 }
 
 export interface HilRespondEvent {
-  type: 'hil.respond';
+  type: "hil.respond";
   requestId: string;
   approved: boolean;
   notes?: string;
 }
 
 /** All client-to-server WebSocket event types */
-export type ClientEvent =
-  | AgentSubscribeEvent
-  | AgentUnsubscribeEvent
-  | HilRespondEvent;
+export type ClientEvent = AgentSubscribeEvent | AgentUnsubscribeEvent | HilRespondEvent;

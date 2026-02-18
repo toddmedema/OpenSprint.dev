@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PrdViewer } from "./PrdViewer";
 
@@ -33,13 +33,7 @@ describe("PrdViewer", () => {
       executive_summary: "Summary text",
       goals_and_metrics: "Goals text",
     };
-    render(
-      <PrdViewer
-        prdContent={prdContent}
-        savingSections={[]}
-        onSectionChange={vi.fn()}
-      />,
-    );
+    render(<PrdViewer prdContent={prdContent} savingSections={[]} onSectionChange={vi.fn()} />);
 
     expect(screen.getByText("Executive Summary")).toBeInTheDocument();
     expect(screen.getByText("Goals And Metrics")).toBeInTheDocument();
@@ -52,7 +46,7 @@ describe("PrdViewer", () => {
         prdContent={{ overview: "Content" }}
         savingSections={["overview"]}
         onSectionChange={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText("Saving...")).toBeInTheDocument();
@@ -66,7 +60,7 @@ describe("PrdViewer", () => {
         prdContent={{ overview: "Original" }}
         savingSections={[]}
         onSectionChange={onSectionChange}
-      />,
+      />
     );
 
     const input = screen.getByTestId("input-overview");

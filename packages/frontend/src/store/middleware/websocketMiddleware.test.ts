@@ -1,11 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { configureStore } from "@reduxjs/toolkit";
-import {
-  websocketMiddleware,
-  wsConnect,
-  wsDisconnect,
-  wsSend,
-} from "./websocketMiddleware";
+import { websocketMiddleware, wsConnect, wsDisconnect, wsSend } from "./websocketMiddleware";
 import projectReducer from "../slices/projectSlice";
 import websocketReducer from "../slices/websocketSlice";
 import specReducer from "../slices/specSlice";
@@ -64,11 +59,25 @@ vi.mock("../../api/client", () => ({
   api: {
     prd: { get: vi.fn().mockResolvedValue({}), getHistory: vi.fn().mockResolvedValue([]) },
     chat: { history: vi.fn().mockResolvedValue({ messages: [] }) },
-    plans: { list: vi.fn().mockResolvedValue({ plans: [], edges: [] }), get: vi.fn().mockResolvedValue({}) },
-    projects: { getPlanStatus: vi.fn().mockResolvedValue({ hasPlanningRun: false, prdChangedSinceLastRun: false, action: "plan" }) },
+    plans: {
+      list: vi.fn().mockResolvedValue({ plans: [], edges: [] }),
+      get: vi.fn().mockResolvedValue({}),
+    },
+    projects: {
+      getPlanStatus: vi
+        .fn()
+        .mockResolvedValue({
+          hasPlanningRun: false,
+          prdChangedSinceLastRun: false,
+          action: "plan",
+        }),
+    },
     tasks: { list: vi.fn().mockResolvedValue([]) },
     feedback: { list: vi.fn().mockResolvedValue([]) },
-    deploy: { status: vi.fn().mockResolvedValue({ activeDeployId: null, currentDeploy: null }), history: vi.fn().mockResolvedValue([]) },
+    deploy: {
+      status: vi.fn().mockResolvedValue({ activeDeployId: null, currentDeploy: null }),
+      history: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 
@@ -81,7 +90,7 @@ describe("websocketMiddleware", () => {
     MockWS = class extends MockWebSocket {
       constructor(url: string) {
         super(url);
-        wsInstance = this;
+        wsInstance = this; // eslint-disable-line @typescript-eslint/no-this-alias
       }
     };
     vi.stubGlobal("WebSocket", MockWS);
@@ -185,7 +194,6 @@ describe("websocketMiddleware", () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
       wsInstance!.simulateOpen();
-      const wsCountBefore = 1;
       store.dispatch(wsDisconnect());
 
       vi.advanceTimersByTime(60000);
@@ -203,7 +211,9 @@ describe("websocketMiddleware", () => {
 
       store.dispatch(wsSend({ type: "agent.subscribe", taskId: "task-1" }));
 
-      expect(wsInstance!.sent).toContainEqual(JSON.stringify({ type: "agent.subscribe", taskId: "task-1" }));
+      expect(wsInstance!.sent).toContainEqual(
+        JSON.stringify({ type: "agent.subscribe", taskId: "task-1" })
+      );
     });
 
     it("does not send when socket is closed", () => {
@@ -229,7 +239,13 @@ describe("websocketMiddleware", () => {
       const { api } = await import("../../api/client");
       vi.mocked(api.prd.get).mockResolvedValue({ sections: { overview: { content: "Updated" } } });
       vi.mocked(api.prd.getHistory).mockResolvedValue([
-        { section: "overview", version: 2, source: "spec", timestamp: "2025-01-01", diff: "+Updated" },
+        {
+          section: "overview",
+          version: 2,
+          source: "spec",
+          timestamp: "2025-01-01",
+          diff: "+Updated",
+        },
       ]);
       vi.mocked(api.chat.history).mockResolvedValue({
         messages: [{ role: "assistant", content: "Done", timestamp: "2025-01-01" }],
@@ -304,7 +320,11 @@ describe("websocketMiddleware", () => {
       const { setSelectedTaskId } = await import("../slices/executeSlice");
       store.dispatch(setSelectedTaskId("task-1"));
 
-      wsInstance!.simulateMessage({ type: "agent.output", taskId: "task-1", chunk: "Hello world\n" });
+      wsInstance!.simulateMessage({
+        type: "agent.output",
+        taskId: "task-1",
+        chunk: "Hello world\n",
+      });
 
       await vi.waitFor(() => {
         expect(store.getState().execute.agentOutput.join("")).toContain("Hello world");
@@ -383,7 +403,7 @@ describe("websocketMiddleware", () => {
             assignee: null,
             epicId: "epic-1",
           },
-        ]),
+        ])
       );
       store.dispatch(wsConnect({ projectId: "proj-1" }));
       wsInstance!.simulateOpen();
@@ -498,7 +518,11 @@ describe("websocketMiddleware", () => {
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
-      wsInstance!.simulateMessage({ type: "deploy.completed", deployId: "deploy-123", success: true });
+      wsInstance!.simulateMessage({
+        type: "deploy.completed",
+        deployId: "deploy-123",
+        success: true,
+      });
 
       await vi.waitFor(() => {
         expect(store.getState().websocket.deployToast).toEqual({
@@ -514,7 +538,11 @@ describe("websocketMiddleware", () => {
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
-      wsInstance!.simulateMessage({ type: "deploy.completed", deployId: "deploy-123", success: false });
+      wsInstance!.simulateMessage({
+        type: "deploy.completed",
+        deployId: "deploy-123",
+        success: false,
+      });
 
       await vi.waitFor(() => {
         expect(store.getState().websocket.deployToast).toEqual({
@@ -596,7 +624,9 @@ describe("websocketMiddleware", () => {
       await vi.waitFor(() => store.getState().websocket.connected);
 
       const { api } = await import("../../api/client");
-      vi.mocked(api.prd.get).mockResolvedValue({ sections: { overview: { content: "After reconnect" } } });
+      vi.mocked(api.prd.get).mockResolvedValue({
+        sections: { overview: { content: "After reconnect" } },
+      });
       vi.mocked(api.prd.getHistory).mockResolvedValue([]);
       vi.mocked(api.chat.history).mockResolvedValue({ messages: [] });
       vi.mocked(api.projects.getPlanStatus).mockResolvedValue({

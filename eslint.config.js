@@ -33,6 +33,12 @@ export default [
         ...globals.node,
       },
     },
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
+    },
   },
   // Backend (Node.js) config
   {
@@ -68,11 +74,12 @@ export default [
     rules: {
       ...react.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      "react/react-in-jsx-scope": "off",
     },
   },
   // Root scripts (Node.js)
   {
-    files: ["scripts/**/*.ts"],
+    files: ["scripts/**/*.ts", "scripts/**/*.mjs"],
     languageOptions: {
       globals: {
         ...globals.node,

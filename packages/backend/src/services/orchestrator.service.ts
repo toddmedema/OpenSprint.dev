@@ -505,7 +505,6 @@ export class OrchestratorService {
     repoPath: string,
     taskId: string,
     branchName: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _worktreePath?: string | null
   ): Promise<void> {
     const state = this.getState(projectId);
@@ -1559,14 +1558,21 @@ export class OrchestratorService {
     if (epicId) {
       const allIssues = await this.beads.listAll(repoPath);
       const implTasks = allIssues.filter(
-        (i) => i.id.startsWith(epicId + ".") && !i.id.endsWith(".0") && (i.issue_type ?? i.type) !== "epic",
+        (i) =>
+          i.id.startsWith(epicId + ".") &&
+          !i.id.endsWith(".0") &&
+          (i.issue_type ?? i.type) !== "epic"
       );
-      const allClosed = implTasks.length > 0 && implTasks.every((i) => (i.status as string) === "closed");
+      const allClosed =
+        implTasks.length > 0 && implTasks.every((i) => (i.status as string) === "closed");
       if (allClosed) {
         const settings = await this.projectService.getSettings(projectId);
         if (settings.deployment.autoDeployOnEpicCompletion) {
           triggerDeploy(projectId).catch((err) => {
-            console.warn(`[orchestrator] Auto-deploy on epic completion failed for ${projectId}:`, err);
+            console.warn(
+              `[orchestrator] Auto-deploy on epic completion failed for ${projectId}:`,
+              err
+            );
           });
         }
       }

@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import type { DeploymentRecord, DeploymentConfig, ProjectSettings } from "@opensprint/shared";
+import type { DeploymentRecord, DeploymentConfig } from "@opensprint/shared";
 import { api } from "../../api/client";
 
 export interface DeployStatusResponse {
@@ -41,27 +41,24 @@ export const fetchDeployStatus = createAsyncThunk(
   "deploy/fetchStatus",
   async (projectId: string) => {
     return api.deploy.status(projectId);
-  },
+  }
 );
 
 export const fetchDeployHistory = createAsyncThunk(
   "deploy/fetchHistory",
   async (projectId: string) => {
     return api.deploy.history(projectId);
-  },
+  }
 );
 
 export const triggerDeploy = createAsyncThunk(
   "deploy/trigger",
-  async (
-    { projectId, target }: { projectId: string; target?: string },
-    { dispatch },
-  ) => {
+  async ({ projectId, target }: { projectId: string; target?: string }, { dispatch }) => {
     const { deployId } = await api.deploy.deploy(projectId, target);
     dispatch(fetchDeployStatus(projectId));
     dispatch(fetchDeployHistory(projectId));
     return { deployId };
-  },
+  }
 );
 
 export const rollbackDeploy = createAsyncThunk(
@@ -71,16 +68,20 @@ export const rollbackDeploy = createAsyncThunk(
     dispatch(fetchDeployStatus(projectId));
     dispatch(fetchDeployHistory(projectId));
     return result;
-  },
+  }
 );
 
 export const updateDeploySettings = createAsyncThunk(
   "deploy/updateSettings",
-  async (
-    { projectId, deployment }: { projectId: string; deployment: Partial<DeploymentConfig> },
-  ) => {
+  async ({
+    projectId,
+    deployment,
+  }: {
+    projectId: string;
+    deployment: Partial<DeploymentConfig>;
+  }) => {
     return api.deploy.updateSettings(projectId, deployment);
-  },
+  }
 );
 
 const deploySlice = createSlice({
@@ -109,7 +110,7 @@ const deploySlice = createSlice({
     },
     deployCompleted(
       state,
-      action: PayloadAction<{ deployId: string; success: boolean; fixEpicId?: string | null }>,
+      action: PayloadAction<{ deployId: string; success: boolean; fixEpicId?: string | null }>
     ) {
       if (state.activeDeployId === action.payload.deployId) {
         state.activeDeployId = null;

@@ -42,7 +42,9 @@ function StatusBadge({ status }: { status: DeploymentRecord["status"] }) {
     rolled_back: "bg-amber-100 text-amber-700",
   };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles[status]}`}>
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles[status]}`}
+    >
       {status.replace("_", "-")}
     </span>
   );
@@ -56,12 +58,11 @@ export function DeployPhase({ projectId, onOpenSettings }: DeployPhaseProps) {
   const [settings, setSettings] = useState<{ deployment: DeploymentConfig } | null>(null);
   const defaultTarget = useMemo(
     () => (settings?.deployment ? getDefaultDeploymentTarget(settings.deployment) : "production"),
-    [settings?.deployment],
+    [settings?.deployment]
   );
   const [selectedTarget, setSelectedTarget] = useState<string>(defaultTarget);
 
   const history = useAppSelector((s) => s.deploy.history);
-  const currentDeploy = useAppSelector((s) => s.deploy.currentDeploy);
   const activeDeployId = useAppSelector((s) => s.deploy.activeDeployId);
   const selectedDeployId = useAppSelector((s) => s.deploy.selectedDeployId);
   const liveLog = useAppSelector((s) => s.deploy.liveLog);
@@ -71,7 +72,10 @@ export function DeployPhase({ projectId, onOpenSettings }: DeployPhaseProps) {
   const error = useAppSelector((s) => s.deploy.error);
 
   useEffect(() => {
-    api.projects.getSettings(projectId).then(setSettings).catch(() => setSettings(null));
+    api.projects
+      .getSettings(projectId)
+      .then(setSettings)
+      .catch(() => setSettings(null));
   }, [projectId]);
 
   useEffect(() => {
@@ -84,8 +88,8 @@ export function DeployPhase({ projectId, onOpenSettings }: DeployPhaseProps) {
   }, [projectId, dispatch]);
 
   const selectedRecord = selectedDeployId
-    ? history.find((r) => r.id === selectedDeployId) ?? null
-    : history[0] ?? null;
+    ? (history.find((r) => r.id === selectedDeployId) ?? null)
+    : (history[0] ?? null);
 
   const displayLog = (() => {
     if (activeDeployId && (selectedDeployId === activeDeployId || !selectedDeployId)) {
@@ -203,7 +207,8 @@ export function DeployPhase({ projectId, onOpenSettings }: DeployPhaseProps) {
                           type="button"
                           onClick={() => handleSelectDeploy(r.id)}
                           className={`w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-gray-100 transition-colors ${
-                            selectedDeployId === r.id || (!selectedDeployId && r.id === history[0]?.id)
+                            selectedDeployId === r.id ||
+                            (!selectedDeployId && r.id === history[0]?.id)
                               ? "bg-white border-l-2 border-brand-600"
                               : ""
                           }`}
@@ -263,9 +268,7 @@ export function DeployPhase({ projectId, onOpenSettings }: DeployPhaseProps) {
                     <div className="mt-2">
                       <button
                         type="button"
-                        onClick={() =>
-                          navigate(getProjectPhasePath(effectiveProjectId, "execute"))
-                        }
+                        onClick={() => navigate(getProjectPhasePath(effectiveProjectId, "execute"))}
                         className="text-brand-600 hover:text-brand-700 font-medium underline"
                         data-testid="fix-epic-link"
                       >

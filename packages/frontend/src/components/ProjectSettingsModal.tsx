@@ -3,7 +3,16 @@ import { FolderBrowser } from "./FolderBrowser";
 import { CloseButton } from "./CloseButton";
 import { ModelSelect } from "./ModelSelect";
 import { api } from "../api/client";
-import type { Project, ProjectSettings, AgentType, DeploymentMode, HilNotificationMode, AgentConfig, PlanComplexity, ReviewMode, DeploymentTargetConfig } from "@opensprint/shared";
+import type {
+  Project,
+  ProjectSettings,
+  AgentType,
+  DeploymentMode,
+  HilNotificationMode,
+  AgentConfig,
+  PlanComplexity,
+  ReviewMode,
+} from "@opensprint/shared";
 import { DEFAULT_HIL_CONFIG, DEFAULT_REVIEW_MODE } from "@opensprint/shared";
 
 interface ProjectSettingsModalProps {
@@ -39,7 +48,10 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
   // API key status (for agents tab)
   const [envKeys, setEnvKeys] = useState<{ anthropic: boolean; cursor: boolean } | null>(null);
   const [savingKey, setSavingKey] = useState<"ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | null>(null);
-  const [keyInput, setKeyInput] = useState<{ anthropic: string; cursor: string }>({ anthropic: "", cursor: "" });
+  const [keyInput, setKeyInput] = useState<{ anthropic: string; cursor: string }>({
+    anthropic: "",
+    cursor: "",
+  });
   const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
 
   useEffect(() => {
@@ -114,7 +126,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
           deployment: {
             mode: deployment.mode,
             expoConfig:
-              deployment.mode === "expo" ? { channel: deployment.expoConfig?.channel ?? "preview" } : undefined,
+              deployment.mode === "expo"
+                ? { channel: deployment.expoConfig?.channel ?? "preview" }
+                : undefined,
             customCommand: deployment.customCommand ?? undefined,
             webhookUrl: deployment.webhookUrl ?? undefined,
             rollbackCommand: deployment.rollbackCommand ?? undefined,
@@ -122,7 +136,8 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
             envVars: deployment.envVars,
             autoDeployOnEpicCompletion: deployment.autoDeployOnEpicCompletion ?? false,
             autoDeployOnEvalResolution: deployment.autoDeployOnEvalResolution ?? false,
-            autoResolveFeedbackOnTaskCompletion: deployment.autoResolveFeedbackOnTaskCompletion ?? false,
+            autoResolveFeedbackOnTaskCompletion:
+              deployment.autoResolveFeedbackOnTaskCompletion ?? false,
           },
           hilConfig,
           testCommand: settings?.testCommand ?? undefined,
@@ -145,7 +160,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
             ...s,
             planningAgent: { ...s.planningAgent, ...updates },
           }
-        : null,
+        : null
     );
   };
 
@@ -156,7 +171,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
             ...s,
             codingAgent: { ...s.codingAgent, ...updates },
           }
-        : null,
+        : null
     );
   };
 
@@ -171,7 +186,10 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
       } else {
         current[level] = value;
       }
-      return { ...s, codingAgentByComplexity: Object.keys(current).length > 0 ? current : undefined };
+      return {
+        ...s,
+        codingAgentByComplexity: Object.keys(current).length > 0 ? current : undefined,
+      };
     });
   };
 
@@ -190,9 +208,12 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
     try {
       await api.env.saveKey(envKey, value.trim());
       setEnvKeys((prev) =>
-        prev ? { ...prev, [envKey === "ANTHROPIC_API_KEY" ? "anthropic" : "cursor"]: true } : null,
+        prev ? { ...prev, [envKey === "ANTHROPIC_API_KEY" ? "anthropic" : "cursor"]: true } : null
       );
-      setKeyInput((prev) => ({ ...prev, [envKey === "ANTHROPIC_API_KEY" ? "anthropic" : "cursor"]: "" }));
+      setKeyInput((prev) => ({
+        ...prev,
+        [envKey === "ANTHROPIC_API_KEY" ? "anthropic" : "cursor"]: "",
+      }));
       setModelRefreshTrigger((n) => n + 1);
     } catch {
       // Error handled by api client
@@ -212,13 +233,19 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
         data-testid="settings-modal"
       >
         {/* Header */}
-        <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-200" data-testid="settings-modal-header">
+        <div
+          className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-200"
+          data-testid="settings-modal-header"
+        >
           <h2 className="text-lg font-semibold text-gray-900">Project Settings</h2>
           <CloseButton onClick={onClose} ariaLabel="Close settings modal" />
         </div>
 
         {/* Tabs */}
-        <div className="flex-shrink-0 flex flex-nowrap gap-1 px-5 pt-3 pb-2 border-b border-gray-200 overflow-x-auto overflow-y-hidden" data-testid="settings-modal-tabs">
+        <div
+          className="flex-shrink-0 flex flex-nowrap gap-1 px-5 pt-3 pb-2 border-b border-gray-200 overflow-x-auto overflow-y-hidden"
+          data-testid="settings-modal-tabs"
+        >
           {TABS.map((tab) => (
             <button
               key={tab.key}
@@ -235,7 +262,10 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-5 py-4 overscroll-contain" data-testid="settings-modal-content">
+        <div
+          className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-5 py-4 overscroll-contain"
+          data-testid="settings-modal-content"
+        >
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
@@ -245,7 +275,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
               {activeTab === "basics" && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Project Name
+                    </label>
                     <input
                       type="text"
                       className="input"
@@ -255,7 +287,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Description
+                    </label>
                     <textarea
                       className="input min-h-[80px]"
                       value={description}
@@ -264,7 +298,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Repository Path</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Repository Path
+                    </label>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -278,7 +314,13 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         onClick={() => setShowFolderBrowser(true)}
                         className="btn-secondary text-sm px-3 whitespace-nowrap flex items-center gap-1.5"
                       >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -288,7 +330,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         Browse
                       </button>
                     </div>
-                    <p className="mt-1 text-xs text-gray-400">Absolute path to the project repository</p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      Absolute path to the project repository
+                    </p>
                   </div>
                 </div>
               )}
@@ -301,8 +345,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         <p className="text-sm text-amber-800">
                           <strong>API keys required:</strong> Add{" "}
                           <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and/or{" "}
-                          <code className="font-mono text-xs">CURSOR_API_KEY</code> to your project&apos;s{" "}
-                          <code className="font-mono text-xs">.env</code> file to use Claude and Cursor. Get keys from{" "}
+                          <code className="font-mono text-xs">CURSOR_API_KEY</code> to your
+                          project&apos;s <code className="font-mono text-xs">.env</code> file to use
+                          Claude and Cursor. Get keys from{" "}
                           <a
                             href="https://console.anthropic.com/"
                             target="_blank"
@@ -335,7 +380,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                                 className="input font-mono text-sm"
                                 placeholder="sk-ant-..."
                                 value={keyInput.anthropic}
-                                onChange={(e) => setKeyInput((p) => ({ ...p, anthropic: e.target.value }))}
+                                onChange={(e) =>
+                                  setKeyInput((p) => ({ ...p, anthropic: e.target.value }))
+                                }
                                 autoComplete="off"
                               />
                             </div>
@@ -352,13 +399,17 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         {!envKeys.cursor && (
                           <div className="flex gap-2 items-end">
                             <div className="flex-1">
-                              <label className="block text-xs font-medium text-gray-500 mb-1">CURSOR_API_KEY</label>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">
+                                CURSOR_API_KEY
+                              </label>
                               <input
                                 type="password"
                                 className="input font-mono text-sm"
                                 placeholder="key_..."
                                 value={keyInput.cursor}
-                                onChange={(e) => setKeyInput((p) => ({ ...p, cursor: e.target.value }))}
+                                onChange={(e) =>
+                                  setKeyInput((p) => ({ ...p, cursor: e.target.value }))
+                                }
                                 autoComplete="off"
                               />
                             </div>
@@ -376,12 +427,19 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                     </>
                   )}
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-3">Planning Agent Slot</h3>
-                    <p className="text-xs text-gray-500 mb-3">Used by Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor, Delta Planner</p>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                      Planning Agent Slot
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Used by Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor, Delta
+                      Planner
+                    </p>
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Provider
+                          </label>
                           <select
                             className="input"
                             value={planningAgent.type}
@@ -398,7 +456,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         </div>
                         {planningAgent.type !== "custom" && (
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Model
+                            </label>
                             <ModelSelect
                               provider={planningAgent.type}
                               value={planningAgent.model}
@@ -410,16 +470,21 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       </div>
                       {planningAgent.type === "custom" && (
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">CLI command</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            CLI command
+                          </label>
                           <input
                             type="text"
                             className="input w-full font-mono text-sm"
                             placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
                             value={planningAgent.cliCommand ?? ""}
-                            onChange={(e) => updatePlanningAgent({ cliCommand: e.target.value || null })}
+                            onChange={(e) =>
+                              updatePlanningAgent({ cliCommand: e.target.value || null })
+                            }
                           />
                           <p className="mt-1 text-xs text-gray-500">
-                            Command invoked with prompt as argument. Must accept input and produce output.
+                            Command invoked with prompt as argument. Must accept input and produce
+                            output.
                           </p>
                         </div>
                       )}
@@ -428,15 +493,21 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                   <hr />
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900 mb-3">Coding Agent Slot</h3>
-                    <p className="text-xs text-gray-500 mb-3">Used by Coder and Reviewer for Execute phase implementation and review</p>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Used by Coder and Reviewer for Execute phase implementation and review
+                    </p>
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Provider
+                          </label>
                           <select
                             className="input"
                             value={codingAgent.type}
-                            onChange={(e) => updateCodingAgent({ type: e.target.value as AgentType })}
+                            onChange={(e) =>
+                              updateCodingAgent({ type: e.target.value as AgentType })
+                            }
                           >
                             <option value="claude">Claude</option>
                             <option value="cursor">Cursor</option>
@@ -445,7 +516,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         </div>
                         {codingAgent.type !== "custom" && (
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Model
+                            </label>
                             <ModelSelect
                               provider={codingAgent.type}
                               value={codingAgent.model}
@@ -457,16 +530,21 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       </div>
                       {codingAgent.type === "custom" && (
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">CLI command</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            CLI command
+                          </label>
                           <input
                             type="text"
                             className="input w-full font-mono text-sm"
                             placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
                             value={codingAgent.cliCommand ?? ""}
-                            onChange={(e) => updateCodingAgent({ cliCommand: e.target.value || null })}
+                            onChange={(e) =>
+                              updateCodingAgent({ cliCommand: e.target.value || null })
+                            }
                           />
                           <p className="mt-1 text-xs text-gray-500">
-                            Command invoked with prompt as argument. Must accept input and produce output.
+                            Command invoked with prompt as argument. Must accept input and produce
+                            output.
                           </p>
                         </div>
                       )}
@@ -476,7 +554,8 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900 mb-1">Test Command</h3>
                     <p className="text-xs text-gray-500 mb-3">
-                      Override the test command (auto-detected from package.json). Leave empty to use detection.
+                      Override the test command (auto-detected from package.json). Leave empty to
+                      use detection.
                     </p>
                     <input
                       type="text"
@@ -494,16 +573,17 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900 mb-1">Code Review</h3>
                     <p className="text-xs text-gray-500 mb-3">
-                      After the coding agent completes a task, a review agent can validate the implementation against
-                      the ticket specification, verify tests pass and cover the scope, and check code quality. Rejected
-                      work is sent back to the coding agent with feedback for improvement.
+                      After the coding agent completes a task, a review agent can validate the
+                      implementation against the ticket specification, verify tests pass and cover
+                      the scope, and check code quality. Rejected work is sent back to the coding
+                      agent with feedback for improvement.
                     </p>
                     <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
                       <div>
                         <p className="text-sm font-medium text-gray-900">Review Mode</p>
                         <p className="text-xs text-gray-500">
-                          Never: merge directly. Always: run review after every success. On Failure Only: run review only
-                          when the task has had previous failures.
+                          Never: merge directly. Always: run review after every success. On Failure
+                          Only: run review only when the task has had previous failures.
                         </p>
                       </div>
                       <select
@@ -524,17 +604,31 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                   </div>
                   <hr />
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-1">Per-Complexity Overrides</h3>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                      Per-Complexity Overrides
+                    </h3>
                     <p className="text-xs text-gray-500 mb-3">
-                      Optionally use different agents for tasks based on plan complexity. When not set, the default
-                      coding agent above is used.
+                      Optionally use different agents for tasks based on plan complexity. When not
+                      set, the default coding agent above is used.
                     </p>
                     <div className="space-y-3">
                       {(
                         [
-                          { key: "low" as PlanComplexity, label: "Low", desc: "Simple, well-defined tasks" },
-                          { key: "medium" as PlanComplexity, label: "Medium", desc: "Moderate complexity tasks" },
-                          { key: "high" as PlanComplexity, label: "High", desc: "Complex, multi-step tasks" },
+                          {
+                            key: "low" as PlanComplexity,
+                            label: "Low",
+                            desc: "Simple, well-defined tasks",
+                          },
+                          {
+                            key: "medium" as PlanComplexity,
+                            label: "Medium",
+                            desc: "Moderate complexity tasks",
+                          },
+                          {
+                            key: "high" as PlanComplexity,
+                            label: "High",
+                            desc: "Complex, multi-step tasks",
+                          },
                           {
                             key: "very_high" as PlanComplexity,
                             label: "Very High",
@@ -564,14 +658,18 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                                 className="rounded"
                               />
                               <div className="flex-1">
-                                <span className="text-sm font-medium text-gray-900">{level.label}</span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {level.label}
+                                </span>
                                 <span className="text-xs text-gray-500 ml-2">{level.desc}</span>
                               </div>
                             </label>
                             {isEnabled && override && (
                               <div className="mt-3 ml-7 grid grid-cols-2 gap-3">
                                 <div>
-                                  <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                                    Provider
+                                  </label>
                                   <select
                                     className="input text-sm"
                                     value={override.type}
@@ -589,19 +687,26 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                                 </div>
                                 {override.type !== "custom" ? (
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">Model</label>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                      Model
+                                    </label>
                                     <ModelSelect
                                       provider={override.type}
                                       value={override.model}
                                       onChange={(id) =>
-                                        updateCodingAgentByComplexity(level.key, { ...override, model: id })
+                                        updateCodingAgentByComplexity(level.key, {
+                                          ...override,
+                                          model: id,
+                                        })
                                       }
                                       refreshTrigger={modelRefreshTrigger}
                                     />
                                   </div>
                                 ) : (
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">CLI command</label>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                      CLI command
+                                    </label>
                                     <input
                                       type="text"
                                       className="input w-full font-mono text-xs"
@@ -629,8 +734,12 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
               {activeTab === "deployment" && (
                 <div className="space-y-4">
                   <div className="space-y-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-900">Auto-deploy triggers (PRD §7.5.3)</h3>
-                    <p className="text-xs text-gray-500">Both off by default. Enable to auto-trigger deployment.</p>
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      Auto-deploy triggers (PRD §7.5.3)
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Both off by default. Enable to auto-trigger deployment.
+                    </p>
                     <label className="flex items-center justify-between gap-3 cursor-pointer">
                       <span className="text-sm text-gray-700">Auto-deploy on epic completion</span>
                       <input
@@ -659,26 +768,34 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       />
                     </label>
                     <p className="text-xs text-gray-500 ml-1">
-                      When all critical (bug) feedback is resolved, trigger deployment automatically.
+                      When all critical (bug) feedback is resolved, trigger deployment
+                      automatically.
                     </p>
                     <label className="flex items-center justify-between gap-3 cursor-pointer">
-                      <span className="text-sm text-gray-700">Auto-resolve feedback when tasks done</span>
+                      <span className="text-sm text-gray-700">
+                        Auto-resolve feedback when tasks done
+                      </span>
                       <input
                         type="checkbox"
                         checked={deployment.autoResolveFeedbackOnTaskCompletion ?? false}
                         onChange={(e) =>
-                          updateDeployment({ autoResolveFeedbackOnTaskCompletion: e.target.checked })
+                          updateDeployment({
+                            autoResolveFeedbackOnTaskCompletion: e.target.checked,
+                          })
                         }
                         className="rounded"
                         data-testid="auto-resolve-feedback-toggle"
                       />
                     </label>
                     <p className="text-xs text-gray-500 ml-1">
-                      When all tasks created from feedback reach Done, mark the feedback as resolved (PRD §10.2).
+                      When all tasks created from feedback reach Done, mark the feedback as resolved
+                      (PRD §10.2).
                     </p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">Deployment Mode</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Deployment Mode
+                    </label>
                     <div className="space-y-3">
                       <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:border-brand-300 cursor-pointer transition-colors">
                         <input
@@ -686,7 +803,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                           name="deployment"
                           value="expo"
                           checked={deployment.mode === "expo"}
-                          onChange={() => updateDeployment({ mode: "expo", expoConfig: { channel: "preview" } })}
+                          onChange={() =>
+                            updateDeployment({ mode: "expo", expoConfig: { channel: "preview" } })
+                          }
                           className="mt-0.5"
                         />
                         <div>
@@ -707,7 +826,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         />
                         <div>
                           <p className="text-sm font-medium text-gray-900">Custom Pipeline</p>
-                          <p className="text-xs text-gray-500">Command or webhook triggered after Build completion</p>
+                          <p className="text-xs text-gray-500">
+                            Command or webhook triggered after Build completion
+                          </p>
                         </div>
                       </label>
                     </div>
@@ -715,13 +836,17 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                   {deployment.mode === "custom" && (
                     <div className="space-y-3 pt-2 border-t border-gray-200">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Deployment command</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Deployment command
+                        </label>
                         <input
                           type="text"
                           className="input w-full font-mono text-sm"
                           placeholder="e.g. ./deploy.sh or vercel deploy --prod"
                           value={deployment.customCommand ?? ""}
-                          onChange={(e) => updateDeployment({ customCommand: e.target.value || undefined })}
+                          onChange={(e) =>
+                            updateDeployment({ customCommand: e.target.value || undefined })
+                          }
                         />
                         <p className="mt-1 text-xs text-gray-500">
                           Shell command run from project root after each task completion
@@ -729,38 +854,52 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       </div>
                       <div className="text-sm text-gray-500 text-center">— or —</div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Webhook URL
+                        </label>
                         <input
                           type="url"
                           className="input w-full font-mono text-sm"
                           placeholder="https://api.example.com/deploy"
                           value={deployment.webhookUrl ?? ""}
-                          onChange={(e) => updateDeployment({ webhookUrl: e.target.value || undefined })}
+                          onChange={(e) =>
+                            updateDeployment({ webhookUrl: e.target.value || undefined })
+                          }
                         />
                         <p className="mt-1 text-xs text-gray-500">
                           HTTP POST sent after each task completion (GitHub Actions, Vercel, etc.)
                         </p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Rollback command</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Rollback command
+                        </label>
                         <input
                           type="text"
                           className="input w-full font-mono text-sm"
                           placeholder="e.g. ./rollback.sh or vercel rollback"
                           value={deployment.rollbackCommand ?? ""}
-                          onChange={(e) => updateDeployment({ rollbackCommand: e.target.value || undefined })}
+                          onChange={(e) =>
+                            updateDeployment({ rollbackCommand: e.target.value || undefined })
+                          }
                         />
                         <p className="mt-1 text-xs text-gray-500">
                           Shell command for rolling back to a previous deployment (Deploy phase)
                         </p>
                       </div>
                       <div className="pt-3 border-t border-gray-200">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Deployment targets (PRD §7.5.2/7.5.4)</h4>
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">
+                          Deployment targets (PRD §7.5.2/7.5.4)
+                        </h4>
                         <p className="text-xs text-gray-500 mb-2">
-                          Define staging/production targets with per-target command or webhook. Leave empty to use legacy single command/webhook above.
+                          Define staging/production targets with per-target command or webhook.
+                          Leave empty to use legacy single command/webhook above.
                         </p>
                         {(deployment.targets ?? []).map((t, i) => (
-                          <div key={i} className="mb-3 p-3 rounded-lg border border-gray-200 bg-white">
+                          <div
+                            key={i}
+                            className="mb-3 p-3 rounded-lg border border-gray-200 bg-white"
+                          >
                             <div className="flex justify-between items-center mb-2">
                               <input
                                 type="text"
@@ -779,7 +918,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                                   checked={t.isDefault ?? false}
                                   onChange={(e) => {
                                     const next = (deployment.targets ?? []).map((x, j) =>
-                                      j === i ? { ...x, isDefault: e.target.checked } : { ...x, isDefault: false },
+                                      j === i
+                                        ? { ...x, isDefault: e.target.checked }
+                                        : { ...x, isDefault: false }
                                     );
                                     updateDeployment({ targets: next });
                                   }}
@@ -824,7 +965,10 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         <button
                           type="button"
                           onClick={() => {
-                            const next = [...(deployment.targets ?? []), { name: "", isDefault: (deployment.targets ?? []).length === 0 }];
+                            const next = [
+                              ...(deployment.targets ?? []),
+                              { name: "", isDefault: (deployment.targets ?? []).length === 0 },
+                            ];
                             updateDeployment({ targets: next });
                           }}
                           className="btn-secondary text-sm"
@@ -833,7 +977,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         </button>
                       </div>
                       <div className="pt-3 border-t border-gray-200">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Environment variables</h4>
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">
+                          Environment variables
+                        </h4>
                         <p className="text-xs text-gray-500 mb-2">
                           Key-value pairs passed to deployment commands and webhooks.
                         </p>
@@ -848,7 +994,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                                 const next = { ...(deployment.envVars ?? {}) };
                                 delete next[k];
                                 if (e.target.value) next[e.target.value] = v;
-                                updateDeployment({ envVars: Object.keys(next).length ? next : undefined });
+                                updateDeployment({
+                                  envVars: Object.keys(next).length ? next : undefined,
+                                });
                               }}
                             />
                             <input
@@ -866,7 +1014,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                               onClick={() => {
                                 const next = { ...(deployment.envVars ?? {}) };
                                 delete next[k];
-                                updateDeployment({ envVars: Object.keys(next).length ? next : undefined });
+                                updateDeployment({
+                                  envVars: Object.keys(next).length ? next : undefined,
+                                });
                               }}
                               className="text-red-600 hover:text-red-700 text-xs"
                             >
@@ -879,7 +1029,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                           onClick={() => {
                             const key = prompt("Environment variable name:");
                             if (key && !(deployment.envVars ?? {})[key]) {
-                              updateDeployment({ envVars: { ...(deployment.envVars ?? {}), [key]: "" } });
+                              updateDeployment({
+                                envVars: { ...(deployment.envVars ?? {}), [key]: "" },
+                              });
                             }
                           }}
                           className="btn-secondary text-sm"
@@ -916,7 +1068,10 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       },
                     ] as const
                   ).map((cat) => (
-                    <div key={cat.key} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                    <div
+                      key={cat.key}
+                      className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                    >
                       <div>
                         <p className="text-sm font-medium text-gray-900">{cat.label}</p>
                         <p className="text-xs text-gray-500">{cat.desc}</p>
@@ -924,7 +1079,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       <select
                         className="input w-48"
                         value={hilConfig[cat.key]}
-                        onChange={(e) => updateHilConfig(cat.key, e.target.value as HilNotificationMode)}
+                        onChange={(e) =>
+                          updateHilConfig(cat.key, e.target.value as HilNotificationMode)
+                        }
                       >
                         <option value="requires_approval">Requires Approval</option>
                         <option value="notify_and_proceed">Notify & Proceed</option>

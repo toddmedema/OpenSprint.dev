@@ -106,7 +106,10 @@ export class BranchManager {
    * Get the diff between main and a task branch.
    */
   async getDiff(repoPath: string, branchName: string): Promise<string> {
-    const { stdout } = await execAsync(`git diff main...${branchName}`, { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 });
+    const { stdout } = await execAsync(`git diff main...${branchName}`, {
+      cwd: repoPath,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return stdout;
   }
 
@@ -159,7 +162,9 @@ export class BranchManager {
    * Get a summary of files changed between main and a branch.
    */
   async getChangedFiles(repoPath: string, branchName: string): Promise<string[]> {
-    const { stdout } = await execAsync(`git diff --name-only main...${branchName}`, { cwd: repoPath });
+    const { stdout } = await execAsync(`git diff --name-only main...${branchName}`, {
+      cwd: repoPath,
+    });
     return stdout.trim().split("\n").filter(Boolean);
   }
 
@@ -186,7 +191,9 @@ export class BranchManager {
           const stat = await fs.stat(lockPath);
           const lockAge = Date.now() - stat.mtimeMs;
           if (lockAge > 30_000) {
-            console.warn(`[branch-manager] Removing stale .git/index.lock (age: ${Math.round(lockAge / 1000)}s)`);
+            console.warn(
+              `[branch-manager] Removing stale .git/index.lock (age: ${Math.round(lockAge / 1000)}s)`
+            );
             await fs.unlink(lockPath);
             return;
           }
@@ -319,7 +326,9 @@ export class BranchManager {
     const resolvedRepo = await fs.realpath(repoPath).catch(() => repoPath);
     const resolvedWt = await fs.realpath(wtPath).catch(() => wtPath);
     if (resolvedRepo === resolvedWt) {
-      console.warn("[branch-manager] symlinkNodeModules: wtPath equals repoPath, skipping to avoid circular symlinks");
+      console.warn(
+        "[branch-manager] symlinkNodeModules: wtPath equals repoPath, skipping to avoid circular symlinks"
+      );
       return;
     }
 
@@ -362,18 +371,22 @@ export class BranchManager {
     const resolvedTarget = await fs.realpath(target).catch(() => path.resolve(target));
     const resolvedLink = path.resolve(linkPath);
     if (resolvedTarget === resolvedLink) {
-      console.warn(`[branch-manager] forceSymlink: target === linkPath (${resolvedTarget}), skipping circular symlink`);
+      console.warn(
+        `[branch-manager] forceSymlink: target === linkPath (${resolvedTarget}), skipping circular symlink`
+      );
       return;
     }
 
     try {
       await fs.symlink(target, linkPath, "junction");
-    } catch (err: any) {
-      if (err.code === "EEXIST") {
+    } catch (err: unknown) {
+      if (err instanceof Error && (err as NodeJS.ErrnoException).code === "EEXIST") {
         // Don't delete a real directory that isn't a symlink
         const stat = await fs.lstat(linkPath);
         if (stat.isDirectory() && !stat.isSymbolicLink()) {
-          console.warn(`[branch-manager] forceSymlink: ${linkPath} is a real directory, refusing to replace`);
+          console.warn(
+            `[branch-manager] forceSymlink: ${linkPath} is a real directory, refusing to replace`
+          );
           return;
         }
         await fs.rm(linkPath, { recursive: true, force: true });
@@ -408,10 +421,9 @@ export class BranchManager {
    */
   async getCommitCountAhead(repoPath: string, branchName: string): Promise<number> {
     try {
-      const { stdout } = await execAsync(
-        `git rev-list --count main..${branchName}`,
-        { cwd: repoPath },
-      );
+      const { stdout } = await execAsync(`git rev-list --count main..${branchName}`, {
+        cwd: repoPath,
+      });
       return parseInt(stdout.trim(), 10) || 0;
     } catch {
       return 0;
@@ -432,7 +444,10 @@ export class BranchManager {
     }
   }
 
-  private async git(repoPath: string, command: string): Promise<{ stdout: string; stderr: string }> {
+  private async git(
+    repoPath: string,
+    command: string
+  ): Promise<{ stdout: string; stderr: string }> {
     return execAsync(`git ${command}`, {
       cwd: repoPath,
       timeout: 30000,

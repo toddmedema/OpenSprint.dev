@@ -47,7 +47,8 @@ let beadsCreateCallCount = 0;
 const mockBeadsCreate = vi.fn().mockImplementation(() => {
   beadsCreateCallCount += 1;
   // First call: feedback source bead; subsequent: task beads
-  const id = beadsCreateCallCount === 1 ? "mock-feedback-source-1" : `mock-task-${beadsCreateCallCount - 1}`;
+  const id =
+    beadsCreateCallCount === 1 ? "mock-feedback-source-1" : `mock-task-${beadsCreateCallCount - 1}`;
   return Promise.resolve({ id, title: "Mock", status: "open" });
 });
 const mockBeadsAddDependency = vi.fn().mockResolvedValue(undefined);
@@ -127,7 +128,7 @@ describe("FeedbackService", () => {
     await fs.writeFile(
       path.join(feedbackDir, "fb-legacy.json"),
       JSON.stringify(legacyItem),
-      "utf-8",
+      "utf-8"
     );
 
     const items = await feedbackService.listFeedback(projectId);
@@ -151,11 +152,7 @@ describe("FeedbackService", () => {
       status: "mapped",
       createdAt: new Date().toISOString(),
     };
-    await fs.writeFile(
-      path.join(feedbackDir, "fb-1.json"),
-      JSON.stringify(feedbackItem),
-      "utf-8",
-    );
+    await fs.writeFile(path.join(feedbackDir, "fb-1.json"), JSON.stringify(feedbackItem), "utf-8");
 
     const items = await feedbackService.listFeedback(projectId);
 
@@ -179,11 +176,7 @@ describe("FeedbackService", () => {
       status: "pending",
       createdAt: new Date().toISOString(),
     };
-    await fs.writeFile(
-      path.join(feedbackDir, "fb-2.json"),
-      JSON.stringify(feedbackItem),
-      "utf-8",
-    );
+    await fs.writeFile(path.join(feedbackDir, "fb-2.json"), JSON.stringify(feedbackItem), "utf-8");
 
     const items = await feedbackService.listFeedback(projectId);
 
@@ -241,7 +234,7 @@ describe("FeedbackService", () => {
       text: "Login broken on desktop",
     });
 
-    const reply = await feedbackService.submitFeedback(projectId, {
+    await feedbackService.submitFeedback(projectId, {
       text: "Same on mobile",
       parent_id: parent.id,
     });
@@ -290,7 +283,7 @@ describe("FeedbackService", () => {
         status: "pending",
         createdAt: new Date().toISOString(),
       }),
-      "utf-8",
+      "utf-8"
     );
 
     feedbackIdSequence = [existingId, "bbbbbb"];
@@ -334,10 +327,7 @@ describe("FeedbackService", () => {
     expect(updated.status).toBe("mapped");
     expect(updated.category).toBe("feature");
     expect(updated.mappedPlanId).toBe("auth-plan");
-    expect(updated.taskTitles).toEqual([
-      "Add dark mode toggle",
-      "Implement theme persistence",
-    ]);
+    expect(updated.taskTitles).toEqual(["Add dark mode toggle", "Implement theme persistence"]);
     // BeadsService.create is mocked — feedback source bead + 2 task beads
     expect(updated.createdTaskIds).toEqual(["mock-task-1", "mock-task-2"]);
     expect(updated.feedbackSourceBeadId).toBe("mock-feedback-source-1");
@@ -377,8 +367,20 @@ describe("FeedbackService", () => {
         mapped_epic_id: "bd-auth-123",
         is_scope_change: false,
         proposed_tasks: [
-          { index: 0, title: "Add theme toggle", description: "Add dark/light toggle to settings", priority: 1, depends_on: [] },
-          { index: 1, title: "Persist theme", description: "Save preference to localStorage", priority: 2, depends_on: [0] },
+          {
+            index: 0,
+            title: "Add theme toggle",
+            description: "Add dark/light toggle to settings",
+            priority: 1,
+            depends_on: [],
+          },
+          {
+            index: 1,
+            title: "Persist theme",
+            description: "Save preference to localStorage",
+            priority: 2,
+            depends_on: [0],
+          },
         ],
       }),
     });
@@ -430,7 +432,15 @@ describe("FeedbackService", () => {
         mapped_plan_id: null,
         mapped_epic_id: null,
         is_scope_change: true,
-        proposed_tasks: [{ index: 0, title: "Add mobile platform", description: "...", priority: 1, depends_on: [] }],
+        proposed_tasks: [
+          {
+            index: 0,
+            title: "Add mobile platform",
+            description: "...",
+            priority: 1,
+            depends_on: [],
+          },
+        ],
       }),
     });
 
@@ -440,7 +450,10 @@ describe("FeedbackService", () => {
 
     await new Promise((r) => setTimeout(r, 200));
 
-    expect(mockGetScopeChangeProposal).toHaveBeenCalledWith(projectId, "We need a native mobile app");
+    expect(mockGetScopeChangeProposal).toHaveBeenCalledWith(
+      projectId,
+      "We need a native mobile app"
+    );
     expect(mockHilEvaluate).toHaveBeenCalledTimes(1);
   });
 
@@ -545,14 +558,14 @@ describe("FeedbackService", () => {
       expect.any(String),
       "mock-task-1",
       "mock-feedback-source-1",
-      "discovered-from",
+      "discovered-from"
     );
     expect(mockBeadsAddDependency).toHaveBeenNthCalledWith(
       2,
       expect.any(String),
       "mock-task-2",
       "mock-feedback-source-1",
-      "discovered-from",
+      "discovered-from"
     );
   });
 
@@ -565,7 +578,8 @@ describe("FeedbackService", () => {
       }),
     });
 
-    const base64Image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const base64Image =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
     const item = await feedbackService.submitFeedback(projectId, {
       text: "Bug with screenshot",
       images: [`data:image/png;base64,${base64Image}`],
@@ -616,18 +630,30 @@ describe("FeedbackService", () => {
 
       expect(mockGetScopeChangeProposal).toHaveBeenCalledWith(
         projectId,
-        "We need to add a mobile app as a new platform",
+        "We need to add a mobile app as a new platform"
       );
       expect(mockHilEvaluate).toHaveBeenCalledTimes(1);
       const hilCall = mockHilEvaluate.mock.calls[0];
       expect(hilCall[0]).toBe(projectId);
       expect(hilCall[1]).toBe("scopeChanges");
-      expect(hilCall[2]).toContain("A user submitted feedback that was categorized as a scope change");
-      expect(hilCall[2]).toContain("Please review the proposed PRD updates below and approve or reject");
+      expect(hilCall[2]).toContain(
+        "A user submitted feedback that was categorized as a scope change"
+      );
+      expect(hilCall[2]).toContain(
+        "Please review the proposed PRD updates below and approve or reject"
+      );
       expect(hilCall[2]).toContain("We need to add a mobile app as a new platform");
       expect(hilCall[3]).toHaveLength(2);
-      expect(hilCall[3][0]).toMatchObject({ id: "approve", label: "Approve", description: "Apply the proposed PRD updates" });
-      expect(hilCall[3][1]).toMatchObject({ id: "reject", label: "Reject", description: "Skip updates and do not modify the PRD" });
+      expect(hilCall[3][0]).toMatchObject({
+        id: "approve",
+        label: "Approve",
+        description: "Apply the proposed PRD updates",
+      });
+      expect(hilCall[3][1]).toMatchObject({
+        id: "reject",
+        label: "Reject",
+        description: "Skip updates and do not modify the PRD",
+      });
     });
 
     it("should pass scopeChangeMetadata to HIL when getScopeChangeProposal returns proposal", async () => {
@@ -664,13 +690,15 @@ describe("FeedbackService", () => {
         true,
         {
           scopeChangeSummary: "• feature_list: Add mobile app",
-          scopeChangeProposedUpdates: [{ section: "feature_list", changeLogEntry: "Add mobile app" }],
-        },
+          scopeChangeProposedUpdates: [
+            { section: "feature_list", changeLogEntry: "Add mobile app" },
+          ],
+        }
       );
       expect(mockApplyScopeChangeUpdates).toHaveBeenCalledWith(
         projectId,
         proposal.prdUpdates,
-        expect.stringContaining("Add mobile app"),
+        expect.stringContaining("Add mobile app")
       );
     });
 
@@ -732,7 +760,7 @@ describe("FeedbackService", () => {
       expect(mockSyncPrdFromScopeChange).toHaveBeenCalledTimes(1);
       expect(mockSyncPrdFromScopeChange).toHaveBeenCalledWith(
         projectId,
-        "Add mobile app as a new platform - scope change",
+        "Add mobile app as a new platform - scope change"
       );
       expect(mockBeadsCreate).toHaveBeenCalled();
     });
@@ -748,7 +776,7 @@ describe("FeedbackService", () => {
         }),
       });
 
-      const item = await feedbackService.submitFeedback(projectId, { text: "Add feature" });
+      await feedbackService.submitFeedback(projectId, { text: "Add feature" });
       await new Promise((r) => setTimeout(r, 200));
 
       expect(mockRegister).toHaveBeenCalledTimes(1);
@@ -758,7 +786,7 @@ describe("FeedbackService", () => {
         "eval",
         "analyst",
         "Feedback categorization",
-        expect.any(String),
+        expect.any(String)
       );
       expect(mockUnregister).toHaveBeenCalledTimes(1);
       expect(mockUnregister).toHaveBeenCalledWith(mockRegister.mock.calls[0][0]);
@@ -797,7 +825,7 @@ describe("FeedbackService", () => {
       await fs.writeFile(
         path.join(feedbackDir, "fb-auto-1.json"),
         JSON.stringify(feedbackItem),
-        "utf-8",
+        "utf-8"
       );
 
       mockBeadsListAll.mockResolvedValue([
@@ -826,7 +854,7 @@ describe("FeedbackService", () => {
       await fs.writeFile(
         path.join(feedbackDir, "fb-auto-2.json"),
         JSON.stringify(feedbackItem),
-        "utf-8",
+        "utf-8"
       );
 
       mockBeadsListAll.mockResolvedValue([{ id: "task-1", status: "closed" }]);
@@ -857,7 +885,7 @@ describe("FeedbackService", () => {
       await fs.writeFile(
         path.join(feedbackDir, "fb-auto-3.json"),
         JSON.stringify(feedbackItem),
-        "utf-8",
+        "utf-8"
       );
 
       mockBeadsListAll.mockResolvedValue([

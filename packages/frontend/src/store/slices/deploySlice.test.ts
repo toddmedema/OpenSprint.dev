@@ -22,10 +22,7 @@ describe("deploySlice", () => {
   });
 
   it("should handle deployStarted", () => {
-    const state = deployReducer(
-      undefined,
-      deployStarted({ deployId: "deploy-123" }),
-    );
+    const state = deployReducer(undefined, deployStarted({ deployId: "deploy-123" }));
     expect(state.activeDeployId).toBe("deploy-123");
     expect(state.selectedDeployId).toBe("deploy-123");
     expect(state.liveLog).toEqual([]);
@@ -62,9 +59,9 @@ describe("deploySlice", () => {
       },
     ];
     const stateWithHistory = deployReducer(undefined, { type: "unknown" });
-    let state = deployReducer(
+    const state = deployReducer(
       { ...stateWithHistory, history },
-      deployCompleted({ deployId: "deploy-1", success: false, fixEpicId: "bd-abc123" }),
+      deployCompleted({ deployId: "deploy-1", success: false, fixEpicId: "bd-abc123" })
     );
     expect(state.history[0]).toMatchObject({ fixEpicId: "bd-abc123" });
   });

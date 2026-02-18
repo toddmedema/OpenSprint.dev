@@ -10,7 +10,12 @@ import {
 } from "../lib/phaseRouting";
 import { useAppDispatch, useAppSelector } from "../store";
 import { fetchProject, resetProject } from "../store/slices/projectSlice";
-import { resetWebsocket, clearHilRequest, clearHilNotification, clearDeployToast } from "../store/slices/websocketSlice";
+import {
+  resetWebsocket,
+  clearHilRequest,
+  clearHilNotification,
+  clearDeployToast,
+} from "../store/slices/websocketSlice";
 import { fetchSpecChat, fetchPrd, fetchPrdHistory, resetSpec } from "../store/slices/specSlice";
 import { fetchPlans, resetPlan, setSelectedPlanId } from "../store/slices/planSlice";
 import {
@@ -42,7 +47,8 @@ export function ProjectView() {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
-  const redirectTo = projectId && !isValidPhaseSlug(phaseSlug) ? getProjectPhasePath(projectId, "spec") : null;
+  const redirectTo =
+    projectId && !isValidPhaseSlug(phaseSlug) ? getProjectPhasePath(projectId, "spec") : null;
 
   const currentPhase = phaseFromSlug(phaseSlug);
   const selectedPlanId = useAppSelector((s) => s.plan.selectedPlanId);
@@ -105,36 +111,46 @@ export function ProjectView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, redirectTo]);
 
-  if (!projectId) return null;
-  if (redirectTo) return <Navigate to={redirectTo} replace />;
-
   // Sync URL search params → Redux on load / when URL changes (deep link support)
   useEffect(() => {
+    if (!projectId) return;
     const { plan, task } = parseDetailParams(location.search);
     if (plan && currentPhase === "plan") dispatch(setSelectedPlanId(plan));
     if (task && currentPhase === "execute") dispatch(setSelectedTaskId(task));
-  }, [location.search, currentPhase, dispatch]);
+  }, [projectId, location.search, currentPhase, dispatch]);
 
   // Sync Redux selection → URL when user selects plan/task (shareable links)
   useEffect(() => {
+    if (!projectId) return;
     const path = getProjectPhasePath(projectId, currentPhase, {
-      plan: currentPhase === "plan" ? selectedPlanId ?? undefined : undefined,
-      task: currentPhase === "execute" ? selectedTaskId ?? undefined : undefined,
+      plan: currentPhase === "plan" ? (selectedPlanId ?? undefined) : undefined,
+      task: currentPhase === "execute" ? (selectedTaskId ?? undefined) : undefined,
     });
     const currentPath = location.pathname + location.search;
     if (path !== currentPath) {
       navigate(path, { replace: true });
     }
-  }, [projectId, currentPhase, selectedPlanId, selectedTaskId, location.pathname, location.search, navigate]);
+  }, [
+    projectId,
+    currentPhase,
+    selectedPlanId,
+    selectedTaskId,
+    location.pathname,
+    location.search,
+    navigate,
+  ]);
+
+  if (!projectId) return null;
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
 
   const handlePhaseChange = (phase: ProjectPhase) => {
     // Preserve detail panel selection when switching phases — include plan/task in URL so
     // returning to a phase restores the detail panel
     navigate(
       getProjectPhasePath(projectId, phase, {
-        plan: phase === "plan" ? selectedPlanId ?? undefined : undefined,
-        task: phase === "execute" ? selectedTaskId ?? undefined : undefined,
-      }),
+        plan: phase === "plan" ? (selectedPlanId ?? undefined) : undefined,
+        task: phase === "execute" ? (selectedTaskId ?? undefined) : undefined,
+      })
     );
   };
 
@@ -171,10 +187,15 @@ export function ProjectView() {
     return (
       <>
         <Layout>
-          <div className="flex items-center justify-center h-full text-gray-400">Loading project...</div>
+          <div className="flex items-center justify-center h-full text-gray-400">
+            Loading project...
+          </div>
         </Layout>
         {hilRequest && <HilApprovalModal request={hilRequest} onRespond={handleRespondToHil} />}
-        <HilNotificationToast notification={hilNotification} onDismiss={handleDismissNotification} />
+        <HilNotificationToast
+          notification={hilNotification}
+          onDismiss={handleDismissNotification}
+        />
         <DeployToast toast={deployToast} onDismiss={handleDismissDeployToast} />
       </>
     );
@@ -190,7 +211,10 @@ export function ProjectView() {
           </div>
         </Layout>
         {hilRequest && <HilApprovalModal request={hilRequest} onRespond={handleRespondToHil} />}
-        <HilNotificationToast notification={hilNotification} onDismiss={handleDismissNotification} />
+        <HilNotificationToast
+          notification={hilNotification}
+          onDismiss={handleDismissNotification}
+        />
         <DeployToast toast={deployToast} onDismiss={handleDismissDeployToast} />
       </>
     );
@@ -214,13 +238,21 @@ export function ProjectView() {
             key={phase}
             data-testid={`phase-${phase}`}
             style={{ display: phase === currentPhase ? "flex" : "none" }}
-            className={phase === currentPhase ? "flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col" : undefined}
+            className={
+              phase === currentPhase
+                ? "flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col"
+                : undefined
+            }
           >
             {phase === "spec" && (
               <SpecPhase projectId={projectId} onNavigateToPlan={() => handlePhaseChange("plan")} />
             )}
-            {phase === "plan" && <PlanPhase projectId={projectId} onNavigateToBuildTask={handleNavigateToBuildTask} />}
-            {phase === "execute" && <ExecutePhase projectId={projectId} onNavigateToPlan={handleNavigateToPlan} />}
+            {phase === "plan" && (
+              <PlanPhase projectId={projectId} onNavigateToBuildTask={handleNavigateToBuildTask} />
+            )}
+            {phase === "execute" && (
+              <ExecutePhase projectId={projectId} onNavigateToPlan={handleNavigateToPlan} />
+            )}
             {phase === "eval" && (
               <EvalPhase projectId={projectId} onNavigateToBuildTask={handleNavigateToBuildTask} />
             )}
@@ -265,7 +297,13 @@ function DeployToast({
           className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           aria-label="Dismiss"
         >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
@@ -290,7 +328,9 @@ function HilNotificationToast({
             {CATEGORY_LABELS[notification.category] ?? notification.category}
           </p>
           <p className="mt-1 text-sm text-gray-600">{notification.description}</p>
-          <p className="mt-2 text-xs text-gray-500">Proceeding automatically. You can review in the log.</p>
+          <p className="mt-2 text-xs text-gray-500">
+            Proceeding automatically. You can review in the log.
+          </p>
         </div>
         <button
           type="button"
@@ -298,7 +338,13 @@ function HilNotificationToast({
           className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           aria-label="Dismiss"
         >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
