@@ -183,6 +183,24 @@ describe("PlanDetailContent", () => {
     expect(editorContainer.className).toMatch(/border-theme-border/);
   });
 
+  it("trims body markdown before passing to editor (no spurious blank space at top)", () => {
+    const planWithLeadingNewlines: Plan = {
+      ...mockPlan,
+      content: "# My Plan\n\n\n\n## Overview\n\nContent with leading newlines in body.",
+    };
+    render(<PlanDetailContent plan={planWithLeadingNewlines} onContentSave={onContentSave} />);
+    const bodyMarkdown = screen.getByTestId("body-markdown").textContent;
+    expect(bodyMarkdown).not.toMatch(/^\s/);
+    expect(bodyMarkdown).toContain("## Overview");
+  });
+
+  it("uses reduced top padding on markdown editor container (no spurious blank space)", () => {
+    render(<PlanDetailContent plan={mockPlan} onContentSave={onContentSave} />);
+    const editorContainer = screen.getByTestId("plan-markdown-editor");
+    expect(editorContainer.className).toMatch(/pt-2/);
+    expect(editorContainer.className).toContain("first-child");
+  });
+
   it("renders header with title aligned to top and no HR (border-b)", () => {
     const { container } = render(<PlanDetailContent plan={mockPlan} onContentSave={onContentSave} />);
     const headerRow = container.querySelector(".flex.items-start");

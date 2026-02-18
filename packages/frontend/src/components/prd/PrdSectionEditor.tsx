@@ -99,7 +99,7 @@ export function PrdSectionEditor({
     if (el.contains(document.activeElement)) return;
     if (pendingHtmlRef.current != null) return;
     lastMarkdownRef.current = markdown;
-    const content = markdown.trim() ? markdown : "_No content yet_";
+    const content = markdown.trim() ? markdown.trim() : "_No content yet_";
     markdownToHtml(content).then((html) => {
       if (!elRef.current) return;
       if (elRef.current.contains(document.activeElement)) return;

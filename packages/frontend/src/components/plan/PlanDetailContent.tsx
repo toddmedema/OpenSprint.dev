@@ -119,7 +119,8 @@ export function PlanDetailContent({
     [titleValue, displayTitle, plan.content, onContentSave],
   );
 
-  const bodyMarkdown = body || "_No content yet_";
+  // Trim body to remove leading/trailing whitespace that causes spurious blank space at top
+  const bodyMarkdown = (body ?? "").trim() || "_No content yet_";
 
   return (
     <div className="shrink-0">
@@ -148,7 +149,7 @@ export function PlanDetailContent({
       <div className="px-4 pb-4">
         <div
           data-testid="plan-markdown-editor"
-          className="prose prose-sm max-w-none bg-theme-surface p-4 rounded-lg border border-theme-border text-theme-text text-xs"
+          className="prose prose-sm max-w-none bg-theme-surface px-4 pt-2 pb-4 rounded-lg border border-theme-border text-theme-text text-xs [&>div>:first-child]:mt-0"
         >
           <PrdSectionEditor
             sectionKey="plan-body"

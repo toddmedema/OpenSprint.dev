@@ -36,6 +36,14 @@ describe("planContentUtils", () => {
       expect(title).toBe("");
       expect(body).toBe("### Subsection\n\nBody");
     });
+
+    it("trims leading whitespace from body (avoids spurious blank space in sidebar)", () => {
+      const content = "# Title\n\n\n\n## Overview\n\nBody content";
+      const { title, body } = parsePlanContent(content);
+      expect(title).toBe("Title");
+      expect(body).toBe("## Overview\n\nBody content");
+      expect(body.startsWith("\n")).toBe(false);
+    });
   });
 
   describe("serializePlanContent", () => {
