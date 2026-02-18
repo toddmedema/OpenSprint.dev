@@ -521,6 +521,7 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
                   onClick={handleUnblock}
                   disabled={unblockLoading}
                   className="text-xs py-1.5 px-3 font-medium text-theme-error-text hover:bg-theme-error-bg rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  data-testid="sidebar-unblock-btn"
                 >
                   {unblockLoading ? "Unblocking…" : "Unblock"}
                 </button>

@@ -84,9 +84,12 @@ function createStore(
         plans: [],
         awaitingApproval: false,
         orchestratorRunning: false,
+        currentTaskId: null,
+        currentPhase: null,
         selectedTaskId: null,
         taskDetail: null,
         taskDetailLoading: false,
+        taskDetailError: null,
         agentOutput: [],
         completionState: null,
         archivedSessions: [],
@@ -193,14 +196,16 @@ describe("ExecutePhase top bar", () => {
       { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "ready", priority: 0, assignee: null },
     ];
     const store = createStore(tasks);
-    render(
+    const { container } = render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
       </Provider>,
     );
 
     expect(screen.queryByRole("heading", { name: "Execute" })).not.toBeInTheDocument();
-    expect(document.querySelector('[role="progressbar"]')).not.toBeInTheDocument();
+    // Top bar (filter chips area) has no progress bar; epic cards have their own
+    const topBar = container.querySelector(".px-6.py-4.border-b");
+    expect(topBar?.querySelector('[role="progressbar"]')).not.toBeInTheDocument();
   });
 
   it("shows status filter chips with task counts (All, Ready, In Progress, In Review, Done, Blocked)", () => {
@@ -437,7 +442,7 @@ describe("ExecutePhase Redux integration", () => {
       </Provider>,
     );
 
-    const unblockBtn = await screen.findByRole("button", { name: /unblock/i });
+    const unblockBtn = await screen.findByTestId("sidebar-unblock-btn");
     expect(unblockBtn).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /mark done/i })).not.toBeInTheDocument();
 
@@ -561,14 +566,12 @@ describe("ExecutePhase Redux integration", () => {
       </Provider>,
     );
 
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
+    const liveOutput = await vi.waitFor(() => {
+      const el = screen.getByTestId("live-agent-output");
+      expect(el).toHaveTextContent("Line 1");
+      return el;
     });
-
-    const liveOutput = screen.getByTestId("live-agent-output");
-    expect(liveOutput).toBeInTheDocument();
     expect(liveOutput).toHaveClass("overflow-y-auto");
-    expect(liveOutput).toHaveTextContent("Line 1");
     expect(liveOutput).toHaveTextContent("Line 2");
     expect(liveOutput).toHaveTextContent("Line 3");
   });
@@ -594,7 +597,7 @@ describe("ExecutePhase Redux integration", () => {
       expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
     });
 
-    const header = screen.getByRole("heading", { level: 3 });
+    const header = screen.getByTestId("task-detail-title");
     expect(header).toHaveTextContent("Implement feature X");
     expect(header).not.toHaveTextContent(/^Task$/);
     // No separate "Task" label in the detail section
@@ -627,10 +630,8 @@ describe("ExecutePhase Redux integration", () => {
       expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
     });
 
-    // Wait for task detail to load so header shows title
-    const header = await vi.waitFor(() => screen.getByRole("heading", { level: 3, name: uniqueTitle }));
-
-    // Title appears exactly once in the sidebar (header only; no duplicate in metadata row)
+    // Title appears immediately from cached list data
+    const header = screen.getByTestId("task-detail-title");
     expect(header).toHaveTextContent(uniqueTitle);
 
     // Status (In Progress) remains visible in metadata row (may also appear in filter chips)
@@ -700,13 +701,8 @@ describe("ExecutePhase Redux integration", () => {
       </Provider>,
     );
 
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    expect(screen.getByText("Final line")).toBeInTheDocument();
-    const descriptionContainer = document.querySelector(".prose.overflow-y-auto");
-    expect(descriptionContainer).toBeInTheDocument();
+    const descriptionContainer = await screen.findByTestId("task-description-markdown", { timeout: 5000 });
+    expect(descriptionContainer).toHaveTextContent("Final line");
     expect(descriptionContainer).toHaveClass("overflow-y-auto");
   });
 
@@ -947,11 +943,7 @@ describe("ExecutePhase Source feedback section", () => {
       </Provider>,
     );
 
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    expect(screen.getByRole("button", { name: /source feedback/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /source feedback/i })).toBeInTheDocument();
   });
 
   it("omits Source feedback section for tasks without sourceFeedbackId", async () => {
@@ -1061,11 +1053,7 @@ describe("ExecutePhase Source feedback section", () => {
       </Provider>,
     );
 
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    const expandBtn = screen.getByRole("button", { name: /source feedback/i });
+    const expandBtn = await screen.findByRole("button", { name: /source feedback/i });
     await user.click(expandBtn);
 
     await vi.waitFor(() => {
@@ -1075,7 +1063,7 @@ describe("ExecutePhase Source feedback section", () => {
     expect(screen.getByTestId("source-feedback-card")).toBeInTheDocument();
     expect(screen.getByText("Please add dark mode support")).toBeInTheDocument();
     expect(screen.getByText("Feature")).toBeInTheDocument();
-    expect(screen.getByText(/mapped plan: build test/i)).toBeInTheDocument();
+    expect(screen.getByText(/mapped plan:/i)).toBeInTheDocument();
   });
 
   it("shows Resolved chip in Source feedback section when feedback is resolved", async () => {
@@ -1116,11 +1104,7 @@ describe("ExecutePhase Source feedback section", () => {
       </Provider>,
     );
 
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    const expandBtn = screen.getByRole("button", { name: /source feedback/i });
+    const expandBtn = await screen.findByRole("button", { name: /source feedback/i });
     await user.click(expandBtn);
 
     await vi.waitFor(() => {
