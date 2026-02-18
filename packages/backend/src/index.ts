@@ -163,16 +163,13 @@ const shutdown = async () => {
   stopProcessReaper();
   orchestratorService.stopAll();
 
-  // Stop bd daemons for all known repos (prevents daemon process accumulation)
+  // Stop bd daemons only for repos this backend actually started/managed.
+  // Do NOT stop daemons for all project paths — other backends may be managing them.
   try {
-    const projectService = new ProjectService();
-    const projects = await projectService.listProjects();
-    const projectPaths = projects.map((p) => p.repoPath);
     const managedPaths = BeadsService.getManagedRepoPaths();
-    const allRepoPaths = [...new Set([...projectPaths, ...managedPaths])];
-    if (allRepoPaths.length > 0) {
+    if (managedPaths.length > 0) {
       const beads = new BeadsService();
-      await beads.stopDaemonsForRepos(allRepoPaths);
+      await beads.stopDaemonsForRepos(managedPaths);
     }
   } catch (err) {
     console.warn("[shutdown] Failed to stop bd daemons:", (err as Error).message);
