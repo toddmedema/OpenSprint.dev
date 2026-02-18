@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation, Navigate } from "react-router-dom";
 import type { ProjectPhase } from "@opensprint/shared";
 import {
@@ -60,6 +60,7 @@ export function ProjectView() {
   const selectedTaskId = useAppSelector((s) => s.execute.selectedTaskId);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const prevProjectIdRef = useRef<string | null>(null);
   const project = useAppSelector((s) => s.project.data);
   const projectLoading = useAppSelector((s) => s.project.loading);
   const projectError = useAppSelector((s) => s.project.error);
@@ -70,6 +71,12 @@ export function ProjectView() {
   // Upfront data loading for ALL phases on mount
   useEffect(() => {
     if (!projectId || redirectTo) return;
+
+    // Only reset spec when switching projects (not on Strict Mode remount with same projectId)
+    if (prevProjectIdRef.current != null && prevProjectIdRef.current !== projectId) {
+      dispatch(resetSpec());
+    }
+    prevProjectIdRef.current = projectId;
 
     dispatch(wsConnect({ projectId }));
     dispatch(fetchProject(projectId));
@@ -87,7 +94,9 @@ export function ProjectView() {
       dispatch(wsDisconnect());
       dispatch(resetProject());
       dispatch(resetWebsocket());
-      dispatch(resetSpec());
+      // Do NOT reset spec in cleanup: React Strict Mode double-mounts in dev; resetSpec
+      // would clear prdContent before remount's fetchPrd completes. Reset only when
+      // projectId changes (handled at effect start).
       dispatch(resetPlan());
       dispatch(resetExecute());
       dispatch(resetEval());

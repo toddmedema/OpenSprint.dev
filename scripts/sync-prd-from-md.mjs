@@ -10,7 +10,9 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
 const PRD_MD = path.join(ROOT, "PRD.md");
-const PRD_JSON = path.join(ROOT, ".opensprint", "prd.json");
+// Output to dev repo if projects.json points there (project 94c64729 uses /Users/todd/opensprint-dev)
+const OUT_DIR = process.env.OPENSPRINT_REPO_PATH || ROOT;
+const PRD_JSON = path.join(OUT_DIR, ".opensprint", "prd.json");
 
 /** Map PRD.md section numbers to prd.json keys. Some sections are combined. */
 const SECTION_MAP = [
@@ -124,7 +126,7 @@ function main() {
   };
 
   fs.writeFileSync(PRD_JSON, JSON.stringify(prd, null, 2), "utf-8");
-  console.log("Updated .opensprint/prd.json from PRD.md");
+  console.log("Updated", PRD_JSON, "from PRD.md");
 }
 
 main();

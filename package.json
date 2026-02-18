@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "sync-prd": "node scripts/sync-prd-from-md.mjs",
+    "sync-prd:dev": "OPENSPRINT_REPO_PATH=/Users/todd/opensprint-dev node scripts/sync-prd-from-md.mjs",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "npm run dev -w packages/backend",
     "dev:frontend": "npm run dev -w packages/frontend",

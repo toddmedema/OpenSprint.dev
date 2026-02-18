@@ -34,7 +34,9 @@ export function PrdSectionEditor({
   ...rest
 }: PrdSectionEditorProps) {
   const elRef = useRef<HTMLDivElement>(null);
-  const lastMarkdownRef = useRef(markdown);
+  // Initialize with null sentinel so the sync effect always runs on first mount,
+  // even when the component mounts with content already loaded from Redux.
+  const lastMarkdownRef = useRef<string | null>(null);
   const isInternalUpdateRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
