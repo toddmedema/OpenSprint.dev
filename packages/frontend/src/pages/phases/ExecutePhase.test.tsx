@@ -51,14 +51,21 @@ const basePlan = {
 };
 
 function createStore(
-  tasks: { id: string; kanbanColumn: string; epicId: string; title: string; priority: number; assignee: string | null }[],
+  tasks: {
+    id: string;
+    kanbanColumn: string;
+    epicId: string;
+    title: string;
+    priority: number;
+    assignee: string | null;
+  }[],
   buildOverrides?: Partial<{
     orchestratorRunning: boolean;
     selectedTaskId: string | null;
     awaitingApproval: boolean;
     agentOutput: string[];
     taskDetailError: string | null;
-  }>,
+  }>
 ) {
   return configureStore({
     reducer: {
@@ -112,15 +119,36 @@ describe("ExecutePhase epic card task order", () => {
 
   it("sorts epic card tasks by status: In Progress → In Review → Ready → Backlog → Done", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Done task", epicId: "epic-1", kanbanColumn: "done", priority: 0, assignee: null },
-      { id: "epic-1.2", title: "Ready task", epicId: "epic-1", kanbanColumn: "ready", priority: 0, assignee: null },
-      { id: "epic-1.3", title: "In progress task", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Done task",
+        epicId: "epic-1",
+        kanbanColumn: "done",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Ready task",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.3",
+        title: "In progress task",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     const { container } = render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
@@ -134,26 +162,42 @@ describe("ExecutePhase epic card task order", () => {
 
   it("renders task rows with status left and assignee right (no duplicate indicators)", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Assigned task", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent-1" },
-      { id: "epic-1.2", title: "Unassigned task", epicId: "epic-1", kanbanColumn: "ready", priority: 1, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Assigned task",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent-1",
+      },
+      {
+        id: "epic-1.2",
+        title: "Unassigned task",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 1,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     const { container } = render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
     expect(epicCard).toBeInTheDocument();
 
     // Assigned task: status left, assignee right
-    const assignedRow = epicCard!.querySelector('li');
+    const assignedRow = epicCard!.querySelector("li");
     expect(assignedRow).toBeTruthy();
     const assignedButton = assignedRow!.querySelector("button");
     const assignedChildren = Array.from(assignedButton!.children);
     const titleIdx = assignedChildren.findIndex((el) => el.textContent?.includes("Assigned task"));
-    const statusIdx = assignedChildren.findIndex((el) => el.getAttribute("title") === "In Progress");
+    const statusIdx = assignedChildren.findIndex(
+      (el) => el.getAttribute("title") === "In Progress"
+    );
     const assigneeEl = assignedRow!.querySelector('[data-testid="task-row-right"]');
     expect(statusIdx).toBeGreaterThanOrEqual(0);
     expect(statusIdx).toBeLessThan(titleIdx);
@@ -166,20 +210,43 @@ describe("ExecutePhase epic card task order", () => {
 
   it("sorts by priority within same status, then by ID", () => {
     const tasks = [
-      { id: "epic-1.3", title: "Low priority", epicId: "epic-1", kanbanColumn: "ready", priority: 2, assignee: null },
-      { id: "epic-1.1", title: "High priority", epicId: "epic-1", kanbanColumn: "ready", priority: 0, assignee: null },
-      { id: "epic-1.2", title: "Mid priority", epicId: "epic-1", kanbanColumn: "ready", priority: 1, assignee: null },
+      {
+        id: "epic-1.3",
+        title: "Low priority",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 2,
+        assignee: null,
+      },
+      {
+        id: "epic-1.1",
+        title: "High priority",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Mid priority",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 1,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     const { container } = render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
     const listItems = epicCard!.querySelectorAll("ul li");
-    const titles = Array.from(listItems).map((li) => li.textContent?.trim().split(/\s+/).slice(0, 2).join(" ") ?? "");
+    const titles = Array.from(listItems).map(
+      (li) => li.textContent?.trim().split(/\s+/).slice(0, 2).join(" ") ?? ""
+    );
     expect(titles[0]).toContain("High");
     expect(titles[1]).toContain("Mid");
     expect(titles[2]).toContain("Low");
@@ -193,13 +260,20 @@ describe("ExecutePhase top bar", () => {
 
   it("does not show Execute heading or progress bar in top bar", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "ready", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     const { container } = render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.queryByRole("heading", { name: "Execute" })).not.toBeInTheDocument();
@@ -210,14 +284,28 @@ describe("ExecutePhase top bar", () => {
 
   it("shows status filter chips with task counts (All, Ready, In Progress, In Review, Done, Blocked)", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "done", priority: 0, assignee: null },
-      { id: "epic-1.2", title: "Task B", epicId: "epic-1", kanbanColumn: "ready", priority: 1, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "done",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Task B",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 1,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.getByTestId("filter-chip-all")).toHaveTextContent("All");
@@ -230,15 +318,36 @@ describe("ExecutePhase top bar", () => {
 
   it("shows in-progress and in-review counts separately in chips", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "done", priority: 0, assignee: null },
-      { id: "epic-1.2", title: "Task B", epicId: "epic-1", kanbanColumn: "in_progress", priority: 1, assignee: "agent-1" },
-      { id: "epic-1.3", title: "Task C", epicId: "epic-1", kanbanColumn: "in_review", priority: 2, assignee: "agent-1" },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "done",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Task B",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 1,
+        assignee: "agent-1",
+      },
+      {
+        id: "epic-1.3",
+        title: "Task C",
+        epicId: "epic-1",
+        kanbanColumn: "in_review",
+        priority: 2,
+        assignee: "agent-1",
+      },
     ];
     const store = createStore(tasks);
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.getByTestId("filter-chip-in_progress")).toHaveTextContent("1");
@@ -248,14 +357,28 @@ describe("ExecutePhase top bar", () => {
 
   it("shows separate ready and blocked counts in chips", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "backlog", priority: 0, assignee: null },
-      { id: "epic-1.2", title: "Task B", epicId: "epic-1", kanbanColumn: "ready", priority: 1, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "backlog",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Task B",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 1,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.getByTestId("filter-chip-ready")).toHaveTextContent("1");
@@ -264,15 +387,36 @@ describe("ExecutePhase top bar", () => {
 
   it("counts planning, backlog, and blocked as Blocked chip", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "planning", priority: 0, assignee: null },
-      { id: "epic-1.2", title: "Task B", epicId: "epic-1", kanbanColumn: "backlog", priority: 1, assignee: null },
-      { id: "epic-1.3", title: "Task C", epicId: "epic-1", kanbanColumn: "blocked", priority: 2, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "planning",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Task B",
+        epicId: "epic-1",
+        kanbanColumn: "backlog",
+        priority: 1,
+        assignee: null,
+      },
+      {
+        id: "epic-1.3",
+        title: "Task C",
+        epicId: "epic-1",
+        kanbanColumn: "blocked",
+        priority: 2,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("3");
@@ -281,15 +425,36 @@ describe("ExecutePhase top bar", () => {
   it("filters task list when chip is clicked", async () => {
     const user = userEvent.setup();
     const tasks = [
-      { id: "epic-1.1", title: "Done task", epicId: "epic-1", kanbanColumn: "done", priority: 0, assignee: null },
-      { id: "epic-1.2", title: "Ready task", epicId: "epic-1", kanbanColumn: "ready", priority: 1, assignee: null },
-      { id: "epic-1.3", title: "In progress task", epicId: "epic-1", kanbanColumn: "in_progress", priority: 2, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Done task",
+        epicId: "epic-1",
+        kanbanColumn: "done",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Ready task",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 1,
+        assignee: null,
+      },
+      {
+        id: "epic-1.3",
+        title: "In progress task",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 2,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     const { container } = render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
@@ -312,32 +477,57 @@ describe("ExecutePhase top bar", () => {
   it("re-clicking active chip (non-All) resets to All", async () => {
     const user = userEvent.setup();
     const tasks = [
-      { id: "epic-1.1", title: "Done task", epicId: "epic-1", kanbanColumn: "done", priority: 0, assignee: null },
-      { id: "epic-1.2", title: "Ready task", epicId: "epic-1", kanbanColumn: "ready", priority: 1, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Done task",
+        epicId: "epic-1",
+        kanbanColumn: "done",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Ready task",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 1,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     const { container } = render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await user.click(screen.getByTestId("filter-chip-done"));
-    expect(container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")).toHaveLength(1);
+    expect(
+      container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")
+    ).toHaveLength(1);
 
     await user.click(screen.getByTestId("filter-chip-done"));
-    expect(container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")).toHaveLength(2);
+    expect(
+      container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")
+    ).toHaveLength(2);
   });
 
   it("All chip is active by default", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "ready", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.getByTestId("filter-chip-all")).toHaveAttribute("aria-pressed", "true");
@@ -345,13 +535,20 @@ describe("ExecutePhase top bar", () => {
 
   it("does not render play or pause buttons in the header", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "ready", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.queryByRole("button", { name: /pick up next task/i })).not.toBeInTheDocument();
@@ -360,13 +557,20 @@ describe("ExecutePhase top bar", () => {
 
   it("shows awaiting approval message when awaitingApproval is true", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { awaitingApproval: true });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.getByText("Awaiting approval…")).toBeInTheDocument();
@@ -374,13 +578,20 @@ describe("ExecutePhase top bar", () => {
 
   it("does not show awaiting approval when awaitingApproval is false", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "ready", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.queryByText("Awaiting approval…")).not.toBeInTheDocument();
@@ -395,13 +606,20 @@ describe("ExecutePhase Redux integration", () => {
   it("dispatches fetchTaskDetail when a task is selected", async () => {
     mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent" },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -412,13 +630,20 @@ describe("ExecutePhase Redux integration", () => {
   it("dispatches markTaskDone when Mark done button is clicked", async () => {
     const user = userEvent.setup();
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent" },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const markDoneBtn = await screen.findByRole("button", { name: /mark done/i });
@@ -433,13 +658,20 @@ describe("ExecutePhase Redux integration", () => {
     const user = userEvent.setup();
     mockGet.mockResolvedValue({ id: "epic-1.1", title: "Blocked Task", kanbanColumn: "blocked" });
     const tasks = [
-      { id: "epic-1.1", title: "Blocked Task", epicId: "epic-1", kanbanColumn: "blocked", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Blocked Task",
+        epicId: "epic-1",
+        kanbanColumn: "blocked",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const unblockBtn = await screen.findByTestId("sidebar-unblock-btn");
@@ -457,13 +689,20 @@ describe("ExecutePhase Redux integration", () => {
     const user = userEvent.setup();
     mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -481,13 +720,20 @@ describe("ExecutePhase Redux integration", () => {
     const user = userEvent.setup();
     mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -502,13 +748,20 @@ describe("ExecutePhase Redux integration", () => {
 
   it("has kanban scroll area with min-h-0 and overflow-auto for independent scroll", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
     const scrollArea = document.querySelector(".overflow-auto.min-h-0");
     expect(scrollArea).toBeInTheDocument();
@@ -517,13 +770,20 @@ describe("ExecutePhase Redux integration", () => {
 
   it("has root with flex flex-1 min-h-0 min-w-0 for proper fill and independent page/sidebar scroll", () => {
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks);
     const { container } = render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
     const root = container.firstElementChild;
     expect(root).toHaveClass("flex");
@@ -535,26 +795,42 @@ describe("ExecutePhase Redux integration", () => {
   it("renders resizable sidebar with resize handle when a task is selected", async () => {
     mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
       expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
     });
 
-    expect(screen.getByRole("separator", { name: "Resize sidebar", hidden: true })).toBeInTheDocument();
+    expect(
+      screen.getByRole("separator", { name: "Resize sidebar", hidden: true })
+    ).toBeInTheDocument();
   });
 
   it("live agent output area is scrollable (overflow-y-auto) and does not auto-scroll when content grows", async () => {
     mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, {
       selectedTaskId: "epic-1.1",
@@ -563,7 +839,7 @@ describe("ExecutePhase Redux integration", () => {
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const liveOutput = await vi.waitFor(() => {
@@ -584,13 +860,20 @@ describe("ExecutePhase Redux integration", () => {
       description: "Short desc",
     });
     const tasks = [
-      { id: "epic-1.1", title: "Implement feature X", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Implement feature X",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -617,13 +900,20 @@ describe("ExecutePhase Redux integration", () => {
       epicId: "epic-1",
     });
     const tasks = [
-      { id: "epic-1.1", title: uniqueTitle, epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: uniqueTitle,
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -655,13 +945,20 @@ describe("ExecutePhase Redux integration", () => {
       updatedAt: "",
     });
     const tasks = [
-      { id: "epic-1.1", title: "Fix login bug", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Fix login bug",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -692,16 +989,25 @@ describe("ExecutePhase Redux integration", () => {
       updatedAt: "",
     });
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
-    const descriptionContainer = await screen.findByTestId("task-description-markdown", { timeout: 5000 });
+    const descriptionContainer = await screen.findByTestId("task-description-markdown", {
+      timeout: 5000,
+    });
     expect(descriptionContainer).toHaveTextContent("Final line");
     expect(descriptionContainer).toHaveClass("overflow-y-auto");
   });
@@ -723,13 +1029,20 @@ describe("ExecutePhase Redux integration", () => {
       updatedAt: "",
     });
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -782,14 +1095,21 @@ describe("ExecutePhase task detail plan link", () => {
     };
     mockGet.mockResolvedValue(taskDetail);
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent" },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
     ];
     const onNavigateToPlan = vi.fn();
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -818,13 +1138,20 @@ describe("ExecutePhase task detail plan link", () => {
     };
     mockGet.mockResolvedValue(taskDetail);
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent" },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -852,14 +1179,21 @@ describe("ExecutePhase task detail plan link", () => {
     };
     mockGet.mockResolvedValue(taskDetail);
     const tasks = [
-      { id: "other-1", title: "Orphan Task", epicId: null, kanbanColumn: "ready", priority: 0, assignee: null },
+      {
+        id: "other-1",
+        title: "Orphan Task",
+        epicId: null,
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const onNavigateToPlan = vi.fn();
     const store = createStore(tasks, { selectedTaskId: "other-1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -888,14 +1222,21 @@ describe("ExecutePhase task detail plan link", () => {
     };
     mockGet.mockResolvedValue(taskDetail);
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent" },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
     ];
     const onNavigateToPlan = vi.fn();
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -934,13 +1275,20 @@ describe("ExecutePhase Source feedback section", () => {
     };
     mockGet.mockResolvedValue(taskDetail);
     const tasks = [
-      { id: "epic-1.1", title: "Implement feature", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent" },
+      {
+        id: "epic-1.1",
+        title: "Implement feature",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(await screen.findByRole("button", { name: /source feedback/i })).toBeInTheDocument();
@@ -964,13 +1312,20 @@ describe("ExecutePhase Source feedback section", () => {
     };
     mockGet.mockResolvedValue(taskDetail);
     const tasks = [
-      { id: "epic-1.1", title: "Regular task", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent" },
+      {
+        id: "epic-1.1",
+        title: "Regular task",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -999,13 +1354,20 @@ describe("ExecutePhase Source feedback section", () => {
     };
     mockGet.mockResolvedValue(taskDetail);
     const tasks = [
-      { id: "epic-1.1", title: "Feedback: Fix the bug", epicId: null, kanbanColumn: "ready", priority: 4, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Feedback: Fix the bug",
+        epicId: null,
+        kanbanColumn: "ready",
+        priority: 4,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     await vi.waitFor(() => {
@@ -1044,13 +1406,20 @@ describe("ExecutePhase Source feedback section", () => {
       createdAt: "2026-02-17T10:00:00Z",
     });
     const tasks = [
-      { id: "epic-1.1", title: "Implement feature", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent" },
+      {
+        id: "epic-1.1",
+        title: "Implement feature",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const expandBtn = await screen.findByRole("button", { name: /source feedback/i });
@@ -1095,13 +1464,20 @@ describe("ExecutePhase Source feedback section", () => {
       createdAt: "2026-02-17T10:00:00Z",
     });
     const tasks = [
-      { id: "epic-1.1", title: "Implement feature", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent" },
+      {
+        id: "epic-1.1",
+        title: "Implement feature",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const expandBtn = await screen.findByRole("button", { name: /source feedback/i });
@@ -1120,20 +1496,40 @@ describe("ExecutePhase Source feedback section", () => {
 });
 
 describe("ExecutePhase task detail cached state", () => {
+  let pendingAbort: AbortController;
+
+  function neverResolves() {
+    pendingAbort = new AbortController();
+    return new Promise((_resolve, reject) => {
+      pendingAbort.signal.addEventListener("abort", () => reject(new Error("aborted")));
+    });
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    pendingAbort?.abort();
+  });
+
   it("shows task title immediately in sidebar header from cached list data (no wait for detail API)", () => {
-    mockGet.mockImplementation(() => new Promise(() => {})); // Never resolves
+    mockGet.mockImplementation(() => neverResolves());
     const tasks = [
-      { id: "epic-1.1", title: "Cached Task Title", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent-1" },
+      {
+        id: "epic-1.1",
+        title: "Cached Task Title",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent-1",
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const title = screen.getByTestId("task-detail-title");
@@ -1142,15 +1538,22 @@ describe("ExecutePhase task detail cached state", () => {
   });
 
   it("shows list-level metadata (status, assignee) immediately in sidebar header", () => {
-    mockGet.mockImplementation(() => new Promise(() => {}));
+    mockGet.mockImplementation(() => neverResolves());
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_review", priority: 0, assignee: "agent-1" },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_review",
+        priority: 0,
+        assignee: "agent-1",
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const metadata = screen.getByTestId("task-detail-metadata");
@@ -1159,15 +1562,22 @@ describe("ExecutePhase task detail cached state", () => {
   });
 
   it("shows loading skeleton for detail-dependent fields while fetching", () => {
-    mockGet.mockImplementation(() => new Promise(() => {}));
+    mockGet.mockImplementation(() => neverResolves());
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.getByTestId("task-detail-loading")).toBeInTheDocument();
@@ -1177,13 +1587,20 @@ describe("ExecutePhase task detail cached state", () => {
   it("shows error state below header without clearing task name when detail fetch fails", async () => {
     mockGet.mockRejectedValue(new Error("Network error"));
     const tasks = [
-      { id: "epic-1.1", title: "Task With Error", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task With Error",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.getByTestId("task-detail-title")).toHaveTextContent("Task With Error");

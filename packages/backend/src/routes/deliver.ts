@@ -1,7 +1,16 @@
 import { Router, Request } from "express";
 import { spawn, execSync } from "child_process";
-import type { ApiResponse, DeploymentRecord, DeploymentConfig, ProjectSettings } from "@opensprint/shared";
-import { resolveTestCommand, getDefaultDeploymentTarget, getDeploymentTargetConfig } from "@opensprint/shared";
+import type {
+  ApiResponse,
+  DeploymentRecord,
+  DeploymentConfig,
+  ProjectSettings,
+} from "@opensprint/shared";
+import {
+  resolveTestCommand,
+  getDefaultDeploymentTarget,
+  getDeploymentTargetConfig,
+} from "@opensprint/shared";
 import { deploymentService } from "../services/deployment-service.js";
 import { deployStorageService } from "../services/deploy-storage.service.js";
 import { ProjectService } from "../services/project.service.js";
@@ -33,11 +42,25 @@ function getCommitHash(repoPath: string): string | null {
   }
 }
 
+const activeDeployments = new Map<string, string>();
+
 // POST /projects/:projectId/deliver — Trigger deployment (Deliver phase)
 // Body: { target?: string } — target name from targets array; defaults to getDefaultDeploymentTarget()
 deliverRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
   try {
     const { projectId } = req.params;
+
+    const existingDeployId = activeDeployments.get(projectId);
+    if (existingDeployId) {
+      res.status(409).json({
+        error: {
+          code: "DEPLOY_ALREADY_RUNNING",
+          message: `Deployment ${existingDeployId} is already running for this project`,
+        },
+      });
+      return;
+    }
+
     const bodyTarget = (req.body as { target?: string } | undefined)?.target;
     const project = await projectService.getProject(projectId);
     const settings = await projectService.getSettings(projectId);
@@ -46,8 +69,7 @@ deliverRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
     const previousDeployId = latest?.id ?? null;
 
     const commitHash = getCommitHash(project.repoPath);
-    const target =
-      bodyTarget ?? getDefaultDeploymentTarget(settings.deployment);
+    const target = bodyTarget ?? getDefaultDeploymentTarget(settings.deployment);
     const mode = settings.deployment.mode ?? "custom";
 
     const record = await deployStorageService.createRecord(projectId, previousDeployId, {
@@ -56,13 +78,18 @@ deliverRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
       mode,
     });
 
+    activeDeployments.set(projectId, record.id);
     broadcastToProject(projectId, { type: "deliver.started", deployId: record.id });
 
     await deployStorageService.updateRecord(projectId, record.id, { status: "running" });
 
-    runDeployAsync(projectId, record.id, project.repoPath, settings, target).catch((err) => {
-      console.error(`[deliver] Deploy ${record.id} failed:`, err);
-    });
+    runDeployAsync(projectId, record.id, project.repoPath, settings, target)
+      .catch((err) => {
+        console.error(`[deliver] Deploy ${record.id} failed:`, err);
+      })
+      .finally(() => {
+        activeDeployments.delete(projectId);
+      });
 
     const body: ApiResponse<{ deployId: string }> = { data: { deployId: record.id } };
     res.status(202).json(body);
@@ -77,7 +104,8 @@ deliverRouter.get("/status", async (req: Request<ProjectParams>, res, next) => {
     const { projectId } = req.params;
     const history = await deployStorageService.listHistory(projectId, 1);
     const current = history[0] ?? null;
-    const activeDeployId = current?.status === "running" || current?.status === "pending" ? current.id : null;
+    const activeDeployId =
+      current?.status === "running" || current?.status === "pending" ? current.id : null;
 
     const body: ApiResponse<DeliverStatusResponse> = {
       data: {
@@ -147,8 +175,7 @@ deliverRouter.post("/:deployId/rollback", async (req: Request<DeployIdParams>, r
 
     if (settings.deployment.mode === "custom" && settings.deployment.rollbackCommand) {
       const latest = await deployStorageService.getLatestDeploy(projectId);
-      const rolledBackDeployId =
-        latest && latest.id !== deployId ? latest.id : null;
+      const rolledBackDeployId = latest && latest.id !== deployId ? latest.id : null;
 
       const commitHash = getCommitHash(project.repoPath);
       const target = getDefaultDeploymentTarget(settings.deployment);
@@ -167,7 +194,7 @@ deliverRouter.post("/:deployId/rollback", async (req: Request<DeployIdParams>, r
         rollbackRecord.id,
         project.repoPath,
         settings.deployment.rollbackCommand!,
-        rolledBackDeployId,
+        rolledBackDeployId
       ).catch((err) => {
         console.error(`[deliver] Rollback ${rollbackRecord.id} failed:`, err);
       });
@@ -178,7 +205,8 @@ deliverRouter.post("/:deployId/rollback", async (req: Request<DeployIdParams>, r
       res.status(501).json({
         error: {
           code: "NOT_IMPLEMENTED",
-          message: "Rollback is only supported for custom deployment with rollbackCommand configured",
+          message:
+            "Rollback is only supported for custom deployment with rollbackCommand configured",
         },
       });
     }
@@ -197,7 +225,7 @@ export async function runDeployAsync(
   deployId: string,
   repoPath: string,
   settings: ProjectSettings,
-  targetName?: string,
+  targetName?: string
 ): Promise<void> {
   const config = settings.deployment;
   const effectiveTarget = targetName ?? getDefaultDeploymentTarget(config);
@@ -226,7 +254,7 @@ export async function runDeployAsync(
       const fixResult = await createFixEpicFromTestOutput(
         projectId,
         repoPath,
-        testResult.rawOutput || failMsg,
+        testResult.rawOutput || failMsg
       );
 
       await deployStorageService.updateRecord(projectId, deployId, {
@@ -261,10 +289,19 @@ export async function runDeployAsync(
       try {
         await runCommandStreaming(
           "npx",
-          ["eas-cli", "update", "--channel", channel, "--message", message, "--non-interactive", "--json"],
+          [
+            "eas-cli",
+            "update",
+            "--channel",
+            channel,
+            "--message",
+            message,
+            "--non-interactive",
+            "--json",
+          ],
           repoPath,
           captureEmit,
-          envVars,
+          envVars
         );
         let url: string | undefined;
         try {
@@ -308,7 +345,11 @@ export async function runDeployAsync(
           url: result.url,
           error: result.error,
         });
-        broadcastToProject(projectId, { type: "deliver.completed", deployId, success: result.success });
+        broadcastToProject(projectId, {
+          type: "deliver.completed",
+          deployId,
+          success: result.success,
+        });
       } else {
         await deployStorageService.updateRecord(projectId, deployId, {
           status: "failed",
@@ -343,7 +384,7 @@ async function runRollbackAsync(
   deployId: string,
   repoPath: string,
   rollbackCommand: string,
-  rolledBackDeployId: string | null,
+  rolledBackDeployId: string | null
 ): Promise<void> {
   const emit = (chunk: string) => {
     deployStorageService.appendLog(projectId, deployId, chunk);
@@ -380,7 +421,7 @@ function runCommandStreaming(
   args: string[],
   cwd: string,
   onOutput: (chunk: string) => void,
-  envVars?: Record<string, string>,
+  envVars?: Record<string, string>
 ): Promise<void> {
   const env = { ...process.env, ...envVars };
   return new Promise((resolve, reject) => {

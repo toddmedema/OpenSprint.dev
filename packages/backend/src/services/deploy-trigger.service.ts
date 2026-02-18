@@ -7,6 +7,8 @@ import { runDeployAsync } from "../routes/deliver.js";
 
 const projectService = new ProjectService();
 
+const activeAutoDeployments = new Set<string>();
+
 /** Get git commit hash at HEAD in repo (git rev-parse HEAD) */
 function getCommitHash(repoPath: string): string | null {
   try {
@@ -22,9 +24,17 @@ function getCommitHash(repoPath: string): string | null {
  * Creates a deployment record, broadcasts deliver.started, and runs the deploy pipeline
  * (pre-deploy tests, then Expo or custom command/webhook).
  * Returns the deploy ID. Does not throw — logs errors.
+ * Prevents concurrent deployments per project.
  */
 export async function triggerDeploy(projectId: string): Promise<string | null> {
+  if (activeAutoDeployments.has(projectId)) {
+    console.warn(`[deploy] Skipping auto-deploy for ${projectId}: deployment already in progress`);
+    return null;
+  }
+
   try {
+    activeAutoDeployments.add(projectId);
+
     const project = await projectService.getProject(projectId);
     const settings = await projectService.getSettings(projectId);
 
@@ -45,12 +55,17 @@ export async function triggerDeploy(projectId: string): Promise<string | null> {
 
     await deployStorageService.updateRecord(projectId, record.id, { status: "running" });
 
-    runDeployAsync(projectId, record.id, project.repoPath, settings, target).catch((err) => {
-      console.error(`[deploy] Deploy ${record.id} failed:`, err);
-    });
+    runDeployAsync(projectId, record.id, project.repoPath, settings, target)
+      .catch((err) => {
+        console.error(`[deploy] Deploy ${record.id} failed:`, err);
+      })
+      .finally(() => {
+        activeAutoDeployments.delete(projectId);
+      });
 
     return record.id;
   } catch (err) {
+    activeAutoDeployments.delete(projectId);
     console.error(`[deploy] Trigger deploy failed for project ${projectId}:`, err);
     return null;
   }

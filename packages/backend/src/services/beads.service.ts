@@ -9,6 +9,9 @@ const execAsync = promisify(exec);
 const DEFAULT_TIMEOUT_MS = 30000;
 const MAX_BUFFER_BYTES = 2 * 1024 * 1024; // 2MB for large list output
 
+const daemonReady = new Map<string, { promise: Promise<void>; checkedAt: number }>();
+const DAEMON_CHECK_INTERVAL_MS = 60_000;
+
 /**
  * Raw shape returned by `bd list --json` / `bd show --json`.
  * Field names use snake_case to match the beads CLI output.
@@ -38,10 +41,67 @@ export interface BeadsIssue {
  */
 export class BeadsService {
   /**
+   * Ensure exactly one bd daemon is running for the given repo.
+   * Uses a per-path singleton promise so concurrent callers coalesce
+   * rather than each spawning their own daemon.
+   */
+  async ensureDaemon(repoPath: string): Promise<void> {
+    const existing = daemonReady.get(repoPath);
+    if (existing && Date.now() - existing.checkedAt < DAEMON_CHECK_INTERVAL_MS) {
+      return existing.promise;
+    }
+
+    const promise = this.startDaemonIfNeeded(repoPath);
+    daemonReady.set(repoPath, { promise, checkedAt: Date.now() });
+
+    try {
+      await promise;
+    } catch {
+      daemonReady.delete(repoPath);
+    }
+  }
+
+  private async startDaemonIfNeeded(repoPath: string): Promise<void> {
+    try {
+      const { stdout } = await execAsync("bd daemon status --json", {
+        cwd: repoPath,
+        timeout: 5_000,
+        env: { ...process.env },
+      });
+      const status = JSON.parse(stdout.trim());
+      if (status.status === "running") return;
+    } catch {
+      // status check failed — daemon likely not running
+    }
+
+    try {
+      await execAsync("bd daemon start", {
+        cwd: repoPath,
+        timeout: 10_000,
+        env: { ...process.env },
+      });
+    } catch (err: unknown) {
+      const msg =
+        (err as { stderr?: string; message?: string }).stderr ??
+        (err as { message?: string }).message ??
+        "";
+      if (msg.includes("already running")) return;
+      console.warn(`[beads] Failed to start daemon for ${repoPath}: ${msg}`);
+    }
+  }
+
+  /**
    * Execute a bd command in the context of a project directory.
    * Handles exec errors, timeouts, and surfaces stderr to caller.
+   * Ensures a daemon is running before executing.
    */
-  private async exec(repoPath: string, command: string, options?: { timeout?: number }): Promise<string> {
+  private async exec(
+    repoPath: string,
+    command: string,
+    options?: { timeout?: number }
+  ): Promise<string> {
+    await this.ensureDaemon(repoPath);
+
     const timeout = options?.timeout ?? DEFAULT_TIMEOUT_MS;
     try {
       const { stdout } = await execAsync(`bd ${command}`, {
@@ -61,16 +121,26 @@ export class BeadsService {
         signal?: string;
       };
       if (err.killed && err.signal === "SIGTERM") {
-        throw new AppError(504, ErrorCodes.BEADS_TIMEOUT, `Beads command timed out after ${timeout}ms: bd ${command}\n${err.stderr || err.message}`, {
-          command: `bd ${command}`,
-          timeout,
-        });
+        throw new AppError(
+          504,
+          ErrorCodes.BEADS_TIMEOUT,
+          `Beads command timed out after ${timeout}ms: bd ${command}\n${err.stderr || err.message}`,
+          {
+            command: `bd ${command}`,
+            timeout,
+          }
+        );
       }
       const stderr = err.stderr || err.stdout || err.message;
-      throw new AppError(502, ErrorCodes.BEADS_COMMAND_FAILED, `Beads command failed: bd ${command}\n${stderr}`, {
-        command: `bd ${command}`,
-        stderr,
-      });
+      throw new AppError(
+        502,
+        ErrorCodes.BEADS_COMMAND_FAILED,
+        `Beads command failed: bd ${command}\n${stderr}`,
+        {
+          command: `bd ${command}`,
+          stderr,
+        }
+      );
     }
   }
 
@@ -82,7 +152,7 @@ export class BeadsService {
     repoPath: string,
     command: string,
     args: string[] = [],
-    options?: { timeout?: number },
+    options?: { timeout?: number }
   ): Promise<unknown> {
     const fullCmd = [command, ...args].filter(Boolean).join(" ");
     const stdout = await this.exec(repoPath, fullCmd, options);
@@ -97,9 +167,14 @@ export class BeadsService {
       }
       return JSON.parse(trimmed);
     } catch {
-      throw new AppError(502, ErrorCodes.BEADS_PARSE_FAILED, `Failed to parse beads JSON output: ${trimmed.slice(0, 200)}`, {
-        outputPreview: trimmed.slice(0, 200),
-      });
+      throw new AppError(
+        502,
+        ErrorCodes.BEADS_PARSE_FAILED,
+        `Failed to parse beads JSON output: ${trimmed.slice(0, 200)}`,
+        {
+          outputPreview: trimmed.slice(0, 200),
+        }
+      );
     }
   }
 
@@ -111,9 +186,14 @@ export class BeadsService {
       if (jsonStart >= 0) {
         return JSON.parse(stdout.slice(jsonStart));
       }
-      throw new AppError(502, ErrorCodes.BEADS_PARSE_FAILED, `Failed to parse beads JSON output: ${stdout}`, {
-        outputPreview: stdout.slice(0, 200),
-      });
+      throw new AppError(
+        502,
+        ErrorCodes.BEADS_PARSE_FAILED,
+        `Failed to parse beads JSON output: ${stdout}`,
+        {
+          outputPreview: stdout.slice(0, 200),
+        }
+      );
     }
   }
 
@@ -129,9 +209,14 @@ export class BeadsService {
       if (stdout.trim() === "" || stdout.trim() === "[]") {
         return [];
       }
-      throw new AppError(502, ErrorCodes.BEADS_PARSE_FAILED, `Failed to parse beads JSON array output: ${stdout}`, {
-        outputPreview: stdout.slice(0, 200),
-      });
+      throw new AppError(
+        502,
+        ErrorCodes.BEADS_PARSE_FAILED,
+        `Failed to parse beads JSON array output: ${stdout}`,
+        {
+          outputPreview: stdout.slice(0, 200),
+        }
+      );
     }
   }
 
@@ -166,7 +251,7 @@ export class BeadsService {
       priority?: TaskPriority | number;
       description?: string;
       parentId?: string;
-    } = {},
+    } = {}
   ): Promise<BeadsIssue> {
     let cmd = `create "${title}" --json`;
     if (options.type) cmd += ` -t ${options.type}`;
@@ -187,7 +272,7 @@ export class BeadsService {
       description?: string;
       priority?: number;
       claim?: boolean;
-    } = {},
+    } = {}
   ): Promise<BeadsIssue> {
     let cmd = `update ${id} --json`;
     if (options.status) cmd += ` --status ${options.status}`;
@@ -215,17 +300,26 @@ export class BeadsService {
     // Retry verification with short delays before failing.
     const maxRetries = 3;
     const delayMs = 150;
-    for (let attempt = 0; attempt < maxRetries && (result.status as string) !== "closed"; attempt++) {
+    for (
+      let attempt = 0;
+      attempt < maxRetries && (result.status as string) !== "closed";
+      attempt++
+    ) {
       if (attempt > 0) {
         await new Promise((r) => setTimeout(r, delayMs));
         result = await this.show(repoPath, id);
       }
     }
     if ((result.status as string) !== "closed") {
-      throw new AppError(502, ErrorCodes.BEADS_CLOSE_FAILED, `Beads close did not persist: issue ${id} still has status "${result.status ?? "undefined"}"`, {
-        issueId: id,
-        status: result.status,
-      });
+      throw new AppError(
+        502,
+        ErrorCodes.BEADS_CLOSE_FAILED,
+        `Beads close did not persist: issue ${id} still has status "${result.status ?? "undefined"}"`,
+        {
+          issueId: id,
+          status: result.status,
+        }
+      );
     }
     return result;
   }
@@ -246,7 +340,8 @@ export class BeadsService {
     const filtered: BeadsIssue[] = [];
     for (const task of rawTasks) {
       const blockers = await this.getBlockers(repoPath, task.id);
-      const allBlockersClosed = blockers.length === 0 || blockers.every((bid) => idToStatus.get(bid) === "closed");
+      const allBlockersClosed =
+        blockers.length === 0 || blockers.every((bid) => idToStatus.get(bid) === "closed");
       if (allBlockersClosed) {
         filtered.push(task);
       }
@@ -276,7 +371,7 @@ export class BeadsService {
       (t) =>
         t.status === "in_progress" &&
         typeof t.assignee === "string" &&
-        /^agent-\d+$/.test(t.assignee),
+        /^agent-\d+$/.test(t.assignee)
     );
   }
 
@@ -330,7 +425,12 @@ export class BeadsService {
   }
 
   /** Add a dependency between issues */
-  async addDependency(repoPath: string, childId: string, parentId: string, type?: string): Promise<void> {
+  async addDependency(
+    repoPath: string,
+    childId: string,
+    parentId: string,
+    type?: string
+  ): Promise<void> {
     let cmd = `dep add ${childId} ${parentId} --json`;
     if (type) cmd += ` --type ${type}`;
     await this.exec(repoPath, cmd);

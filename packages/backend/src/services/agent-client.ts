@@ -269,7 +269,6 @@ export class AgentClient {
   private async invokeClaudeCli(options: AgentInvokeOptions): Promise<AgentResponse> {
     const { config, prompt, systemPrompt, conversationHistory } = options;
 
-    // Build conversation context for Claude CLI
     let fullPrompt = "";
     if (systemPrompt) {
       fullPrompt += systemPrompt + "\n\n";
@@ -281,14 +280,30 @@ export class AgentClient {
     }
     fullPrompt += `Human: ${prompt}\n\nAssistant:`;
 
+    const modelArg = config.model ? `--model ${config.model}` : "";
+    const child = exec(`claude ${modelArg} --print "${fullPrompt.replace(/"/g, '\\"')}"`, {
+      cwd: options.cwd || process.cwd(),
+      timeout: 300_000,
+      maxBuffer: 10 * 1024 * 1024,
+      killSignal: "SIGKILL",
+    });
+
     try {
-      const modelArg = config.model ? `--model ${config.model}` : "";
-      const { stdout } = await execAsync(
-        `claude ${modelArg} --print "${fullPrompt.replace(/"/g, '\\"')}"`,
-        {
-          cwd: options.cwd || process.cwd(),
-          timeout: 300_000,
-          maxBuffer: 10 * 1024 * 1024,
+      const { stdout } = await new Promise<{ stdout: string; stderr: string }>(
+        (resolve, reject) => {
+          let stdout = "";
+          let stderr = "";
+          child.stdout?.on("data", (d: Buffer) => {
+            stdout += d.toString();
+          });
+          child.stderr?.on("data", (d: Buffer) => {
+            stderr += d.toString();
+          });
+          child.on("error", reject);
+          child.on("close", (code) => {
+            if (code === 0) resolve({ stdout, stderr });
+            else reject(new Error(stderr || `claude exited with code ${code}`));
+          });
         }
       );
 
@@ -299,6 +314,13 @@ export class AgentClient {
 
       return { content };
     } catch (error: unknown) {
+      if (child.pid && !child.killed) {
+        try {
+          process.kill(child.pid, "SIGKILL");
+        } catch {
+          /* already dead */
+        }
+      }
       const err = error as { message: string; stderr?: string };
       const raw = err.stderr || err.message;
       throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, formatAgentError("claude", raw), {

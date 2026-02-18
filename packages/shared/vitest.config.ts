@@ -14,5 +14,10 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["src/__tests__/**/*.test.ts"],
+    pool: "threads",
+    poolOptions: {
+      threads: { maxThreads: 4 },
+    },
+    testTimeout: 30_000,
   },
 });

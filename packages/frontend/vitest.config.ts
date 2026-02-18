@@ -17,6 +17,11 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: ["./src/test/setup.ts"],
+    pool: "threads",
+    poolOptions: {
+      threads: { maxThreads: 4 },
+    },
+    testTimeout: 30_000,
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
