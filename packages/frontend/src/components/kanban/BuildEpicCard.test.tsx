@@ -236,4 +236,87 @@ describe("BuildEpicCard", () => {
     expect(screen.getByText("Empty Epic")).toBeInTheDocument();
     expect(screen.getByText("0/0")).toBeInTheDocument();
   });
+
+  it("renders status indicator exclusively on the left of task title", () => {
+    const tasks = [
+      createMockTask({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" }),
+    ];
+    const { container } = render(
+      <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />,
+    );
+    const row = container.querySelector("li");
+    expect(row).toBeTruthy();
+    const button = row!.querySelector("button");
+    expect(button).toBeTruthy();
+    const children = Array.from(button!.children);
+    const titleIdx = children.findIndex((el) => el.textContent?.includes("Task A"));
+    const statusIdx = children.findIndex((el) => el.getAttribute("title") === "In Progress");
+    expect(statusIdx).toBeGreaterThanOrEqual(0);
+    expect(titleIdx).toBeGreaterThanOrEqual(0);
+    expect(statusIdx).toBeLessThan(titleIdx);
+  });
+
+  it("renders assignee exclusively on the right of task title", () => {
+    const tasks = [
+      createMockTask({
+        id: "epic-1.1",
+        title: "Task A",
+        assignee: "agent-1",
+        kanbanColumn: "in_progress",
+      }),
+    ];
+    const { container } = render(
+      <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />,
+    );
+    const row = container.querySelector("li");
+    const button = row!.querySelector("button");
+    const children = Array.from(button!.children);
+    const titleIdx = children.findIndex((el) => el.textContent?.includes("Task A"));
+    const assigneeIdx = children.findIndex((el) => el.textContent?.includes("agent-1"));
+    expect(assigneeIdx).toBeGreaterThanOrEqual(0);
+    expect(titleIdx).toBeGreaterThanOrEqual(0);
+    expect(assigneeIdx).toBeGreaterThan(titleIdx);
+  });
+
+  it("shows no assignee element on the right when task is unassigned", () => {
+    const tasks = [
+      createMockTask({ id: "epic-1.1", title: "Unassigned Task", assignee: null, kanbanColumn: "ready" }),
+    ];
+    render(
+      <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />,
+    );
+    expect(screen.getByText("Unassigned Task")).toBeInTheDocument();
+    expect(screen.getByTitle("Ready")).toBeInTheDocument();
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
+  });
+
+  it("renders all task states correctly in left-side position", () => {
+    const states: Array<"planning" | "backlog" | "ready" | "in_progress" | "in_review" | "done" | "blocked"> = [
+      "planning",
+      "backlog",
+      "ready",
+      "in_progress",
+      "in_review",
+      "done",
+      "blocked",
+    ];
+    const tasks = states.map((col, i) =>
+      createMockTask({ id: `epic-1.${i}`, title: `Task ${i}`, kanbanColumn: col }),
+    );
+    render(
+      <BuildEpicCard
+        epicId="epic-1"
+        epicTitle="All States"
+        tasks={tasks}
+        onTaskSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByTitle("Planning")).toBeInTheDocument();
+    expect(screen.getByTitle("Backlog")).toBeInTheDocument();
+    expect(screen.getByTitle("Ready")).toBeInTheDocument();
+    expect(screen.getByTitle("In Progress")).toBeInTheDocument();
+    expect(screen.getByTitle("In Review")).toBeInTheDocument();
+    expect(screen.getByTitle("Done")).toBeInTheDocument();
+    expect(screen.getByTitle("Blocked")).toBeInTheDocument();
+  });
 });

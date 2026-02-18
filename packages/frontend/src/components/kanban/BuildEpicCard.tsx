@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Task } from "@opensprint/shared";
-import { TaskStatusBadge } from "./TaskStatusBadge";
+import { TaskStatusBadge, COLUMN_LABELS } from "./TaskStatusBadge";
 import { formatUptime } from "../../lib/formatting";
 
 const VISIBLE_SUBTASKS = 3;
@@ -76,21 +76,10 @@ export function BuildEpicCard({
                     onClick={() => onTaskSelect(task.id)}
                     className="flex-1 flex items-center gap-3 text-left hover:bg-theme-info-bg/50 transition-colors text-sm min-w-0"
                   >
-                    <span
-                      className={`shrink-0 w-2 h-2 rounded-full ${
-                        task.kanbanColumn === "done"
-                          ? "bg-theme-status-done"
-                          : task.kanbanColumn === "blocked"
-                            ? "bg-theme-status-blocked"
-                            : task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review"
-                              ? "bg-theme-status-in-progress"
-                              : "bg-theme-ring"
-                      }`}
-                    />
+                    <TaskStatusBadge column={task.kanbanColumn} size="xs" title={COLUMN_LABELS[task.kanbanColumn]} />
                     <span className="flex-1 min-w-0 truncate font-medium text-theme-text" title={task.title}>
                       {task.title}
                     </span>
-                    <TaskStatusBadge column={task.kanbanColumn} size="xs" />
                     {(task.assignee || elapsed) && (
                       <span className="text-xs text-theme-muted shrink-0 tabular-nums">
                         {[task.assignee, elapsed].filter(Boolean).join(" · ")}
