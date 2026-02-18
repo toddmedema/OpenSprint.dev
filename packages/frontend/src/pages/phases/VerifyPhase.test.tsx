@@ -943,6 +943,155 @@ describe("EvalPhase feedback input", () => {
     vi.useRealTimers();
   });
 
+  it("collapses and removes feedback item from DOM after resolve animation completes", async () => {
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const storeWithFeedback = configureStore({
+      reducer: {
+        project: projectReducer,
+        eval: evalReducer,
+        execute: executeReducer,
+      },
+      preloadedState: {
+        project: {
+          data: {
+            id: "proj-1",
+            name: "Test Project",
+            description: "",
+            repoPath: "/tmp/test",
+            currentPhase: "eval",
+            createdAt: "",
+            updatedAt: "",
+          },
+          loading: false,
+          error: null,
+        },
+        eval: {
+          feedback: [
+            {
+              id: "fb-collapse-test",
+              text: "Bug to resolve and collapse",
+              category: "bug",
+              mappedPlanId: "plan-1",
+              createdTaskIds: [],
+              status: "mapped",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          loading: false,
+          submitting: false,
+          error: null,
+        },
+      },
+    });
+
+    mockFeedbackResolve.mockResolvedValue({
+      id: "fb-collapse-test",
+      text: "Bug to resolve and collapse",
+      category: "bug",
+      mappedPlanId: "plan-1",
+      createdTaskIds: [],
+      status: "resolved",
+      createdAt: new Date().toISOString(),
+    } as never);
+
+    render(
+      <Provider store={storeWithFeedback}>
+        <EvalPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    expect(screen.getByText("Bug to resolve and collapse")).toBeInTheDocument();
+    const resolveBtn = screen.getByRole("button", { name: /resolve/i });
+    await user.click(resolveBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("Resolved")).toBeInTheDocument();
+    });
+
+    await vi.advanceTimersByTimeAsync(1200);
+
+    await waitFor(() => {
+      expect(screen.queryByText("Bug to resolve and collapse")).not.toBeInTheDocument();
+    });
+
+    expect(storeWithFeedback.getState().eval.feedback).toHaveLength(0);
+    vi.useRealTimers();
+  });
+
+  it("animates multiple resolved items independently when resolved in quick succession", async () => {
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const storeWithFeedback = configureStore({
+      reducer: {
+        project: projectReducer,
+        eval: evalReducer,
+        execute: executeReducer,
+      },
+      preloadedState: {
+        project: {
+          data: {
+            id: "proj-1",
+            name: "Test Project",
+            description: "",
+            repoPath: "/tmp/test",
+            currentPhase: "eval",
+            createdAt: "",
+            updatedAt: "",
+          },
+          loading: false,
+          error: null,
+        },
+        eval: {
+          feedback: [
+            { id: "fb-a", text: "First bug", category: "bug", mappedPlanId: "p1", createdTaskIds: [], status: "mapped", createdAt: "2024-01-01T00:00:00Z" },
+            { id: "fb-b", text: "Second bug", category: "bug", mappedPlanId: "p2", createdTaskIds: [], status: "mapped", createdAt: "2024-01-01T00:00:01Z" },
+          ],
+          loading: false,
+          submitting: false,
+          error: null,
+        },
+      },
+    });
+
+    mockFeedbackResolve.mockImplementation((_, id) =>
+      Promise.resolve({
+        id,
+        text: id === "fb-a" ? "First bug" : "Second bug",
+        category: "bug",
+        mappedPlanId: id === "fb-a" ? "p1" : "p2",
+        createdTaskIds: [],
+        status: "resolved",
+        createdAt: new Date().toISOString(),
+      } as never),
+    );
+
+    render(
+      <Provider store={storeWithFeedback}>
+        <EvalPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    const resolveBtn1 = screen.getByRole("button", { name: /resolve/i });
+    await user.click(resolveBtn1);
+
+    const resolveBtn2 = screen.getByRole("button", { name: /resolve/i });
+    await user.click(resolveBtn2);
+
+    expect(screen.getByText("First bug")).toBeInTheDocument();
+    expect(screen.getByText("Second bug")).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(1200);
+
+    await waitFor(() => {
+      expect(screen.queryByText("First bug")).not.toBeInTheDocument();
+      expect(screen.queryByText("Second bug")).not.toBeInTheDocument();
+    });
+
+    expect(storeWithFeedback.getState().eval.feedback).toHaveLength(0);
+    vi.useRealTimers();
+  });
+
   it("preserves scroll position when resolving multiple items in sequence", async () => {
     vi.useFakeTimers();
     const storeWithFeedback = configureStore({

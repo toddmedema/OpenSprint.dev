@@ -1,7 +1,7 @@
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import type { FeedbackItem, KanbanColumn } from "@opensprint/shared";
 import { useAppDispatch, useAppSelector } from "../../store";
-import { submitFeedback, resolveFeedback } from "../../store/slices/evalSlice";
+import { submitFeedback, resolveFeedback, removeFeedbackItem } from "../../store/slices/evalSlice";
 import { TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
 
 /** Reply icon (message turn / corner up-right) */
@@ -136,10 +136,14 @@ interface FeedbackCardProps {
   onCancelReply: () => void;
   onSubmitReply: (parentId: string, text: string) => void;
   onResolve: (feedbackId: string) => void;
+  onRemoveAfterAnimation: (feedbackId: string) => void;
   collapsedIds: Set<string>;
   onToggleCollapse: (id: string) => void;
   submitting: boolean;
 }
+
+const RESOLVE_COLLAPSE_DURATION_MS = 1000;
+const RESOLVE_COLLAPSE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 
 function FeedbackCard({
   node,
@@ -152,6 +156,7 @@ function FeedbackCard({
   onCancelReply,
   onSubmitReply,
   onResolve,
+  onRemoveAfterAnimation,
   collapsedIds,
   onToggleCollapse,
   submitting,
@@ -162,6 +167,49 @@ function FeedbackCard({
   const isCollapsed = collapsedIds.has(item.id);
   const hasChildren = children.length > 0;
 
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [collapseHeight, setCollapseHeight] = useState<number | null>(null);
+  const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+  const prevStatusRef = useRef(item.status);
+
+  useEffect(() => {
+    const justResolved = item.status === "resolved" && prevStatusRef.current !== "resolved";
+    prevStatusRef.current = item.status;
+
+    if (!justResolved || isAnimatingOut) return;
+    const el = wrapperRef.current;
+    if (!el) return;
+
+    const startCollapse = () => {
+      const height = el.offsetHeight;
+      setCollapseHeight(height);
+      setIsAnimatingOut(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setCollapseHeight(0);
+        });
+      });
+    };
+
+    startCollapse();
+  }, [item.status, isAnimatingOut]);
+
+  const removeRef = useRef<() => void>();
+  removeRef.current = () => onRemoveAfterAnimation(item.id);
+
+  const handleTransitionEnd = useCallback((e: React.TransitionEvent) => {
+    if (e.propertyName !== "height") return;
+    removeRef.current?.();
+  }, []);
+
+  useEffect(() => {
+    if (collapseHeight !== 0 || !isAnimatingOut) return;
+    const fallback = setTimeout(() => {
+      removeRef.current?.();
+    }, RESOLVE_COLLAPSE_DURATION_MS + 100);
+    return () => clearTimeout(fallback);
+  }, [collapseHeight, isAnimatingOut]);
+
   const handleSubmitReply = () => {
     if (!replyText.trim() || submitting) return;
     onSubmitReply(item.id, replyText.trim());
@@ -169,8 +217,25 @@ function FeedbackCard({
     onCancelReply();
   };
 
+  const isResolvedAndAnimating = item.status === "resolved" && collapseHeight !== null;
+
+  const wrapperStyle: React.CSSProperties =
+    isResolvedAndAnimating
+      ? {
+          height: collapseHeight,
+          overflow: "hidden",
+          margin: 0,
+          transition: `height ${RESOLVE_COLLAPSE_DURATION_MS}ms ${RESOLVE_COLLAPSE_EASING}`,
+        }
+      : {};
+
   return (
-    <div className={depth > 0 ? "ml-4 mt-2 border-l-2 border-theme-border pl-4" : ""}>
+    <div
+      ref={wrapperRef}
+      style={wrapperStyle}
+      onTransitionEnd={handleTransitionEnd}
+      className={depth > 0 ? "ml-4 mt-2 border-l-2 border-theme-border pl-4" : ""}
+    >
       <div className="card p-4">
         {/* Category badge/spinner floats top-right */}
         <div className="mb-2 overflow-hidden">
@@ -353,6 +418,7 @@ function FeedbackCard({
             onCancelReply={onCancelReply}
             onSubmitReply={onSubmitReply}
             onResolve={onResolve}
+            onRemoveAfterAnimation={onRemoveAfterAnimation}
             collapsedIds={collapsedIds}
             onToggleCollapse={onToggleCollapse}
             submitting={submitting}
@@ -483,6 +549,13 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
       });
     },
     [dispatch, projectId],
+  );
+
+  const handleRemoveAfterAnimation = useCallback(
+    (feedbackId: string) => {
+      dispatch(removeFeedbackItem(feedbackId));
+    },
+    [dispatch],
   );
 
   const handleToggleCollapse = useCallback(
@@ -642,6 +715,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                 onCancelReply={() => setReplyingToId(null)}
                 onSubmitReply={handleSubmitReply}
                 onResolve={handleResolve}
+                onRemoveAfterAnimation={handleRemoveAfterAnimation}
                 collapsedIds={collapsedIds}
                 onToggleCollapse={handleToggleCollapse}
                 submitting={submitting}

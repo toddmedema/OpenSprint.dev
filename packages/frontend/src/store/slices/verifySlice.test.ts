@@ -4,6 +4,7 @@ import evalReducer, {
   setFeedback,
   setEvalError,
   resetEval,
+  removeFeedbackItem,
   fetchFeedback,
   submitFeedback,
   recategorizeFeedback,
@@ -86,6 +87,37 @@ describe("evalSlice", () => {
       expect(state.loading).toBe(false);
       expect(state.submitting).toBe(false);
       expect(state.error).toBeNull();
+    });
+
+    it("removeFeedbackItem removes item and all descendants", () => {
+      const store = createStore();
+      const parent: FeedbackItem = {
+        ...mockFeedback,
+        id: "fb-parent",
+        parent_id: null,
+      };
+      const child1: FeedbackItem = {
+        ...mockFeedback,
+        id: "fb-child1",
+        parent_id: "fb-parent",
+      };
+      const child2: FeedbackItem = {
+        ...mockFeedback,
+        id: "fb-child2",
+        parent_id: "fb-child1",
+      };
+      const other: FeedbackItem = {
+        ...mockFeedback,
+        id: "fb-other",
+        parent_id: null,
+      };
+      store.dispatch(setFeedback([parent, child1, child2, other]));
+
+      store.dispatch(removeFeedbackItem("fb-parent"));
+
+      const remaining = store.getState().eval.feedback;
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe("fb-other");
     });
   });
 

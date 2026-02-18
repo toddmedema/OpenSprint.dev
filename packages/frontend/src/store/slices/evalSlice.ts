@@ -61,6 +61,22 @@ const evalSlice = createSlice({
     setFeedback(state, action: PayloadAction<FeedbackItem[]>) {
       state.feedback = action.payload;
     },
+    /** Remove feedback item and all descendants from list (e.g. after collapse animation completes) */
+    removeFeedbackItem(state, action: PayloadAction<string>) {
+      const removeId = action.payload;
+      const toRemove = new Set<string>([removeId]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const f of state.feedback) {
+          if (f.parent_id && toRemove.has(f.parent_id) && !toRemove.has(f.id)) {
+            toRemove.add(f.id);
+            changed = true;
+          }
+        }
+      }
+      state.feedback = state.feedback.filter((f) => !toRemove.has(f.id));
+    },
     setEvalError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
     },
@@ -154,5 +170,5 @@ const evalSlice = createSlice({
   },
 });
 
-export const { setFeedback, setEvalError, resetEval } = evalSlice.actions;
+export const { setFeedback, setEvalError, resetEval, removeFeedbackItem } = evalSlice.actions;
 export default evalSlice.reducer;
