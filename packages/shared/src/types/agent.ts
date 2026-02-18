@@ -1,50 +1,52 @@
 /** Supported agent backends */
-export type AgentType = 'claude' | 'cursor' | 'custom';
+export type AgentType = "claude" | "cursor" | "custom";
 
 /** Named agent roles (PRD §6.3, §12). Planning slot: dreamer–delta_planner. Coding slot: coder, reviewer. */
 export type AgentRole =
-  | 'dreamer'
-  | 'planner'
-  | 'harmonizer'
-  | 'analyst'
-  | 'summarizer'
-  | 'auditor'
-  | 'delta_planner'
-  | 'coder'
-  | 'reviewer';
+  | "dreamer"
+  | "planner"
+  | "harmonizer"
+  | "analyst"
+  | "summarizer"
+  | "auditor"
+  | "delta_planner"
+  | "coder"
+  | "reviewer"
+  | "merger";
 
 /** Agent slot: Planning (concurrent) or Coding (single-agent per project) */
-export type AgentSlot = 'planning' | 'coding';
+export type AgentSlot = "planning" | "coding";
 
 /** Map role to slot */
 export function getSlotForRole(role: AgentRole): AgentSlot {
-  return role === 'coder' || role === 'reviewer' ? 'coding' : 'planning';
+  return role === "coder" || role === "reviewer" || role === "merger" ? "coding" : "planning";
 }
 
 /** Human-readable display label for each role */
 export const AGENT_ROLE_LABELS: Record<AgentRole, string> = {
-  dreamer: 'Dreamer',
-  planner: 'Planner',
-  harmonizer: 'Harmonizer',
-  analyst: 'Analyst',
-  summarizer: 'Summarizer',
-  auditor: 'Auditor',
-  delta_planner: 'Delta Planner',
-  coder: 'Coder',
-  reviewer: 'Reviewer',
+  dreamer: "Dreamer",
+  planner: "Planner",
+  harmonizer: "Harmonizer",
+  analyst: "Analyst",
+  summarizer: "Summarizer",
+  auditor: "Auditor",
+  delta_planner: "Delta Planner",
+  coder: "Coder",
+  reviewer: "Reviewer",
+  merger: "Merger",
 };
 
 /** Agent execution phase (coding vs review sub-phase within Execute) */
-export type AgentPhase = 'coding' | 'review';
+export type AgentPhase = "coding" | "review";
 
 /** Agent session status */
 export type AgentSessionStatus =
-  | 'success'
-  | 'failed'
-  | 'timeout'
-  | 'cancelled'
-  | 'approved'
-  | 'rejected';
+  | "success"
+  | "failed"
+  | "timeout"
+  | "cancelled"
+  | "approved"
+  | "rejected";
 
 /** Configuration for an active task directory (.opensprint/active/<task-id>/config.json) */
 export interface ActiveTaskConfig {
@@ -98,14 +100,14 @@ export interface TestResults {
 /** Individual test result */
 export interface TestResultDetail {
   name: string;
-  status: 'passed' | 'failed' | 'skipped';
+  status: "passed" | "failed" | "skipped";
   duration: number;
   error?: string;
 }
 
 /** Coding agent result (result.json) */
 export interface CodingAgentResult {
-  status: 'success' | 'failed' | 'partial';
+  status: "success" | "failed" | "partial";
   summary: string;
   filesChanged: string[];
   testsWritten: number;
@@ -115,7 +117,7 @@ export interface CodingAgentResult {
 
 /** Review agent result (result.json) */
 export interface ReviewAgentResult {
-  status: 'approved' | 'rejected';
+  status: "approved" | "rejected";
   summary: string;
   issues?: string[];
   notes: string;

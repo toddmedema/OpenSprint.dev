@@ -1,12 +1,12 @@
-import Anthropic from '@anthropic-ai/sdk';
-import type { AgentConfig } from '@opensprint/shared';
-import { AgentClient } from './agent-client.js';
-import { AppError } from '../middleware/error-handler.js';
-import { ErrorCodes } from '../middleware/error-codes.js';
+import Anthropic from "@anthropic-ai/sdk";
+import type { AgentConfig } from "@opensprint/shared";
+import { AgentClient } from "./agent-client.js";
+import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 
 /** Message for planning agent (user or assistant) */
 export interface PlanningMessage {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
 }
 
@@ -61,7 +61,7 @@ export class AgentService {
         throw new AppError(
           400,
           ErrorCodes.ANTHROPIC_API_KEY_MISSING,
-          'ANTHROPIC_API_KEY is not set. Add it to your .env file or Project Settings. Get a key from https://console.anthropic.com/',
+          "ANTHROPIC_API_KEY is not set. Add it to your .env file or Project Settings. Get a key from https://console.anthropic.com/"
         );
       }
       this.anthropic = new Anthropic({ apiKey });
@@ -77,13 +77,13 @@ export class AgentService {
   async invokePlanningAgent(options: InvokePlanningAgentOptions): Promise<PlanningAgentResponse> {
     const { config, messages, systemPrompt, onChunk } = options;
 
-    if (config.type === 'claude') {
+    if (config.type === "claude") {
       return this.invokeClaudePlanningAgent(options);
     }
 
     // Cursor and custom: use AgentClient (CLI-based)
-    const lastUser = messages.filter((m) => m.role === 'user').pop();
-    const prompt = lastUser?.content ?? '';
+    const lastUser = messages.filter((m) => m.role === "user").pop();
+    const prompt = lastUser?.content ?? "";
     const conversationHistory = messages.slice(0, -1).map((m) => ({
       role: m.role,
       content: m.content,
@@ -110,7 +110,7 @@ export class AgentService {
   invokeCodingAgent(
     promptPath: string,
     config: AgentConfig,
-    options: InvokeCodingAgentOptions,
+    options: InvokeCodingAgentOptions
   ): CodingAgentHandle {
     return this.agentClient.spawnWithTaskFile(
       config,
@@ -118,7 +118,7 @@ export class AgentService {
       options.cwd,
       options.onOutput,
       options.onExit,
-      options.agentRole,
+      options.agentRole
     );
   }
 
@@ -131,11 +131,26 @@ export class AgentService {
   invokeReviewAgent(
     promptPath: string,
     config: AgentConfig,
-    options: InvokeCodingAgentOptions,
+    options: InvokeCodingAgentOptions
   ): CodingAgentHandle {
     return this.invokeCodingAgent(promptPath, config, {
       ...options,
-      agentRole: options.agentRole ?? 'code reviewer',
+      agentRole: options.agentRole ?? "code reviewer",
+    });
+  }
+
+  /**
+   * Invoke the merger agent to resolve rebase conflicts.
+   * Runs in the main repo directory (not a worktree) where the rebase is in progress.
+   */
+  invokeMergerAgent(
+    promptPath: string,
+    config: AgentConfig,
+    options: InvokeCodingAgentOptions
+  ): CodingAgentHandle {
+    return this.invokeCodingAgent(promptPath, config, {
+      ...options,
+      agentRole: "merger",
     });
   }
 
@@ -144,16 +159,16 @@ export class AgentService {
    * Supports streaming via onChunk.
    */
   private async invokeClaudePlanningAgent(
-    options: InvokePlanningAgentOptions,
+    options: InvokePlanningAgentOptions
   ): Promise<PlanningAgentResponse> {
     const { config, messages, systemPrompt, onChunk } = options;
 
-    const model = config.model ?? 'claude-sonnet-4-20250514';
+    const model = config.model ?? "claude-sonnet-4-20250514";
     const client = this.getAnthropic();
 
     // Convert to Anthropic message format (role + content)
     const anthropicMessages = messages.map((m) => ({
-      role: m.role as 'user' | 'assistant',
+      role: m.role as "user" | "assistant",
       content: m.content,
     }));
 
@@ -166,15 +181,15 @@ export class AgentService {
         messages: anthropicMessages,
       });
 
-      let fullContent = '';
-      stream.on('text', (text) => {
+      let fullContent = "";
+      stream.on("text", (text) => {
         fullContent += text;
         onChunk(text);
       });
 
       const finalMessage = await stream.finalMessage();
-      const textBlock = finalMessage.content.find((b) => b.type === 'text');
-      const content = textBlock && 'text' in textBlock ? textBlock.text : fullContent;
+      const textBlock = finalMessage.content.find((b) => b.type === "text");
+      const content = textBlock && "text" in textBlock ? textBlock.text : fullContent;
       return { content };
     }
 
@@ -186,8 +201,8 @@ export class AgentService {
       messages: anthropicMessages,
     });
 
-    const textBlock = response.content.find((b) => b.type === 'text');
-    const content = textBlock && 'text' in textBlock ? textBlock.text : '';
+    const textBlock = response.content.find((b) => b.type === "text");
+    const content = textBlock && "text" in textBlock ? textBlock.text : "";
     return { content };
   }
 }

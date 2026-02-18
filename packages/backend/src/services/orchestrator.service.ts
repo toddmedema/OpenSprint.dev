@@ -23,7 +23,7 @@ import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { ProjectService } from "./project.service.js";
 import { agentService } from "./agent.service.js";
 import { triggerDeploy } from "./deploy-trigger.service.js";
-import { BranchManager } from "./branch-manager.js";
+import { BranchManager, RebaseConflictError } from "./branch-manager.js";
 import { gitCommitQueue } from "./git-commit-queue.service.js";
 import { ContextAssembler } from "./context-assembler.js";
 import { SessionManager } from "./session-manager.js";
@@ -1519,10 +1519,9 @@ export class OrchestratorService {
     await this.branchManager.removeTaskWorktree(repoPath, task.id);
     await this.branchManager.deleteBranch(repoPath, branchName);
 
-    // Push main to remote so completed work reaches origin
-    await this.branchManager.pushMain(repoPath).catch((err) => {
-      console.warn("[orchestrator] pushMain failed after merge:", err);
-    });
+    // Push main to remote so completed work reaches origin.
+    // If rebase conflicts with origin/main, spawn a merger agent to resolve them.
+    await this.pushMainWithMergerFallback(projectId, repoPath);
 
     state.status.totalDone += 1;
     state.status.currentTask = null;
@@ -1584,6 +1583,118 @@ export class OrchestratorService {
       state.loopTimer = null;
       this.nudge(projectId);
     }, 3000);
+  }
+
+  /**
+   * Push main to remote, spawning a merger agent to resolve rebase conflicts if needed.
+   * On unrecoverable failure, logs a warning but does not throw — the task is already
+   * done; we just couldn't push yet.
+   */
+  private async pushMainWithMergerFallback(projectId: string, repoPath: string): Promise<void> {
+    try {
+      await this.branchManager.pushMain(repoPath);
+    } catch (err) {
+      if (!(err instanceof RebaseConflictError)) {
+        console.warn("[orchestrator] pushMain failed (non-conflict):", err);
+        return;
+      }
+
+      console.log(
+        `[orchestrator] Rebase conflict in ${err.conflictedFiles.length} file(s), spawning merger agent`
+      );
+
+      try {
+        const resolved = await this.spawnMergerAgent(projectId, repoPath, err.conflictedFiles);
+        if (resolved) {
+          await this.branchManager.pushMainToOrigin(repoPath);
+          console.log("[orchestrator] Merger agent resolved conflicts, push succeeded");
+        } else {
+          console.warn("[orchestrator] Merger agent failed to resolve conflicts, aborting rebase");
+          await this.branchManager.rebaseAbort(repoPath);
+        }
+      } catch (mergeErr) {
+        console.warn("[orchestrator] Merger agent error, aborting rebase:", mergeErr);
+        await this.branchManager.rebaseAbort(repoPath);
+      }
+    }
+  }
+
+  /**
+   * Spawn a merger agent to resolve rebase conflicts. Returns true if resolution succeeded.
+   * The agent runs synchronously (we await its exit) since this is part of the push flow.
+   */
+  private async spawnMergerAgent(
+    projectId: string,
+    repoPath: string,
+    conflictedFiles: string[]
+  ): Promise<boolean> {
+    const settings = await this.projectService.getSettings(projectId);
+    const conflictDiff = await this.branchManager.getConflictDiff(repoPath);
+
+    const prompt = this.contextAssembler.generateMergeConflictPrompt({
+      conflictedFiles,
+      conflictDiff,
+    });
+
+    // Write prompt to a temporary file in .opensprint/
+    const mergerDir = path.join(repoPath, OPENSPRINT_PATHS.active, "_merger");
+    await fs.mkdir(mergerDir, { recursive: true });
+    const promptPath = path.join(mergerDir, "prompt.md");
+    await fs.writeFile(promptPath, prompt);
+
+    const resultPath = path.join(repoPath, ".opensprint", "merge-result.json");
+    try {
+      await fs.unlink(resultPath);
+    } catch {
+      // May not exist
+    }
+
+    return new Promise<boolean>((resolve) => {
+      const outputLog: string[] = [];
+
+      const handle = agentService.invokeMergerAgent(promptPath, settings.codingAgent, {
+        cwd: repoPath,
+        onOutput: (chunk: string) => {
+          outputLog.push(chunk);
+          sendAgentOutputToProject(projectId, "_merger", chunk);
+        },
+        onExit: async (code: number | null) => {
+          console.log(`[orchestrator] Merger agent exited with code ${code}`);
+
+          // Clean up prompt dir
+          await fs.rm(mergerDir, { recursive: true, force: true }).catch(() => {});
+
+          // Check if rebase is still in progress (agent failed to complete it)
+          const rebaseStillActive = await this.branchManager.isRebaseInProgress(repoPath);
+          if (rebaseStillActive) {
+            resolve(false);
+            return;
+          }
+
+          // Read result.json if agent wrote one
+          try {
+            const raw = await fs.readFile(resultPath, "utf-8");
+            const result = JSON.parse(raw) as { status: string; summary?: string };
+            await fs.unlink(resultPath).catch(() => {});
+            if (result.status === "success") {
+              console.log(`[orchestrator] Merger agent: ${result.summary ?? "conflicts resolved"}`);
+              resolve(true);
+              return;
+            }
+          } catch {
+            // No result file — check exit code
+          }
+
+          resolve(code === 0 && !rebaseStillActive);
+        },
+      });
+
+      // Safety timeout: kill merger after 5 minutes
+      setTimeout(() => {
+        console.warn("[orchestrator] Merger agent timed out after 5 minutes");
+        handle.kill();
+      }, 300_000);
+    });
   }
 
   /**

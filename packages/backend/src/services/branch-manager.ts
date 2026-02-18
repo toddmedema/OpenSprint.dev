@@ -6,6 +6,14 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
+/** Thrown when `pushMain` rebase encounters conflicts. Repo is left in rebase state. */
+export class RebaseConflictError extends Error {
+  constructor(public readonly conflictedFiles: string[]) {
+    super(`Rebase conflict in ${conflictedFiles.length} file(s): ${conflictedFiles.join(", ")}`);
+    this.name = "RebaseConflictError";
+  }
+}
+
 /** Max time (ms) to wait for .git/index.lock to clear before removing it */
 const GIT_LOCK_TIMEOUT_MS = 15_000;
 /** Polling interval (ms) when waiting for git lock to clear */
@@ -127,14 +135,95 @@ export class BranchManager {
 
   /**
    * Push main to the remote. Called after successful merge so completed work reaches origin.
+   * Fetches and rebases first to handle concurrent pushes to origin/main.
+   * If rebase hits conflicts, throws a RebaseConflictError (repo left in rebase state
+   * so a merger agent can resolve). Caller is responsible for aborting if resolution fails.
    */
   async pushMain(repoPath: string): Promise<void> {
     try {
-      await this.git(repoPath, "push origin main");
+      await this.git(repoPath, "fetch origin main");
     } catch (error) {
-      console.warn("[branch-manager] pushMain failed:", error);
-      throw error;
+      console.warn("[branch-manager] pushMain: fetch failed, pushing anyway:", error);
     }
+
+    try {
+      await this.git(repoPath, "rebase origin/main");
+    } catch {
+      const conflictedFiles = await this.getConflictedFiles(repoPath);
+      throw new RebaseConflictError(conflictedFiles);
+    }
+
+    await this.git(repoPath, "push origin main");
+  }
+
+  /**
+   * Push main to origin (no fetch/rebase). Used after the merger agent has resolved conflicts.
+   */
+  async pushMainToOrigin(repoPath: string): Promise<void> {
+    await this.git(repoPath, "push origin main");
+  }
+
+  /**
+   * List files with merge/rebase conflicts (unmerged paths).
+   */
+  async getConflictedFiles(repoPath: string): Promise<string[]> {
+    try {
+      const { stdout } = await execAsync("git diff --name-only --diff-filter=U", {
+        cwd: repoPath,
+      });
+      return stdout.trim().split("\n").filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Get the full diff showing conflict markers for unresolved files.
+   */
+  async getConflictDiff(repoPath: string): Promise<string> {
+    try {
+      const { stdout } = await execAsync("git diff", {
+        cwd: repoPath,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      return stdout;
+    } catch {
+      return "";
+    }
+  }
+
+  /**
+   * Stage all resolved files and continue an in-progress rebase.
+   */
+  async rebaseContinue(repoPath: string): Promise<void> {
+    await this.git(repoPath, "add -A");
+    await execAsync("git -c core.editor=true rebase --continue", {
+      cwd: repoPath,
+      timeout: 30000,
+    });
+  }
+
+  /**
+   * Abort an in-progress rebase, restoring the repo to its pre-rebase state.
+   */
+  async rebaseAbort(repoPath: string): Promise<void> {
+    await this.git(repoPath, "rebase --abort").catch(() => {});
+  }
+
+  /**
+   * Check whether a rebase is currently in progress.
+   */
+  async isRebaseInProgress(repoPath: string): Promise<boolean> {
+    const gitDir = path.join(repoPath, ".git");
+    for (const dir of ["rebase-merge", "rebase-apply"]) {
+      try {
+        await fs.access(path.join(gitDir, dir));
+        return true;
+      } catch {
+        // Not present
+      }
+    }
+    return false;
   }
 
   /**

@@ -324,6 +324,53 @@ export class ContextAssembler {
     return prompt;
   }
 
+  /**
+   * Generate a prompt for the Merger agent to resolve rebase conflicts.
+   * This is a standalone prompt (not tied to ActiveTaskConfig) since merge
+   * conflicts happen outside the normal task lifecycle.
+   */
+  generateMergeConflictPrompt(opts: { conflictedFiles: string[]; conflictDiff: string }): string {
+    let prompt = `# Resolve Rebase Conflicts\n\n`;
+    prompt += `## Situation\n\n`;
+    prompt += `The orchestrator merged a task branch into local \`main\`, then ran \`git rebase origin/main\` `;
+    prompt += `to incorporate remote changes before pushing. The rebase hit conflicts that need manual resolution.\n\n`;
+    prompt += `The repository is currently in a **rebase-in-progress** state. Your job is to resolve all conflicts `;
+    prompt += `and allow the rebase to complete.\n\n`;
+
+    prompt += `## Conflicted Files\n\n`;
+    for (const f of opts.conflictedFiles) {
+      prompt += `- \`${f}\`\n`;
+    }
+    prompt += `\n`;
+
+    if (opts.conflictDiff) {
+      const truncated = opts.conflictDiff.slice(0, 20_000);
+      prompt += `## Conflict Diff\n\n\`\`\`diff\n${truncated}\n\`\`\`\n\n`;
+      if (opts.conflictDiff.length > 20_000) {
+        prompt += `*(diff truncated — run \`git diff\` to see the full output)*\n\n`;
+      }
+    }
+
+    prompt += `## Instructions\n\n`;
+    prompt += `1. For each conflicted file, open it, understand both sides, and resolve the conflict markers (\`<<<<<<<\`, \`=======\`, \`>>>>>>>\`). Keep the correct combination of both sides.\n`;
+    prompt += `2. After resolving each file, stage it with \`git add <file>\`.\n`;
+    prompt += `3. Once ALL conflicts are resolved and staged, run: \`git -c core.editor=true rebase --continue\`\n`;
+    prompt += `4. Verify the rebase completed successfully (no more conflicts).\n`;
+    prompt += `5. Write your result to \`.opensprint/merge-result.json\` using this exact JSON format:\n`;
+    prompt += `   \`\`\`json\n`;
+    prompt += `   { "status": "success", "summary": "Brief description of how conflicts were resolved" }\n`;
+    prompt += `   \`\`\`\n`;
+    prompt += `   Use \`"status": "success"\` when all conflicts are resolved and the rebase completed.\n`;
+    prompt += `   Use \`"status": "failed"\` if you cannot resolve the conflicts.\n`;
+    prompt += `   The \`status\` field MUST be exactly \`"success"\` or \`"failed"\`.\n\n`;
+    prompt += `## Important\n\n`;
+    prompt += `- Do NOT run \`git rebase --abort\`. The orchestrator will handle cleanup if you fail.\n`;
+    prompt += `- Do NOT run \`git push\`. The orchestrator will push after you exit.\n`;
+    prompt += `- Focus only on resolving conflicts — do not make other code changes.\n`;
+
+    return prompt;
+  }
+
   private generateReviewPrompt(config: ActiveTaskConfig, context: TaskContext): string {
     let prompt = `# Review Task: ${context.title}\n\n`;
     prompt += `## Objective\n\n`;

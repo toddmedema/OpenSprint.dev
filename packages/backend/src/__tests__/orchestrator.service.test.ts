@@ -7,27 +7,104 @@ import type { ReviewAgentResult } from "@opensprint/shared";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 
 // ─── Mocks ───
+// All mock fns must be created via vi.hoisted() so they're available inside vi.mock() factories.
 
-const mockBroadcastToProject = vi.fn();
-const mockSendAgentOutputToProject = vi.fn();
+const {
+  mockBroadcastToProject,
+  mockSendAgentOutputToProject,
+  mockBeadsReady,
+  mockBeadsShow,
+  mockBeadsUpdate,
+  mockBeadsClose,
+  mockBeadsComment,
+  mockBeadsHasLabel,
+  mockBeadsAreAllBlockersClosed,
+  mockBeadsGetCumulativeAttempts,
+  mockBeadsSetCumulativeAttempts,
+  mockBeadsAddLabel,
+  mockBeadsRemoveLabel,
+  mockBeadsExport,
+  mockGetProject,
+  mockGetRepoPath,
+  mockGetSettings,
+  mockCreateTaskWorktree,
+  mockRemoveTaskWorktree,
+  mockDeleteBranch,
+  mockGetCommitCountAhead,
+  mockCaptureBranchDiff,
+  mockEnsureOnMain,
+  mockWaitForGitReady,
+  mockSymlinkNodeModules,
+  mockMergeToMain,
+  mockVerifyMerge,
+  mockPushMain,
+  mockGetChangedFiles,
+  mockCommitWip,
+  mockBuildContext,
+  mockAssembleTaskDirectory,
+  mockGetActiveDir,
+  mockReadResult,
+  mockClearResult,
+  mockCreateSession,
+  mockArchiveSession,
+  mockRunScopedTests,
+  mockInvokeCodingAgent,
+  mockInvokeReviewAgent,
+  mockInvokeMergerAgent,
+  mockRecoverOrphanedTasks,
+  mockRecoverFromStaleHeartbeats,
+  mockWriteJsonAtomic,
+} = vi.hoisted(() => ({
+  mockBroadcastToProject: vi.fn(),
+  mockSendAgentOutputToProject: vi.fn(),
+  mockBeadsReady: vi.fn(),
+  mockBeadsShow: vi.fn(),
+  mockBeadsUpdate: vi.fn(),
+  mockBeadsClose: vi.fn(),
+  mockBeadsComment: vi.fn(),
+  mockBeadsHasLabel: vi.fn(),
+  mockBeadsAreAllBlockersClosed: vi.fn(),
+  mockBeadsGetCumulativeAttempts: vi.fn(),
+  mockBeadsSetCumulativeAttempts: vi.fn(),
+  mockBeadsAddLabel: vi.fn(),
+  mockBeadsRemoveLabel: vi.fn(),
+  mockBeadsExport: vi.fn().mockResolvedValue(undefined),
+  mockGetProject: vi.fn(),
+  mockGetRepoPath: vi.fn(),
+  mockGetSettings: vi.fn(),
+  mockCreateTaskWorktree: vi.fn(),
+  mockRemoveTaskWorktree: vi.fn(),
+  mockDeleteBranch: vi.fn(),
+  mockGetCommitCountAhead: vi.fn(),
+  mockCaptureBranchDiff: vi.fn(),
+  mockEnsureOnMain: vi.fn(),
+  mockWaitForGitReady: vi.fn(),
+  mockSymlinkNodeModules: vi.fn(),
+  mockMergeToMain: vi.fn(),
+  mockVerifyMerge: vi.fn(),
+  mockPushMain: vi.fn(),
+  mockGetChangedFiles: vi.fn(),
+  mockCommitWip: vi.fn(),
+  mockBuildContext: vi.fn(),
+  mockAssembleTaskDirectory: vi.fn(),
+  mockGetActiveDir: vi.fn(),
+  mockReadResult: vi.fn(),
+  mockClearResult: vi.fn(),
+  mockCreateSession: vi.fn(),
+  mockArchiveSession: vi.fn(),
+  mockRunScopedTests: vi.fn(),
+  mockInvokeCodingAgent: vi.fn(),
+  mockInvokeReviewAgent: vi.fn(),
+  mockInvokeMergerAgent: vi.fn(),
+  mockRecoverOrphanedTasks: vi.fn(),
+  mockRecoverFromStaleHeartbeats: vi.fn(),
+  mockWriteJsonAtomic: vi.fn(),
+}));
 
 vi.mock("../websocket/index.js", () => ({
   broadcastToProject: (...args: unknown[]) => mockBroadcastToProject(...args),
   sendAgentOutputToProject: (...args: unknown[]) => mockSendAgentOutputToProject(...args),
 }));
-
-const mockBeadsReady = vi.fn();
-const mockBeadsShow = vi.fn();
-const mockBeadsUpdate = vi.fn();
-const mockBeadsClose = vi.fn();
-const mockBeadsComment = vi.fn();
-const mockBeadsHasLabel = vi.fn();
-const mockBeadsAreAllBlockersClosed = vi.fn();
-const mockBeadsGetCumulativeAttempts = vi.fn();
-const mockBeadsSetCumulativeAttempts = vi.fn();
-const mockBeadsAddLabel = vi.fn();
-const mockBeadsRemoveLabel = vi.fn();
-const mockBeadsExport = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("../services/beads.service.js", () => ({
   BeadsService: vi.fn().mockImplementation(() => ({
@@ -46,10 +123,6 @@ vi.mock("../services/beads.service.js", () => ({
   })),
 }));
 
-const mockGetProject = vi.fn();
-const mockGetRepoPath = vi.fn();
-const mockGetSettings = vi.fn();
-
 vi.mock("../services/project.service.js", () => ({
   ProjectService: vi.fn().mockImplementation(() => ({
     getProject: mockGetProject,
@@ -58,54 +131,49 @@ vi.mock("../services/project.service.js", () => ({
   })),
 }));
 
-const mockCreateTaskWorktree = vi.fn();
-const mockRemoveTaskWorktree = vi.fn();
-const mockDeleteBranch = vi.fn();
-const mockGetCommitCountAhead = vi.fn();
-const mockCaptureBranchDiff = vi.fn();
-const mockEnsureOnMain = vi.fn();
-const mockWaitForGitReady = vi.fn();
-const mockSymlinkNodeModules = vi.fn();
-const mockMergeToMain = vi.fn();
-const mockVerifyMerge = vi.fn();
-const mockPushMain = vi.fn();
-const mockGetChangedFiles = vi.fn();
-const mockCommitWip = vi.fn();
-
-vi.mock("../services/branch-manager.js", () => ({
-  BranchManager: vi.fn().mockImplementation(() => ({
-    createTaskWorktree: mockCreateTaskWorktree,
-    removeTaskWorktree: mockRemoveTaskWorktree,
-    deleteBranch: mockDeleteBranch,
-    getCommitCountAhead: mockGetCommitCountAhead,
-    captureBranchDiff: mockCaptureBranchDiff,
-    captureUncommittedDiff: vi.fn().mockResolvedValue(""),
-    ensureOnMain: mockEnsureOnMain,
-    waitForGitReady: mockWaitForGitReady,
-    symlinkNodeModules: mockSymlinkNodeModules,
-    mergeToMain: mockMergeToMain,
-    verifyMerge: mockVerifyMerge,
-    pushMain: mockPushMain,
-    getChangedFiles: mockGetChangedFiles,
-    commitWip: mockCommitWip,
-  })),
-}));
-
-const mockBuildContext = vi.fn();
-const mockAssembleTaskDirectory = vi.fn();
+vi.mock("../services/branch-manager.js", () => {
+  class _RebaseConflictError extends Error {
+    conflictedFiles: string[];
+    constructor(conflictedFiles: string[]) {
+      super(`Rebase conflict in ${conflictedFiles.length} file(s)`);
+      this.name = "RebaseConflictError";
+      this.conflictedFiles = conflictedFiles;
+    }
+  }
+  return {
+    RebaseConflictError: _RebaseConflictError,
+    BranchManager: vi.fn().mockImplementation(() => ({
+      createTaskWorktree: mockCreateTaskWorktree,
+      removeTaskWorktree: mockRemoveTaskWorktree,
+      deleteBranch: mockDeleteBranch,
+      getCommitCountAhead: mockGetCommitCountAhead,
+      captureBranchDiff: mockCaptureBranchDiff,
+      captureUncommittedDiff: vi.fn().mockResolvedValue(""),
+      ensureOnMain: mockEnsureOnMain,
+      waitForGitReady: mockWaitForGitReady,
+      symlinkNodeModules: mockSymlinkNodeModules,
+      mergeToMain: mockMergeToMain,
+      verifyMerge: mockVerifyMerge,
+      pushMain: mockPushMain,
+      pushMainToOrigin: vi.fn().mockResolvedValue(undefined),
+      getChangedFiles: mockGetChangedFiles,
+      getConflictedFiles: vi.fn().mockResolvedValue([]),
+      getConflictDiff: vi.fn().mockResolvedValue(""),
+      rebaseContinue: vi.fn().mockResolvedValue(undefined),
+      rebaseAbort: vi.fn().mockResolvedValue(undefined),
+      isRebaseInProgress: vi.fn().mockResolvedValue(false),
+      commitWip: mockCommitWip,
+    })),
+  };
+});
 
 vi.mock("../services/context-assembler.js", () => ({
   ContextAssembler: vi.fn().mockImplementation(() => ({
     buildContext: mockBuildContext,
     assembleTaskDirectory: mockAssembleTaskDirectory,
+    generateMergeConflictPrompt: vi.fn().mockReturnValue("# Resolve Rebase Conflicts\n"),
   })),
 }));
-
-const mockGetActiveDir = vi.fn();
-const mockReadResult = vi.fn();
-const mockClearResult = vi.fn();
-const mockCreateSession = vi.fn();
-const mockArchiveSession = vi.fn();
 
 vi.mock("../services/session-manager.js", () => ({
   SessionManager: vi.fn().mockImplementation(() => ({
@@ -117,30 +185,23 @@ vi.mock("../services/session-manager.js", () => ({
   })),
 }));
 
-const mockRunScopedTests = vi.fn();
-
 vi.mock("../services/test-runner.js", () => ({
   TestRunner: vi.fn().mockImplementation(() => ({
     runScopedTests: mockRunScopedTests,
   })),
 }));
 
-const mockInvokeCodingAgent = vi.fn();
-const mockInvokeReviewAgent = vi.fn();
-
 vi.mock("../services/agent.service.js", () => ({
   agentService: {
     invokeCodingAgent: mockInvokeCodingAgent,
     invokeReviewAgent: mockInvokeReviewAgent,
+    invokeMergerAgent: mockInvokeMergerAgent,
   },
 }));
 
 vi.mock("../services/deployment-service.js", () => ({
   deploymentService: { deploy: vi.fn().mockResolvedValue(undefined) },
 }));
-
-const mockRecoverOrphanedTasks = vi.fn();
-const mockRecoverFromStaleHeartbeats = vi.fn();
 
 vi.mock("../services/orphan-recovery.service.js", () => ({
   orphanRecoveryService: {
@@ -155,8 +216,6 @@ vi.mock("../services/heartbeat.service.js", () => ({
     deleteHeartbeat: vi.fn().mockResolvedValue(undefined),
   },
 }));
-
-const mockWriteJsonAtomic = vi.fn();
 
 vi.mock("../utils/file-utils.js", () => ({
   writeJsonAtomic: (...args: unknown[]) => mockWriteJsonAtomic(...args),
