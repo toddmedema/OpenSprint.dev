@@ -128,6 +128,38 @@ describe("ExecutePhase epic card task order", () => {
     expect(listItems[2].textContent).toContain("Done task");
   });
 
+  it("renders task rows with status left and assignee right (no duplicate indicators)", () => {
+    const tasks = [
+      { id: "epic-1.1", title: "Assigned task", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent-1" },
+      { id: "epic-1.2", title: "Unassigned task", epicId: "epic-1", kanbanColumn: "ready", priority: 1, assignee: null },
+    ];
+    const store = createStore(tasks);
+    const { container } = render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
+    expect(epicCard).toBeInTheDocument();
+
+    // Assigned task: status left, assignee right
+    const assignedRow = epicCard!.querySelector('li');
+    expect(assignedRow).toBeTruthy();
+    const assignedButton = assignedRow!.querySelector("button");
+    const assignedChildren = Array.from(assignedButton!.children);
+    const titleIdx = assignedChildren.findIndex((el) => el.textContent?.includes("Assigned task"));
+    const statusIdx = assignedChildren.findIndex((el) => el.getAttribute("title") === "In Progress");
+    const assigneeEl = assignedRow!.querySelector('[data-testid="task-row-right"]');
+    expect(statusIdx).toBeGreaterThanOrEqual(0);
+    expect(statusIdx).toBeLessThan(titleIdx);
+    expect(assigneeEl).toHaveTextContent("agent-1");
+
+    // Unassigned task: no assignee element on right (no empty dot or placeholder)
+    const unassignedRow = epicCard!.querySelectorAll("li")[1];
+    expect(unassignedRow!.querySelector('[data-testid="task-row-right"]')).toBeNull();
+  });
+
   it("sorts by priority within same status, then by ID", () => {
     const tasks = [
       { id: "epic-1.3", title: "Low priority", epicId: "epic-1", kanbanColumn: "ready", priority: 2, assignee: null },
