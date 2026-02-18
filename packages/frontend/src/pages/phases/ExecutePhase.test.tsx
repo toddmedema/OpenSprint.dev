@@ -704,7 +704,7 @@ describe("ExecutePhase Redux integration", () => {
       expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
     });
 
-    const markdownContainer = screen.getByTestId("task-description-markdown");
+    const markdownContainer = await screen.findByTestId("task-description-markdown");
     expect(markdownContainer).toBeInTheDocument();
     const cn = markdownContainer.className;
     expect(cn).toMatch(/text-theme-text/);
@@ -722,6 +722,8 @@ describe("ExecutePhase Redux integration", () => {
     expect(cn).toMatch(/prose-execute-task/);
     expect(cn).toMatch(/prose-gray/);
     expect(cn).toMatch(/dark:prose-invert/);
+    expect(cn).toMatch(/prose-kbd:text-theme-text/);
+    expect(cn).toMatch(/prose-figcaption:text-theme-text/);
   });
 });
 
