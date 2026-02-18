@@ -389,6 +389,14 @@ describe("SketchPhase with specSlice", () => {
           expect(screen.getByText(/Discussing: Executive Summary/i)).toBeInTheDocument();
           expect(screen.getByPlaceholderText(/Comment on this selection/)).toBeInTheDocument();
         });
+
+        await waitFor(
+          () => {
+            const input = screen.getByPlaceholderText(/Comment on this selection/);
+            expect(document.activeElement).toBe(input);
+          },
+          { timeout: 200 }
+        );
       });
 
       it("dismisses popover when clicking outside popover and selection", async () => {
@@ -519,6 +527,15 @@ describe("SketchPhase with specSlice", () => {
           expect(screen.getByText(/Discussing: Executive Summary/i)).toBeInTheDocument();
           expect(screen.getByPlaceholderText(/Comment on this selection/)).toBeInTheDocument();
         });
+
+        // Input receives focus after sidebar expansion (250ms delay)
+        await waitFor(
+          () => {
+            const input = screen.getByPlaceholderText(/Comment on this selection/);
+            expect(document.activeElement).toBe(input);
+          },
+          { timeout: 500 }
+        );
 
         vi.restoreAllMocks();
       });

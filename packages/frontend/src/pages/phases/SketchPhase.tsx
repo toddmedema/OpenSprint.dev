@@ -358,7 +358,8 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   const handleDiscuss = () => {
     if (!selection) return;
     // Auto-open sidebar if collapsed so user sees the Discuss flow
-    if (discussCollapsed) {
+    const wasCollapsed = discussCollapsed;
+    if (wasCollapsed) {
       setDiscussCollapsed(false);
     }
     setSelectionContext({
@@ -367,7 +368,10 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
     });
     setSelection(null);
     window.getSelection()?.removeAllRanges();
-    setTimeout(() => chatInputRef.current?.focus(), 100);
+    // Delay focus to allow sidebar expansion (200ms transition); when expanding from
+    // collapsed, the input is not in DOM until the next render
+    const focusDelay = wasCollapsed ? 250 : 50;
+    setTimeout(() => chatInputRef.current?.focus(), focusDelay);
   };
 
   const handleSectionChange = useCallback(
