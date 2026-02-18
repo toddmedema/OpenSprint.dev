@@ -146,6 +146,7 @@ export class AgentClient {
         command = "agent";
         args = [
           "--print",
+          "--force",
           "--output-format",
           "stream-json",
           "--stream-partial-output",

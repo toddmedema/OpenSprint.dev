@@ -1606,6 +1606,21 @@ export class OrchestratorService {
         return;
       }
 
+      // If git auto-resolved all conflicts (no unmerged files), just continue the rebase
+      // directly — no need to spawn a merger agent for a trivial rebase --continue.
+      if (err.conflictedFiles.length === 0) {
+        console.log("[orchestrator] Rebase paused with no unmerged files, continuing directly");
+        try {
+          await this.branchManager.rebaseContinue(repoPath);
+          await this.branchManager.pushMainToOrigin(repoPath);
+          console.log("[orchestrator] Auto-resolved rebase continued, push succeeded");
+          return;
+        } catch (contErr) {
+          console.warn("[orchestrator] rebaseContinue failed, falling through to merger agent:", contErr);
+          // Fall through to merger agent — the continue may have hit new conflicts
+        }
+      }
+
       console.log(
         `[orchestrator] Rebase conflict in ${err.conflictedFiles.length} file(s), spawning merger agent`
       );
