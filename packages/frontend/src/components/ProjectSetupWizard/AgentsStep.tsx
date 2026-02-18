@@ -45,9 +45,11 @@ export function AgentsStep({
         <>
           <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
             <p className="text-sm text-theme-warning-text">
-              <strong>API keys required:</strong> Add <code className="font-mono text-xs">ANTHROPIC_API_KEY</code>{" "}
-              and/or <code className="font-mono text-xs">CURSOR_API_KEY</code> to your project&apos;s{" "}
-              <code className="font-mono text-xs">.env</code> file to use Claude and Cursor. Get keys from{" "}
+              <strong>API keys required:</strong> Add{" "}
+              <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and/or{" "}
+              <code className="font-mono text-xs">CURSOR_API_KEY</code> to your project&apos;s{" "}
+              <code className="font-mono text-xs">.env</code> file to use Claude and Cursor. Get
+              keys from{" "}
               <a
                 href="https://console.anthropic.com/"
                 target="_blank"
@@ -72,7 +74,9 @@ export function AgentsStep({
             {envKeys && !envKeys.anthropic && (
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-theme-muted mb-1">ANTHROPIC_API_KEY (Claude)</label>
+                  <label className="block text-xs font-medium text-theme-muted mb-1">
+                    ANTHROPIC_API_KEY (Claude)
+                  </label>
                   <input
                     type="password"
                     className="input font-mono text-sm"
@@ -95,7 +99,9 @@ export function AgentsStep({
             {envKeys && !envKeys.cursor && (
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-theme-muted mb-1">CURSOR_API_KEY</label>
+                  <label className="block text-xs font-medium text-theme-muted mb-1">
+                    CURSOR_API_KEY
+                  </label>
                   <input
                     type="password"
                     className="input font-mono text-sm"
@@ -120,7 +126,9 @@ export function AgentsStep({
       )}
       <div>
         <h3 className="text-sm font-semibold text-theme-text mb-3">Planning Agent Slot</h3>
-        <p className="text-xs text-theme-muted mb-3">Used by Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor, Delta Planner</p>
+        <p className="text-xs text-theme-muted mb-3">
+          Used by Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor, Delta Planner
+        </p>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -128,7 +136,9 @@ export function AgentsStep({
               <select
                 className="input"
                 value={planningAgent.type}
-                onChange={(e) => onPlanningAgentChange({ ...planningAgent, type: e.target.value as AgentType })}
+                onChange={(e) =>
+                  onPlanningAgentChange({ ...planningAgent, type: e.target.value as AgentType })
+                }
               >
                 <option value="claude">Claude</option>
                 <option value="cursor">Cursor</option>
@@ -155,7 +165,9 @@ export function AgentsStep({
                 className="input w-full font-mono text-sm"
                 placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
                 value={planningAgent.cliCommand}
-                onChange={(e) => onPlanningAgentChange({ ...planningAgent, cliCommand: e.target.value })}
+                onChange={(e) =>
+                  onPlanningAgentChange({ ...planningAgent, cliCommand: e.target.value })
+                }
               />
               <p className="mt-1 text-xs text-theme-muted">
                 Command invoked with prompt as argument. Must accept input and produce output.
@@ -167,7 +179,7 @@ export function AgentsStep({
       <hr />
       <div>
         <h3 className="text-sm font-semibold text-theme-text mb-3">Coding Agent Slot</h3>
-        <p className="text-xs text-theme-muted mb-3">Used by Coder and Reviewer for Execute phase implementation and review</p>
+        <p className="text-xs text-theme-muted mb-3">Used by Coder and Reviewer</p>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -175,7 +187,9 @@ export function AgentsStep({
               <select
                 className="input"
                 value={codingAgent.type}
-                onChange={(e) => onCodingAgentChange({ ...codingAgent, type: e.target.value as AgentType })}
+                onChange={(e) =>
+                  onCodingAgentChange({ ...codingAgent, type: e.target.value as AgentType })
+                }
               >
                 <option value="claude">Claude</option>
                 <option value="cursor">Cursor</option>
@@ -202,7 +216,9 @@ export function AgentsStep({
                 className="input w-full font-mono text-sm"
                 placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
                 value={codingAgent.cliCommand}
-                onChange={(e) => onCodingAgentChange({ ...codingAgent, cliCommand: e.target.value })}
+                onChange={(e) =>
+                  onCodingAgentChange({ ...codingAgent, cliCommand: e.target.value })
+                }
               />
               <p className="mt-1 text-xs text-theme-muted">
                 Command invoked with prompt as argument. Must accept input and produce output.

@@ -395,6 +395,16 @@ export class OrchestratorService {
       state.lastOutputTime = lastOutput;
       state.loopActive = true;
 
+      activeAgentsService.register(
+        taskId,
+        projectId,
+        persisted.currentPhase ?? "coding",
+        persisted.currentPhase === "review" ? "reviewer" : "coder",
+        persisted.currentTaskTitle ?? taskId,
+        state.startedAt,
+        branchName
+      );
+
       // Combined poll: check both PID death and inactivity timeout
       const pollTimer = setInterval(async () => {
         // Check inactivity timeout (using heartbeat for freshest timestamp)
@@ -435,6 +445,7 @@ export class OrchestratorService {
             } catch {
               /* ignore */
             }
+            activeAgentsService.unregister(taskId);
             try {
               const task = await this.beads.show(repoPath, taskId);
               await this.handleTaskFailure(
@@ -507,6 +518,7 @@ export class OrchestratorService {
     branchName: string,
     _worktreePath?: string | null
   ): Promise<void> {
+    activeAgentsService.unregister(taskId);
     const state = this.getState(projectId);
     console.log(
       `[orchestrator] Recovery: crash recovery for task ${taskId} (branch ${branchName})`
@@ -898,20 +910,19 @@ export class OrchestratorService {
         const systemPrompt = `You are the Summarizer agent for OpenSprint (PRD §12.3.5). Condense context into a focused summary when it exceeds size thresholds.`;
 
         const summarizerId = `summarizer-${projectId}-${task.id}-${Date.now()}`;
-        activeAgentsService.register(
-          summarizerId,
-          projectId,
-          "execute",
-          "summarizer",
-          "Context condensation",
-          new Date().toISOString()
-        );
 
         try {
           const summarizerResponse = await agentService.invokePlanningAgent({
             config: settings.planningAgent,
             messages: [{ role: "user", content: summarizerPrompt }],
             systemPrompt,
+            tracking: {
+              id: summarizerId,
+              projectId,
+              phase: "execute",
+              role: "summarizer",
+              label: "Context condensation",
+            },
           });
 
           const jsonMatch = summarizerResponse.content.match(/\{[\s\S]*"status"[\s\S]*\}/);
@@ -937,8 +948,6 @@ export class OrchestratorService {
             `[orchestrator] Summarizer failed for ${task.id}, using raw context:`,
             err instanceof Error ? err.message : err
           );
-        } finally {
-          activeAgentsService.unregister(summarizerId);
         }
       }
 
@@ -965,16 +974,6 @@ export class OrchestratorService {
       state.outputLog = [];
       state.lastOutputTime = Date.now();
 
-      activeAgentsService.register(
-        task.id,
-        projectId,
-        "coding",
-        "coder",
-        state.activeTaskTitle ?? task.id,
-        state.startedAt,
-        branchName
-      );
-
       broadcastToProject(projectId, {
         type: "agent.started",
         taskId: task.id,
@@ -990,6 +989,14 @@ export class OrchestratorService {
       state.activeProcess = agentService.invokeCodingAgent(promptPath, settings.codingAgent, {
         cwd: wtPath,
         agentRole: "coder",
+        tracking: {
+          id: task.id,
+          projectId,
+          phase: "coding",
+          role: "coder",
+          label: state.activeTaskTitle ?? task.id,
+          branchName,
+        },
         onOutput: (chunk: string) => {
           state.outputLog.push(chunk);
           state.lastOutputTime = Date.now();
@@ -1090,7 +1097,6 @@ export class OrchestratorService {
     branchName: string,
     exitCode: number | null
   ): Promise<void> {
-    activeAgentsService.unregister(task.id);
     const state = this.getState(projectId);
     const wtPath = state.activeWorktreePath ?? repoPath;
 
@@ -1246,16 +1252,6 @@ export class OrchestratorService {
       state.outputLog = [];
       state.lastOutputTime = Date.now();
 
-      activeAgentsService.register(
-        task.id,
-        projectId,
-        "review",
-        "reviewer",
-        state.activeTaskTitle ?? task.id,
-        state.startedAt,
-        branchName
-      );
-
       broadcastToProject(projectId, {
         type: "agent.started",
         taskId: task.id,
@@ -1268,6 +1264,14 @@ export class OrchestratorService {
 
       state.activeProcess = agentService.invokeReviewAgent(promptPath, settings.codingAgent, {
         cwd: wtPath,
+        tracking: {
+          id: task.id,
+          projectId,
+          phase: "review",
+          role: "reviewer",
+          label: state.activeTaskTitle ?? task.id,
+          branchName,
+        },
         onOutput: (chunk: string) => {
           state.outputLog.push(chunk);
           state.lastOutputTime = Date.now();
@@ -1368,7 +1372,6 @@ export class OrchestratorService {
     branchName: string,
     exitCode: number | null
   ): Promise<void> {
-    activeAgentsService.unregister(task.id);
     const state = this.getState(projectId);
     const wtPath = state.activeWorktreePath ?? repoPath;
     const result = (await this.sessionManager.readResult(
@@ -1653,11 +1656,20 @@ export class OrchestratorService {
       // May not exist
     }
 
+    const mergerId = `_merger:${projectId}`;
+
     return new Promise<boolean>((resolve) => {
       const outputLog: string[] = [];
 
       const handle = agentService.invokeMergerAgent(promptPath, settings.codingAgent, {
         cwd: repoPath,
+        tracking: {
+          id: mergerId,
+          projectId,
+          phase: "execute",
+          role: "merger",
+          label: "Resolving merge conflicts",
+        },
         onOutput: (chunk: string) => {
           outputLog.push(chunk);
           sendAgentOutputToProject(projectId, "_merger", chunk);

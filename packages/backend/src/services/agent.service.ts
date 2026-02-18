@@ -1,13 +1,27 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { AgentConfig } from "@opensprint/shared";
+import type { AgentConfig, AgentRole } from "@opensprint/shared";
 import { AgentClient } from "./agent-client.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
+import { activeAgentsService } from "./active-agents.service.js";
 
 /** Message for planning agent (user or assistant) */
 export interface PlanningMessage {
   role: "user" | "assistant";
   content: string;
+}
+
+/**
+ * Optional tracking descriptor — when provided, the agent is automatically
+ * registered in activeAgentsService on invocation and unregistered on exit.
+ */
+export interface AgentTrackingInfo {
+  id: string;
+  projectId: string;
+  phase: string;
+  role: AgentRole;
+  label: string;
+  branchName?: string;
 }
 
 /** Options for invokePlanningAgent */
@@ -18,8 +32,12 @@ export interface InvokePlanningAgentOptions {
   messages: PlanningMessage[];
   /** Optional system prompt */
   systemPrompt?: string;
+  /** Working directory for CLI agents (cursor/custom) */
+  cwd?: string;
   /** Callback for streaming text chunks */
   onChunk?: (chunk: string) => void;
+  /** When provided, auto-registers/unregisters with activeAgentsService */
+  tracking?: AgentTrackingInfo;
 }
 
 /** Response from planning agent */
@@ -37,6 +55,8 @@ export interface InvokeCodingAgentOptions {
   onExit: (code: number | null) => void;
   /** Human-readable agent role for logging (e.g. 'coder', 'code reviewer') */
   agentRole?: string;
+  /** When provided, auto-registers/unregisters with activeAgentsService */
+  tracking?: AgentTrackingInfo;
 }
 
 /** Return type for invokeCodingAgent — handle with kill() to terminate */
@@ -75,7 +95,29 @@ export class AgentService {
    * Claude: uses @anthropic-ai/sdk API. Cursor/custom: delegates to AgentClient (CLI).
    */
   async invokePlanningAgent(options: InvokePlanningAgentOptions): Promise<PlanningAgentResponse> {
-    const { config, messages, systemPrompt, onChunk } = options;
+    const { tracking } = options;
+    if (tracking) {
+      activeAgentsService.register(
+        tracking.id,
+        tracking.projectId,
+        tracking.phase,
+        tracking.role,
+        tracking.label,
+        new Date().toISOString(),
+        tracking.branchName
+      );
+    }
+    try {
+      return await this._invokePlanningAgentInner(options);
+    } finally {
+      if (tracking) activeAgentsService.unregister(tracking.id);
+    }
+  }
+
+  private async _invokePlanningAgentInner(
+    options: InvokePlanningAgentOptions
+  ): Promise<PlanningAgentResponse> {
+    const { config, messages, systemPrompt, cwd, onChunk } = options;
 
     if (config.type === "claude") {
       return this.invokeClaudePlanningAgent(options);
@@ -93,6 +135,7 @@ export class AgentService {
       config,
       prompt,
       systemPrompt,
+      cwd,
       conversationHistory,
       onChunk,
     });
@@ -112,12 +155,33 @@ export class AgentService {
     config: AgentConfig,
     options: InvokeCodingAgentOptions
   ): CodingAgentHandle {
+    const { tracking } = options;
+    if (tracking) {
+      activeAgentsService.register(
+        tracking.id,
+        tracking.projectId,
+        tracking.phase,
+        tracking.role,
+        tracking.label,
+        new Date().toISOString(),
+        tracking.branchName
+      );
+    }
+
+    const originalOnExit = options.onExit;
+    const wrappedOnExit = tracking
+      ? (code: number | null) => {
+          activeAgentsService.unregister(tracking.id);
+          originalOnExit(code);
+        }
+      : originalOnExit;
+
     return this.agentClient.spawnWithTaskFile(
       config,
       promptPath,
       options.cwd,
       options.onOutput,
-      options.onExit,
+      wrappedOnExit,
       options.agentRole
     );
   }

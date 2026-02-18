@@ -501,10 +501,10 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                   </div>
                   <hr />
                   <div>
-                    <h3 className="text-sm font-semibold text-theme-text mb-3">Coding Agent Slot</h3>
-                    <p className="text-xs text-theme-muted mb-3">
-                      Used by Coder and Reviewer for Execute phase implementation and review
-                    </p>
+                    <h3 className="text-sm font-semibold text-theme-text mb-3">
+                      Coding Agent Slot
+                    </h3>
+                    <p className="text-xs text-theme-muted mb-3">Used by Coder and Reviewer</p>
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -648,7 +648,10 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         const override = codingAgentByComplexity[level.key];
                         const isEnabled = !!override;
                         return (
-                          <div key={level.key} className="rounded-lg border border-theme-border p-3">
+                          <div
+                            key={level.key}
+                            className="rounded-lg border border-theme-border p-3"
+                          >
                             <label className="flex items-center gap-3 cursor-pointer">
                               <input
                                 type="checkbox"
@@ -750,7 +753,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       Both off by default. Enable to auto-trigger deployment.
                     </p>
                     <label className="flex items-center justify-between gap-3 cursor-pointer">
-                      <span className="text-sm text-theme-text">Auto-deploy on epic completion</span>
+                      <span className="text-sm text-theme-text">
+                        Auto-deploy on epic completion
+                      </span>
                       <input
                         type="checkbox"
                         checked={deployment.autoDeployOnEpicCompletion ?? false}
@@ -765,7 +770,9 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       When all tasks in an epic reach Done, trigger deployment automatically.
                     </p>
                     <label className="flex items-center justify-between gap-3 cursor-pointer">
-                      <span className="text-sm text-theme-text">Auto-deploy on Eval resolution</span>
+                      <span className="text-sm text-theme-text">
+                        Auto-deploy on Eval resolution
+                      </span>
                       <input
                         type="checkbox"
                         checked={deployment.autoDeployOnEvalResolution ?? false}

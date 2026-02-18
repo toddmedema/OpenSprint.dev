@@ -1,6 +1,6 @@
 # Open Sprint
 
-**Build _good_ software at the speed of thought.**
+**Build _good_ software at the speed of thought. Never pay for SaaS again.**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Node.js >= 20](https://img.shields.io/badge/Node.js-%3E%3D20-green.svg)](https://nodejs.org/)

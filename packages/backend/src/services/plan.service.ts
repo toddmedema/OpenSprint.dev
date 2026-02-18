@@ -23,13 +23,11 @@ import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { gitCommitQueue } from "./git-commit-queue.service.js";
 import { ChatService } from "./chat.service.js";
 import { PrdService } from "./prd.service.js";
-import { AgentClient } from "./agent-client.js";
 import { agentService } from "./agent.service.js";
 import { buildAuditorPrompt, parseAuditorResult } from "./auditor.service.js";
 import { buildDeltaPlannerPrompt, parseDeltaPlannerResult } from "./delta-planner.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
-import { activeAgentsService } from "./active-agents.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 
@@ -130,7 +128,6 @@ export class PlanService {
   private beads = new BeadsService();
   private chatService = new ChatService();
   private prdService = new PrdService();
-  private agentClient = new AgentClient();
 
   /** Get the plans directory for a project */
   private async getPlansDir(projectId: string): Promise<string> {
@@ -153,26 +150,31 @@ export class PlanService {
   /**
    * Evaluate plan complexity using the planning agent. Returns "medium" on parse failure.
    */
-  async evaluateComplexity(projectId: string, title: string, content: string): Promise<PlanComplexity> {
+  async evaluateComplexity(
+    projectId: string,
+    title: string,
+    content: string
+  ): Promise<PlanComplexity> {
     const repoPath = await this.getRepoPath(projectId);
     const settings = await this.projectService.getSettings(projectId);
 
     const prompt = `Evaluate the implementation complexity of this feature plan.\n\n## Title\n${title}\n\n## Content\n${content}`;
 
     const agentId = `plan-complexity-${projectId}-${Date.now()}`;
-    activeAgentsService.register(agentId, projectId, "plan", "planner", "Complexity evaluation", new Date().toISOString());
 
-    let response;
-    try {
-      response = await this.agentClient.invoke({
-        config: settings.planningAgent,
-        prompt,
-        systemPrompt: COMPLEXITY_EVALUATION_SYSTEM_PROMPT,
-        cwd: repoPath,
-      });
-    } finally {
-      activeAgentsService.unregister(agentId);
-    }
+    const response = await agentService.invokePlanningAgent({
+      config: settings.planningAgent,
+      messages: [{ role: "user", content: prompt }],
+      systemPrompt: COMPLEXITY_EVALUATION_SYSTEM_PROMPT,
+      cwd: repoPath,
+      tracking: {
+        id: agentId,
+        projectId,
+        phase: "plan",
+        role: "planner",
+        label: "Complexity evaluation",
+      },
+    });
 
     const jsonMatch = response.content.match(/\{[\s\S]*"complexity"[\s\S]*\}/);
     if (!jsonMatch) return "medium";
@@ -190,17 +192,27 @@ export class PlanService {
   }
 
   /** Count tasks under an epic from beads (implementation tasks only, excludes gating .0) */
-  private async countTasks(repoPath: string, epicId: string): Promise<{ total: number; done: number }> {
+  private async countTasks(
+    repoPath: string,
+    epicId: string
+  ): Promise<{ total: number; done: number }> {
     try {
       const allIssues = await this.beads.listAll(repoPath);
       const children = allIssues.filter(
         (issue: BeadsIssue) =>
-          issue.id.startsWith(epicId + ".") && !issue.id.endsWith(".0") && (issue.issue_type ?? issue.type) !== "epic",
+          issue.id.startsWith(epicId + ".") &&
+          !issue.id.endsWith(".0") &&
+          (issue.issue_type ?? issue.type) !== "epic"
       );
-      const done = children.filter((issue: BeadsIssue) => (issue.status as string) === "closed").length;
+      const done = children.filter(
+        (issue: BeadsIssue) => (issue.status as string) === "closed"
+      ).length;
       return { total: children.length, done };
     } catch (err) {
-      console.warn("[plan] countTasks failed, using default:", err instanceof Error ? err.message : err);
+      console.warn(
+        "[plan] countTasks failed, using default:",
+        err instanceof Error ? err.message : err
+      );
       return { total: 0, done: 0 };
     }
   }
@@ -211,11 +223,13 @@ export class PlanService {
    */
   private async buildDependencyEdgesCore(
     planInfos: Array<{ planId: string; beadEpicId: string; content: string }>,
-    repoPath: string,
+    repoPath: string
   ): Promise<PlanDependencyEdge[]> {
     const edges: PlanDependencyEdge[] = [];
     const seenEdges = new Set<string>();
-    const epicToPlan = new Map(planInfos.filter((p) => p.beadEpicId).map((p) => [p.beadEpicId, p.planId]));
+    const epicToPlan = new Map(
+      planInfos.filter((p) => p.beadEpicId).map((p) => [p.beadEpicId, p.planId])
+    );
 
     const addEdge = (fromPlanId: string, toPlanId: string) => {
       if (fromPlanId === toPlanId) return;
@@ -243,7 +257,10 @@ export class PlanService {
         }
       }
     } catch (err) {
-      console.warn("[plan] buildDependencyEdgesCore: beads unavailable:", err instanceof Error ? err.message : err);
+      console.warn(
+        "[plan] buildDependencyEdgesCore: beads unavailable:",
+        err instanceof Error ? err.message : err
+      );
     }
 
     // 2. Parse Plan markdown for "## Dependencies" section
@@ -264,7 +281,10 @@ export class PlanService {
   }
 
   /** Build dependency edges between plans (from beads + markdown). */
-  private async buildDependencyEdges(plans: Plan[], repoPath: string): Promise<PlanDependencyEdge[]> {
+  private async buildDependencyEdges(
+    plans: Plan[],
+    repoPath: string
+  ): Promise<PlanDependencyEdge[]> {
     const planInfos = plans.map((p) => ({
       planId: p.metadata.planId,
       beadEpicId: p.metadata.beadEpicId,
@@ -293,12 +313,18 @@ export class PlanService {
             const plan = await this.getPlan(projectId, planId);
             plans.push(plan);
           } catch (err) {
-            console.warn(`[plan] Skipping broken plan ${planId}:`, err instanceof Error ? err.message : err);
+            console.warn(
+              `[plan] Skipping broken plan ${planId}:`,
+              err instanceof Error ? err.message : err
+            );
           }
         }
       }
     } catch (err) {
-      console.warn("[plan] No plans directory or read failed:", err instanceof Error ? err.message : err);
+      console.warn(
+        "[plan] No plans directory or read failed:",
+        err instanceof Error ? err.message : err
+      );
     }
 
     const edges = await this.buildDependencyEdges(plans, repoPath);
@@ -430,8 +456,13 @@ export class PlanService {
       content: string;
       complexity?: string;
       mockups?: PlanMockup[];
-      tasks?: Array<{ title: string; description: string; priority?: number; dependsOn?: string[] }>;
-    },
+      tasks?: Array<{
+        title: string;
+        description: string;
+        priority?: number;
+        dependsOn?: string[];
+      }>;
+    }
   ): Promise<Plan> {
     const repoPath = await this.getRepoPath(projectId);
     const plansDir = await this.getPlansDir(projectId);
@@ -563,7 +594,7 @@ export class PlanService {
   private async generateAndCreateTasks(
     projectId: string,
     repoPath: string,
-    plan: Plan,
+    plan: Plan
   ): Promise<number> {
     const settings = await this.projectService.getSettings(projectId);
     const epicId = plan.metadata.beadEpicId;
@@ -576,28 +607,38 @@ export class PlanService {
     const prompt = `Break down the following feature plan into implementation tasks.\n\n## Feature Plan\n\n${plan.content}\n\n## PRD Context\n\n${prdContext}`;
 
     const agentId = `plan-task-gen-${projectId}-${Date.now()}`;
-    activeAgentsService.register(agentId, projectId, "plan", "planner", "Task generation", new Date().toISOString());
 
-    let response;
-    try {
-      response = await this.agentClient.invoke({
-        config: settings.planningAgent,
-        prompt,
-        systemPrompt: TASK_GENERATION_SYSTEM_PROMPT,
-        cwd: repoPath,
-      });
-    } finally {
-      activeAgentsService.unregister(agentId);
-    }
+    const response = await agentService.invokePlanningAgent({
+      config: settings.planningAgent,
+      messages: [{ role: "user", content: prompt }],
+      systemPrompt: TASK_GENERATION_SYSTEM_PROMPT,
+      cwd: repoPath,
+      tracking: {
+        id: agentId,
+        projectId,
+        phase: "plan",
+        role: "planner",
+        label: "Task generation",
+      },
+    });
 
     // Parse tasks from agent response
     const jsonMatch = response.content.match(/\{[\s\S]*"tasks"[\s\S]*\}/);
     if (!jsonMatch) {
-      console.warn("[plan] Task generation agent did not return valid JSON, shipping without tasks");
+      console.warn(
+        "[plan] Task generation agent did not return valid JSON, shipping without tasks"
+      );
       return 0;
     }
 
-    let parsed: { tasks?: Array<{ title: string; description: string; priority?: number; dependsOn?: string[] }> };
+    let parsed: {
+      tasks?: Array<{
+        title: string;
+        description: string;
+        priority?: number;
+        dependsOn?: string[];
+      }>;
+    };
     try {
       parsed = JSON.parse(jsonMatch[0]);
     } catch {
@@ -732,12 +773,16 @@ export class PlanService {
           issue.id.startsWith(epicId + ".") &&
           issue.id !== gateTaskId &&
           issue.id !== plan.metadata.reExecuteGateTaskId &&
-          (issue.issue_type ?? issue.type) !== "epic",
+          (issue.issue_type ?? issue.type) !== "epic"
       );
 
       const hasInProgress = children.some((issue: BeadsIssue) => issue.status === "in_progress");
       if (hasInProgress) {
-        throw new AppError(400, ErrorCodes.TASKS_IN_PROGRESS, "Cannot rebuild while tasks are In Progress or In Review");
+        throw new AppError(
+          400,
+          ErrorCodes.TASKS_IN_PROGRESS,
+          "Cannot rebuild while tasks are In Progress or In Review"
+        );
       }
 
       const allDone = children.every((issue: BeadsIssue) => issue.status === "closed");
@@ -747,7 +792,9 @@ export class PlanService {
         // Delete all existing sub-tasks (including any re-execute gate), then ship fresh
         const toDelete = allIssues.filter(
           (i: BeadsIssue) =>
-            i.id.startsWith(epicId + ".") && i.id !== gateTaskId && (i.issue_type ?? i.type) !== "epic",
+            i.id.startsWith(epicId + ".") &&
+            i.id !== gateTaskId &&
+            (i.issue_type ?? i.type) !== "epic"
         );
         for (const child of toDelete) {
           await this.beads.delete(repoPath, child.id);
@@ -759,7 +806,11 @@ export class PlanService {
         return this.shipPlan(projectId, planId);
       }
       if (!allDone && children.length > 0) {
-        throw new AppError(400, ErrorCodes.TASKS_NOT_COMPLETE, "All tasks must be Done before rebuilding (or none started)");
+        throw new AppError(
+          400,
+          ErrorCodes.TASKS_NOT_COMPLETE,
+          "All tasks must be Done before rebuilding (or none started)"
+        );
       }
     }
 
@@ -767,7 +818,7 @@ export class PlanService {
     const { fileTree, keyFilesContent, completedTasksJson } = await this.assembleReExecuteContext(
       repoPath,
       epicId ?? "",
-      gateTaskId,
+      gateTaskId
     );
 
     const auditorPrompt = buildAuditorPrompt(planId, epicId ?? "");
@@ -786,22 +837,26 @@ ${keyFilesContent}
 ${completedTasksJson}`;
 
     const agentIdAuditor = `auditor-${projectId}-${planId}-${Date.now()}`;
-    activeAgentsService.register(agentIdAuditor, projectId, "plan", "auditor", "Re-execute: capability audit", new Date().toISOString());
 
-    let auditorResponse;
-    try {
-      auditorResponse = await agentService.invokePlanningAgent({
-        config: (await this.projectService.getSettings(projectId)).planningAgent,
-        messages: [{ role: "user", content: auditorFullPrompt }],
-        systemPrompt: "You are the Auditor agent for OpenSprint (PRD §12.3.6). Summarize the app's current capabilities from the codebase and completed task history.",
-      });
-    } finally {
-      activeAgentsService.unregister(agentIdAuditor);
-    }
+    const auditorResponse = await agentService.invokePlanningAgent({
+      config: (await this.projectService.getSettings(projectId)).planningAgent,
+      messages: [{ role: "user", content: auditorFullPrompt }],
+      systemPrompt:
+        "You are the Auditor agent for OpenSprint (PRD §12.3.6). Summarize the app's current capabilities from the codebase and completed task history.",
+      tracking: {
+        id: agentIdAuditor,
+        projectId,
+        phase: "plan",
+        role: "auditor",
+        label: "Re-execute: capability audit",
+      },
+    });
 
     const auditorResult = parseAuditorResult(auditorResponse.content);
     if (!auditorResult || auditorResult.status !== "success" || !auditorResult.capability_summary) {
-      console.error("[plan] Auditor failed or returned invalid result, falling back to full rebuild");
+      console.error(
+        "[plan] Auditor failed or returned invalid result, falling back to full rebuild"
+      );
       return this.shipPlan(projectId, planId);
     }
 
@@ -824,21 +879,27 @@ ${planNew}
 ${auditorResult.capability_summary}`;
 
     const agentIdDelta = `delta-planner-${projectId}-${planId}-${Date.now()}`;
-    activeAgentsService.register(agentIdDelta, projectId, "plan", "delta_planner", "Re-execute: delta task list", new Date().toISOString());
 
-    let deltaResponse;
-    try {
-      deltaResponse = await agentService.invokePlanningAgent({
-        config: (await this.projectService.getSettings(projectId)).planningAgent,
-        messages: [{ role: "user", content: deltaPlannerFullPrompt }],
-        systemPrompt: "You are the Delta Planner agent for OpenSprint (PRD §12.3.7). Compare old/new Plan against capability summary and output only the delta tasks needed.",
-      });
-    } finally {
-      activeAgentsService.unregister(agentIdDelta);
-    }
+    const deltaResponse = await agentService.invokePlanningAgent({
+      config: (await this.projectService.getSettings(projectId)).planningAgent,
+      messages: [{ role: "user", content: deltaPlannerFullPrompt }],
+      systemPrompt:
+        "You are the Delta Planner agent for OpenSprint (PRD §12.3.7). Compare old/new Plan against capability summary and output only the delta tasks needed.",
+      tracking: {
+        id: agentIdDelta,
+        projectId,
+        phase: "plan",
+        role: "delta_planner",
+        label: "Re-execute: delta task list",
+      },
+    });
 
     const deltaResult = parseDeltaPlannerResult(deltaResponse.content);
-    if (!deltaResult || deltaResult.status === "no_changes_needed" || deltaResult.status === "failed") {
+    if (
+      !deltaResult ||
+      deltaResult.status === "no_changes_needed" ||
+      deltaResult.status === "failed"
+    ) {
       return this.getPlan(projectId, planId);
     }
 
@@ -905,7 +966,7 @@ ${auditorResult.capability_summary}`;
   private async assembleReExecuteContext(
     repoPath: string,
     epicId: string,
-    gateTaskId: string,
+    gateTaskId: string
   ): Promise<{ fileTree: string; keyFilesContent: string; completedTasksJson: string }> {
     const fileTree = await this.buildFileTree(repoPath);
     const keyFilesContent = await this.getKeyFilesContent(repoPath);
@@ -916,7 +977,16 @@ ${auditorResult.capability_summary}`;
 
   /** Build file tree string (excludes node_modules, .git, etc.) */
   private async buildFileTree(repoPath: string): Promise<string> {
-    const SKIP_DIRS = new Set([".git", "node_modules", ".opensprint", "dist", "build", ".next", ".turbo", "coverage"]);
+    const SKIP_DIRS = new Set([
+      ".git",
+      "node_modules",
+      ".opensprint",
+      "dist",
+      "build",
+      ".next",
+      ".turbo",
+      "coverage",
+    ]);
     const lines: string[] = [];
 
     const walk = async (dir: string): Promise<void> => {
@@ -971,7 +1041,10 @@ ${auditorResult.capability_summary}`;
         } else if (EXT.some((e) => entry.name.endsWith(e))) {
           try {
             const content = await fs.readFile(full, "utf-8");
-            const truncated = content.length > MAX_FILE ? content.slice(0, MAX_FILE) + "\n... (truncated)" : content;
+            const truncated =
+              content.length > MAX_FILE
+                ? content.slice(0, MAX_FILE) + "\n... (truncated)"
+                : content;
             parts.push(`### ${rel}\n\n\`\`\`\n${truncated}\n\`\`\`\n`);
             total += truncated.length;
             if (total >= MAX_TOTAL) return;
@@ -989,7 +1062,7 @@ ${auditorResult.capability_summary}`;
   private async getCompletedTasksForEpic(
     repoPath: string,
     epicId: string,
-    gateTaskId: string,
+    gateTaskId: string
   ): Promise<Array<{ id: string; title: string; description?: string; close_reason?: string }>> {
     const all = await this.beads.listAll(repoPath);
     const closed = all.filter(
@@ -997,7 +1070,7 @@ ${auditorResult.capability_summary}`;
         i.id.startsWith(epicId + ".") &&
         i.id !== gateTaskId &&
         (i.issue_type ?? i.type) !== "epic" &&
-        (i.status as string) === "closed",
+        (i.status as string) === "closed"
     );
     return closed.map((i: BeadsIssue) => ({
       id: i.id,
@@ -1026,7 +1099,10 @@ ${auditorResult.capability_summary}`;
    * Get cross-epic dependencies: plans that must be executed first (still in Planning state).
    * Returns prerequisite plan IDs in topological order for execution.
    */
-  async getCrossEpicDependencies(projectId: string, planId: string): Promise<CrossEpicDependenciesResponse> {
+  async getCrossEpicDependencies(
+    projectId: string,
+    planId: string
+  ): Promise<CrossEpicDependenciesResponse> {
     const { plans, edges } = await this.listPlansWithDependencyGraph(projectId);
     const planById = new Map(plans.map((p) => [p.metadata.planId, p]));
     const targetPlan = planById.get(planId);
@@ -1036,7 +1112,9 @@ ${auditorResult.capability_summary}`;
 
     // Edges: (from, to) means "from blocks to" — so "to" depends on "from"
     // Collect all prerequisites (plans that block us) that are still in planning
-    const inPlanning = new Set(plans.filter((p) => p.status === "planning").map((p) => p.metadata.planId));
+    const inPlanning = new Set(
+      plans.filter((p) => p.status === "planning").map((p) => p.metadata.planId)
+    );
     const directPrereqs = new Set<string>();
     for (const edge of edges) {
       if (edge.to === planId && inPlanning.has(edge.from)) {
@@ -1078,7 +1156,7 @@ ${auditorResult.capability_summary}`;
   async shipPlanWithPrerequisites(
     projectId: string,
     planId: string,
-    prerequisitePlanIds: string[],
+    prerequisitePlanIds: string[]
   ): Promise<Plan> {
     for (const prereqId of prerequisitePlanIds) {
       await this.shipPlan(projectId, prereqId);
@@ -1102,17 +1180,32 @@ ${auditorResult.capability_summary}`;
 
   /** Get the latest planning run (most recent by created_at) */
   private async getLatestPlanningRun(
-    projectId: string,
-  ): Promise<{ id: string; created_at: string; prd_snapshot: Prd; plans_created: string[] } | null> {
+    projectId: string
+  ): Promise<{
+    id: string;
+    created_at: string;
+    prd_snapshot: Prd;
+    plans_created: string[];
+  } | null> {
     const runsDir = await this.getPlanningRunsDir(projectId);
     try {
       const files = await fs.readdir(runsDir);
       const jsonFiles = files.filter((f) => f.endsWith(".json"));
       if (jsonFiles.length === 0) return null;
-      let latest: { id: string; created_at: string; prd_snapshot: Prd; plans_created: string[] } | null = null;
+      let latest: {
+        id: string;
+        created_at: string;
+        prd_snapshot: Prd;
+        plans_created: string[];
+      } | null = null;
       for (const file of jsonFiles) {
         const data = await fs.readFile(path.join(runsDir, file), "utf-8");
-        const run = JSON.parse(data) as { id: string; created_at: string; prd_snapshot: Prd; plans_created: string[] };
+        const run = JSON.parse(data) as {
+          id: string;
+          created_at: string;
+          prd_snapshot: Prd;
+          plans_created: string[];
+        };
         if (!latest || run.created_at > latest.created_at) latest = run;
       }
       return latest;
@@ -1135,7 +1228,7 @@ ${auditorResult.capability_summary}`;
   /** Create a planning run with PRD snapshot. Called after decompose or replan. */
   async createPlanningRun(
     projectId: string,
-    plansCreated: Plan[],
+    plansCreated: Plan[]
   ): Promise<{ id: string; created_at: string }> {
     const prd = await this.prdService.getPrd(projectId);
     const runId = crypto.randomUUID();
@@ -1168,7 +1261,7 @@ ${auditorResult.capability_summary}`;
       (issue: BeadsIssue) =>
         issue.id.startsWith(plan.metadata.beadEpicId + ".") &&
         issue.id !== plan.metadata.gateTaskId &&
-        (issue.issue_type ?? issue.type) !== "epic",
+        (issue.issue_type ?? issue.type) !== "epic"
     );
 
     for (const task of planTasks) {
@@ -1191,7 +1284,15 @@ ${auditorResult.capability_summary}`;
 
   /** Build a summary of the codebase structure for the auto-review agent (file tree, key files). */
   private async buildCodebaseContext(repoPath: string): Promise<string> {
-    const SKIP_DIRS = new Set([".git", "node_modules", ".next", "dist", "build", "__pycache__", ".venv"]);
+    const SKIP_DIRS = new Set([
+      ".git",
+      "node_modules",
+      ".next",
+      "dist",
+      "build",
+      "__pycache__",
+      ".venv",
+    ]);
     const MAX_FILES = 150;
     const MAX_FILE_SIZE = 2000;
 
@@ -1217,14 +1318,18 @@ ${auditorResult.capability_summary}`;
 
     const files: string[] = [];
     await walk(repoPath, "", files);
-    let context = "## Repository file structure\n\n```\n" + files.slice(0, MAX_FILES).join("\n") + "\n```\n\n";
+    let context =
+      "## Repository file structure\n\n```\n" + files.slice(0, MAX_FILES).join("\n") + "\n```\n\n";
 
     // Include key config/source files for context (truncated, max 8 files)
     const keyPatterns = ["package.json", "tsconfig.json", "src/", "app/", "lib/"];
     let keyFileCount = 0;
     for (const f of files) {
       if (context.length > 12000 || keyFileCount >= 8) break;
-      if (keyPatterns.some((p) => f.includes(p)) && (f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".json"))) {
+      if (
+        keyPatterns.some((p) => f.includes(p)) &&
+        (f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".json"))
+      ) {
         try {
           const fullPath = path.join(repoPath, f);
           const stat = await fs.stat(fullPath);
@@ -1253,7 +1358,7 @@ ${auditorResult.capability_summary}`;
         (i: BeadsIssue) =>
           i.id.startsWith(epicId + ".") &&
           i.id !== plan.metadata.gateTaskId &&
-          (i.issue_type ?? i.type) !== "epic",
+          (i.issue_type ?? i.type) !== "epic"
       );
       lines.push(`## Plan: ${plan.metadata.planId} (epic: ${epicId})`);
       for (const t of tasks) {
@@ -1283,7 +1388,7 @@ ${auditorResult.capability_summary}`;
         (i: BeadsIssue) =>
           i.id.startsWith(plan.metadata.beadEpicId + ".") &&
           i.id !== plan.metadata.gateTaskId &&
-          (i.issue_type ?? i.type) !== "epic",
+          (i.issue_type ?? i.type) !== "epic"
       );
       for (const t of tasks) {
         validTaskIds.add(t.id);
@@ -1299,19 +1404,20 @@ ${auditorResult.capability_summary}`;
       const prompt = `Review the following plans and tasks against the codebase. Identify which tasks are already implemented.\n\n## Created plans and tasks\n\n${planSummary}\n\n${codebaseContext}`;
 
       const agentId = `plan-auto-review-${projectId}-${Date.now()}`;
-      activeAgentsService.register(agentId, projectId, "plan", "planner", "Plan auto-review", new Date().toISOString());
 
-      let response;
-      try {
-        response = await this.agentClient.invoke({
-          config: settings.planningAgent,
-          prompt,
-          systemPrompt: AUTO_REVIEW_SYSTEM_PROMPT,
-          cwd: repoPath,
-        });
-      } finally {
-        activeAgentsService.unregister(agentId);
-      }
+      const response = await agentService.invokePlanningAgent({
+        config: settings.planningAgent,
+        messages: [{ role: "user", content: prompt }],
+        systemPrompt: AUTO_REVIEW_SYSTEM_PROMPT,
+        cwd: repoPath,
+        tracking: {
+          id: agentId,
+          projectId,
+          phase: "plan",
+          role: "planner",
+          label: "Plan auto-review",
+        },
+      });
 
       const jsonMatch = response.content.match(/\{[\s\S]*"taskIdsToClose"[\s\S]*\}/);
       if (!jsonMatch) {
@@ -1346,7 +1452,9 @@ ${auditorResult.capability_summary}`;
       }
 
       if (toClose.length > 0) {
-        console.log(`[plan] Auto-review marked ${toClose.length} task(s) as done: ${toClose.join(", ")}`);
+        console.log(
+          `[plan] Auto-review marked ${toClose.length} task(s) as done: ${toClose.join(", ")}`
+        );
       }
     } catch (err) {
       console.error("[plan] Auto-review against repo failed:", err);
@@ -1367,7 +1475,10 @@ ${auditorResult.capability_summary}`;
       }
       return context || "The PRD is currently empty.";
     } catch (err) {
-      console.warn("[plan] buildPrdContext: PRD unavailable:", err instanceof Error ? err.message : err);
+      console.warn(
+        "[plan] buildPrdContext: PRD unavailable:",
+        err instanceof Error ? err.message : err
+      );
       return "No PRD exists yet.";
     }
   }
@@ -1384,19 +1495,20 @@ ${auditorResult.capability_summary}`;
     const prompt = `Analyze the PRD below and produce a feature decomposition. Output valid JSON with a "plans" array. Each plan has: title, content (full markdown), complexity (low|medium|high|very_high), and tasks array. Each task has: title, description, priority (0-4), dependsOn (array of task titles it depends on).`;
 
     const agentId = `plan-suggest-${projectId}-${Date.now()}`;
-    activeAgentsService.register(agentId, projectId, "plan", "planner", "Feature decomposition (suggest)", new Date().toISOString());
 
-    let response;
-    try {
-      response = await this.agentClient.invoke({
-        config: settings.planningAgent,
-        prompt,
-        systemPrompt: DECOMPOSE_SYSTEM_PROMPT + "\n\n## Current PRD\n\n" + prdContext,
-        cwd: repoPath,
-      });
-    } finally {
-      activeAgentsService.unregister(agentId);
-    }
+    const response = await agentService.invokePlanningAgent({
+      config: settings.planningAgent,
+      messages: [{ role: "user", content: prompt }],
+      systemPrompt: DECOMPOSE_SYSTEM_PROMPT + "\n\n## Current PRD\n\n" + prdContext,
+      cwd: repoPath,
+      tracking: {
+        id: agentId,
+        projectId,
+        phase: "plan",
+        role: "planner",
+        label: "Feature decomposition (suggest)",
+      },
+    });
 
     const planSpecs = this.parseDecomposeResponse(response.content);
     return { plans: planSpecs };
@@ -1412,8 +1524,9 @@ ${auditorResult.capability_summary}`;
       throw new AppError(
         400,
         ErrorCodes.DECOMPOSE_PARSE_FAILED,
-        "Planning agent did not return valid decomposition JSON. Response: " + content.slice(0, 500),
-        { responsePreview: content.slice(0, 500) },
+        "Planning agent did not return valid decomposition JSON. Response: " +
+          content.slice(0, 500),
+        { responsePreview: content.slice(0, 500) }
       );
     }
 
@@ -1421,7 +1534,11 @@ ${auditorResult.capability_summary}`;
     try {
       parsed = JSON.parse(jsonMatch[0]);
     } catch {
-      throw new AppError(400, ErrorCodes.DECOMPOSE_JSON_INVALID, "Could not parse decomposition JSON from agent response");
+      throw new AppError(
+        400,
+        ErrorCodes.DECOMPOSE_JSON_INVALID,
+        "Could not parse decomposition JSON from agent response"
+      );
     }
 
     const planSpecs = parsed.plans ?? [];
@@ -1429,7 +1546,7 @@ ${auditorResult.capability_summary}`;
       throw new AppError(
         400,
         ErrorCodes.DECOMPOSE_EMPTY,
-        "Planning agent returned no plans. Ensure the PRD has sufficient content.",
+        "Planning agent returned no plans. Ensure the PRD has sufficient content."
       );
     }
     return planSpecs;
@@ -1448,19 +1565,20 @@ ${auditorResult.capability_summary}`;
     const prompt = `Analyze the PRD below and produce a feature decomposition. Output valid JSON with a "plans" array. Each plan has: title, content (full markdown), complexity (low|medium|high|very_high), and tasks array. Each task has: title, description, priority (0-4), dependsOn (array of task titles it depends on).`;
 
     const agentId = `plan-decompose-${projectId}-${Date.now()}`;
-    activeAgentsService.register(agentId, projectId, "plan", "planner", "Feature decomposition", new Date().toISOString());
 
-    let response;
-    try {
-      response = await this.agentClient.invoke({
-        config: settings.planningAgent,
-        prompt,
-        systemPrompt: DECOMPOSE_SYSTEM_PROMPT + "\n\n## Current PRD\n\n" + prdContext,
-        cwd: repoPath,
-      });
-    } finally {
-      activeAgentsService.unregister(agentId);
-    }
+    const response = await agentService.invokePlanningAgent({
+      config: settings.planningAgent,
+      messages: [{ role: "user", content: prompt }],
+      systemPrompt: DECOMPOSE_SYSTEM_PROMPT + "\n\n## Current PRD\n\n" + prdContext,
+      cwd: repoPath,
+      tracking: {
+        id: agentId,
+        projectId,
+        phase: "plan",
+        role: "planner",
+        label: "Feature decomposition",
+      },
+    });
 
     const planSpecs = this.parseDecomposeResponse(response.content);
 

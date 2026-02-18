@@ -1,31 +1,32 @@
-import fs from 'fs/promises';
-import path from 'path';
-import type { FeedbackItem, FeedbackSubmitRequest, FeedbackCategory, ProposedTask } from '@opensprint/shared';
-import { OPENSPRINT_PATHS } from '@opensprint/shared';
-import { AppError } from '../middleware/error-handler.js';
-import { ErrorCodes } from '../middleware/error-codes.js';
-import { ProjectService } from './project.service.js';
-import { AgentClient } from './agent-client.js';
-import { hilService } from './hil-service.js';
-import { ChatService } from './chat.service.js';
-import { PlanService } from './plan.service.js';
-import { PrdService } from './prd.service.js';
-import { BeadsService, type BeadsIssue } from './beads.service.js';
-import { activeAgentsService } from './active-agents.service.js';
-import { broadcastToProject } from '../websocket/index.js';
-import { writeJsonAtomic } from '../utils/file-utils.js';
-import { generateShortFeedbackId } from '../utils/feedback-id.js';
-import { triggerDeploy } from './deploy-trigger.service.js';
+import fs from "fs/promises";
+import path from "path";
+import type {
+  FeedbackItem,
+  FeedbackSubmitRequest,
+  FeedbackCategory,
+  ProposedTask,
+} from "@opensprint/shared";
+import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
+import { ProjectService } from "./project.service.js";
+import { agentService } from "./agent.service.js";
+import { hilService } from "./hil-service.js";
+import { ChatService } from "./chat.service.js";
+import { PlanService } from "./plan.service.js";
+import { PrdService } from "./prd.service.js";
+import { BeadsService, type BeadsIssue } from "./beads.service.js";
+import { broadcastToProject } from "../websocket/index.js";
+import { writeJsonAtomic } from "../utils/file-utils.js";
+import { generateShortFeedbackId } from "../utils/feedback-id.js";
+import { triggerDeploy } from "./deploy-trigger.service.js";
 
 /**
  * Build a user-friendly description for scope change HIL approval (PRD §6.5.1).
  * Prompts the user clearly about what they are being asked to approve.
  */
 function buildScopeChangeHilDescription(feedbackText: string): string {
-  const truncated =
-    feedbackText.length > 200
-      ? `${feedbackText.slice(0, 200)}…`
-      : feedbackText;
+  const truncated = feedbackText.length > 200 ? `${feedbackText.slice(0, 200)}…` : feedbackText;
   return `A user submitted feedback that was categorized as a scope change. Please review the proposed PRD updates below and approve or reject.
 
 User feedback: "${truncated}"`;
@@ -56,7 +57,6 @@ priority: 0 (highest) to 4 (lowest). depends_on: array of task indices (0-based)
 
 export class FeedbackService {
   private projectService = new ProjectService();
-  private agentClient = new AgentClient();
   private hilService = hilService;
   private chatService = new ChatService();
   private planService = new PlanService();
@@ -75,7 +75,7 @@ export class FeedbackService {
         return id;
       }
     }
-    throw new Error('Failed to generate unique feedback ID after retries');
+    throw new Error("Failed to generate unique feedback ID after retries");
   }
 
   /** Get feedback directory for a project */
@@ -92,8 +92,8 @@ export class FeedbackService {
     try {
       const files = await fs.readdir(feedbackDir);
       for (const file of files) {
-        if (file.endsWith('.json')) {
-          const data = await fs.readFile(path.join(feedbackDir, file), 'utf-8');
+        if (file.endsWith(".json")) {
+          const data = await fs.readFile(path.join(feedbackDir, file), "utf-8");
           const item = JSON.parse(data) as FeedbackItem;
           // Ensure parent_id and depth for client tree building (legacy items may lack these)
           if (item.parent_id === undefined) item.parent_id = null;
@@ -109,20 +109,18 @@ export class FeedbackService {
   }
 
   /** Submit new feedback with AI categorization and mapping */
-  async submitFeedback(
-    projectId: string,
-    body: FeedbackSubmitRequest,
-  ): Promise<FeedbackItem> {
-    const text = typeof body?.text === 'string' ? body.text.trim() : '';
+  async submitFeedback(projectId: string, body: FeedbackSubmitRequest): Promise<FeedbackItem> {
+    const text = typeof body?.text === "string" ? body.text.trim() : "";
     if (!text) {
-      throw new AppError(400, ErrorCodes.INVALID_INPUT, 'Feedback text is required');
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Feedback text is required");
     }
     const feedbackDir = await this.getFeedbackDir(projectId);
     await fs.mkdir(feedbackDir, { recursive: true });
     const id = await this.generateUniqueFeedbackId(feedbackDir);
 
     // Validate parent_id when creating a reply (PRD §7.4.1)
-    const parentId = typeof body?.parent_id === 'string' && body.parent_id.trim() ? body.parent_id.trim() : null;
+    const parentId =
+      typeof body?.parent_id === "string" && body.parent_id.trim() ? body.parent_id.trim() : null;
     let parent: FeedbackItem | null = null;
     let depth = 0;
     if (parentId) {
@@ -130,9 +128,14 @@ export class FeedbackService {
         parent = await this.getFeedback(projectId, parentId);
         depth = (parent.depth ?? 0) + 1;
       } catch {
-        throw new AppError(404, ErrorCodes.FEEDBACK_NOT_FOUND, `Parent feedback '${parentId}' not found`, {
-          feedbackId: parentId,
-        });
+        throw new AppError(
+          404,
+          ErrorCodes.FEEDBACK_NOT_FOUND,
+          `Parent feedback '${parentId}' not found`,
+          {
+            feedbackId: parentId,
+          }
+        );
       }
     }
 
@@ -140,9 +143,9 @@ export class FeedbackService {
     const images: string[] = [];
     if (Array.isArray(body?.images)) {
       for (const img of body.images) {
-        if (typeof img === 'string' && img.length > 0) {
+        if (typeof img === "string" && img.length > 0) {
           // Accept data URLs (data:image/...;base64,...) or raw base64
-          const base64 = img.startsWith('data:') ? img : `data:image/png;base64,${img}`;
+          const base64 = img.startsWith("data:") ? img : `data:image/png;base64,${img}`;
           images.push(base64);
         }
       }
@@ -152,10 +155,10 @@ export class FeedbackService {
     const item: FeedbackItem = {
       id,
       text,
-      category: 'bug', // Default, will be updated by AI
+      category: "bug", // Default, will be updated by AI
       mappedPlanId: null,
       createdTaskIds: [],
-      status: 'pending',
+      status: "pending",
       createdAt: new Date().toISOString(),
       ...(images.length > 0 && { images }),
       parent_id: parentId ?? null,
@@ -180,10 +183,10 @@ export class FeedbackService {
       const sections = prd.sections;
       const parts: string[] = [];
       const keys = [
-        'executive_summary',
-        'feature_list',
-        'technical_architecture',
-        'data_model',
+        "executive_summary",
+        "feature_list",
+        "technical_architecture",
+        "data_model",
       ] as const;
       for (const key of keys) {
         const section = sections[key];
@@ -191,10 +194,10 @@ export class FeedbackService {
           parts.push(`## ${key}\n${section.content.trim()}`);
         }
       }
-      if (parts.length === 0) return 'No PRD content available.';
-      return `# PRD (Product Requirements Document)\n\n${parts.join('\n\n')}`;
+      if (parts.length === 0) return "No PRD content available.";
+      return `# PRD (Product Requirements Document)\n\n${parts.join("\n\n")}`;
     } catch {
-      return 'No PRD available.';
+      return "No PRD available.";
     }
   }
 
@@ -202,28 +205,26 @@ export class FeedbackService {
   private async getPlanContextForCategorization(projectId: string): Promise<string> {
     try {
       const plans = await this.planService.listPlans(projectId);
-      if (plans.length === 0) return 'No plans exist yet. Use mapped_plan_id: null, mapped_epic_id: null.';
+      if (plans.length === 0)
+        return "No plans exist yet. Use mapped_plan_id: null, mapped_epic_id: null.";
       const lines = plans.map((p) => {
-        const title = p.content.split('\n')[0]?.replace(/^#+\s*/, '').trim() || p.metadata.planId;
-        const epicId = p.metadata.beadEpicId ?? '';
-        return `- ${p.metadata.planId} (beadEpicId: ${epicId || 'none'}): ${title}`;
+        const title =
+          p.content
+            .split("\n")[0]
+            ?.replace(/^#+\s*/, "")
+            .trim() || p.metadata.planId;
+        const epicId = p.metadata.beadEpicId ?? "";
+        return `- ${p.metadata.planId} (beadEpicId: ${epicId || "none"}): ${title}`;
       });
-      return `Available plans (use planId for mapped_plan_id, beadEpicId for mapped_epic_id):\n${lines.join('\n')}`;
+      return `Available plans (use planId for mapped_plan_id, beadEpicId for mapped_epic_id):\n${lines.join("\n")}`;
     } catch {
-      return 'No plans available. Use mapped_plan_id: null, mapped_epic_id: null.';
+      return "No plans available. Use mapped_plan_id: null, mapped_epic_id: null.";
     }
   }
 
   /** AI categorization, mapping, and bead task creation */
   private async categorizeFeedback(projectId: string, item: FeedbackItem): Promise<void> {
-    const agentId = `feedback-categorize-${projectId}-${item.id}-${Date.now()}`;
-    activeAgentsService.register(agentId, projectId, 'eval', 'analyst', 'Feedback categorization', new Date().toISOString());
-
-    try {
-      await this.categorizeFeedbackImpl(projectId, item);
-    } finally {
-      activeAgentsService.unregister(agentId);
-    }
+    await this.categorizeFeedbackImpl(projectId, item);
   }
 
   private async categorizeFeedbackImpl(projectId: string, item: FeedbackItem): Promise<void> {
@@ -243,37 +244,50 @@ export class FeedbackService {
     const firstPlanId = plans.length > 0 ? plans[0].metadata.planId : null;
 
     // Build parent context for replies (PRD §7.4.1: agent receives parent content, category, metadata)
-    let parentContext = '';
+    let parentContext = "";
     if (item.parent_id) {
       try {
         const parentItem = await this.getFeedback(projectId, item.parent_id);
-        parentContext = `\n\n# Parent feedback (this is a reply)\n\nParent content: "${parentItem.text}"\nParent category: ${parentItem.category}\nParent mappedPlanId: ${parentItem.mappedPlanId ?? 'null'}\n`;
+        parentContext = `\n\n# Parent feedback (this is a reply)\n\nParent content: "${parentItem.text}"\nParent category: ${parentItem.category}\nParent mappedPlanId: ${parentItem.mappedPlanId ?? "null"}\n`;
       } catch {
         // Parent not found — proceed without parent context
       }
     }
 
+    const agentId = `feedback-categorize-${projectId}-${item.id}-${Date.now()}`;
     try {
-      const response = await this.agentClient.invoke({
+      const response = await agentService.invokePlanningAgent({
         config: settings.planningAgent,
-        prompt: `# PRD\n\n${prdContext}\n\n# Plans\n\n${planContext}${parentContext}\n\n# Feedback to categorize\n\n"${item.text}"`,
+        messages: [
+          {
+            role: "user",
+            content: `# PRD\n\n${prdContext}\n\n# Plans\n\n${planContext}${parentContext}\n\n# Feedback to categorize\n\n"${item.text}"`,
+          },
+        ],
         systemPrompt: FEEDBACK_CATEGORIZATION_PROMPT,
         cwd: project.repoPath,
+        tracking: {
+          id: agentId,
+          projectId,
+          phase: "eval",
+          role: "analyst",
+          label: "Feedback categorization",
+        },
       });
 
       // Parse AI response; fallback: default to bug, map to first plan (PRD §7.4.2 edge case)
       const jsonMatch = response.content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        const validCategories: FeedbackCategory[] = ['bug', 'feature', 'ux', 'scope'];
+        const validCategories: FeedbackCategory[] = ["bug", "feature", "ux", "scope"];
         item.category = validCategories.includes(parsed.category)
           ? (parsed.category as FeedbackCategory)
-          : 'bug';
+          : "bug";
         item.mappedPlanId = parsed.mapped_plan_id ?? parsed.mappedPlanId ?? firstPlanId;
 
         // mapped_epic_id: resolve from Plan beadEpicId if not provided (PRD §12.3.4)
         const rawMappedEpicId = parsed.mapped_epic_id ?? parsed.mappedEpicId;
-        if (typeof rawMappedEpicId === 'string' && rawMappedEpicId.trim()) {
+        if (typeof rawMappedEpicId === "string" && rawMappedEpicId.trim()) {
           item.mappedEpicId = rawMappedEpicId.trim();
         } else if (item.mappedPlanId) {
           try {
@@ -287,20 +301,36 @@ export class FeedbackService {
         }
 
         // is_scope_change: explicit flag (PRD §12.3.4)
-        item.isScopeChange = typeof parsed.is_scope_change === 'boolean' ? parsed.is_scope_change : item.category === 'scope';
+        item.isScopeChange =
+          typeof parsed.is_scope_change === "boolean"
+            ? parsed.is_scope_change
+            : item.category === "scope";
 
         // proposed_tasks: full Planner format; fallback to task_titles / suggestedTitle (legacy)
         const rawProposed = parsed.proposed_tasks ?? parsed.proposedTasks;
         if (Array.isArray(rawProposed) && rawProposed.length > 0) {
           const tasks: ProposedTask[] = rawProposed
-            .filter((t: unknown) => t && typeof t === 'object' && typeof (t as { title?: unknown }).title === 'string')
-            .map((t: { index?: number; title: string; description?: string; priority?: number; depends_on?: number[] }) => ({
-              index: typeof t.index === 'number' ? t.index : 0,
-              title: String(t.title),
-              description: typeof t.description === 'string' ? t.description : '',
-              priority: typeof t.priority === 'number' ? t.priority : 2,
-              depends_on: Array.isArray(t.depends_on) ? t.depends_on.filter((d): d is number => typeof d === 'number') : [],
-            }));
+            .filter(
+              (t: unknown) =>
+                t && typeof t === "object" && typeof (t as { title?: unknown }).title === "string"
+            )
+            .map(
+              (t: {
+                index?: number;
+                title: string;
+                description?: string;
+                priority?: number;
+                depends_on?: number[];
+              }) => ({
+                index: typeof t.index === "number" ? t.index : 0,
+                title: String(t.title),
+                description: typeof t.description === "string" ? t.description : "",
+                priority: typeof t.priority === "number" ? t.priority : 2,
+                depends_on: Array.isArray(t.depends_on)
+                  ? t.depends_on.filter((d): d is number => typeof d === "number")
+                  : [],
+              })
+            );
           if (tasks.length > 0) {
             item.proposedTasks = tasks;
             item.taskTitles = tasks.map((t) => t.title);
@@ -308,20 +338,23 @@ export class FeedbackService {
         }
         if (!item.proposedTasks?.length) {
           item.taskTitles = Array.isArray(parsed.task_titles)
-            ? parsed.task_titles.filter((t: unknown) => typeof t === 'string')
+            ? parsed.task_titles.filter((t: unknown) => typeof t === "string")
             : parsed.suggestedTitle
               ? [String(parsed.suggestedTitle)]
               : [item.text.slice(0, 80)];
         }
 
         // Handle scope changes with HIL (PRD §7.4.2, §15.1) — category=scope OR is_scope_change=true
-        if (item.category === 'scope' || item.isScopeChange) {
+        if (item.category === "scope" || item.isScopeChange) {
           // Get AI-generated proposal for modal summary (before HIL)
-          let proposal: { summary: string; prdUpdates: Array<{ section: string; content: string; changeLogEntry?: string }> } | null = null;
+          let proposal: {
+            summary: string;
+            prdUpdates: Array<{ section: string; content: string; changeLogEntry?: string }>;
+          } | null = null;
           try {
             proposal = await this.chatService.getScopeChangeProposal(projectId, item.text);
           } catch (err) {
-            console.warn('[feedback] Could not get scope-change proposal for modal:', err);
+            console.warn("[feedback] Could not get scope-change proposal for modal:", err);
           }
 
           const scopeChangeMetadata = proposal
@@ -336,25 +369,29 @@ export class FeedbackService {
 
           const scopeChangeDescription = buildScopeChangeHilDescription(item.text);
           const scopeChangeOptions = [
-            { id: 'approve', label: 'Approve', description: 'Apply the proposed PRD updates' },
-            { id: 'reject', label: 'Reject', description: 'Skip updates and do not modify the PRD' },
+            { id: "approve", label: "Approve", description: "Apply the proposed PRD updates" },
+            {
+              id: "reject",
+              label: "Reject",
+              description: "Skip updates and do not modify the PRD",
+            },
           ];
           const { approved } = await this.hilService.evaluateDecision(
             projectId,
-            'scopeChanges',
+            "scopeChanges",
             scopeChangeDescription,
             scopeChangeOptions,
             true,
-            scopeChangeMetadata,
+            scopeChangeMetadata
           );
 
           if (!approved) {
-            item.status = 'mapped';
+            item.status = "mapped";
             await this.saveFeedback(projectId, item);
             broadcastToProject(projectId, {
-              type: 'feedback.mapped',
+              type: "feedback.mapped",
               feedbackId: item.id,
-              planId: item.mappedPlanId || '',
+              planId: item.mappedPlanId || "",
               taskIds: item.createdTaskIds,
             });
             return;
@@ -366,24 +403,24 @@ export class FeedbackService {
               await this.chatService.applyScopeChangeUpdates(
                 projectId,
                 proposal.prdUpdates,
-                `Scope change feedback: "${item.text.slice(0, 80)}${item.text.length > 80 ? '…' : ''}"`,
+                `Scope change feedback: "${item.text.slice(0, 80)}${item.text.length > 80 ? "…" : ""}"`
               );
             } else {
               await this.chatService.syncPrdFromScopeChangeFeedback(projectId, item.text);
             }
           } catch (err) {
-            console.error('[feedback] PRD sync on scope-change approval failed:', err);
+            console.error("[feedback] PRD sync on scope-change approval failed:", err);
           }
         }
       } else {
         // Parse failed: default to bug, map to first plan
-        item.category = 'bug';
+        item.category = "bug";
         item.mappedPlanId = firstPlanId;
         item.taskTitles = [item.text.slice(0, 80)];
       }
     } catch (error) {
       console.error(`AI categorization failed for feedback ${item.id}:`, error);
-      item.category = 'bug';
+      item.category = "bug";
       item.mappedPlanId = firstPlanId;
       item.taskTitles = [item.text.slice(0, 80)];
     }
@@ -394,14 +431,14 @@ export class FeedbackService {
     } catch (err) {
       console.error(`[feedback] Failed to create beads tasks for ${item.id}:`, err);
     }
-    item.status = 'mapped';
+    item.status = "mapped";
 
     await this.saveFeedback(projectId, item);
 
     broadcastToProject(projectId, {
-      type: 'feedback.mapped',
+      type: "feedback.mapped",
       feedbackId: item.id,
-      planId: item.mappedPlanId || '',
+      planId: item.mappedPlanId || "",
       taskIds: item.createdTaskIds,
     });
   }
@@ -410,23 +447,23 @@ export class FeedbackService {
    * Map feedback category to beads issue type (PRD §14).
    * bug → bug, feature → feature, ux → task.
    */
-  private categoryToBeadType(category: FeedbackCategory): 'bug' | 'feature' | 'task' {
+  private categoryToBeadType(category: FeedbackCategory): "bug" | "feature" | "task" {
     switch (category) {
-      case 'bug':
-        return 'bug';
-      case 'feature':
-        return 'feature';
-      case 'ux':
-      case 'scope':
+      case "bug":
+        return "bug";
+      case "feature":
+        return "feature";
+      case "ux":
+      case "scope":
       default:
-        return 'task';
+        return "task";
     }
   }
 
   /** Create beads tasks from feedback — uses proposed_tasks (PRD §12.3.4) or task_titles (legacy) */
   private async createBeadTasksFromFeedback(
     projectId: string,
-    item: FeedbackItem,
+    item: FeedbackItem
   ): Promise<string[]> {
     const proposedTasks = item.proposedTasks ?? [];
     const taskTitles = item.taskTitles ?? [];
@@ -455,9 +492,9 @@ export class FeedbackService {
     // Create feedback source bead for discovered-from provenance (PRD §14, §15.3)
     let feedbackSourceBeadId: string | undefined;
     try {
-      const sourceTitle = `Feedback: ${item.text.slice(0, 60)}${item.text.length > 60 ? '…' : ''}`;
+      const sourceTitle = `Feedback: ${item.text.slice(0, 60)}${item.text.length > 60 ? "…" : ""}`;
       const sourceBead = await this.beadsService.create(repoPath, sourceTitle, {
-        type: 'chore',
+        type: "chore",
         priority: 4,
         description: `Feedback ID: ${item.id}`,
       });
@@ -476,7 +513,7 @@ export class FeedbackService {
       const sorted = [...proposedTasks].sort((a, b) => a.index - b.index);
       for (const task of sorted) {
         try {
-          const priority = task.priority ?? (item.category === 'bug' ? 0 : 2);
+          const priority = task.priority ?? (item.category === "bug" ? 0 : 2);
           const issue = await this.createBeadTaskWithRetry(repoPath, task.title, {
             type: beadType,
             priority,
@@ -493,7 +530,7 @@ export class FeedbackService {
                   repoPath,
                   issue.id,
                   feedbackSourceBeadId,
-                  'discovered-from',
+                  "discovered-from"
                 );
               } catch (depErr) {
                 console.error(`[feedback] Failed to add discovered-from for ${issue.id}:`, depErr);
@@ -516,7 +553,10 @@ export class FeedbackService {
               try {
                 await this.beadsService.addDependency(repoPath, childId, parentId);
               } catch (depErr) {
-                console.error(`[feedback] Failed to add blocks dep ${childId} -> ${parentId}:`, depErr);
+                console.error(
+                  `[feedback] Failed to add blocks dep ${childId} -> ${parentId}:`,
+                  depErr
+                );
               }
             }
           }
@@ -528,7 +568,7 @@ export class FeedbackService {
         try {
           const issue = await this.createBeadTaskWithRetry(repoPath, title, {
             type: beadType,
-            priority: item.category === 'bug' ? 0 : 2,
+            priority: item.category === "bug" ? 0 : 2,
             parentId: parentEpicId,
           });
           if (issue) {
@@ -539,7 +579,7 @@ export class FeedbackService {
                   repoPath,
                   issue.id,
                   feedbackSourceBeadId,
-                  'discovered-from',
+                  "discovered-from"
                 );
               } catch (depErr) {
                 console.error(`[feedback] Failed to add discovered-from for ${issue.id}:`, depErr);
@@ -565,7 +605,7 @@ export class FeedbackService {
   private async createBeadTaskWithRetry(
     repoPath: string,
     title: string,
-    options: { type: string; priority: number; parentId?: string },
+    options: { type: string; priority: number; parentId?: string }
   ): Promise<BeadsIssue | null> {
     const MAX_RETRIES = 3;
 
@@ -574,7 +614,7 @@ export class FeedbackService {
         return await this.beadsService.create(repoPath, title, options);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        const isUniqueConstraint = msg.includes('UNIQUE constraint failed');
+        const isUniqueConstraint = msg.includes("UNIQUE constraint failed");
 
         if (!isUniqueConstraint) {
           throw err;
@@ -583,7 +623,7 @@ export class FeedbackService {
         if (attempt < MAX_RETRIES) {
           console.warn(
             `[feedback] UNIQUE constraint on attempt ${attempt + 1}/${MAX_RETRIES + 1} ` +
-            `for "${title}", retrying after delay...`,
+              `for "${title}", retrying after delay...`
           );
           await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
           continue;
@@ -593,7 +633,7 @@ export class FeedbackService {
         if (options.parentId) {
           console.warn(
             `[feedback] UNIQUE constraint persists under parent ${options.parentId}, ` +
-            `creating standalone task: "${title}"`,
+              `creating standalone task: "${title}"`
           );
           try {
             return await this.beadsService.create(repoPath, title, {
@@ -603,7 +643,7 @@ export class FeedbackService {
           } catch (fallbackErr) {
             console.error(
               `[feedback] Standalone fallback also failed for "${title}":`,
-              fallbackErr,
+              fallbackErr
             );
             return null;
           }
@@ -629,10 +669,12 @@ export class FeedbackService {
    */
   async retryPendingCategorizations(projectId: string): Promise<number> {
     const items = await this.listFeedback(projectId);
-    const pending = items.filter((item) => item.status === 'pending');
+    const pending = items.filter((item) => item.status === "pending");
     if (pending.length === 0) return 0;
 
-    console.log(`[feedback] Retrying categorization for ${pending.length} pending feedback item(s)`);
+    console.log(
+      `[feedback] Retrying categorization for ${pending.length} pending feedback item(s)`
+    );
     for (const item of pending) {
       this.categorizeFeedback(projectId, item).catch((err) => {
         console.error(`[feedback] Retry failed for ${item.id}:`, err);
@@ -647,8 +689,8 @@ export class FeedbackService {
    */
   async recategorizeFeedback(projectId: string, feedbackId: string): Promise<FeedbackItem> {
     const item = await this.getFeedback(projectId, feedbackId);
-    item.status = 'pending';
-    item.category = 'bug';
+    item.status = "pending";
+    item.category = "bug";
     item.mappedPlanId = null;
     item.mappedEpicId = undefined;
     item.isScopeChange = undefined;
@@ -678,18 +720,18 @@ export class FeedbackService {
     const items = await this.listFeedback(projectId);
     const candidates = items.filter(
       (i) =>
-        i.status === 'mapped' &&
+        i.status === "mapped" &&
         i.createdTaskIds.length > 0 &&
-        i.createdTaskIds.includes(closedTaskId),
+        i.createdTaskIds.includes(closedTaskId)
     );
     if (candidates.length === 0) return;
 
     const project = await this.projectService.getProject(projectId);
     const allIssues = await this.beadsService.listAll(project.repoPath);
-    const idToStatus = new Map(allIssues.map((i) => [i.id, (i.status as string) ?? 'open']));
+    const idToStatus = new Map(allIssues.map((i) => [i.id, (i.status as string) ?? "open"]));
 
     for (const item of candidates) {
-      const allClosed = item.createdTaskIds.every((tid) => idToStatus.get(tid) === 'closed');
+      const allClosed = item.createdTaskIds.every((tid) => idToStatus.get(tid) === "closed");
       if (allClosed) {
         await this.resolveFeedback(projectId, item.id);
       }
@@ -703,22 +745,22 @@ export class FeedbackService {
    */
   async resolveFeedback(projectId: string, feedbackId: string): Promise<FeedbackItem> {
     const item = await this.getFeedback(projectId, feedbackId);
-    if (item.status === 'resolved') {
+    if (item.status === "resolved") {
       return item;
     }
-    item.status = 'resolved';
+    item.status = "resolved";
     await this.saveFeedback(projectId, item);
 
     broadcastToProject(projectId, {
-      type: 'feedback.resolved',
+      type: "feedback.resolved",
       feedbackId: item.id,
     });
 
     // PRD §7.5.3: Auto-deploy on eval resolution — when all critical (bug) feedback resolved
     const items = await this.listFeedback(projectId);
-    const criticalItems = items.filter((i) => i.category === 'bug');
+    const criticalItems = items.filter((i) => i.category === "bug");
     const allCriticalResolved =
-      criticalItems.length > 0 && criticalItems.every((i) => i.status === 'resolved');
+      criticalItems.length > 0 && criticalItems.every((i) => i.status === "resolved");
 
     if (allCriticalResolved) {
       const settings = await this.projectService.getSettings(projectId);
@@ -736,15 +778,20 @@ export class FeedbackService {
   async getFeedback(projectId: string, feedbackId: string): Promise<FeedbackItem> {
     const feedbackDir = await this.getFeedbackDir(projectId);
     try {
-      const data = await fs.readFile(path.join(feedbackDir, `${feedbackId}.json`), 'utf-8');
+      const data = await fs.readFile(path.join(feedbackDir, `${feedbackId}.json`), "utf-8");
       const item = JSON.parse(data) as FeedbackItem;
       if (item.parent_id === undefined) item.parent_id = null;
       if (item.depth === undefined) item.depth = 0;
       return item;
     } catch (err) {
       const nodeErr = err as NodeJS.ErrnoException;
-      if (nodeErr?.code === 'ENOENT') {
-        throw new AppError(404, ErrorCodes.FEEDBACK_NOT_FOUND, `Feedback '${feedbackId}' not found`, { feedbackId });
+      if (nodeErr?.code === "ENOENT") {
+        throw new AppError(
+          404,
+          ErrorCodes.FEEDBACK_NOT_FOUND,
+          `Feedback '${feedbackId}' not found`,
+          { feedbackId }
+        );
       }
       throw err;
     }

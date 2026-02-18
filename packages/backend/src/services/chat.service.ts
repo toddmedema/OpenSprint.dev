@@ -15,7 +15,6 @@ import { agentService } from "./agent.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { hilService } from "./hil-service.js";
-import { activeAgentsService } from "./active-agents.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import {
@@ -299,15 +298,6 @@ export class ChatService {
         : `design-chat-${projectId}-${conversation.id}-${Date.now()}`;
     const phase = isPlanContext ? "plan" : "sketch";
     const label = isPlanContext ? "Plan chat" : "Sketch chat";
-    activeAgentsService.register(
-      agentId,
-      projectId,
-      phase,
-      "dreamer",
-      label,
-      new Date().toISOString()
-    );
-
     try {
       console.log("[chat] Invoking planning agent", {
         type: agentConfig.type,
@@ -319,6 +309,7 @@ export class ChatService {
         config: agentConfig,
         messages,
         systemPrompt,
+        tracking: { id: agentId, projectId, phase, role: "dreamer", label },
       });
 
       console.log("[chat] Planning agent returned", { contentLen: response.content?.length ?? 0 });
@@ -330,8 +321,6 @@ export class ChatService {
         "I was unable to connect to the planning agent.\n\n" +
         `**Error:** ${msg}\n\n` +
         "**What to try:** Open Project Settings → Agent Config. Ensure your API key is set, the CLI is installed, and the model is valid.";
-    } finally {
-      activeAgentsService.unregister(agentId);
     }
 
     let displayContent: string;
@@ -424,25 +413,19 @@ export class ChatService {
     const systemPrompt = `You are the Harmonizer agent for OpenSprint (PRD §12.3.3). Review shipped Plans against the PRD and propose section updates.\n\n## Current PRD\n\n${prdContext}`;
 
     const agentId = `harmonizer-build-it-${projectId}-${planId}-${Date.now()}`;
-    activeAgentsService.register(
-      agentId,
-      projectId,
-      "plan",
-      "harmonizer",
-      "Execute! PRD sync",
-      new Date().toISOString()
-    );
 
-    let response;
-    try {
-      response = await agentService.invokePlanningAgent({
-        config: agentConfig,
-        messages: [{ role: "user", content: prompt }],
-        systemPrompt,
-      });
-    } finally {
-      activeAgentsService.unregister(agentId);
-    }
+    const response = await agentService.invokePlanningAgent({
+      config: agentConfig,
+      messages: [{ role: "user", content: prompt }],
+      systemPrompt,
+      tracking: {
+        id: agentId,
+        projectId,
+        phase: "plan",
+        role: "harmonizer",
+        label: "Execute! PRD sync",
+      },
+    });
 
     const legacyUpdates = this.parsePrdUpdates(response.content);
     const result = parseHarmonizerResult(response.content, legacyUpdates);
@@ -482,25 +465,19 @@ export class ChatService {
     const systemPrompt = `You are the Harmonizer agent for OpenSprint (PRD §12.3.3). Review scope-change feedback against the PRD and propose section updates.\n\n## Current PRD\n\n${prdContext}`;
 
     const agentId = `harmonizer-scope-preview-${projectId}-${Date.now()}`;
-    activeAgentsService.register(
-      agentId,
-      projectId,
-      "plan",
-      "harmonizer",
-      "Scope-change proposal",
-      new Date().toISOString()
-    );
 
-    let response;
-    try {
-      response = await agentService.invokePlanningAgent({
-        config: agentConfig,
-        messages: [{ role: "user", content: prompt }],
-        systemPrompt,
-      });
-    } finally {
-      activeAgentsService.unregister(agentId);
-    }
+    const response = await agentService.invokePlanningAgent({
+      config: agentConfig,
+      messages: [{ role: "user", content: prompt }],
+      systemPrompt,
+      tracking: {
+        id: agentId,
+        projectId,
+        phase: "plan",
+        role: "harmonizer",
+        label: "Scope-change proposal",
+      },
+    });
 
     const legacyUpdates = this.parsePrdUpdates(response.content);
     const result = parseHarmonizerResultFull(response.content, legacyUpdates);
@@ -560,25 +537,19 @@ export class ChatService {
     const systemPrompt = `You are the Harmonizer agent for OpenSprint (PRD §12.3.3). Review scope-change feedback against the PRD and propose section updates.\n\n## Current PRD\n\n${prdContext}`;
 
     const agentId = `harmonizer-scope-change-${projectId}-${Date.now()}`;
-    activeAgentsService.register(
-      agentId,
-      projectId,
-      "plan",
-      "harmonizer",
-      "Scope-change PRD sync",
-      new Date().toISOString()
-    );
 
-    let response;
-    try {
-      response = await agentService.invokePlanningAgent({
-        config: agentConfig,
-        messages: [{ role: "user", content: prompt }],
-        systemPrompt,
-      });
-    } finally {
-      activeAgentsService.unregister(agentId);
-    }
+    const response = await agentService.invokePlanningAgent({
+      config: agentConfig,
+      messages: [{ role: "user", content: prompt }],
+      systemPrompt,
+      tracking: {
+        id: agentId,
+        projectId,
+        phase: "plan",
+        role: "harmonizer",
+        label: "Scope-change PRD sync",
+      },
+    });
 
     const legacyUpdates = this.parsePrdUpdates(response.content);
     const result = parseHarmonizerResult(response.content, legacyUpdates);

@@ -296,7 +296,7 @@ html.sketch-phase-light {
   }
 
   .card {
-    @apply rounded-xl bg-theme-surface shadow-sm ring-1 ring-theme-border/10;
+    @apply rounded-xl bg-theme-surface shadow-sm ring-1 ring-theme-border;
   }
 
   .input {
