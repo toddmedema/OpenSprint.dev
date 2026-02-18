@@ -7,10 +7,11 @@
  */
 
 export function parsePlanContent(content: string): { title: string; body: string } {
-  if (!content?.trim()) {
+  const trimmed = content?.trim() ?? "";
+  if (!trimmed) {
     return { title: "", body: "" };
   }
-  const lines = content.split("\n");
+  const lines = trimmed.split("\n");
   const first = lines[0] ?? "";
   // Only match single # (level-1 heading) as plan title; ## Overview etc. are section headers
   const titleMatch = first.match(/^#\s+(.*)$/);

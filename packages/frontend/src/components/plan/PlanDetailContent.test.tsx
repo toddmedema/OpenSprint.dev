@@ -194,10 +194,10 @@ describe("PlanDetailContent", () => {
     expect(bodyMarkdown).toContain("## Overview");
   });
 
-  it("uses reduced top padding on markdown editor container (no spurious blank space)", () => {
+  it("uses no top padding on markdown editor container (no spurious blank space)", () => {
     render(<PlanDetailContent plan={mockPlan} onContentSave={onContentSave} />);
     const editorContainer = screen.getByTestId("plan-markdown-editor");
-    expect(editorContainer.className).toMatch(/pt-2/);
+    expect(editorContainer.className).toMatch(/pt-0/);
     expect(editorContainer.className).toContain("first-child");
   });
 

@@ -378,6 +378,19 @@ describe("PlanPhase inline editing", () => {
       { timeout: 2000 },
     );
   });
+
+  it("renders plan markdown in sidebar with no spurious blank space at top", () => {
+    const store = createStore();
+    const { container } = render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>,
+    );
+    const editorContainer = container.querySelector('[data-testid="plan-markdown-editor"]');
+    expect(editorContainer).toBeInTheDocument();
+    expect(editorContainer?.className).toMatch(/pt-0/);
+    expect(editorContainer?.className).toContain("first-child");
+  });
 });
 
 describe("PlanPhase Re-execute button", () => {

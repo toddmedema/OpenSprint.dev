@@ -44,6 +44,14 @@ describe("planContentUtils", () => {
       expect(body).toBe("## Overview\n\nBody content");
       expect(body.startsWith("\n")).toBe(false);
     });
+
+    it("trims leading newlines from source content (plan files with leading blank lines)", () => {
+      const content = "\n\n# My Plan\n\n## Overview\n\nBody";
+      const { title, body } = parsePlanContent(content);
+      expect(title).toBe("My Plan");
+      expect(body).toBe("## Overview\n\nBody");
+      expect(body.startsWith("\n")).toBe(false);
+    });
   });
 
   describe("serializePlanContent", () => {
