@@ -74,6 +74,15 @@ interface EvalPhaseProps {
   onNavigateToBuildTask?: (taskId: string) => void;
 }
 
+export type FeedbackStatusFilter = "all" | "pending" | "resolved";
+
+function matchesStatusFilter(item: FeedbackItem, filter: FeedbackStatusFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "pending") return item.status === "pending" || item.status === "mapped";
+  if (filter === "resolved") return item.status === "resolved";
+  return true;
+}
+
 const categoryColors: Record<string, string> = {
   bug: "bg-red-50 text-red-700",
   feature: "bg-purple-50 text-purple-700",
@@ -92,11 +101,14 @@ interface FeedbackTreeNode {
   children: FeedbackTreeNode[];
 }
 
-/** Build tree from flat feedback list. Top-level first, then children by createdAt desc. */
+/** Build tree from flat feedback list. Top-level first, then children by createdAt desc.
+ * Items whose parent is not in the list are shown at top level (e.g. when filtering). */
 function buildFeedbackTree(items: FeedbackItem[]): FeedbackTreeNode[] {
+  const idSet = new Set(items.map((i) => i.id));
   const byParent = new Map<string | null, FeedbackItem[]>();
   for (const item of items) {
-    const pid = item.parent_id ?? null;
+    let pid = item.parent_id ?? null;
+    if (pid !== null && !idSet.has(pid)) pid = null;
     if (!byParent.has(pid)) byParent.set(pid, []);
     byParent.get(pid)!.push(item);
   }
@@ -374,6 +386,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => loadFeedbackCollapsedIds(projectId));
+  const [statusFilter, setStatusFilter] = useState<FeedbackStatusFilter>("all");
 
   const addImagesFromFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files).filter(isImageFile);
@@ -476,7 +489,11 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
     [projectId],
   );
 
-  const feedbackTree = useMemo(() => buildFeedbackTree(feedback), [feedback]);
+  const filteredFeedback = useMemo(
+    () => feedback.filter((item) => matchesStatusFilter(item, statusFilter)),
+    [feedback, statusFilter],
+  );
+  const feedbackTree = useMemo(() => buildFeedbackTree(filteredFeedback), [filteredFeedback]);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -582,13 +599,38 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
         </div>
 
         {/* Feedback Feed */}
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Feedback History ({feedback.length})</h3>
+        <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            Feedback History ({filteredFeedback.length})
+          </h3>
+          {feedback.length > 0 && (
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as FeedbackStatusFilter)}
+              className="input text-sm py-1.5 px-2.5 w-auto min-w-[7rem] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 ring-gray-300 dark:ring-gray-600"
+              aria-label="Filter feedback by status"
+              data-testid="feedback-status-filter"
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          )}
+        </div>
 
         {loading ? (
-          <div className="text-center py-10 text-gray-400">Loading feedback...</div>
+          <div className="text-center py-10 text-gray-400 dark:text-gray-500">Loading feedback...</div>
         ) : feedback.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 text-sm">
+          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">
             No feedback submitted yet. Test your app and report findings above.
+          </div>
+        ) : filteredFeedback.length === 0 ? (
+          <div className="text-center py-10 text-gray-400 dark:text-gray-500 text-sm">
+            {statusFilter === "pending"
+              ? "No pending feedback yet."
+              : statusFilter === "resolved"
+                ? "No resolved feedback yet."
+                : "No feedback matches the current filter."}
           </div>
         ) : (
           <div className="space-y-3">

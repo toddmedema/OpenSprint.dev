@@ -1120,6 +1120,219 @@ describe("EvalPhase feedback input", () => {
     });
   });
 
+  describe("Feedback History status filter", () => {
+    const feedbackWithMixedStatus = [
+      {
+        id: "fb-pending",
+        text: "Pending feedback",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "fb-mapped",
+        text: "Mapped feedback",
+        category: "feature",
+        mappedPlanId: "plan-1",
+        createdTaskIds: [],
+        status: "mapped",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "fb-resolved",
+        text: "Resolved feedback",
+        category: "ux",
+        mappedPlanId: "plan-2",
+        createdTaskIds: [],
+        status: "resolved",
+        createdAt: new Date().toISOString(),
+      },
+    ];
+
+    function createStoreWithFeedback(feedback: typeof feedbackWithMixedStatus) {
+      return configureStore({
+        reducer: {
+          project: projectReducer,
+          eval: evalReducer,
+          execute: executeReducer,
+        },
+        preloadedState: {
+          project: {
+            data: {
+              id: "proj-1",
+              name: "Test Project",
+              description: "",
+              repoPath: "/tmp/test",
+              currentPhase: "eval",
+              createdAt: "",
+              updatedAt: "",
+            },
+            loading: false,
+            error: null,
+          },
+          eval: {
+            feedback,
+            loading: false,
+            submitting: false,
+            error: null,
+          },
+        },
+      });
+    }
+
+    it("renders status filter dropdown when feedback exists, right-aligned in header row", () => {
+      const store = createStoreWithFeedback(feedbackWithMixedStatus);
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>,
+      );
+
+      const filter = screen.getByTestId("feedback-status-filter");
+      expect(filter).toBeInTheDocument();
+      expect(filter).toHaveAttribute("aria-label", "Filter feedback by status");
+
+      const headerRow = filter.closest(".flex");
+      expect(headerRow).toHaveClass("justify-between");
+      expect(headerRow).toContainElement(screen.getByText(/Feedback History \(3\)/));
+    });
+
+    it("default selection is All, showing all feedback items", () => {
+      const store = createStoreWithFeedback(feedbackWithMixedStatus);
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>,
+      );
+
+      const filter = screen.getByTestId("feedback-status-filter");
+      expect(filter).toHaveValue("all");
+      expect(screen.getByText(/Feedback History \(3\)/)).toBeInTheDocument();
+      expect(screen.getByText("Pending feedback")).toBeInTheDocument();
+      expect(screen.getByText("Mapped feedback")).toBeInTheDocument();
+      expect(screen.getByText("Resolved feedback")).toBeInTheDocument();
+    });
+
+    it("selecting Pending hides resolved items, shows only pending and mapped", async () => {
+      const user = userEvent.setup();
+      const store = createStoreWithFeedback(feedbackWithMixedStatus);
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>,
+      );
+
+      const filter = screen.getByTestId("feedback-status-filter");
+      await user.selectOptions(filter, "pending");
+
+      expect(filter).toHaveValue("pending");
+      expect(screen.getByText(/Feedback History \(2\)/)).toBeInTheDocument();
+      expect(screen.getByText("Pending feedback")).toBeInTheDocument();
+      expect(screen.getByText("Mapped feedback")).toBeInTheDocument();
+      expect(screen.queryByText("Resolved feedback")).not.toBeInTheDocument();
+    });
+
+    it("selecting Resolved hides non-resolved items", async () => {
+      const user = userEvent.setup();
+      const store = createStoreWithFeedback(feedbackWithMixedStatus);
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>,
+      );
+
+      const filter = screen.getByTestId("feedback-status-filter");
+      await user.selectOptions(filter, "resolved");
+
+      expect(filter).toHaveValue("resolved");
+      expect(screen.getByText(/Feedback History \(1\)/)).toBeInTheDocument();
+      expect(screen.getByText("Resolved feedback")).toBeInTheDocument();
+      expect(screen.queryByText("Pending feedback")).not.toBeInTheDocument();
+      expect(screen.queryByText("Mapped feedback")).not.toBeInTheDocument();
+    });
+
+    it("shows empty-state message when filtered list is empty (Resolved filter, no resolved items)", async () => {
+      const user = userEvent.setup();
+      const store = createStoreWithFeedback([
+        feedbackWithMixedStatus[0],
+        feedbackWithMixedStatus[1],
+      ]);
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>,
+      );
+
+      const filter = screen.getByTestId("feedback-status-filter");
+      await user.selectOptions(filter, "resolved");
+
+      expect(screen.getByText(/Feedback History \(0\)/)).toBeInTheDocument();
+      expect(screen.getByText("No resolved feedback yet.")).toBeInTheDocument();
+    });
+
+    it("shows empty-state message when filtered list is empty (Pending filter, all resolved)", async () => {
+      const user = userEvent.setup();
+      const store = createStoreWithFeedback([feedbackWithMixedStatus[2]]);
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>,
+      );
+
+      const filter = screen.getByTestId("feedback-status-filter");
+      await user.selectOptions(filter, "pending");
+
+      expect(screen.getByText(/Feedback History \(0\)/)).toBeInTheDocument();
+      expect(screen.getByText("No pending feedback yet.")).toBeInTheDocument();
+    });
+
+    it("does not show filter dropdown when no feedback exists", () => {
+      const store = createStore();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>,
+      );
+
+      expect(screen.queryByTestId("feedback-status-filter")).not.toBeInTheDocument();
+    });
+
+    it("filter state persists when switching between options and back", async () => {
+      const user = userEvent.setup();
+      const store = createStoreWithFeedback(feedbackWithMixedStatus);
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>,
+      );
+
+      const filter = screen.getByTestId("feedback-status-filter");
+      await user.selectOptions(filter, "resolved");
+      expect(filter).toHaveValue("resolved");
+
+      await user.selectOptions(filter, "pending");
+      expect(filter).toHaveValue("pending");
+
+      await user.selectOptions(filter, "all");
+      expect(filter).toHaveValue("all");
+      expect(screen.getByText(/Feedback History \(3\)/)).toBeInTheDocument();
+    });
+
+    it("dropdown has dark mode classes for theme compatibility", () => {
+      const store = createStoreWithFeedback(feedbackWithMixedStatus);
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>,
+      );
+
+      const filter = screen.getByTestId("feedback-status-filter");
+      expect(filter).toHaveClass("dark:bg-gray-800", "dark:text-gray-100");
+    });
+  });
+
   it("displays images in feedback history when present", () => {
     const storeWithFeedback = configureStore({
       reducer: {
