@@ -1,0 +1,28 @@
+{
+  "id": "hhhtfc",
+  "text": "Bug: In spec / sketch view, clicking \"discuss\" doesn't seem to do anything if the side chat bar is closed. As such, if the user clicks discuss and the sidebar is closed, please automatically open the chat sidebar",
+  "category": "bug",
+  "mappedPlanId": "design-phase-chat-and-living-prd",
+  "createdTaskIds": [
+    "opensprint.dev-6bk.10"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-18T04:12:28.375Z",
+  "parent_id": null,
+  "depth": 0,
+  "mappedEpicId": "opensprint.dev-6bk",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Auto-open chat sidebar when 'Discuss' is clicked while sidebar is closed",
+      "description": "In the Spec (Sketch) phase split-pane view, clicking the 'Discuss' button on a PRD section should open the chat sidebar if it is currently closed, then focus the conversation on the selected section. Currently, clicking 'Discuss' with the sidebar closed has no visible effect.\n\nAcceptance criteria:\n- When the chat sidebar is closed and the user clicks 'Discuss' on any PRD section, the sidebar opens automatically.\n- After opening, the conversation is focused on the clicked section (same behavior as when the sidebar is already open).\n- If the sidebar is already open, existing behavior is unchanged.\n- No flicker or layout jump when the sidebar opens from a Discuss click.",
+      "priority": 1,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": [
+    "Auto-open chat sidebar when 'Discuss' is clicked while sidebar is closed"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-h63"
+}

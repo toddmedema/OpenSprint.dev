@@ -1,0 +1,39 @@
+{
+  "id": "fyizi9",
+  "text": "If a feedback is marked as \"Resolved\" by the user, add a green \"Resolved\" chip to the top right next to the category. \n\nAdd a filter dropdown next to the \"Feedback History\" title (but floated to the right side of the UX) that lets users select between showing All, Pending, and Resolved feedback",
+  "category": "ux",
+  "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
+  "createdTaskIds": [
+    "opensprint.dev-srl.21",
+    "opensprint.dev-srl.22"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-18T02:58:31.924Z",
+  "parent_id": null,
+  "depth": 0,
+  "mappedEpicId": "opensprint.dev-srl",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Add Resolved status chip to feedback items",
+      "description": "When a FeedbackItem has status 'resolved', render a green 'Resolved' chip/badge in the top-right corner of the feedback entry card, positioned next to the existing category chip. Use the project's existing chip/badge component with a green variant (e.g., bg-green-100 text-green-800 in light mode, appropriate dark-mode equivalent). Acceptance criteria: (1) Resolved feedback items display a green 'Resolved' chip adjacent to the category chip. (2) Pending/mapped feedback items do NOT show the chip. (3) Chip renders correctly in both light and dark themes. (4) Chip appears immediately when the user marks feedback as resolved without requiring a page refresh.",
+      "priority": 2,
+      "depends_on": []
+    },
+    {
+      "index": 1,
+      "title": "Add status filter dropdown to Feedback History header",
+      "description": "Add a dropdown/select control to the Feedback History section header, floated/aligned to the right side of the header row opposite the 'Feedback History' title. The dropdown offers three options: 'All' (default), 'Pending', and 'Resolved'. Selecting an option filters the chronological feedback feed to show only items matching that status ('Pending' maps to FeedbackItem status pending or mapped; 'Resolved' maps to status resolved; 'All' shows everything). Acceptance criteria: (1) Dropdown is right-aligned in the Feedback History header row. (2) Default selection is 'All', showing all feedback items. (3) Selecting 'Pending' hides resolved items; selecting 'Resolved' hides non-resolved items. (4) Filter state persists during the session but resets to 'All' on page navigation. (5) When the filtered list is empty, show an appropriate empty-state message (e.g., 'No resolved feedback yet'). (6) Works correctly in both light and dark themes.",
+      "priority": 2,
+      "depends_on": [
+        0
+      ]
+    }
+  ],
+  "taskTitles": [
+    "Add Resolved status chip to feedback items",
+    "Add status filter dropdown to Feedback History header"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-3jq"
+}
