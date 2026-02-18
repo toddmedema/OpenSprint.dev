@@ -41,6 +41,22 @@ const mockFeedbackResolve = vi.fn().mockResolvedValue({
   createdAt: new Date().toISOString(),
 });
 
+const mockTasksGet = vi.fn().mockResolvedValue({
+  id: "task-1",
+  title: "Test task title",
+  description: "",
+  type: "bug",
+  status: "open",
+  priority: 1,
+  assignee: null,
+  labels: [],
+  dependencies: [],
+  epicId: null,
+  kanbanColumn: "backlog",
+  createdAt: "",
+  updatedAt: "",
+});
+
 vi.mock("../../api/client", () => ({
   api: {
     feedback: {
@@ -48,6 +64,9 @@ vi.mock("../../api/client", () => ({
       submit: (...args: unknown[]) => mockFeedbackSubmit(...args),
       recategorize: (...args: unknown[]) => mockFeedbackRecategorize(...args),
       resolve: (...args: unknown[]) => mockFeedbackResolve(...args),
+    },
+    tasks: {
+      get: (...args: unknown[]) => mockTasksGet(...args),
     },
   },
 }));
@@ -2053,6 +2072,102 @@ describe("EvalPhase feedback input", () => {
     expect(actionsRow).toContainElement(replyBtn);
     expect(actionsRow).toHaveClass("justify-between");
     expect(screen.getByTestId("feedback-card-ticket-info")).toContainElement(taskLink);
+  });
+
+  it("shows tooltip with task title when hovering over ticket link", async () => {
+    vi.useFakeTimers();
+    const storeWithTaskAndReply = configureStore({
+      reducer: {
+        project: projectReducer,
+        eval: evalReducer,
+        execute: executeReducer,
+      },
+      preloadedState: {
+        project: {
+          data: {
+            id: "proj-1",
+            name: "Test Project",
+            description: "",
+            repoPath: "/tmp/test",
+            currentPhase: "eval",
+            createdAt: "",
+            updatedAt: "",
+          },
+          loading: false,
+          error: null,
+        },
+        eval: {
+          feedback: [
+            {
+              id: "fb-1",
+              text: "Bug in login",
+              category: "bug",
+              mappedPlanId: "plan-1",
+              createdTaskIds: ["opensprint.dev-abc.1"],
+              status: "mapped",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          loading: false,
+          submitting: false,
+          error: null,
+        },
+        execute: {
+          tasks: [
+            {
+              id: "opensprint.dev-abc.1",
+              title: "Fix login button styling",
+              description: "",
+              type: "bug" as const,
+              status: "in_progress" as const,
+              priority: 2,
+              assignee: null,
+              labels: [],
+              dependencies: [],
+              epicId: "plan-1",
+              kanbanColumn: "in_progress" as const,
+              createdAt: "",
+              updatedAt: "",
+            },
+          ],
+          plans: [],
+          orchestratorRunning: false,
+          awaitingApproval: false,
+          selectedTaskId: null,
+          taskDetail: null,
+          taskDetailLoading: false,
+          agentOutput: [],
+          completionState: null,
+          archivedSessions: [],
+          archivedLoading: false,
+          markDoneLoading: false,
+          statusLoading: false,
+          loading: false,
+          error: null,
+        },
+      },
+    });
+
+    render(
+      <Provider store={storeWithTaskAndReply}>
+        <EvalPhase projectId="proj-1" />
+      </Provider>,
+    );
+
+    const taskLink = screen.getByText("opensprint.dev-abc.1");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    taskLink.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(250);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tooltip")).toHaveTextContent("Fix login button styling");
+    });
+
+    taskLink.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    vi.useRealTimers();
   });
 
   it("shows reply button in actions row when feedback has no created tickets", () => {

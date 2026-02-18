@@ -3,6 +3,7 @@ import type { FeedbackItem, KanbanColumn } from "@opensprint/shared";
 import { useAppDispatch, useAppSelector } from "../../store";
 import { submitFeedback, resolveFeedback, removeFeedbackItem } from "../../store/slices/evalSlice";
 import { TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
+import { TaskLinkTooltip } from "../../components/TaskLinkTooltip";
 
 /** Reply icon (message turn / corner up-right) */
 function ReplyIcon({ className }: { className?: string }) {
@@ -130,6 +131,7 @@ interface FeedbackCardProps {
   depth: number;
   projectId: string;
   getTaskColumn: (taskId: string) => KanbanColumn;
+  getTaskTitle?: (taskId: string) => string | undefined;
   onNavigateToBuildTask?: (taskId: string) => void;
   replyingToId: string | null;
   onStartReply: (id: string) => void;
@@ -150,6 +152,7 @@ function FeedbackCard({
   depth,
   projectId,
   getTaskColumn,
+  getTaskTitle,
   onNavigateToBuildTask,
   replyingToId,
   onStartReply,
@@ -294,9 +297,8 @@ function FeedbackCard({
               {item.createdTaskIds.map((taskId) => {
                 const column = getTaskColumn(taskId);
                 const statusLabel = COLUMN_LABELS[column];
-                return onNavigateToBuildTask ? (
+                const linkContent = onNavigateToBuildTask ? (
                   <button
-                    key={taskId}
                     type="button"
                     onClick={() => onNavigateToBuildTask(taskId)}
                     className="inline-flex items-center gap-1.5 rounded bg-theme-border-subtle px-1.5 py-0.5 text-xs font-mono text-brand-600 hover:bg-theme-info-bg hover:text-theme-info-text underline transition-colors"
@@ -310,7 +312,6 @@ function FeedbackCard({
                   </button>
                 ) : (
                   <span
-                    key={taskId}
                     className="inline-flex items-center gap-1.5 rounded bg-theme-border-subtle px-1.5 py-0.5 text-xs font-mono text-theme-muted"
                   >
                     <TaskStatusBadge column={column} size="xs" />
@@ -319,6 +320,16 @@ function FeedbackCard({
                     </span>
                     {taskId}
                   </span>
+                );
+                return (
+                  <TaskLinkTooltip
+                    key={taskId}
+                    projectId={projectId}
+                    taskId={taskId}
+                    cachedTitle={getTaskTitle?.(taskId)}
+                  >
+                    {linkContent}
+                  </TaskLinkTooltip>
                 );
               })}
             </div>
@@ -412,6 +423,7 @@ function FeedbackCard({
             depth={depth + 1}
             projectId={projectId}
             getTaskColumn={getTaskColumn}
+            getTaskTitle={getTaskTitle}
             onNavigateToBuildTask={onNavigateToBuildTask}
             replyingToId={replyingToId}
             onStartReply={onStartReply}
@@ -441,6 +453,14 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
     (taskId: string): KanbanColumn => {
       const task = executeTasks.find((t) => t.id === taskId);
       return task?.kanbanColumn ?? "backlog";
+    },
+    [executeTasks],
+  );
+
+  const getTaskTitle = useCallback(
+    (taskId: string): string | undefined => {
+      const task = executeTasks.find((t) => t.id === taskId);
+      return task?.title;
     },
     [executeTasks],
   );
@@ -709,6 +729,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                 depth={0}
                 projectId={projectId}
                 getTaskColumn={getTaskColumn}
+                getTaskTitle={getTaskTitle}
                 onNavigateToBuildTask={onNavigateToBuildTask}
                 replyingToId={replyingToId}
                 onStartReply={setReplyingToId}
