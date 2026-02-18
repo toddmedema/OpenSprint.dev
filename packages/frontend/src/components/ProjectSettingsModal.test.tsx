@@ -1,8 +1,12 @@
+import type { ReactElement } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ThemeProvider } from "../contexts/ThemeContext";
 import { ProjectSettingsModal } from "./ProjectSettingsModal";
 import type { Project } from "@opensprint/shared";
+
+const storage: Record<string, string> = {};
 
 const mockGetSettings = vi.fn();
 const mockUpdate = vi.fn();
@@ -51,20 +55,45 @@ describe("ProjectSettingsModal", () => {
     vi.clearAllMocks();
     mockGetSettings.mockResolvedValue(mockSettings);
     mockGetKeys.mockResolvedValue({ anthropic: true, cursor: true });
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => storage[key] ?? null,
+      setItem: (key: string, value: string) => {
+        storage[key] = value;
+      },
+      removeItem: (key: string) => {
+        delete storage[key];
+      },
+      clear: () => {
+        Object.keys(storage).forEach((k) => delete storage[k]);
+      },
+      length: 0,
+      key: () => null,
+    });
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    Object.keys(storage).forEach((k) => delete storage[k]);
   });
 
+  function renderModal(ui: ReactElement) {
+    return render(<ThemeProvider>{ui}</ThemeProvider>);
+  }
+
   it("renders modal with header, tabs, and content", async () => {
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
 
     await screen.findByText("Project Settings");
     expect(screen.getByText("Project Info")).toBeInTheDocument();
     expect(screen.getByText("Agent Config")).toBeInTheDocument();
     expect(screen.getByText("Deliver")).toBeInTheDocument();
     expect(screen.getByText("Autonomy")).toBeInTheDocument();
+    expect(screen.getByText("Display")).toBeInTheDocument();
   });
 
   it("content area has min-h-0 and overflow-y-auto for proper scroll behavior on Agent Config", async () => {
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
 
     await screen.findByText("Project Settings");
 
@@ -80,7 +109,7 @@ describe("ProjectSettingsModal", () => {
   });
 
   it("modal has overflow-hidden and tabs have flex-nowrap to prevent navigation bar layout issues on Agent Config", async () => {
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
 
     await screen.findByText("Project Settings");
 
@@ -98,7 +127,7 @@ describe("ProjectSettingsModal", () => {
   });
 
   it("header and tabs have flex-shrink-0 to stay visible when content overflows", async () => {
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
 
     await screen.findByText("Project Settings");
 
@@ -112,7 +141,7 @@ describe("ProjectSettingsModal", () => {
   it("hides API key banner, inputs, and status when both keys are configured", async () => {
     mockGetKeys.mockResolvedValue({ anthropic: true, cursor: true });
 
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Project Settings");
 
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
@@ -131,7 +160,7 @@ describe("ProjectSettingsModal", () => {
   it("shows API key banner and inputs when at least one key is missing", async () => {
     mockGetKeys.mockResolvedValue({ anthropic: false, cursor: true });
 
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Project Settings");
 
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
@@ -143,7 +172,7 @@ describe("ProjectSettingsModal", () => {
   });
 
   it("shows Code Review section with updated helptext and default review mode", async () => {
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Project Settings");
 
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
@@ -162,7 +191,7 @@ describe("ProjectSettingsModal", () => {
   it("uses Always as default when settings have no reviewMode", async () => {
     mockGetSettings.mockResolvedValue({ ...mockSettings, reviewMode: undefined });
 
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Project Settings");
 
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
@@ -176,7 +205,7 @@ describe("ProjectSettingsModal", () => {
   it("saves reviewMode when changed and Save is clicked", async () => {
     mockGetSettings.mockResolvedValue({ ...mockSettings, reviewMode: "always" });
 
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
     await screen.findByText("Project Settings");
 
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
@@ -198,7 +227,7 @@ describe("ProjectSettingsModal", () => {
   });
 
   it("Autonomy tab shows only configurable HIL categories (PRD §6.5.1: no testFailuresAndRetries)", async () => {
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Project Settings");
 
     const autonomyTab = screen.getByRole("button", { name: "Autonomy" });
@@ -211,7 +240,7 @@ describe("ProjectSettingsModal", () => {
   });
 
   it("Deliver tab shows auto-deploy toggles (PRD §7.5.3)", async () => {
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Project Settings");
 
     const deploymentTab = screen.getByRole("button", { name: "Deliver" });
@@ -226,7 +255,7 @@ describe("ProjectSettingsModal", () => {
   });
 
   it("saves auto-deploy toggles when changed and Save is clicked", async () => {
-    render(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
     await screen.findByText("Project Settings");
 
     const deploymentTab = screen.getByRole("button", { name: "Deliver" });
@@ -247,5 +276,53 @@ describe("ProjectSettingsModal", () => {
         }),
       })
     );
+  });
+
+  it("Display tab is last in settings list and shows theme picker", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await screen.findByText("Project Settings");
+
+    const displayTab = screen.getByRole("button", { name: "Display" });
+    expect(displayTab).toBeInTheDocument();
+
+    const tabs = screen.getByTestId("settings-modal-tabs");
+    const tabButtons = tabs.querySelectorAll("button");
+    expect(tabButtons[tabButtons.length - 1]).toHaveTextContent("Display");
+
+    await userEvent.click(displayTab);
+
+    const displaySection = screen.getByTestId("display-section");
+    expect(displaySection).toBeInTheDocument();
+    expect(screen.getByText("Theme")).toBeInTheDocument();
+    expect(screen.getByTestId("theme-option-light")).toBeInTheDocument();
+    expect(screen.getByTestId("theme-option-dark")).toBeInTheDocument();
+    expect(screen.getByTestId("theme-option-system")).toBeInTheDocument();
+  });
+
+  it("Display theme picker persists to localStorage and applies immediately", async () => {
+    const user = userEvent.setup();
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await screen.findByText("Project Settings");
+
+    const displayTab = screen.getByRole("button", { name: "Display" });
+    await user.click(displayTab);
+
+    await user.click(screen.getByTestId("theme-option-dark"));
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(localStorage.getItem("opensprint.theme")).toBe("dark");
+
+    await user.click(screen.getByTestId("theme-option-light"));
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(localStorage.getItem("opensprint.theme")).toBe("light");
+  });
+
+  it("Display theme picker defaults to System for new users", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await screen.findByText("Project Settings");
+
+    const displayTab = screen.getByRole("button", { name: "Display" });
+    await userEvent.click(displayTab);
+
+    expect(screen.getByTestId("theme-option-system")).toHaveClass("bg-brand-600");
   });
 });

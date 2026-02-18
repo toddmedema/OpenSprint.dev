@@ -8,11 +8,14 @@ import { render, screen } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
 import { configureStore } from "@reduxjs/toolkit";
+import { ThemeProvider } from "../../contexts/ThemeContext";
 import notificationReducer from "../../store/slices/notificationSlice";
 import executeReducer from "../../store/slices/executeSlice";
 import planReducer from "../../store/slices/planSlice";
 import { HomeScreen } from "../HomeScreen";
 import { Layout } from "../layout/Layout";
+
+const storage: Record<string, string> = {};
 
 vi.mock("../../api/client", () => ({
   api: {
@@ -34,6 +37,26 @@ function createTestStore() {
 describe("theme-aware components", () => {
   beforeEach(() => {
     document.documentElement.setAttribute("data-theme", "light");
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => storage[key] ?? null,
+      setItem: (key: string, value: string) => {
+        storage[key] = value;
+      },
+      removeItem: (key: string) => {
+        delete storage[key];
+      },
+      clear: () => {
+        Object.keys(storage).forEach((k) => delete storage[k]);
+      },
+      length: 0,
+      key: () => null,
+    });
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    Object.keys(storage).forEach((k) => delete storage[k]);
   });
 
   afterEach(() => {
@@ -42,13 +65,15 @@ describe("theme-aware components", () => {
 
   it("HomeScreen uses theme tokens (no hard-coded brand-50/brand-700 for badges)", async () => {
     render(
-      <Provider store={createTestStore()}>
-        <MemoryRouter>
-          <Layout>
-            <HomeScreen />
-          </Layout>
-        </MemoryRouter>
-      </Provider>
+      <ThemeProvider>
+        <Provider store={createTestStore()}>
+          <MemoryRouter>
+            <Layout>
+              <HomeScreen />
+            </Layout>
+          </MemoryRouter>
+        </Provider>
+      </ThemeProvider>,
     );
     await screen.findByText("No projects yet");
     // HomeScreen should use theme tokens; phase badges use theme-info-bg/text
@@ -62,13 +87,15 @@ describe("theme-aware components", () => {
 
   it("Layout uses theme tokens for background", () => {
     render(
-      <Provider store={createTestStore()}>
-        <MemoryRouter>
-          <Layout>
-            <div data-testid="child">Content</div>
-          </Layout>
-        </MemoryRouter>
-      </Provider>
+      <ThemeProvider>
+        <Provider store={createTestStore()}>
+          <MemoryRouter>
+            <Layout>
+              <div data-testid="child">Content</div>
+            </Layout>
+          </MemoryRouter>
+        </Provider>
+      </ThemeProvider>,
     );
     const outer = document.querySelector(".bg-theme-bg");
     expect(outer).toBeInTheDocument();
@@ -78,13 +105,15 @@ describe("theme-aware components", () => {
   it("components respond to dark theme when data-theme is dark", () => {
     document.documentElement.setAttribute("data-theme", "dark");
     render(
-      <Provider store={createTestStore()}>
-        <MemoryRouter>
-          <Layout>
-            <div data-testid="dark-content">Dark mode content</div>
-          </Layout>
-        </MemoryRouter>
-      </Provider>
+      <ThemeProvider>
+        <Provider store={createTestStore()}>
+          <MemoryRouter>
+            <Layout>
+              <div data-testid="dark-content">Dark mode content</div>
+            </Layout>
+          </MemoryRouter>
+        </Provider>
+      </ThemeProvider>,
     );
     // CSS variables are redefined in index.css for html[data-theme="dark"]
     // Components using var(--color-*) will automatically pick up dark values

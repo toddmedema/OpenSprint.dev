@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { FolderBrowser } from "./FolderBrowser";
 import { CloseButton } from "./CloseButton";
 import { ModelSelect } from "./ModelSelect";
+import { useTheme } from "../contexts/ThemeContext";
 import { api } from "../api/client";
 import type {
   Project,
@@ -21,16 +22,24 @@ interface ProjectSettingsModalProps {
   onSaved?: () => void;
 }
 
-type Tab = "basics" | "agents" | "deployment" | "hil";
+type Tab = "basics" | "agents" | "deployment" | "hil" | "display";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "basics", label: "Project Info" },
   { key: "agents", label: "Agent Config" },
   { key: "deployment", label: "Deliver" },
   { key: "hil", label: "Autonomy" },
+  { key: "display", label: "Display" },
+];
+
+const THEME_OPTIONS: { value: "light" | "dark" | "system"; label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
 ];
 
 export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSettingsModalProps) {
+  const { preference: themePreference, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<Tab>("basics");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1089,6 +1098,32 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       </select>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {activeTab === "display" && (
+                <div className="space-y-4" data-testid="display-section">
+                  <h3 className="text-sm font-semibold text-theme-text">Theme</h3>
+                  <p className="text-xs text-theme-muted mb-3">
+                    Choose how OpenSprint looks. System follows your operating system preference.
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    {THEME_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setTheme(opt.value)}
+                        data-testid={`theme-option-${opt.value}`}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          themePreference === opt.value
+                            ? "bg-brand-600 text-white"
+                            : "bg-theme-border-subtle text-theme-text hover:bg-theme-bg-elevated"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </>
