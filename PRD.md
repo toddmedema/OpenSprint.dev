@@ -205,7 +205,7 @@ The Dreamer writes `prd.json` directly but does not commit; the orchestrator det
 
 OpenSprint opens to a home screen that lists all existing projects as cards, each showing the project name, last-modified date, current phase, and overall progress. A prominent "Create New Project" button starts the project setup wizard.
 
-Once inside a project, the project name appears at the top-left of the navbar and functions as a dropdown selector. Clicking it reveals a list of all projects, allowing the user to rapidly switch between projects without returning to the home screen. The navbar also includes a theme toggle (light/dark/system) for quick access to appearance preferences (see 6.6).
+Once inside a project, the project name appears at the top-left of the navbar and functions as a dropdown selector. Clicking it reveals a list of all projects, allowing the user to rapidly switch between projects without returning to the home screen. Theme (light/dark/system) is configurable from project settings (Display section; see 6.6).
 
 ### 6.2 Project Setup Wizard
 
@@ -282,7 +282,7 @@ For each category, users choose one of three modes:
 
 ### 6.6 Appearance & Theme
 
-OpenSprint supports Light, Dark, and System (follows OS `prefers-color-scheme`) themes. The preference is global across all projects, persists in `localStorage`, applies immediately to all views, and is toggleable from the navbar. System is the default for new users.
+OpenSprint supports Light, Dark, and System (follows OS `prefers-color-scheme`) themes. The preference is global across all projects, persists in `localStorage`, applies immediately to all views, and is configurable from project settings (Display section). System is the default for new users.
 
 ---
 
