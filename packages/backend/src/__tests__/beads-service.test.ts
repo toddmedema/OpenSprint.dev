@@ -68,7 +68,9 @@ describe("BeadsService", () => {
       throw Object.assign(new Error("bd not found"), { stderr: "bd: command not found" });
     };
 
-    await expect(beads.runBd(repoPath, "list", ["--json"])).rejects.toThrow(/Beads command failed/);
+    await expect(beads.runBd(repoPath, "list", ["--json"])).rejects.toThrow(
+      /Beads (command failed|database sync failed)/
+    );
   });
 
   describe("update", () => {
@@ -518,6 +520,21 @@ describe("BeadsService", () => {
       await expect(beads.listAll("/repo")).rejects.toThrow(
         /bd sync --import-only|bd import -i .beads\/issues.jsonl --orphan-handling skip/
       );
+    });
+
+    it("throws BEADS_SYNC_FAILED when both sync and import fail", async () => {
+      mockExecImpl = async (cmd: string) => {
+        if (cmd.includes("sync --import-only") || cmd.includes("import -i")) {
+          throw Object.assign(new Error("sync failed"), {
+            stderr: "Database corrupted",
+          });
+        }
+        return { stdout: "[]", stderr: "" };
+      };
+      await expect(beads.listAll("/repo")).rejects.toMatchObject({
+        statusCode: 502,
+        code: "BEADS_SYNC_FAILED",
+      });
     });
   });
 

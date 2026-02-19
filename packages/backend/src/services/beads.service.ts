@@ -29,10 +29,15 @@ const managedReposForShutdown = new Set<string>();
 const daemonEnsuredRepos = new Set<string>();
 
 /**
- * Repo paths where JSONL sync has been run in this process.
- * Proactive sync on first use prevents "Database out of sync" after git pull.
+ * Per-repo sync state: when we last synced and JSONL mtime at that moment.
+ * Used for mtime-based invalidation: if JSONL mtime > jsonlMtimeAtSync, re-sync
+ * before running beads commands (handles git pull, external exports, etc.).
  */
-const syncEnsuredRepos = new Set<string>();
+interface SyncState {
+  lastSyncMs: number;
+  jsonlMtime: number;
+}
+const syncStateMap = new Map<string, SyncState>();
 
 /** Path to backend.pid file for file-based lock (prevents multiple backends managing same repo) */
 const BACKEND_PID_FILE = ".beads/backend.pid";
@@ -69,15 +74,11 @@ export class BeadsService {
    * Ensures a bd daemon is running for the repo. Runs `bd daemon stop` before
    * `bd daemon start` to prevent accumulation across backend restarts.
    * Skips if another backend instance holds the file-based lock (backend.pid).
-   * Also runs proactive sync (syncImport) once per repo per process to fix
-   * "Database out of sync" after git pull before any beads command runs.
+   * Also ensures beads DB is in sync with JSONL (mtime-based invalidation).
    */
   async ensureDaemon(repoPath: string): Promise<void> {
     await this.startDaemonIfNeeded(repoPath);
-    if (!syncEnsuredRepos.has(repoPath)) {
-      await this.syncImport(repoPath);
-      syncEnsuredRepos.add(repoPath);
-    }
+    await this.ensureSyncBeforeExec(repoPath);
   }
 
   /**
@@ -120,7 +121,7 @@ export class BeadsService {
   static resetForTesting(): void {
     managedReposForShutdown.clear();
     daemonEnsuredRepos.clear();
-    syncEnsuredRepos.clear();
+    syncStateMap.clear();
   }
 
   /**
@@ -189,9 +190,12 @@ export class BeadsService {
    * Import JSONL into the database to fix staleness (e.g. after git pull).
    * Tries `bd sync --import-only` first (beads-recommended for "Database out of sync").
    * Falls back to `bd import --orphan-handling skip` when sync fails (e.g. orphan/missing-parent).
-   * "allow" still fails on missing parents in beads 0.49.x; "skip" skips orphan deps and completes.
+   * Throws if both fail — no silent continuation with a still-stale DB.
    */
   private async syncImport(repoPath: string): Promise<void> {
+    let lastError: string | undefined;
+    const jsonlPath = path.join(repoPath, ".beads/issues.jsonl");
+
     // 1. Try beads-recommended sync --import-only
     try {
       await execAsync(`bd ${BD_GLOBAL_FLAGS} sync --import-only`, {
@@ -202,25 +206,75 @@ export class BeadsService {
       return;
     } catch (err: unknown) {
       const e = err as { stderr?: string; message?: string };
+      lastError = e.stderr ?? e.message ?? String(err);
       console.warn(
-        `[beads] sync --import-only failed for ${repoPath}, trying import: ${e.stderr ?? e.message}`
+        `[beads] sync --import-only failed for ${repoPath}, trying import: ${lastError}`
       );
     }
 
     // 2. Fallback: import with orphan-handling skip (handles missing-parent edge cases)
-    const jsonlPath = path.join(repoPath, ".beads/issues.jsonl");
     try {
       await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${jsonlPath}" --orphan-handling skip`, {
         cwd: repoPath,
         timeout: 30_000,
         maxBuffer: MAX_BUFFER_BYTES,
       });
+      return;
     } catch (err: unknown) {
       const e = err as { stderr?: string; message?: string };
-      console.warn(
-        `[beads] import --orphan-handling skip failed for ${repoPath}: ${e.stderr ?? e.message}`
+      const importError = e.stderr ?? e.message ?? String(err);
+      const manualFix =
+        " Run in the project directory: bd sync --import-only (or bd import -i .beads/issues.jsonl --orphan-handling skip)";
+      throw new AppError(
+        502,
+        ErrorCodes.BEADS_SYNC_FAILED,
+        `Beads database sync failed. Both sync --import-only and import --orphan-handling skip failed.${manualFix}\nLast error: ${importError}`,
+        {
+          syncError: lastError,
+          importError,
+        }
       );
     }
+  }
+
+  /**
+   * Returns the mtime of .beads/issues.jsonl in ms, or 0 if missing/unreadable.
+   */
+  private getJsonlMtime(repoPath: string): number {
+    try {
+      const p = path.join(repoPath, ".beads/issues.jsonl");
+      const stat = fs.statSync(p);
+      return stat.mtimeMs;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Ensures the beads DB is in sync with JSONL before running commands.
+   * Syncs when: (a) never synced for this repo, or (b) JSONL mtime > when we last synced.
+   */
+  private async ensureSyncBeforeExec(repoPath: string): Promise<void> {
+    const jsonlMtime = this.getJsonlMtime(repoPath);
+    const state = syncStateMap.get(repoPath);
+
+    const needsSync = !state || jsonlMtime > state.jsonlMtime;
+
+    if (needsSync) {
+      await this.syncImport(repoPath);
+      syncStateMap.set(repoPath, {
+        lastSyncMs: Date.now(),
+        jsonlMtime: jsonlMtime || this.getJsonlMtime(repoPath),
+      });
+    }
+  }
+
+  /**
+   * Clears sync state for a repo so the next beads command will re-sync.
+   * Call when we've hit a stale error and want to force a fresh sync.
+   */
+  private invalidateSyncState(repoPath: string): void {
+    syncStateMap.delete(repoPath);
   }
 
   private isStaleDbError(stderr: string): boolean {
@@ -276,8 +330,9 @@ export class BeadsService {
 
       const stderr = err.stderr || err.stdout || err.message;
       if (this.isStaleDbError(stderr)) {
-        console.warn(`[beads] Stale DB detected for ${fullCmd}, running sync/import recovery`);
-        await this.syncImport(repoPath);
+        console.warn(`[beads] Stale DB detected for ${fullCmd}, invalidating sync and retrying`);
+        this.invalidateSyncState(repoPath);
+        await this.ensureSyncBeforeExec(repoPath);
         try {
           const { stdout } = await execAsync(fullCmd, {
             cwd: repoPath,
