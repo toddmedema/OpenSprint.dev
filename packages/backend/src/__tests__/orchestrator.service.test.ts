@@ -765,6 +765,73 @@ describe("OrchestratorService", () => {
     });
   });
 
+  describe("full cycle: nudge → pickTask → runAgentTask → handleCompletion", () => {
+    it("exercises complete flow: nudge starts loop, picks task, runs agent, handles success", async () => {
+      const task = {
+        id: "task-full-cycle",
+        title: "Full cycle task",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-full-cycle");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(wtPath, ".opensprint", "active", "task-full-cycle")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockGetChangedFiles.mockResolvedValue([]);
+      mockRunScopedTests.mockResolvedValue({
+        passed: 3,
+        failed: 0,
+        rawOutput: "tests passed",
+      });
+      mockReadResult.mockResolvedValue({ status: "success", summary: "Implemented" });
+
+      let onExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeCodingAgent.mockImplementation(
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
+          onExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      expect(mockBeadsReady).toHaveBeenCalled();
+      expect(mockBeadsUpdate).toHaveBeenCalledWith(
+        repoPath,
+        "task-full-cycle",
+        expect.objectContaining({ status: "in_progress", assignee: "agent-1" })
+      );
+      expect(mockInvokeCodingAgent).toHaveBeenCalled();
+
+      mockBeadsShow.mockResolvedValue({ ...task, status: "in_progress" });
+      mockCreateSession.mockResolvedValue({ id: "sess-1" });
+      mockArchiveSession.mockResolvedValue(undefined);
+
+      await onExit(0);
+      await new Promise((r) => setTimeout(r, 300));
+
+      expect(mockBeadsClose).toHaveBeenCalledWith(repoPath, "task-full-cycle", "Implemented");
+      expect(mockBroadcastToProject).toHaveBeenCalledWith(
+        projectId,
+        expect.objectContaining({
+          type: "agent.completed",
+          taskId: "task-full-cycle",
+          status: "approved",
+        })
+      );
+    });
+  });
+
   describe("ensureRunning - full loop with task completion", () => {
     it("completes task when coding succeeds and reviewMode is never", async () => {
       const task = {
@@ -1477,6 +1544,56 @@ describe("OrchestratorService", () => {
         assignee: "",
       });
     });
+
+    it("round-trips persistState to disk and loadPersistedState restores all fields", async () => {
+      const task = {
+        id: "task-roundtrip-2",
+        title: "Round-trip persist/load",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-roundtrip");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(wtPath, ".opensprint", "active", "task-roundtrip-2")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+
+      mockWriteJsonAtomic.mockImplementation(async (filePath: string, data: unknown) => {
+        if (filePath.includes(OPENSPRINT_PATHS.orchestratorState)) {
+          await fs.mkdir(path.dirname(filePath), { recursive: true });
+          await fs.writeFile(filePath, JSON.stringify(data), "utf-8");
+        }
+      });
+
+      mockInvokeCodingAgent.mockReturnValue({ kill: vi.fn(), pid: 12345 });
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      const statePath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorState);
+      const raw = await fs.readFile(statePath, "utf-8");
+      const loaded = JSON.parse(raw) as Record<string, unknown>;
+
+      expect(loaded.projectId).toBe(projectId);
+      expect(loaded.currentTaskId).toBe("task-roundtrip-2");
+      expect(loaded.currentPhase).toBe("coding");
+      expect(loaded.branchName).toBe("opensprint/task-roundtrip-2");
+      expect(loaded.attempt).toBe(1);
+      expect(loaded.agentPid).toBe(12345);
+      expect(loaded.lastTransition).toBeDefined();
+      expect(typeof loaded.lastTransition).toBe("string");
+      expect(loaded.queueDepth).toBeDefined();
+      expect(loaded.totalDone).toBeDefined();
+      expect(loaded.totalFailed).toBeDefined();
+    });
   });
 
   // ─── Progressive backoff / infra vs quality ───
@@ -1610,6 +1727,143 @@ describe("OrchestratorService", () => {
         1
       );
     });
+
+    it("demotes task at BACKOFF_FAILURE_THRESHOLD (attempt 3) - priority increase", async () => {
+      const task = {
+        id: "task-demotion",
+        title: "Task for demotion",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-demotion");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(wtPath, ".opensprint", "active", "task-demotion")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockGetChangedFiles.mockResolvedValue([]);
+      mockReadResult.mockResolvedValue({ status: "success", summary: "Done" });
+      mockRunScopedTests.mockResolvedValue({
+        passed: 1,
+        failed: 2,
+        rawOutput: "2 tests failed",
+      });
+
+      let onExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeCodingAgent.mockImplementation(
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
+          onExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      mockBeadsSetCumulativeAttempts.mockResolvedValue(undefined);
+
+      await onExit(0);
+      await new Promise((r) => setTimeout(r, 400));
+
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(1);
+
+      await onExit(0);
+      await new Promise((r) => setTimeout(r, 400));
+
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(2);
+
+      await onExit(0);
+      await new Promise((r) => setTimeout(r, 500));
+
+      expect(mockBeadsUpdate).toHaveBeenCalledWith(repoPath, "task-demotion", {
+        status: "open",
+        assignee: "",
+        priority: 3,
+      });
+      expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, "opensprint/task-demotion");
+      expect(mockBroadcastToProject).toHaveBeenCalledWith(
+        projectId,
+        expect.objectContaining({
+          type: "agent.completed",
+          taskId: "task-demotion",
+          status: "failed",
+        })
+      );
+    });
+
+    it("blocks task at MAX_PRIORITY_BEFORE_BLOCK (4) after 3 failures", async () => {
+      const task = {
+        id: "task-block-max",
+        title: "Task at max priority",
+        issue_type: "task",
+        priority: 4,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-block-max");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(wtPath, ".opensprint", "active", "task-block-max")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockGetChangedFiles.mockResolvedValue([]);
+      mockReadResult.mockResolvedValue({ status: "success", summary: "Done" });
+      mockRunScopedTests.mockResolvedValue({
+        passed: 1,
+        failed: 2,
+        rawOutput: "2 tests failed",
+      });
+
+      let onExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeCodingAgent.mockImplementation(
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
+          onExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      mockBeadsSetCumulativeAttempts.mockResolvedValue(undefined);
+
+      await onExit(0);
+      await new Promise((r) => setTimeout(r, 400));
+
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(1);
+
+      await onExit(0);
+      await new Promise((r) => setTimeout(r, 400));
+
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(2);
+
+      await onExit(0);
+      await new Promise((r) => setTimeout(r, 500));
+
+      expect(mockBeadsUpdate).toHaveBeenCalledWith(repoPath, "task-block-max", {
+        status: "blocked",
+        assignee: "",
+      });
+      expect(mockBroadcastToProject).toHaveBeenCalledWith(
+        projectId,
+        expect.objectContaining({
+          type: "task.blocked",
+          taskId: "task-block-max",
+        })
+      );
+    });
   });
 
   // ─── MAX_INFRA_RETRIES (2 free retries) ───
@@ -1674,26 +1928,54 @@ describe("OrchestratorService", () => {
     });
   });
 
-  // ─── Watchdog timeout ───
+  // ─── Watchdog timeout (WATCHDOG_INTERVAL_MS = 60s) ───
   describe("watchdog timeout", () => {
-    it("watchdog triggers nudge at interval and detects stuck agents", async () => {
+    it("watchdog triggers nudge at 60s interval", async () => {
+      vi.useFakeTimers();
+
+      mockBeadsReady.mockResolvedValue([]);
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.advanceTimersByTimeAsync(0);
+
+      const statusCallsBefore = mockBroadcastToProject.mock.calls.filter(
+        (c: [string, { type?: string }]) => c[1]?.type === "execute.status"
+      ).length;
+
+      await vi.advanceTimersByTimeAsync(59_000);
+      const statusCallsAfter59s = mockBroadcastToProject.mock.calls.filter(
+        (c: [string, { type?: string }]) => c[1]?.type === "execute.status"
+      ).length;
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      const statusCallsAfter61s = mockBroadcastToProject.mock.calls.filter(
+        (c: [string, { type?: string }]) => c[1]?.type === "execute.status"
+      ).length;
+
+      expect(statusCallsAfter59s).toBe(statusCallsBefore);
+      expect(statusCallsAfter61s).toBeGreaterThan(statusCallsBefore);
+
+      vi.useRealTimers();
+    });
+
+    it("watchdog triggers nudge when loop is idle and can restart loop", async () => {
       vi.useFakeTimers();
 
       mockBeadsReady.mockResolvedValue([]);
 
       await orchestrator.ensureRunning(projectId);
 
-      const nudgeCallsBefore = mockBroadcastToProject.mock.calls.filter(
+      const initialCalls = mockBroadcastToProject.mock.calls.filter(
         (c: [string, { type?: string }]) => c[1]?.type === "execute.status"
       ).length;
 
       await vi.advanceTimersByTimeAsync(61_000);
 
-      const nudgeCallsAfter = mockBroadcastToProject.mock.calls.filter(
+      const afterCalls = mockBroadcastToProject.mock.calls.filter(
         (c: [string, { type?: string }]) => c[1]?.type === "execute.status"
       ).length;
 
-      expect(nudgeCallsAfter).toBeGreaterThan(nudgeCallsBefore);
+      expect(afterCalls).toBeGreaterThan(initialCalls);
 
       vi.useRealTimers();
     });
