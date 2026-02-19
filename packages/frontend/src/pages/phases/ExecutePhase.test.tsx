@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import { ExecutePhase } from "./ExecutePhase";
-import { setSelectedTaskId } from "../../store/slices/executeSlice";
+import { setSelectedTaskId, taskUpdated } from "../../store/slices/executeSlice";
 import projectReducer from "../../store/slices/projectSlice";
 import planReducer from "../../store/slices/planSlice";
 import executeReducer from "../../store/slices/executeSlice";
@@ -253,6 +253,111 @@ describe("ExecutePhase epic card task order", () => {
     expect(titles[0]).toContain("High");
     expect(titles[1]).toContain("Mid");
     expect(titles[2]).toContain("Low");
+  });
+});
+
+describe("ExecutePhase epic completed checkmark", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAgentsActive.mockResolvedValue([]);
+  });
+
+  it("shows green checkmark on epic card when all child tasks are Done", () => {
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "done",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Task B",
+        epicId: "epic-1",
+        kanbanColumn: "done",
+        priority: 1,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks);
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const epicCard = screen.getByTestId("epic-card-epic-1");
+    const checkmark = epicCard.querySelector('[data-testid="epic-completed-checkmark"]');
+    expect(checkmark).toBeInTheDocument();
+    expect(checkmark).toHaveClass("text-theme-success-muted");
+  });
+
+  it("does not show checkmark when any child task is not Done", () => {
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "done",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Task B",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 1,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks);
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const epicCard = screen.getByTestId("epic-card-epic-1");
+    expect(epicCard.querySelector('[data-testid="epic-completed-checkmark"]')).not.toBeInTheDocument();
+  });
+
+  it("updates checkmark when task status changes via Redux (simulates WebSocket)", () => {
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "done",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Task B",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 1,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks);
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const epicCard = () => screen.getByTestId("epic-card-epic-1");
+    expect(epicCard().querySelector('[data-testid="epic-completed-checkmark"]')).not.toBeInTheDocument();
+
+    act(() => {
+      store.dispatch(taskUpdated({ taskId: "epic-1.2", status: "closed" }));
+    });
+
+    expect(epicCard().querySelector('[data-testid="epic-completed-checkmark"]')).toBeInTheDocument();
   });
 });
 

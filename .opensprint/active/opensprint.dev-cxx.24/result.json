@@ -1,0 +1,1 @@
+{ "status": "success", "summary": "Added green checkmark icon to epic cards in Execute view when all child tasks are Done. Checkmark uses text-theme-success-muted for light/dark consistency. Icon updates in real-time via Redux (taskUpdated) which is driven by WebSocket task.updated events. Unit tests in BuildEpicCard and integration tests in ExecutePhase." }
