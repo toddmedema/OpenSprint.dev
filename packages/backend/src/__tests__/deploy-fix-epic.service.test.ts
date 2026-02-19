@@ -15,6 +15,8 @@ const {
   mockBeadsClose,
   mockBeadsReady,
   mockBeadsInit,
+  mockBeadsConfigSet,
+  mockBeadsListAll,
 } = vi.hoisted(() => {
   const mockInvoke = vi.fn().mockResolvedValue({
     content: JSON.stringify({
@@ -43,6 +45,8 @@ const {
   const mockBeadsClose = vi.fn();
   const mockBeadsReady = vi.fn();
   const mockBeadsInit = vi.fn().mockResolvedValue(undefined);
+  const mockBeadsConfigSet = vi.fn().mockResolvedValue(undefined);
+  const mockBeadsListAll = vi.fn().mockResolvedValue([]);
   return {
     mockInvoke,
     mockBeadsCreate,
@@ -51,6 +55,8 @@ const {
     mockBeadsClose,
     mockBeadsReady,
     mockBeadsInit,
+    mockBeadsConfigSet,
+    mockBeadsListAll,
   };
 });
 
@@ -61,6 +67,8 @@ vi.mock("../services/agent-client.js", () => ({
 vi.mock("../services/beads.service.js", () => ({
   BeadsService: vi.fn().mockImplementation(() => ({
     init: mockBeadsInit,
+    configSet: mockBeadsConfigSet,
+    listAll: mockBeadsListAll,
     create: mockBeadsCreate,
     update: mockBeadsUpdate,
     addDependency: mockBeadsAddDependency,
