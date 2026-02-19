@@ -36,6 +36,22 @@ vi.mock("../services/agent-client.js", () => ({
   AgentClient: vi.fn().mockImplementation(() => ({ invoke: mockInvoke })),
 }));
 
+const mockBeadsCreate = vi.fn();
+const mockBeadsUpdate = vi.fn();
+const mockBeadsAddDependency = vi.fn();
+const mockBeadsClose = vi.fn();
+const mockBeadsReady = vi.fn();
+
+vi.mock("../services/beads.service.js", () => ({
+  BeadsService: vi.fn().mockImplementation(() => ({
+    create: mockBeadsCreate,
+    update: mockBeadsUpdate,
+    addDependency: mockBeadsAddDependency,
+    close: mockBeadsClose,
+    ready: mockBeadsReady,
+  })),
+}));
+
 describe("deploy-fix-epic service", () => {
   let tempDir: string;
   let projectId: string;
@@ -48,6 +64,19 @@ describe("deploy-fix-epic service", () => {
   });
 
   beforeEach(async () => {
+    mockBeadsCreate.mockImplementation(
+      (_repo: string, _title: string, opts?: { type?: string; parentId?: string }) => {
+        const id = opts?.parentId
+          ? `${opts.parentId}.${Math.floor(Math.random() * 1000)}`
+          : `epic-${Date.now()}`;
+        return Promise.resolve({ id });
+      }
+    );
+    mockBeadsUpdate.mockResolvedValue(undefined);
+    mockBeadsAddDependency.mockResolvedValue(undefined);
+    mockBeadsClose.mockResolvedValue(undefined);
+    mockBeadsReady.mockResolvedValue([{ id: "fix-1", title: "Fix auth test", status: "ready" }]);
+
     mockInvoke.mockResolvedValue({
       content: JSON.stringify({
         status: "success",
@@ -121,6 +150,8 @@ describe("deploy-fix-epic service", () => {
     expect(result!.taskCount).toBe(2);
     expect(result!.gateTaskId).toBeDefined();
 
+    expect(mockBeadsCreate).toHaveBeenCalled();
+    expect(mockBeadsClose).toHaveBeenCalled();
     const beads = new BeadsService();
     const ready = await beads.ready(project.repoPath);
     expect(ready.length).toBeGreaterThan(0);

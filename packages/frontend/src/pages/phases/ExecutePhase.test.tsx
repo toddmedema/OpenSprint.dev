@@ -340,7 +340,7 @@ describe("ExecutePhase epic completed checkmark", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("updates checkmark when task status changes via Redux (simulates WebSocket)", () => {
+  it("updates checkmark when task status changes via Redux (simulates WebSocket)", async () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -382,9 +382,11 @@ describe("ExecutePhase epic completed checkmark", () => {
       store.dispatch(taskUpdated({ taskId: "epic-1.2", status: "closed" }));
     });
 
-    expect(
-      epicCard().querySelector('[data-testid="epic-completed-checkmark"]')
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        epicCard().querySelector('[data-testid="epic-completed-checkmark"]')
+      ).toBeInTheDocument();
+    });
   });
 });
 

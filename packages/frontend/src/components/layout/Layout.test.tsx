@@ -1,9 +1,21 @@
 import type { ReactElement } from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { Provider } from "react-redux";
+import { configureStore } from "@reduxjs/toolkit";
 import { MemoryRouter } from "react-router";
 import { ThemeProvider } from "../../contexts/ThemeContext";
 import { Layout } from "./Layout";
+import notificationReducer from "../../store/slices/notificationSlice";
+import executeReducer from "../../store/slices/executeSlice";
+import planReducer from "../../store/slices/planSlice";
+
+vi.mock("../../api/client", () => ({
+  api: {
+    projects: { list: () => Promise.resolve([]) },
+    agents: { active: () => Promise.resolve([]) },
+  },
+}));
 
 const storage: Record<string, string> = {};
 beforeEach(() => {
@@ -32,11 +44,23 @@ beforeEach(() => {
   Object.keys(storage).forEach((k) => delete storage[k]);
 });
 
+function createTestStore() {
+  return configureStore({
+    reducer: {
+      notification: notificationReducer,
+      execute: executeReducer,
+      plan: planReducer,
+    },
+  });
+}
+
 function renderLayout(ui: ReactElement) {
   return render(
-    <MemoryRouter>
-      <ThemeProvider>{ui}</ThemeProvider>
-    </MemoryRouter>
+    <Provider store={createTestStore()}>
+      <MemoryRouter>
+        <ThemeProvider>{ui}</ThemeProvider>
+      </MemoryRouter>
+    </Provider>
   );
 }
 

@@ -12,7 +12,35 @@ const mockUnregister = vi.fn();
 
 vi.mock("../services/agent.service.js", () => ({
   agentService: {
-    invokePlanningAgent: (...args: unknown[]) => mockInvokePlanningAgent(...args),
+    async invokePlanningAgent(opts: {
+      tracking?: {
+        id: string;
+        projectId: string;
+        phase: string;
+        role: string;
+        label: string;
+        branchName?: string;
+      };
+      [key: string]: unknown;
+    }) {
+      const { tracking } = opts ?? {};
+      if (tracking) {
+        mockRegister(
+          tracking.id,
+          tracking.projectId,
+          tracking.phase,
+          tracking.role,
+          tracking.label,
+          new Date().toISOString(),
+          tracking.branchName
+        );
+      }
+      try {
+        return await mockInvokePlanningAgent(opts);
+      } finally {
+        if (tracking) mockUnregister(tracking.id);
+      }
+    },
   },
 }));
 
@@ -108,7 +136,8 @@ describe("ChatService - Plan phase agent registry", () => {
         "plan",
         "harmonizer",
         "Execute! PRD sync",
-        expect.any(String)
+        expect.any(String),
+        undefined
       );
       expect(mockUnregister).toHaveBeenCalledTimes(1);
       expect(mockUnregister).toHaveBeenCalledWith(mockRegister.mock.calls[0][0]);
@@ -154,8 +183,8 @@ describe("ChatService - Plan phase agent registry", () => {
       const call = mockInvokePlanningAgent.mock.calls[0][0];
       expect(call.messages[0].content).toContain("Add mobile app support");
       expect(call.messages[0].content).toContain("## Feedback");
-      expect(call.systemPrompt).toContain("scope change");
-      expect(call.systemPrompt).toContain("approved for PRD updates");
+      expect(call.systemPrompt).toContain("scope-change");
+      expect(call.systemPrompt).toContain("propose section updates");
     });
 
     it("should do nothing when agent returns no PRD_UPDATE blocks", async () => {
@@ -189,9 +218,16 @@ describe("ChatService - Plan phase agent registry", () => {
 
     it("should apply PRD updates and broadcast when agent returns non-architecture updates", async () => {
       mockInvokePlanningAgent.mockResolvedValue({
-        content: `[PRD_UPDATE:feature_list]
-Updated feature list with mobile support.
-[/PRD_UPDATE]`,
+        content: JSON.stringify({
+          status: "success",
+          prd_updates: [
+            {
+              section: "feature_list",
+              action: "update",
+              content: "Updated feature list with mobile support.",
+            },
+          ],
+        }),
       });
 
       await chatService.syncPrdFromScopeChangeFeedback(projectId, "Add mobile app");
@@ -209,9 +245,16 @@ Updated feature list with mobile support.
 
     it("should evaluate HIL for architecture sections when scope feedback includes them", async () => {
       mockInvokePlanningAgent.mockResolvedValue({
-        content: `[PRD_UPDATE:technical_architecture]
-New mobile architecture.
-[/PRD_UPDATE]`,
+        content: JSON.stringify({
+          status: "success",
+          prd_updates: [
+            {
+              section: "technical_architecture",
+              action: "update",
+              content: "New mobile architecture.",
+            },
+          ],
+        }),
       });
 
       await chatService.syncPrdFromScopeChangeFeedback(projectId, "Add mobile architecture");

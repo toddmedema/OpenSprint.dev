@@ -12,6 +12,8 @@ import { ThemeProvider } from "../../contexts/ThemeContext";
 import notificationReducer from "../../store/slices/notificationSlice";
 import executeReducer from "../../store/slices/executeSlice";
 import planReducer from "../../store/slices/planSlice";
+import projectReducer from "../../store/slices/projectSlice";
+import websocketReducer from "../../store/slices/websocketSlice";
 import { HomeScreen } from "../HomeScreen";
 import { Layout } from "../layout/Layout";
 
@@ -30,6 +32,8 @@ function createTestStore() {
       notification: notificationReducer,
       execute: executeReducer,
       plan: planReducer,
+      project: projectReducer,
+      websocket: websocketReducer,
     },
   });
 }
@@ -51,11 +55,14 @@ describe("theme-aware components", () => {
       length: 0,
       key: () => null,
     });
-    vi.stubGlobal("matchMedia", vi.fn(() => ({
-      matches: false,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })));
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    );
     Object.keys(storage).forEach((k) => delete storage[k]);
   });
 
@@ -73,7 +80,7 @@ describe("theme-aware components", () => {
             </Layout>
           </MemoryRouter>
         </Provider>
-      </ThemeProvider>,
+      </ThemeProvider>
     );
     await screen.findByText("No projects yet");
     // HomeScreen should use theme tokens; phase badges use theme-info-bg/text
@@ -95,7 +102,7 @@ describe("theme-aware components", () => {
             </Layout>
           </MemoryRouter>
         </Provider>
-      </ThemeProvider>,
+      </ThemeProvider>
     );
     const outer = document.querySelector(".bg-theme-bg");
     expect(outer).toBeInTheDocument();
@@ -113,7 +120,7 @@ describe("theme-aware components", () => {
             </Layout>
           </MemoryRouter>
         </Provider>
-      </ThemeProvider>,
+      </ThemeProvider>
     );
     // CSS variables are redefined in index.css for html[data-theme="dark"]
     // Components using var(--color-*) will automatically pick up dark values

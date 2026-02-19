@@ -150,7 +150,8 @@ describe("Plan suggestPlans (POST /plans/suggest)", () => {
         "plan",
         "planner",
         "Feature decomposition (suggest)",
-        expect.any(String)
+        expect.any(String),
+        undefined
       );
       expect(mockUnregister).toHaveBeenCalledTimes(1);
 
