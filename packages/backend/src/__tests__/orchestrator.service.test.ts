@@ -266,6 +266,7 @@ describe("OrchestratorService", () => {
       testFramework: "vitest",
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       reviewMode: "never",
+      deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
     });
     mockRecoverOrphanedTasks.mockResolvedValue({ recovered: [] });
     mockRecoverFromStaleHeartbeats.mockResolvedValue({ recovered: [] });
@@ -608,6 +609,7 @@ describe("OrchestratorService", () => {
         testFramework: "vitest",
         codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
         reviewMode: "always",
+        deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
       });
       mockCommitWip.mockResolvedValue(undefined);
       mockMergeToMain.mockResolvedValue(undefined);
@@ -850,6 +852,7 @@ describe("OrchestratorService", () => {
         testFramework: "vitest",
         codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
         reviewMode: "always",
+        deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
       });
 
       mockBeadsReady.mockResolvedValue([task]);
@@ -959,6 +962,7 @@ describe("OrchestratorService", () => {
         testFramework: "vitest",
         codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
         reviewMode: "always",
+        deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
       });
 
       mockBeadsReady.mockResolvedValue([task]);
@@ -1340,6 +1344,7 @@ describe("OrchestratorService", () => {
         codingAgent: defaultAgent,
         codingAgentByComplexity: { high: veryHighAgent },
         reviewMode: "always",
+        deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
       });
       mockGetPlanComplexityForTask.mockResolvedValue("high");
 
@@ -1385,6 +1390,511 @@ describe("OrchestratorService", () => {
 
       await reviewOnExit(0);
       await new Promise((r) => setTimeout(r, 300));
+    });
+  });
+
+  // ─── Crash recovery persist/restore round-trip ───
+  describe("crash recovery - persistState/restoreState round-trip", () => {
+    it("persists state with correct structure when task starts and can be restored", async () => {
+      const task = {
+        id: "task-persist-1",
+        title: "Task for persist test",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-persist");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(wtPath, ".opensprint", "active", "task-persist-1")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+
+      let capturedPersistedState: unknown = null;
+      mockWriteJsonAtomic.mockImplementation(async (filePath: string, data: unknown) => {
+        capturedPersistedState = data;
+      });
+
+      mockInvokeCodingAgent.mockReturnValue({
+        kill: vi.fn(),
+        pid: 12345,
+      });
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      expect(capturedPersistedState).toBeDefined();
+      const persisted = capturedPersistedState as Record<string, unknown>;
+      expect(persisted.projectId).toBe(projectId);
+      expect(persisted.currentTaskId).toBe("task-persist-1");
+      expect(persisted.currentPhase).toBe("coding");
+      expect(persisted.branchName).toBe("opensprint/task-persist-1");
+      expect(persisted.attempt).toBe(1);
+      expect(persisted.agentPid).toBe(12345);
+      expect(persisted.lastTransition).toBeDefined();
+      expect(typeof persisted.lastTransition).toBe("string");
+    });
+
+    it("restores from persisted state after simulated crash with in-progress task", async () => {
+      const persistedState = {
+        projectId,
+        currentTaskId: "task-roundtrip",
+        currentTaskTitle: "Round-trip task",
+        currentPhase: "coding" as const,
+        branchName: "opensprint/task-roundtrip",
+        worktreePath: null,
+        agentPid: 999999999,
+        attempt: 2,
+        startedAt: new Date().toISOString(),
+        lastTransition: new Date().toISOString(),
+        lastOutputTimestamp: null,
+        queueDepth: 1,
+        totalDone: 3,
+        totalFailed: 0,
+      };
+
+      const statePath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorState);
+      await fs.writeFile(statePath, JSON.stringify(persistedState), "utf-8");
+
+      mockGetCommitCountAhead.mockResolvedValue(0);
+      mockCaptureBranchDiff.mockResolvedValue("");
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 150));
+
+      const status = await orchestrator.getStatus(projectId);
+      expect(status.totalDone).toBe(3);
+      expect(status.totalFailed).toBe(1);
+      expect(mockBeadsUpdate).toHaveBeenCalledWith(repoPath, "task-roundtrip", {
+        status: "open",
+        assignee: "",
+      });
+    });
+  });
+
+  // ─── Progressive backoff / infra vs quality ───
+  describe("progressive backoff - infra vs quality failure distinction", () => {
+    it("quality failure (test_failure) at attempt 1 retries immediately without demotion", async () => {
+      const task = {
+        id: "task-quality-fail",
+        title: "Task with test failure",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-quality");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(wtPath, ".opensprint", "active", "task-quality-fail")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockGetChangedFiles.mockResolvedValue([]);
+      mockReadResult.mockResolvedValue({ status: "success", summary: "Done" });
+      mockRunScopedTests.mockResolvedValue({
+        passed: 1,
+        failed: 2,
+        rawOutput: "2 tests failed",
+      });
+
+      let onExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeCodingAgent.mockImplementation(
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
+          onExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      await onExit(0);
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(mockBeadsComment).toHaveBeenCalledWith(
+        repoPath,
+        "task-quality-fail",
+        expect.stringContaining("[test_failure]")
+      );
+      expect(mockBeadsSetCumulativeAttempts).toHaveBeenCalledWith(repoPath, "task-quality-fail", 1);
+      expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, "task-quality-fail");
+      expect(mockDeleteBranch).not.toHaveBeenCalled();
+    });
+
+    it("quality failure (review_rejection) triggers retry with review feedback", async () => {
+      const task = {
+        id: "task-review-reject",
+        title: "Task with review rejection",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-review-reject");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockGetSettings.mockResolvedValue({
+        testFramework: "vitest",
+        codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+        reviewMode: "always",
+        deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
+      });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(wtPath, ".opensprint", "active", "task-review-reject")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockGetChangedFiles.mockResolvedValue([]);
+      mockRunScopedTests.mockResolvedValue({ passed: 2, failed: 0, rawOutput: "ok" });
+      mockCaptureBranchDiff.mockResolvedValue("diff");
+
+      mockReadResult
+        .mockResolvedValueOnce({ status: "success", summary: "Implemented" })
+        .mockResolvedValueOnce({
+          status: "rejected",
+          summary: "Missing tests",
+          issues: ["Add unit tests"],
+        });
+
+      let codingOnExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeCodingAgent.mockImplementation(
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
+          codingOnExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      let reviewOnExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeReviewAgent.mockImplementation(
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
+          reviewOnExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12346 };
+        }
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+      await codingOnExit(0);
+      await new Promise((r) => setTimeout(r, 300));
+
+      mockCreateSession.mockResolvedValue({ id: "sess-1" });
+      mockArchiveSession.mockResolvedValue(undefined);
+
+      await reviewOnExit(0);
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(mockBeadsComment).toHaveBeenCalledWith(
+        repoPath,
+        "task-review-reject",
+        expect.stringContaining("Review rejected (attempt 1)")
+      );
+      expect(mockBeadsSetCumulativeAttempts).toHaveBeenCalledWith(
+        repoPath,
+        "task-review-reject",
+        1
+      );
+    });
+  });
+
+  // ─── MAX_INFRA_RETRIES (2 free retries) ───
+  describe("infrastructure retry counting - MAX_INFRA_RETRIES", () => {
+    it("agent_crash gets 2 free retries before counting toward backoff", async () => {
+      const task = {
+        id: "task-infra-retries",
+        title: "Task with agent crashes",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-infra");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(wtPath, ".opensprint", "active", "task-infra-retries")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockReadResult.mockResolvedValue(null);
+
+      let onExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeCodingAgent.mockImplementation(
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
+          onExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      await onExit(143);
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(mockBeadsSetCumulativeAttempts).not.toHaveBeenCalled();
+      expect(mockBeadsComment).toHaveBeenCalledWith(
+        repoPath,
+        "task-infra-retries",
+        expect.stringContaining("[agent_crash]")
+      );
+      expect(mockCreateTaskWorktree.mock.calls.length).toBeGreaterThanOrEqual(2);
+
+      await onExit(143);
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(mockCreateTaskWorktree.mock.calls.length).toBeGreaterThanOrEqual(3);
+
+      await onExit(143);
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(mockBeadsSetCumulativeAttempts).toHaveBeenCalledWith(
+        repoPath,
+        "task-infra-retries",
+        3
+      );
+    });
+  });
+
+  // ─── Watchdog timeout ───
+  describe("watchdog timeout", () => {
+    it("watchdog triggers nudge at interval and detects stuck agents", async () => {
+      vi.useFakeTimers();
+
+      mockBeadsReady.mockResolvedValue([]);
+
+      await orchestrator.ensureRunning(projectId);
+
+      const nudgeCallsBefore = mockBroadcastToProject.mock.calls.filter(
+        (c: [string, { type?: string }]) => c[1]?.type === "execute.status"
+      ).length;
+
+      await vi.advanceTimersByTimeAsync(61_000);
+
+      const nudgeCallsAfter = mockBroadcastToProject.mock.calls.filter(
+        (c: [string, { type?: string }]) => c[1]?.type === "execute.status"
+      ).length;
+
+      expect(nudgeCallsAfter).toBeGreaterThan(nudgeCallsBefore);
+
+      vi.useRealTimers();
+    });
+  });
+
+  // ─── Multi-project state isolation ───
+  describe("multi-project orchestration - state isolation", () => {
+    it("ensures state isolation between projects", async () => {
+      const projectA = "project-a";
+      const projectB = "project-b";
+      const repoPathA = path.join(repoPath, "repo-a");
+      const repoPathB = path.join(repoPath, "repo-b");
+      await fs.mkdir(path.join(repoPathA, ".opensprint"), { recursive: true });
+      await fs.mkdir(path.join(repoPathB, ".opensprint"), { recursive: true });
+
+      mockGetProject.mockImplementation((id: string) =>
+        Promise.resolve({
+          id,
+          repoPath: id === projectA ? repoPathA : repoPathB,
+        })
+      );
+      mockGetRepoPath.mockImplementation((id: string) =>
+        Promise.resolve(id === projectA ? repoPathA : repoPathB)
+      );
+
+      mockBeadsReady.mockResolvedValue([]);
+
+      await orchestrator.ensureRunning(projectA);
+      await orchestrator.ensureRunning(projectB);
+
+      const statusA = await orchestrator.getStatus(projectA);
+      const statusB = await orchestrator.getStatus(projectB);
+
+      expect(statusA).toBeDefined();
+      expect(statusB).toBeDefined();
+      expect(statusA.currentTask).toBeNull();
+      expect(statusB.currentTask).toBeNull();
+
+      mockBeadsReady.mockResolvedValue([
+        {
+          id: "task-a",
+          title: "Task A",
+          issue_type: "task",
+          priority: 2,
+          status: "open",
+        },
+      ]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(path.join(repoPathA, "wt-a"));
+      mockGetActiveDir.mockReturnValue(path.join(repoPathA, "wt-a", ".opensprint", "active", "task-a"));
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+
+      mockInvokeCodingAgent.mockReturnValue({ kill: vi.fn(), pid: 12345 });
+
+      orchestrator.nudge(projectA);
+      await new Promise((r) => setTimeout(r, 200));
+
+      const statusAAfter = await orchestrator.getStatus(projectA);
+      const statusBAfter = await orchestrator.getStatus(projectB);
+
+      expect(statusAAfter.currentTask).toBe("task-a");
+      expect(statusBAfter.currentTask).toBeNull();
+
+      orchestrator.stopProject(projectA);
+      orchestrator.stopProject(projectB);
+    });
+  });
+
+  // ─── Task selection priority and blocked handling ───
+  describe("task selection - priority and blocked handling", () => {
+    it("filters out blocked tasks from ready list", async () => {
+      mockBeadsReady.mockResolvedValue([
+        { id: "task-blocked", title: "Blocked", issue_type: "task", priority: 2, status: "blocked" },
+        { id: "task-ready", title: "Ready", issue_type: "task", priority: 2, status: "open" },
+      ]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(path.join(repoPath, "wt-ready"));
+      mockGetActiveDir.mockReturnValue(
+        path.join(repoPath, "wt-ready", ".opensprint", "active", "task-ready")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockInvokeCodingAgent.mockReturnValue({ kill: vi.fn(), pid: 12345 });
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(mockBeadsUpdate).toHaveBeenCalledWith(
+        repoPath,
+        "task-ready",
+        expect.objectContaining({ status: "in_progress" })
+      );
+      expect(mockBeadsUpdate).not.toHaveBeenCalledWith(
+        repoPath,
+        "task-blocked",
+        expect.anything()
+      );
+    });
+
+    it("filters out epics and plan approval gate tasks", async () => {
+      mockBeadsReady.mockResolvedValue([
+        { id: "epic-1", title: "Epic", issue_type: "epic", priority: 3, status: "open" },
+        { id: "task-1.0", title: "Plan approval gate", issue_type: "task", priority: 2, status: "open" },
+        { id: "task-1.1", title: "Implement feature", issue_type: "task", priority: 2, status: "open" },
+      ]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(path.join(repoPath, "wt-1.1"));
+      mockGetActiveDir.mockReturnValue(
+        path.join(repoPath, "wt-1.1", ".opensprint", "active", "task-1.1")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockInvokeCodingAgent.mockReturnValue({ kill: vi.fn(), pid: 12345 });
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(mockBeadsUpdate).toHaveBeenCalledWith(
+        repoPath,
+        "task-1.1",
+        expect.objectContaining({ status: "in_progress" })
+      );
+    });
+
+    it("picks first task with all blockers closed", async () => {
+      mockBeadsReady.mockResolvedValue([
+        { id: "task-blocked", title: "Blocked", issue_type: "task", priority: 1, status: "open" },
+        { id: "task-ready", title: "Ready", issue_type: "task", priority: 2, status: "open" },
+      ]);
+      mockBeadsAreAllBlockersClosed
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(path.join(repoPath, "wt-ready"));
+      mockGetActiveDir.mockReturnValue(
+        path.join(repoPath, "wt-ready", ".opensprint", "active", "task-ready")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockInvokeCodingAgent.mockReturnValue({ kill: vi.fn(), pid: 12345 });
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(mockBeadsUpdate).toHaveBeenCalledWith(
+        repoPath,
+        "task-ready",
+        expect.objectContaining({ status: "in_progress" })
+      );
+    });
+  });
+
+  // ─── Agent completion - merge conflict failure path ───
+  describe("agent completion - merge conflict failure path", () => {
+    it("handles merge_conflict failure type and triggers retry", async () => {
+      const task = {
+        id: "task-merge-fail",
+        title: "Task with merge conflict",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, "wt-merge");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(
+        path.join(wtPath, ".opensprint", "active", "task-merge-fail")
+      );
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+      mockGetChangedFiles.mockResolvedValue([]);
+      mockReadResult.mockResolvedValue({ status: "success", summary: "Done" });
+      mockRunScopedTests.mockResolvedValue({ passed: 2, failed: 0, rawOutput: "ok" });
+      mockCommitWip.mockResolvedValue(undefined);
+
+      mockGitQueueEnqueueAndWait.mockRejectedValue(new Error("Merge conflict"));
+      mockVerifyMerge.mockResolvedValue(false);
+
+      let onExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeCodingAgent.mockImplementation(
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
+          onExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      await onExit(0);
+      await new Promise((r) => setTimeout(r, 500));
+
+      expect(mockBeadsComment).toHaveBeenCalledWith(
+        repoPath,
+        "task-merge-fail",
+        expect.stringContaining("[merge_conflict]")
+      );
     });
   });
 });
