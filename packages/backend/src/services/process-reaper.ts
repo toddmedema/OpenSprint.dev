@@ -3,49 +3,66 @@ import { execSync } from "child_process";
 const REAP_INTERVAL_MS = 60_000;
 let timer: ReturnType<typeof setInterval> | null = null;
 
-const ORPHAN_SIGNATURES = ["vitest", "bd daemon --start", "bd daemon start"];
+const ORPHAN_CMD_SIGNATURES = ["vitest", "bd daemon --start", "bd daemon start"];
+const ORPHAN_CLAUDE_SIGNATURES = ["claude", "--print"];
+
+/**
+ * Parse `ps -eo pid,ppid,command` output into structured records.
+ * Using the full `command` field (not `comm`) avoids macOS path-matching
+ * issues where `comm` shows the full binary path (e.g. /Users/x/.local/bin/bd)
+ * instead of just the base name.
+ */
+export function parseOrphanedProcesses(
+  psOutput: string,
+  ownPid: number
+): Array<{ pid: number; command: string }> {
+  const results: Array<{ pid: number; command: string }> = [];
+  for (const line of psOutput.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    // Format: "  PID  PPID COMMAND..."  — first two tokens are numbers
+    const match = trimmed.match(/^(\d+)\s+(\d+)\s+(.+)$/);
+    if (!match) continue;
+    const pid = parseInt(match[1], 10);
+    const ppid = parseInt(match[2], 10);
+    const command = match[3];
+    if (ppid !== 1 || pid === ownPid) continue;
+    results.push({ pid, command });
+  }
+  return results;
+}
 
 /**
  * Finds and kills orphaned worker processes (ppid=1) that were abandoned when
  * their parent was killed. Targets vitest workers and leaked bd daemon
  * processes, which can accumulate hundreds of instances and consume tens of GB.
  *
- * Only targets processes whose ppid is 1 (adopted by init/launchd), meaning
- * the original parent is already gone — safe to kill.
+ * Uses `ps -eo pid,ppid,command` (full command line) instead of `comm` (executable
+ * basename) because macOS `comm` shows the full binary path, breaking exact-match
+ * filters like `$3 == "bd"`.
  */
 function reapOrphanedWorkers(): void {
   if (process.platform === "win32") return;
 
   try {
-    // Find orphaned node AND bd processes (ppid=1)
-    const output = execSync(
-      `ps -eo pid,ppid,comm 2>/dev/null | awk '$2 == 1 && ($3 == "node" || $3 == "bd")' | awk '{print $1}'`,
-      { encoding: "utf-8", timeout: 5_000 }
-    ).trim();
+    const output = execSync("ps -eo pid,ppid,command 2>/dev/null", {
+      encoding: "utf-8",
+      timeout: 10_000,
+    }).trim();
 
     if (!output) return;
 
-    const pids = output
-      .split("\n")
-      .map((p) => parseInt(p.trim(), 10))
-      .filter((p) => !isNaN(p) && p !== process.pid);
-
-    if (pids.length === 0) return;
-
+    const orphans = parseOrphanedProcesses(output, process.pid);
     let killed = 0;
-    for (const pid of pids) {
-      try {
-        const cmdline = execSync(`ps -p ${pid} -o command=`, {
-          encoding: "utf-8",
-          timeout: 2_000,
-        }).trim();
 
-        if (!ORPHAN_SIGNATURES.some((sig) => cmdline.includes(sig))) continue;
-
-        process.kill(pid, "SIGKILL");
-        killed++;
-      } catch {
-        /* process already exited or no permission */
+    for (const { pid, command } of orphans) {
+      if (ORPHAN_CMD_SIGNATURES.some((sig) => command.includes(sig))) {
+        try {
+          process.kill(pid, "SIGKILL");
+          killed++;
+        } catch {
+          /* process already exited or no permission */
+        }
       }
     }
 
@@ -53,7 +70,7 @@ function reapOrphanedWorkers(): void {
       console.log(`[reaper] Killed ${killed} orphaned worker(s)`);
     }
   } catch {
-    /* ps/awk not available or timed out — skip silently */
+    /* ps not available or timed out — skip silently */
   }
 }
 
@@ -66,34 +83,24 @@ function reapOrphanedClaudeProcesses(): void {
   if (process.platform === "win32") return;
 
   try {
-    const output = execSync(
-      `ps -eo pid,ppid,comm 2>/dev/null | awk '$2 == 1 && $3 == "claude"' | awk '{print $1}'`,
-      { encoding: "utf-8", timeout: 5_000 }
-    ).trim();
+    const output = execSync("ps -eo pid,ppid,command 2>/dev/null", {
+      encoding: "utf-8",
+      timeout: 10_000,
+    }).trim();
 
     if (!output) return;
 
-    const pids = output
-      .split("\n")
-      .map((p) => parseInt(p.trim(), 10))
-      .filter((p) => !isNaN(p) && p !== process.pid);
-
-    if (pids.length === 0) return;
-
+    const orphans = parseOrphanedProcesses(output, process.pid);
     let killed = 0;
-    for (const pid of pids) {
-      try {
-        const cmdline = execSync(`ps -p ${pid} -o command=`, {
-          encoding: "utf-8",
-          timeout: 2_000,
-        }).trim();
 
-        if (!cmdline.includes("claude") || !cmdline.includes("--print")) continue;
-
-        process.kill(pid, "SIGKILL");
-        killed++;
-      } catch {
-        /* process already exited or no permission */
+    for (const { pid, command } of orphans) {
+      if (ORPHAN_CLAUDE_SIGNATURES.every((sig) => command.includes(sig))) {
+        try {
+          process.kill(pid, "SIGKILL");
+          killed++;
+        } catch {
+          /* process already exited or no permission */
+        }
       }
     }
 
@@ -101,7 +108,7 @@ function reapOrphanedClaudeProcesses(): void {
       console.log(`[reaper] Killed ${killed} orphaned claude process(es)`);
     }
   } catch {
-    /* ps/awk not available or timed out — skip silently */
+    /* ps not available or timed out — skip silently */
   }
 }
 
