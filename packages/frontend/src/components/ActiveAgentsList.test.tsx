@@ -186,7 +186,7 @@ describe("ActiveAgentsList", () => {
     expect(screen.getByText("Task 1")).toBeInTheDocument();
   });
 
-  it("renders agent icons with 23px width that stretch to match text height", async () => {
+  it("renders agent icons that scale to match text height with correct aspect ratio", async () => {
     mockAgentsActive.mockResolvedValue([
       {
         id: "task-1",
@@ -208,7 +208,6 @@ describe("ActiveAgentsList", () => {
     const listbox = screen.getByRole("listbox");
     const icon = listbox.querySelector("img");
     expect(icon).toBeInTheDocument();
-    expect(icon).toHaveStyle({ width: "23px" });
-    expect(icon).toHaveClass("self-stretch", "object-contain");
+    expect(icon).toHaveClass("self-stretch", "aspect-square");
   });
 });
