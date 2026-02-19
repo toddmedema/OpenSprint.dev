@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { configureStore } from "@reduxjs/toolkit";
+import { agentOutputFilterMiddleware } from "../middleware/agentOutputFilterMiddleware";
 import executeReducer, {
   fetchTasks,
   fetchExecutePlans,
@@ -101,6 +102,8 @@ describe("executeSlice", () => {
   function createStore() {
     return configureStore({
       reducer: { execute: executeReducer, plan: planReducer },
+      middleware: (getDefaultMiddleware) =>
+        getDefaultMiddleware().concat(agentOutputFilterMiddleware),
     });
   }
 

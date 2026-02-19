@@ -10,6 +10,7 @@ import evalReducer from "./slices/evalSlice";
 import deliverReducer from "./slices/deliverSlice";
 import notificationReducer from "./slices/notificationSlice";
 import { websocketMiddleware } from "./middleware/websocketMiddleware";
+import { agentOutputFilterMiddleware } from "./middleware/agentOutputFilterMiddleware";
 import { notificationListener } from "./listeners/notificationListener";
 
 export const store = configureStore({
@@ -30,7 +31,7 @@ export const store = configureStore({
         ignoredActions: ["ws/connect", "ws/disconnect", "ws/send"],
       },
     })
-      .concat(websocketMiddleware)
+      .concat(websocketMiddleware, agentOutputFilterMiddleware)
       .prepend(notificationListener.middleware),
 });
 

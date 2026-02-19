@@ -2,10 +2,6 @@ import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/tool
 import type { AgentSession, Task, KanbanColumn, Plan } from "@opensprint/shared";
 import { api } from "../../api/client";
 import { setPlansAndGraph } from "./planSlice";
-import {
-  filterAgentOutputChunk,
-  resetAgentOutputFilter,
-} from "../../utils/agentOutputFilter";
 
 /** Task display shape for kanban (subset of Task) */
 export type TaskCard = Pick<
@@ -147,14 +143,13 @@ const executeSlice = createSlice({
       state.taskDetail = null;
       state.taskDetailError = null;
       state.agentOutput = [];
-      resetAgentOutputFilter();
     },
     appendAgentOutput(state, action: PayloadAction<{ taskId: string; chunk: string }>) {
       if (action.payload.taskId === state.selectedTaskId) {
         state.completionState = null;
-        const filtered = filterAgentOutputChunk(action.payload.chunk);
-        if (filtered) {
-          state.agentOutput.push(filtered);
+        const chunk = action.payload.chunk;
+        if (chunk) {
+          state.agentOutput.push(chunk);
           if (state.agentOutput.length > MAX_AGENT_OUTPUT) {
             state.agentOutput = state.agentOutput.slice(-MAX_AGENT_OUTPUT);
           }
