@@ -22,6 +22,12 @@ const BD_GLOBAL_FLAGS = "--no-daemon";
 /** Repo paths where this backend has started a daemon (for shutdown cleanup) */
 const managedReposForShutdown = new Set<string>();
 
+/**
+ * Repo paths where daemon has been ensured in this process.
+ * Once ensured, skip daemon stop+start on subsequent exec calls (~200ms savings each).
+ */
+const daemonEnsuredRepos = new Set<string>();
+
 /** Path to backend.pid file for file-based lock (prevents multiple backends managing same repo) */
 const BACKEND_PID_FILE = ".beads/backend.pid";
 
@@ -101,6 +107,7 @@ export class BeadsService {
   /** Reset module-level state (for tests only) */
   static resetForTesting(): void {
     managedReposForShutdown.clear();
+    daemonEnsuredRepos.clear();
   }
 
   /**
@@ -108,6 +115,9 @@ export class BeadsService {
    * to prevent accumulation. Skips if another backend holds backend.pid lock.
    */
   private async startDaemonIfNeeded(repoPath: string): Promise<void> {
+    // Already ensured daemon for this repo in this process — skip stop+start (~200ms each)
+    if (daemonEnsuredRepos.has(repoPath)) return;
+
     const beadsDir = path.join(repoPath, ".beads");
     const backendPidPath = path.join(repoPath, BACKEND_PID_FILE);
 
@@ -147,6 +157,7 @@ export class BeadsService {
         env: { ...process.env },
       });
       managedReposForShutdown.add(repoPath);
+      daemonEnsuredRepos.add(repoPath);
 
       // Write our PID to claim we're managing this repo
       try {
