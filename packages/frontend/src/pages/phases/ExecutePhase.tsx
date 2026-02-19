@@ -148,24 +148,20 @@ function SourceFeedbackSection({
 
   return (
     <div className="border-b border-theme-border">
-      <div className="flex items-center justify-between p-4">
-        <h4
-          className="text-xs font-medium text-theme-muted uppercase tracking-wide"
-          id="source-feedback-header"
-        >
-          Source feedback
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
+        aria-expanded={expanded}
+        aria-controls="source-feedback-content"
+        aria-label={expanded ? "Collapse Source Feedback" : "Expand Source Feedback"}
+        id="source-feedback-header"
+      >
+        <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">
+          Source Feedback
         </h4>
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="text-theme-muted text-xs p-1 -m-1 rounded hover:bg-theme-border-subtle/50 transition-colors"
-          aria-expanded={expanded}
-          aria-controls="source-feedback-content"
-          aria-label={expanded ? "Collapse Source feedback" : "Expand Source feedback"}
-        >
-          {expanded ? "▼" : "▶"}
-        </button>
-      </div>
+        <span className="text-theme-muted text-xs">{expanded ? "▼" : "▶"}</span>
+      </button>
       {expanded && (
         <div
           id="source-feedback-content"
@@ -625,28 +621,26 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
               </div>
 
               <div className="border-b border-theme-border">
-              <div className="flex items-center justify-between p-4">
-                <h4
-                  className="text-xs font-medium text-theme-muted uppercase tracking-wide"
-                  id="artifacts-header"
-                >
-                  {isDoneTask ? "Done work artifacts" : "Live agent output"}
+              <button
+                type="button"
+                onClick={() => setArtifactsSectionExpanded(!artifactsSectionExpanded)}
+                className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
+                aria-expanded={artifactsSectionExpanded}
+                aria-controls="artifacts-content"
+                aria-label={
+                  artifactsSectionExpanded
+                    ? `Collapse ${isDoneTask ? "Done Work Artifacts" : "Live agent output"}`
+                    : `Expand ${isDoneTask ? "Done Work Artifacts" : "Live agent output"}`
+                }
+                id="artifacts-header"
+              >
+                <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">
+                  {isDoneTask ? "Done Work Artifacts" : "Live agent output"}
                 </h4>
-                <button
-                  type="button"
-                  onClick={() => setArtifactsSectionExpanded(!artifactsSectionExpanded)}
-                  className="text-theme-muted text-xs p-1 -m-1 rounded hover:bg-theme-border-subtle/50 transition-colors"
-                  aria-expanded={artifactsSectionExpanded}
-                  aria-controls="artifacts-content"
-                  aria-label={
-                    artifactsSectionExpanded
-                      ? `Collapse ${isDoneTask ? "Done work artifacts" : "Live agent output"}`
-                      : `Expand ${isDoneTask ? "Done work artifacts" : "Live agent output"}`
-                  }
-                >
+                <span className="text-theme-muted text-xs">
                   {artifactsSectionExpanded ? "▼" : "▶"}
-                </button>
-              </div>
+                </span>
+              </button>
               {artifactsSectionExpanded && (
               <div
                 id="artifacts-content"
