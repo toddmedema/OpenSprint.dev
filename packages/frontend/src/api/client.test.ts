@@ -122,4 +122,54 @@ describe("api client", () => {
       expect(body.prdSectionFocus).toBe("overview");
     });
   });
+
+  describe("feedback", () => {
+    it("submit includes priority in body when provided", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: vi.fn().mockResolvedValue({
+          data: {
+            id: "fb1",
+            text: "Critical bug",
+            category: "bug",
+            mappedPlanId: null,
+            createdTaskIds: [],
+            status: "pending",
+            createdAt: new Date().toISOString(),
+          },
+        }),
+      } as Response);
+
+      await api.feedback.submit("proj-1", "Critical bug", undefined, undefined, 0);
+      const call = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(call[1]?.body as string);
+      expect(body.text).toBe("Critical bug");
+      expect(body.priority).toBe(0);
+    });
+
+    it("submit omits priority from body when not provided", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: vi.fn().mockResolvedValue({
+          data: {
+            id: "fb2",
+            text: "Normal feedback",
+            category: "bug",
+            mappedPlanId: null,
+            createdTaskIds: [],
+            status: "pending",
+            createdAt: new Date().toISOString(),
+          },
+        }),
+      } as Response);
+
+      await api.feedback.submit("proj-1", "Normal feedback");
+      const call = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(call[1]?.body as string);
+      expect(body.text).toBe("Normal feedback");
+      expect(body).not.toHaveProperty("priority");
+    });
+  });
 });

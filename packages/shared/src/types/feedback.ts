@@ -38,4 +38,6 @@ export interface FeedbackItem {
   parent_id?: string | null;
   /** Nesting depth computed from the parent chain (0 for top-level). PRD §7.4.1 */
   depth?: number;
+  /** User-specified priority (0=Critical, 1=High, 2=Medium, 3=Low, 4=Lowest) from submission */
+  userPriority?: number | null;
 }

@@ -241,6 +241,44 @@ describe("FeedbackService", () => {
     expect(item.id).toHaveLength(6);
   });
 
+  it("should store userPriority when priority is provided (0-4)", async () => {
+    feedbackIdSequence = ["prio01"];
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "bug",
+        mappedPlanId: null,
+        task_titles: ["Fix critical bug"],
+      }),
+    });
+
+    const item = await feedbackService.submitFeedback(projectId, {
+      text: "Critical bug in auth",
+      priority: 0,
+    });
+
+    expect(item.userPriority).toBe(0);
+
+    const stored = await feedbackService.getFeedback(projectId, item.id);
+    expect(stored.userPriority).toBe(0);
+  });
+
+  it("should omit userPriority when priority is not provided", async () => {
+    feedbackIdSequence = ["noprio"];
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "bug",
+        mappedPlanId: null,
+        task_titles: ["Fix something"],
+      }),
+    });
+
+    const item = await feedbackService.submitFeedback(projectId, {
+      text: "Normal feedback",
+    });
+
+    expect(item.userPriority).toBeUndefined();
+  });
+
   it("should retry with new ID on collision", async () => {
     const repoPath = path.join(tempDir, "my-project");
     const feedbackDir = path.join(repoPath, OPENSPRINT_PATHS.feedback);

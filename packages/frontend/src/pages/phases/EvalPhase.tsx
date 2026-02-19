@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import type { FeedbackItem, KanbanColumn } from "@opensprint/shared";
+import { PRIORITY_LABELS } from "@opensprint/shared";
 import { useAppDispatch, useAppSelector } from "../../store";
 import { submitFeedback, resolveFeedback, removeFeedbackItem } from "../../store/slices/evalSlice";
 import { TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
@@ -479,6 +480,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
   /* ── Local UI state (preserved by mount-all) ── */
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
+  const [priority, setPriority] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() =>
@@ -554,9 +556,13 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
     if (!input.trim() || submitting) return;
     const text = input.trim();
     const imagePayload = images.length > 0 ? images : undefined;
+    const priorityPayload = priority != null ? priority : undefined;
     setInput("");
     setImages([]);
-    await dispatch(submitFeedback({ projectId, text, images: imagePayload }));
+    setPriority(null);
+    await dispatch(
+      submitFeedback({ projectId, text, images: imagePayload, priority: priorityPayload })
+    );
   };
 
   const handleSubmitReply = useCallback(
@@ -659,6 +665,24 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
               </div>
             )}
             <div className="flex justify-end items-center gap-2">
+              <select
+                value={priority ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPriority(v === "" ? null : Number(v));
+                }}
+                disabled={submitting}
+                className="input text-sm py-1.5 px-2.5 w-auto min-w-[10rem] bg-theme-input-bg text-theme-input-text ring-theme-ring"
+                aria-label="Priority (optional)"
+                data-testid="feedback-priority-select"
+              >
+                <option value="">Priority (optional)</option>
+                {[0, 1, 2, 3, 4].map((p) => (
+                  <option key={p} value={p}>
+                    {PRIORITY_LABELS[p]}
+                  </option>
+                ))}
+              </select>
               <input
                 ref={fileInputRef}
                 type="file"

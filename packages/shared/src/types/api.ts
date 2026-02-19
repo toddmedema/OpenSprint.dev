@@ -42,4 +42,6 @@ export interface FeedbackSubmitRequest {
   images?: string[];
   /** ID of the parent feedback item when creating a reply. PRD §7.4.1 threaded replies */
   parent_id?: string | null;
+  /** User-specified priority (0=Critical, 1=High, 2=Medium, 3=Low, 4=Lowest). Omitted when not set. */
+  priority?: number | null;
 }

@@ -150,6 +150,12 @@ export class FeedbackService {
       }
     }
 
+    // Validate and store user-specified priority (0-4)
+    const userPriority =
+      typeof body?.priority === "number" && body.priority >= 0 && body.priority <= 4
+        ? body.priority
+        : undefined;
+
     // Create initial feedback item (PRD §7.4.1: parent_id null for top-level, depth 0)
     const item: FeedbackItem = {
       id,
@@ -162,6 +168,7 @@ export class FeedbackService {
       ...(images.length > 0 && { images }),
       parent_id: parentId ?? null,
       depth,
+      ...(userPriority !== undefined && { userPriority }),
     };
 
     // Save immediately
