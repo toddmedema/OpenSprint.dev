@@ -26,6 +26,12 @@ Open Sprint solves this with a Product-Driven web UI that maintains context acro
 
 _Open Sprint_: The speed of a full-out open sprint. Agile methodology sprints of quick iteration and user feedback. Open source software. And a nod to OpenAI for starting this crazy new era.
 
+### What about Gas Town?
+
+You've probably heard about [Gas Town]([url](https://github.com/steveyegge/gastown)), the original AI orchestrator. 
+
+Open Sprint takes the concept of an AI orchestrator and levels it up: now you're not working in terminals giving text-only prompts and trying to keep track of agents, you're working in a web-first workflow that gives Jira a run for its money. Brainstorm your PRD alongside an agent in a Google Docs-like interface. Track project status and provide feedback (including wonderful web features like attaching screenshots and replying inline). Once you've opened your sprint, you'll never be able to stop!
+
 ## Quick Start
 
 ```bash
