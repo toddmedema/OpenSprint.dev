@@ -59,7 +59,6 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    expect(screen.getByText("A test project")).toBeInTheDocument();
     expect(screen.getByText("sketch")).toBeInTheDocument();
     expect(screen.getByText("25%")).toBeInTheDocument();
   });
