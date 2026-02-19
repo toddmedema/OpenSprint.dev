@@ -157,21 +157,29 @@ export class BeadsService {
       }
     } catch (err: unknown) {
       const e = err as { stderr?: string; message?: string };
-      console.warn(
-        `[beads] daemon start failed for ${repoPath}: ${e.stderr ?? e.message}`
-      );
+      console.warn(`[beads] daemon start failed for ${repoPath}: ${e.stderr ?? e.message}`);
     }
   }
 
+  /**
+   * Import JSONL into the database to fix staleness (e.g. after git pull).
+   * Uses `bd import --orphan-handling skip` instead of `sync --import-only` so that
+   * issues with missing parent references (e.g. orphaned children) don't block import.
+   * "allow" still fails on missing parents in beads 0.49.x; "skip" skips orphan deps and completes.
+   */
   private async syncImport(repoPath: string): Promise<void> {
+    const jsonlPath = path.join(repoPath, ".beads/issues.jsonl");
     try {
-      await execAsync(`bd ${BD_GLOBAL_FLAGS} sync --import-only`, {
+      await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${jsonlPath}" --orphan-handling skip`, {
         cwd: repoPath,
-        timeout: 15_000,
+        timeout: 30_000,
+        maxBuffer: MAX_BUFFER_BYTES,
       });
     } catch (err: unknown) {
       const e = err as { stderr?: string; message?: string };
-      console.warn(`[beads] sync --import-only failed for ${repoPath}: ${e.stderr ?? e.message}`);
+      console.warn(
+        `[beads] import --orphan-handling skip failed for ${repoPath}: ${e.stderr ?? e.message}`
+      );
     }
   }
 
@@ -188,7 +196,7 @@ export class BeadsService {
    * Execute a bd command in the context of a project directory.
    * Ensures daemon is running (with stop-before-start to prevent accumulation)
    * then runs the command with --no-daemon for direct storage access.
-   * Auto-recovers from stale-database errors by running sync --import-only and retrying once.
+   * Auto-recovers from stale-database errors by running import --orphan-handling skip and retrying once.
    */
   private async exec(
     repoPath: string,
@@ -228,7 +236,9 @@ export class BeadsService {
 
       const stderr = err.stderr || err.stdout || err.message;
       if (this.isStaleDbError(stderr)) {
-        console.warn(`[beads] Stale DB detected for ${fullCmd}, running sync --import-only`);
+        console.warn(
+          `[beads] Stale DB detected for ${fullCmd}, running import --orphan-handling skip`
+        );
         await this.syncImport(repoPath);
         try {
           const { stdout } = await execAsync(fullCmd, {
@@ -378,7 +388,7 @@ export class BeadsService {
    */
   async export(repoPath: string, outputPath: string): Promise<void> {
     try {
-      await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i ${outputPath}`, {
+      await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${outputPath}" --orphan-handling skip`, {
         cwd: repoPath,
         timeout: 30_000,
         maxBuffer: MAX_BUFFER_BYTES,

@@ -58,6 +58,7 @@ const {
   mockWriteJsonAtomic,
   mockGitQueueEnqueue,
   mockGitQueueEnqueueAndWait,
+  mockGetPlanComplexityForTask,
 } = vi.hoisted(() => ({
   mockBroadcastToProject: vi.fn(),
   mockSendAgentOutputToProject: vi.fn(),
@@ -107,6 +108,7 @@ const {
   mockWriteJsonAtomic: vi.fn(),
   mockGitQueueEnqueue: vi.fn().mockResolvedValue(undefined),
   mockGitQueueEnqueueAndWait: vi.fn().mockResolvedValue(undefined),
+  mockGetPlanComplexityForTask: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../websocket/index.js", () => ({
@@ -237,6 +239,10 @@ vi.mock("../services/git-commit-queue.service.js", () => ({
 
 vi.mock("../utils/file-utils.js", () => ({
   writeJsonAtomic: (...args: unknown[]) => mockWriteJsonAtomic(...args),
+}));
+
+vi.mock("../services/plan-complexity.js", () => ({
+  getPlanComplexityForTask: (...args: unknown[]) => mockGetPlanComplexityForTask(...args),
 }));
 
 // ─── Tests ───
@@ -1229,6 +1235,156 @@ describe("OrchestratorService", () => {
         "task-no-result-other",
         expect.stringContaining("Attempt 1 failed [no_result]")
       );
+    });
+  });
+
+  describe("complexity-based agent routing", () => {
+    const veryHighAgent = { type: "claude" as const, model: "claude-opus-4", cliCommand: null };
+    const defaultAgent = { type: "claude" as const, model: "claude-sonnet-4", cliCommand: null };
+
+    function setupTaskRun(taskId: string) {
+      const task = {
+        id: taskId,
+        title: "Complexity routed task",
+        issue_type: "task",
+        priority: 2,
+        status: "open",
+      };
+
+      const wtPath = path.join(repoPath, `wt-${taskId}`);
+
+      mockBeadsReady.mockResolvedValue([task]);
+      mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
+      mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
+      mockCreateTaskWorktree.mockResolvedValue(wtPath);
+      mockGetActiveDir.mockReturnValue(path.join(wtPath, ".opensprint", "active", taskId));
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+
+      let onExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeCodingAgent.mockImplementation(
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
+          onExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      return { task, wtPath, getOnExit: () => onExit };
+    }
+
+    it("uses per-complexity agent override when complexity matches", async () => {
+      mockGetSettings.mockResolvedValue({
+        testFramework: "vitest",
+        codingAgent: defaultAgent,
+        codingAgentByComplexity: { very_high: veryHighAgent },
+        reviewMode: "never",
+      });
+      mockGetPlanComplexityForTask.mockResolvedValue("very_high");
+
+      const { wtPath } = setupTaskRun("task-complexity-vh");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      expect(mockInvokeCodingAgent).toHaveBeenCalled();
+      const invokeCall = mockInvokeCodingAgent.mock.calls[0];
+      const agentConfig = invokeCall[1];
+      expect(agentConfig).toEqual(veryHighAgent);
+    });
+
+    it("falls back to default codingAgent when no complexity override", async () => {
+      mockGetSettings.mockResolvedValue({
+        testFramework: "vitest",
+        codingAgent: defaultAgent,
+        codingAgentByComplexity: { very_high: veryHighAgent },
+        reviewMode: "never",
+      });
+      mockGetPlanComplexityForTask.mockResolvedValue("low");
+
+      const { wtPath } = setupTaskRun("task-complexity-low");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      expect(mockInvokeCodingAgent).toHaveBeenCalled();
+      const invokeCall = mockInvokeCodingAgent.mock.calls[0];
+      const agentConfig = invokeCall[1];
+      expect(agentConfig).toEqual(defaultAgent);
+    });
+
+    it("falls back to default codingAgent when complexity is undefined", async () => {
+      mockGetSettings.mockResolvedValue({
+        testFramework: "vitest",
+        codingAgent: defaultAgent,
+        codingAgentByComplexity: { very_high: veryHighAgent },
+        reviewMode: "never",
+      });
+      mockGetPlanComplexityForTask.mockResolvedValue(undefined);
+
+      const { wtPath } = setupTaskRun("task-complexity-undef");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      expect(mockInvokeCodingAgent).toHaveBeenCalled();
+      const invokeCall = mockInvokeCodingAgent.mock.calls[0];
+      const agentConfig = invokeCall[1];
+      expect(agentConfig).toEqual(defaultAgent);
+    });
+
+    it("uses per-complexity override for review phase too", async () => {
+      mockGetSettings.mockResolvedValue({
+        testFramework: "vitest",
+        codingAgent: defaultAgent,
+        codingAgentByComplexity: { high: veryHighAgent },
+        reviewMode: "always",
+      });
+      mockGetPlanComplexityForTask.mockResolvedValue("high");
+
+      const { wtPath, getOnExit } = setupTaskRun("task-complexity-review");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+
+      mockReadResult
+        .mockResolvedValueOnce({ status: "success", summary: "Done" })
+        .mockResolvedValueOnce({ status: "approved", summary: "LGTM" });
+      mockGetChangedFiles.mockResolvedValue([]);
+      mockRunScopedTests.mockResolvedValue({ passed: 2, failed: 0, rawOutput: "ok" });
+      mockCaptureBranchDiff.mockResolvedValue("diff");
+
+      let reviewOnExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeReviewAgent.mockImplementation(
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
+          reviewOnExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12346 };
+        }
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await new Promise((r) => setTimeout(r, 300));
+
+      const codingOnExit = getOnExit();
+      await codingOnExit(0);
+      await new Promise((r) => setTimeout(r, 300));
+
+      expect(mockInvokeReviewAgent).toHaveBeenCalled();
+      const reviewCall = mockInvokeReviewAgent.mock.calls[0];
+      const reviewAgentConfig = reviewCall[1];
+      expect(reviewAgentConfig).toEqual(veryHighAgent);
+
+      mockBeadsShow.mockResolvedValue({
+        id: "task-complexity-review",
+        title: "Complexity routed task",
+        issue_type: "task",
+        priority: 2,
+        status: "in_progress",
+      });
+      mockCreateSession.mockResolvedValue({ id: "sess-1" });
+      mockArchiveSession.mockResolvedValue(undefined);
+
+      await reviewOnExit(0);
+      await new Promise((r) => setTimeout(r, 300));
     });
   });
 });

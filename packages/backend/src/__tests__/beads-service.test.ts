@@ -438,6 +438,36 @@ describe("BeadsService", () => {
     });
   });
 
+  describe("stale DB recovery", () => {
+    it("uses import --orphan-handling skip when DB is stale, then retries", async () => {
+      const execCalls: string[] = [];
+      let listCallCount = 0;
+      mockExecImpl = async (cmd: string) => {
+        execCalls.push(cmd);
+        if (cmd.includes("list --all")) {
+          listCallCount++;
+          if (listCallCount === 1) {
+            throw Object.assign(new Error("Database out of sync"), {
+              stderr: "Database out of sync with JSONL. Run 'bd sync --import-only' to fix.",
+            });
+          }
+          return { stdout: "[]", stderr: "" };
+        }
+        if (cmd.includes("import -i") && cmd.includes("--orphan-handling skip")) {
+          return { stdout: "", stderr: "" };
+        }
+        return { stdout: "[]", stderr: "" };
+      };
+      const result = await beads.listAll("/repo");
+      expect(result).toEqual([]);
+      const importCall = execCalls.find(
+        (c) => c.includes("import -i") && c.includes("--orphan-handling skip")
+      );
+      expect(importCall).toBeDefined();
+      expect(execCalls.filter((c) => c.includes("list --all"))).toHaveLength(2);
+    });
+  });
+
   describe("export", () => {
     it("runs bd import before export to prevent stale DB errors", async () => {
       const execCalls: string[] = [];
@@ -446,7 +476,12 @@ describe("BeadsService", () => {
         return { stdout: "", stderr: "" };
       };
       await beads.export("/repo", ".beads/issues.jsonl");
-      const importIdx = execCalls.findIndex((c) => c.includes("import -i .beads/issues.jsonl"));
+      const importIdx = execCalls.findIndex(
+        (c) =>
+          c.includes("import -i") &&
+          c.includes(".beads/issues.jsonl") &&
+          c.includes("--orphan-handling skip")
+      );
       const exportIdx = execCalls.findIndex((c) => c.includes("export -o"));
       expect(importIdx).toBeGreaterThanOrEqual(0);
       expect(exportIdx).toBeGreaterThan(importIdx);

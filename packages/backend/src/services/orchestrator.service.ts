@@ -15,6 +15,7 @@ import {
   MAX_PRIORITY_BEFORE_BLOCK,
   resolveTestCommand,
   DEFAULT_REVIEW_MODE,
+  getCodingAgentForComplexity,
 } from "@opensprint/shared";
 import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { ProjectService } from "./project.service.js";
@@ -39,6 +40,7 @@ import {
   type PersistedOrchestratorState as CrashPersistedState,
 } from "./crash-recovery.service.js";
 import { normalizeCodingStatus, normalizeReviewStatus } from "./result-normalizers.js";
+import { getPlanComplexityForTask } from "./plan-complexity.js";
 
 /**
  * Failure types for smarter recovery routing.
@@ -724,6 +726,9 @@ export class OrchestratorService {
       const taskDir = this.sessionManager.getActiveDir(wtPath, task.id);
       const promptPath = path.join(taskDir, "prompt.md");
 
+      const complexity = await getPlanComplexityForTask(repoPath, task);
+      const agentConfig = getCodingAgentForComplexity(settings, complexity);
+
       this.lifecycleManager.run(
         {
           projectId,
@@ -732,7 +737,7 @@ export class OrchestratorService {
           wtPath,
           branchName,
           promptPath,
-          agentConfig: settings.codingAgent,
+          agentConfig,
           agentLabel: state.activeTaskTitle ?? task.id,
           role: "coder",
           onDone: (code) => this.handleCodingDone(projectId, repoPath, task, branchName, code),
@@ -894,6 +899,9 @@ export class OrchestratorService {
 
       const promptPath = path.join(taskDir, "prompt.md");
 
+      const complexity = await getPlanComplexityForTask(repoPath, task);
+      const agentConfig = getCodingAgentForComplexity(settings, complexity);
+
       this.lifecycleManager.run(
         {
           projectId,
@@ -902,7 +910,7 @@ export class OrchestratorService {
           wtPath,
           branchName,
           promptPath,
-          agentConfig: settings.codingAgent,
+          agentConfig,
           agentLabel: state.activeTaskTitle ?? task.id,
           role: "reviewer",
           onDone: (code) => this.handleReviewDone(projectId, repoPath, task, branchName, code),
