@@ -586,6 +586,33 @@ describe("BeadsService", () => {
       expect(Array.isArray(managed)).toBe(true);
     });
 
+    it("runs daemon stop+start only once per repoPath per process (cache)", async () => {
+      const uniqueRepo = path.join(os.tmpdir(), `beads-cache-test-${Date.now()}`);
+      fs.mkdirSync(uniqueRepo, { recursive: true });
+      mockStdout = "[]";
+
+      const execCalls: string[] = [];
+      mockExecImpl = async (cmd: string) => {
+        execCalls.push(cmd);
+        if (cmd.includes("daemon stop") || cmd.includes("daemon start")) {
+          return { stdout: "", stderr: "" };
+        }
+        return { stdout: mockStdout, stderr: "" };
+      };
+
+      // First call: runs stop+start. Second and third: should skip (cache hit)
+      await beads.runBd(uniqueRepo, "list", ["--json"]);
+      await beads.runBd(uniqueRepo, "list", ["--json"]);
+      await beads.runBd(uniqueRepo, "show", ["task-1", "--json"]);
+
+      const stopCalls = execCalls.filter((c) => c.includes("daemon stop"));
+      const startCalls = execCalls.filter((c) => c.includes("daemon start"));
+      expect(stopCalls).toHaveLength(1);
+      expect(startCalls).toHaveLength(1);
+
+      fs.rmSync(uniqueRepo, { recursive: true, force: true });
+    });
+
     it("skips daemon start when another backend has backend.pid (file lock)", async () => {
       const tmpDir = path.join(os.tmpdir(), `beads-test-${Date.now()}`);
       fs.mkdirSync(path.join(tmpDir, ".beads"), { recursive: true });
