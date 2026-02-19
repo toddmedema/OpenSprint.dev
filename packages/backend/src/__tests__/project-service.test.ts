@@ -97,6 +97,58 @@ describe("ProjectService", () => {
     expect(fetched.id).toBe(project.id);
   });
 
+  it("should not include description in created project", async () => {
+    const repoPath = path.join(tempDir, "no-desc-project");
+
+    const project = await projectService.createProject({
+      name: "No Description",
+      repoPath,
+      planningAgent: { type: "claude", model: null, cliCommand: null },
+      codingAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    expect(project.id).toBeDefined();
+    expect(project.name).toBe("No Description");
+    expect((project as Record<string, unknown>).description).toBeUndefined();
+
+    const fetched = await projectService.getProject(project.id);
+    expect((fetched as Record<string, unknown>).description).toBeUndefined();
+  });
+
+  it("should load project without error when index has stale description", async () => {
+    const repoPath = path.join(tempDir, "stale-desc-project");
+
+    const project = await projectService.createProject({
+      name: "Stale Desc",
+      repoPath,
+      planningAgent: { type: "claude", model: null, cliCommand: null },
+      codingAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    // Manually inject a stale description into the index file
+    const indexPath = path.join(tempDir, ".opensprint", "projects.json");
+    const indexRaw = await fs.readFile(indexPath, "utf-8");
+    const index = JSON.parse(indexRaw);
+    index.projects[0].description = "stale description from old version";
+    await fs.writeFile(indexPath, JSON.stringify(index));
+
+    // Verify project loads without error and response has no description
+    const fetched = await projectService.getProject(project.id);
+    expect(fetched.id).toBe(project.id);
+    expect(fetched.name).toBe("Stale Desc");
+    expect((fetched as Record<string, unknown>).description).toBeUndefined();
+
+    // Verify listProjects also works
+    const all = await projectService.listProjects();
+    const found = all.find((p) => p.id === project.id);
+    expect(found).toBeDefined();
+    expect((found as Record<string, unknown>).description).toBeUndefined();
+  });
+
   it("should reject empty project name", async () => {
     await expect(
       projectService.createProject({

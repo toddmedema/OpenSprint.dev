@@ -67,6 +67,32 @@ describe("project-index", () => {
         createdAt: "2026-01-01T00:00:00.000Z",
       });
     });
+
+    it("loads entries with stale description field without error", async () => {
+      const dir = path.join(tempDir, ".opensprint");
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(
+        path.join(dir, "projects.json"),
+        JSON.stringify({
+          projects: [
+            {
+              id: "legacy-1",
+              name: "Legacy Project",
+              repoPath: "/path/to/legacy",
+              createdAt: "2025-01-01T00:00:00.000Z",
+              description: "This is a stale description field",
+            },
+          ],
+        }),
+        "utf-8",
+      );
+
+      const projects = await projectIndex.getProjects();
+      expect(projects).toHaveLength(1);
+      expect(projects[0].id).toBe("legacy-1");
+      expect(projects[0].name).toBe("Legacy Project");
+      expect(projects[0].repoPath).toBe("/path/to/legacy");
+    });
   });
 
   describe("addProject", () => {
