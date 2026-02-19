@@ -72,6 +72,22 @@ flowchart LR
 | **Evaluate** | Submit feedback that AI categorizes and maps back to plan epics for iteration    |
 | **Deliver**  | Ship your code and deliver value!                                                |
 
+### The Agent Team
+
+Open Sprint orchestrates a team of nine specialized agents — each responsible for a distinct part of the SPEED lifecycle:
+
+| Agent          | Fellowship Member                                                                                                         | Phase              | Description                                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dreamer**    | <img src="docs/assets/agent-icons/dreamer.svg" width="24" height="24" alt="" style="vertical-align: middle" /> Gandalf    | Sketch             | The wise conversationalist who refines your idea into a PRD, asking the hard questions and challenging assumptions before the journey begins.   |
+| **Planner**    | <img src="docs/assets/agent-icons/planner.svg" width="24" height="24" alt="" style="vertical-align: middle" /> Aragorn    | Plan               | The brilliant strategist who decomposes a PRD into epics, tasks, and a dependency graph — knowing every milestone and danger on the road ahead. |
+| **Harmonizer** | <img src="docs/assets/agent-icons/harmonizer.svg" width="24" height="24" alt="" style="vertical-align: middle" /> Frodo   | Execute / Evaluate | The steady keeper of the central mission, quietly ensuring the PRD stays true even as implementation forces difficult compromises.              |
+| **Analyst**    | <img src="docs/assets/agent-icons/analyst.svg" width="24" height="24" alt="" style="vertical-align: middle" /> Legolas    | Evaluate           | With eyes that miss nothing, categorizes every piece of user feedback and maps it to the right epic before anyone else has processed it.        |
+| **Summarizer** | <img src="docs/assets/agent-icons/summarizer.svg" width="24" height="24" alt="" style="vertical-align: middle" /> Samwise | Execute            | Ever-faithful and efficient, distills assembled context down to exactly what the Coder needs — nothing more, nothing less.                      |
+| **Auditor**    | <img src="docs/assets/agent-icons/auditor.svg" width="24" height="24" alt="" style="vertical-align: middle" /> Gimli      | Re-execute         | Surveys what has _actually_ been built with unflinching honesty, then determines exactly — and only — what still needs doing.                   |
+| **Coder**      | <img src="docs/assets/agent-icons/coder.svg" width="24" height="24" alt="" style="vertical-align: middle" /> Pippin       | Execute            | Full of energy and occasionally chaotic, dives into every task head-first and always ships working code with tests.                             |
+| **Reviewer**   | <img src="docs/assets/agent-icons/reviewer.svg" width="24" height="24" alt="" style="vertical-align: middle" /> Boromir   | Execute            | Principled and demanding, validates every implementation against its acceptance criteria — approving only what truly serves the cause.          |
+| **Merger**     | <img src="docs/assets/agent-icons/merger.svg" width="24" height="24" alt="" style="vertical-align: middle" /> Merry       | Execute            | Clever and unflappable, steps in when rebase conflicts block the road, resolves the mess with quiet competence, and keeps the journey moving.   |
+
 ## Project Structure
 
 ```
@@ -111,6 +127,15 @@ All scripts can be run from the project root:
 - [Node.js](https://nodejs.org/) >= 20.0.0
 - npm (included with Node.js)
 - Git
+
+## Environment Variables
+
+| Variable                     | Default | Description                                                                                                                                                                         |
+| ---------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`          | —       | API key for Claude agent integration                                                                                                                                                |
+| `CURSOR_API_KEY`             | —       | API key for Cursor agent integration                                                                                                                                                |
+| `PORT`                       | `3100`  | Backend server port                                                                                                                                                                 |
+| `OPENSPRINT_PRESERVE_AGENTS` | unset   | When set to `1`, agent processes survive backend restarts. Automatically set in `npm run dev` so that `tsx watch` restarts don't kill running agents. Do **not** set in production. |
 
 ## Developing on OpenSprint
 

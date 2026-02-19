@@ -1,5 +1,7 @@
 import { spawn, exec } from "child_process";
-import { readFileSync } from "fs";
+import { readFileSync, openSync, closeSync, mkdirSync } from "fs";
+import { open as fsOpen, stat as fsStat } from "fs/promises";
+import path from "path";
 import { promisify } from "util";
 import type { AgentConfig } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
@@ -8,6 +10,8 @@ import { getErrorMessage } from "../utils/error-utils.js";
 import { registerAgentProcess, unregisterAgentProcess } from "./agent-process-registry.js";
 
 const execAsync = promisify(exec);
+
+const OUTPUT_POLL_MS = 500;
 
 /** Format raw agent errors into user-friendly messages with remediation hints */
 function formatAgentError(agentType: "claude" | "cursor" | "custom", raw: string): string {
@@ -107,7 +111,11 @@ export class AgentClient {
   /**
    * Invoke agent with a task file (for Build phase).
    * Spawns the agent as a subprocess and streams output.
+   * When outputLogPath is provided, stdout/stderr are redirected to a file
+   * (allowing the agent to survive backend restarts) and the file is polled
+   * to deliver output via onOutput.
    * @param agentRole - Human-readable role for logging (e.g. 'coder', 'code reviewer')
+   * @param outputLogPath - If set, redirect agent output to this file instead of pipes
    */
   spawnWithTaskFile(
     config: AgentConfig,
@@ -115,7 +123,8 @@ export class AgentClient {
     cwd: string,
     onOutput: (chunk: string) => void,
     onExit: (code: number | null) => void | Promise<void>,
-    agentRole?: string
+    agentRole?: string,
+    outputLogPath?: string
   ): { kill: () => void; pid: number | null } {
     let command: string;
     let args: string[];
@@ -129,7 +138,6 @@ export class AgentClient {
         }
         break;
       case "cursor": {
-        // Cursor agent uses --print with prompt as positional arg (no --input)
         let taskContent: string;
         try {
           taskContent = readFileSync(taskFilePath, "utf-8");
@@ -186,31 +194,58 @@ export class AgentClient {
         );
     }
 
+    // When outputLogPath is provided, open a file descriptor for stdout/stderr
+    // so the agent process survives backend restarts (no broken pipe).
+    let outputFd: number | undefined;
+    if (outputLogPath) {
+      mkdirSync(path.dirname(outputLogPath), { recursive: true });
+      outputFd = openSync(outputLogPath, "w");
+    }
+
+    const stdio: ["ignore", "pipe" | number, "pipe" | number] =
+      outputFd !== undefined ? ["ignore", outputFd, outputFd] : ["ignore", "pipe", "pipe"];
+
     console.log("[agent] Spawning agent subprocess", {
       type: config.type,
       agentRole: agentRole ?? "coder",
       command,
       taskFilePath,
       cwd,
+      outputLogPath: outputLogPath ?? "(pipe)",
     });
 
     const child = spawn(command, args, {
       cwd,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio,
       env: { ...process.env },
       detached: true,
     });
+
+    // Close our copy of the fd; the child process inherits its own.
+    if (outputFd !== undefined) {
+      closeSync(outputFd);
+    }
 
     if (child.pid) {
       registerAgentProcess(child.pid, { processGroup: true });
     }
 
     let killTimer: ReturnType<typeof setTimeout> | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let readOffset = 0;
+
+    const stopPoll = () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
 
     const cleanup = () => {
       if (child.pid) {
         unregisterAgentProcess(child.pid, { processGroup: true });
       }
+      stopPoll();
       child.stdout?.removeAllListeners();
       child.stderr?.removeAllListeners();
       child.removeAllListeners();
@@ -220,19 +255,55 @@ export class AgentClient {
       }
     };
 
-    child.stdout.on("data", (data: Buffer) => {
-      onOutput(data.toString());
-    });
+    /** Read new bytes from the output log file and deliver via onOutput */
+    const drainOutputFile = async (): Promise<void> => {
+      if (!outputLogPath) return;
+      try {
+        const s = await fsStat(outputLogPath);
+        if (s.size <= readOffset) return;
+        const toRead = Math.min(s.size - readOffset, 256 * 1024);
+        const fh = await fsOpen(outputLogPath, "r");
+        try {
+          const buf = Buffer.alloc(toRead);
+          const { bytesRead } = await fh.read(buf, 0, toRead, readOffset);
+          if (bytesRead > 0) {
+            readOffset += bytesRead;
+            onOutput(buf.subarray(0, bytesRead).toString());
+          }
+        } finally {
+          await fh.close();
+        }
+      } catch {
+        // File may not exist yet or transient I/O error
+      }
+    };
 
-    child.stderr.on("data", (data: Buffer) => {
-      onOutput(data.toString());
-    });
+    if (outputLogPath) {
+      // Poll the output file to stream content to the caller
+      pollTimer = setInterval(() => {
+        drainOutputFile().catch(() => {});
+      }, OUTPUT_POLL_MS);
+    } else {
+      // Pipe-based streaming (original behavior)
+      child.stdout!.on("data", (data: Buffer) => {
+        onOutput(data.toString());
+      });
+      child.stderr!.on("data", (data: Buffer) => {
+        onOutput(data.toString());
+      });
+    }
 
     child.on("close", (code) => {
-      cleanup();
-      Promise.resolve(onExit(code)).catch((err) => {
-        console.error("[agent-client] onExit callback failed:", err);
-      });
+      stopPoll();
+      // Final drain to capture any remaining output written before exit
+      drainOutputFile()
+        .catch(() => {})
+        .finally(() => {
+          cleanup();
+          Promise.resolve(onExit(code)).catch((err) => {
+            console.error("[agent-client] onExit callback failed:", err);
+          });
+        });
     });
 
     child.on("error", (err: NodeJS.ErrnoException) => {

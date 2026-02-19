@@ -43,6 +43,7 @@ describe("AgentService", () => {
         onOutput,
         onExit,
         "code reviewer",
+        undefined
       );
       expect(handle).toBe(mockHandle);
     });
@@ -68,6 +69,7 @@ describe("AgentService", () => {
         expect.anything(),
         expect.anything(),
         "senior reviewer",
+        undefined
       );
     });
   });

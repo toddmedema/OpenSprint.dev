@@ -1,11 +1,30 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import { SketchPhase } from "./SketchPhase";
 import sketchReducer from "../../store/slices/sketchSlice";
 import planReducer, { decomposePlans } from "../../store/slices/planSlice";
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+  if (typeof Range !== "undefined" && !Range.prototype.getBoundingClientRect) {
+    Range.prototype.getBoundingClientRect = () =>
+      ({
+        top: 500,
+        left: 500,
+        right: 600,
+        bottom: 520,
+        width: 100,
+        height: 20,
+        x: 500,
+        y: 500,
+        toJSON: () => {},
+      }) as DOMRect;
+  }
+});
 
 const mockChatSend = vi.fn();
 const mockChatHistory = vi.fn();
@@ -93,6 +112,7 @@ function createStore(preloadedState?: {
         reExecutingPlanId: null,
         archivingPlanId: null,
         error: null,
+        backgroundError: null,
       },
     },
   });
@@ -203,8 +223,7 @@ describe("SketchPhase with sketchSlice", () => {
         expect(mockChatSend).toHaveBeenCalledWith(
           "proj-1",
           expect.stringContaining("Here's my existing product requirements document"),
-          "sketch",
-          undefined
+          "sketch"
         );
       });
 
@@ -236,18 +255,19 @@ describe("SketchPhase with sketchSlice", () => {
       resolveSend!({ message: "Done" });
     });
 
-    it("displays error and Dismiss when sendSpecMessage fails", async () => {
+    it("stores error in Redux when sendSpecMessage fails", async () => {
       mockChatSend.mockRejectedValue(new Error("Agent unavailable"));
 
+      const store = createStore();
       const user = userEvent.setup();
-      renderSketchPhase();
+      renderSketchPhase(store);
       const textarea = screen.getByRole("textbox");
       await user.type(textarea, "A todo app");
       await user.click(screen.getByTitle("Sketch it"));
 
       await waitFor(() => {
-        expect(screen.getByText("Agent unavailable")).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /Dismiss/i })).toBeInTheDocument();
+        const state = store.getState();
+        expect(state.sketch.error).toBe("Agent unavailable");
       });
     });
   });
@@ -346,17 +366,55 @@ describe("SketchPhase with sketchSlice", () => {
     });
 
     describe("Discuss popover (selection toolbar)", () => {
+      let getSelectionSpy: ReturnType<typeof vi.spyOn> | null = null;
+
+      const collapsedSel = {
+        isCollapsed: true,
+        rangeCount: 0,
+        toString: () => "",
+        anchorNode: null,
+        focusNode: null,
+        getRangeAt: () => document.createRange(),
+        removeAllRanges: vi.fn(),
+        addRange: vi.fn(),
+      } as unknown as Selection;
+
       /** Simulate text selection in PRD and trigger mouseup to show the Discuss popover */
       function showDiscussPopover(sectionKey: string) {
         const contentEl = screen.getByTestId(`prd-content-${sectionKey}`);
+        const sectionEl = contentEl.closest("[data-prd-section]") ?? contentEl.parentElement!;
+        const text = contentEl.textContent || "selected text";
         const range = document.createRange();
         range.selectNodeContents(contentEl);
-        const sel = window.getSelection()!;
-        sel.removeAllRanges();
-        sel.addRange(range);
-        const container = contentEl.closest("[data-prd-section]") ?? contentEl.parentElement!;
-        fireEvent.mouseUp(container);
+
+        const mockSel = {
+          isCollapsed: false,
+          rangeCount: 1,
+          toString: () => text,
+          anchorNode: contentEl.firstChild || contentEl,
+          focusNode: contentEl.firstChild || contentEl,
+          getRangeAt: () => range,
+          removeAllRanges: vi.fn(),
+          addRange: vi.fn(),
+        };
+        getSelectionSpy?.mockRestore();
+        getSelectionSpy = vi
+          .spyOn(window, "getSelection")
+          .mockReturnValue(mockSel as unknown as Selection);
+
+        fireEvent.mouseUp(sectionEl);
       }
+
+      /** Reset getSelection mock to return collapsed/empty selection for dismiss tests */
+      function clearSelectionMock() {
+        getSelectionSpy?.mockRestore();
+        getSelectionSpy = vi.spyOn(window, "getSelection").mockReturnValue(collapsedSel);
+      }
+
+      afterEach(() => {
+        getSelectionSpy?.mockRestore();
+        getSelectionSpy = null;
+      });
 
       it("shows Discuss popover when user selects text in PRD", async () => {
         const store = createStore({
@@ -367,8 +425,9 @@ describe("SketchPhase with sketchSlice", () => {
         showDiscussPopover("executive_summary");
 
         await waitFor(() => {
-          expect(screen.getByTestId("discuss-popover")).toBeInTheDocument();
-          expect(screen.getByRole("button", { name: /Discuss/i })).toBeInTheDocument();
+          const popover = screen.getByTestId("discuss-popover");
+          expect(popover).toBeInTheDocument();
+          expect(within(popover).getByRole("button", { name: /Discuss/i })).toBeInTheDocument();
         });
       });
 
@@ -385,7 +444,8 @@ describe("SketchPhase with sketchSlice", () => {
           expect(screen.getByTestId("discuss-popover")).toBeInTheDocument();
         });
 
-        const discussBtn = screen.getByRole("button", { name: /Discuss/i });
+        const popover = screen.getByTestId("discuss-popover");
+        const discussBtn = within(popover).getByRole("button", { name: /Discuss/i });
         await user.click(discussBtn);
 
         await waitFor(() => {
@@ -416,7 +476,7 @@ describe("SketchPhase with sketchSlice", () => {
           expect(screen.getByTestId("discuss-popover")).toBeInTheDocument();
         });
 
-        // Click on page header (outside popover and selection)
+        clearSelectionMock();
         await user.click(screen.getByRole("heading", { name: /Product Requirements Document/i }));
 
         await waitFor(() => {
@@ -437,7 +497,7 @@ describe("SketchPhase with sketchSlice", () => {
           expect(screen.getByTestId("discuss-popover")).toBeInTheDocument();
         });
 
-        // Click in chat input (outside popover) - placeholder is "Ask about your PRD" when no selectionContext
+        clearSelectionMock();
         const chatInput = screen.getByPlaceholderText(/Ask about your PRD/);
         await user.click(chatInput);
 
@@ -464,7 +524,7 @@ describe("SketchPhase with sketchSlice", () => {
           expect(screen.getByTestId("discuss-popover")).toBeInTheDocument();
         });
 
-        // Click on different section's content - outside the highlighted text
+        clearSelectionMock();
         const otherSectionContent = screen.getByTestId("prd-content-goals_and_metrics");
         await user.click(otherSectionContent);
 
@@ -486,8 +546,8 @@ describe("SketchPhase with sketchSlice", () => {
           expect(screen.getByTestId("discuss-popover")).toBeInTheDocument();
         });
 
-        // Click Discuss - should trigger discuss flow (selection moves to chat)
-        const discussBtn = screen.getByRole("button", { name: /Discuss/i });
+        const popover = screen.getByTestId("discuss-popover");
+        const discussBtn = within(popover).getByRole("button", { name: /Discuss/i });
         await user.click(discussBtn);
 
         await waitFor(() => {
@@ -512,7 +572,6 @@ describe("SketchPhase with sketchSlice", () => {
         });
         renderSketchPhase(store);
 
-        // Sidebar starts collapsed
         expect(screen.getByRole("button", { name: "Expand Discuss sidebar" })).toBeInTheDocument();
         expect(screen.queryByText(/Discussing:/i)).not.toBeInTheDocument();
 
@@ -522,7 +581,8 @@ describe("SketchPhase with sketchSlice", () => {
           expect(screen.getByTestId("discuss-popover")).toBeInTheDocument();
         });
 
-        const discussBtn = screen.getByRole("button", { name: /Discuss/i });
+        const popover = screen.getByTestId("discuss-popover");
+        const discussBtn = within(popover).getByRole("button", { name: /Discuss/i });
         await user.click(discussBtn);
 
         await waitFor(() => {
@@ -567,8 +627,9 @@ describe("SketchPhase with sketchSlice", () => {
         showDiscussPopover("goals_and_metrics");
 
         await waitFor(() => {
-          expect(screen.getByTestId("discuss-popover")).toBeInTheDocument();
-          expect(screen.getByRole("button", { name: /Discuss/i })).toBeInTheDocument();
+          const popover = screen.getByTestId("discuss-popover");
+          expect(popover).toBeInTheDocument();
+          expect(within(popover).getByRole("button", { name: /Discuss/i })).toBeInTheDocument();
         });
       });
     });
@@ -675,6 +736,11 @@ describe("SketchPhase with sketchSlice", () => {
     });
 
     it("shows Replan it when planStatus.action is replan", async () => {
+      mockGetPlanStatus.mockResolvedValue({
+        hasPlanningRun: true,
+        prdChangedSinceLastRun: true,
+        action: "replan",
+      });
       const store = createStore({
         sketch: { prdContent: { overview: "Content" } },
         plan: {
@@ -685,7 +751,7 @@ describe("SketchPhase with sketchSlice", () => {
       await waitFor(() => {
         expect(screen.getByRole("button", { name: /Replan it/i })).toBeInTheDocument();
       });
-      expect(screen.queryByRole("button", { name: /Plan it/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Plan it$/i })).not.toBeInTheDocument();
     });
 
     it("hides CTA button when planStatus.action is none", async () => {

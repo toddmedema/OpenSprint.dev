@@ -57,6 +57,8 @@ export interface InvokeCodingAgentOptions {
   agentRole?: string;
   /** When provided, auto-registers/unregisters with activeAgentsService */
   tracking?: AgentTrackingInfo;
+  /** File path to redirect agent stdout/stderr for crash-resilient output */
+  outputLogPath?: string;
 }
 
 /** Return type for invokeCodingAgent — handle with kill() to terminate */
@@ -172,7 +174,7 @@ export class AgentService {
     const wrappedOnExit = tracking
       ? (code: number | null) => {
           activeAgentsService.unregister(tracking.id);
-          originalOnExit(code);
+          return originalOnExit(code);
         }
       : originalOnExit;
 
@@ -182,7 +184,8 @@ export class AgentService {
       options.cwd,
       options.onOutput,
       wrappedOnExit,
-      options.agentRole
+      options.agentRole,
+      options.outputLogPath
     );
   }
 

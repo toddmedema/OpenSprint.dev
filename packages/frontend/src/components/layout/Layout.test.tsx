@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import { ThemeProvider } from "../../contexts/ThemeContext";
 import { Layout } from "./Layout";
 
@@ -20,16 +21,23 @@ beforeEach(() => {
     length: 0,
     key: () => null,
   });
-  vi.stubGlobal("matchMedia", vi.fn(() => ({
-    matches: false,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  })));
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+  );
   Object.keys(storage).forEach((k) => delete storage[k]);
 });
 
 function renderLayout(ui: ReactElement) {
-  return render(<ThemeProvider>{ui}</ThemeProvider>);
+  return render(
+    <MemoryRouter>
+      <ThemeProvider>{ui}</ThemeProvider>
+    </MemoryRouter>
+  );
 }
 
 describe("Layout", () => {
@@ -37,7 +45,7 @@ describe("Layout", () => {
     renderLayout(
       <Layout>
         <span data-testid="child">Content</span>
-      </Layout>,
+      </Layout>
     );
     expect(screen.getByTestId("child")).toBeInTheDocument();
   });
@@ -46,7 +54,7 @@ describe("Layout", () => {
     renderLayout(
       <Layout>
         <span>Content</span>
-      </Layout>,
+      </Layout>
     );
     const main = document.querySelector("main");
     expect(main).toBeInTheDocument();

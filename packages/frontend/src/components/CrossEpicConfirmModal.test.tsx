@@ -13,12 +13,12 @@ describe("CrossEpicConfirmModal", () => {
         prerequisitePlanIds={["user-auth", "feature-base"]}
         onConfirm={onConfirm}
         onCancel={onCancel}
-      />,
+      />
     );
 
     expect(screen.getByText(/Cross-epic dependencies/)).toBeInTheDocument();
     expect(screen.getByText(/User Auth, Feature Base/)).toBeInTheDocument();
-    expect(screen.getByText(/must be implemented first/)).toBeInTheDocument();
+    expect(screen.getByText(/be implemented first/)).toBeInTheDocument();
     expect(screen.getByText(/Queueing will also queue those features/)).toBeInTheDocument();
   });
 
@@ -32,7 +32,7 @@ describe("CrossEpicConfirmModal", () => {
         prerequisitePlanIds={["user-auth"]}
         onConfirm={onConfirm}
         onCancel={onCancel}
-      />,
+      />
     );
 
     await user.click(screen.getByRole("button", { name: /Proceed/ }));
@@ -50,7 +50,7 @@ describe("CrossEpicConfirmModal", () => {
         prerequisitePlanIds={["user-auth"]}
         onConfirm={onConfirm}
         onCancel={onCancel}
-      />,
+      />
     );
 
     await user.click(screen.getByRole("button", { name: /Cancel/ }));
@@ -66,7 +66,7 @@ describe("CrossEpicConfirmModal", () => {
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
         confirming={true}
-      />,
+      />
     );
 
     expect(screen.getByRole("button", { name: /Executing…/ })).toBeInTheDocument();

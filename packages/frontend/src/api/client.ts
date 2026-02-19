@@ -45,7 +45,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     const error = await response.json().catch(() => ({
       error: { code: "UNKNOWN", message: response.statusText },
     }));
-    throw new Error(error.error?.message ?? "Request failed");
+    throw new Error(error.error?.message || response.statusText || "Request failed");
   }
 
   if (response.status === 204) {
@@ -66,7 +66,8 @@ export interface ModelOption {
 
 export const api = {
   models: {
-    list: (provider: string) => request<ModelOption[]>(`/models?provider=${encodeURIComponent(provider)}`),
+    list: (provider: string) =>
+      request<ModelOption[]>(`/models?provider=${encodeURIComponent(provider)}`),
   },
   env: {
     getKeys: () => request<{ anthropic: boolean; cursor: boolean }>("/env/keys"),
@@ -109,7 +110,8 @@ export const api = {
         method: "PUT",
         body: JSON.stringify({ content }),
       }),
-    getHistory: (projectId: string) => request<PrdChangeLogEntry[]>(`/projects/${projectId}/prd/history`),
+    getHistory: (projectId: string) =>
+      request<PrdChangeLogEntry[]>(`/projects/${projectId}/prd/history`),
     upload: async (projectId: string, file: File): Promise<PrdUploadResult> => {
       const formData = new FormData();
       formData.append("file", file);
@@ -140,7 +142,8 @@ export const api = {
       request<{ created: number; plans: Plan[] }>(`/projects/${projectId}/plans/decompose`, {
         method: "POST",
       }),
-    get: (projectId: string, planId: string) => request<Plan>(`/projects/${projectId}/plans/${planId}`),
+    get: (projectId: string, planId: string) =>
+      request<Plan>(`/projects/${projectId}/plans/${planId}`),
     create: (projectId: string, data: CreatePlanRequest) =>
       request<Plan>(`/projects/${projectId}/plans`, {
         method: "POST",
@@ -152,13 +155,13 @@ export const api = {
         body: JSON.stringify(data),
       }),
     getCrossEpicDependencies: (projectId: string, planId: string) =>
-      request<CrossEpicDependenciesResponse>(`/projects/${projectId}/plans/${planId}/cross-epic-dependencies`),
+      request<CrossEpicDependenciesResponse>(
+        `/projects/${projectId}/plans/${planId}/cross-epic-dependencies`
+      ),
     execute: (projectId: string, planId: string, prerequisitePlanIds?: string[]) =>
       request<Plan>(`/projects/${projectId}/plans/${planId}/execute`, {
         method: "POST",
-        body: JSON.stringify(
-          prerequisitePlanIds?.length ? { prerequisitePlanIds } : {},
-        ),
+        body: JSON.stringify(prerequisitePlanIds?.length ? { prerequisitePlanIds } : {}),
       }),
     reExecute: (projectId: string, planId: string) =>
       request<Plan>(`/projects/${projectId}/plans/${planId}/re-execute`, {
@@ -168,22 +171,27 @@ export const api = {
       request<Plan>(`/projects/${projectId}/plans/${planId}/archive`, {
         method: "POST",
       }),
-    dependencies: (projectId: string) => request<PlanDependencyGraph>(`/projects/${projectId}/plans/dependencies`),
+    dependencies: (projectId: string) =>
+      request<PlanDependencyGraph>(`/projects/${projectId}/plans/dependencies`),
   },
 
   // ─── Tasks ───
   tasks: {
     list: (projectId: string) => request<Task[]>(`/projects/${projectId}/tasks`),
     ready: (projectId: string) => request<Task[]>(`/projects/${projectId}/tasks/ready`),
-    get: (projectId: string, taskId: string) => request<Task>(`/projects/${projectId}/tasks/${taskId}`),
+    get: (projectId: string, taskId: string) =>
+      request<Task>(`/projects/${projectId}/tasks/${taskId}`),
     sessions: (projectId: string, taskId: string) =>
       request<AgentSession[]>(`/projects/${projectId}/tasks/${taskId}/sessions`),
     session: (projectId: string, taskId: string, attempt: number) =>
       request<AgentSession>(`/projects/${projectId}/tasks/${taskId}/sessions/${attempt}`),
     markDone: (projectId: string, taskId: string) =>
-      request<{ taskClosed: boolean; epicClosed?: boolean }>(`/projects/${projectId}/tasks/${taskId}/done`, {
-        method: "POST",
-      }),
+      request<{ taskClosed: boolean; epicClosed?: boolean }>(
+        `/projects/${projectId}/tasks/${taskId}/done`,
+        {
+          method: "POST",
+        }
+      ),
     unblock: (projectId: string, taskId: string, options?: { resetAttempts?: boolean }) =>
       request<{ taskUnblocked: boolean }>(`/projects/${projectId}/tasks/${taskId}/unblock`, {
         method: "POST",
@@ -193,7 +201,8 @@ export const api = {
 
   // ─── Execute ───
   execute: {
-    status: (projectId: string) => request<OrchestratorStatus>(`/projects/${projectId}/execute/status`),
+    status: (projectId: string) =>
+      request<OrchestratorStatus>(`/projects/${projectId}/execute/status`),
     liveOutput: (projectId: string, taskId: string) =>
       request<{ output: string }>(`/projects/${projectId}/execute/tasks/${taskId}/output`),
   },
@@ -207,11 +216,11 @@ export const api = {
       }),
     status: (projectId: string) =>
       request<{ activeDeployId: string | null; currentDeploy: DeploymentRecord | null }>(
-        `/projects/${projectId}/deliver/status`,
+        `/projects/${projectId}/deliver/status`
       ),
     history: (projectId: string, limit?: number) =>
       request<DeploymentRecord[]>(
-        `/projects/${projectId}/deliver/history${limit ? `?limit=${limit}` : ""}`,
+        `/projects/${projectId}/deliver/history${limit ? `?limit=${limit}` : ""}`
       ),
     rollback: (projectId: string, deployId: string) =>
       request<{ deployId: string }>(`/projects/${projectId}/deliver/${deployId}/rollback`, {
@@ -265,7 +274,7 @@ export const api = {
       }>(`/fs/browse${path ? `?path=${encodeURIComponent(path)}` : ""}`),
     detectTestFramework: (path: string) =>
       request<{ framework: string; testCommand: string } | null>(
-        `/fs/detect-test-framework?path=${encodeURIComponent(path)}`,
+        `/fs/detect-test-framework?path=${encodeURIComponent(path)}`
       ),
   },
 
@@ -282,6 +291,8 @@ export const api = {
         body: JSON.stringify({ message, context, prdSectionFocus } satisfies Partial<ChatRequest>),
       }),
     history: (projectId: string, context?: string) =>
-      request<Conversation>(`/projects/${projectId}/chat/history${context ? `?context=${context}` : ""}`),
+      request<Conversation>(
+        `/projects/${projectId}/chat/history${context ? `?context=${context}` : ""}`
+      ),
   },
 };

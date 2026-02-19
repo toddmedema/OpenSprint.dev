@@ -17,7 +17,6 @@ describe("AgentRole and slot mapping", () => {
         "analyst",
         "summarizer",
         "auditor",
-        "delta_planner",
       ];
       for (const role of planningRoles) {
         expect(getSlotForRole(role)).toBe("planning");
@@ -33,7 +32,6 @@ describe("AgentRole and slot mapping", () => {
       expect(AGENT_ROLE_LABELS.analyst).toBe("Analyst");
       expect(AGENT_ROLE_LABELS.summarizer).toBe("Summarizer");
       expect(AGENT_ROLE_LABELS.auditor).toBe("Auditor");
-      expect(AGENT_ROLE_LABELS.delta_planner).toBe("Delta Planner");
       expect(AGENT_ROLE_LABELS.coder).toBe("Coder");
       expect(AGENT_ROLE_LABELS.reviewer).toBe("Reviewer");
     });

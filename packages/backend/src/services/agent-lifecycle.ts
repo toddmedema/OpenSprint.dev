@@ -1,5 +1,10 @@
+import path from "path";
 import type { AgentPhase, AgentConfig } from "@opensprint/shared";
-import { AGENT_INACTIVITY_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS } from "@opensprint/shared";
+import {
+  AGENT_INACTIVITY_TIMEOUT_MS,
+  HEARTBEAT_INTERVAL_MS,
+  OPENSPRINT_PATHS,
+} from "@opensprint/shared";
 import { agentService } from "./agent.service.js";
 import type { CodingAgentHandle } from "./agent.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
@@ -84,6 +89,13 @@ export class AgentLifecycleManager {
     runState.outputLogBytes = 0;
     runState.lastOutputTime = Date.now();
 
+    const outputLogPath = path.join(
+      wtPath,
+      OPENSPRINT_PATHS.active,
+      taskId,
+      OPENSPRINT_PATHS.agentOutputLog
+    );
+
     broadcastToProject(projectId, {
       type: "agent.started",
       taskId,
@@ -100,6 +112,7 @@ export class AgentLifecycleManager {
     runState.activeProcess = invoke(promptPath, agentConfig, {
       cwd: wtPath,
       agentRole: role === "coder" ? "coder" : "code reviewer",
+      outputLogPath,
       tracking: {
         id: taskId,
         projectId,
@@ -119,7 +132,11 @@ export class AgentLifecycleManager {
         runState.activeProcess = null;
         this.cleanupTimers(timers);
         await heartbeatService.deleteHeartbeat(wtPath, taskId);
-        await onDone(code);
+        try {
+          await onDone(code);
+        } catch (err) {
+          console.error(`[agent-lifecycle] onDone failed for ${taskId} (exit code ${code}):`, err);
+        }
       },
     });
 
@@ -179,7 +196,10 @@ export class AgentLifecycleManager {
             .then(() => onDone(null))
             .catch((err) => {
               console.error(`[agent-lifecycle] Post-death handler failed for ${taskId}:`, err);
-              onDone(null);
+              return onDone(null);
+            })
+            .catch((err) => {
+              console.error(`[agent-lifecycle] onDone fallback also failed for ${taskId}:`, err);
             });
           return;
         }

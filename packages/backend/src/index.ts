@@ -22,7 +22,10 @@ import { BeadsService } from "./services/beads.service.js";
 import { FeedbackService } from "./services/feedback.service.js";
 import { orchestratorService } from "./services/orchestrator.service.js";
 import { startProcessReaper, stopProcessReaper } from "./services/process-reaper.js";
-import { killAllTrackedAgentProcesses } from "./services/agent-process-registry.js";
+import {
+  killAllTrackedAgentProcesses,
+  clearAgentProcessRegistry,
+} from "./services/agent-process-registry.js";
 
 const port = parseInt(process.env.PORT || String(DEFAULT_API_PORT), 10);
 
@@ -182,7 +185,12 @@ async function initAlwaysOnOrchestrator(): Promise<void> {
 // Graceful shutdown
 const shutdown = async () => {
   console.log("\nShutting down...");
-  await killAllTrackedAgentProcesses();
+  if (process.env.OPENSPRINT_PRESERVE_AGENTS === "1") {
+    console.log("[shutdown] OPENSPRINT_PRESERVE_AGENTS=1 — preserving agent processes");
+    clearAgentProcessRegistry();
+  } else {
+    await killAllTrackedAgentProcesses();
+  }
   stopProcessReaper();
   orchestratorService.stopAll();
   // Stop bd daemons for all repos this backend managed

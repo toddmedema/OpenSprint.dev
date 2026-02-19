@@ -59,7 +59,7 @@ describe("Plan REST endpoints - task decomposition", () => {
       name: "Plan Test Project",
       description: "For plan route and task decomposition tests",
       repoPath,
-      planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+      planningAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       deployment: { mode: "custom" },
       hilConfig: DEFAULT_HIL_CONFIG,
@@ -72,51 +72,65 @@ describe("Plan REST endpoints - task decomposition", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("POST /projects/:id/plans with tasks should create beads tasks via bd create", { timeout: 15000 }, async () => {
-    const app = createApp();
-    const planBody = {
-      title: "User Authentication",
-      content: "# User Authentication\n\n## Overview\n\nAuth feature.\n\n## Acceptance Criteria\n\n- Login works",
-      complexity: "medium",
-      tasks: [
-        { title: "Implement login endpoint", description: "POST /auth/login", priority: 0, dependsOn: [] },
-        {
-          title: "Implement JWT validation",
-          description: "Validate tokens",
-          priority: 1,
-          dependsOn: ["Implement login endpoint"],
-        },
-      ],
-    };
+  it(
+    "POST /projects/:id/plans with tasks should create beads tasks via bd create",
+    { timeout: 15000 },
+    async () => {
+      const app = createApp();
+      const planBody = {
+        title: "User Authentication",
+        content:
+          "# User Authentication\n\n## Overview\n\nAuth feature.\n\n## Acceptance Criteria\n\n- Login works",
+        complexity: "medium",
+        tasks: [
+          {
+            title: "Implement login endpoint",
+            description: "POST /auth/login",
+            priority: 0,
+            dependsOn: [],
+          },
+          {
+            title: "Implement JWT validation",
+            description: "Validate tokens",
+            priority: 1,
+            dependsOn: ["Implement login endpoint"],
+          },
+        ],
+      };
 
-    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+      const res = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
 
-    expect(res.status).toBe(201);
-    expect(res.body.data).toBeDefined();
-    const plan = res.body.data;
-    expect(plan.taskCount).toBe(2);
-    expect(plan.metadata.beadEpicId).toBeDefined();
-    expect(plan.metadata.gateTaskId).toBeDefined();
+      expect(res.status).toBe(201);
+      expect(res.body.data).toBeDefined();
+      const plan = res.body.data;
+      expect(plan.taskCount).toBe(2);
+      expect(plan.metadata.beadEpicId).toBeDefined();
+      expect(plan.metadata.gateTaskId).toBeDefined();
 
-    // Verify beads has the child tasks (bd create was called for each)
-    const project = await projectService.getProject(projectId);
-    const allIssues = await beads.listAll(project.repoPath);
-    const epicId = plan.metadata.beadEpicId;
-    const childTasks = allIssues.filter((i) => i.id.startsWith(epicId + ".") && i.id !== plan.metadata.gateTaskId);
-    expect(childTasks.length).toBe(2);
-    expect(childTasks.map((t) => t.title)).toContain("Implement login endpoint");
-    expect(childTasks.map((t) => t.title)).toContain("Implement JWT validation");
+      // Verify beads has the child tasks (bd create was called for each)
+      const project = await projectService.getProject(projectId);
+      const allIssues = await beads.listAll(project.repoPath);
+      const epicId = plan.metadata.beadEpicId;
+      const childTasks = allIssues.filter(
+        (i) => i.id.startsWith(epicId + ".") && i.id !== plan.metadata.gateTaskId
+      );
+      expect(childTasks.length).toBe(2);
+      expect(childTasks.map((t) => t.title)).toContain("Implement login endpoint");
+      expect(childTasks.map((t) => t.title)).toContain("Implement JWT validation");
 
-    // Verify bd dep add was called: each task blocks on the gate (plan.service adds this)
-    // and JWT task blocks on login task (inter-task deps)
-    const readyBeforeShip = await beads.ready(project.repoPath);
-    const implementationTaskIds = childTasks.map((t) => t.id);
-    // Before shipping, no implementation tasks should be ready (they block on gate)
-    const readyIds = readyBeforeShip.map((r) => r.id);
-    for (const tid of implementationTaskIds) {
-      expect(readyIds).not.toContain(tid);
+      // Verify bd dep add was called: each task blocks on the gate (plan.service adds this)
+      // and JWT task blocks on login task (inter-task deps)
+      const readyBeforeShip = await beads.ready(project.repoPath);
+      const implementationTaskIds = childTasks.map((t) => t.id);
+      // Before shipping, no implementation tasks should be ready (they block on gate)
+      const readyIds = readyBeforeShip.map((r) => r.id);
+      for (const tid of implementationTaskIds) {
+        expect(readyIds).not.toContain(tid);
+      }
     }
-  });
+  );
 
   it("POST /projects/:id/plans without tasks should create epic and gate only", async () => {
     const app = createApp();
@@ -150,45 +164,58 @@ describe("Plan REST endpoints - task decomposition", () => {
     // Validation warns but does not block — plan is created successfully
   });
 
-  it("POST /projects/:id/plans without complexity should agent-evaluate and use result", {
-    timeout: 10000,
-  }, async () => {
-    mockSuggestInvoke.mockResolvedValueOnce({
-      content: JSON.stringify({ complexity: "high" }),
-    });
+  it(
+    "POST /projects/:id/plans without complexity should agent-evaluate and use result",
+    {
+      timeout: 10000,
+    },
+    async () => {
+      mockSuggestInvoke.mockResolvedValueOnce({
+        content: JSON.stringify({ complexity: "high" }),
+      });
 
-    const app = createApp();
-    const planBody = {
-      title: "Complex Feature",
-      content: "# Complex Feature\n\n## Overview\n\nMulti-system integration with auth, API, and UI.",
-    };
-    // Intentionally omit complexity - backend should agent-evaluate
+      const app = createApp();
+      const planBody = {
+        title: "Complex Feature",
+        content:
+          "# Complex Feature\n\n## Overview\n\nMulti-system integration with auth, API, and UI.",
+      };
+      // Intentionally omit complexity - backend should agent-evaluate
 
-    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+      const res = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
 
-    expect(res.status).toBe(201);
-    expect(res.body.data.metadata.complexity).toBe("high");
-    expect(mockSuggestInvoke).toHaveBeenCalledTimes(1);
-  });
+      expect(res.status).toBe(201);
+      expect(res.body.data.metadata.complexity).toBe("high");
+      expect(mockSuggestInvoke).toHaveBeenCalledTimes(1);
+    }
+  );
 
-  it("POST /projects/:id/plans without complexity falls back to medium when agent returns invalid JSON", {
-    timeout: 10000,
-  }, async () => {
-    mockSuggestInvoke.mockResolvedValueOnce({
-      content: "I cannot produce valid JSON.",
-    });
+  it(
+    "POST /projects/:id/plans without complexity falls back to medium when agent returns invalid JSON",
+    {
+      timeout: 10000,
+    },
+    async () => {
+      mockSuggestInvoke.mockResolvedValueOnce({
+        content: "I cannot produce valid JSON.",
+      });
 
-    const app = createApp();
-    const planBody = {
-      title: "Simple Feature",
-      content: "# Simple\n\nOverview.",
-    };
+      const app = createApp();
+      const planBody = {
+        title: "Simple Feature",
+        content: "# Simple\n\nOverview.",
+      };
 
-    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+      const res = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
 
-    expect(res.status).toBe(201);
-    expect(res.body.data.metadata.complexity).toBe("medium");
-  });
+      expect(res.status).toBe(201);
+      expect(res.body.data.metadata.complexity).toBe("medium");
+    }
+  );
 
   it("GET /projects/:id/plans/:planId returns lastModified (plan markdown file mtime)", async () => {
     const app = createApp();
@@ -198,7 +225,9 @@ describe("Plan REST endpoints - task decomposition", () => {
       complexity: "low",
     };
 
-    const createRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    const createRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send(planBody);
     expect(createRes.status).toBe(201);
     const planId = createRes.body.data.metadata.planId;
 
@@ -218,11 +247,14 @@ describe("Plan REST endpoints - task decomposition", () => {
       complexity: "low",
     };
 
-    const createRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    const createRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send(planBody);
     expect(createRes.status).toBe(201);
     const planId = createRes.body.data.metadata.planId;
 
-    const updatedContent = "# Updated Feature Title\n\n## Overview\n\nUpdated markdown body with new content.";
+    const updatedContent =
+      "# Updated Feature Title\n\n## Overview\n\nUpdated markdown body with new content.";
     const putRes = await request(app)
       .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
       .send({ content: updatedContent });
@@ -251,7 +283,7 @@ describe("Plan REST endpoints - task decomposition", () => {
     expect(listRes.body.data.edges).toBeDefined();
     expect(listRes.body.data.plans.length).toBeGreaterThan(0);
     const plan = listRes.body.data.plans.find((p: { metadata: { planId: string } }) =>
-      p.metadata.planId.includes("list-test-feature"),
+      p.metadata.planId.includes("list-test-feature")
     );
     expect(plan).toBeDefined();
     expect(plan.lastModified).toBeDefined();
@@ -276,21 +308,27 @@ describe("Plan REST endpoints - task decomposition", () => {
         ],
       };
 
-      const createRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+      const createRes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
       expect(createRes.status).toBe(201);
       const createdPlanId = createRes.body.data.metadata.planId;
       const epicId = createRes.body.data.metadata.beadEpicId;
       const gateTaskId = createRes.body.data.metadata.gateTaskId;
 
       // Ship the plan so tasks become ready
-      const shipRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/execute`);
+      const shipRes = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/execute`
+      );
       expect(shipRes.status).toBe(200);
 
       const project = await projectService.getProject(projectId);
       const allIssues = await beads.listAll(project.repoPath);
       const planTasks = allIssues.filter(
         (i: { id: string; issue_type?: string; type?: string }) =>
-          i.id.startsWith(epicId + ".") && i.id !== gateTaskId && (i.issue_type ?? i.type) !== "epic",
+          i.id.startsWith(epicId + ".") &&
+          i.id !== gateTaskId &&
+          (i.issue_type ?? i.type) !== "epic"
       );
 
       const taskA = planTasks.find((t: { title: string }) => t.title === "Task A");
@@ -309,261 +347,328 @@ describe("Plan REST endpoints - task decomposition", () => {
       await beads.sync(project.repoPath);
 
       // Archive the plan
-      const archiveRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/archive`);
+      const archiveRes = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/archive`
+      );
       expect(archiveRes.status).toBe(200);
 
       // Verify: Task A and Task C should be closed; Task B (in_progress) should remain in_progress
       const afterArchive = await beads.listAll(project.repoPath);
-      const taskAAfter = afterArchive.find((i: { id: string }) => i.id === (taskA as { id: string }).id);
-      const taskBAfter = afterArchive.find((i: { id: string }) => i.id === (taskB as { id: string }).id);
-      const taskCAfter = afterArchive.find((i: { id: string }) => i.id === (taskC as { id: string }).id);
+      const taskAAfter = afterArchive.find(
+        (i: { id: string }) => i.id === (taskA as { id: string }).id
+      );
+      const taskBAfter = afterArchive.find(
+        (i: { id: string }) => i.id === (taskB as { id: string }).id
+      );
+      const taskCAfter = afterArchive.find(
+        (i: { id: string }) => i.id === (taskC as { id: string }).id
+      );
 
       expect((taskAAfter as { status: string }).status).toBe("closed");
       expect((taskBAfter as { status: string }).status).toBe("in_progress");
       expect((taskCAfter as { status: string }).status).toBe("closed");
-    },
+    }
   );
 
   describe("POST /projects/:id/plans/:planId/re-execute", () => {
-    it("reship succeeds when all tasks are done (closed) — Auditor + Delta Planner two-agent flow", {
-      timeout: 15000,
-    }, async () => {
-      // Harmonizer (ship) + Auditor + Delta Planner (re-execute)
-      mockPlanningAgentInvoke
-        .mockResolvedValueOnce({ content: '{"status":"no_changes_needed"}' }) // Harmonizer on ship
-        .mockResolvedValueOnce({
-          content: '{"status":"success","capability_summary":"## Features\\n- Auth implemented"}',
-        })
-        .mockResolvedValueOnce({
-          content: '{"status":"success","tasks":[{"index":0,"title":"Delta Task","description":"Add delta","priority":1,"depends_on":[]}]}',
+    it(
+      "reship succeeds when all tasks are done (closed) — Auditor audit & delta flow",
+      {
+        timeout: 15000,
+      },
+      async () => {
+        // Harmonizer (ship) + Auditor (re-execute: audit + delta tasks)
+        mockPlanningAgentInvoke
+          .mockResolvedValueOnce({ content: '{"status":"no_changes_needed"}' }) // Harmonizer on ship
+          .mockResolvedValueOnce({
+            content:
+              '{"status":"success","capability_summary":"## Features\\n- Auth implemented","tasks":[{"index":0,"title":"Delta Task","description":"Add delta","priority":1,"depends_on":[]}]}',
+          });
+
+        const app = createApp();
+        const planBody = {
+          title: "Reship All Done Feature",
+          content: "# Reship All Done\n\nContent.",
+          complexity: "medium",
+          tasks: [
+            { title: "Task X", description: "First", priority: 0, dependsOn: [] },
+            { title: "Task Y", description: "Second", priority: 1, dependsOn: [] },
+          ],
+        };
+
+        const createRes = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/plans`)
+          .send(planBody);
+        expect(createRes.status).toBe(201);
+        const planId = createRes.body.data.metadata.planId;
+        const epicId = createRes.body.data.metadata.beadEpicId;
+        const gateTaskId = createRes.body.data.metadata.gateTaskId;
+
+        // Ship the plan (saves .shipped.md for plan_old)
+        const shipRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
+        );
+        expect(shipRes.status).toBe(200);
+
+        const project = await projectService.getProject(projectId);
+        const allIssues = await beads.listAll(project.repoPath);
+        const planTasks = allIssues.filter(
+          (i: { id: string; issue_type?: string; type?: string }) =>
+            i.id.startsWith(epicId + ".") &&
+            i.id !== gateTaskId &&
+            (i.issue_type ?? i.type) !== "epic"
+        );
+
+        // Close all implementation tasks
+        for (const task of planTasks) {
+          await beads.close(project.repoPath, (task as { id: string }).id, "Done");
+        }
+        await beads.sync(project.repoPath);
+
+        // Re-execute: Auditor creates new gate and delta tasks
+        const reshipRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
+        );
+        expect(reshipRes.status).toBe(200);
+        expect(reshipRes.body.data).toBeDefined();
+        expect(reshipRes.body.data.metadata.reExecuteGateTaskId).toBeDefined();
+
+        const afterReship = await beads.listAll(project.repoPath);
+        const deltaTasks = afterReship.filter(
+          (i: { id: string; title: string; issue_type?: string; type?: string }) =>
+            i.id.startsWith(epicId + ".") &&
+            i.id !== gateTaskId &&
+            (i.issue_type ?? i.type) !== "epic" &&
+            i.title === "Delta Task"
+        );
+        expect(deltaTasks.length).toBe(1);
+      }
+    );
+
+    it(
+      "reship returns plan unchanged when Auditor returns no_changes_needed",
+      {
+        timeout: 15000,
+      },
+      async () => {
+        mockPlanningAgentInvoke
+          .mockResolvedValueOnce({ content: '{"status":"no_changes_needed"}' }) // Harmonizer on ship
+          .mockResolvedValueOnce({
+            content:
+              '{"status":"no_changes_needed","capability_summary":"## Features\\n- All done"}',
+          });
+
+        const app = createApp();
+        const planBody = {
+          title: "No Changes Feature",
+          content: "# No Changes\n\nContent.",
+          complexity: "medium",
+          tasks: [{ title: "Task A", description: "First", priority: 0, dependsOn: [] }],
+        };
+
+        const createRes = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/plans`)
+          .send(planBody);
+        expect(createRes.status).toBe(201);
+        const planId = createRes.body.data.metadata.planId;
+        const epicId = createRes.body.data.metadata.beadEpicId;
+        const gateTaskId = createRes.body.data.metadata.gateTaskId;
+
+        const shipRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
+        );
+        expect(shipRes.status).toBe(200);
+
+        const project = await projectService.getProject(projectId);
+        const allIssues = await beads.listAll(project.repoPath);
+        const planTasks = allIssues.filter(
+          (i: { id: string; issue_type?: string; type?: string }) =>
+            i.id.startsWith(epicId + ".") &&
+            i.id !== gateTaskId &&
+            (i.issue_type ?? i.type) !== "epic"
+        );
+        for (const task of planTasks) {
+          await beads.close(project.repoPath, (task as { id: string }).id, "Done");
+        }
+        await beads.sync(project.repoPath);
+
+        const beforeCount = (await beads.listAll(project.repoPath)).filter(
+          (i: { id: string }) => i.id.startsWith(epicId + ".") && i.id !== gateTaskId
+        ).length;
+
+        const reshipRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
+        );
+        expect(reshipRes.status).toBe(200);
+        expect(reshipRes.body.data.metadata.reExecuteGateTaskId).toBeUndefined();
+
+        const afterCount = (await beads.listAll(project.repoPath)).filter(
+          (i: { id: string }) => i.id.startsWith(epicId + ".") && i.id !== gateTaskId
+        ).length;
+        expect(afterCount).toBe(beforeCount);
+      }
+    );
+
+    it(
+      "reship returns 400 TASKS_IN_PROGRESS when any task is in_progress",
+      { timeout: 15000 },
+      async () => {
+        const app = createApp();
+        const planBody = {
+          title: "Reship In Progress Feature",
+          content: "# Reship In Progress\n\nContent.",
+          complexity: "medium",
+          tasks: [
+            { title: "Task P", description: "First", priority: 0, dependsOn: [] },
+            { title: "Task Q", description: "Second", priority: 1, dependsOn: [] },
+          ],
+        };
+
+        const createRes = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/plans`)
+          .send(planBody);
+        expect(createRes.status).toBe(201);
+        const planId = createRes.body.data.metadata.planId;
+        const epicId = createRes.body.data.metadata.beadEpicId;
+        const gateTaskId = createRes.body.data.metadata.gateTaskId;
+
+        const shipRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
+        );
+        expect(shipRes.status).toBe(200);
+
+        const project = await projectService.getProject(projectId);
+        const allIssues = await beads.listAll(project.repoPath);
+        const taskP = allIssues.find(
+          (i: { id: string; title: string; issue_type?: string; type?: string }) =>
+            i.id.startsWith(epicId + ".") &&
+            i.id !== gateTaskId &&
+            (i.issue_type ?? i.type) !== "epic" &&
+            i.title === "Task P"
+        );
+        expect(taskP).toBeDefined();
+
+        await beads.update(project.repoPath, (taskP as { id: string }).id, {
+          status: "in_progress",
+          assignee: "test-user",
+          claim: true,
         });
+        await beads.sync(project.repoPath);
 
-      const app = createApp();
-      const planBody = {
-        title: "Reship All Done Feature",
-        content: "# Reship All Done\n\nContent.",
-        complexity: "medium",
-        tasks: [
-          { title: "Task X", description: "First", priority: 0, dependsOn: [] },
-          { title: "Task Y", description: "Second", priority: 1, dependsOn: [] },
-        ],
-      };
-
-      const createRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
-      expect(createRes.status).toBe(201);
-      const planId = createRes.body.data.metadata.planId;
-      const epicId = createRes.body.data.metadata.beadEpicId;
-      const gateTaskId = createRes.body.data.metadata.gateTaskId;
-
-      // Ship the plan (saves .shipped.md for plan_old)
-      const shipRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
-      expect(shipRes.status).toBe(200);
-
-      const project = await projectService.getProject(projectId);
-      const allIssues = await beads.listAll(project.repoPath);
-      const planTasks = allIssues.filter(
-        (i: { id: string; issue_type?: string; type?: string }) =>
-          i.id.startsWith(epicId + ".") && i.id !== gateTaskId && (i.issue_type ?? i.type) !== "epic",
-      );
-
-      // Close all implementation tasks
-      for (const task of planTasks) {
-        await beads.close(project.repoPath, (task as { id: string }).id, "Done");
+        const reshipRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
+        );
+        expect(reshipRes.status).toBe(400);
+        expect(reshipRes.body.error?.code).toBe("TASKS_IN_PROGRESS");
       }
-      await beads.sync(project.repoPath);
+    );
 
-      // Re-execute: Auditor + Delta Planner create new gate and delta tasks
-      const reshipRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`);
-      expect(reshipRes.status).toBe(200);
-      expect(reshipRes.body.data).toBeDefined();
-      expect(reshipRes.body.data.metadata.reExecuteGateTaskId).toBeDefined();
+    it(
+      "reship returns 400 TASKS_NOT_COMPLETE when some tasks open and some closed",
+      { timeout: 15000 },
+      async () => {
+        const app = createApp();
+        const planBody = {
+          title: "Reship Mixed Feature",
+          content: "# Reship Mixed\n\nContent.",
+          complexity: "medium",
+          tasks: [
+            { title: "Task M", description: "First", priority: 0, dependsOn: [] },
+            { title: "Task N", description: "Second", priority: 1, dependsOn: [] },
+          ],
+        };
 
-      const afterReship = await beads.listAll(project.repoPath);
-      const deltaTasks = afterReship.filter(
-        (i: { id: string; title: string; issue_type?: string; type?: string }) =>
-          i.id.startsWith(epicId + ".") &&
-          i.id !== gateTaskId &&
-          (i.issue_type ?? i.type) !== "epic" &&
-          i.title === "Delta Task",
-      );
-      expect(deltaTasks.length).toBe(1);
-    });
+        const createRes = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/plans`)
+          .send(planBody);
+        expect(createRes.status).toBe(201);
+        const planId = createRes.body.data.metadata.planId;
+        const epicId = createRes.body.data.metadata.beadEpicId;
+        const gateTaskId = createRes.body.data.metadata.gateTaskId;
 
-    it("reship returns plan unchanged when Delta Planner returns no_changes_needed", {
-      timeout: 15000,
-    }, async () => {
-      mockPlanningAgentInvoke
-        .mockResolvedValueOnce({ content: '{"status":"no_changes_needed"}' })
-        .mockResolvedValueOnce({
-          content: '{"status":"success","capability_summary":"## Features\\n- All done"}',
-        })
-        .mockResolvedValueOnce({ content: '{"status":"no_changes_needed"}' });
+        const shipRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
+        );
+        expect(shipRes.status).toBe(200);
 
-      const app = createApp();
-      const planBody = {
-        title: "No Changes Feature",
-        content: "# No Changes\n\nContent.",
-        complexity: "medium",
-        tasks: [
-          { title: "Task A", description: "First", priority: 0, dependsOn: [] },
-        ],
-      };
+        const project = await projectService.getProject(projectId);
+        const allIssues = await beads.listAll(project.repoPath);
+        const planTasks = allIssues.filter(
+          (i: { id: string; issue_type?: string; type?: string }) =>
+            i.id.startsWith(epicId + ".") &&
+            i.id !== gateTaskId &&
+            (i.issue_type ?? i.type) !== "epic"
+        );
+        expect(planTasks.length).toBe(2);
 
-      const createRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
-      expect(createRes.status).toBe(201);
-      const planId = createRes.body.data.metadata.planId;
-      const epicId = createRes.body.data.metadata.beadEpicId;
-      const gateTaskId = createRes.body.data.metadata.gateTaskId;
+        // Close only the first task
+        await beads.close(project.repoPath, (planTasks[0] as { id: string }).id, "Done");
+        await beads.sync(project.repoPath);
 
-      const shipRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
-      expect(shipRes.status).toBe(200);
-
-      const project = await projectService.getProject(projectId);
-      const allIssues = await beads.listAll(project.repoPath);
-      const planTasks = allIssues.filter(
-        (i: { id: string; issue_type?: string; type?: string }) =>
-          i.id.startsWith(epicId + ".") && i.id !== gateTaskId && (i.issue_type ?? i.type) !== "epic",
-      );
-      for (const task of planTasks) {
-        await beads.close(project.repoPath, (task as { id: string }).id, "Done");
+        const reshipRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
+        );
+        expect(reshipRes.status).toBe(400);
+        expect(reshipRes.body.error?.code).toBe("TASKS_NOT_COMPLETE");
       }
-      await beads.sync(project.repoPath);
+    );
 
-      const beforeCount = (await beads.listAll(project.repoPath)).filter(
-        (i: { id: string }) => i.id.startsWith(epicId + ".") && i.id !== gateTaskId,
-      ).length;
+    it(
+      "reship succeeds when none started (all open) — deletes tasks then ships",
+      { timeout: 15000 },
+      async () => {
+        const app = createApp();
+        const planBody = {
+          title: "Reship None Started Feature",
+          content: "# Reship None Started\n\nContent.",
+          complexity: "medium",
+          tasks: [
+            { title: "Task S", description: "First", priority: 0, dependsOn: [] },
+            { title: "Task T", description: "Second", priority: 1, dependsOn: [] },
+          ],
+        };
 
-      const reshipRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`);
-      expect(reshipRes.status).toBe(200);
-      expect(reshipRes.body.data.metadata.reExecuteGateTaskId).toBeUndefined();
+        const createRes = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/plans`)
+          .send(planBody);
+        expect(createRes.status).toBe(201);
+        const planId = createRes.body.data.metadata.planId;
+        const epicId = createRes.body.data.metadata.beadEpicId;
+        const gateTaskId = createRes.body.data.metadata.gateTaskId;
 
-      const afterCount = (await beads.listAll(project.repoPath)).filter(
-        (i: { id: string }) => i.id.startsWith(epicId + ".") && i.id !== gateTaskId,
-      ).length;
-      expect(afterCount).toBe(beforeCount);
-    });
+        // Ship the plan (tasks become ready but stay open)
+        const shipRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
+        );
+        expect(shipRes.status).toBe(200);
 
-    it("reship returns 400 TASKS_IN_PROGRESS when any task is in_progress", { timeout: 15000 }, async () => {
-      const app = createApp();
-      const planBody = {
-        title: "Reship In Progress Feature",
-        content: "# Reship In Progress\n\nContent.",
-        complexity: "medium",
-        tasks: [
-          { title: "Task P", description: "First", priority: 0, dependsOn: [] },
-          { title: "Task Q", description: "Second", priority: 1, dependsOn: [] },
-        ],
-      };
+        const project = await projectService.getProject(projectId);
+        const beforeReship = await beads.listAll(project.repoPath);
+        const tasksBefore = beforeReship.filter(
+          (i: { id: string; issue_type?: string; type?: string }) =>
+            i.id.startsWith(epicId + ".") &&
+            i.id !== gateTaskId &&
+            (i.issue_type ?? i.type) !== "epic"
+        );
+        expect(tasksBefore.length).toBe(2);
 
-      const createRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
-      expect(createRes.status).toBe(201);
-      const planId = createRes.body.data.metadata.planId;
-      const epicId = createRes.body.data.metadata.beadEpicId;
-      const gateTaskId = createRes.body.data.metadata.gateTaskId;
+        // Reship when none started (all open) — should delete tasks and re-ship
+        const reshipRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
+        );
+        expect(reshipRes.status).toBe(200);
 
-      const shipRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
-      expect(shipRes.status).toBe(200);
-
-      const project = await projectService.getProject(projectId);
-      const allIssues = await beads.listAll(project.repoPath);
-      const taskP = allIssues.find(
-        (i: { id: string; title: string; issue_type?: string; type?: string }) =>
-          i.id.startsWith(epicId + ".") && i.id !== gateTaskId && (i.issue_type ?? i.type) !== "epic" && i.title === "Task P",
-      );
-      expect(taskP).toBeDefined();
-
-      await beads.update(project.repoPath, (taskP as { id: string }).id, {
-        status: "in_progress",
-        assignee: "test-user",
-        claim: true,
-      });
-      await beads.sync(project.repoPath);
-
-      const reshipRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`);
-      expect(reshipRes.status).toBe(400);
-      expect(reshipRes.body.error?.code).toBe("TASKS_IN_PROGRESS");
-    });
-
-    it("reship returns 400 TASKS_NOT_COMPLETE when some tasks open and some closed", { timeout: 15000 }, async () => {
-      const app = createApp();
-      const planBody = {
-        title: "Reship Mixed Feature",
-        content: "# Reship Mixed\n\nContent.",
-        complexity: "medium",
-        tasks: [
-          { title: "Task M", description: "First", priority: 0, dependsOn: [] },
-          { title: "Task N", description: "Second", priority: 1, dependsOn: [] },
-        ],
-      };
-
-      const createRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
-      expect(createRes.status).toBe(201);
-      const planId = createRes.body.data.metadata.planId;
-      const epicId = createRes.body.data.metadata.beadEpicId;
-      const gateTaskId = createRes.body.data.metadata.gateTaskId;
-
-      const shipRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
-      expect(shipRes.status).toBe(200);
-
-      const project = await projectService.getProject(projectId);
-      const allIssues = await beads.listAll(project.repoPath);
-      const planTasks = allIssues.filter(
-        (i: { id: string; issue_type?: string; type?: string }) =>
-          i.id.startsWith(epicId + ".") && i.id !== gateTaskId && (i.issue_type ?? i.type) !== "epic",
-      );
-      expect(planTasks.length).toBe(2);
-
-      // Close only the first task
-      await beads.close(project.repoPath, (planTasks[0] as { id: string }).id, "Done");
-      await beads.sync(project.repoPath);
-
-      const reshipRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`);
-      expect(reshipRes.status).toBe(400);
-      expect(reshipRes.body.error?.code).toBe("TASKS_NOT_COMPLETE");
-    });
-
-    it("reship succeeds when none started (all open) — deletes tasks then ships", { timeout: 15000 }, async () => {
-      const app = createApp();
-      const planBody = {
-        title: "Reship None Started Feature",
-        content: "# Reship None Started\n\nContent.",
-        complexity: "medium",
-        tasks: [
-          { title: "Task S", description: "First", priority: 0, dependsOn: [] },
-          { title: "Task T", description: "Second", priority: 1, dependsOn: [] },
-        ],
-      };
-
-      const createRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
-      expect(createRes.status).toBe(201);
-      const planId = createRes.body.data.metadata.planId;
-      const epicId = createRes.body.data.metadata.beadEpicId;
-      const gateTaskId = createRes.body.data.metadata.gateTaskId;
-
-      // Ship the plan (tasks become ready but stay open)
-      const shipRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
-      expect(shipRes.status).toBe(200);
-
-      const project = await projectService.getProject(projectId);
-      const beforeReship = await beads.listAll(project.repoPath);
-      const tasksBefore = beforeReship.filter(
-        (i: { id: string; issue_type?: string; type?: string }) =>
-          i.id.startsWith(epicId + ".") && i.id !== gateTaskId && (i.issue_type ?? i.type) !== "epic",
-      );
-      expect(tasksBefore.length).toBe(2);
-
-      // Reship when none started (all open) — should delete tasks and re-ship
-      const reshipRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`);
-      expect(reshipRes.status).toBe(200);
-
-      // Implementation tasks should have been deleted (none-started case deletes them)
-      const afterReship = await beads.listAll(project.repoPath);
-      const tasksAfter = afterReship.filter(
-        (i: { id: string; issue_type?: string; type?: string }) =>
-          i.id.startsWith(epicId + ".") && i.id !== gateTaskId && (i.issue_type ?? i.type) !== "epic",
-      );
-      expect(tasksAfter.length).toBe(0);
-    });
+        // Implementation tasks should have been deleted (none-started case deletes them)
+        const afterReship = await beads.listAll(project.repoPath);
+        const tasksAfter = afterReship.filter(
+          (i: { id: string; issue_type?: string; type?: string }) =>
+            i.id.startsWith(epicId + ".") &&
+            i.id !== gateTaskId &&
+            (i.issue_type ?? i.type) !== "epic"
+        );
+        expect(tasksAfter.length).toBe(0);
+      }
+    );
   });
 
   describe("POST /projects/:id/plans/suggest", () => {
@@ -577,49 +682,64 @@ describe("Plan REST endpoints - task decomposition", () => {
         JSON.stringify({
           version: 1,
           sections: {
-            executive_summary: { content: "A todo app", version: 1, updated_at: new Date().toISOString() },
+            executive_summary: {
+              content: "A todo app",
+              version: 1,
+              updated_at: new Date().toISOString(),
+            },
           },
         }),
-        "utf-8",
+        "utf-8"
       );
     });
 
-    it("returns suggested plans from AI without creating plans or beads", { timeout: 10000 }, async () => {
-      mockSuggestInvoke.mockResolvedValueOnce({
-        content: JSON.stringify({
-          plans: [
-            {
-              title: "Task CRUD",
-              content: "# Task CRUD\n\n## Overview\n\nCreate and manage tasks.",
-              complexity: "medium",
-              mockups: [{ title: "List", content: "Tasks" }],
-              tasks: [
-                { title: "Create model", description: "Task schema", priority: 0, dependsOn: [] },
-                { title: "Create API", description: "REST", priority: 1, dependsOn: ["Create model"] },
-              ],
-            },
-          ],
-        }),
-      });
+    it(
+      "returns suggested plans from AI without creating plans or beads",
+      { timeout: 10000 },
+      async () => {
+        mockSuggestInvoke.mockResolvedValueOnce({
+          content: JSON.stringify({
+            plans: [
+              {
+                title: "Task CRUD",
+                content: "# Task CRUD\n\n## Overview\n\nCreate and manage tasks.",
+                complexity: "medium",
+                mockups: [{ title: "List", content: "Tasks" }],
+                tasks: [
+                  { title: "Create model", description: "Task schema", priority: 0, dependsOn: [] },
+                  {
+                    title: "Create API",
+                    description: "REST",
+                    priority: 1,
+                    dependsOn: ["Create model"],
+                  },
+                ],
+              },
+            ],
+          }),
+        });
 
-      const app = createApp();
-      const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/suggest`);
+        const app = createApp();
+        const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/suggest`);
 
-      expect(res.status).toBe(200);
-      expect(res.body.data).toBeDefined();
-      expect(res.body.data.plans).toHaveLength(1);
-      expect(res.body.data.plans[0].title).toBe("Task CRUD");
-      expect(res.body.data.plans[0].tasks).toHaveLength(2);
+        expect(res.status).toBe(200);
+        expect(res.body.data).toBeDefined();
+        expect(res.body.data.plans).toHaveLength(1);
+        expect(res.body.data.plans[0].title).toBe("Task CRUD");
+        expect(res.body.data.plans[0].tasks).toHaveLength(2);
 
-      const project = await projectService.getProject(projectId);
-      const plansDir = path.join(project.repoPath, ".opensprint", "plans");
-      const files = await fs.readdir(plansDir).catch(() => []);
-      expect(files).toHaveLength(0);
+        const project = await projectService.getProject(projectId);
+        const plansDir = path.join(project.repoPath, ".opensprint", "plans");
+        const files = await fs.readdir(plansDir).catch(() => []);
+        expect(files).toHaveLength(0);
 
-      const allIssues = await beads.listAll(project.repoPath);
-      const epics = allIssues.filter((i: { issue_type?: string; type?: string }) => (i.issue_type ?? i.type) === "epic");
-      expect(epics).toHaveLength(0);
-    });
+        const allIssues = await beads.listAll(project.repoPath);
+        const epics = allIssues.filter(
+          (i: { issue_type?: string; type?: string }) => (i.issue_type ?? i.type) === "epic"
+        );
+        expect(epics).toHaveLength(0);
+      }
+    );
 
     it("returns 400 when agent returns invalid JSON", { timeout: 10000 }, async () => {
       mockSuggestInvoke.mockResolvedValueOnce({
@@ -635,24 +755,31 @@ describe("Plan REST endpoints - task decomposition", () => {
   });
 
   describe("GET /projects/:id/plans/:planId/cross-epic-dependencies", () => {
-    it("returns prerequisite plan IDs when plan depends on others still in planning", { timeout: 15000 }, async () => {
-      const app = createApp();
-      // Create plan A (user-auth) - prerequisite
-      const planABody = {
-        title: "User Auth",
-        content: "# User Auth\n\n## Overview\n\nAuth.\n\n## Dependencies\n\nNone.",
-        complexity: "low",
-        tasks: [{ title: "Auth task", description: "Implement auth", priority: 0, dependsOn: [] }],
-      };
-      const createARes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planABody);
-      expect(createARes.status).toBe(201);
-      const planAId = createARes.body.data.metadata.planId;
-      expect(planAId).toBe("user-auth");
+    it(
+      "returns prerequisite plan IDs when plan depends on others still in planning",
+      { timeout: 15000 },
+      async () => {
+        const app = createApp();
+        // Create plan A (user-auth) - prerequisite
+        const planABody = {
+          title: "User Auth",
+          content: "# User Auth\n\n## Overview\n\nAuth.\n\n## Dependencies\n\nNone.",
+          complexity: "low",
+          tasks: [
+            { title: "Auth task", description: "Implement auth", priority: 0, dependsOn: [] },
+          ],
+        };
+        const createARes = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/plans`)
+          .send(planABody);
+        expect(createARes.status).toBe(201);
+        const planAId = createARes.body.data.metadata.planId;
+        expect(planAId).toBe("user-auth");
 
-      // Create plan B (feature-x) that depends on user-auth via markdown
-      const planBBody = {
-        title: "Feature X",
-        content: `# Feature X
+        // Create plan B (feature-x) that depends on user-auth via markdown
+        const planBBody = {
+          title: "Feature X",
+          content: `# Feature X
 
 ## Overview
 
@@ -662,21 +789,26 @@ Feature that depends on auth.
 
 - user-auth
 `,
-        complexity: "medium",
-        tasks: [{ title: "Feature task", description: "Implement feature", priority: 0, dependsOn: [] }],
-      };
-      const createBRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBBody);
-      expect(createBRes.status).toBe(201);
-      const planBId = createBRes.body.data.metadata.planId;
-      expect(planBId).toBe("feature-x");
+          complexity: "medium",
+          tasks: [
+            { title: "Feature task", description: "Implement feature", priority: 0, dependsOn: [] },
+          ],
+        };
+        const createBRes = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/plans`)
+          .send(planBBody);
+        expect(createBRes.status).toBe(201);
+        const planBId = createBRes.body.data.metadata.planId;
+        expect(planBId).toBe("feature-x");
 
-      // Both plans in planning state (neither shipped)
-      const depsRes = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/plans/${planBId}/cross-epic-dependencies`,
-      );
-      expect(depsRes.status).toBe(200);
-      expect(depsRes.body.data.prerequisitePlanIds).toEqual(["user-auth"]);
-    });
+        // Both plans in planning state (neither shipped)
+        const depsRes = await request(app).get(
+          `${API_PREFIX}/projects/${projectId}/plans/${planBId}/cross-epic-dependencies`
+        );
+        expect(depsRes.status).toBe(200);
+        expect(depsRes.body.data.prerequisitePlanIds).toEqual(["user-auth"]);
+      }
+    );
 
     it("returns empty array when plan has no cross-epic dependencies", async () => {
       const app = createApp();
@@ -685,12 +817,14 @@ Feature that depends on auth.
         content: "# Standalone\n\n## Dependencies\n\nNone.",
         complexity: "low",
       };
-      const createRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+      const createRes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
 
       const depsRes = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/plans/${planId}/cross-epic-dependencies`,
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/cross-epic-dependencies`
       );
       expect(depsRes.status).toBe(200);
       expect(depsRes.body.data.prerequisitePlanIds).toEqual([]);
@@ -707,7 +841,9 @@ Feature that depends on auth.
         complexity: "low",
         tasks: [{ title: "Auth task", description: "Auth", priority: 0, dependsOn: [] }],
       };
-      const createARes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planABody);
+      const createARes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planABody);
       expect(createARes.status).toBe(201);
       const planAId = createARes.body.data.metadata.planId;
 
@@ -718,7 +854,9 @@ Feature that depends on auth.
         complexity: "medium",
         tasks: [{ title: "Feature task", description: "Feature", priority: 0, dependsOn: [] }],
       };
-      const createBRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBBody);
+      const createBRes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBBody);
       expect(createBRes.status).toBe(201);
       const planBId = createBRes.body.data.metadata.planId;
 
@@ -731,10 +869,10 @@ Feature that depends on auth.
       const project = await projectService.getProject(projectId);
       const plansDir = path.join(project.repoPath, OPENSPRINT_PATHS.plans);
       const planAMeta = JSON.parse(
-        await fs.readFile(path.join(plansDir, `${planAId}.meta.json`), "utf-8"),
+        await fs.readFile(path.join(plansDir, `${planAId}.meta.json`), "utf-8")
       );
       const planBMeta = JSON.parse(
-        await fs.readFile(path.join(plansDir, `${planBId}.meta.json`), "utf-8"),
+        await fs.readFile(path.join(plansDir, `${planBId}.meta.json`), "utf-8")
       );
       expect(planAMeta.shippedAt).toBeTruthy();
       expect(planBMeta.shippedAt).toBeTruthy();
@@ -748,18 +886,26 @@ Feature that depends on auth.
       content: "# No Epic\n\nManually created without beads.",
       complexity: "low",
     };
-    const createRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    const createRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send(planBody);
     expect(createRes.status).toBe(201);
     const planId = createRes.body.data.metadata.planId;
 
     // Remove beadEpicId from metadata to simulate plan without epic
-    const plansDir = path.join((await projectService.getProject(projectId)).repoPath, ".opensprint", "plans");
+    const plansDir = path.join(
+      (await projectService.getProject(projectId)).repoPath,
+      ".opensprint",
+      "plans"
+    );
     const metaPath = path.join(plansDir, `${planId}.meta.json`);
     const meta = JSON.parse(await fs.readFile(metaPath, "utf-8"));
     meta.beadEpicId = "";
     await fs.writeFile(metaPath, JSON.stringify(meta, null, 2));
 
-    const archiveRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/archive`);
+    const archiveRes = await request(app).post(
+      `${API_PREFIX}/projects/${projectId}/plans/${planId}/archive`
+    );
     expect(archiveRes.status).toBe(400);
     expect(archiveRes.body.error?.code).toBe("NO_EPIC");
   });

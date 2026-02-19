@@ -440,8 +440,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       Planning Agent Slot
                     </h3>
                     <p className="text-xs text-theme-muted mb-3">
-                      Used by Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor, Delta
-                      Planner
+                      Used by Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor
                     </p>
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">

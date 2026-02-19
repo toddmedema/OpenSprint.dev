@@ -26,6 +26,7 @@ describe("GitCommitQueue", () => {
   });
 
   afterEach(async () => {
+    await gitCommitQueue.drain();
     await fs.rm(repoPath, { recursive: true, force: true }).catch(() => {});
   });
 

@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
@@ -7,14 +8,26 @@ import { DeliverPhase } from "./DeliverPhase";
 import deliverReducer from "../../store/slices/deliverSlice";
 import projectReducer from "../../store/slices/projectSlice";
 
-const mockGetSettings = vi.fn().mockResolvedValue({
-  deployment: { mode: "custom", customCommand: "echo deploy" },
-});
+const { mockGetSettings, mockDeliverHistory, mockDeliverStatus } = vi.hoisted(() => ({
+  mockGetSettings: vi.fn().mockResolvedValue({
+    deployment: { mode: "custom", customCommand: "echo deploy" },
+  }),
+  mockDeliverHistory: vi.fn().mockResolvedValue([]),
+  mockDeliverStatus: vi.fn().mockResolvedValue({ activeDeployId: null, currentDeploy: null }),
+}));
 
 vi.mock("../../api/client", () => ({
   api: {
     projects: {
-      getSettings: mockGetSettings,
+      getSettings: (...args: unknown[]) => mockGetSettings(...args),
+      get: vi.fn().mockResolvedValue({}),
+    },
+    deliver: {
+      status: (...args: unknown[]) => mockDeliverStatus(...args),
+      history: (...args: unknown[]) => mockDeliverHistory(...args),
+      deploy: vi.fn().mockResolvedValue({ deployId: "d1" }),
+      rollback: vi.fn().mockResolvedValue({}),
+      updateSettings: vi.fn().mockResolvedValue({}),
     },
   },
 }));
@@ -79,10 +92,12 @@ describe("DeliverPhase", () => {
     expect(screen.getByText("Delivery History")).toBeInTheDocument();
   });
 
-  it("shows empty state when no deliveries", () => {
+  it("shows empty state when no deliveries", async () => {
     const store = createStore();
     renderWithRouter(store);
-    expect(screen.getByText(/No deliveries yet\. Click Deliver! to start\./)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/No deliveries yet\. Click Deliver! to start\./)
+    ).toBeInTheDocument();
   });
 
   it("renders live log panel", () => {
@@ -91,22 +106,22 @@ describe("DeliverPhase", () => {
     expect(screen.getByTestId("deploy-log")).toBeInTheDocument();
   });
 
-  it("renders rolled_back status badge", () => {
-    const store = createStore({
-      history: [
-        {
-          id: "deploy-1",
-          projectId: "proj-1",
-          status: "rolled_back",
-          startedAt: "2025-01-01T12:00:00.000Z",
-          completedAt: "2025-01-01T12:01:00.000Z",
-          log: [],
-          rolledBackBy: "deploy-2",
-        },
-      ],
-    });
+  it("renders rolled_back status badge", async () => {
+    const rolledBackRecord = {
+      id: "deploy-1",
+      projectId: "proj-1",
+      status: "rolled_back",
+      startedAt: "2025-01-01T12:00:00.000Z",
+      completedAt: "2025-01-01T12:01:00.000Z",
+      log: [],
+      rolledBackBy: "deploy-2",
+    };
+    mockDeliverHistory.mockResolvedValue([rolledBackRecord]);
+    const store = createStore({ history: [rolledBackRecord] });
     renderWithRouter(store);
-    expect(screen.getByText("rolled-back")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("rolled-back")).toBeInTheDocument();
+    });
   });
 
   it("shows fix epic link when deployment failed with fixEpicId", () => {

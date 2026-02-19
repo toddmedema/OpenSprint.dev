@@ -33,6 +33,15 @@ function isProcessAlive(pid: number): boolean {
 }
 
 /**
+ * Clear the tracking sets without killing processes.
+ * Used when OPENSPRINT_PRESERVE_AGENTS is set so agents survive a backend restart.
+ */
+export function clearAgentProcessRegistry(): void {
+  trackedProcessGroups.clear();
+  trackedPids.clear();
+}
+
+/**
  * Kill all tracked agent processes. Called on backend SIGTERM/SIGINT.
  * Sends SIGTERM first, waits briefly, then SIGKILLs any still alive.
  * Returns a Promise that resolves when cleanup is done.

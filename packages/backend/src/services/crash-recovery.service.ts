@@ -1,3 +1,5 @@
+import path from "path";
+import { open as fsOpen, stat as fsStat } from "fs/promises";
 import type {
   AgentPhase,
   CodingAgentResult,
@@ -6,13 +8,14 @@ import type {
 } from "@opensprint/shared";
 import {
   AGENT_INACTIVITY_TIMEOUT_MS,
+  OPENSPRINT_PATHS,
   resolveTestCommand,
   DEFAULT_REVIEW_MODE,
 } from "@opensprint/shared";
 import type { BeadsIssue } from "./beads.service.js";
 import { activeAgentsService } from "./active-agents.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
-import { broadcastToProject } from "../websocket/index.js";
+import { broadcastToProject, sendAgentOutputToProject } from "../websocket/index.js";
 import { normalizeCodingStatus } from "./result-normalizers.js";
 
 const RECOVERY_POLL_MS = 30_000;
@@ -302,6 +305,28 @@ export class CrashRecoveryService {
       branchName
     );
 
+    // Stream existing agent output from the log file so the frontend can
+    // display what the agent produced before the backend restarted.
+    const outputLogPath = wtPath
+      ? path.join(wtPath, OPENSPRINT_PATHS.active, taskId, OPENSPRINT_PATHS.agentOutputLog)
+      : null;
+    let outputReadOffset = 0;
+
+    if (outputLogPath) {
+      try {
+        const initialBytes = await this.readOutputLogTail(outputLogPath, 1024 * 1024);
+        if (initialBytes.data.length > 0) {
+          outputReadOffset = initialBytes.offset;
+          sendAgentOutputToProject(projectId, taskId, initialBytes.data);
+          console.log(
+            `[orchestrator] Recovery: streamed ${initialBytes.data.length} bytes of prior agent output`
+          );
+        }
+      } catch {
+        // Output file may not exist (agent using pipes, or not yet started writing)
+      }
+    }
+
     state.timers.setInterval(
       "recoveryPoll",
       async () => {
@@ -311,6 +336,19 @@ export class CrashRecoveryService {
           if (hb && hb.lastOutputTimestamp > currentLastOutput) {
             currentLastOutput = hb.lastOutputTimestamp;
             state.agent.lastOutputTime = currentLastOutput;
+          }
+        }
+
+        // Stream new output from the log file to WebSocket clients
+        if (outputLogPath) {
+          try {
+            const newData = await this.readOutputLogFrom(outputLogPath, outputReadOffset);
+            if (newData.bytesRead > 0) {
+              outputReadOffset += newData.bytesRead;
+              sendAgentOutputToProject(projectId, taskId, newData.data);
+            }
+          } catch {
+            // Transient read error
           }
         }
 
@@ -579,6 +617,46 @@ export class CrashRecoveryService {
       console.warn("[orchestrator] Recovery: result.json advance-to-review failed:", err);
     }
     return false;
+  }
+
+  /**
+   * Read up to maxBytes from the end of an output log file.
+   * Returns the data and the file offset after reading (for subsequent reads).
+   */
+  private async readOutputLogTail(
+    logPath: string,
+    maxBytes: number
+  ): Promise<{ data: string; offset: number }> {
+    const s = await fsStat(logPath);
+    if (s.size === 0) return { data: "", offset: 0 };
+    const start = Math.max(0, s.size - maxBytes);
+    const toRead = s.size - start;
+    const fh = await fsOpen(logPath, "r");
+    try {
+      const buf = Buffer.alloc(toRead);
+      const { bytesRead } = await fh.read(buf, 0, toRead, start);
+      return { data: buf.subarray(0, bytesRead).toString(), offset: start + bytesRead };
+    } finally {
+      await fh.close();
+    }
+  }
+
+  /** Read new bytes from the output log starting at the given offset. */
+  private async readOutputLogFrom(
+    logPath: string,
+    offset: number
+  ): Promise<{ data: string; bytesRead: number }> {
+    const s = await fsStat(logPath);
+    if (s.size <= offset) return { data: "", bytesRead: 0 };
+    const toRead = Math.min(s.size - offset, 256 * 1024);
+    const fh = await fsOpen(logPath, "r");
+    try {
+      const buf = Buffer.alloc(toRead);
+      const { bytesRead } = await fh.read(buf, 0, toRead, offset);
+      return { data: buf.subarray(0, bytesRead).toString(), bytesRead };
+    } finally {
+      await fh.close();
+    }
   }
 
   private killPidGracefully(pid: number): void {

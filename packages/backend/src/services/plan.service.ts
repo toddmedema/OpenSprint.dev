@@ -25,7 +25,6 @@ import { ChatService } from "./chat.service.js";
 import { PrdService } from "./prd.service.js";
 import { agentService } from "./agent.service.js";
 import { buildAuditorPrompt, parseAuditorResult } from "./auditor.service.js";
-import { buildDeltaPlannerPrompt, parseDeltaPlannerResult } from "./delta-planner.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { broadcastToProject } from "../websocket/index.js";
@@ -749,7 +748,7 @@ export class PlanService {
     return { ...plan, status: "building" };
   }
 
-  /** Rebuild an updated Plan — PRD §7.2.2: Auditor + Delta Planner two-agent approach */
+  /** Rebuild an updated Plan — PRD §7.2.2: Auditor performs capability audit and delta task generation */
   async reshipPlan(projectId: string, planId: string): Promise<Plan> {
     const plan = await this.getPlan(projectId, planId);
     const repoPath = await this.getRepoPath(projectId);
@@ -781,7 +780,6 @@ export class PlanService {
       const noneStarted = children.every((issue: BeadsIssue) => issue.status === "open");
 
       if (noneStarted && children.length > 0) {
-        // Delete all existing sub-tasks (including any re-execute gate), then ship fresh
         const toDelete = allIssues.filter(
           (i: BeadsIssue) =>
             i.id.startsWith(epicId + ".") &&
@@ -806,12 +804,15 @@ export class PlanService {
       }
     }
 
-    // All done: use Auditor + Delta Planner two-agent approach (PRD §12.3.6–7)
+    // All done: Auditor audits capabilities and generates delta tasks (PRD §12.3.6)
     const { fileTree, keyFilesContent, completedTasksJson } = await this.assembleReExecuteContext(
       repoPath,
       epicId ?? "",
       gateTaskId
     );
+
+    const planOld = await this.getShippedPlanContent(repoPath, planId);
+    const planNew = plan.content;
 
     const auditorPrompt = buildAuditorPrompt(planId, epicId ?? "");
     const auditorFullPrompt = `${auditorPrompt}
@@ -826,37 +827,7 @@ ${keyFilesContent}
 
 ## context/completed_tasks.json
 
-${completedTasksJson}`;
-
-    const agentIdAuditor = `auditor-${projectId}-${planId}-${Date.now()}`;
-
-    const auditorResponse = await agentService.invokePlanningAgent({
-      config: (await this.projectService.getSettings(projectId)).planningAgent,
-      messages: [{ role: "user", content: auditorFullPrompt }],
-      systemPrompt:
-        "You are the Auditor agent for OpenSprint (PRD §12.3.6). Summarize the app's current capabilities from the codebase and completed task history.",
-      tracking: {
-        id: agentIdAuditor,
-        projectId,
-        phase: "plan",
-        role: "auditor",
-        label: "Re-execute: capability audit",
-      },
-    });
-
-    const auditorResult = parseAuditorResult(auditorResponse.content);
-    if (!auditorResult || auditorResult.status !== "success" || !auditorResult.capability_summary) {
-      console.error(
-        "[plan] Auditor failed or returned invalid result, falling back to full rebuild"
-      );
-      return this.shipPlan(projectId, planId);
-    }
-
-    const planOld = await this.getShippedPlanContent(repoPath, planId);
-    const planNew = plan.content;
-
-    const deltaPlannerPrompt = buildDeltaPlannerPrompt(planId, epicId ?? "");
-    const deltaPlannerFullPrompt = `${deltaPlannerPrompt}
+${completedTasksJson}
 
 ## context/plan_old.md
 
@@ -864,38 +835,37 @@ ${planOld}
 
 ## context/plan_new.md
 
-${planNew}
+${planNew}`;
 
-## context/capability_summary.md
+    const agentIdAuditor = `auditor-${projectId}-${planId}-${Date.now()}`;
 
-${auditorResult.capability_summary}`;
-
-    const agentIdDelta = `delta-planner-${projectId}-${planId}-${Date.now()}`;
-
-    const deltaResponse = await agentService.invokePlanningAgent({
+    const auditorResponse = await agentService.invokePlanningAgent({
       config: (await this.projectService.getSettings(projectId)).planningAgent,
-      messages: [{ role: "user", content: deltaPlannerFullPrompt }],
+      messages: [{ role: "user", content: auditorFullPrompt }],
       systemPrompt:
-        "You are the Delta Planner agent for OpenSprint (PRD §12.3.7). Compare old/new Plan against capability summary and output only the delta tasks needed.",
+        "You are the Auditor agent for OpenSprint (PRD §12.3.6). Audit the app's current capabilities and generate delta tasks for re-execution.",
       tracking: {
-        id: agentIdDelta,
+        id: agentIdAuditor,
         projectId,
         phase: "plan",
-        role: "delta_planner",
-        label: "Re-execute: delta task list",
+        role: "auditor",
+        label: "Re-execute: audit & delta tasks",
       },
     });
 
-    const deltaResult = parseDeltaPlannerResult(deltaResponse.content);
-    if (
-      !deltaResult ||
-      deltaResult.status === "no_changes_needed" ||
-      deltaResult.status === "failed"
-    ) {
-      return this.getPlan(projectId, planId);
+    const auditorResult = parseAuditorResult(auditorResponse.content);
+    if (!auditorResult || auditorResult.status === "failed") {
+      console.error(
+        "[plan] Auditor failed or returned invalid result, falling back to full rebuild"
+      );
+      return this.shipPlan(projectId, planId);
     }
 
-    if (!deltaResult.tasks || deltaResult.tasks.length === 0) {
+    if (
+      auditorResult.status === "no_changes_needed" ||
+      !auditorResult.tasks ||
+      auditorResult.tasks.length === 0
+    ) {
       return this.getPlan(projectId, planId);
     }
 
@@ -907,7 +877,7 @@ ${auditorResult.capability_summary}`;
     const newGateTaskId = newGateResult.id;
 
     const taskIdMap = new Map<number, string>();
-    for (const task of deltaResult.tasks) {
+    for (const task of auditorResult.tasks) {
       const priority = Math.min(4, Math.max(0, task.priority ?? 2));
       const taskResult = await this.beads.create(repoPath, task.title, {
         type: "task",
@@ -919,7 +889,7 @@ ${auditorResult.capability_summary}`;
       await this.beads.addDependency(repoPath, taskResult.id, newGateTaskId);
     }
 
-    for (const task of deltaResult.tasks) {
+    for (const task of auditorResult.tasks) {
       if (task.depends_on && task.depends_on.length > 0) {
         const childId = taskIdMap.get(task.index);
         if (childId) {
@@ -939,7 +909,7 @@ ${auditorResult.capability_summary}`;
     gitCommitQueue.enqueue({
       type: "beads_export",
       repoPath,
-      summary: `re-execute ${planId}: ${deltaResult.tasks.length} delta tasks`,
+      summary: `re-execute ${planId}: ${auditorResult.tasks.length} delta tasks`,
     });
 
     for (const [, taskId] of taskIdMap) {
@@ -1171,9 +1141,7 @@ ${auditorResult.capability_summary}`;
   }
 
   /** Get the latest planning run (most recent by created_at) */
-  private async getLatestPlanningRun(
-    projectId: string
-  ): Promise<{
+  private async getLatestPlanningRun(projectId: string): Promise<{
     id: string;
     created_at: string;
     prd_snapshot: Prd;

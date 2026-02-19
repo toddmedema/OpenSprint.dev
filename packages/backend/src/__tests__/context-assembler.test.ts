@@ -57,9 +57,9 @@ User authentication.
     await fs.writeFile(path.join(plansDir, "auth.md"), planContent);
 
     const config = {
-      invocation_id: 'bd-a3f8.1',
-      agent_role: 'coder' as const,
-      taskId: 'bd-a3f8.1',
+      invocation_id: "bd-a3f8.1",
+      agent_role: "coder" as const,
+      taskId: "bd-a3f8.1",
       repoPath,
       branch: "opensprint/bd-a3f8.1",
       testCommand: "npm test",
@@ -83,11 +83,11 @@ User authentication.
     const contextDir = path.join(taskDir, "context");
     const depsDir = path.join(contextDir, "deps");
 
-    const configJson = JSON.parse(await fs.readFile(path.join(taskDir, 'config.json'), 'utf-8'));
-    expect(configJson.invocation_id).toBe('bd-a3f8.1');
-    expect(configJson.agent_role).toBe('coder');
-    expect(configJson.taskId).toBe('bd-a3f8.1');
-    expect(configJson.phase).toBe('coding');
+    const configJson = JSON.parse(await fs.readFile(path.join(taskDir, "config.json"), "utf-8"));
+    expect(configJson.invocation_id).toBe("bd-a3f8.1");
+    expect(configJson.agent_role).toBe("coder");
+    expect(configJson.taskId).toBe("bd-a3f8.1");
+    expect(configJson.phase).toBe("coding");
 
     const prdExcerpt = await fs.readFile(path.join(contextDir, "prd_excerpt.md"), "utf-8");
     expect(prdExcerpt).toContain("Test product.");
@@ -148,9 +148,9 @@ User authentication.
     await fs.writeFile(path.join(plansDir, "auth.md"), planContent);
 
     const config = {
-      invocation_id: 'bd-a3f8.1',
-      agent_role: 'coder' as const,
-      taskId: 'bd-a3f8.1',
+      invocation_id: "bd-a3f8.1",
+      agent_role: "coder" as const,
+      taskId: "bd-a3f8.1",
       repoPath,
       branch: "opensprint/bd-a3f8.1",
       testCommand: "npm test",
@@ -410,9 +410,9 @@ User authentication.
     await fs.writeFile(path.join(plansDir, "auth.md"), planContent);
 
     const config = {
-      invocation_id: 'bd-a3f8.2',
-      agent_role: 'reviewer' as const,
-      taskId: 'bd-a3f8.2',
+      invocation_id: "bd-a3f8.2",
+      agent_role: "reviewer" as const,
+      taskId: "bd-a3f8.2",
       repoPath,
       branch: "opensprint/bd-a3f8.2",
       testCommand: "npm test",
@@ -435,16 +435,29 @@ User authentication.
 
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
 
-    // Per PRD §12.3: Review agent prompt structure
+    // Review prompt structure
     expect(prompt).toContain("# Review Task: Implement JWT validation");
     expect(prompt).toContain("## Objective");
-    expect(prompt).toContain(
-      "Review the implementation of this task against its specification and acceptance criteria"
-    );
-    expect(prompt).toContain("## Task Specification");
+    expect(prompt).toContain("Scope compliance");
+    expect(prompt).toContain("Code quality");
+
+    // Original ticket context
+    expect(prompt).toContain("## Original Ticket");
+    expect(prompt).toContain("**Task ID:** bd-a3f8.2");
     expect(prompt).toContain("Add JWT validation middleware");
+
+    // Acceptance criteria and technical approach from plan
     expect(prompt).toContain("## Acceptance Criteria");
     expect(prompt).toContain("User can log in with email/password");
+    expect(prompt).toContain("## Technical Approach");
+    expect(prompt).toContain("Use bcrypt for password hashing");
+
+    // Context file references
+    expect(prompt).toContain("## Context");
+    expect(prompt).toContain("context/plan.md");
+    expect(prompt).toContain("context/prd_excerpt.md");
+
+    // Implementation section
     expect(prompt).toContain("## Implementation");
     expect(prompt).toContain(
       "The coding agent has produced changes on branch `opensprint/bd-a3f8.2`"
@@ -453,20 +466,69 @@ User authentication.
     expect(prompt).toContain(
       "Run `git diff main...opensprint/bd-a3f8.2` to review the committed changes"
     );
+
+    // Two-part review checklist
+    expect(prompt).toContain("## Review Checklist");
+    expect(prompt).toContain("### Part 1: Scope Compliance");
+    expect(prompt).toContain("ALL acceptance criteria are met");
+    expect(prompt).toContain("### Part 2: Code Quality");
+    expect(prompt).toContain("Correctness");
+    expect(prompt).toContain("Error handling");
+    expect(prompt).toContain("Test coverage");
+    expect(prompt).toContain("All tests pass");
+
+    // Instructions
     expect(prompt).toContain("## Instructions");
-    expect(prompt).toContain(
-      "1. Review the diff between main and the task branch using `git diff main...opensprint/bd-a3f8.2`"
-    );
-    expect(prompt).toContain("2. Verify the implementation meets ALL acceptance criteria");
-    expect(prompt).toContain("3. Verify tests exist and cover the ticket scope");
-    expect(prompt).toContain("4. Run `npm test` and confirm all tests pass");
-    expect(prompt).toContain("5. Check code quality");
-    // PRD §12.3: Structured result.json format with approved/rejected + Do NOT merge
+    expect(prompt).toContain("Read the original ticket");
+    expect(prompt).toContain(`git diff main...opensprint/bd-a3f8.2`);
+    expect(prompt).toContain("Run the full test suite: `npm test`");
     expect(prompt).toContain("6. Write your result to `.opensprint/active/bd-a3f8.2/result.json`");
     expect(prompt).toContain('"status": "approved"');
     expect(prompt).toContain("do NOT merge");
     expect(prompt).toContain('"status": "rejected"');
     expect(prompt).toContain('"summary"');
     expect(prompt).toContain('The `status` field MUST be exactly `"approved"` or `"rejected"`');
+
+    // Should NOT contain prior review history for first attempt
+    expect(prompt).not.toContain("## Prior Review History");
+  });
+
+  it("should include prior review history in review prompt when provided", async () => {
+    const planContent = `# Feature: Auth\n\n## Acceptance Criteria\n\n- Login works\n`;
+
+    const config = {
+      invocation_id: "bd-a3f8.2",
+      agent_role: "reviewer" as const,
+      taskId: "bd-a3f8.2",
+      repoPath,
+      branch: "opensprint/bd-a3f8.2",
+      testCommand: "npm test",
+      attempt: 2,
+      phase: "review" as const,
+      previousFailure: null as string | null,
+      reviewFeedback: null as string | null,
+    };
+
+    const reviewHistory =
+      "### Attempt 1 — Rejected\n\n**Reason:** Missing error handling for invalid JWT tokens\n";
+
+    const context = {
+      taskId: config.taskId,
+      title: "Implement JWT validation",
+      description: "Add JWT validation middleware",
+      planContent,
+      prdExcerpt: "# Product Requirements\n\nTest product.",
+      dependencyOutputs: [] as Array<{ taskId: string; diff: string; summary: string }>,
+      reviewHistory,
+    };
+
+    const taskDir = await assembler.assembleTaskDirectory(repoPath, config.taskId, config, context);
+    const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
+
+    expect(prompt).toContain("## Prior Review History");
+    expect(prompt).toContain("has been reviewed and rejected before");
+    expect(prompt).toContain("previously identified problems have actually been fixed");
+    expect(prompt).toContain("### Attempt 1 — Rejected");
+    expect(prompt).toContain("Missing error handling for invalid JWT tokens");
   });
 });

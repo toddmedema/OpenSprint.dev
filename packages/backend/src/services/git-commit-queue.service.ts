@@ -154,8 +154,6 @@ class GitCommitQueueImpl implements GitCommitQueueService {
     if (this.queue.length === 0 && !this.processing) return;
     return new Promise<void>((resolve) => {
       this.drainResolvers.push(resolve);
-      if (this.queue.length === 0 && !this.processing) return;
-      setImmediate(() => this.processNext());
     });
   }
 }

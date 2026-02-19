@@ -79,7 +79,7 @@ describe("EpicCard", () => {
         onSelect={onSelect}
         onShip={vi.fn()}
         onReship={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText("Auth Feature")).toBeInTheDocument();
@@ -96,7 +96,7 @@ describe("EpicCard", () => {
         onSelect={vi.fn()}
         onShip={vi.fn()}
         onReship={vi.fn()}
-      />,
+      />
     );
 
     const progressbar = screen.getByRole("progressbar", {
@@ -117,7 +117,7 @@ describe("EpicCard", () => {
         onSelect={vi.fn()}
         onShip={vi.fn()}
         onReship={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText(/1\/3/)).toBeInTheDocument();
@@ -133,7 +133,7 @@ describe("EpicCard", () => {
         onSelect={vi.fn()}
         onShip={vi.fn()}
         onReship={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText("Implement login")).toBeInTheDocument();
@@ -153,7 +153,7 @@ describe("EpicCard", () => {
         onSelect={onSelect}
         onShip={vi.fn()}
         onReship={vi.fn()}
-      />,
+      />
     );
 
     await user.click(screen.getByText("Auth Feature"));
@@ -171,10 +171,11 @@ describe("EpicCard", () => {
         onSelect={vi.fn()}
         onShip={vi.fn()}
         onReship={vi.fn()}
-      />,
+      />
     );
 
-    expect(screen.getByRole("button", { name: /execute!/i })).toBeInTheDocument();
+    const executeButtons = screen.getAllByRole("button", { name: /execute!/i });
+    expect(executeButtons.find((b) => b.tagName === "BUTTON")).toBeInTheDocument();
   });
 
   it("calls onShip when Execute! is clicked", async () => {
@@ -190,10 +191,11 @@ describe("EpicCard", () => {
         onSelect={vi.fn()}
         onShip={onShip}
         onReship={vi.fn()}
-      />,
+      />
     );
 
-    await user.click(screen.getByRole("button", { name: /execute!/i }));
+    const shipButtons = screen.getAllByRole("button", { name: /execute!/i });
+    await user.click(shipButtons.find((b) => b.tagName === "BUTTON")!);
     expect(onShip).toHaveBeenCalledTimes(1);
   });
 
@@ -217,10 +219,11 @@ describe("EpicCard", () => {
         onSelect={vi.fn()}
         onShip={vi.fn()}
         onReship={vi.fn()}
-      />,
+      />
     );
 
-    expect(screen.getByRole("button", { name: /re-execute/i })).toBeInTheDocument();
+    const reexecButtons = screen.getAllByRole("button", { name: /re-execute/i });
+    expect(reexecButtons.find((b) => b.tagName === "BUTTON")).toBeInTheDocument();
   });
 
   it("calls onReship when Re-execute is clicked", async () => {
@@ -245,10 +248,11 @@ describe("EpicCard", () => {
         onSelect={vi.fn()}
         onShip={vi.fn()}
         onReship={onReship}
-      />,
+      />
     );
 
-    await user.click(screen.getByRole("button", { name: /re-execute/i }));
+    const reshipButtons = screen.getAllByRole("button", { name: /re-execute/i });
+    await user.click(reshipButtons.find((b) => b.tagName === "BUTTON")!);
     expect(onReship).toHaveBeenCalledTimes(1);
   });
 
@@ -262,7 +266,7 @@ describe("EpicCard", () => {
         onSelect={vi.fn()}
         onShip={vi.fn()}
         onReship={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText("Progress")).toBeInTheDocument();
@@ -270,7 +274,10 @@ describe("EpicCard", () => {
   });
 
   it("formats plan title with capitalized words", () => {
-    const plan: Plan = { ...basePlan, metadata: { ...basePlan.metadata, planId: "my-cool-feature" } };
+    const plan: Plan = {
+      ...basePlan,
+      metadata: { ...basePlan.metadata, planId: "my-cool-feature" },
+    };
     render(
       <EpicCard
         plan={plan}
@@ -280,7 +287,7 @@ describe("EpicCard", () => {
         onSelect={vi.fn()}
         onShip={vi.fn()}
         onReship={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText("My Cool Feature")).toBeInTheDocument();
@@ -297,7 +304,7 @@ describe("EpicCard", () => {
         onSelect={vi.fn()}
         onShip={vi.fn()}
         onReship={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText("Auth Feature")).toBeInTheDocument();

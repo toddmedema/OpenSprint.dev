@@ -49,21 +49,18 @@ export const fetchPlanStatus = createAsyncThunk(
   "plan/fetchPlanStatus",
   async (projectId: string): Promise<PlanStatusResponse> => {
     return api.projects.getPlanStatus(projectId);
-  },
+  }
 );
 
-export const fetchPlans = createAsyncThunk(
-  "plan/fetchPlans",
-  async (arg: FetchPlansArg) => {
-    const projectId = typeof arg === "string" ? arg : arg.projectId;
-    const graph = await api.plans.list(projectId);
-    return {
-      plans: graph.plans,
-      dependencyGraph: graph,
-      background: typeof arg === "string" ? false : (arg.background ?? false),
-    };
-  },
-);
+export const fetchPlans = createAsyncThunk("plan/fetchPlans", async (arg: FetchPlansArg) => {
+  const projectId = typeof arg === "string" ? arg : arg.projectId;
+  const graph = await api.plans.list(projectId);
+  return {
+    plans: graph.plans,
+    dependencyGraph: graph,
+    background: typeof arg === "string" ? false : (arg.background ?? false),
+  };
+});
 
 export const decomposePlans = createAsyncThunk("plan/decompose", async (projectId: string) => {
   await api.plans.decompose(projectId);
@@ -81,21 +78,21 @@ export const executePlan = createAsyncThunk(
     prerequisitePlanIds?: string[];
   }) => {
     await api.plans.execute(projectId, planId, prerequisitePlanIds);
-  },
+  }
 );
 
 export const reExecutePlan = createAsyncThunk(
   "plan/reExecute",
   async ({ projectId, planId }: { projectId: string; planId: string }) => {
     await api.plans.reExecute(projectId, planId);
-  },
+  }
 );
 
 export const archivePlan = createAsyncThunk(
   "plan/archive",
   async ({ projectId, planId }: { projectId: string; planId: string }) => {
     return api.plans.archive(projectId, planId);
-  },
+  }
 );
 
 export const fetchPlanChat = createAsyncThunk(
@@ -103,22 +100,30 @@ export const fetchPlanChat = createAsyncThunk(
   async ({ projectId, context }: { projectId: string; context: string }) => {
     const conv = await api.chat.history(projectId, context);
     return { context, messages: conv?.messages ?? [] };
-  },
+  }
 );
 
 export const sendPlanMessage = createAsyncThunk(
   "plan/sendMessage",
-  async ({ projectId, message, context }: { projectId: string; message: string; context: string }) => {
+  async ({
+    projectId,
+    message,
+    context,
+  }: {
+    projectId: string;
+    message: string;
+    context: string;
+  }) => {
     const response = await api.chat.send(projectId, message, context);
     return { context, response };
-  },
+  }
 );
 
 export const fetchSinglePlan = createAsyncThunk(
   "plan/fetchSingle",
   async ({ projectId, planId }: { projectId: string; planId: string }) => {
     return api.plans.get(projectId, planId);
-  },
+  }
 );
 
 export const updatePlan = createAsyncThunk(
@@ -133,7 +138,7 @@ export const updatePlan = createAsyncThunk(
     content: string;
   }) => {
     return api.plans.update(projectId, planId, { content });
-  },
+  }
 );
 
 const planSlice = createSlice({
@@ -154,7 +159,7 @@ const planSlice = createSlice({
     },
     setPlansAndGraph(
       state,
-      action: PayloadAction<{ plans: Plan[]; dependencyGraph: PlanDependencyGraph | null }>,
+      action: PayloadAction<{ plans: Plan[]; dependencyGraph: PlanDependencyGraph | null }>
     ) {
       state.plans = action.payload.plans;
       state.dependencyGraph = action.payload.dependencyGraph;
@@ -186,7 +191,7 @@ const planSlice = createSlice({
       .addCase(fetchPlans.rejected, (state, action) => {
         const background = typeof action.meta.arg !== "string" && action.meta.arg.background;
         state.loading = false;
-        const msg = action.error.message ?? "Failed to load plans";
+        const msg = action.error.message || "Failed to load plans";
         if (background) {
           state.backgroundError = msg;
         } else {
@@ -203,7 +208,7 @@ const planSlice = createSlice({
       })
       .addCase(decomposePlans.rejected, (state, action) => {
         state.decomposing = false;
-        state.error = action.error.message ?? "Failed to decompose PRD";
+        state.error = action.error.message || "Failed to decompose PRD";
       })
       // executePlan / reExecutePlan
       .addCase(executePlan.pending, (state, action) => {
@@ -215,7 +220,7 @@ const planSlice = createSlice({
       })
       .addCase(executePlan.rejected, (state, action) => {
         state.executingPlanId = null;
-        state.error = action.error.message ?? "Failed to start execute";
+        state.error = action.error.message || "Failed to start execute";
       })
       .addCase(reExecutePlan.pending, (state, action) => {
         state.reExecutingPlanId = action.meta.arg.planId;
@@ -226,7 +231,7 @@ const planSlice = createSlice({
       })
       .addCase(reExecutePlan.rejected, (state, action) => {
         state.reExecutingPlanId = null;
-        state.error = action.error.message ?? "Failed to re-execute plan";
+        state.error = action.error.message || "Failed to re-execute plan";
       })
       // archivePlan
       .addCase(archivePlan.pending, (state, action) => {
@@ -238,7 +243,7 @@ const planSlice = createSlice({
       })
       .addCase(archivePlan.rejected, (state, action) => {
         state.archivingPlanId = null;
-        state.error = action.error.message ?? "Failed to archive plan";
+        state.error = action.error.message || "Failed to archive plan";
       })
       // fetchPlanChat
       .addCase(fetchPlanChat.fulfilled, (state, action) => {
@@ -255,18 +260,22 @@ const planSlice = createSlice({
         });
       })
       .addCase(sendPlanMessage.rejected, (state, action) => {
-        state.error = action.error.message ?? "Failed to send message";
+        state.error = action.error.message || "Failed to send message";
       })
       // fetchSinglePlan
       .addCase(fetchSinglePlan.fulfilled, (state, action) => {
-        const idx = state.plans.findIndex((p) => p.metadata.planId === action.payload.metadata.planId);
+        const idx = state.plans.findIndex(
+          (p) => p.metadata.planId === action.payload.metadata.planId
+        );
         if (idx >= 0) {
           state.plans[idx] = action.payload;
         }
       })
       // updatePlan
       .addCase(updatePlan.fulfilled, (state, action) => {
-        const idx = state.plans.findIndex((p) => p.metadata.planId === action.payload.metadata.planId);
+        const idx = state.plans.findIndex(
+          (p) => p.metadata.planId === action.payload.metadata.planId
+        );
         if (idx >= 0) {
           state.plans[idx] = action.payload;
         }

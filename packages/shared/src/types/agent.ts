@@ -1,7 +1,7 @@
 /** Supported agent backends */
 export type AgentType = "claude" | "cursor" | "custom";
 
-/** Named agent roles (PRD §6.3, §12). Planning slot: dreamer–delta_planner. Coding slot: coder, reviewer. */
+/** Named agent roles (PRD §6.3, §12). Planning slot: dreamer–auditor. Coding slot: coder, reviewer. */
 export type AgentRole =
   | "dreamer"
   | "planner"
@@ -9,7 +9,6 @@ export type AgentRole =
   | "analyst"
   | "summarizer"
   | "auditor"
-  | "delta_planner"
   | "coder"
   | "reviewer"
   | "merger";
@@ -30,7 +29,6 @@ export const AGENT_ROLE_LABELS: Record<AgentRole, string> = {
   analyst: "Analyst",
   summarizer: "Summarizer",
   auditor: "Auditor",
-  delta_planner: "Delta Planner",
   coder: "Coder",
   reviewer: "Reviewer",
   merger: "Merger",

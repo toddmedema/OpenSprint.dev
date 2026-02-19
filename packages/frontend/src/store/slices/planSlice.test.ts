@@ -99,7 +99,11 @@ describe("planSlice", () => {
 
   describe("fetchPlanStatus thunk", () => {
     it("stores plan status on fulfilled", async () => {
-      const status = { hasPlanningRun: true, prdChangedSinceLastRun: true, action: "replan" as const };
+      const status = {
+        hasPlanningRun: true,
+        prdChangedSinceLastRun: true,
+        action: "replan" as const,
+      };
       vi.mocked(api.projects.getPlanStatus).mockResolvedValue(status);
       const store = createStore();
       await store.dispatch(fetchPlanStatus("proj-1"));
@@ -323,7 +327,7 @@ describe("planSlice", () => {
       vi.mocked(api.plans.execute).mockReturnValue(apiPromise as never);
       const store = createStore();
       const dispatchPromise = store.dispatch(
-        executePlan({ projectId: "proj-1", planId: "plan-123" }),
+        executePlan({ projectId: "proj-1", planId: "plan-123" })
       );
 
       expect(store.getState().plan.executingPlanId).toBe("plan-123");
@@ -339,7 +343,7 @@ describe("planSlice", () => {
       await store.dispatch(executePlan({ projectId: "proj-1", planId: "plan-123" }));
 
       expect(store.getState().plan.executingPlanId).toBeNull();
-      expect(api.plans.execute).toHaveBeenCalledWith("proj-1", "plan-123");
+      expect(api.plans.execute).toHaveBeenCalledWith("proj-1", "plan-123", undefined);
     });
 
     it("passes prerequisitePlanIds when provided", async () => {
@@ -350,14 +354,13 @@ describe("planSlice", () => {
           projectId: "proj-1",
           planId: "plan-123",
           prerequisitePlanIds: ["user-auth", "feature-base"],
-        }),
+        })
       );
 
-      expect(api.plans.execute).toHaveBeenCalledWith(
-        "proj-1",
-        "plan-123",
-        ["user-auth", "feature-base"],
-      );
+      expect(api.plans.execute).toHaveBeenCalledWith("proj-1", "plan-123", [
+        "user-auth",
+        "feature-base",
+      ]);
     });
 
     it("clears executingPlanId and sets error on rejected", async () => {
@@ -388,7 +391,7 @@ describe("planSlice", () => {
       vi.mocked(api.plans.reExecute).mockReturnValue(apiPromise as never);
       const store = createStore();
       const dispatchPromise = store.dispatch(
-        reExecutePlan({ projectId: "proj-1", planId: "plan-456" }),
+        reExecutePlan({ projectId: "proj-1", planId: "plan-456" })
       );
 
       expect(store.getState().plan.reExecutingPlanId).toBe("plan-456");
@@ -433,9 +436,7 @@ describe("planSlice", () => {
       ];
       vi.mocked(api.chat.history).mockResolvedValue({ messages });
       const store = createStore();
-      await store.dispatch(
-        fetchPlanChat({ projectId: "proj-1", context: "plan-plan-1" }),
-      );
+      await store.dispatch(fetchPlanChat({ projectId: "proj-1", context: "plan-plan-1" }));
 
       expect(store.getState().plan.chatMessages["plan-plan-1"]).toEqual(messages);
       expect(api.chat.history).toHaveBeenCalledWith("proj-1", "plan-plan-1");
@@ -444,9 +445,7 @@ describe("planSlice", () => {
     it("uses empty array when messages missing", async () => {
       vi.mocked(api.chat.history).mockResolvedValue({});
       const store = createStore();
-      await store.dispatch(
-        fetchPlanChat({ projectId: "proj-1", context: "plan-plan-2" }),
-      );
+      await store.dispatch(fetchPlanChat({ projectId: "proj-1", context: "plan-plan-2" }));
 
       expect(store.getState().plan.chatMessages["plan-plan-2"]).toEqual([]);
     });
@@ -473,7 +472,7 @@ describe("planSlice", () => {
           projectId: "proj-1",
           message: "hello",
           context: "plan-plan-1",
-        }),
+        })
       );
 
       const state = store.getState().plan;
@@ -491,7 +490,7 @@ describe("planSlice", () => {
           projectId: "proj-1",
           message: "hi",
           context: "plan-new-context",
-        }),
+        })
       );
 
       expect(store.getState().plan.chatMessages["plan-new-context"]).toHaveLength(1);
@@ -505,7 +504,7 @@ describe("planSlice", () => {
           projectId: "proj-1",
           message: "hello",
           context: "plan-plan-1",
-        }),
+        })
       );
 
       expect(store.getState().plan.error).toBe("Send failed");
@@ -519,7 +518,7 @@ describe("planSlice", () => {
           projectId: "proj-1",
           message: "hello",
           context: "plan-plan-1",
-        }),
+        })
       );
 
       expect(store.getState().plan.error).toBe("Failed to send message");
@@ -572,7 +571,11 @@ describe("planSlice", () => {
       store.dispatch(setPlansAndGraph({ plans: [mockPlan], dependencyGraph: mockGraph }));
 
       await store.dispatch(
-        updatePlan({ projectId: "proj-1", planId: "plan-1", content: "# Updated Title\n\nUpdated body content" }),
+        updatePlan({
+          projectId: "proj-1",
+          planId: "plan-1",
+          content: "# Updated Title\n\nUpdated body content",
+        })
       );
 
       const state = store.getState().plan;
@@ -592,7 +595,9 @@ describe("planSlice", () => {
       const store = createStore();
       store.dispatch(setPlansAndGraph({ plans: [mockPlan], dependencyGraph: mockGraph }));
 
-      await store.dispatch(updatePlan({ projectId: "proj-1", planId: "plan-other", content: "# Other content" }));
+      await store.dispatch(
+        updatePlan({ projectId: "proj-1", planId: "plan-other", content: "# Other content" })
+      );
 
       expect(store.getState().plan.plans).toHaveLength(1);
       expect(store.getState().plan.plans[0].metadata.planId).toBe("plan-1");
@@ -608,7 +613,7 @@ describe("planSlice", () => {
       vi.mocked(api.plans.archive).mockReturnValue(apiPromise as never);
       const store = createStore();
       const dispatchPromise = store.dispatch(
-        archivePlan({ projectId: "proj-1", planId: "plan-123" }),
+        archivePlan({ projectId: "proj-1", planId: "plan-123" })
       );
 
       expect(store.getState().plan.archivingPlanId).toBe("plan-123");

@@ -1,7 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PrdChatPanel } from "./PrdChatPanel";
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 const defaultProps = {
   open: true,
@@ -67,7 +71,7 @@ describe("PrdChatPanel", () => {
         variant="inline"
         collapsed={false}
         onCollapsedChange={onCollapsedChange}
-      />,
+      />
     );
 
     const collapseBtn = screen.getByRole("button", { name: "Collapse Discuss sidebar" });
@@ -83,7 +87,7 @@ describe("PrdChatPanel", () => {
         variant="inline"
         collapsed={false}
         onCollapsedChange={onCollapsedChange}
-      />,
+      />
     );
 
     await user.click(screen.getByRole("button", { name: "Collapse Discuss sidebar" }));
@@ -98,7 +102,7 @@ describe("PrdChatPanel", () => {
         variant="inline"
         collapsed={true}
         onCollapsedChange={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByTestId("prd-chat-sidebar")).toBeInTheDocument();
@@ -113,7 +117,7 @@ describe("PrdChatPanel", () => {
         variant="inline"
         collapsed={true}
         onCollapsedChange={vi.fn()}
-      />,
+      />
     );
 
     const sidebar = container.querySelector('[data-testid="prd-chat-sidebar"]');
@@ -128,7 +132,7 @@ describe("PrdChatPanel", () => {
         variant="inline"
         collapsed={true}
         onCollapsedChange={vi.fn()}
-      />,
+      />
     );
 
     const sidebar = container.querySelector('[data-testid="prd-chat-sidebar"]');
@@ -144,7 +148,7 @@ describe("PrdChatPanel", () => {
         variant="inline"
         collapsed={false}
         onCollapsedChange={vi.fn()}
-      />,
+      />
     );
 
     const header = screen.getByTestId("prd-chat-header");
@@ -160,7 +164,7 @@ describe("PrdChatPanel", () => {
         variant="inline"
         collapsed={false}
         onCollapsedChange={vi.fn()}
-      />,
+      />
     );
 
     const sidebar = container.querySelector('[data-testid="prd-chat-sidebar"]');
@@ -176,7 +180,7 @@ describe("PrdChatPanel", () => {
         variant="inline"
         collapsed={true}
         onCollapsedChange={onCollapsedChange}
-      />,
+      />
     );
 
     await user.click(screen.getByRole("button", { name: "Expand Discuss sidebar" }));
@@ -191,7 +195,7 @@ describe("PrdChatPanel", () => {
         variant="inline"
         collapsed={false}
         onCollapsedChange={vi.fn()}
-      />,
+      />
     );
 
     const sidebar = container.querySelector('[data-testid="prd-chat-sidebar"]');
@@ -207,7 +211,7 @@ describe("PrdChatPanel", () => {
         {...defaultProps}
         variant="inline"
         messages={[{ role: "assistant", content: "Hello", timestamp: "" }]}
-      />,
+      />
     );
 
     const sidebar = screen.getByTestId("prd-chat-sidebar");

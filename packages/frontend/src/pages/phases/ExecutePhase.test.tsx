@@ -299,6 +299,9 @@ describe("ExecutePhase epic completed checkmark", () => {
       </Provider>
     );
 
+    // "All" filter hides fully-completed epics; switch to "Done" filter to see them
+    fireEvent.click(screen.getByTestId("filter-chip-done"));
+
     const epicCard = screen.getByTestId("epic-card-epic-1");
     const checkmark = epicCard.querySelector('[data-testid="epic-completed-checkmark"]');
     expect(checkmark).toBeInTheDocument();
@@ -332,7 +335,9 @@ describe("ExecutePhase epic completed checkmark", () => {
     );
 
     const epicCard = screen.getByTestId("epic-card-epic-1");
-    expect(epicCard.querySelector('[data-testid="epic-completed-checkmark"]')).not.toBeInTheDocument();
+    expect(
+      epicCard.querySelector('[data-testid="epic-completed-checkmark"]')
+    ).not.toBeInTheDocument();
   });
 
   it("updates checkmark when task status changes via Redux (simulates WebSocket)", () => {
@@ -361,14 +366,25 @@ describe("ExecutePhase epic completed checkmark", () => {
       </Provider>
     );
 
+    // Switch to "done" filter so the epic stays visible after all tasks become done
+    fireEvent.click(screen.getByTestId("filter-chip-done"));
+
+    // Switch to "done" filter so the epic stays visible after all tasks become done
+    // (the "all" filter hides fully-completed epics)
+    fireEvent.click(screen.getByTestId("filter-chip-done"));
+
     const epicCard = () => screen.getByTestId("epic-card-epic-1");
-    expect(epicCard().querySelector('[data-testid="epic-completed-checkmark"]')).not.toBeInTheDocument();
+    expect(
+      epicCard().querySelector('[data-testid="epic-completed-checkmark"]')
+    ).not.toBeInTheDocument();
 
     act(() => {
       store.dispatch(taskUpdated({ taskId: "epic-1.2", status: "closed" }));
     });
 
-    expect(epicCard().querySelector('[data-testid="epic-completed-checkmark"]')).toBeInTheDocument();
+    expect(
+      epicCard().querySelector('[data-testid="epic-completed-checkmark"]')
+    ).toBeInTheDocument();
   });
 });
 
@@ -744,7 +760,10 @@ describe("ExecutePhase expandable search bar", () => {
     );
 
     expect(screen.getByTestId("execute-search-expand")).toBeInTheDocument();
-    expect(screen.getByTestId("execute-search-expand")).toHaveAttribute("aria-label", "Expand search");
+    expect(screen.getByTestId("execute-search-expand")).toHaveAttribute(
+      "aria-label",
+      "Expand search"
+    );
     expect(screen.queryByTestId("execute-search-expanded")).not.toBeInTheDocument();
   });
 
@@ -888,8 +907,7 @@ describe("ExecutePhase expandable search bar", () => {
   });
 
   it("filters tasks by search query", async () => {
-    vi.useFakeTimers();
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     const tasks = [
       {
         id: "epic-1.1",
@@ -926,19 +944,16 @@ describe("ExecutePhase expandable search bar", () => {
     await user.click(screen.getByTestId("execute-search-expand"));
     const input = screen.getByPlaceholderText("Search tickets…");
     fireEvent.change(input, { target: { value: "login" } });
-    vi.advanceTimersByTime(200);
 
     await waitFor(() => {
       const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
       expect(epicCard!.querySelectorAll("ul li")).toHaveLength(1);
       expect(epicCard!.textContent).toContain("Add login form");
     });
-    vi.useRealTimers();
   });
 
   it("works alongside status filter without layout conflicts", async () => {
-    vi.useFakeTimers();
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     const tasks = [
       {
         id: "epic-1.1",
@@ -965,29 +980,31 @@ describe("ExecutePhase expandable search bar", () => {
     );
 
     await user.click(screen.getByTestId("filter-chip-done"));
-    expect(container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")).toHaveLength(1);
+    expect(
+      container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")
+    ).toHaveLength(1);
 
     await user.click(screen.getByTestId("execute-search-expand"));
     const input = screen.getByPlaceholderText("Search tickets…");
     fireEvent.change(input, { target: { value: "Logout" } });
-    vi.advanceTimersByTime(200);
 
     await waitFor(() => {
       expect(container.querySelector('[data-testid="epic-card-epic-1"]')).not.toBeInTheDocument();
     });
 
     fireEvent.change(input, { target: { value: "Login" } });
-    vi.advanceTimersByTime(200);
 
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")).toHaveLength(1);
-      expect(container.querySelector('[data-testid="epic-card-epic-1"]')!.textContent).toContain("Login task");
+      expect(
+        container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")
+      ).toHaveLength(1);
+      expect(container.querySelector('[data-testid="epic-card-epic-1"]')!.textContent).toContain(
+        "Login task"
+      );
     });
-    vi.useRealTimers();
   });
 
   it("filters by description when title does not match", async () => {
-    vi.useFakeTimers();
     const tasks = [
       {
         id: "epic-1.1",
@@ -1018,18 +1035,15 @@ describe("ExecutePhase expandable search bar", () => {
     await userEvent.click(screen.getByTestId("execute-search-expand"));
     const input = screen.getByPlaceholderText("Search tickets…");
     fireEvent.change(input, { target: { value: "OAuth2" } });
-    vi.advanceTimersByTime(200);
 
     await waitFor(() => {
       const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
       expect(epicCard!.querySelectorAll("ul li")).toHaveLength(1);
       expect(epicCard!.textContent).toContain("Implement auth");
     });
-    vi.useRealTimers();
   });
 
   it("hides epic cards with zero matching tickets when search is active", async () => {
-    vi.useFakeTimers();
     const tasks = [
       {
         id: "epic-1.1",
@@ -1050,7 +1064,12 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const plan2 = {
       ...basePlan,
-      metadata: { ...basePlan.metadata, planId: "plan-2", beadEpicId: "epic-2", gateTaskId: "epic-2.0" },
+      metadata: {
+        ...basePlan.metadata,
+        planId: "plan-2",
+        beadEpicId: "epic-2",
+        gateTaskId: "epic-2.0",
+      },
       content: "# Other Epic",
     };
     const store = configureStore({
@@ -1100,19 +1119,18 @@ describe("ExecutePhase expandable search bar", () => {
     expect(container.querySelectorAll('[data-testid^="epic-card-"]')).toHaveLength(2);
 
     await userEvent.click(screen.getByTestId("execute-search-expand"));
-    fireEvent.change(screen.getByPlaceholderText("Search tickets…"), { target: { value: "Login" } });
-    vi.advanceTimersByTime(200);
+    fireEvent.change(screen.getByPlaceholderText("Search tickets…"), {
+      target: { value: "Login" },
+    });
 
     await waitFor(() => {
       expect(container.querySelector('[data-testid="epic-card-epic-1"]')).toBeInTheDocument();
       expect(container.querySelector('[data-testid="epic-card-epic-2"]')).not.toBeInTheDocument();
     });
-    vi.useRealTimers();
   });
 
   it("clearing search via X restores full unfiltered view", async () => {
-    vi.useFakeTimers();
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     const tasks = [
       {
         id: "epic-1.1",
@@ -1139,27 +1157,30 @@ describe("ExecutePhase expandable search bar", () => {
     );
 
     await user.click(screen.getByTestId("execute-search-expand"));
-    fireEvent.change(screen.getByPlaceholderText("Search tickets…"), { target: { value: "login" } });
-    vi.advanceTimersByTime(200);
+    fireEvent.change(screen.getByPlaceholderText("Search tickets…"), {
+      target: { value: "login" },
+    });
 
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")).toHaveLength(1);
+      expect(
+        container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")
+      ).toHaveLength(1);
     });
 
     await user.click(screen.getByTestId("execute-search-close"));
 
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")).toHaveLength(2);
+      expect(
+        container.querySelector('[data-testid="epic-card-epic-1"]')!.querySelectorAll("ul li")
+      ).toHaveLength(2);
     });
 
     await user.click(screen.getByTestId("execute-search-expand"));
     const input = screen.getByPlaceholderText("Search tickets…");
     expect(input).toHaveValue("");
-    vi.useRealTimers();
   });
 
   it("shows filtered indicator in epic card progress when search is active", async () => {
-    vi.useFakeTimers();
     const tasks = [
       {
         id: "epic-1.1",
@@ -1186,15 +1207,15 @@ describe("ExecutePhase expandable search bar", () => {
     );
 
     await userEvent.click(screen.getByTestId("execute-search-expand"));
-    fireEvent.change(screen.getByPlaceholderText("Search tickets…"), { target: { value: "Login" } });
-    vi.advanceTimersByTime(200);
+    fireEvent.change(screen.getByPlaceholderText("Search tickets…"), {
+      target: { value: "Logout" },
+    });
 
     await waitFor(() => {
       const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
       expect(epicCard).toBeInTheDocument();
       expect(epicCard!.textContent).toContain("filtered");
     });
-    vi.useRealTimers();
   });
 });
 
@@ -1438,7 +1459,7 @@ describe("ExecutePhase Redux integration", () => {
         selectedTaskId: "epic-1.1",
         agentOutput: ["Line 1\n", "Line 2\n", "Line 3\n"],
       },
-      { connected: true },
+      { connected: true }
     );
     render(
       <Provider store={store}>
@@ -2339,13 +2360,20 @@ describe("ExecutePhase task detail cached state", () => {
   it("shows status with color indicator and icon in detail section below divider", () => {
     mockGet.mockImplementation(() => new Promise(() => {}));
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "done", priority: 0, assignee: null },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "done",
+        priority: 0,
+        assignee: null,
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const statusSection = screen.getByTestId("task-detail-status-section");
@@ -2362,13 +2390,20 @@ describe("ExecutePhase task detail cached state", () => {
       { id: "epic-1.1", phase: "coding", role: "coder", label: "Task A", startedAt },
     ]);
     const tasks = [
-      { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress", priority: 0, assignee: "agent-1" },
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent-1",
+      },
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
-      </Provider>,
+      </Provider>
     );
 
     const statusSection = screen.getByTestId("task-detail-status-section");

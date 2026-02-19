@@ -38,7 +38,7 @@ const projectSlice = createSlice({
       })
       .addCase(fetchProject.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message ?? "Failed to load project";
+        state.error = action.error.message || "Failed to load project";
       });
   },
 });

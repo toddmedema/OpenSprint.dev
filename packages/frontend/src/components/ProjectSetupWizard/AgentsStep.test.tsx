@@ -1,6 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AgentsStep } from "./AgentsStep";
+
+vi.mock("../../api/client", () => ({
+  api: {
+    models: {
+      list: vi.fn().mockResolvedValue([]),
+    },
+  },
+}));
 
 const defaultPlanningAgent = {
   type: "claude" as const,
@@ -36,8 +44,8 @@ describe("AgentsStep", () => {
     renderAgentsStep();
 
     expect(screen.getByTestId("agents-step")).toBeInTheDocument();
-    expect(screen.getByText("Planning Agent")).toBeInTheDocument();
-    expect(screen.getByText("Coding Agent")).toBeInTheDocument();
+    expect(screen.getByText("Planning Agent Slot")).toBeInTheDocument();
+    expect(screen.getByText("Coding Agent Slot")).toBeInTheDocument();
   });
 
   it("hides API key banner, inputs, and status when both keys are configured", () => {
@@ -45,10 +53,14 @@ describe("AgentsStep", () => {
       envKeys: { anthropic: true, cursor: true },
     });
 
-    expect(screen.queryByText("API keys required")).not.toBeInTheDocument();
+    expect(screen.queryByText(/API keys required/)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("sk-ant-...")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Both API keys configured|Claude API key configured|Cursor API key configured/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /Both API keys configured|Claude API key configured|Cursor API key configured/
+      )
+    ).not.toBeInTheDocument();
   });
 
   it("shows API key banner and inputs when anthropic key is missing", () => {
@@ -56,7 +68,7 @@ describe("AgentsStep", () => {
       envKeys: { anthropic: false, cursor: true },
     });
 
-    expect(screen.getByText("API keys required")).toBeInTheDocument();
+    expect(screen.getByText(/API keys required/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText("sk-ant-...")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
   });
@@ -66,7 +78,7 @@ describe("AgentsStep", () => {
       envKeys: { anthropic: true, cursor: false },
     });
 
-    expect(screen.getByText("API keys required")).toBeInTheDocument();
+    expect(screen.getByText(/API keys required/)).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("sk-ant-...")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText("key_...")).toBeInTheDocument();
   });
@@ -76,7 +88,7 @@ describe("AgentsStep", () => {
       envKeys: { anthropic: false, cursor: false },
     });
 
-    expect(screen.getByText("API keys required")).toBeInTheDocument();
+    expect(screen.getByText(/API keys required/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText("sk-ant-...")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("key_...")).toBeInTheDocument();
   });
@@ -84,7 +96,7 @@ describe("AgentsStep", () => {
   it("does not show API key section when envKeys is null", () => {
     renderAgentsStep({ envKeys: null });
 
-    expect(screen.queryByText("API keys required")).not.toBeInTheDocument();
+    expect(screen.queryByText(/API keys required/)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("sk-ant-...")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
   });

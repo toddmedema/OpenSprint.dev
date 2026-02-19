@@ -615,6 +615,8 @@ export class OrchestratorService {
 
       if (readyTasks.length === 0) {
         console.log("[orchestrator] No ready tasks, going idle", { projectId });
+        if (state.status.currentTask) activeAgentsService.unregister(state.status.currentTask);
+        this.resetTaskState(state);
         state.loopActive = false;
         broadcastToProject(projectId, {
           type: "execute.status",
@@ -644,6 +646,8 @@ export class OrchestratorService {
         console.log("[orchestrator] No task with all blockers closed, going idle", {
           projectId,
         });
+        if (state.status.currentTask) activeAgentsService.unregister(state.status.currentTask);
+        this.resetTaskState(state);
         state.loopActive = false;
         broadcastToProject(projectId, {
           type: "execute.status",
@@ -914,6 +918,9 @@ export class OrchestratorService {
         this.beads,
         this.branchManager
       );
+
+      context.reviewHistory = await this.buildReviewHistory(repoPath, task.id);
+
       await this.contextAssembler.assembleTaskDirectory(wtPath, task.id, config, context);
 
       const promptPath = path.join(taskDir, "prompt.md");
@@ -1028,6 +1035,34 @@ export class OrchestratorService {
         null,
         failureType
       );
+    }
+  }
+
+  /**
+   * Build a formatted history of past review rejections for this task.
+   * Used to give the reviewer context about what was previously rejected
+   * and what the coding agent was asked to fix.
+   */
+  private async buildReviewHistory(repoPath: string, taskId: string): Promise<string> {
+    try {
+      const sessions = await this.sessionManager.listSessions(repoPath, taskId);
+      const rejections = sessions
+        .filter((s) => s.status === "rejected")
+        .sort((a, b) => a.attempt - b.attempt);
+
+      if (rejections.length === 0) return "";
+
+      const parts: string[] = [];
+      for (const session of rejections) {
+        parts.push(`### Attempt ${session.attempt} — Rejected`);
+        if (session.failureReason) {
+          parts.push(`\n**Reason:** ${session.failureReason}`);
+        }
+        parts.push("");
+      }
+      return parts.join("\n");
+    } catch {
+      return "";
     }
   }
 

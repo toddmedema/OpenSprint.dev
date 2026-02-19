@@ -153,7 +153,7 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
               <li key={agent.id} role="option">
                 <button
                   type="button"
-                  className="w-full px-4 py-2.5 text-sm text-left hover:bg-theme-border-subtle transition-colors flex items-start gap-3"
+                  className="w-full px-4 py-2.5 text-sm text-left hover:bg-theme-border-subtle transition-colors flex items-center gap-3"
                   onClick={() => {
                     dispatch(setSelectedTaskId(agent.id));
                     navigate(getProjectPhasePath(projectId, "execute"));
@@ -163,7 +163,7 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
                   <img
                     src={getAgentIconSrc(agent)}
                     alt=""
-                    className="shrink-0"
+                    className="shrink-0 object-contain object-center"
                     style={{ width: DROPDOWN_AGENT_ICON_SIZE, height: DROPDOWN_AGENT_ICON_SIZE }}
                     aria-hidden
                   />

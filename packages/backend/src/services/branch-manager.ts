@@ -18,6 +18,8 @@ export class RebaseConflictError extends Error {
 const GIT_LOCK_TIMEOUT_MS = 15_000;
 /** Polling interval (ms) when waiting for git lock to clear */
 const GIT_LOCK_POLL_MS = 500;
+/** Max time (ms) for npm install when ensuring node_modules exists */
+const NPM_INSTALL_TIMEOUT_MS = 120_000;
 
 /**
  * Manages git branches for the task lifecycle:
@@ -418,9 +420,45 @@ export class BranchManager {
   }
 
   /**
+   * Ensure node_modules exists in the main repo. If missing and package.json exists,
+   * runs npm install. Used before symlinking so worktrees have dependencies.
+   * @returns true if node_modules exists after this call, false otherwise
+   */
+  private async ensureNodeModules(repoPath: string): Promise<boolean> {
+    const srcRoot = path.join(repoPath, "node_modules");
+    try {
+      await fs.access(srcRoot);
+      return true;
+    } catch {
+      // node_modules missing — try npm install if package.json exists
+    }
+
+    const pkgPath = path.join(repoPath, "package.json");
+    try {
+      await fs.access(pkgPath);
+    } catch {
+      return false;
+    }
+
+    try {
+      await execAsync("npm install", {
+        cwd: repoPath,
+        timeout: NPM_INSTALL_TIMEOUT_MS,
+      });
+      await fs.access(srcRoot);
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[branch-manager] npm install in ${repoPath} failed:`, msg);
+      return false;
+    }
+  }
+
+  /**
    * Symlink node_modules directories from the main repo into a worktree.
    * Handles both root node_modules and any per-package node_modules
    * (e.g. .vite caches in workspace packages).
+   * If the main repo lacks node_modules, runs npm install first.
    */
   async symlinkNodeModules(repoPath: string, wtPath: string): Promise<void> {
     // Safety: never symlink into the main repo itself
@@ -433,14 +471,32 @@ export class BranchManager {
       return;
     }
 
-    // Symlink root node_modules
+    // Symlink root node_modules (ensure it exists first)
     const srcRoot = path.join(repoPath, "node_modules");
     const destRoot = path.join(wtPath, "node_modules");
     try {
       await fs.access(srcRoot);
+    } catch (err) {
+      const code = err instanceof Error ? (err as NodeJS.ErrnoException).code : undefined;
+      if (code === "ENOENT") {
+        const ensured = await this.ensureNodeModules(repoPath);
+        if (!ensured) {
+          console.warn(
+            `[branch-manager] Skipping root node_modules symlink: ${srcRoot} does not exist (no package.json or npm install failed)`
+          );
+          return;
+        }
+      } else {
+        console.warn(`[branch-manager] Skipping root node_modules symlink:`, code ?? err);
+        return;
+      }
+    }
+
+    try {
       await this.forceSymlink(srcRoot, destRoot);
     } catch (err) {
-      console.warn("[branch-manager] Failed to symlink root node_modules:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[branch-manager] Failed to symlink root node_modules: ${msg}`);
     }
 
     // Symlink per-package node_modules (for .vite caches etc.)

@@ -14,6 +14,7 @@ export const OPENSPRINT_PATHS = {
   orchestratorState: `${OPENSPRINT_DIR}/orchestrator-state.json`,
   deployments: `${OPENSPRINT_DIR}/deployments`,
   heartbeat: "heartbeat.json",
+  agentOutputLog: "agent-output.log",
 } as const;
 
 /** Heartbeat interval in milliseconds (10 seconds) */

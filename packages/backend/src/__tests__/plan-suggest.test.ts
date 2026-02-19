@@ -63,7 +63,7 @@ describe("Plan suggestPlans (POST /plans/suggest)", () => {
       name: "Suggest Test",
       description: "Test project for plan suggest",
       repoPath,
-      planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+      planningAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       deployment: { mode: "custom" },
       hilConfig: DEFAULT_HIL_CONFIG,

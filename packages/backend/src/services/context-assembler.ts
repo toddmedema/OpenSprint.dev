@@ -13,6 +13,8 @@ export interface TaskContext {
   planContent: string;
   prdExcerpt: string;
   dependencyOutputs: Array<{ taskId: string; diff: string; summary: string }>;
+  /** Past review rejection history (populated by orchestrator for review phase) */
+  reviewHistory?: string;
 }
 
 /**
@@ -373,24 +375,70 @@ export class ContextAssembler {
 
   private generateReviewPrompt(config: ActiveTaskConfig, context: TaskContext): string {
     let prompt = `# Review Task: ${context.title}\n\n`;
+
     prompt += `## Objective\n\n`;
-    prompt += `Review the implementation of this task against its specification and acceptance criteria.\n\n`;
-    prompt += `## Task Specification\n\n${context.description}\n\n`;
+    prompt += `You are reviewing the implementation of a task. Your review covers **two dimensions**:\n`;
+    prompt += `1. **Scope compliance** — Does the implementation match the original ticket and meet all acceptance criteria?\n`;
+    prompt += `2. **Code quality** — Is the code correct, clear, well-tested, and production-ready?\n\n`;
+    prompt += `Approve only if BOTH dimensions pass. Reject with specific, actionable feedback if either fails.\n\n`;
+
+    prompt += `## Original Ticket\n\n`;
+    prompt += `**Task ID:** ${context.taskId}\n`;
+    prompt += `**Title:** ${context.title}\n\n`;
+    prompt += `${context.description}\n\n`;
 
     const acceptanceCriteria = this.extractPlanSection(context.planContent, "Acceptance Criteria");
     if (acceptanceCriteria) {
       prompt += `## Acceptance Criteria\n\n${acceptanceCriteria}\n\n`;
     }
 
+    const technicalApproach = this.extractPlanSection(context.planContent, "Technical Approach");
+    if (technicalApproach) {
+      prompt += `## Technical Approach\n\n${technicalApproach}\n\n`;
+    }
+
+    prompt += `## Context\n\n`;
+    prompt += `Review the provided context files for full requirements and design:\n\n`;
+    prompt += `- \`context/plan.md\` — the full feature specification and plan\n`;
+    prompt += `- \`context/prd_excerpt.md\` — relevant product requirements\n`;
+    prompt += `- \`context/deps/\` — output from dependency tasks this builds on\n\n`;
+
+    if (context.reviewHistory) {
+      prompt += `## Prior Review History\n\n`;
+      prompt += `This task has been reviewed and rejected before. The coding agent was asked to address these issues. `;
+      prompt += `**Pay special attention to verifying that the previously identified problems have actually been fixed.**\n\n`;
+      prompt += `${context.reviewHistory}\n\n`;
+    }
+
     prompt += `## Implementation\n\n`;
     prompt += `The coding agent has produced changes on branch \`${config.branch}\`. The orchestrator has already committed them before invoking you.\n`;
     prompt += `Run \`git diff main...${config.branch}\` to review the committed changes.\n\n`;
+
+    prompt += `## Review Checklist\n\n`;
+    prompt += `### Part 1: Scope Compliance\n\n`;
+    prompt += `- [ ] The implementation addresses what the ticket asks for — no more, no less\n`;
+    prompt += `- [ ] ALL acceptance criteria are met (check each one individually)\n`;
+    prompt += `- [ ] The technical approach matches the plan (or deviations are justified)\n`;
+    prompt += `- [ ] No unrelated changes or scope creep\n\n`;
+
+    prompt += `### Part 2: Code Quality\n\n`;
+    prompt += `- [ ] **Correctness** — No bugs, off-by-one errors, race conditions, or unhandled edge cases\n`;
+    prompt += `- [ ] **Error handling** — Failures are handled gracefully; no swallowed errors that hide problems\n`;
+    prompt += `- [ ] **Clarity** — Code is readable; naming is clear; complex logic has explanatory comments\n`;
+    prompt += `- [ ] **No dead code** — No commented-out code, unused imports, or orphaned functions\n`;
+    prompt += `- [ ] **Test coverage** — Tests exist for the new/changed behavior and cover:\n`;
+    prompt += `  - Happy paths\n`;
+    prompt += `  - Edge cases and error paths\n`;
+    prompt += `  - Boundary conditions where applicable\n`;
+    prompt += `- [ ] **All tests pass** — Run \`${config.testCommand}\` and confirm zero failures\n`;
+    prompt += `- [ ] **Consistent style** — Follows existing codebase patterns and conventions\n\n`;
+
     prompt += `## Instructions\n\n`;
-    prompt += `1. Review the diff between main and the task branch using \`git diff main...${config.branch}\`.\n`;
-    prompt += `2. Verify the implementation meets ALL acceptance criteria.\n`;
-    prompt += `3. Verify tests exist and cover the ticket scope (not just happy paths).\n`;
-    prompt += `4. Run \`${config.testCommand}\` and confirm all tests pass.\n`;
-    prompt += `5. Check code quality: no obvious bugs, reasonable error handling, consistent style.\n`;
+    prompt += `1. Read the original ticket, acceptance criteria, and context files above to fully understand the scope.\n`;
+    prompt += `2. Review the diff: \`git diff main...${config.branch}\`\n`;
+    prompt += `3. Walk through the checklist above, checking each item.\n`;
+    prompt += `4. Run the full test suite: \`${config.testCommand}\` — confirm ALL tests pass (not just the new ones).\n`;
+    prompt += `5. If prior reviews rejected this task, verify those specific issues were resolved.\n`;
     prompt += `6. Write your result to \`.opensprint/active/${config.taskId}/result.json\` using this exact JSON format:\n`;
     prompt += `   If approving (do NOT merge — the orchestrator will merge after you exit):\n`;
     prompt += `   \`\`\`json\n`;
@@ -401,6 +449,12 @@ export class ContextAssembler {
     prompt += `   { "status": "rejected", "summary": "One-line reason for rejection", "issues": ["Specific issue 1", "Specific issue 2"], "notes": "Additional context" }\n`;
     prompt += `   \`\`\`\n`;
     prompt += `   The \`status\` field MUST be exactly \`"approved"\` or \`"rejected"\`. The \`summary\` field is required. \`issues\` and \`notes\` are optional.\n\n`;
+
+    prompt += `## Important\n\n`;
+    prompt += `- Be **specific** in rejection feedback — cite file names, line numbers, and concrete problems so the coding agent can fix them.\n`;
+    prompt += `- Do NOT approve out of lenience. If acceptance criteria are unmet or tests fail, reject.\n`;
+    prompt += `- Do NOT reject for style nitpicks that don't affect correctness or readability.\n`;
+    prompt += `- Do NOT merge the branch — the orchestrator handles merging after approval.\n`;
 
     return prompt;
   }

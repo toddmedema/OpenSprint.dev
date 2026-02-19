@@ -148,7 +148,7 @@ The data flows through the system in a unidirectional pipeline with feedback loo
 
 **One orchestrator per project, always running.** When the OpenSprint backend starts, it launches an orchestrator instance for each registered project. The orchestrator continuously monitors for available work and dispatches agents — there is no manual "start build" action.
 
-**Single-agent constraint applies only to Coder/Reviewer (v1).** Each project runs one Coder or Reviewer at a time. All other agents (Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor, Delta Planner) can run concurrently with each other and with the Coder/Reviewer, since they don't touch code branches.
+**Single-agent constraint applies only to Coder/Reviewer (v1).** Each project runs one Coder or Reviewer at a time. All other agents (Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor) can run concurrently with each other and with the Coder/Reviewer, since they don't touch code branches.
 
 **Event-driven with watchdog polling:** The orchestrator triggers agents on events (task completion, feedback submission, Plan execution). A **watchdog timer** runs every 5 minutes to catch edge cases: it queries `bd ready --json`, checks for a running Coder/Reviewer, starts one if tasks are waiting, and terminates any agent that has been inactive for 10 minutes (Section 9.4).
 
@@ -223,7 +223,7 @@ After setup, the user lands directly in the Sketch tab.
 
 Users configure two agent slots during project setup. Both use the same invocation mechanism — OpenSprint calls the user-selected agent's API or CLI. The only difference is which agent/model is used.
 
-**Planning Agent Slot** (used by: Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor, Delta Planner):
+**Planning Agent Slot** (used by: Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor):
 
 - Powers all non-coding agent roles. Each named agent receives a specialized prompt and produces a role-specific output format (see Section 12), but all share the same underlying model configuration.
 - Options: Claude (select model: e.g., Sonnet, Opus), Cursor (select model from available options), or Custom (user provides CLI command).
@@ -237,17 +237,16 @@ Users configure two agent slots during project setup. Both use the same invocati
 
 **Named agent roles:**
 
-| Agent         | Slot     | Phase             | Purpose                                                                    |
-| ------------- | -------- | ----------------- | -------------------------------------------------------------------------- |
-| Dreamer       | Planning | Sketch            | Multi-turn PRD creation and refinement via chat                            |
-| Planner       | Planning | Plan              | Decomposes PRD into features and tasks; outputs indexed task list          |
-| Harmonizer    | Planning | Plan (Execute!)   | Reviews shipped Plan against PRD; proposes PRD section updates             |
-| Analyst       | Planning | Evaluate          | Categorizes feedback; maps to epics; proposes new tasks                    |
-| Summarizer    | Planning | Execute           | Condenses context when dependencies or Plan exceed thresholds              |
-| Auditor       | Planning | Plan (Re-execute) | Summarizes current app capabilities from codebase and task history         |
-| Delta Planner | Planning | Plan (Re-execute) | Compares old/new Plan against Auditor's summary; generates delta task list |
-| Coder         | Coding   | Execute           | Implements tasks and writes tests                                          |
-| Reviewer      | Coding   | Execute           | Validates implementation against spec; approves or rejects                 |
+| Agent      | Slot     | Phase             | Purpose                                                                        |
+| ---------- | -------- | ----------------- | ------------------------------------------------------------------------------ |
+| Dreamer    | Planning | Sketch            | Multi-turn PRD creation and refinement via chat                                |
+| Planner    | Planning | Plan              | Decomposes PRD into features and tasks; outputs indexed task list              |
+| Harmonizer | Planning | Plan (Execute!)   | Reviews shipped Plan against PRD; proposes PRD section updates                 |
+| Analyst    | Planning | Evaluate          | Categorizes feedback; maps to epics; proposes new tasks                        |
+| Summarizer | Planning | Execute           | Condenses context when dependencies or Plan exceed thresholds                  |
+| Auditor    | Planning | Plan (Re-execute) | Audits current app capabilities and generates delta task list for re-execution |
+| Coder      | Coding   | Execute           | Implements tasks and writes tests                                              |
+| Reviewer   | Coding   | Execute           | Validates implementation against spec; approves or rejects                     |
 
 The agent configuration can be changed at any time from project settings. When switching the Coding Agent Slot mid-project, all pending tasks in the Ready state will be picked up by the newly selected agent. In-progress tasks will complete with their originally assigned agent.
 
@@ -342,11 +341,9 @@ The Plan phase breaks the high-level PRD into discrete, implementable features. 
 
   **UI feedback:** Clicking "Execute!" immediately shows a **toast notification**: _"Plan queued for execution."_ The Harmonizer is exempt from the Coder/Reviewer single-agent constraint (Section 5.7), so it typically runs immediately. When tasks appear in `bd ready`, a follow-up toast confirms: _"[Feature Name] is now building."_
 
-- **Re-execute behavior:** A Plan can only be re-executed once ALL tasks in its existing epic are Done (or if no work has been started yet, in which case all existing sub-tasks are simply deleted). The "Re-execute" button is disabled if any tasks are currently In Progress or In Review. When clicked, the system uses a two-agent approach:
-  1. **Auditor** — receives the codebase snapshot (file tree + key files) and the completed task history for this epic. It produces a structured summary of the app's current capabilities relevant to this feature.
-  2. **Delta Planner** — receives the original Plan markdown, the updated Plan markdown, and the Auditor's capability summary. It compares what exists against what the new Plan requires and outputs an indexed task list (same structured format as the Planner) representing only the delta work needed.
+- **Re-execute behavior:** A Plan can only be re-executed once ALL tasks in its existing epic are Done (or if no work has been started yet, in which case all existing sub-tasks are simply deleted). The "Re-execute" button is disabled if any tasks are currently In Progress or In Review. When clicked, the **Auditor** agent receives the codebase snapshot (file tree + key files), the completed task history, the original Plan markdown, and the updated Plan markdown. It audits the app's current capabilities and compares them against the new Plan requirements, outputting an indexed task list (same structured format as the Planner) representing only the delta work needed.
 
-  The orchestrator then creates the new tasks from the Delta Planner's output using the standard `bd create` / `bd dep add` flow. The user sees the new tasks appear under the existing epic card, gated behind a new approval gate.
+  The orchestrator then creates the new tasks from the Auditor's output using the standard `bd create` / `bd dep add` flow. The user sees the new tasks appear under the existing epic card, gated behind a new approval gate.
 
 #### 7.2.3 Plan Markdown Structure
 
@@ -722,7 +719,7 @@ Connection: `ws://localhost:<port>/ws/projects/:id`
 
 ### 12.1 Overview
 
-The orchestration layer communicates with agents through a standardized file-based interface. Each named agent role (see Section 6.3) receives a role-specific prompt and produces a role-specific output, but all share the same invocation and directory mechanism. Agents in the **Coding Agent Slot** (Coder, Reviewer) operate in git worktrees and are subject to the single-agent constraint. Agents in the **Planning Agent Slot** (Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor, Delta Planner) can run concurrently.
+The orchestration layer communicates with agents through a standardized file-based interface. Each named agent role (see Section 6.3) receives a role-specific prompt and produces a role-specific output, but all share the same invocation and directory mechanism. Agents in the **Coding Agent Slot** (Coder, Reviewer) operate in git worktrees and are subject to the single-agent constraint. Agents in the **Planning Agent Slot** (Dreamer, Planner, Harmonizer, Analyst, Summarizer, Auditor) can run concurrently.
 
 ### 12.2 Common Input Structure
 
@@ -814,21 +811,13 @@ The orchestrator creates beads issues from this output, resolving ordinal indice
 
 #### 12.3.6 Auditor
 
-**Purpose:** Summarize the current app's capabilities for a Plan being re-built.
+**Purpose:** Audit the current app's capabilities for a Plan being re-built and generate only the delta tasks needed.
 
-**Input:** `context/file_tree.txt`, `context/key_files/`, `context/completed_tasks.json`. **Additional config:** `plan_id`, `epic_id`.
+**Input:** `context/file_tree.txt`, `context/key_files/`, `context/completed_tasks.json`, `context/plan_old.md`, `context/plan_new.md`. **Additional config:** `plan_id`, `epic_id`.
 
-**Output (`result.json`):** `{ "status": "success", "capability_summary": "<markdown>" }` — a structured summary of implemented features, data models, and API surface relevant to this epic.
+**Output (`result.json`):** `{ "status": "success", "capability_summary": "<markdown>", "tasks": [...] }` — a structured summary of implemented features plus an indexed delta task list (same format as the Planner, Section 12.3.2). **Additional status:** `no_changes_needed` (when the plan is unchanged or fully satisfied by current capabilities).
 
-#### 12.3.7 Delta Planner
-
-**Purpose:** Compare old and new Plan versions against the Auditor's capability summary and generate only the delta tasks needed.
-
-**Input:** `context/plan_old.md`, `context/plan_new.md`, `context/capability_summary.md`. **Additional config:** `plan_id`, `epic_id`.
-
-**Output (`result.json`):** Same format as the Planner (Section 12.3.2) — an indexed task list with dependencies. **Additional status:** `no_changes_needed`.
-
-#### 12.3.8 Coder
+#### 12.3.7 Coder
 
 **Purpose:** Implement a task and write tests.
 
@@ -892,7 +881,7 @@ You are implementing a task as part of a larger feature. Review the provided con
 
 **Status values:** `success`, `failed`, `partial` (some work done but blocked on an issue).
 
-#### 12.3.9 Reviewer
+#### 12.3.8 Reviewer
 
 **Purpose:** Validate a Coder's implementation against the task specification.
 
@@ -996,9 +985,9 @@ All beads interactions use the `bd` CLI with `--json` flags, invoked via `child_
 | Phase | Scope                                                                                                                                                                                                                                                                                                    |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Alpha | Sketch + Plan phases with living PRD; Dreamer chat interface; Planner for Plan markdown generation; agent slot selection during setup; project home screen; light/dark/system theme (Project Settings → Display)                                                                                         |
-| Beta  | Execute phase with epic card interface, single Coder/Reviewer execution, beads integration, agent CLI contract (all 9 named agents), unit test generation, Summarizer for context management, and error handling with progressive backoff                                                                |
+| Beta  | Execute phase with epic card interface, single Coder/Reviewer execution, beads integration, agent CLI contract (all 8 named agents), unit test generation, Summarizer for context management, and error handling with progressive backoff                                                                |
 | v1.0  | Full Execute phase with real-time monitoring, comprehensive testing (unit + integration + E2E), HIL configuration, git worktree isolation, cross-epic dependency resolution on "Execute!", and 10-minute timeout handling                                                                                |
-| v1.1  | Evaluate phase with Analyst for feedback ingestion, Harmonizer for scope-change PRD updates, flywheel closure, Re-execute with Auditor + Delta Planner; Deliver phase with Expo.dev integration and custom deployment pipelines                                                                          |
+| v1.1  | Evaluate phase with Analyst for feedback ingestion, Harmonizer for scope-change PRD updates, flywheel closure, Re-execute with Auditor; Deliver phase with Expo.dev integration and custom deployment pipelines                                                                                          |
 | v2.0  | Concurrent multi-Coder execution with conflict resolution, **Agent Dashboard tab** (view, monitor, and manage all agent status and output), multi-project parallel execution, team collaboration, advanced Deliver features (staging environments, canary deployments), regression test suite management |
 
 ---
@@ -1012,7 +1001,7 @@ This table records architectural decisions where the rationale isn't self-eviden
 | Backend language               | Node.js + TypeScript                                                                                                          | Shared language with React frontend; npm beads package; strong subprocess and WebSocket support             |
 | PRD storage                    | JSON file in git (`.opensprint/prd.json`) with markdown inside section wrappers                                               | Structured for section-level diffing and versioning; git-versioned; offline-compatible                      |
 | Agent selection                | Pluggable: Claude, Cursor, or Custom CLI command                                                                              | Maximizes flexibility; Custom option future-proofs for new agents                                           |
-| Named agent taxonomy           | Two slots (Planning, Coding) with 9 named roles                                                                               | Each role gets a specialized prompt and output schema; slots allow cost optimization per phase              |
+| Named agent taxonomy           | Two slots (Planning, Coding) with 8 named roles                                                                               | Each role gets a specialized prompt and output schema; slots allow cost optimization per phase              |
 | Human-in-the-loop threshold    | 3 configurable categories with 3 notification modes each; error recovery always automatic                                     | Gives users control over product decisions while keeping the flywheel running through errors                |
 | Agent concurrency              | Single Coder/Reviewer per project in v1; Planning-slot agents unlimited concurrency                                           | Eliminates merge conflict concerns for MVP; planning agents don't touch code branches                       |
 | Context propagation            | Summarizer agent invoked when >2 dependencies or >2,000-word Plan                                                             | Prevents context window overflow; threshold-based invocation avoids unnecessary overhead                    |
@@ -1026,7 +1015,7 @@ This table records architectural decisions where the rationale isn't self-eviden
 | Orchestrator design            | Deterministic Node.js process; one per project; always-on; event-driven + 5-min watchdog; persistent state for crash recovery | Not an AI agent — all decision points are coded conditionals; self-healing on crash                         |
 | Git concurrency control        | Serialized commit queue; beads auto-commit disabled                                                                           | Multiple concurrent agents produce git-tracked changes; serialization prevents `.git/index.lock` contention |
 | Cross-epic dependencies        | "Execute!" checks for blocking deps, shows confirmation modal, queues prerequisites automatically                             | Prevents deadlocked tasks; user is informed and in control; no silent failures                              |
-| Re-execute approach            | Two-agent: Auditor + Delta Planner                                                                                            | Splitting the work avoids overloading one agent's context; Auditor output is reusable                       |
+| Re-execute approach            | Single Auditor agent performs capability audit and delta task generation                                                      | Simplifies the flow by combining the always-sequential audit and delta steps into one agent call            |
 | Offline mode                   | Fully supported with local agents                                                                                             | Beads is git-based and inherently offline-compatible; all features work without internet                    |
 | Scope exclusions (v1)          | No cost management, multi-tenancy, agent marketplace, logical conflict detection                                              | Keeps v1 focused on the core Sketch → Plan → Execute → Evaluate → Deliver (SPEED) workflow                  |
 

@@ -28,7 +28,7 @@ describe("Tasks REST - task-to-kanban-column mapping", () => {
       name: "Task Mapping Test",
       description: "For kanban column mapping tests",
       repoPath,
-      planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+      planningAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       deployment: { mode: "custom" },
       hilConfig: DEFAULT_HIL_CONFIG,
@@ -41,72 +41,76 @@ describe("Tasks REST - task-to-kanban-column mapping", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("GET /tasks maps beads state to kanban columns: planning, backlog, ready, done", { timeout: 20000 }, async () => {
-    const app = createApp();
+  it(
+    "GET /tasks maps beads state to kanban columns: planning, backlog, ready, done",
+    { timeout: 20000 },
+    async () => {
+      const app = createApp();
 
-    // Create plan with tasks (epic + gate + 2 tasks; tasks block on gate)
-    const planRes = await request(app)
-      .post(`${API_PREFIX}/projects/${projectId}/plans`)
-      .send({
-        title: "Kanban Test Feature",
-        content: "# Kanban Test\n\n## Overview\n\nTest mapping.",
-        complexity: "low",
-        tasks: [
-          { title: "Task A", description: "First task", priority: 0, dependsOn: [] },
-          { title: "Task B", description: "Second task", priority: 1, dependsOn: ["Task A"] },
-        ],
-      });
+      // Create plan with tasks (epic + gate + 2 tasks; tasks block on gate)
+      const planRes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send({
+          title: "Kanban Test Feature",
+          content: "# Kanban Test\n\n## Overview\n\nTest mapping.",
+          complexity: "low",
+          tasks: [
+            { title: "Task A", description: "First task", priority: 0, dependsOn: [] },
+            { title: "Task B", description: "Second task", priority: 1, dependsOn: ["Task A"] },
+          ],
+        });
 
-    expect(planRes.status).toBe(201);
-    const plan = planRes.body.data;
-    const gateTaskId = plan.metadata.gateTaskId;
-    expect(gateTaskId).toBeDefined();
+      expect(planRes.status).toBe(201);
+      const plan = planRes.body.data;
+      const gateTaskId = plan.metadata.gateTaskId;
+      expect(gateTaskId).toBeDefined();
 
-    // Before ship: tasks block on open gate -> planning
-    const tasksBeforeRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
-    expect(tasksBeforeRes.status).toBe(200);
-    const tasksBefore = tasksBeforeRes.body.data ?? [];
+      // Before ship: tasks block on open gate -> planning
+      const tasksBeforeRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      expect(tasksBeforeRes.status).toBe(200);
+      const tasksBefore = tasksBeforeRes.body.data ?? [];
 
-    const taskA = tasksBefore.find((t: { title: string }) => t.title === "Task A");
-    const taskB = tasksBefore.find((t: { title: string }) => t.title === "Task B");
-    expect(taskA).toBeDefined();
-    expect(taskB).toBeDefined();
+      const taskA = tasksBefore.find((t: { title: string }) => t.title === "Task A");
+      const taskB = tasksBefore.find((t: { title: string }) => t.title === "Task B");
+      expect(taskA).toBeDefined();
+      expect(taskB).toBeDefined();
 
-    // Both block on gate (.0) which is open -> planning
-    expect(taskA.kanbanColumn).toBe("planning");
-    expect(taskB.kanbanColumn).toBe("planning");
+      // Both block on gate (.0) which is open -> planning
+      expect(taskA.kanbanColumn).toBe("planning");
+      expect(taskB.kanbanColumn).toBe("planning");
 
-    // Ship the plan: close gate directly (avoids PRD sync which invokes AI)
-    const project = await projectService.getProject(projectId);
-    await beads.close(project.repoPath, gateTaskId, "Plan approved for build");
-    // Update plan metadata so status is correct
-    const plansDir = path.join(project.repoPath, ".opensprint", "plans");
-    const metaPath = path.join(plansDir, `${plan.metadata.planId}.meta.json`);
-    const meta = JSON.parse(await fs.readFile(metaPath, "utf-8"));
-    meta.shippedAt = new Date().toISOString();
-    await fs.writeFile(metaPath, JSON.stringify(meta));
+      // Ship the plan: close gate directly (avoids PRD sync which invokes AI)
+      const project = await projectService.getProject(projectId);
+      await beads.close(project.repoPath, gateTaskId, "Plan approved for build");
+      // Update plan metadata so status is correct
+      const plansDir = path.join(project.repoPath, ".opensprint", "plans");
+      const metaPath = path.join(plansDir, `${plan.metadata.planId}.meta.json`);
+      const meta = JSON.parse(await fs.readFile(metaPath, "utf-8"));
+      meta.shippedAt = new Date().toISOString();
+      await fs.writeFile(metaPath, JSON.stringify(meta));
 
-    // After ship: Task A has no blockers (gate closed) -> ready; Task B blocks on A (open) -> backlog
-    const tasksAfterRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
-    expect(tasksAfterRes.status).toBe(200);
-    const tasksAfter = tasksAfterRes.body.data ?? [];
+      // After ship: Task A has no blockers (gate closed) -> ready; Task B blocks on A (open) -> backlog
+      const tasksAfterRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      expect(tasksAfterRes.status).toBe(200);
+      const tasksAfter = tasksAfterRes.body.data ?? [];
 
-    const taskAAfter = tasksAfter.find((t: { title: string }) => t.title === "Task A");
-    const taskBAfter = tasksAfter.find((t: { title: string }) => t.title === "Task B");
-    expect(taskAAfter.kanbanColumn).toBe("ready");
-    expect(taskBAfter.kanbanColumn).toBe("backlog");
+      const taskAAfter = tasksAfter.find((t: { title: string }) => t.title === "Task A");
+      const taskBAfter = tasksAfter.find((t: { title: string }) => t.title === "Task B");
+      expect(taskAAfter.kanbanColumn).toBe("ready");
+      expect(taskBAfter.kanbanColumn).toBe("backlog");
 
-    // Close Task A -> done
-    await beads.close(project.repoPath, taskAAfter.id, "Done");
+      // Close Task A -> done
+      await beads.close(project.repoPath, taskAAfter.id, "Done");
 
-    // Task B should now be ready (only blocker is done)
-    const tasksFinalRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
-    const tasksFinal = tasksFinalRes.body.data ?? [];
-    const taskAFinal = tasksFinal.find((t: { id: string }) => t.id === taskAAfter.id);
-    const taskBFinal = tasksFinal.find((t: { id: string }) => t.id === taskBAfter.id);
-    expect(taskAFinal.kanbanColumn).toBe("done");
-    expect(taskBFinal.kanbanColumn).toBe("ready");
-  });
+      // Task B should now be ready (only blocker is done)
+      const tasksFinalRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const tasksFinal = tasksFinalRes.body.data ?? [];
+      const taskAFinal = tasksFinal.find((t: { id: string }) => t.id === taskAAfter.id);
+      const taskBFinal = tasksFinal.find((t: { id: string }) => t.id === taskBAfter.id);
+      expect(taskAFinal.kanbanColumn).toBe("done");
+      expect(taskBFinal.kanbanColumn).toBe("ready");
+    }
+  );
 
   it(
     "POST /tasks/:taskId/prepare creates .opensprint/active/<task-id>/ with prompt, config, context",
@@ -174,20 +178,24 @@ Test task directory creation.
       expect(config.phase).toBe("coding");
       expect(config.branch).toContain(taskX.id);
 
-    await fs.access(prdPath);
-    await fs.access(planPath);
-  });
+      await fs.access(prdPath);
+      await fs.access(planPath);
+    }
+  );
 
-  it("POST /tasks/:taskId/prepare with phase=review generates review prompt per PRD §12.3", {
-    timeout: 20000,
-  }, async () => {
-    const app = createApp();
+  it(
+    "POST /tasks/:taskId/prepare with phase=review generates review prompt per PRD §12.3",
+    {
+      timeout: 20000,
+    },
+    async () => {
+      const app = createApp();
 
-    const planRes = await request(app)
-      .post(`${API_PREFIX}/projects/${projectId}/plans`)
-      .send({
-        title: "Review Prompt Test",
-        content: `# Review Test
+      const planRes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send({
+          title: "Review Prompt Test",
+          content: `# Review Test
 
 ## Overview
 Test review prompt generation.
@@ -199,42 +207,45 @@ Test review prompt generation.
 ## Technical Approach
 - Use ContextAssembler with phase review
 `,
-        complexity: "low",
-        tasks: [{ title: "Task Y", description: "Implement Y", priority: 0, dependsOn: [] }],
-      });
+          complexity: "low",
+          tasks: [{ title: "Task Y", description: "Implement Y", priority: 0, dependsOn: [] }],
+        });
 
-    expect(planRes.status).toBe(201);
-    const plan = planRes.body.data;
-    const gateTaskId = plan.metadata.gateTaskId;
-    const project = await projectService.getProject(projectId);
-    await beads.close(project.repoPath, gateTaskId, "Plan shipped");
+      expect(planRes.status).toBe(201);
+      const plan = planRes.body.data;
+      const gateTaskId = plan.metadata.gateTaskId;
+      const project = await projectService.getProject(projectId);
+      await beads.close(project.repoPath, gateTaskId, "Plan shipped");
 
-    const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
-    const tasks = tasksRes.body.data ?? [];
-    const taskY = tasks.find((t: { title: string }) => t.title === "Task Y");
-    expect(taskY).toBeDefined();
+      const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const tasks = tasksRes.body.data ?? [];
+      const taskY = tasks.find((t: { title: string }) => t.title === "Task Y");
+      expect(taskY).toBeDefined();
 
-    const prepareRes = await request(app)
-      .post(`${API_PREFIX}/projects/${projectId}/execute/tasks/${taskY.id}/prepare`)
-      .set("Content-Type", "application/json")
-      .send({ phase: "review", createBranch: false });
+      const prepareRes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/execute/tasks/${taskY.id}/prepare`)
+        .set("Content-Type", "application/json")
+        .send({ phase: "review", createBranch: false });
 
-    expect(prepareRes.status).toBe(201);
-    const { taskDir } = prepareRes.body.data;
-    const promptPath = path.join(taskDir, "prompt.md");
-    const configPath = path.join(taskDir, "config.json");
+      expect(prepareRes.status).toBe(201);
+      const { taskDir } = prepareRes.body.data;
+      const promptPath = path.join(taskDir, "prompt.md");
+      const configPath = path.join(taskDir, "config.json");
 
-    const prompt = await fs.readFile(promptPath, "utf-8");
-    expect(prompt).toContain("# Review Task: Task Y");
-    expect(prompt).toContain("Review the implementation of this task against its specification and acceptance criteria");
-    expect(prompt).toContain("The orchestrator has already committed them before invoking you");
-    expect(prompt).toMatch(/do NOT merge.*orchestrator will merge after you exit/i);
-    expect(prompt).toMatch(/"status":\s*"approved"/);
-    expect(prompt).toMatch(/"status":\s*"rejected"/);
+      const prompt = await fs.readFile(promptPath, "utf-8");
+      expect(prompt).toContain("# Review Task: Task Y");
+      expect(prompt).toContain(
+        "Review the implementation of this task against its specification and acceptance criteria"
+      );
+      expect(prompt).toContain("The orchestrator has already committed them before invoking you");
+      expect(prompt).toMatch(/do NOT merge.*orchestrator will merge after you exit/i);
+      expect(prompt).toMatch(/"status":\s*"approved"/);
+      expect(prompt).toMatch(/"status":\s*"rejected"/);
 
-    const config = JSON.parse(await fs.readFile(configPath, "utf-8"));
-    expect(config.phase).toBe("review");
-  });
+      const config = JSON.parse(await fs.readFile(configPath, "utf-8"));
+      expect(config.phase).toBe("review");
+    }
+  );
 
   it("POST /tasks/:taskId/unblock sets beads status to open", { timeout: 20000 }, async () => {
     const app = createApp();
@@ -263,7 +274,9 @@ Test review prompt generation.
     await beads.sync(project.repoPath);
 
     const tasksBlockedRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
-    const taskBlocked = (tasksBlockedRes.body.data ?? []).find((t: { id: string }) => t.id === taskZ.id);
+    const taskBlocked = (tasksBlockedRes.body.data ?? []).find(
+      (t: { id: string }) => t.id === taskZ.id
+    );
     expect(taskBlocked.kanbanColumn).toBe("blocked");
 
     const unblockRes = await request(app)
@@ -275,7 +288,9 @@ Test review prompt generation.
     expect(unblockRes.body.data.taskUnblocked).toBe(true);
 
     const tasksAfterRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
-    const taskAfter = (tasksAfterRes.body.data ?? []).find((t: { id: string }) => t.id === taskZ.id);
+    const taskAfter = (tasksAfterRes.body.data ?? []).find(
+      (t: { id: string }) => t.id === taskZ.id
+    );
     expect(taskAfter.kanbanColumn).not.toBe("blocked");
   });
 
@@ -314,73 +329,89 @@ Test review prompt generation.
     expect(unblockRes.body.data.taskUnblocked).toBe(true);
   });
 
-  it("GET /tasks/:taskId returns sourceFeedbackId when task has discovered-from dep to feedback source bead", {
-    timeout: 20000,
-  }, async () => {
-    const app = createApp();
-    const project = await projectService.getProject(projectId);
-    const repoPath = project.repoPath;
+  it(
+    "GET /tasks/:taskId returns sourceFeedbackId when task has discovered-from dep to feedback source bead",
+    {
+      timeout: 20000,
+    },
+    async () => {
+      const app = createApp();
+      const project = await projectService.getProject(projectId);
+      const repoPath = project.repoPath;
 
-    // Create feedback source bead (chore with "Feedback ID: xxx" in description)
-    const sourceBead = await beads.create(repoPath, "Feedback: Add dark mode", {
-      type: "chore",
-      priority: 4,
-      description: "Feedback ID: fb-test-source",
-    });
-    expect(sourceBead.id).toBeDefined();
+      // Create feedback source bead (chore with "Feedback ID: xxx" in description)
+      const sourceBead = await beads.create(repoPath, "Feedback: Add dark mode", {
+        type: "chore",
+        priority: 4,
+        description: "Feedback ID: fb-test-source",
+      });
+      expect(sourceBead.id).toBeDefined();
 
-    // Create child task
-    const childBead = await beads.create(repoPath, "Implement dark mode", {
-      type: "task",
-      priority: 2,
-      description: "Add dark mode support to the app",
-    });
-    expect(childBead.id).toBeDefined();
+      // Create child task
+      const childBead = await beads.create(repoPath, "Implement dark mode", {
+        type: "task",
+        priority: 2,
+        description: "Add dark mode support to the app",
+      });
+      expect(childBead.id).toBeDefined();
 
-    // Add discovered-from dependency: child -> feedback source
-    await beads.addDependency(repoPath, childBead.id, sourceBead.id, "discovered-from");
+      // Add discovered-from dependency: child -> feedback source
+      await beads.addDependency(repoPath, childBead.id, sourceBead.id, "discovered-from");
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${childBead.id}`);
-    expect(res.status).toBe(200);
-    expect(res.body.data.sourceFeedbackId).toBe("fb-test-source");
-  });
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/tasks/${childBead.id}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data.sourceFeedbackId).toBe("fb-test-source");
+    }
+  );
 
-  it("GET /tasks/:taskId returns sourceFeedbackId when task is the feedback source bead itself", {
-    timeout: 20000,
-  }, async () => {
-    const app = createApp();
-    const project = await projectService.getProject(projectId);
-    const repoPath = project.repoPath;
+  it(
+    "GET /tasks/:taskId returns sourceFeedbackId when task is the feedback source bead itself",
+    {
+      timeout: 20000,
+    },
+    async () => {
+      const app = createApp();
+      const project = await projectService.getProject(projectId);
+      const repoPath = project.repoPath;
 
-    // Create feedback source bead (task IS the source - description is "Feedback ID: xxx")
-    const sourceBead = await beads.create(repoPath, "Feedback: Fix login bug", {
-      type: "chore",
-      priority: 4,
-      description: "Feedback ID: fb-direct-source",
-    });
+      // Create feedback source bead (task IS the source - description is "Feedback ID: xxx")
+      const sourceBead = await beads.create(repoPath, "Feedback: Fix login bug", {
+        type: "chore",
+        priority: 4,
+        description: "Feedback ID: fb-direct-source",
+      });
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${sourceBead.id}`);
-    expect(res.status).toBe(200);
-    expect(res.body.data.sourceFeedbackId).toBe("fb-direct-source");
-  });
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/tasks/${sourceBead.id}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data.sourceFeedbackId).toBe("fb-direct-source");
+    }
+  );
 
-  it("GET /tasks/:taskId includes Server-Timing header for regression detection", {
-    timeout: 20000,
-  }, async () => {
-    const app = createApp();
-    const project = await projectService.getProject(projectId);
-    const repoPath = project.repoPath;
+  it(
+    "GET /tasks/:taskId includes Server-Timing header for regression detection",
+    {
+      timeout: 20000,
+    },
+    async () => {
+      const app = createApp();
+      const project = await projectService.getProject(projectId);
+      const repoPath = project.repoPath;
 
-    const bead = await beads.create(repoPath, "Server-Timing Test Task", {
-      type: "task",
-      priority: 1,
-      description: "Test task for Server-Timing header",
-    });
+      const bead = await beads.create(repoPath, "Server-Timing Test Task", {
+        type: "task",
+        priority: 1,
+        description: "Test task for Server-Timing header",
+      });
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${bead.id}`);
-    expect(res.status).toBe(200);
-    const serverTiming = res.headers["server-timing"];
-    expect(serverTiming).toBeDefined();
-    expect(serverTiming).toMatch(/task-detail;dur=\d+;desc="Task detail load"/);
-  });
+      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${bead.id}`);
+      expect(res.status).toBe(200);
+      const serverTiming = res.headers["server-timing"];
+      expect(serverTiming).toBeDefined();
+      expect(serverTiming).toMatch(/task-detail;dur=\d+;desc="Task detail load"/);
+    }
+  );
 });

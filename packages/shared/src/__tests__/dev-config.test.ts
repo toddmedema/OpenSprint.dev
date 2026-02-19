@@ -1,8 +1,7 @@
 /**
  * Verification test: dev servers use source-direct imports.
- * - Root dev script removes shared/dist so package exports fall through to src.
+ * - Root dev script builds shared first, then watches via concurrently.
  * - Frontend Vite config aliases @opensprint/shared to source for HMR.
- * - Backend uses package exports; when dist is removed, Node resolves to src.
  * - Both frontend and backend vitest configs alias to source for npm test.
  */
 import { describe, it, expect } from "vitest";
@@ -15,12 +14,10 @@ const repoRoot = resolve(__dirname, "../../../..");
 const sharedRoot = resolve(__dirname, "../..");
 
 describe("dev config (source-direct imports)", () => {
-  it("root dev script removes shared/dist before starting", () => {
-    const pkg = JSON.parse(
-      readFileSync(resolve(repoRoot, "package.json"), "utf-8")
-    );
+  it("root dev script builds shared and starts concurrently", () => {
+    const pkg = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf-8"));
     const devScript = pkg.scripts?.dev ?? "";
-    expect(devScript).toMatch(/rm -rf packages\/shared\/dist/);
+    expect(devScript).toContain("build -w packages/shared");
     expect(devScript).toContain("concurrently");
   });
 
@@ -49,9 +46,7 @@ describe("dev config (source-direct imports)", () => {
   });
 
   it("shared package exports have src fallback when dist absent", () => {
-    const pkg = JSON.parse(
-      readFileSync(resolve(sharedRoot, "package.json"), "utf-8")
-    );
+    const pkg = JSON.parse(readFileSync(resolve(sharedRoot, "package.json"), "utf-8"));
     const exports = pkg.exports?.["."];
     expect(exports).toBeDefined();
     const importPaths = exports.import ?? exports.default;
@@ -59,21 +54,16 @@ describe("dev config (source-direct imports)", () => {
     expect(paths.some((p: string) => p.includes("src/index.ts"))).toBe(true);
   });
 
-  it("dev script removes dist so backend resolves to source (even when dist existed)", () => {
-    // When dist exists from prior build, npm run dev removes it first.
-    // Backend (tsx) then resolves @opensprint/shared via package exports;
-    // dist/index.js is absent, so Node falls through to src/index.ts.
-    const pkg = JSON.parse(
-      readFileSync(resolve(repoRoot, "package.json"), "utf-8")
-    );
+  it("dev script runs shared in watch mode alongside backend and frontend", () => {
+    const pkg = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf-8"));
     const devScript = pkg.scripts?.dev ?? "";
-    expect(devScript).toMatch(/rm -rf packages\/shared\/dist/);
+    expect(devScript).toContain("dev -w packages/shared");
+    expect(devScript).toContain("dev:backend");
+    expect(devScript).toContain("dev:frontend");
   });
 
   it("dev script starts both backend and frontend via concurrently", () => {
-    const pkg = JSON.parse(
-      readFileSync(resolve(repoRoot, "package.json"), "utf-8")
-    );
+    const pkg = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf-8"));
     const devScript = pkg.scripts?.dev ?? "";
     expect(devScript).toContain("dev:backend");
     expect(devScript).toContain("dev:frontend");

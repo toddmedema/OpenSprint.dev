@@ -7,14 +7,29 @@ import { ProjectService } from "../services/project.service.js";
 import { BeadsService } from "../services/beads.service.js";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
-const mockInvoke = vi.fn().mockResolvedValue({
-  content: JSON.stringify({
-    status: "success",
-    tasks: [
-      { index: 0, title: "Fix auth test", description: "Fix failing auth test", priority: 1, depends_on: [] },
-      { index: 1, title: "Fix API test", description: "Fix API endpoint test", priority: 1, depends_on: [0] },
-    ],
-  }),
+const { mockInvoke } = vi.hoisted(() => {
+  const mockInvoke = vi.fn().mockResolvedValue({
+    content: JSON.stringify({
+      status: "success",
+      tasks: [
+        {
+          index: 0,
+          title: "Fix auth test",
+          description: "Fix failing auth test",
+          priority: 1,
+          depends_on: [],
+        },
+        {
+          index: 1,
+          title: "Fix API test",
+          description: "Fix API endpoint test",
+          priority: 1,
+          depends_on: [0],
+        },
+      ],
+    }),
+  });
+  return { mockInvoke };
 });
 
 vi.mock("../services/agent-client.js", () => ({
@@ -37,8 +52,20 @@ describe("deploy-fix-epic service", () => {
       content: JSON.stringify({
         status: "success",
         tasks: [
-          { index: 0, title: "Fix auth test", description: "Fix failing auth test", priority: 1, depends_on: [] },
-          { index: 1, title: "Fix API test", description: "Fix API endpoint test", priority: 1, depends_on: [0] },
+          {
+            index: 0,
+            title: "Fix auth test",
+            description: "Fix failing auth test",
+            priority: 1,
+            depends_on: [],
+          },
+          {
+            index: 1,
+            title: "Fix API test",
+            description: "Fix API endpoint test",
+            priority: 1,
+            depends_on: [0],
+          },
         ],
       }),
     });
@@ -51,7 +78,7 @@ describe("deploy-fix-epic service", () => {
     await fs.mkdir(repoPath, { recursive: true });
     await fs.writeFile(
       path.join(repoPath, "package.json"),
-      JSON.stringify({ name: "test", scripts: { test: "echo ok" } }),
+      JSON.stringify({ name: "test", scripts: { test: "echo ok" } })
     );
 
     const project = await projectService.createProject({
@@ -75,7 +102,7 @@ describe("deploy-fix-epic service", () => {
     const result = await createFixEpicFromTestOutput(
       projectId,
       project.repoPath,
-      "FAIL  src/auth.test.ts",
+      "FAIL  src/auth.test.ts"
     );
 
     expect(result).toBeNull();
@@ -86,7 +113,7 @@ describe("deploy-fix-epic service", () => {
     const result = await createFixEpicFromTestOutput(
       projectId,
       project.repoPath,
-      "FAIL  src/auth.test.ts\n  Expected: true\n  Received: false",
+      "FAIL  src/auth.test.ts\n  Expected: true\n  Received: false"
     );
 
     expect(result).not.toBeNull();

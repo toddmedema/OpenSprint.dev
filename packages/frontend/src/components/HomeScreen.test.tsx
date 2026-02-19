@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { HomeScreen } from "./HomeScreen";
 
 const mockProjectsList = vi.fn();
@@ -13,14 +13,16 @@ vi.mock("../api/client", () => ({
 }));
 
 vi.mock("./layout/Layout", () => ({
-  Layout: ({ children }: { children: React.ReactNode }) => <div data-testid="layout">{children}</div>,
+  Layout: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="layout">{children}</div>
+  ),
 }));
 
 function renderHomeScreen() {
   return render(
     <MemoryRouter>
       <HomeScreen />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 }
 
@@ -59,7 +61,7 @@ describe("HomeScreen", () => {
 
     await screen.findByText("My Project");
     expect(screen.getByText("A test project")).toBeInTheDocument();
-    expect(screen.getByText("Sketch")).toBeInTheDocument();
+    expect(screen.getByText("sketch")).toBeInTheDocument();
     expect(screen.getByText("25%")).toBeInTheDocument();
   });
 
@@ -67,17 +69,22 @@ describe("HomeScreen", () => {
     mockProjectsList.mockResolvedValue([]);
     const user = userEvent.setup();
 
+    function LocationDisplay() {
+      return <div data-testid="location">{useLocation().pathname}</div>;
+    }
+
     render(
       <MemoryRouter>
         <HomeScreen />
-      </MemoryRouter>,
+        <LocationDisplay />
+      </MemoryRouter>
     );
 
     await screen.findByText("No projects yet");
     const createButton = screen.getAllByRole("button", { name: /create new project/i })[0];
     await user.click(createButton);
 
-    expect(window.location.pathname).toBe("/projects/new");
+    expect(screen.getByTestId("location")).toHaveTextContent("/projects/new");
   });
 
   it("project grid has improved spacing (gap-8 lg:gap-12)", async () => {

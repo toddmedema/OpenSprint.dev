@@ -58,7 +58,7 @@ describe("ChatService - Plan phase agent registry", () => {
       name: "Test Project",
       description: "A test project",
       repoPath,
-      planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+      planningAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       deployment: { mode: "custom" },
       hilConfig: DEFAULT_HIL_CONFIG,
@@ -73,10 +73,14 @@ describe("ChatService - Plan phase agent registry", () => {
       JSON.stringify({
         version: 1,
         sections: {
-          executive_summary: { content: "Test app", version: 1, updated_at: new Date().toISOString() },
+          executive_summary: {
+            content: "Test app",
+            version: 1,
+            updated_at: new Date().toISOString(),
+          },
         },
       }),
-      "utf-8",
+      "utf-8"
     );
   });
 
@@ -91,7 +95,11 @@ describe("ChatService - Plan phase agent registry", () => {
         content: "No updates needed. The PRD is already aligned.",
       });
 
-      await chatService.syncPrdFromPlanShip(projectId, "auth-plan", "# Auth Plan\n\n## Overview\n\nAuth feature.");
+      await chatService.syncPrdFromPlanShip(
+        projectId,
+        "auth-plan",
+        "# Auth Plan\n\n## Overview\n\nAuth feature."
+      );
 
       expect(mockRegister).toHaveBeenCalledTimes(1);
       expect(mockRegister).toHaveBeenCalledWith(
@@ -100,7 +108,7 @@ describe("ChatService - Plan phase agent registry", () => {
         "plan",
         "harmonizer",
         "Execute! PRD sync",
-        expect.any(String),
+        expect.any(String)
       );
       expect(mockUnregister).toHaveBeenCalledTimes(1);
       expect(mockUnregister).toHaveBeenCalledWith(mockRegister.mock.calls[0][0]);
@@ -125,7 +133,7 @@ describe("ChatService - Plan phase agent registry", () => {
       mockInvokePlanningAgent.mockRejectedValue(new Error("Agent unavailable"));
 
       await expect(
-        chatService.syncPrdFromPlanShip(projectId, "auth-plan", "# Auth Plan\n\nContent."),
+        chatService.syncPrdFromPlanShip(projectId, "auth-plan", "# Auth Plan\n\nContent.")
       ).rejects.toThrow("Agent unavailable");
 
       expect(mockRegister).toHaveBeenCalledTimes(1);
@@ -190,10 +198,12 @@ Updated feature list with mobile support.
 
       const prdPath = path.join(repoPath, OPENSPRINT_PATHS.prd);
       const prd = JSON.parse(await fs.readFile(prdPath, "utf-8"));
-      expect(prd.sections.feature_list.content).toContain("Updated feature list with mobile support");
+      expect(prd.sections.feature_list.content).toContain(
+        "Updated feature list with mobile support"
+      );
       expect(mockBroadcast).toHaveBeenCalledWith(
         projectId,
-        expect.objectContaining({ type: "prd.updated", section: "feature_list" }),
+        expect.objectContaining({ type: "prd.updated", section: "feature_list" })
       );
     });
 
@@ -211,7 +221,7 @@ New mobile architecture.
         "architectureDecisions",
         expect.stringContaining("affect architectural sections"),
         expect.any(Array),
-        true,
+        true
       );
       const hilDesc = mockHilEvaluate.mock.calls[0][2];
       expect(hilDesc).toContain("Technical Architecture");

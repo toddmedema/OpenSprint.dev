@@ -45,7 +45,7 @@ describe("markdownUtils", () => {
     it("converts HTML to markdown", () => {
       const md = htmlToMarkdown("<p><strong>bold</strong> and <em>italic</em></p>");
       expect(md).toContain("**bold**");
-      expect(md).toContain("*italic*");
+      expect(md).toMatch(/[*_]italic[*_]/);
     });
 
     it("converts headers", () => {

@@ -12,6 +12,7 @@ const mockGetSettings = vi.fn();
 const mockUpdate = vi.fn();
 const mockUpdateSettings = vi.fn();
 const mockGetKeys = vi.fn();
+const mockModelsList = vi.fn();
 
 vi.mock("../api/client", () => ({
   api: {
@@ -22,6 +23,9 @@ vi.mock("../api/client", () => ({
     },
     env: {
       getKeys: (...args: unknown[]) => mockGetKeys(...args),
+    },
+    models: {
+      list: (...args: unknown[]) => mockModelsList(...args),
     },
   },
 }));
@@ -55,6 +59,7 @@ describe("ProjectSettingsModal", () => {
     vi.clearAllMocks();
     mockGetSettings.mockResolvedValue(mockSettings);
     mockGetKeys.mockResolvedValue({ anthropic: true, cursor: true });
+    mockModelsList.mockResolvedValue([]);
     vi.stubGlobal("localStorage", {
       getItem: (key: string) => storage[key] ?? null,
       setItem: (key: string, value: string) => {
@@ -103,7 +108,7 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    await screen.findByText("Planning Agent");
+    await screen.findByText("Planning Agent Slot");
 
     const contentArea = screen.getByTestId("settings-modal-content");
     expect(contentArea).toHaveClass("min-h-0");
@@ -119,7 +124,7 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    await screen.findByText("Planning Agent");
+    await screen.findByText("Planning Agent Slot");
 
     const modal = screen.getByTestId("settings-modal");
     expect(modal).toHaveClass("overflow-hidden");
@@ -150,9 +155,9 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    await screen.findByText("Planning Agent");
+    await screen.findByText("Planning Agent Slot");
 
-    expect(screen.queryByText("API keys required")).not.toBeInTheDocument();
+    expect(screen.queryByText(/API keys required/)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("sk-ant-...")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
     expect(
@@ -171,7 +176,7 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    await screen.findByText("API keys required");
+    await screen.findByText(/API keys required/);
     expect(screen.getByPlaceholderText("sk-ant-...")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
   });

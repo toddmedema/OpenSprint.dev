@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { TaskLinkTooltip } from "./TaskLinkTooltip";
 
 const mockTasksGet = vi.fn();
@@ -26,7 +26,7 @@ describe("TaskLinkTooltip", () => {
     render(
       <TaskLinkTooltip projectId="proj-1" taskId="task-1">
         <span data-testid="child">Ticket task-1</span>
-      </TaskLinkTooltip>,
+      </TaskLinkTooltip>
     );
     expect(screen.getByTestId("child")).toBeInTheDocument();
     expect(screen.getByText("Ticket task-1")).toBeInTheDocument();
@@ -52,13 +52,13 @@ describe("TaskLinkTooltip", () => {
     render(
       <TaskLinkTooltip projectId="proj-1" taskId="task-1">
         <span>Link</span>
-      </TaskLinkTooltip>,
+      </TaskLinkTooltip>
     );
 
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
     const link = screen.getByText("Link");
-    link.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    fireEvent.mouseEnter(link);
 
     vi.advanceTimersByTime(150);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
@@ -68,13 +68,15 @@ describe("TaskLinkTooltip", () => {
     render(
       <TaskLinkTooltip projectId="proj-1" taskId="task-1" cachedTitle="Cached task title">
         <span>Link</span>
-      </TaskLinkTooltip>,
+      </TaskLinkTooltip>
     );
 
     const link = screen.getByText("Link");
-    link.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    fireEvent.mouseEnter(link);
 
-    await vi.advanceTimersByTimeAsync(250);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
 
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
     expect(screen.getByRole("tooltip")).toHaveTextContent("Cached task title");
@@ -101,18 +103,17 @@ describe("TaskLinkTooltip", () => {
     render(
       <TaskLinkTooltip projectId="proj-1" taskId="task-1">
         <span>Link</span>
-      </TaskLinkTooltip>,
+      </TaskLinkTooltip>
     );
 
     const link = screen.getByText("Link");
-    link.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    fireEvent.mouseEnter(link);
 
-    await vi.advanceTimersByTimeAsync(250);
-
-    await waitFor(() => {
-      expect(mockTasksGet).toHaveBeenCalledWith("proj-1", "task-1");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
     });
 
+    expect(mockTasksGet).toHaveBeenCalledWith("proj-1", "task-1");
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
     expect(screen.getByRole("tooltip")).toHaveTextContent("Fix login button");
   });
@@ -123,18 +124,17 @@ describe("TaskLinkTooltip", () => {
     render(
       <TaskLinkTooltip projectId="proj-1" taskId="deleted-task">
         <span>Link</span>
-      </TaskLinkTooltip>,
+      </TaskLinkTooltip>
     );
 
     const link = screen.getByText("Link");
-    link.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    fireEvent.mouseEnter(link);
 
-    await vi.advanceTimersByTimeAsync(250);
-
-    await waitFor(() => {
-      expect(mockTasksGet).toHaveBeenCalledWith("proj-1", "deleted-task");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
     });
 
+    expect(mockTasksGet).toHaveBeenCalledWith("proj-1", "deleted-task");
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
@@ -142,16 +142,18 @@ describe("TaskLinkTooltip", () => {
     render(
       <TaskLinkTooltip projectId="proj-1" taskId="task-1" cachedTitle="Cached title">
         <span>Link</span>
-      </TaskLinkTooltip>,
+      </TaskLinkTooltip>
     );
 
     const link = screen.getByText("Link");
-    link.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-    await vi.advanceTimersByTimeAsync(250);
+    fireEvent.mouseEnter(link);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
 
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
 
-    link.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+    fireEvent.mouseLeave(link);
 
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
@@ -160,12 +162,14 @@ describe("TaskLinkTooltip", () => {
     render(
       <TaskLinkTooltip projectId="proj-1" taskId="task-1" cachedTitle="Title">
         <span>Link</span>
-      </TaskLinkTooltip>,
+      </TaskLinkTooltip>
     );
 
     const link = screen.getByText("Link");
-    link.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-    await vi.advanceTimersByTimeAsync(250);
+    fireEvent.mouseEnter(link);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
 
     const tooltip = screen.getByRole("tooltip");
     expect(tooltip).toHaveClass("bg-theme-bg-elevated");

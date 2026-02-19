@@ -138,7 +138,7 @@ describe("FeedbackService", () => {
       name: "Test Project",
       description: "A test project",
       repoPath: path.join(tempDir, "my-project"),
-      planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+      planningAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       deployment: { mode: "custom" },
       hilConfig: DEFAULT_HIL_CONFIG,
@@ -147,6 +147,8 @@ describe("FeedbackService", () => {
   });
 
   afterEach(async () => {
+    // Allow fire-and-forget categorizeFeedback promises to settle
+    await new Promise((r) => setTimeout(r, 300));
     process.env.HOME = originalHome;
     await fs.rm(tempDir, { recursive: true, force: true });
   });
