@@ -12,6 +12,11 @@ vi.mock("../services/agent-client.js", () => ({
     invoke: (opts: { prompt?: string }) => mockInvoke(opts),
   })),
 }));
+vi.mock("../services/agent.service.js", () => ({
+  agentService: {
+    invokePlanningAgent: (opts: unknown) => mockInvoke(opts),
+  },
+}));
 
 const mockHilEvaluate = vi.fn().mockResolvedValue({ approved: false });
 vi.mock("../services/hil-service.js", () => ({
@@ -277,6 +282,88 @@ describe("FeedbackService", () => {
     });
 
     expect(item.userPriority).toBeUndefined();
+  });
+
+  it("should apply userPriority override to ALL created beads tasks (ignoring AI-suggested)", async () => {
+    feedbackIdSequence = ["prioov"];
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "feature",
+        mappedPlanId: null,
+        proposed_tasks: [
+          { index: 0, title: "Task A", description: "A", priority: 1, depends_on: [] },
+          { index: 1, title: "Task B", description: "B", priority: 2, depends_on: [0] },
+        ],
+      }),
+    });
+
+    const item = await feedbackService.submitFeedback(projectId, {
+      text: "Feature with user priority",
+      priority: 3,
+    });
+
+    expect(item.userPriority).toBe(3);
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    const updated = await feedbackService.getFeedback(projectId, item.id);
+    expect(updated.userPriority).toBe(3);
+
+    const taskCreateCalls = mockBeadsCreate.mock.calls.filter((c) => c[2]?.type === "feature");
+    expect(taskCreateCalls).toHaveLength(2);
+    expect(taskCreateCalls[0][2]).toMatchObject({ type: "feature", priority: 3 });
+    expect(taskCreateCalls[1][2]).toMatchObject({ type: "feature", priority: 3 });
+  });
+
+  it("should use AI-suggested priority when userPriority is null/undefined", async () => {
+    feedbackIdSequence = ["ainopr"];
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "feature",
+        mappedPlanId: null,
+        proposed_tasks: [
+          { index: 0, title: "Task X", description: "X", priority: 1, depends_on: [] },
+          { index: 1, title: "Task Y", description: "Y", priority: 2, depends_on: [0] },
+        ],
+      }),
+    });
+
+    await feedbackService.submitFeedback(projectId, {
+      text: "Feature without user priority",
+    });
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    const taskCreateCalls = mockBeadsCreate.mock.calls.filter((c) => c[2]?.type === "feature");
+    expect(taskCreateCalls).toHaveLength(2);
+    expect(taskCreateCalls[0][2]).toMatchObject({ type: "feature", priority: 1 });
+    expect(taskCreateCalls[1][2]).toMatchObject({ type: "feature", priority: 2 });
+  });
+
+  it("should persist userPriority in feedback JSON file", async () => {
+    feedbackIdSequence = ["pers01"];
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "bug",
+        mappedPlanId: null,
+        task_titles: ["Fix bug"],
+      }),
+    });
+
+    const item = await feedbackService.submitFeedback(projectId, {
+      text: "Critical bug",
+      priority: 0,
+    });
+
+    const stored = await feedbackService.getFeedback(projectId, item.id);
+    expect(stored.userPriority).toBe(0);
+
+    const repoPath = path.join(tempDir, "my-project");
+    const feedbackDir = path.join(repoPath, OPENSPRINT_PATHS.feedback);
+    const raw = JSON.parse(
+      await fs.readFile(path.join(feedbackDir, `${item.id}.json`), "utf-8")
+    );
+    expect(raw.userPriority).toBe(0);
   });
 
   it("should retry with new ID on collision", async () => {
