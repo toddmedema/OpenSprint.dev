@@ -439,7 +439,7 @@ describe("BeadsService", () => {
   });
 
   describe("stale DB recovery", () => {
-    it("uses import --orphan-handling skip when DB is stale, then retries", async () => {
+    it("tries sync --import-only first when DB is stale, then retries", async () => {
       const execCalls: string[] = [];
       let listCallCount = 0;
       mockExecImpl = async (cmd: string) => {
@@ -453,6 +453,9 @@ describe("BeadsService", () => {
           }
           return { stdout: "[]", stderr: "" };
         }
+        if (cmd.includes("sync --import-only")) {
+          return { stdout: "", stderr: "" };
+        }
         if (cmd.includes("import -i") && cmd.includes("--orphan-handling skip")) {
           return { stdout: "", stderr: "" };
         }
@@ -460,11 +463,90 @@ describe("BeadsService", () => {
       };
       const result = await beads.listAll("/repo");
       expect(result).toEqual([]);
+      const syncCall = execCalls.find((c) => c.includes("sync --import-only"));
+      expect(syncCall).toBeDefined();
+      expect(execCalls.filter((c) => c.includes("list --all"))).toHaveLength(2);
+    });
+
+    it("falls back to import --orphan-handling skip when sync fails", async () => {
+      const execCalls: string[] = [];
+      let listCallCount = 0;
+      mockExecImpl = async (cmd: string) => {
+        execCalls.push(cmd);
+        if (cmd.includes("list --all")) {
+          listCallCount++;
+          if (listCallCount === 1) {
+            throw Object.assign(new Error("Database out of sync"), {
+              stderr: "Database out of sync with JSONL. Run 'bd sync --import-only' to fix.",
+            });
+          }
+          return { stdout: "[]", stderr: "" };
+        }
+        if (cmd.includes("sync --import-only")) {
+          throw Object.assign(new Error("sync failed"), {
+            stderr: "parent issue does not exist",
+          });
+        }
+        if (cmd.includes("import -i") && cmd.includes("--orphan-handling skip")) {
+          return { stdout: "", stderr: "" };
+        }
+        return { stdout: "[]", stderr: "" };
+      };
+      const result = await beads.listAll("/repo");
+      expect(result).toEqual([]);
+      const syncCall = execCalls.find((c) => c.includes("sync --import-only"));
       const importCall = execCalls.find(
         (c) => c.includes("import -i") && c.includes("--orphan-handling skip")
       );
+      expect(syncCall).toBeDefined();
       expect(importCall).toBeDefined();
-      expect(execCalls.filter((c) => c.includes("list --all"))).toHaveLength(2);
+      expect(execCalls.indexOf(syncCall!)).toBeLessThan(execCalls.indexOf(importCall!));
+    });
+
+    it("includes manual fix hint when retry fails after recovery", async () => {
+      mockExecImpl = async (cmd: string) => {
+        if (cmd.includes("list --all")) {
+          throw Object.assign(new Error("Database out of sync"), {
+            stderr: "Database out of sync with JSONL.",
+          });
+        }
+        if (cmd.includes("sync --import-only") || cmd.includes("import -i")) {
+          return { stdout: "", stderr: "" };
+        }
+        return { stdout: "[]", stderr: "" };
+      };
+      await expect(beads.listAll("/repo")).rejects.toThrow(
+        /bd sync --import-only|bd import -i .beads\/issues.jsonl --orphan-handling skip/
+      );
+    });
+  });
+
+  describe("proactive sync on first use", () => {
+    it("runs syncImport on first beads command for a repo", async () => {
+      const execCalls: string[] = [];
+      const uniqueRepo = path.join(os.tmpdir(), `beads-sync-test-${Date.now()}`);
+      fs.mkdirSync(path.join(uniqueRepo, ".beads"), { recursive: true });
+
+      mockExecImpl = async (cmd: string) => {
+        execCalls.push(cmd);
+        if (cmd.includes("daemon stop") || cmd.includes("daemon start")) {
+          return { stdout: "", stderr: "" };
+        }
+        if (cmd.includes("sync --import-only") || cmd.includes("import -i")) {
+          return { stdout: "", stderr: "" };
+        }
+        return { stdout: "[]", stderr: "" };
+      };
+
+      await beads.listAll(uniqueRepo);
+
+      const syncCall = execCalls.find((c) => c.includes("sync --import-only"));
+      expect(syncCall).toBeDefined();
+      const listCall = execCalls.find((c) => c.includes("list --all"));
+      expect(listCall).toBeDefined();
+      expect(execCalls.indexOf(syncCall!)).toBeLessThan(execCalls.indexOf(listCall!));
+
+      fs.rmSync(uniqueRepo, { recursive: true, force: true });
     });
   });
 
