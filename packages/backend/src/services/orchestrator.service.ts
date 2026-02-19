@@ -33,6 +33,8 @@ import { activeAgentsService } from "./active-agents.service.js";
 import { FeedbackService } from "./feedback.service.js";
 import { broadcastToProject, sendAgentOutputToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { getErrorMessage } from "../utils/error-utils.js";
+import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { TimerRegistry } from "./timer-registry.js";
 import { AgentLifecycleManager, type AgentRunState } from "./agent-lifecycle.js";
 import {
@@ -1551,28 +1553,24 @@ export class OrchestratorService {
         },
       });
 
-      const jsonMatch = summarizerResponse.content.match(/\{[\s\S]*"status"[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const parsed = JSON.parse(jsonMatch[0]) as { status: string; summary?: string };
-          if (parsed.status === "success" && parsed.summary?.trim()) {
+      const parsed = extractJsonFromAgentResponse<{ status: string; summary?: string }>(
+        summarizerResponse.content,
+        "status"
+      );
+      if (parsed && parsed.status === "success" && parsed.summary?.trim()) {
             console.log(`[orchestrator] Summarizer condensed context for task ${taskId}`);
-            return {
-              ...context,
-              planContent: parsed.summary.trim(),
-              prdExcerpt:
-                "Context condensed by Summarizer (thresholds exceeded). See plan.md for full context.",
-              dependencyOutputs: [],
-            };
-          }
-        } catch {
-          // Fall through: use raw context if Summarizer output unparseable
-        }
+        return {
+          ...context,
+          planContent: parsed.summary.trim(),
+          prdExcerpt:
+            "Context condensed by Summarizer (thresholds exceeded). See plan.md for full context.",
+          dependencyOutputs: [],
+        };
       }
     } catch (err) {
       console.warn(
         `[orchestrator] Summarizer failed for ${taskId}, using raw context:`,
-        err instanceof Error ? err.message : err
+        getErrorMessage(err)
       );
     }
     return context;

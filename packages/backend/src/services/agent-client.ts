@@ -4,6 +4,7 @@ import { promisify } from "util";
 import type { AgentConfig } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
+import { getErrorMessage } from "../utils/error-utils.js";
 import { registerAgentProcess, unregisterAgentProcess } from "./agent-process-registry.js";
 
 const execAsync = promisify(exec);
@@ -133,14 +134,14 @@ export class AgentClient {
         try {
           taskContent = readFileSync(taskFilePath, "utf-8");
         } catch (readErr) {
-          const msg = readErr instanceof Error ? readErr.message : String(readErr);
+          const msg = getErrorMessage(readErr);
           throw new AppError(
             500,
             ErrorCodes.AGENT_TASK_FILE_READ_FAILED,
             `Could not read task file: ${taskFilePath}. ${msg}`,
             {
               taskFilePath,
-              cause: readErr instanceof Error ? readErr.message : String(readErr),
+              cause: msg,
             }
           );
         }

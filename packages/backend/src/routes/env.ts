@@ -5,6 +5,7 @@ import { constants } from "node:fs";
 import type { ApiResponse } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
+import { getErrorMessage } from "../utils/error-utils.js";
 
 const ALLOWED_KEYS = ["ANTHROPIC_API_KEY", "CURSOR_API_KEY"] as const;
 
@@ -93,7 +94,7 @@ envRouter.post("/keys", async (req: Request, res, next) => {
     try {
       await writeFile(envPath, output, "utf-8");
     } catch (writeErr) {
-      const msg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+      const msg = getErrorMessage(writeErr);
       const code = (writeErr as NodeJS.ErrnoException)?.code;
       const hint =
         code === "EACCES"

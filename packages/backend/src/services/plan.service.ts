@@ -30,6 +30,7 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 
 const PLAN_TEMPLATE_STRUCTURE = PLAN_MARKDOWN_SECTIONS.join(", ");
@@ -210,7 +211,7 @@ export class PlanService {
     } catch (err) {
       console.warn(
         "[plan] countTasks failed, using default:",
-        err instanceof Error ? err.message : err
+        getErrorMessage(err)
       );
       return { total: 0, done: 0 };
     }
@@ -258,7 +259,7 @@ export class PlanService {
     } catch (err) {
       console.warn(
         "[plan] buildDependencyEdgesCore: beads unavailable:",
-        err instanceof Error ? err.message : err
+        getErrorMessage(err)
       );
     }
 
@@ -314,7 +315,7 @@ export class PlanService {
           } catch (err) {
             console.warn(
               `[plan] Skipping broken plan ${planId}:`,
-              err instanceof Error ? err.message : err
+              getErrorMessage(err)
             );
           }
         }
@@ -322,7 +323,7 @@ export class PlanService {
     } catch (err) {
       console.warn(
         "[plan] No plans directory or read failed:",
-        err instanceof Error ? err.message : err
+        getErrorMessage(err)
       );
     }
 
@@ -1463,7 +1464,7 @@ ${auditorResult.capability_summary}`;
     } catch (err) {
       console.warn(
         "[plan] buildPrdContext: PRD unavailable:",
-        err instanceof Error ? err.message : err
+        getErrorMessage(err)
       );
       return "No PRD exists yet.";
     }

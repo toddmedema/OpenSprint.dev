@@ -17,6 +17,7 @@ import { ErrorCodes } from "../middleware/error-codes.js";
 import { hilService } from "./hil-service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { getErrorMessage } from "../utils/error-utils.js";
 import {
   buildHarmonizerPromptBuildIt,
   buildHarmonizerPromptScopeChange,
@@ -300,7 +301,7 @@ export class ChatService {
       console.log("[chat] Planning agent returned", { contentLen: response.content?.length ?? 0 });
       responseContent = response.content;
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
+      const msg = getErrorMessage(error);
       console.error("Agent invocation failed:", error);
       responseContent =
         "I was unable to connect to the planning agent.\n\n" +

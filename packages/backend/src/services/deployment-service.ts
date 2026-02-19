@@ -3,6 +3,7 @@ import { promisify } from "util";
 import type { DeploymentConfig } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { ensureEasConfig } from "./eas-config.js";
+import { getErrorMessage } from "../utils/error-utils.js";
 
 const execAsync = promisify(exec);
 
@@ -49,7 +50,7 @@ export class DeploymentService {
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
         timestamp: new Date().toISOString(),
       };
     }
