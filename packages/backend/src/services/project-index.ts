@@ -1,7 +1,7 @@
 /**
  * Project index file operations for ~/.opensprint/projects.json.
  * Handles read/write with missing directory creation.
- * Schema: { projects: [{ id, name, description?, repoPath, createdAt }] }
+ * Schema: { projects: [{ id, name, repoPath, createdAt }] }
  */
 import fs from "fs/promises";
 import path from "path";

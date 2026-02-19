@@ -5,7 +5,6 @@ export type ProjectPhase = "sketch" | "plan" | "execute" | "eval" | "deliver";
 export interface Project {
   id: string;
   name: string;
-  description: string;
   repoPath: string;
   currentPhase: ProjectPhase;
   createdAt: string;
@@ -18,7 +17,6 @@ export interface Project {
 export interface ProjectIndexEntry {
   id: string;
   name: string;
-  description: string;
   repoPath: string;
   createdAt: string;
 }
@@ -31,7 +29,6 @@ export interface ProjectIndex {
 /** Project creation request */
 export interface CreateProjectRequest {
   name: string;
-  description: string;
   repoPath: string;
   planningAgent: AgentConfigInput;
   codingAgent: AgentConfigInput;
@@ -44,7 +41,6 @@ export interface CreateProjectRequest {
 /** Project update request (partial fields) */
 export interface UpdateProjectRequest {
   name?: string;
-  description?: string;
   repoPath?: string;
 }
 

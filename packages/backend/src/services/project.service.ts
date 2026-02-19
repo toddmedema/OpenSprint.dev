@@ -104,7 +104,6 @@ export class ProjectService {
         projects.push({
           id: entry.id,
           name: entry.name,
-          description: entry.description ?? "",
           repoPath: entry.repoPath,
           currentPhase: "sketch",
           createdAt: entry.createdAt,
@@ -268,7 +267,6 @@ export class ProjectService {
     await projectIndex.addProject({
       id,
       name,
-      description: input.description ?? "",
       repoPath,
       createdAt: now,
     });
@@ -276,7 +274,6 @@ export class ProjectService {
     return {
       id,
       name,
-      description: input.description ?? "",
       repoPath,
       currentPhase: "sketch",
       createdAt: now,
@@ -318,7 +315,6 @@ export class ProjectService {
     return {
       id: entry.id,
       name: entry.name,
-      description: entry.description ?? "",
       repoPath: entry.repoPath,
       currentPhase: "sketch",
       createdAt: entry.createdAt,
@@ -332,7 +328,7 @@ export class ProjectService {
     return project.repoPath;
   }
 
-  /** Update project (name, description, repoPath, etc.) */
+  /** Update project (name, repoPath, etc.) */
   async updateProject(
     id: string,
     updates: Partial<Project>
@@ -341,11 +337,10 @@ export class ProjectService {
     const repoPathChanged = updates.repoPath !== undefined && updates.repoPath !== project.repoPath;
     const updated = { ...project, ...updates, updatedAt: new Date().toISOString() };
 
-    // Update global index if name, description, or repoPath changed
-    if (updates.name !== undefined || updates.description !== undefined || repoPathChanged) {
-      const indexUpdates: { name?: string; description?: string; repoPath?: string } = {};
+    // Update global index if name or repoPath changed
+    if (updates.name !== undefined || repoPathChanged) {
+      const indexUpdates: { name?: string; repoPath?: string } = {};
       if (updates.name !== undefined) indexUpdates.name = updates.name;
-      if (updates.description !== undefined) indexUpdates.description = updates.description;
       if (repoPathChanged) indexUpdates.repoPath = updates.repoPath;
       await projectIndex.updateProject(id, indexUpdates);
     }
