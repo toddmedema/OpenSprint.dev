@@ -185,6 +185,12 @@ const shutdown = async () => {
   await killAllTrackedAgentProcesses();
   stopProcessReaper();
   orchestratorService.stopAll();
+  // Stop bd daemons for all repos this backend managed
+  const managedRepos = BeadsService.getManagedRepoPaths();
+  if (managedRepos.length > 0) {
+    const beads = new BeadsService();
+    await beads.stopDaemonsForRepos(managedRepos);
+  }
   // Kill any lingering bd daemons spawned by this or previous sessions
   try {
     execSync("bd daemon killall 2>/dev/null", { timeout: 5_000 });

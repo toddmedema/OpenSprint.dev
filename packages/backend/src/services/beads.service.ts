@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import type { TaskType, TaskPriority } from "@opensprint/shared";
@@ -16,6 +18,12 @@ const MAX_BUFFER_BYTES = 2 * 1024 * 1024; // 2MB for large list output
  * of orphaned daemon processes and 50+ GB of leaked RAM.
  */
 const BD_GLOBAL_FLAGS = "--no-daemon";
+
+/** Repo paths where this backend has started a daemon (for shutdown cleanup) */
+const managedReposForShutdown = new Set<string>();
+
+/** Path to backend.pid file for file-based lock (prevents multiple backends managing same repo) */
+const BACKEND_PID_FILE = ".beads/backend.pid";
 
 /**
  * Raw shape returned by `bd list --json` / `bd show --json`.
@@ -46,24 +54,101 @@ export interface BeadsIssue {
  */
 export class BeadsService {
   /**
-   * @deprecated No-op. Daemon management has been removed — all bd commands
-   * now use --no-daemon for direct storage access. Kept for API compatibility
-   * with callers that may still reference it.
+   * Ensures a bd daemon is running for the repo. Runs `bd daemon stop` before
+   * `bd daemon start` to prevent accumulation across backend restarts.
+   * Skips if another backend instance holds the file-based lock (backend.pid).
    */
-  async ensureDaemon(_repoPath: string): Promise<void> {
-    // Intentional no-op — see BD_GLOBAL_FLAGS
+  async ensureDaemon(repoPath: string): Promise<void> {
+    await this.startDaemonIfNeeded(repoPath);
   }
 
-  /** @deprecated No-op — daemons are no longer started. Kept for API compat. */
-  async stopDaemonsForRepos(_repoPaths: string[]): Promise<void> {}
+  /**
+   * Stops bd daemons for the given repo paths. Called on backend shutdown
+   * to clean up daemons this process started.
+   */
+  async stopDaemonsForRepos(repoPaths: string[]): Promise<void> {
+    for (const p of repoPaths) {
+      try {
+        await execAsync("bd daemon stop", {
+          cwd: p,
+          timeout: 5_000,
+          env: { ...process.env },
+        });
+      } catch {
+        /* ignore — may not be running */
+      }
+    }
+  }
 
-  /** @deprecated No-op — daemons are no longer started. Kept for API compat. */
+  /** Returns repo paths where this backend has started a daemon */
   static getManagedRepoPaths(): string[] {
-    return [];
+    return Array.from(managedReposForShutdown);
   }
 
   /** Reset module-level state (for tests only) */
-  static resetForTesting(): void {}
+  static resetForTesting(): void {
+    managedReposForShutdown.clear();
+  }
+
+  /**
+   * Starts daemon if needed. Always runs `bd daemon stop` before `bd daemon start`
+   * to prevent accumulation. Skips if another backend holds backend.pid lock.
+   */
+  private async startDaemonIfNeeded(repoPath: string): Promise<void> {
+    const beadsDir = path.join(repoPath, ".beads");
+    const backendPidPath = path.join(repoPath, BACKEND_PID_FILE);
+
+    // File-based lock: if another backend has backend.pid and that PID is alive, skip
+    try {
+      if (fs.existsSync(backendPidPath)) {
+        const content = fs.readFileSync(backendPidPath, "utf-8").trim();
+        const otherPid = parseInt(content, 10);
+        if (!isNaN(otherPid) && otherPid !== process.pid) {
+          try {
+            process.kill(otherPid, 0); // signal 0 = existence check
+            return; // Another backend is managing this repo
+          } catch {
+            /* otherPid is dead — we can take over */
+          }
+        }
+      }
+    } catch {
+      /* best effort */
+    }
+
+    // Stop any potentially stale daemon before starting fresh
+    try {
+      await execAsync("bd daemon stop", {
+        cwd: repoPath,
+        timeout: 5_000,
+        env: { ...process.env },
+      });
+    } catch {
+      /* ignore — may not be running */
+    }
+
+    try {
+      await execAsync("bd daemon start", {
+        cwd: repoPath,
+        timeout: 10_000,
+        env: { ...process.env },
+      });
+      managedReposForShutdown.add(repoPath);
+
+      // Write our PID to claim we're managing this repo
+      try {
+        fs.mkdirSync(beadsDir, { recursive: true });
+        fs.writeFileSync(backendPidPath, String(process.pid), "utf-8");
+      } catch {
+        /* best effort — may not be writable */
+      }
+    } catch (err: unknown) {
+      const e = err as { stderr?: string; message?: string };
+      console.warn(
+        `[beads] daemon start failed for ${repoPath}: ${e.stderr ?? e.message}`
+      );
+    }
+  }
 
   private async syncImport(repoPath: string): Promise<void> {
     try {
@@ -88,8 +173,8 @@ export class BeadsService {
 
   /**
    * Execute a bd command in the context of a project directory.
-   * All commands include --no-daemon to prevent the CLI from auto-starting
-   * background daemon processes.
+   * Ensures daemon is running (with stop-before-start to prevent accumulation)
+   * then runs the command with --no-daemon for direct storage access.
    * Auto-recovers from stale-database errors by running sync --import-only and retrying once.
    */
   private async exec(
@@ -97,6 +182,7 @@ export class BeadsService {
     command: string,
     options?: { timeout?: number }
   ): Promise<string> {
+    await this.ensureDaemon(repoPath);
     const timeout = options?.timeout ?? DEFAULT_TIMEOUT_MS;
     const fullCmd = `bd ${BD_GLOBAL_FLAGS} ${command}`;
     try {
