@@ -472,6 +472,14 @@ export class FeedbackService {
     const hasTitles = taskTitles.length > 0;
     if (!hasProposed && !hasTitles) return [];
 
+    // User-specified priority (0-4) overrides AI-suggested and category-based default
+    const userPriorityOverride =
+      typeof item.userPriority === "number" &&
+      item.userPriority >= 0 &&
+      item.userPriority <= 4
+        ? item.userPriority
+        : undefined;
+
     const project = await this.projectService.getProject(projectId);
     const repoPath = project.repoPath;
 
@@ -514,7 +522,10 @@ export class FeedbackService {
       const sorted = [...proposedTasks].sort((a, b) => a.index - b.index);
       for (const task of sorted) {
         try {
-          const priority = task.priority ?? (item.category === "bug" ? 0 : 2);
+          const priority =
+            userPriorityOverride ??
+            task.priority ??
+            (item.category === "bug" ? 0 : 2);
           const issue = await this.createBeadTaskWithRetry(repoPath, task.title, {
             type: beadType,
             priority,
@@ -567,9 +578,11 @@ export class FeedbackService {
       // Legacy: create from task_titles only
       for (const title of taskTitles) {
         try {
+          const priority =
+            userPriorityOverride ?? (item.category === "bug" ? 0 : 2);
           const issue = await this.createBeadTaskWithRetry(repoPath, title, {
             type: beadType,
-            priority: item.category === "bug" ? 0 : 2,
+            priority,
             parentId: parentEpicId,
           });
           if (issue) {
