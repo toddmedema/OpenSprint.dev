@@ -1,0 +1,28 @@
+{
+  "id": "hp026o",
+  "text": "While the page is loading, don't show \"No agents running\" in the top right - don't show that div/input at all, just a loading spinner",
+  "category": "ux",
+  "mappedPlanId": "build-phase-kanban-and-task-listing",
+  "createdTaskIds": [
+    "opensprint.dev-cxx.31"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-19T00:12:46.786Z",
+  "parent_id": null,
+  "depth": 0,
+  "mappedEpicId": "opensprint.dev-cxx",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Show loading spinner instead of empty-state agent indicator during page load",
+      "description": "When the Build phase page (or any page displaying the agent status indicator in the top-right) is still loading data, the 'No agents running' div/input should not be rendered. Instead, display a loading spinner in its place until the initial data fetch completes.\n\nAcceptance criteria:\n- While the page/component is in a loading state (initial fetch in progress), the agent status indicator area in the top-right renders a compact loading spinner instead of the 'No agents running' message.\n- Once data has loaded, the indicator displays the correct state ('No agents running' if idle, or the active agent info if running).\n- The spinner matches the existing design system's loading indicator style.\n- No layout shift occurs when transitioning from spinner to the loaded indicator.",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": [
+    "Show loading spinner instead of empty-state agent indicator during page load"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-lt8w"
+}

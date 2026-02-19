@@ -1,0 +1,37 @@
+{
+  "id": "64jvxy",
+  "text": "Please fix all existing type errors (by actually fixing them and improving typing, NOT by ignoring them or disabling typing)",
+  "category": "bug",
+  "mappedPlanId": "agent-invocation-service",
+  "createdTaskIds": [
+    "opensprint.dev-z0v.15",
+    "opensprint.dev-z0v.16"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-19T00:15:53.900Z",
+  "parent_id": null,
+  "depth": 0,
+  "mappedEpicId": "opensprint.dev-z0v",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Fix all TypeScript type errors in the backend",
+      "description": "Audit and fix every TypeScript type error in the backend codebase (`packages/backend` or equivalent). For each error: add correct types, replace `any` with proper interfaces/types, fix incorrect type assertions, and ensure strict-mode compliance. Do NOT suppress errors with `@ts-ignore`, `@ts-expect-error`, `as any`, or by loosening `tsconfig` strictness. Acceptance criteria: `tsc --noEmit` on the backend produces zero errors.",
+      "priority": 1,
+      "depends_on": []
+    },
+    {
+      "index": 1,
+      "title": "Fix all TypeScript type errors in the frontend",
+      "description": "Audit and fix every TypeScript type error in the frontend codebase (`packages/frontend` or equivalent). For each error: add correct types to props, state, event handlers, and API responses; replace `any` with proper interfaces/types; fix incorrect type assertions. Do NOT suppress errors with `@ts-ignore`, `@ts-expect-error`, `as any`, or by loosening `tsconfig` strictness. Acceptance criteria: `tsc --noEmit` on the frontend produces zero errors.",
+      "priority": 1,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": [
+    "Fix all TypeScript type errors in the backend",
+    "Fix all TypeScript type errors in the frontend"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-xkln"
+}
