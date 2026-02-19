@@ -25,9 +25,6 @@ function ProjectCard({ project }: { project: Project }) {
       <h3 className="font-semibold text-theme-text group-hover:text-brand-600 transition-colors">
         {project.name}
       </h3>
-      {project.description && (
-        <p className="mt-1 text-sm text-theme-muted line-clamp-2">{project.description}</p>
-      )}
       <div className="mt-3 flex items-center justify-between">
         <span className="inline-flex items-center rounded-full bg-theme-info-bg px-2.5 py-1 text-xs font-medium text-theme-info-text">
           {phaseLabel}

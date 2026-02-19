@@ -136,7 +136,6 @@ describe("FeedbackService", () => {
 
     const project = await projectService.createProject({
       name: "Test Project",
-      description: "A test project",
       repoPath: path.join(tempDir, "my-project"),
       planningAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },

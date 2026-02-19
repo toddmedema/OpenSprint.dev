@@ -47,7 +47,6 @@ function createStore() {
         data: {
           id: "proj-1",
           name: "Test Project",
-          description: "",
           repoPath: "/tmp/test",
           currentPhase: "eval",
           createdAt: "",

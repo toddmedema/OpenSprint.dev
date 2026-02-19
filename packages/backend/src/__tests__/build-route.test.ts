@@ -24,7 +24,6 @@ describe("Execute API", () => {
     const repoPath = path.join(tempDir, "my-project");
     const project = await projectService.createProject({
       name: "Build Test Project",
-      description: "For build API tests",
       repoPath,
       planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },

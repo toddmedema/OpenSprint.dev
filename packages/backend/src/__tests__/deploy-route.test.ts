@@ -29,7 +29,6 @@ describe("Deliver API (phase routes for deployment records)", () => {
     );
     const project = await projectService.createProject({
       name: "Deploy Test Project",
-      description: "For deploy API tests",
       repoPath,
       planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },

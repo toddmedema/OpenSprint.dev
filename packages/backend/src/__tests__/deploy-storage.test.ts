@@ -21,7 +21,6 @@ describe("DeployStorageService", () => {
     const repoPath = path.join(tempDir, "my-project");
     const project = await projectService.createProject({
       name: "Deploy Storage Test",
-      description: "For deploy storage tests",
       repoPath,
       planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },

@@ -25,7 +25,6 @@ describe("Projects REST API — spec/sketch phase routes", () => {
     await fs.mkdir(repoPath, { recursive: true });
     const project = await projectService.createProject({
       name: "Sketch Test Project",
-      description: "For spec/sketch route tests",
       repoPath,
       planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },

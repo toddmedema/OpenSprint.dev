@@ -26,7 +26,6 @@ describe("Tasks REST - task-to-kanban-column mapping", () => {
     const repoPath = path.join(tempDir, "test-project");
     const project = await projectService.createProject({
       name: "Task Mapping Test",
-      description: "For kanban column mapping tests",
       repoPath,
       planningAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },

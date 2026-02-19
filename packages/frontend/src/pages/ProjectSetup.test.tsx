@@ -34,12 +34,11 @@ function renderProjectSetup() {
 }
 
 describe("ProjectSetup - Step 1 validation", () => {
-  it("shows project metadata step (name and description) on first load", () => {
+  it("shows project metadata step (name) on first load", () => {
     renderProjectSetup();
 
     expect(screen.getByTestId("project-metadata-step")).toBeInTheDocument();
     expect(screen.getByLabelText(/project name/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
   });
 
   it("blocks Next when name is empty and shows error on click", async () => {

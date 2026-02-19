@@ -27,7 +27,6 @@ describe("PRD REST API", () => {
 
     const project = await projectService.createProject({
       name: "Test Project",
-      description: "A test project",
       repoPath: path.join(tempDir, "my-project"),
       planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },

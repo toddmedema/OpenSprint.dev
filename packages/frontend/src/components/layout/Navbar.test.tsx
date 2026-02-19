@@ -127,7 +127,6 @@ describe("Navbar", () => {
     const mockProject = {
       id: "proj-1",
       name: "Test",
-      description: "",
       repoPath: "/path",
       currentPhase: "sketch" as const,
       createdAt: "2025-01-01T00:00:00Z",
@@ -154,7 +153,6 @@ describe("Navbar", () => {
     const mockProject = {
       id: "proj-1",
       name: "Test",
-      description: "",
       repoPath: "/path",
       currentPhase: "sketch" as const,
       createdAt: "2025-01-01T00:00:00Z",
@@ -181,7 +179,6 @@ describe("Navbar", () => {
     const mockProject = {
       id: "proj-1",
       name: "Test",
-      description: "",
       repoPath: "/path",
       currentPhase: "sketch" as const,
       createdAt: "2025-01-01T00:00:00Z",
@@ -209,7 +206,6 @@ describe("Navbar", () => {
     const mockProject = {
       id: "proj-1",
       name: "Test",
-      description: "",
       repoPath: "/path",
       currentPhase: "sketch" as const,
       createdAt: "2025-01-01T00:00:00Z",

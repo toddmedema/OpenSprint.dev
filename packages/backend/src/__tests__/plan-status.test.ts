@@ -47,7 +47,6 @@ describe("Plan status endpoint and planning run creation", () => {
     const repoPath = path.join(tempDir, "test-project");
     const project = await projectService.createProject({
       name: "Plan Status Test",
-      description: "For plan-status and planning run tests",
       repoPath,
       planningAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },

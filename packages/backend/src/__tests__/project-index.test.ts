@@ -54,7 +54,6 @@ describe("project-index", () => {
       await projectIndex.addProject({
         id: "proj-1",
         name: "Project One",
-        description: "First project",
         repoPath: "/path/to/proj1",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
@@ -64,7 +63,6 @@ describe("project-index", () => {
       expect(loaded[0]).toEqual({
         id: "proj-1",
         name: "Project One",
-        description: "First project",
         repoPath: "/path/to/proj1",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
@@ -77,7 +75,6 @@ describe("project-index", () => {
       await projectIndex.addProject({
         id: "p1",
         name: "Test",
-        description: "",
         repoPath: "/tmp/repo",
         createdAt: new Date().toISOString(),
       });
@@ -90,7 +87,6 @@ describe("project-index", () => {
       const entry = {
         id: "uuid-123",
         name: "My Project",
-        description: "A test project",
         repoPath: "/home/user/repos/my-project",
         createdAt: "2026-02-15T12:00:00.000Z",
       };
@@ -108,14 +104,12 @@ describe("project-index", () => {
       await projectIndex.addProject({
         id: "p1",
         name: "First",
-        description: "",
         repoPath: "/a",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
       await projectIndex.addProject({
         id: "p2",
         name: "Second",
-        description: "",
         repoPath: "/b",
         createdAt: "2026-01-02T00:00:00.000Z",
       });
@@ -132,14 +126,12 @@ describe("project-index", () => {
       await projectIndex.addProject({
         id: "to-remove",
         name: "Remove Me",
-        description: "",
         repoPath: "/x",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
       await projectIndex.addProject({
         id: "keep",
         name: "Keep Me",
-        description: "",
         repoPath: "/y",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
@@ -155,7 +147,6 @@ describe("project-index", () => {
       await projectIndex.addProject({
         id: "p1",
         name: "One",
-        description: "",
         repoPath: "/a",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
@@ -172,19 +163,16 @@ describe("project-index", () => {
       await projectIndex.addProject({
         id: "to-update",
         name: "Original",
-        description: "First",
         repoPath: "/path",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
 
       const updated = await projectIndex.updateProject("to-update", {
         name: "Updated Name",
-        description: "New description",
       });
 
       expect(updated).not.toBeNull();
       expect(updated!.name).toBe("Updated Name");
-      expect(updated!.description).toBe("New description");
       expect(updated!.repoPath).toBe("/path");
       expect(updated!.id).toBe("to-update");
 
@@ -201,7 +189,6 @@ describe("project-index", () => {
       await projectIndex.addProject({
         id: "p1",
         name: "Original",
-        description: "Desc",
         repoPath: "/path",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
@@ -210,7 +197,6 @@ describe("project-index", () => {
 
       const projects = await projectIndex.getProjects();
       expect(projects[0].name).toBe("New Name");
-      expect(projects[0].description).toBe("Desc");
       expect(projects[0].repoPath).toBe("/path");
     });
   });
@@ -223,7 +209,6 @@ describe("project-index", () => {
       await projectIndex.addProject({
         id: "crud-1",
         name: "CRUD Project",
-        description: "For testing",
         repoPath: "/tmp/crud",
         createdAt: "2026-02-15T00:00:00.000Z",
       });
@@ -234,7 +219,6 @@ describe("project-index", () => {
 
       const updated = await projectIndex.updateProject("crud-1", {
         name: "CRUD Project (Updated)",
-        description: "Updated desc",
       });
       expect(updated!.name).toBe("CRUD Project (Updated)");
 

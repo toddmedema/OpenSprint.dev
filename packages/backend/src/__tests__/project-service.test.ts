@@ -27,7 +27,6 @@ describe("ProjectService", () => {
 
     const project = await projectService.createProject({
       name: "Test Project",
-      description: "A test project",
       repoPath,
       planningAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
@@ -37,7 +36,6 @@ describe("ProjectService", () => {
 
     expect(project.id).toBeDefined();
     expect(project.name).toBe("Test Project");
-    expect(project.description).toBe("A test project");
     expect(project.repoPath).toBe(repoPath);
     expect(project.currentPhase).toBe("sketch");
 
@@ -92,20 +90,17 @@ describe("ProjectService", () => {
     expect(index.projects).toHaveLength(1);
     expect(index.projects[0].id).toBe(project.id);
     expect(index.projects[0].name).toBe("Test Project");
-    expect(index.projects[0].description).toBe("A test project");
     expect(index.projects[0].repoPath).toBe(repoPath);
 
     // Verify getProject returns the project
     const fetched = await projectService.getProject(project.id);
     expect(fetched.id).toBe(project.id);
-    expect(fetched.description).toBe("A test project");
   });
 
   it("should reject empty project name", async () => {
     await expect(
       projectService.createProject({
         name: "",
-        description: "",
         repoPath: path.join(tempDir, "proj"),
         planningAgent: { type: "claude", model: null, cliCommand: null },
         codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -119,7 +114,6 @@ describe("ProjectService", () => {
     await expect(
       projectService.createProject({
         name: "Test",
-        description: "",
         repoPath: "",
         planningAgent: { type: "claude", model: null, cliCommand: null },
         codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -134,7 +128,7 @@ describe("ProjectService", () => {
 
     await projectService.createProject({
       name: "Expo Project",
-      description: "",
+
       repoPath,
       planningAgent: { type: "claude", model: null, cliCommand: null },
       codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -156,7 +150,7 @@ describe("ProjectService", () => {
 
     await projectService.createProject({
       name: "Jest Project",
-      description: "",
+
       repoPath,
       planningAgent: { type: "claude", model: null, cliCommand: null },
       codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -176,7 +170,7 @@ describe("ProjectService", () => {
 
     await projectService.createProject({
       name: "Custom Deploy Project",
-      description: "",
+
       repoPath,
       planningAgent: { type: "claude", model: null, cliCommand: null },
       codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -202,7 +196,7 @@ describe("ProjectService", () => {
 
     await projectService.createProject({
       name: "Expo Ignores Custom",
-      description: "",
+
       repoPath,
       planningAgent: { type: "claude", model: null, cliCommand: null },
       codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -228,7 +222,7 @@ describe("ProjectService", () => {
 
     await projectService.createProject({
       name: "Invalid Deployment",
-      description: "",
+
       repoPath,
       planningAgent: { type: "claude", model: null, cliCommand: null },
       codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -248,7 +242,7 @@ describe("ProjectService", () => {
 
     await projectService.createProject({
       name: "Partial HIL",
-      description: "",
+
       repoPath,
       planningAgent: { type: "claude", model: null, cliCommand: null },
       codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -271,7 +265,7 @@ describe("ProjectService", () => {
     await expect(
       projectService.createProject({
         name: "Test",
-        description: "",
+  
         repoPath,
         planningAgent: { type: "claude", model: null, cliCommand: null },
         codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -287,7 +281,7 @@ describe("ProjectService", () => {
     await expect(
       projectService.createProject({
         name: "Test",
-        description: "",
+  
         repoPath,
         planningAgent: { type: "invalid" as "claude", model: null, cliCommand: null },
         codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -303,7 +297,7 @@ describe("ProjectService", () => {
     await expect(
       projectService.createProject({
         name: "Test",
-        description: "",
+  
         repoPath,
         planningAgent: { type: "claude", model: null, cliCommand: null },
         codingAgent: { type: "cursor", model: 123 as unknown as string, cliCommand: null },
@@ -318,7 +312,7 @@ describe("ProjectService", () => {
 
     const project = await projectService.createProject({
       name: "Cursor Project",
-      description: "",
+
       repoPath,
       planningAgent: { type: "cursor", model: "composer-1.5", cliCommand: null },
       codingAgent: { type: "cursor", model: "composer-1.5", cliCommand: null },
@@ -338,7 +332,7 @@ describe("ProjectService", () => {
 
     const project = await projectService.createProject({
       name: "Custom Agent",
-      description: "",
+
       repoPath,
       planningAgent: { type: "custom", model: null, cliCommand: "/usr/bin/my-agent" },
       codingAgent: { type: "custom", model: null, cliCommand: "/usr/bin/my-agent" },
@@ -356,7 +350,7 @@ describe("ProjectService", () => {
     const repoPath = path.join(tempDir, "complexity-overrides");
     const project = await projectService.createProject({
       name: "Complexity Project",
-      description: "",
+
       repoPath,
       planningAgent: { type: "claude", model: null, cliCommand: null },
       codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -384,7 +378,7 @@ describe("ProjectService", () => {
     const repoPath = path.join(tempDir, "hil-strip");
     const project = await projectService.createProject({
       name: "HIL Strip",
-      description: "",
+
       repoPath,
       planningAgent: { type: "claude", model: null, cliCommand: null },
       codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -410,7 +404,7 @@ describe("ProjectService", () => {
     const repoPath = path.join(tempDir, "hil-read-strip");
     const project = await projectService.createProject({
       name: "HIL Read Strip",
-      description: "",
+
       repoPath,
       planningAgent: { type: "claude", model: null, cliCommand: null },
       codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -434,7 +428,7 @@ describe("ProjectService", () => {
     const repoPath = path.join(tempDir, "bad-complexity");
     const project = await projectService.createProject({
       name: "Bad Complexity",
-      description: "",
+
       repoPath,
       planningAgent: { type: "claude", model: null, cliCommand: null },
       codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -455,7 +449,7 @@ describe("ProjectService", () => {
     const repoPath = path.join(tempDir, "update-settings");
     const project = await projectService.createProject({
       name: "Test",
-      description: "",
+
       repoPath,
       planningAgent: { type: "claude", model: null, cliCommand: null },
       codingAgent: { type: "claude", model: null, cliCommand: null },

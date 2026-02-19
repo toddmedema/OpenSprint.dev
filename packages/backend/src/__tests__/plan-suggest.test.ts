@@ -61,7 +61,6 @@ describe("Plan suggestPlans (POST /plans/suggest)", () => {
 
     const project = await projectService.createProject({
       name: "Suggest Test",
-      description: "Test project for plan suggest",
       repoPath,
       planningAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },

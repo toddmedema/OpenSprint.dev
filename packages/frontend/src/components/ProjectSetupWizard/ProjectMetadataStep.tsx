@@ -1,10 +1,9 @@
 /**
- * Wizard step 1: Project name and description.
+ * Wizard step 1: Project name.
  * Validation: non-empty name required.
  */
 export interface ProjectMetadataState {
   name: string;
-  description: string;
 }
 
 export interface ProjectMetadataStepProps {
@@ -36,18 +35,6 @@ export function ProjectMetadataStep({ value, onChange, error }: ProjectMetadataS
             {error}
           </p>
         )}
-      </div>
-      <div>
-        <label htmlFor="project-description" className="block text-sm font-medium text-theme-text mb-1">
-          Description
-        </label>
-        <textarea
-          id="project-description"
-          className="input min-h-[80px]"
-          value={value.description}
-          onChange={(e) => onChange({ ...value, description: e.target.value })}
-          placeholder="A brief description of what you're building"
-        />
       </div>
     </div>
   );

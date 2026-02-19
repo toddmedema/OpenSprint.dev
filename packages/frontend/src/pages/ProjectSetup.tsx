@@ -35,7 +35,7 @@ export function ProjectSetup() {
   const [step, setStep] = useState<Step>("basics");
   const [creating, setCreating] = useState(false);
 
-  const [metadata, setMetadata] = useState<ProjectMetadataState>({ name: "", description: "" });
+  const [metadata, setMetadata] = useState<ProjectMetadataState>({ name: "" });
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [repoPath, setRepoPath] = useState("");
   const [planningAgent, setPlanningAgent] = useState({
@@ -116,7 +116,6 @@ export function ProjectSetup() {
     try {
       const project = await api.projects.create({
         name: metadata.name.trim(),
-        description: metadata.description.trim(),
         repoPath,
         planningAgent: {
           type: planningAgent.type,

@@ -61,7 +61,6 @@ describe("Plan decompose with auto-review", () => {
 
     const project = await projectService.createProject({
       name: "Auto-Review Test",
-      description: "Test project for decompose auto-review",
       repoPath,
       planningAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },

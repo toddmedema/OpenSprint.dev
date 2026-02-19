@@ -48,7 +48,6 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
 
   // Project basics
   const [name, setName] = useState(project.name);
-  const [description, setDescription] = useState(project.description);
   const [repoPath, setRepoPath] = useState(project.repoPath);
 
   // Settings
@@ -116,7 +115,6 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
       await Promise.all([
         api.projects.update(project.id, {
           name,
-          description,
           repoPath,
         }),
         api.projects.updateSettings(project.id, {
@@ -293,17 +291,6 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="My Awesome App"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-theme-text mb-1">
-                      Description
-                    </label>
-                    <textarea
-                      className="input min-h-[80px]"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="A brief description of what you're building"
                     />
                   </div>
                   <div>

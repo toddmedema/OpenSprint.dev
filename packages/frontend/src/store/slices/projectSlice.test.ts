@@ -10,7 +10,6 @@ import type { Project } from "@opensprint/shared";
 const mockProject: Project = {
   id: "proj-1",
   name: "Test Project",
-  description: "A test project",
   repoPath: "/path/to/repo",
   currentPhase: "sketch",
   createdAt: "2025-01-01T00:00:00Z",

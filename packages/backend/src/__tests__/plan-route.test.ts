@@ -57,7 +57,6 @@ describe("Plan REST endpoints - task decomposition", () => {
     const repoPath = path.join(tempDir, "test-project");
     const project = await projectService.createProject({
       name: "Plan Test Project",
-      description: "For plan route and task decomposition tests",
       repoPath,
       planningAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },

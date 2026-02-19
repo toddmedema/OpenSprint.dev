@@ -5,30 +5,27 @@ import { useState } from "react";
 import { ProjectMetadataStep, isValidProjectMetadata } from "./ProjectMetadataStep";
 
 describe("ProjectMetadataStep", () => {
-  it("renders project name and description inputs", () => {
+  it("renders project name input", () => {
     render(
       <ProjectMetadataStep
-        value={{ name: "", description: "" }}
+        value={{ name: "" }}
         onChange={() => {}}
       />
     );
 
     expect(screen.getByLabelText(/project name/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText("My Awesome App")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/brief description/)).toBeInTheDocument();
   });
 
   it("displays current values", () => {
     render(
       <ProjectMetadataStep
-        value={{ name: "My App", description: "A cool app" }}
+        value={{ name: "My App" }}
         onChange={() => {}}
       />
     );
 
     expect(screen.getByDisplayValue("My App")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("A cool app")).toBeInTheDocument();
   });
 
   it("calls onChange when inputs change", async () => {
@@ -36,7 +33,7 @@ describe("ProjectMetadataStep", () => {
     const onChange = vi.fn();
 
     function Harness() {
-      const [value, setValue] = useState({ name: "", description: "" });
+      const [value, setValue] = useState({ name: "" });
       return (
         <ProjectMetadataStep
           value={value}
@@ -54,16 +51,12 @@ describe("ProjectMetadataStep", () => {
     expect(onChange).toHaveBeenCalled();
     const lastNameCall = onChange.mock.calls[onChange.mock.calls.length - 1][0];
     expect(lastNameCall.name).toBe("Test");
-
-    await user.type(screen.getByLabelText(/description/i), "Desc");
-    const lastDescCall = onChange.mock.calls[onChange.mock.calls.length - 1][0];
-    expect(lastDescCall.description).toBe("Desc");
   });
 
   it("displays validation error when provided", () => {
     render(
       <ProjectMetadataStep
-        value={{ name: "", description: "" }}
+        value={{ name: "" }}
         onChange={() => {}}
         error="Project name is required"
       />
@@ -75,7 +68,7 @@ describe("ProjectMetadataStep", () => {
   it("has data-testid for integration tests", () => {
     render(
       <ProjectMetadataStep
-        value={{ name: "", description: "" }}
+        value={{ name: "" }}
         onChange={() => {}}
       />
     );
@@ -86,13 +79,13 @@ describe("ProjectMetadataStep", () => {
 
 describe("isValidProjectMetadata", () => {
   it("returns false for empty name", () => {
-    expect(isValidProjectMetadata({ name: "", description: "" })).toBe(false);
-    expect(isValidProjectMetadata({ name: "   ", description: "x" })).toBe(false);
+    expect(isValidProjectMetadata({ name: "" })).toBe(false);
+    expect(isValidProjectMetadata({ name: "   " })).toBe(false);
   });
 
   it("returns true for non-empty trimmed name", () => {
-    expect(isValidProjectMetadata({ name: "a", description: "" })).toBe(true);
-    expect(isValidProjectMetadata({ name: " My App ", description: "" })).toBe(true);
-    expect(isValidProjectMetadata({ name: "App", description: "Desc" })).toBe(true);
+    expect(isValidProjectMetadata({ name: "a" })).toBe(true);
+    expect(isValidProjectMetadata({ name: " My App " })).toBe(true);
+    expect(isValidProjectMetadata({ name: "App" })).toBe(true);
   });
 });

@@ -31,7 +31,7 @@ describe("App", () => {
     const res = await request(app)
       .post(`${API_PREFIX}/projects`)
       .set("Content-Type", "application/json")
-      .send({ name: "Test", description: "Test project" });
+      .send({ name: "Test" });
     // Projects create may return 400/500 without valid setup, but body parsing works
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.body).toBeDefined();

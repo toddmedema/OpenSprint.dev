@@ -137,7 +137,6 @@ describe("deploy-fix-epic service", () => {
 
     const project = await projectService.createProject({
       name: "Fix Epic Test",
-      description: "Test",
       repoPath,
       planningAgent: { type: "custom", model: null, cliCommand: "echo" },
       codingAgent: { type: "custom", model: null, cliCommand: "echo" },
