@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -25,6 +25,12 @@ describe("deploy-fix-epic service", () => {
   let tempDir: string;
   let projectId: string;
   let projectService: ProjectService;
+  let originalHome: string | undefined;
+
+  afterEach(async () => {
+    process.env.HOME = originalHome;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
 
   beforeEach(async () => {
     mockInvoke.mockResolvedValue({
@@ -37,6 +43,8 @@ describe("deploy-fix-epic service", () => {
       }),
     });
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "deploy-fix-epic-test-"));
+    originalHome = process.env.HOME;
+    process.env.HOME = tempDir;
     projectService = new ProjectService();
 
     const repoPath = path.join(tempDir, "proj");
