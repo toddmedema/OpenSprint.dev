@@ -212,17 +212,16 @@ export class TaskService {
     return (valid.includes(t as Task["type"]) ? t : "task") as Task["type"];
   }
 
-  /** Enrich tasks with latest test results from agent sessions (PRD §8.3) */
+  /** Enrich tasks with latest test results from agent sessions (PRD §8.3). Uses single readdir. */
   private async enrichTasksWithTestResults(repoPath: string, tasks: Task[]): Promise<void> {
-    await Promise.all(
-      tasks.map(async (task) => {
-        const sessions = await this.sessionManager.listSessions(repoPath, task.id);
-        const latest = sessions[sessions.length - 1];
-        if (latest?.testResults) {
-          task.testResults = latest.testResults;
-        }
-      }),
-    );
+    const sessionsByTask = await this.sessionManager.loadSessionsGroupedByTaskId(repoPath);
+    for (const task of tasks) {
+      const sessions = sessionsByTask.get(task.id);
+      const latest = sessions?.[sessions.length - 1];
+      if (latest?.testResults) {
+        task.testResults = latest.testResults;
+      }
+    }
   }
 
   /** Get all agent sessions for a task */

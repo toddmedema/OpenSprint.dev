@@ -197,4 +197,52 @@ export class SessionManager {
 
     return sessions.sort((a, b) => a.attempt - b.attempt);
   }
+
+  /**
+   * Read sessions directory once and group sessions by task ID.
+   * Used by enrichTasksWithTestResults to avoid N readdir calls (one per task).
+   * Directory entries are named <taskId>-<attempt>; the last hyphen separates taskId from attempt.
+   */
+  async loadSessionsGroupedByTaskId(repoPath: string): Promise<Map<string, AgentSession[]>> {
+    const sessionsDir = path.join(repoPath, OPENSPRINT_PATHS.sessions);
+    const byTaskId = new Map<string, Array<{ attempt: number; entry: string }>>();
+
+    try {
+      const entries = await fs.readdir(sessionsDir);
+      for (const entry of entries) {
+        const lastHyphen = entry.lastIndexOf('-');
+        if (lastHyphen <= 0) continue;
+        const taskId = entry.slice(0, lastHyphen);
+        const attemptStr = entry.slice(lastHyphen + 1);
+        const attempt = parseInt(attemptStr, 10);
+        if (attemptStr !== String(attempt)) continue; // not a valid attempt number
+        let arr = byTaskId.get(taskId);
+        if (!arr) {
+          arr = [];
+          byTaskId.set(taskId, arr);
+        }
+        arr.push({ attempt, entry });
+      }
+    } catch {
+      // No sessions directory
+      return new Map();
+    }
+
+    const result = new Map<string, AgentSession[]>();
+    for (const [taskId, arr] of byTaskId) {
+      arr.sort((a, b) => a.attempt - b.attempt);
+      const sessions: AgentSession[] = [];
+      for (const { entry } of arr) {
+        const sessionPath = path.join(sessionsDir, entry, 'session.json');
+        try {
+          const raw = await fs.readFile(sessionPath, 'utf-8');
+          sessions.push(JSON.parse(raw));
+        } catch {
+          // Skip broken sessions
+        }
+      }
+      if (sessions.length > 0) result.set(taskId, sessions);
+    }
+    return result;
+  }
 }
