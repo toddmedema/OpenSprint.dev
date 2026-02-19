@@ -563,10 +563,27 @@ export class OrchestratorService {
 
   /**
    * Get active agents for the project (from central ActiveAgentsService registry).
+   * If the registry is empty but the orchestrator has a current task (e.g. after backend restart
+   * while agent survived), synthesize an entry from orchestrator state so the UI shows correctly.
    */
   async getActiveAgents(projectId: string): Promise<ActiveAgent[]> {
     await this.projectService.getProject(projectId);
-    return activeAgentsService.list(projectId);
+    const registered = activeAgentsService.list(projectId);
+    if (registered.length > 0) return registered;
+
+    const state = this.getState(projectId);
+    if (!state.status.currentTask || !state.status.currentPhase) return [];
+
+    return [
+      {
+        id: state.status.currentTask,
+        phase: state.status.currentPhase,
+        role: state.status.currentPhase === "review" ? "reviewer" : "coder",
+        label: state.activeTaskTitle ?? state.status.currentTask,
+        startedAt: state.agent.startedAt || new Date().toISOString(),
+        branchName: state.activeBranchName ?? undefined,
+      },
+    ];
   }
 
   // ─── Main Orchestrator Loop ───
