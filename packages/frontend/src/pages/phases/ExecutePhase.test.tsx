@@ -382,11 +382,10 @@ describe("ExecutePhase epic completed checkmark", () => {
       store.dispatch(taskUpdated({ taskId: "epic-1.2", status: "closed" }));
     });
 
-    await waitFor(() => {
-      expect(
-        epicCard().querySelector('[data-testid="epic-completed-checkmark"]')
-      ).toBeInTheDocument();
+    const checkmark = await screen.findByTestId("epic-completed-checkmark", undefined, {
+      timeout: 3000,
     });
+    expect(checkmark).toBeInTheDocument();
   });
 });
 

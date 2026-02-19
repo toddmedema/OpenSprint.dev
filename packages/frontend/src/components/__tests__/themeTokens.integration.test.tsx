@@ -110,6 +110,7 @@ describe("theme-aware components", () => {
   });
 
   it("components respond to dark theme when data-theme is dark", () => {
+    storage["opensprint.theme"] = "dark";
     document.documentElement.setAttribute("data-theme", "dark");
     render(
       <ThemeProvider>

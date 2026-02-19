@@ -7,7 +7,15 @@ import { ProjectService } from "../services/project.service.js";
 import { BeadsService } from "../services/beads.service.js";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
-const { mockInvoke } = vi.hoisted(() => {
+const {
+  mockInvoke,
+  mockBeadsCreate,
+  mockBeadsUpdate,
+  mockBeadsAddDependency,
+  mockBeadsClose,
+  mockBeadsReady,
+  mockBeadsInit,
+} = vi.hoisted(() => {
   const mockInvoke = vi.fn().mockResolvedValue({
     content: JSON.stringify({
       status: "success",
@@ -29,21 +37,30 @@ const { mockInvoke } = vi.hoisted(() => {
       ],
     }),
   });
-  return { mockInvoke };
+  const mockBeadsCreate = vi.fn();
+  const mockBeadsUpdate = vi.fn();
+  const mockBeadsAddDependency = vi.fn();
+  const mockBeadsClose = vi.fn();
+  const mockBeadsReady = vi.fn();
+  const mockBeadsInit = vi.fn().mockResolvedValue(undefined);
+  return {
+    mockInvoke,
+    mockBeadsCreate,
+    mockBeadsUpdate,
+    mockBeadsAddDependency,
+    mockBeadsClose,
+    mockBeadsReady,
+    mockBeadsInit,
+  };
 });
 
 vi.mock("../services/agent-client.js", () => ({
   AgentClient: vi.fn().mockImplementation(() => ({ invoke: mockInvoke })),
 }));
 
-const mockBeadsCreate = vi.fn();
-const mockBeadsUpdate = vi.fn();
-const mockBeadsAddDependency = vi.fn();
-const mockBeadsClose = vi.fn();
-const mockBeadsReady = vi.fn();
-
 vi.mock("../services/beads.service.js", () => ({
   BeadsService: vi.fn().mockImplementation(() => ({
+    init: mockBeadsInit,
     create: mockBeadsCreate,
     update: mockBeadsUpdate,
     addDependency: mockBeadsAddDependency,
