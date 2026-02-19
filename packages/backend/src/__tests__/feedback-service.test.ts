@@ -12,9 +12,53 @@ vi.mock("../services/agent-client.js", () => ({
     invoke: (opts: { prompt?: string }) => mockInvoke(opts),
   })),
 }));
+
+const mockRegister = vi.fn();
+const mockUnregister = vi.fn();
+vi.mock("../services/active-agents.service.js", () => ({
+  activeAgentsService: {
+    register: (...args: unknown[]) => mockRegister(...args),
+    unregister: (...args: unknown[]) => mockUnregister(...args),
+    list: vi.fn().mockReturnValue([]),
+  },
+}));
+
 vi.mock("../services/agent.service.js", () => ({
   agentService: {
-    invokePlanningAgent: (opts: unknown) => mockInvoke(opts),
+    async invokePlanningAgent(opts: {
+      messages?: { role: string; content: string }[];
+      tracking?: {
+        id: string;
+        projectId: string;
+        phase: string;
+        role: string;
+        label: string;
+        branchName?: string;
+      };
+      [key: string]: unknown;
+    }) {
+      const { tracking } = opts ?? {};
+      if (tracking) {
+        mockRegister(
+          tracking.id,
+          tracking.projectId,
+          tracking.phase,
+          tracking.role,
+          tracking.label,
+          new Date().toISOString(),
+          tracking.branchName
+        );
+      }
+      try {
+        const normalized = {
+          ...opts,
+          prompt: opts?.messages?.[0]?.content ?? "",
+        };
+        return mockInvoke(normalized);
+      } finally {
+        if (tracking) mockUnregister(tracking.id);
+      }
+    },
   },
 }));
 
@@ -32,16 +76,6 @@ vi.mock("../services/chat.service.js", () => ({
     getScopeChangeProposal: (...args: unknown[]) => mockGetScopeChangeProposal(...args),
     applyScopeChangeUpdates: (...args: unknown[]) => mockApplyScopeChangeUpdates(...args),
   })),
-}));
-
-const mockRegister = vi.fn();
-const mockUnregister = vi.fn();
-vi.mock("../services/active-agents.service.js", () => ({
-  activeAgentsService: {
-    register: (...args: unknown[]) => mockRegister(...args),
-    unregister: (...args: unknown[]) => mockUnregister(...args),
-    list: vi.fn().mockReturnValue([]),
-  },
 }));
 
 vi.mock("../websocket/index.js", () => ({
@@ -805,6 +839,7 @@ describe("FeedbackService", () => {
     });
 
     it("should call syncPrdFromScopeChangeFeedback and create bead tasks when HIL approves", async () => {
+      mockGetScopeChangeProposal.mockResolvedValue(null);
       mockInvoke.mockResolvedValue({
         content: JSON.stringify({
           category: "scope",
@@ -849,7 +884,8 @@ describe("FeedbackService", () => {
         "eval",
         "analyst",
         "Feedback categorization",
-        expect.any(String)
+        expect.any(String),
+        undefined
       );
       expect(mockUnregister).toHaveBeenCalledTimes(1);
       expect(mockUnregister).toHaveBeenCalledWith(mockRegister.mock.calls[0][0]);
