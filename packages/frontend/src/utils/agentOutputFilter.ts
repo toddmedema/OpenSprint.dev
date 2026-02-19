@@ -5,13 +5,6 @@
  * - Plain text (Claude CLI, custom agents): passes through unchanged
  */
 
-export interface AgentOutputFilter {
-  /** Filter a chunk of agent output to extract only displayable content. */
-  filter(chunk: string): string;
-  /** Reset the line buffer. Call when switching tasks or starting a new stream. */
-  reset(): void;
-}
-
 /**
  * Extract displayable content from a single JSON event.
  * Returns the text to show, or null if the event should be hidden (metadata only).
@@ -76,9 +69,16 @@ function extractContentFromEvent(obj: unknown): string | null {
   return null;
 }
 
+export interface AgentOutputFilter {
+  filter(chunk: string): string;
+  reset(): void;
+}
+
 /**
- * Factory: creates an isolated agent output filter with its own line buffer.
- * Each consumer should create its own instance to avoid shared mutable state.
+ * Creates an isolated agent output filter instance.
+ * Each instance has its own line buffer - use one per stream to avoid state leaking.
+ *
+ * @returns Filter instance with filter() and reset() methods
  */
 export function createAgentOutputFilter(): AgentOutputFilter {
   let lineBuffer = "";
@@ -89,7 +89,7 @@ export function createAgentOutputFilter(): AgentOutputFilter {
 
       lineBuffer += chunk;
       const lines = lineBuffer.split("\n");
-      lineBuffer = lines.pop() ?? "";
+      lineBuffer = lines.pop() ?? ""; // Keep incomplete line in buffer
 
       const results: string[] = [];
 
@@ -104,13 +104,13 @@ export function createAgentOutputFilter(): AgentOutputFilter {
             results.push(content);
           }
         } catch {
+          // Not valid JSON - treat as plain text and pass through
           results.push(line + "\n");
         }
       }
 
       return results.join("");
     },
-
     reset(): void {
       lineBuffer = "";
     },
