@@ -50,6 +50,18 @@ executeRouter.get('/status', async (req: Request<ProjectParams>, res, next) => {
   }
 });
 
+// GET /projects/:projectId/execute/tasks/:taskId/output — Get live output for in-progress task (backfill)
+executeRouter.get('/tasks/:taskId/output', async (req: Request<PrepareParams>, res, next) => {
+  try {
+    const { projectId, taskId } = req.params;
+    const output = await orchestratorService.getLiveOutput(projectId, taskId);
+    const body: ApiResponse<{ output: string }> = { data: { output } };
+    res.json(body);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /projects/:projectId/execute/pause — Pause orchestrator (placeholder; PRD §5.7 always-on)
 executeRouter.post('/pause', async (req: Request<ProjectParams>, res) => {
   res.status(501).json({

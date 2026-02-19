@@ -547,6 +547,19 @@ export class OrchestratorService {
   }
 
   /**
+   * Get live agent output for a task when it is the current orchestrator task.
+   * Returns empty string when task is not running or has no output.
+   */
+  async getLiveOutput(projectId: string, taskId: string): Promise<string> {
+    await this.projectService.getProject(projectId);
+    const state = this.getState(projectId);
+    if (state.status.currentTask !== taskId || !state.agent.outputLog.length) {
+      return "";
+    }
+    return state.agent.outputLog.join("");
+  }
+
+  /**
    * Get active agents for the project (from central ActiveAgentsService registry).
    */
   async getActiveAgents(projectId: string): Promise<ActiveAgent[]> {
