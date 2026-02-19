@@ -170,7 +170,7 @@ describe("Plan REST endpoints - task decomposition", () => {
       timeout: 10000,
     },
     async () => {
-      mockSuggestInvoke.mockResolvedValueOnce({
+      mockPlanningAgentInvoke.mockResolvedValueOnce({
         content: JSON.stringify({ complexity: "high" }),
       });
 
@@ -188,7 +188,7 @@ describe("Plan REST endpoints - task decomposition", () => {
 
       expect(res.status).toBe(201);
       expect(res.body.data.metadata.complexity).toBe("high");
-      expect(mockSuggestInvoke).toHaveBeenCalledTimes(1);
+      expect(mockPlanningAgentInvoke).toHaveBeenCalledTimes(1);
     }
   );
 
@@ -198,7 +198,7 @@ describe("Plan REST endpoints - task decomposition", () => {
       timeout: 10000,
     },
     async () => {
-      mockSuggestInvoke.mockResolvedValueOnce({
+      mockPlanningAgentInvoke.mockResolvedValueOnce({
         content: "I cannot produce valid JSON.",
       });
 
@@ -673,7 +673,7 @@ describe("Plan REST endpoints - task decomposition", () => {
 
   describe("POST /projects/:id/plans/suggest", () => {
     beforeEach(async () => {
-      mockSuggestInvoke.mockClear();
+      mockPlanningAgentInvoke.mockClear();
       const project = await projectService.getProject(projectId);
       const prdPath = path.join(project.repoPath, OPENSPRINT_PATHS.prd);
       await fs.mkdir(path.dirname(prdPath), { recursive: true });
@@ -697,7 +697,7 @@ describe("Plan REST endpoints - task decomposition", () => {
       "returns suggested plans from AI without creating plans or beads",
       { timeout: 10000 },
       async () => {
-        mockSuggestInvoke.mockResolvedValueOnce({
+        mockPlanningAgentInvoke.mockResolvedValueOnce({
           content: JSON.stringify({
             plans: [
               {
@@ -742,7 +742,7 @@ describe("Plan REST endpoints - task decomposition", () => {
     );
 
     it("returns 400 when agent returns invalid JSON", { timeout: 10000 }, async () => {
-      mockSuggestInvoke.mockResolvedValueOnce({
+      mockPlanningAgentInvoke.mockResolvedValueOnce({
         content: "I cannot produce JSON.",
       });
 

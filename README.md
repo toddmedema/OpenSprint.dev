@@ -80,17 +80,71 @@ flowchart LR
 
 Lord of the Sprints orchestrates a fellowship of nine specialized agents — each responsible for a distinct part of the SPEED quest. They have been chosen carefully, for each possesses a unique skill that the others do not.
 
-| Fellowship Member                                                                                                                                                                                                                                                                                                | Phase    | Description                                                                                                                                                                         |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/dreamer.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Gandalf</strong><span>Dreamer</span></span></span>       | Sketch   | The wise conversationalist who refines your idea into a PRD, asking the hard questions and challenging assumptions before the journey begins. _You shall not ship without a plan._  |
-| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/planner.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Aragorn</strong><span>Planner</span></span></span>       | Plan     | The brilliant strategist who decomposes a PRD into epics, tasks, and a dependency graph — knowing every milestone and danger on the road ahead.                                     |
-| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/harmonizer.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Frodo</strong><span>Harmonizer</span></span></span>   | All      | The steady keeper of the central mission, quietly ensuring the PRD stays true even as implementation forces difficult compromises. The Ringbearer of product vision.                |
-| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/analyst.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Legolas</strong><span>Analyst</span></span></span>       | Evaluate | With eyes that miss nothing, categorizes every piece of user feedback and maps it to the right epic before anyone else has processed it.                                            |
-| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/summarizer.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Samwise</strong><span>Summarizer</span></span></span> | Execute  | Ever-faithful and efficient, distills assembled context down to exactly what the Coder needs — nothing more, nothing less. _I can't carry the context for you, but I can carry it._ |
-| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/auditor.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Gimli</strong><span>Auditor</span></span></span>         | Execute  | Surveys what has _actually_ been built with unflinching honesty, then determines exactly — and only — what still needs doing.                                                       |
-| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/coder.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Pippin</strong><span>Coder</span></span></span>            | Execute  | Full of energy and occasionally chaotic, dives into every task head-first and always ships working code with tests.                                                                 |
-| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/reviewer.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Boromir</strong><span>Reviewer</span></span></span>     | Execute  | Principled and demanding, validates every implementation against its acceptance criteria — approving only what truly serves the cause.                                              |
-| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/merger.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Merry</strong><span>Merger</span></span></span>           | Execute  | Clever and unflappable, steps in when rebase conflicts block the road, resolves the mess with quiet competence, and keeps the journey moving.                                       |
+<table>
+<thead>
+<tr>
+  <th colspan="2">Fellowship Member</th>
+  <th>Phase</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><img src="packages/frontend/public/agent-icons/dreamer.svg" width="48" height="48" alt="" align="middle" /></td>
+  <td><strong>Gandalf</strong><br>Dreamer</td>
+  <td>Sketch</td>
+  <td>The wise conversationalist who refines your idea into a PRD, asking the hard questions and challenging assumptions before the journey begins. <em>You shall not ship without a plan.</em></td>
+</tr>
+<tr>
+  <td><img src="packages/frontend/public/agent-icons/planner.svg" width="48" height="48" alt="" align="middle" /></td>
+  <td><strong>Aragorn</strong><br>Planner</td>
+  <td>Plan</td>
+  <td>The brilliant strategist who decomposes a PRD into epics, tasks, and a dependency graph — knowing every milestone and danger on the road ahead.</td>
+</tr>
+<tr>
+  <td><img src="packages/frontend/public/agent-icons/harmonizer.svg" width="48" height="48" alt="" align="middle" /></td>
+  <td><strong>Frodo</strong><br>Harmonizer</td>
+  <td>All</td>
+  <td>The steady keeper of the central mission, quietly ensuring the PRD stays true even as implementation forces difficult compromises. The Ringbearer of product vision.</td>
+</tr>
+<tr>
+  <td><img src="packages/frontend/public/agent-icons/analyst.svg" width="48" height="48" alt="" align="middle" /></td>
+  <td><strong>Legolas</strong><br>Analyst</td>
+  <td>Evaluate</td>
+  <td>With eyes that miss nothing, categorizes every piece of user feedback and maps it to the right epic before anyone else has processed it.</td>
+</tr>
+<tr>
+  <td><img src="packages/frontend/public/agent-icons/summarizer.svg" width="48" height="48" alt="" align="middle" /></td>
+  <td><strong>Samwise</strong><br>Summarizer</td>
+  <td>Execute</td>
+  <td>Ever-faithful and efficient, distills assembled context down to exactly what the Coder needs — nothing more, nothing less. <em>I can't carry the context for you, but I can carry it.</em></td>
+</tr>
+<tr>
+  <td><img src="packages/frontend/public/agent-icons/auditor.svg" width="48" height="48" alt="" align="middle" /></td>
+  <td><strong>Gimli</strong><br>Auditor</td>
+  <td>Execute</td>
+  <td>Surveys what has <em>actually</em> been built with unflinching honesty, then determines exactly — and only — what still needs doing.</td>
+</tr>
+<tr>
+  <td><img src="packages/frontend/public/agent-icons/coder.svg" width="48" height="48" alt="" align="middle" /></td>
+  <td><strong>Pippin</strong><br>Coder</td>
+  <td>Execute</td>
+  <td>Full of energy and occasionally chaotic, dives into every task head-first and always ships working code with tests.</td>
+</tr>
+<tr>
+  <td><img src="packages/frontend/public/agent-icons/reviewer.svg" width="48" height="48" alt="" align="middle" /></td>
+  <td><strong>Boromir</strong><br>Reviewer</td>
+  <td>Execute</td>
+  <td>Principled and demanding, validates every implementation against its acceptance criteria — approving only what truly serves the cause.</td>
+</tr>
+<tr>
+  <td><img src="packages/frontend/public/agent-icons/merger.svg" width="48" height="48" alt="" align="middle" /></td>
+  <td><strong>Merry</strong><br>Merger</td>
+  <td>Execute</td>
+  <td>Clever and unflappable, steps in when rebase conflicts block the road, resolves the mess with quiet competence, and keeps the journey moving.</td>
+</tr>
+</tbody>
+</table>
 
 ## Project Structure
 
