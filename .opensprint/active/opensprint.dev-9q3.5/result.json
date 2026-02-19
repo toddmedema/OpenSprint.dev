@@ -1,1 +1,0 @@
-{ "status": "success", "summary": "Removed description field from Project entity across all backend and frontend layers: shared types (Project, ProjectIndexEntry, CreateProjectRequest, UpdateProjectRequest), project.service.ts, project-index.ts, all API routes (POST/GET/PUT), and updated 30+ test files. Existing stored description values are silently ignored." }
