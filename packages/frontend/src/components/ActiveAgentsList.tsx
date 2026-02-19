@@ -98,6 +98,16 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
       ? AGENT_ROLE_LABELS[agent.role as keyof typeof AGENT_ROLE_LABELS]
       : phaseLabel(agent.phase);
 
+  const getAgentIconSrc = (agent: ActiveAgent): string => {
+    const role = agent.role;
+    if (role && role in AGENT_ROLE_LABELS) {
+      const iconName = role.replace(/_/g, "-");
+      return `/agent-icons/${iconName}.svg`;
+    }
+    if (agent.phase === "review") return "/agent-icons/reviewer.svg";
+    return "/agent-icons/coder.svg";
+  };
+
   const dropdownContent =
     open && dropdownRect ? (
       <div
@@ -118,19 +128,27 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
               <li key={agent.id} role="option">
                 <button
                   type="button"
-                  className="w-full px-4 py-2.5 text-sm text-left hover:bg-theme-border-subtle transition-colors"
+                  className="w-full px-4 py-2.5 text-sm text-left hover:bg-theme-border-subtle transition-colors flex items-start gap-3"
                   onClick={() => {
                     dispatch(setSelectedTaskId(agent.id));
                     navigate(getProjectPhasePath(projectId, "execute"));
                     setOpen(false);
                   }}
                 >
-                  <div className="font-medium text-theme-text">{agent.label || agent.id}</div>
-                  <div className="text-theme-muted mt-0.5">
-                    {roleLabel(agent)} &middot;{" "}
-                    <span className="text-theme-muted tabular-nums">
-                      {agent.startedAt ? formatUptime(agent.startedAt, now) : "—"}
-                    </span>
+                  <img
+                    src={getAgentIconSrc(agent)}
+                    alt=""
+                    className="w-5 h-5 shrink-0 mt-0.5"
+                    aria-hidden
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-theme-text">{agent.label || agent.id}</div>
+                    <div className="text-theme-muted mt-0.5">
+                      {roleLabel(agent)} &middot;{" "}
+                      <span className="text-theme-muted tabular-nums">
+                        {agent.startedAt ? formatUptime(agent.startedAt, now) : "—"}
+                      </span>
+                    </div>
                   </div>
                 </button>
               </li>
@@ -152,7 +170,9 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
         title="Active agents"
       >
         <span>
-          {agents.length > 0 ? `${agents.length} agent${agents.length === 1 ? "" : "s"} running` : "No agents running"}
+          {agents.length > 0
+            ? `${agents.length} agent${agents.length === 1 ? "" : "s"} running`
+            : "No agents running"}
         </span>
         <svg
           className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`}

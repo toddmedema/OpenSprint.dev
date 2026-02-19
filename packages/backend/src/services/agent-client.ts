@@ -326,7 +326,8 @@ export class AgentClient {
     }
   }
 
-  /** Run Claude CLI via spawn; pass prompt as argv (no shell) to avoid orphan processes */
+  /** Run Claude CLI via spawn; pass prompt as argv (no shell) to avoid orphan processes.
+   * Uses SIGTERM first (allows cleanup), then SIGKILL after 3s if process ignores SIGTERM. */
   private runClaudeAgentSpawn(
     child: ReturnType<typeof spawn>,
     options?: { processGroup?: boolean }
@@ -382,14 +383,7 @@ export class AgentClient {
         }
       }, TIMEOUT_MS);
 
-      child.stdout?.on("data", (data: Buffer) => {
-        stdout += data.toString();
-      });
-
-      child.stderr?.on("data", (data: Buffer) => {
-        stderr += data.toString();
-      });
-
+      // Attach close/error first so we handle early exit (e.g. ENOENT) before data listeners
       child.on("close", (code) => {
         clearTimeout(timeout);
         if (code === 0 || stdout.trim()) {
@@ -402,6 +396,14 @@ export class AgentClient {
       child.on("error", (err) => {
         clearTimeout(timeout);
         reject(err);
+      });
+
+      child.stdout?.on("data", (data: Buffer) => {
+        stdout += data.toString();
+      });
+
+      child.stderr?.on("data", (data: Buffer) => {
+        stderr += data.toString();
       });
     });
   }

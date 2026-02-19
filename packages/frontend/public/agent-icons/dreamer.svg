@@ -1,0 +1,14 @@
+<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- wand shaft -->
+  <path d="M10 44 L30 24" stroke="#6d28d9" stroke-width="3" stroke-linecap="round"/>
+  <!-- handle taper -->
+  <path d="M10 44 L14 40" stroke="#8b5cf6" stroke-width="4.5" stroke-linecap="round" opacity="0.35"/>
+  <!-- symmetric 4-point star centred at (32,21)
+       outer r=8: top(32,13) right(40,21) bottom(32,29) left(24,21)
+       inner r=3.26 at 45°: (34.26,18.74) (34.26,23.26) (29.74,23.26) (29.74,18.74) -->
+  <path d="M32 13 L34.26 18.74 L40 21 L34.26 23.26 L32 29 L29.74 23.26 L24 21 L29.74 18.74 Z"
+        fill="#fdf4ff" stroke="#a855f7" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- accent dots -->
+  <circle cx="43" cy="13" r="1.6" fill="#c084fc"/>
+  <circle cx="24" cy="11" r="1.1" fill="#e9d5ff" stroke="#a855f7" stroke-width="0.8"/>
+</svg>

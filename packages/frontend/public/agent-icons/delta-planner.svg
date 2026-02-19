@@ -1,0 +1,18 @@
+<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="leftHalf">
+      <rect x="0" y="0" width="26" height="52"/>
+    </clipPath>
+    <clipPath id="rightHalf">
+      <rect x="26" y="0" width="26" height="52"/>
+    </clipPath>
+  </defs>
+  <!-- left half: light fill -->
+  <path d="M26 8 L46 44 L6 44Z" fill="#f0fdf4" clip-path="url(#leftHalf)"/>
+  <!-- right half: green fill -->
+  <path d="M26 8 L46 44 L6 44Z" fill="#34d399" opacity="0.45" clip-path="url(#rightHalf)"/>
+  <!-- full outline -->
+  <path d="M26 8 L46 44 L6 44Z" fill="none" stroke="#22c55e" stroke-width="2" stroke-linejoin="round"/>
+  <!-- dashed centre line -->
+  <line x1="26" y1="8" x2="26" y2="44" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="3.5 2.5"/>
+</svg>
