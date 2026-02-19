@@ -14,6 +14,9 @@ const POLL_INTERVAL_MS = 5000;
 /** z-index for dropdown portal — above Build sidebar (z-50) and Navbar (z-60) */
 const DROPDOWN_Z_INDEX = 9999;
 
+/** Agent icon size in dropdown: 20px (w-5) * 1.15 = 23px (15% larger) */
+const DROPDOWN_AGENT_ICON_SIZE = "23px";
+
 interface ActiveAgentsListProps {
   projectId: string;
 }
@@ -156,7 +159,8 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
                   <img
                     src={getAgentIconSrc(agent)}
                     alt=""
-                    className="w-5 h-5 shrink-0 mt-0.5"
+                    className="shrink-0 mt-0.5"
+                    style={{ width: DROPDOWN_AGENT_ICON_SIZE, height: DROPDOWN_AGENT_ICON_SIZE }}
                     aria-hidden
                   />
                   <div className="min-w-0 flex-1">
