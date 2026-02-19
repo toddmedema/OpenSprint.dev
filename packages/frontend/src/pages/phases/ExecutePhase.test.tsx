@@ -366,13 +366,6 @@ describe("ExecutePhase epic completed checkmark", () => {
       </Provider>
     );
 
-    // Switch to "done" filter so the epic stays visible after all tasks become done
-    fireEvent.click(screen.getByTestId("filter-chip-done"));
-
-    // Switch to "done" filter so the epic stays visible after all tasks become done
-    // (the "all" filter hides fully-completed epics)
-    fireEvent.click(screen.getByTestId("filter-chip-done"));
-
     const epicCard = () => screen.getByTestId("epic-card-epic-1");
     expect(
       epicCard().querySelector('[data-testid="epic-completed-checkmark"]')
@@ -381,6 +374,9 @@ describe("ExecutePhase epic completed checkmark", () => {
     act(() => {
       store.dispatch(taskUpdated({ taskId: "epic-1.2", status: "closed" }));
     });
+
+    // Switch to "done" filter so the epic stays visible (the "all" filter hides fully-completed epics)
+    fireEvent.click(screen.getByTestId("filter-chip-done"));
 
     const checkmark = await screen.findByTestId("epic-completed-checkmark", { timeout: 3000 });
     expect(checkmark).toBeInTheDocument();

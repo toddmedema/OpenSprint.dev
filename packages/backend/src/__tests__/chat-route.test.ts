@@ -13,7 +13,30 @@ const mockUnregister = vi.fn();
 
 vi.mock("../services/agent.service.js", () => ({
   agentService: {
-    invokePlanningAgent: (...args: unknown[]) => mockInvokePlanningAgent(...args),
+    invokePlanningAgent: async (options: Record<string, unknown>) => {
+      const tracking = options.tracking as
+        | { id: string; projectId: string; phase: string; role: string; label: string }
+        | undefined;
+      if (tracking) {
+        const { activeAgentsService } = await import("../services/active-agents.service.js");
+        activeAgentsService.register(
+          tracking.id,
+          tracking.projectId,
+          tracking.phase,
+          tracking.role as import("@opensprint/shared").AgentRole,
+          tracking.label,
+          new Date().toISOString()
+        );
+      }
+      try {
+        return await mockInvokePlanningAgent(options);
+      } finally {
+        if (tracking) {
+          const { activeAgentsService } = await import("../services/active-agents.service.js");
+          activeAgentsService.unregister(tracking.id);
+        }
+      }
+    },
   },
 }));
 
@@ -292,6 +315,7 @@ Hope that helps!`;
         expect.stringMatching(/^design-chat-.*-/),
         projectId,
         "sketch",
+        "dreamer",
         "Sketch chat",
         expect.any(String)
       );
@@ -314,6 +338,7 @@ Hope that helps!`;
         expect.stringMatching(/^plan-chat-.*auth-plan.*-/),
         projectId,
         "plan",
+        "dreamer",
         "Plan chat",
         expect.any(String)
       );
