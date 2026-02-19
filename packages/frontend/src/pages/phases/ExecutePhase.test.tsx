@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import { ExecutePhase } from "./ExecutePhase";
+import { setSelectedTaskId } from "../../store/slices/executeSlice";
 import projectReducer from "../../store/slices/projectSlice";
 import planReducer from "../../store/slices/planSlice";
 import executeReducer from "../../store/slices/executeSlice";
@@ -1485,6 +1486,98 @@ describe("ExecutePhase Source feedback section", () => {
 
     await userEvent.click(toggleBtn);
     expect(screen.getByTestId("source-feedback-card")).toBeInTheDocument();
+  });
+
+  it("persists Source Feedback collapsed state when switching tasks and back", async () => {
+    const taskWithFeedback = {
+      id: "epic-1.1",
+      title: "Task with feedback",
+      epicId: "epic-1",
+      kanbanColumn: "in_progress" as const,
+      priority: 0,
+      assignee: "agent",
+      description: "Task details",
+      type: "task" as const,
+      status: "in_progress" as const,
+      labels: [],
+      dependencies: [],
+      createdAt: "",
+      updatedAt: "",
+      sourceFeedbackId: "fb-xyz",
+    };
+    const taskWithoutFeedback = {
+      id: "epic-1.2",
+      title: "Task without feedback",
+      epicId: "epic-1",
+      kanbanColumn: "ready" as const,
+      priority: 0,
+      assignee: null,
+      description: "Other task",
+      type: "task" as const,
+      status: "open" as const,
+      labels: [],
+      dependencies: [],
+      createdAt: "",
+      updatedAt: "",
+    };
+    mockGet.mockImplementation((_proj: string, taskId: string) => {
+      if (taskId === "epic-1.1") return Promise.resolve(taskWithFeedback);
+      if (taskId === "epic-1.2") return Promise.resolve(taskWithoutFeedback);
+      return Promise.resolve({});
+    });
+    mockFeedbackGet.mockResolvedValue({
+      id: "fb-xyz",
+      text: "Please add dark mode",
+      category: "feature",
+      mappedPlanId: "build-test-feature",
+      createdTaskIds: ["epic-1.1"],
+      status: "mapped",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task with feedback",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
+      {
+        id: "epic-1.2",
+        title: "Task without feedback",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("source-feedback-card")).toBeInTheDocument();
+    });
+
+    const toggleBtn = screen.getByRole("button", { name: /source feedback/i });
+    await userEvent.click(toggleBtn);
+    expect(screen.queryByTestId("source-feedback-card")).not.toBeInTheDocument();
+
+    store.dispatch(setSelectedTaskId("epic-1.2"));
+    await vi.waitFor(() => {
+      expect(screen.getByText("Task without feedback")).toBeInTheDocument();
+    });
+
+    store.dispatch(setSelectedTaskId("epic-1.1"));
+    await vi.waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
+    });
+
+    expect(screen.queryByTestId("source-feedback-card")).not.toBeInTheDocument();
   });
 
   it("shows Resolved chip in Source feedback section when feedback is resolved", async () => {

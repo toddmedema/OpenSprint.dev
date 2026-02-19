@@ -118,13 +118,16 @@ function SourceFeedbackSection({
   projectId,
   feedbackId,
   plans,
+  expanded,
+  onToggle,
 }: {
   projectId: string;
   feedbackId: string;
   plans: Plan[];
+  expanded: boolean;
+  onToggle: () => void;
 }) {
   const dispatch = useAppDispatch();
-  const [expanded, setExpanded] = useState(true);
   const [feedback, setFeedback] = useState<FeedbackItem | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -150,7 +153,7 @@ function SourceFeedbackSection({
     <div className="border-b border-theme-border">
       <button
         type="button"
-        onClick={() => setExpanded((e) => !e)}
+        onClick={onToggle}
         className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
         aria-expanded={expanded}
         aria-controls="source-feedback-content"
@@ -230,6 +233,7 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
   const [taskIdToStartedAt, setTaskIdToStartedAt] = useState<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [artifactsSectionExpanded, setArtifactsSectionExpanded] = useState(true);
+  const [sourceFeedbackExpanded, setSourceFeedbackExpanded] = useState<Record<string, boolean>>({});
 
   const tasks = useAppSelector((s) => s.execute.tasks);
 
@@ -570,6 +574,13 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
                       projectId={projectId}
                       feedbackId={taskDetail.sourceFeedbackId}
                       plans={plans}
+                      expanded={sourceFeedbackExpanded[taskDetail.sourceFeedbackId] ?? true}
+                      onToggle={() =>
+                        setSourceFeedbackExpanded((prev) => ({
+                          ...prev,
+                          [taskDetail.sourceFeedbackId!]: !(prev[taskDetail.sourceFeedbackId!] ?? true),
+                        }))
+                      }
                     />
                   )}
                   {(() => {
