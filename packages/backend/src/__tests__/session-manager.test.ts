@@ -195,6 +195,74 @@ describe("SessionManager", () => {
     });
   });
 
+  describe("readSession", () => {
+    it("returns session when file exists and is valid JSON", async () => {
+      const sessionsDir = path.join(repoPath, OPENSPRINT_PATHS.sessions);
+      await fs.mkdir(path.join(sessionsDir, "task-x-1"), { recursive: true });
+      const sessionData = {
+        taskId: "task-x",
+        attempt: 1,
+        agentType: "cursor",
+        agentModel: "gpt-4",
+        startedAt: "2024-01-01T00:00:00Z",
+        completedAt: "2024-01-01T00:05:00Z",
+        status: "success",
+        outputLog: "",
+        gitBranch: "main",
+        gitDiff: null,
+        testResults: null,
+        failureReason: null,
+      };
+      await fs.writeFile(
+        path.join(sessionsDir, "task-x-1", "session.json"),
+        JSON.stringify(sessionData)
+      );
+
+      const result = await manager.readSession(repoPath, "task-x", 1);
+      expect(result).toEqual(sessionData);
+    });
+
+    it("returns null when session file does not exist", async () => {
+      const result = await manager.readSession(repoPath, "nonexistent", 1);
+      expect(result).toBeNull();
+    });
+
+    it("returns null when session file is malformed JSON", async () => {
+      const sessionsDir = path.join(repoPath, OPENSPRINT_PATHS.sessions);
+      await fs.mkdir(path.join(sessionsDir, "task-y-1"), { recursive: true });
+      await fs.writeFile(path.join(sessionsDir, "task-y-1", "session.json"), "not valid json");
+
+      const result = await manager.readSession(repoPath, "task-y", 1);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("readResult", () => {
+    it("returns result when result.json exists and is valid", async () => {
+      const activeDir = path.join(repoPath, OPENSPRINT_PATHS.active, "task-z");
+      await fs.mkdir(activeDir, { recursive: true });
+      const resultData = { status: "success", summary: "Done" };
+      await fs.writeFile(path.join(activeDir, "result.json"), JSON.stringify(resultData));
+
+      const result = await manager.readResult(repoPath, "task-z");
+      expect(result).toEqual(resultData);
+    });
+
+    it("returns null when result.json does not exist", async () => {
+      const result = await manager.readResult(repoPath, "no-result-task");
+      expect(result).toBeNull();
+    });
+
+    it("returns null when result.json is malformed", async () => {
+      const activeDir = path.join(repoPath, OPENSPRINT_PATHS.active, "task-malformed");
+      await fs.mkdir(activeDir, { recursive: true });
+      await fs.writeFile(path.join(activeDir, "result.json"), "{ invalid");
+
+      const result = await manager.readResult(repoPath, "task-malformed");
+      expect(result).toBeNull();
+    });
+  });
+
   describe("listSessions", () => {
     it("returns sessions for a task in attempt order", async () => {
       const sessionsDir = path.join(repoPath, OPENSPRINT_PATHS.sessions);
