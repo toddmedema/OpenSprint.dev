@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act, within, fireEvent } from "@testing-library/react";
+import { render, screen, act, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
@@ -40,16 +40,30 @@ describe("ActiveAgentsList", () => {
     mockAgentsActive.mockResolvedValue([]);
   });
 
-  it("renders button with No agents running when empty", async () => {
+  it("shows loading spinner during initial fetch", () => {
+    mockAgentsActive.mockImplementation(() => new Promise(() => {})); // Never resolves
     renderActiveAgentsList();
 
     expect(screen.getByTitle("Active agents")).toBeInTheDocument();
-    expect(screen.getByText("No agents running")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+    expect(screen.queryByText("No agents running")).not.toBeInTheDocument();
   });
 
-  it("does not render colored status dot on agents-running button", () => {
+  it("renders button with No agents running when empty after fetch completes", async () => {
     renderActiveAgentsList();
 
+    expect(screen.getByTitle("Active agents")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("No agents running")).toBeInTheDocument();
+    });
+  });
+
+  it("does not render colored status dot on agents-running button", async () => {
+    renderActiveAgentsList();
+
+    await waitFor(() => {
+      expect(screen.getByText("No agents running")).toBeInTheDocument();
+    });
     const button = screen.getByTitle("Active agents");
     // No status dot (w-2 h-2 rounded-full bg-theme-warning-solid animate-pulse)
     const dot = button.querySelector(".rounded-full.bg-theme-warning-solid");
@@ -60,6 +74,9 @@ describe("ActiveAgentsList", () => {
     const user = userEvent.setup();
     renderActiveAgentsList();
 
+    await waitFor(() => {
+      expect(screen.getByText("No agents running")).toBeInTheDocument();
+    });
     await user.click(screen.getByTitle("Active agents"));
 
     const listbox = screen.getByRole("listbox");
@@ -71,6 +88,9 @@ describe("ActiveAgentsList", () => {
     const user = userEvent.setup();
     renderActiveAgentsList();
 
+    await waitFor(() => {
+      expect(screen.getByText("No agents running")).toBeInTheDocument();
+    });
     await user.click(screen.getByTitle("Active agents"));
 
     const dropdown = screen.getByRole("listbox");
@@ -137,6 +157,19 @@ describe("ActiveAgentsList", () => {
     expect(screen.getByText("3m 0s")).toBeInTheDocument();
 
     vi.useRealTimers();
+  });
+
+  it("shows loading spinner in dropdown when opened during initial fetch", async () => {
+    mockAgentsActive.mockImplementation(() => new Promise(() => {})); // Never resolves
+    const user = userEvent.setup();
+    renderActiveAgentsList();
+
+    await user.click(screen.getByTitle("Active agents"));
+
+    const listbox = screen.getByRole("listbox");
+    expect(listbox).toBeInTheDocument();
+    expect(within(listbox).getByRole("status", { name: "Loading agents" })).toBeInTheDocument();
+    expect(within(listbox).queryByText("No agents running")).not.toBeInTheDocument();
   });
 
   it("shows em dash when agent has no startedAt", async () => {
