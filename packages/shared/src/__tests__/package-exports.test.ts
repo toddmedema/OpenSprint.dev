@@ -9,7 +9,6 @@ import * as shared from "@opensprint/shared";
 
 describe("package exports (src/index.ts resolution)", () => {
   it("exports constants", () => {
-    expect(shared.KANBAN_COLUMNS).toBeDefined();
     expect(shared.API_PREFIX).toBeDefined();
     expect(shared.OPENSPRINT_PATHS).toBeDefined();
   });

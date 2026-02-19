@@ -317,14 +317,6 @@ html.sketch-phase-light {
     @apply text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle;
   }
 
-  .kanban-column {
-    @apply flex flex-col gap-3 min-w-[280px] max-w-[320px];
-  }
-
-  .kanban-card {
-    @apply card p-4 cursor-pointer hover:shadow-md transition-shadow;
-  }
-
   /* Execute task detail markdown: WCAG AA contrast (4.5:1 normal, 3:1 large) in light/dark themes.
    * Uses theme tokens (--color-text, --color-code-text, etc.) for consistent contrast with
    * Plan markdown and PRD display. Higher specificity (.prose.prose-execute-task) ensures

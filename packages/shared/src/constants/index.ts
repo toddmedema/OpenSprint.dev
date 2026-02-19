@@ -43,17 +43,6 @@ export const DEFAULT_API_PORT = 3100;
 /** API version prefix */
 export const API_PREFIX = "/api/v1";
 
-/** Kanban columns in display order */
-export const KANBAN_COLUMNS = [
-  "planning",
-  "backlog",
-  "ready",
-  "in_progress",
-  "in_review",
-  "done",
-  "blocked",
-] as const;
-
 /** Plan status display order (planning → building → complete) */
 export const PLAN_STATUS_ORDER: Record<"planning" | "building" | "complete", number> = {
   planning: 0,
