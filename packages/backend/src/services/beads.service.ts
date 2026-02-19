@@ -28,6 +28,12 @@ const managedReposForShutdown = new Set<string>();
  */
 const daemonEnsuredRepos = new Set<string>();
 
+/**
+ * Repo paths where JSONL sync has been run in this process.
+ * Proactive sync on first use prevents "Database out of sync" after git pull.
+ */
+const syncEnsuredRepos = new Set<string>();
+
 /** Path to backend.pid file for file-based lock (prevents multiple backends managing same repo) */
 const BACKEND_PID_FILE = ".beads/backend.pid";
 
@@ -63,9 +69,15 @@ export class BeadsService {
    * Ensures a bd daemon is running for the repo. Runs `bd daemon stop` before
    * `bd daemon start` to prevent accumulation across backend restarts.
    * Skips if another backend instance holds the file-based lock (backend.pid).
+   * Also runs proactive sync (syncImport) once per repo per process to fix
+   * "Database out of sync" after git pull before any beads command runs.
    */
   async ensureDaemon(repoPath: string): Promise<void> {
     await this.startDaemonIfNeeded(repoPath);
+    if (!syncEnsuredRepos.has(repoPath)) {
+      await this.syncImport(repoPath);
+      syncEnsuredRepos.add(repoPath);
+    }
   }
 
   /**
@@ -108,6 +120,7 @@ export class BeadsService {
   static resetForTesting(): void {
     managedReposForShutdown.clear();
     daemonEnsuredRepos.clear();
+    syncEnsuredRepos.clear();
   }
 
   /**
@@ -174,11 +187,27 @@ export class BeadsService {
 
   /**
    * Import JSONL into the database to fix staleness (e.g. after git pull).
-   * Uses `bd import --orphan-handling skip` instead of `sync --import-only` so that
-   * issues with missing parent references (e.g. orphaned children) don't block import.
+   * Tries `bd sync --import-only` first (beads-recommended for "Database out of sync").
+   * Falls back to `bd import --orphan-handling skip` when sync fails (e.g. orphan/missing-parent).
    * "allow" still fails on missing parents in beads 0.49.x; "skip" skips orphan deps and completes.
    */
   private async syncImport(repoPath: string): Promise<void> {
+    // 1. Try beads-recommended sync --import-only
+    try {
+      await execAsync(`bd ${BD_GLOBAL_FLAGS} sync --import-only`, {
+        cwd: repoPath,
+        timeout: 30_000,
+        maxBuffer: MAX_BUFFER_BYTES,
+      });
+      return;
+    } catch (err: unknown) {
+      const e = err as { stderr?: string; message?: string };
+      console.warn(
+        `[beads] sync --import-only failed for ${repoPath}, trying import: ${e.stderr ?? e.message}`
+      );
+    }
+
+    // 2. Fallback: import with orphan-handling skip (handles missing-parent edge cases)
     const jsonlPath = path.join(repoPath, ".beads/issues.jsonl");
     try {
       await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${jsonlPath}" --orphan-handling skip`, {
@@ -247,9 +276,7 @@ export class BeadsService {
 
       const stderr = err.stderr || err.stdout || err.message;
       if (this.isStaleDbError(stderr)) {
-        console.warn(
-          `[beads] Stale DB detected for ${fullCmd}, running import --orphan-handling skip`
-        );
+        console.warn(`[beads] Stale DB detected for ${fullCmd}, running sync/import recovery`);
         await this.syncImport(repoPath);
         try {
           const { stdout } = await execAsync(fullCmd, {
@@ -261,10 +288,12 @@ export class BeadsService {
         } catch (retryError: unknown) {
           const retryErr = retryError as { stderr?: string; stdout?: string; message: string };
           const retryStderr = retryErr.stderr || retryErr.stdout || retryErr.message;
+          const manualFix =
+            " To fix manually, run in the project directory: bd sync --import-only (or bd import -i .beads/issues.jsonl --orphan-handling skip)";
           throw new AppError(
             502,
             ErrorCodes.BEADS_COMMAND_FAILED,
-            `Beads command failed after sync retry: ${fullCmd}\n${retryStderr}`,
+            `Beads command failed after sync retry: ${fullCmd}\n${retryStderr}${manualFix}`,
             {
               command: fullCmd,
               stderr: retryStderr,
