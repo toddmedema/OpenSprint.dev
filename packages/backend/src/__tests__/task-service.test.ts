@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { TaskService } from "../services/task.service.js";
 import { beadsCache } from "../services/beads-cache.js";
+import { SessionManager } from "../services/session-manager.js";
 import type { BeadsIssue } from "../services/beads.service.js";
 
 vi.mock("../services/project.service.js", () => ({
@@ -185,5 +186,73 @@ describe("TaskService", () => {
     expect(ids).toContain("blocker-2"); // open, no deps -> ready
     expect(ids).not.toContain("task-not-ready"); // blocked by open blocker-2
     expect(ids).not.toContain("blocker-1"); // closed -> not ready
+  });
+
+  it("listTasks calls loadSessionsGroupedByTaskId once (batch enrich, not N listSessions)", async () => {
+    const { BeadsService } = await import("../services/beads.service.js");
+    const manyTasks: BeadsIssue[] = Array.from({ length: 10 }, (_, i) => ({
+      id: `task-${i}`,
+      title: `Task ${i}`,
+      status: "open" as const,
+      issue_type: "task" as const,
+      dependencies: [],
+    }));
+    vi.mocked(BeadsService.prototype.listAll).mockResolvedValue(manyTasks);
+
+    const loadSpy = vi.spyOn(SessionManager.prototype, "loadSessionsGroupedByTaskId");
+    const listSpy = vi.spyOn(SessionManager.prototype, "listSessions");
+
+    await taskService.listTasks("proj-1");
+
+    expect(loadSpy).toHaveBeenCalledTimes(1);
+    expect(listSpy).not.toHaveBeenCalled();
+
+    loadSpy.mockRestore();
+    listSpy.mockRestore();
+  });
+
+  it("listTasks enriches tasks with testResults from latest session", async () => {
+    const { BeadsService } = await import("../services/beads.service.js");
+    vi.mocked(BeadsService.prototype.listAll).mockResolvedValue([
+      { id: "task-with-session", title: "Task A", status: "open", issue_type: "task", dependencies: [] },
+      { id: "task-no-session", title: "Task B", status: "open", issue_type: "task", dependencies: [] },
+    ] as BeadsIssue[]);
+
+    const loadSpy = vi.spyOn(SessionManager.prototype, "loadSessionsGroupedByTaskId").mockResolvedValue(
+      new Map([
+        [
+          "task-with-session",
+          [
+            {
+              taskId: "task-with-session",
+              attempt: 1,
+              agentType: "cursor" as const,
+              agentModel: "gpt-4",
+              startedAt: "2024-01-01T00:00:00Z",
+              completedAt: null,
+              status: "success" as const,
+              outputLog: "",
+              gitBranch: "main",
+              gitDiff: null,
+              testResults: { passed: 5, failed: 0, skipped: 1, total: 6, details: [] },
+              failureReason: null,
+            },
+          ],
+        ],
+      ])
+    );
+
+    const tasks = await taskService.listTasks("proj-1");
+
+    expect(tasks.find((t) => t.id === "task-with-session")?.testResults).toEqual({
+      passed: 5,
+      failed: 0,
+      skipped: 1,
+      total: 6,
+      details: [],
+    });
+    expect(tasks.find((t) => t.id === "task-no-session")?.testResults).toBeUndefined();
+
+    loadSpy.mockRestore();
   });
 });
