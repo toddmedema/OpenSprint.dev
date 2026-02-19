@@ -5,9 +5,6 @@
  * - Plain text (Claude CLI, custom agents): passes through unchanged
  */
 
-/** Buffer for incomplete NDJSON lines across chunks */
-let lineBuffer = "";
-
 /**
  * Extract displayable content from a single JSON event.
  * Returns the text to show, or null if the event should be hidden (metadata only).
@@ -64,45 +61,50 @@ function extractContentFromEvent(obj: unknown): string | null {
   return null;
 }
 
-/**
- * Filter a chunk of agent output to extract only messages/content.
- * Handles NDJSON (newline-delimited JSON) for Cursor stream-json format.
- * Plain text is passed through unchanged.
- *
- * @param chunk - Raw chunk from agent stdout/stderr
- * @returns Filtered string to display (may be empty if chunk was metadata only)
- */
-export function filterAgentOutputChunk(chunk: string): string {
-  if (!chunk) return "";
-
-  lineBuffer += chunk;
-  const lines = lineBuffer.split("\n");
-  lineBuffer = lines.pop() ?? ""; // Keep incomplete line in buffer
-
-  const results: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    try {
-      const obj = JSON.parse(trimmed) as unknown;
-      const content = extractContentFromEvent(obj);
-      if (content) {
-        results.push(content);
-      }
-    } catch {
-      // Not valid JSON - treat as plain text and pass through
-      results.push(line + "\n");
-    }
-  }
-
-  return results.join("");
+export interface AgentOutputFilter {
+  filter(chunk: string): string;
+  reset(): void;
 }
 
 /**
- * Reset the line buffer. Call when switching tasks or starting a new stream.
+ * Creates an isolated agent output filter instance.
+ * Each instance has its own line buffer - use one per stream to avoid state leaking.
+ *
+ * @returns Filter instance with filter() and reset() methods
  */
-export function resetAgentOutputFilter(): void {
-  lineBuffer = "";
+export function createAgentOutputFilter(): AgentOutputFilter {
+  let lineBuffer = "";
+
+  return {
+    filter(chunk: string): string {
+      if (!chunk) return "";
+
+      lineBuffer += chunk;
+      const lines = lineBuffer.split("\n");
+      lineBuffer = lines.pop() ?? ""; // Keep incomplete line in buffer
+
+      const results: string[] = [];
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        try {
+          const obj = JSON.parse(trimmed) as unknown;
+          const content = extractContentFromEvent(obj);
+          if (content) {
+            results.push(content);
+          }
+        } catch {
+          // Not valid JSON - treat as plain text and pass through
+          results.push(line + "\n");
+        }
+      }
+
+      return results.join("");
+    },
+    reset(): void {
+      lineBuffer = "";
+    },
+  };
 }
