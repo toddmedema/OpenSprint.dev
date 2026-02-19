@@ -18,6 +18,7 @@ import { broadcastToProject } from "../websocket/index.js";
 import { ensureEasConfig } from "../services/eas-config.js";
 import { testRunner } from "../services/test-runner.js";
 import { createFixEpicFromTestOutput } from "../services/deploy-fix-epic.service.js";
+import { getErrorMessage } from "../utils/error-utils.js";
 
 const projectService = new ProjectService();
 
@@ -325,7 +326,7 @@ export async function runDeployAsync(
         });
         broadcastToProject(projectId, { type: "deliver.completed", deployId, success: true });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = getErrorMessage(err);
         await deployStorageService.updateRecord(projectId, deployId, {
           status: "failed",
           completedAt: new Date().toISOString(),
@@ -375,7 +376,7 @@ export async function runDeployAsync(
       broadcastToProject(projectId, { type: "deliver.completed", deployId, success: false });
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = getErrorMessage(err);
     emit(`Error: ${msg}\n`);
     await deployStorageService.updateRecord(projectId, deployId, {
       status: "failed",
@@ -413,7 +414,7 @@ async function runRollbackAsync(
     }
     broadcastToProject(projectId, { type: "deliver.completed", deployId, success: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = getErrorMessage(err);
     emit(`Error: ${msg}\n`);
     await deployStorageService.updateRecord(projectId, deployId, {
       status: "failed",

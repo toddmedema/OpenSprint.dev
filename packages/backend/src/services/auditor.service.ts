@@ -4,6 +4,8 @@
  * Invoked during Re-execute flow before Delta Planner.
  */
 
+import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
+
 /** Auditor result.json format per PRD 12.3.6 */
 export interface AuditorResult {
   status: "success" | "failed";
@@ -47,21 +49,16 @@ The capability_summary must be valid markdown. Use headers (##) for sections.`;
 
 /** Parse Auditor result from agent response */
 export function parseAuditorResult(content: string): AuditorResult | null {
-  const jsonMatch = content.match(/\{[\s\S]*"status"[\s\S]*\}/);
-  if (!jsonMatch) return null;
-  try {
-    const parsed = JSON.parse(jsonMatch[0]) as AuditorResult;
-    if (parsed.status === "success" && typeof parsed.capability_summary === "string") {
-      return {
-        status: "success",
-        capability_summary: parsed.capability_summary.trim(),
-      };
-    }
-    if (parsed.status === "failed") {
-      return { status: "failed" };
-    }
-    return null;
-  } catch {
-    return null;
+  const parsed = extractJsonFromAgentResponse<AuditorResult>(content, "status");
+  if (!parsed) return null;
+  if (parsed.status === "success" && typeof parsed.capability_summary === "string") {
+    return {
+      status: "success",
+      capability_summary: parsed.capability_summary.trim(),
+    };
   }
+  if (parsed.status === "failed") {
+    return { status: "failed" };
+  }
+  return null;
 }

@@ -204,14 +204,14 @@ describe("Plan suggestPlans (POST /plans/suggest)", () => {
     });
   });
 
-  it("throws DECOMPOSE_JSON_INVALID when JSON is malformed", { timeout: 10000 }, async () => {
+  it("throws DECOMPOSE_PARSE_FAILED when JSON is malformed", { timeout: 10000 }, async () => {
     mockInvoke.mockResolvedValueOnce({
       content: '{"plans": [invalid json}',
     });
 
     await expect(planService.suggestPlans(projectId)).rejects.toMatchObject({
       statusCode: 400,
-      code: "DECOMPOSE_JSON_INVALID",
+      code: "DECOMPOSE_PARSE_FAILED",
     });
   });
 

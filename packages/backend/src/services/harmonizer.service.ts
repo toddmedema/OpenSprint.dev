@@ -5,6 +5,7 @@
  */
 
 import type { PrdSectionKey } from "@opensprint/shared";
+import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 
 const VALID_SECTION_KEYS: PrdSectionKey[] = [
   "executive_summary",
@@ -110,30 +111,25 @@ export function parseHarmonizerResult(content: string): {
 export function parseHarmonizerResultFull(
   content: string
 ): { status: "success" | "no_changes_needed"; prdUpdates: HarmonizerPrdUpdate[] } | null {
-  const jsonMatch = content.match(/\{[\s\S]*"status"[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      const parsed = JSON.parse(jsonMatch[0]) as HarmonizerResult;
-      const status = parsed.status?.toLowerCase();
-      if (status === "no_changes_needed") {
-        return { status: "no_changes_needed", prdUpdates: [] };
-      }
-      if (status === "success" && parsed.prd_updates && parsed.prd_updates.length > 0) {
-        const prdUpdates = parsed.prd_updates
-          .filter((u) => VALID_SECTION_KEYS.includes(u.section as PrdSectionKey))
-          .map((u) => ({
-            section: u.section as PrdSectionKey,
-            content: u.content?.trim() ?? "",
-            changeLogEntry: u.change_log_entry?.trim(),
-          }))
-          .filter((u) => u.content.length > 0);
-        return { status: "success", prdUpdates };
-      }
-      if (status === "success" && (!parsed.prd_updates || parsed.prd_updates.length === 0)) {
-        return { status: "no_changes_needed", prdUpdates: [] };
-      }
-    } catch {
-      // JSON parse failed
+  const parsed = extractJsonFromAgentResponse<HarmonizerResult>(content, "status");
+  if (parsed) {
+    const status = parsed.status?.toLowerCase();
+    if (status === "no_changes_needed") {
+      return { status: "no_changes_needed", prdUpdates: [] };
+    }
+    if (status === "success" && parsed.prd_updates && parsed.prd_updates.length > 0) {
+      const prdUpdates = parsed.prd_updates
+        .filter((u) => VALID_SECTION_KEYS.includes(u.section as PrdSectionKey))
+        .map((u) => ({
+          section: u.section as PrdSectionKey,
+          content: u.content?.trim() ?? "",
+          changeLogEntry: u.change_log_entry?.trim(),
+        }))
+        .filter((u) => u.content.length > 0);
+      return { status: "success", prdUpdates };
+    }
+    if (status === "success" && (!parsed.prd_updates || parsed.prd_updates.length === 0)) {
+      return { status: "no_changes_needed", prdUpdates: [] };
     }
   }
 

@@ -20,6 +20,8 @@ import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { generateShortFeedbackId } from "../utils/feedback-id.js";
+import { getErrorMessage } from "../utils/error-utils.js";
+import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { triggerDeploy } from "./deploy-trigger.service.js";
 
 /**
@@ -273,9 +275,8 @@ export class FeedbackService {
       });
 
       // Parse AI response; fallback: default to bug, map to first plan (PRD §7.4.2 edge case)
-      const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
+      const parsed = extractJsonFromAgentResponse<Record<string, unknown>>(response.content);
+      if (parsed) {
         const validCategories: FeedbackCategory[] = ["bug", "feature", "ux", "scope"];
         item.category = validCategories.includes(parsed.category)
           ? (parsed.category as FeedbackCategory)
@@ -606,7 +607,7 @@ export class FeedbackService {
       try {
         return await this.beadsService.create(repoPath, title, options);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = getErrorMessage(err);
         const isUniqueConstraint = msg.includes("UNIQUE constraint failed");
 
         if (!isUniqueConstraint) {

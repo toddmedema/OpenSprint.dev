@@ -4,6 +4,8 @@
  * generates only the delta tasks needed.
  */
 
+import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
+
 /** Delta task format — same as Planner (PRD §12.3.2) */
 export interface DeltaTask {
   index: number;
@@ -64,34 +66,29 @@ Tasks must be atomic and implementable in one agent session. Resolve depends_on 
 
 /** Parse Delta Planner result from agent response */
 export function parseDeltaPlannerResult(content: string): DeltaPlannerResult | null {
-  const jsonMatch = content.match(/\{[\s\S]*"status"[\s\S]*\}/);
-  if (!jsonMatch) return null;
-  try {
-    const parsed = JSON.parse(jsonMatch[0]) as DeltaPlannerResult;
-    const status = parsed.status?.toLowerCase();
-    if (status === "no_changes_needed") {
-      return { status: "no_changes_needed" };
-    }
-    if (status === "failed") {
-      return { status: "failed" };
-    }
-    if (status === "success" && Array.isArray(parsed.tasks) && parsed.tasks.length > 0) {
-      return {
-        status: "success",
-        tasks: parsed.tasks.map((t) => ({
-          index: typeof t.index === "number" ? t.index : 0,
-          title: String(t.title ?? "").trim(),
-          description: String(t.description ?? "").trim(),
-          priority: typeof t.priority === "number" ? Math.min(4, Math.max(0, t.priority)) : 2,
-          depends_on: Array.isArray(t.depends_on) ? t.depends_on.filter((d) => typeof d === "number") : [],
-        })),
-      };
-    }
-    if (status === "success" && (!parsed.tasks || parsed.tasks.length === 0)) {
-      return { status: "no_changes_needed" };
-    }
-    return null;
-  } catch {
-    return null;
+  const parsed = extractJsonFromAgentResponse<DeltaPlannerResult>(content, "status");
+  if (!parsed) return null;
+  const status = parsed.status?.toLowerCase();
+  if (status === "no_changes_needed") {
+    return { status: "no_changes_needed" };
   }
+  if (status === "failed") {
+    return { status: "failed" };
+  }
+  if (status === "success" && Array.isArray(parsed.tasks) && parsed.tasks.length > 0) {
+    return {
+      status: "success",
+      tasks: parsed.tasks.map((t) => ({
+        index: typeof t.index === "number" ? t.index : 0,
+        title: String(t.title ?? "").trim(),
+        description: String(t.description ?? "").trim(),
+        priority: typeof t.priority === "number" ? Math.min(4, Math.max(0, t.priority)) : 2,
+        depends_on: Array.isArray(t.depends_on) ? t.depends_on.filter((d) => typeof d === "number") : [],
+      })),
+    };
+  }
+  if (status === "success" && (!parsed.tasks || parsed.tasks.length === 0)) {
+    return { status: "no_changes_needed" };
+  }
+  return null;
 }

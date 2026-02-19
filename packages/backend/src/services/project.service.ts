@@ -26,6 +26,7 @@ import { ErrorCodes } from "../middleware/error-codes.js";
 import * as projectIndex from "./project-index.js";
 import { parseAgentConfig } from "../schemas/agent-config.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { getErrorMessage } from "../utils/error-utils.js";
 
 const execAsync = promisify(exec);
 
@@ -145,7 +146,7 @@ export class ProjectService {
       planningAgent = parseAgentConfig(input.planningAgent, "planningAgent");
       codingAgent = parseAgentConfig(input.codingAgent, "codingAgent");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Invalid agent configuration";
+      const msg = getErrorMessage(err, "Invalid agent configuration");
       throw new AppError(400, ErrorCodes.INVALID_AGENT_CONFIG, msg);
     }
 
@@ -181,7 +182,7 @@ export class ProjectService {
     try {
       await this.beads.init(repoPath);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = getErrorMessage(err);
       if (!msg.toLowerCase().includes("already initialized")) {
         throw new AppError(
           500,
@@ -383,7 +384,7 @@ export class ProjectService {
       try {
         planningAgent = parseAgentConfig(updates.planningAgent, "planningAgent");
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Invalid planning agent configuration";
+        const msg = getErrorMessage(err, "Invalid planning agent configuration");
         throw new AppError(400, ErrorCodes.INVALID_AGENT_CONFIG, msg);
       }
     }
@@ -391,7 +392,7 @@ export class ProjectService {
       try {
         codingAgent = parseAgentConfig(updates.codingAgent, "codingAgent");
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Invalid coding agent configuration";
+        const msg = getErrorMessage(err, "Invalid coding agent configuration");
         throw new AppError(400, ErrorCodes.INVALID_AGENT_CONFIG, msg);
       }
     }
@@ -414,7 +415,7 @@ export class ProjectService {
           try {
             codingAgentByComplexity[key as PlanComplexity] = parseAgentConfig(value, "codingAgent");
           } catch (err) {
-            const msg = err instanceof Error ? err.message : `Invalid agent config for ${key}`;
+            const msg = getErrorMessage(err, `Invalid agent config for ${key}`);
             throw new AppError(400, ErrorCodes.INVALID_AGENT_CONFIG, msg);
           }
         }

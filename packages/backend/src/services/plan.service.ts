@@ -30,6 +30,7 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 
 const PLAN_TEMPLATE_STRUCTURE = PLAN_MARKDOWN_SECTIONS.join(", ");
 
@@ -176,17 +177,15 @@ export class PlanService {
       },
     });
 
-    const jsonMatch = response.content.match(/\{[\s\S]*"complexity"[\s\S]*\}/);
-    if (!jsonMatch) return "medium";
-
-    try {
-      const parsed = JSON.parse(jsonMatch[0]) as { complexity?: string };
+    const parsed = extractJsonFromAgentResponse<{ complexity?: string }>(
+      response.content,
+      "complexity"
+    );
+    if (parsed) {
       const c = parsed.complexity;
       if (c && VALID_COMPLEXITIES.includes(c as PlanComplexity)) {
         return c as PlanComplexity;
       }
-    } catch {
-      // fall through to default
     }
     return "medium";
   }
@@ -623,26 +622,18 @@ export class PlanService {
     });
 
     // Parse tasks from agent response
-    const jsonMatch = response.content.match(/\{[\s\S]*"tasks"[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.warn(
-        "[plan] Task generation agent did not return valid JSON, shipping without tasks"
-      );
-      return 0;
-    }
-
-    let parsed: {
+    const parsed = extractJsonFromAgentResponse<{
       tasks?: Array<{
         title: string;
         description: string;
         priority?: number;
         dependsOn?: string[];
       }>;
-    };
-    try {
-      parsed = JSON.parse(jsonMatch[0]);
-    } catch {
-      console.warn("[plan] Task generation JSON parse failed, shipping without tasks");
+    }>(response.content, "tasks");
+    if (!parsed) {
+      console.warn(
+        "[plan] Task generation agent did not return valid JSON, shipping without tasks"
+      );
       return 0;
     }
 
@@ -1419,17 +1410,12 @@ ${auditorResult.capability_summary}`;
         },
       });
 
-      const jsonMatch = response.content.match(/\{[\s\S]*"taskIdsToClose"[\s\S]*\}/);
-      if (!jsonMatch) {
+      const parsed = extractJsonFromAgentResponse<{
+        taskIdsToClose?: string[];
+        reason?: string;
+      }>(response.content, "taskIdsToClose");
+      if (!parsed) {
         console.warn("[plan] Auto-review agent did not return valid JSON, skipping");
-        return;
-      }
-
-      let parsed: { taskIdsToClose?: string[]; reason?: string };
-      try {
-        parsed = JSON.parse(jsonMatch[0]);
-      } catch {
-        console.warn("[plan] Auto-review agent JSON parse failed, skipping");
         return;
       }
 
@@ -1519,25 +1505,14 @@ ${auditorResult.capability_summary}`;
    * Extracts JSON from response (may be wrapped in ```json ... ```).
    */
   private parseDecomposeResponse(content: string): SuggestedPlan[] {
-    const jsonMatch = content.match(/\{[\s\S]*"plans"[\s\S]*\}/);
-    if (!jsonMatch) {
+    const parsed = extractJsonFromAgentResponse<{ plans?: SuggestedPlan[] }>(content, "plans");
+    if (!parsed) {
       throw new AppError(
         400,
         ErrorCodes.DECOMPOSE_PARSE_FAILED,
         "Planning agent did not return valid decomposition JSON. Response: " +
           content.slice(0, 500),
         { responsePreview: content.slice(0, 500) }
-      );
-    }
-
-    let parsed: { plans?: SuggestedPlan[] };
-    try {
-      parsed = JSON.parse(jsonMatch[0]);
-    } catch {
-      throw new AppError(
-        400,
-        ErrorCodes.DECOMPOSE_JSON_INVALID,
-        "Could not parse decomposition JSON from agent response"
       );
     }
 

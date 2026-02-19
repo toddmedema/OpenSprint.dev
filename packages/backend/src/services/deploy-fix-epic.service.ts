@@ -13,6 +13,7 @@ import { AgentClient } from "./agent-client.js";
 import { ProjectService } from "./project.service.js";
 import { gitCommitQueue } from "./git-commit-queue.service.js";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 
 const projectService = new ProjectService();
 const beads = new BeadsService();
@@ -95,17 +96,12 @@ Output your response as JSON with status and tasks array.`;
     return null;
   }
 
-  const jsonMatch = response.content.match(/\{[\s\S]*"tasks"[\s\S]*\}/);
-  if (!jsonMatch) {
+  const parsed = extractJsonFromAgentResponse<{
+    status?: string;
+    tasks?: Array<{ index?: number; title: string; description?: string; priority?: number; depends_on?: number[] }>;
+  }>(response.content, "tasks");
+  if (!parsed) {
     console.warn("[deploy-fix-epic] Agent did not return valid JSON with tasks");
-    return null;
-  }
-
-  let parsed: { status?: string; tasks?: Array<{ index?: number; title: string; description?: string; priority?: number; depends_on?: number[] }> };
-  try {
-    parsed = JSON.parse(jsonMatch[0]);
-  } catch {
-    console.warn("[deploy-fix-epic] JSON parse failed");
     return null;
   }
 
