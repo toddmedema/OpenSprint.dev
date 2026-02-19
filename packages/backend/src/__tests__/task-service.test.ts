@@ -77,4 +77,113 @@ describe("TaskService", () => {
     expect(beadsShowCalls).toBe(1);
     expect(beadsListAllCalls).toBe(1);
   });
+
+  it("listTasks does not call beads.ready (computes ready from listAll)", async () => {
+    const tasks = await taskService.listTasks("proj-1");
+    expect(tasks).toBeDefined();
+    expect(beadsReadyCalls).toBe(0);
+    expect(beadsListAllCalls).toBe(1);
+  });
+
+  it("getReadyTasks does not call beads.ready (computes ready from listAll)", async () => {
+    const tasks = await taskService.getReadyTasks("proj-1");
+    expect(tasks).toBeDefined();
+    expect(beadsReadyCalls).toBe(0);
+    expect(beadsListAllCalls).toBe(1);
+  });
+
+  it("listTasks computes ready status from listAll: task with no blockers is ready", async () => {
+    const { BeadsService } = await import("../services/beads.service.js");
+    vi.mocked(BeadsService.prototype.listAll).mockResolvedValue([
+      {
+        id: "task-a",
+        title: "Task A",
+        status: "open",
+        issue_type: "task",
+        dependencies: [],
+      },
+    ] as BeadsIssue[]);
+
+    const tasks = await taskService.listTasks("proj-1");
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].kanbanColumn).toBe("ready");
+  });
+
+  it("listTasks computes ready status: task with open blocker is backlog", async () => {
+    const { BeadsService } = await import("../services/beads.service.js");
+    vi.mocked(BeadsService.prototype.listAll).mockResolvedValue([
+      { id: "blocker-1", status: "open", issue_type: "task", dependencies: [] },
+      {
+        id: "task-a",
+        title: "Task A",
+        status: "open",
+        issue_type: "task",
+        dependencies: [{ type: "blocks", depends_on_id: "blocker-1" }],
+      },
+    ] as BeadsIssue[]);
+
+    const tasks = await taskService.listTasks("proj-1");
+    const taskA = tasks.find((t) => t.id === "task-a");
+    expect(taskA).toBeDefined();
+    expect(taskA!.kanbanColumn).toBe("backlog");
+  });
+
+  it("listTasks computes ready status: task with closed blocker is ready", async () => {
+    const { BeadsService } = await import("../services/beads.service.js");
+    vi.mocked(BeadsService.prototype.listAll).mockResolvedValue([
+      { id: "blocker-1", status: "closed", issue_type: "task", dependencies: [] },
+      {
+        id: "task-a",
+        title: "Task A",
+        status: "open",
+        issue_type: "task",
+        dependencies: [{ type: "blocks", depends_on_id: "blocker-1" }],
+      },
+    ] as BeadsIssue[]);
+
+    const tasks = await taskService.listTasks("proj-1");
+    const taskA = tasks.find((t) => t.id === "task-a");
+    expect(taskA).toBeDefined();
+    expect(taskA!.kanbanColumn).toBe("ready");
+  });
+
+  it("listTasks excludes epics from ready (epics are containers, not work items)", async () => {
+    const { BeadsService } = await import("../services/beads.service.js");
+    vi.mocked(BeadsService.prototype.listAll).mockResolvedValue([
+      { id: "epic-1", status: "open", issue_type: "epic", dependencies: [] },
+    ] as BeadsIssue[]);
+
+    const tasks = await taskService.listTasks("proj-1");
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].kanbanColumn).not.toBe("ready");
+  });
+
+  it("getReadyTasks returns only ready tasks (excludes tasks with open blockers)", async () => {
+    const { BeadsService } = await import("../services/beads.service.js");
+    vi.mocked(BeadsService.prototype.listAll).mockResolvedValue([
+      { id: "blocker-1", status: "closed", issue_type: "task", dependencies: [] },
+      {
+        id: "task-ready",
+        title: "Ready Task",
+        status: "open",
+        issue_type: "task",
+        dependencies: [{ type: "blocks", depends_on_id: "blocker-1" }],
+      },
+      { id: "blocker-2", status: "open", issue_type: "task", dependencies: [] },
+      {
+        id: "task-not-ready",
+        title: "Not Ready",
+        status: "open",
+        issue_type: "task",
+        dependencies: [{ type: "blocks", depends_on_id: "blocker-2" }],
+      },
+    ] as BeadsIssue[]);
+
+    const tasks = await taskService.getReadyTasks("proj-1");
+    const ids = tasks.map((t) => t.id);
+    expect(ids).toContain("task-ready");
+    expect(ids).toContain("blocker-2"); // open, no deps -> ready
+    expect(ids).not.toContain("task-not-ready"); // blocked by open blocker-2
+    expect(ids).not.toContain("blocker-1"); // closed -> not ready
+  });
 });
