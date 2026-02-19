@@ -429,10 +429,13 @@ export class OrchestratorService {
       if (state.status.currentTask) {
         activeAgentsService.unregister(state.status.currentTask);
       }
-      try {
-        state.agent.activeProcess.kill();
-      } catch {
-        // Process may already be dead
+      const preserveAgents = process.env.OPENSPRINT_PRESERVE_AGENTS === "1";
+      if (!preserveAgents) {
+        try {
+          state.agent.activeProcess.kill();
+        } catch {
+          // Process may already be dead
+        }
       }
       state.agent.activeProcess = null;
     }
@@ -1593,7 +1596,7 @@ export class OrchestratorService {
         "status"
       );
       if (parsed && parsed.status === "success" && parsed.summary?.trim()) {
-            console.log(`[orchestrator] Summarizer condensed context for task ${taskId}`);
+        console.log(`[orchestrator] Summarizer condensed context for task ${taskId}`);
         return {
           ...context,
           planContent: parsed.summary.trim(),

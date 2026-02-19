@@ -208,10 +208,7 @@ export class PlanService {
       ).length;
       return { total: children.length, done };
     } catch (err) {
-      console.warn(
-        "[plan] countTasks failed, using default:",
-        getErrorMessage(err)
-      );
+      console.warn("[plan] countTasks failed, using default:", getErrorMessage(err));
       return { total: 0, done: 0 };
     }
   }
@@ -256,10 +253,7 @@ export class PlanService {
         }
       }
     } catch (err) {
-      console.warn(
-        "[plan] buildDependencyEdgesCore: beads unavailable:",
-        getErrorMessage(err)
-      );
+      console.warn("[plan] buildDependencyEdgesCore: beads unavailable:", getErrorMessage(err));
     }
 
     // 2. Parse Plan markdown for "## Dependencies" section
@@ -312,18 +306,12 @@ export class PlanService {
             const plan = await this.getPlan(projectId, planId);
             plans.push(plan);
           } catch (err) {
-            console.warn(
-              `[plan] Skipping broken plan ${planId}:`,
-              getErrorMessage(err)
-            );
+            console.warn(`[plan] Skipping broken plan ${planId}:`, getErrorMessage(err));
           }
         }
       }
     } catch (err) {
-      console.warn(
-        "[plan] No plans directory or read failed:",
-        getErrorMessage(err)
-      );
+      console.warn("[plan] No plans directory or read failed:", getErrorMessage(err));
     }
 
     const edges = await this.buildDependencyEdges(plans, repoPath);
@@ -507,6 +495,8 @@ export class PlanService {
     const gateTaskId = gateResult.id;
 
     // Create child tasks if provided
+    const createdTaskIds: string[] = [];
+    const createdTaskTitles: string[] = [];
     if (body.tasks && body.tasks.length > 0) {
       const taskIdMap = new Map<string, string>(); // title -> beads id
 
@@ -519,6 +509,8 @@ export class PlanService {
           parentId: epicId,
         });
         taskIdMap.set(task.title, taskResult.id);
+        createdTaskIds.push(taskResult.id);
+        createdTaskTitles.push(task.title);
 
         // Add blocks dependency on gating task
         await this.beads.addDependency(repoPath, taskResult.id, gateTaskId);
@@ -560,7 +552,7 @@ export class PlanService {
       summary: `plan ${planId} created`,
     });
 
-    return {
+    const plan: Plan & { _createdTaskIds?: string[]; _createdTaskTitles?: string[] } = {
       metadata,
       content: body.content,
       status: "planning",
@@ -568,6 +560,11 @@ export class PlanService {
       doneTaskCount: 0,
       dependencyCount: 0,
     };
+    if (createdTaskIds.length > 0) {
+      plan._createdTaskIds = createdTaskIds;
+      plan._createdTaskTitles = createdTaskTitles;
+    }
+    return plan;
   }
 
   /** Update a Plan's markdown */
@@ -1306,24 +1303,19 @@ ${planNew}`;
     return context;
   }
 
-  /** Build plan/task summary for the auto-review agent. */
-  private async buildPlanTaskSummary(repoPath: string, createdPlans: Plan[]): Promise<string> {
-    const allIssues = await this.beads.listAll(repoPath);
+  /** Build plan/task summary for the auto-review agent using pre-collected task data. */
+  private buildPlanTaskSummaryFromCreated(
+    createdPlans: Array<Plan & { _createdTaskIds?: string[]; _createdTaskTitles?: string[] }>
+  ): string {
     const lines: string[] = [];
-
     for (const plan of createdPlans) {
       const epicId = plan.metadata.beadEpicId;
       if (!epicId) continue;
-      const tasks = allIssues.filter(
-        (i: BeadsIssue) =>
-          i.id.startsWith(epicId + ".") &&
-          i.id !== plan.metadata.gateTaskId &&
-          (i.issue_type ?? i.type) !== "epic"
-      );
       lines.push(`## Plan: ${plan.metadata.planId} (epic: ${epicId})`);
-      for (const t of tasks) {
-        lines.push(`- **${t.id}**: ${t.title}`);
-        if (t.description) lines.push(`  Description: ${String(t.description).slice(0, 200)}`);
+      const ids = plan._createdTaskIds ?? [];
+      const titles = plan._createdTaskTitles ?? [];
+      for (let i = 0; i < ids.length; i++) {
+        lines.push(`- **${ids[i]}**: ${titles[i] ?? "Untitled task"}`);
       }
       lines.push("");
     }
@@ -1334,24 +1326,20 @@ ${planNew}`;
    * Auto-review: invoke planning agent to compare created plans against the codebase
    * and mark already-implemented tasks as done. Best-effort; failures are logged, not thrown.
    */
-  private async autoReviewPlanAgainstRepo(projectId: string, createdPlans: Plan[]): Promise<void> {
+  private async autoReviewPlanAgainstRepo(
+    projectId: string,
+    createdPlans: Array<Plan & { _createdTaskIds?: string[]; _createdTaskTitles?: string[] }>
+  ): Promise<void> {
     if (createdPlans.length === 0) return;
 
     const repoPath = await this.getRepoPath(projectId);
     const settings = await this.projectService.getSettings(projectId);
-    const validTaskIds = new Set<string>();
 
+    // Use pre-collected task IDs from createPlan to avoid stale beads DB reads
+    const validTaskIds = new Set<string>();
     for (const plan of createdPlans) {
-      if (!plan.metadata.beadEpicId) continue;
-      const allIssues = await this.beads.listAll(repoPath);
-      const tasks = allIssues.filter(
-        (i: BeadsIssue) =>
-          i.id.startsWith(plan.metadata.beadEpicId + ".") &&
-          i.id !== plan.metadata.gateTaskId &&
-          (i.issue_type ?? i.type) !== "epic"
-      );
-      for (const t of tasks) {
-        validTaskIds.add(t.id);
+      for (const id of plan._createdTaskIds ?? []) {
+        validTaskIds.add(id);
       }
     }
 
@@ -1359,7 +1347,7 @@ ${planNew}`;
 
     try {
       const codebaseContext = await this.buildCodebaseContext(repoPath);
-      const planSummary = await this.buildPlanTaskSummary(repoPath, createdPlans);
+      const planSummary = this.buildPlanTaskSummaryFromCreated(createdPlans);
 
       const prompt = `Review the following plans and tasks against the codebase. Identify which tasks are already implemented.\n\n## Created plans and tasks\n\n${planSummary}\n\n${codebaseContext}`;
 
@@ -1430,10 +1418,7 @@ ${planNew}`;
       }
       return context || "The PRD is currently empty.";
     } catch (err) {
-      console.warn(
-        "[plan] buildPrdContext: PRD unavailable:",
-        getErrorMessage(err)
-      );
+      console.warn("[plan] buildPrdContext: PRD unavailable:", getErrorMessage(err));
       return "No PRD exists yet.";
     }
   }

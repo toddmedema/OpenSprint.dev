@@ -47,6 +47,7 @@ describe("Plan decompose with auto-review", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockInvoke.mockReset();
     planService = new PlanService();
     projectService = new ProjectService();
     beads = new BeadsService();
@@ -245,8 +246,10 @@ describe("Plan decompose with auto-review", () => {
         expect.stringMatching(/^plan-decompose-.*-/),
         projectId,
         "plan",
+        "planner",
         "Feature decomposition",
-        expect.any(String)
+        expect.any(String),
+        undefined
       );
       expect(mockUnregister).toHaveBeenCalledWith(mockRegister.mock.calls[0][0]);
     });
@@ -291,16 +294,20 @@ describe("Plan decompose with auto-review", () => {
           expect.stringMatching(/^plan-decompose-.*-/),
           projectId,
           "plan",
+          "planner",
           "Feature decomposition",
           expect.any(String),
+          undefined,
         ]);
         expect(autoReviewCall).toBeDefined();
         expect(autoReviewCall).toEqual([
           expect.stringMatching(/^plan-auto-review-.*-/),
           projectId,
           "plan",
+          "planner",
           "Plan auto-review",
           expect.any(String),
+          undefined,
         ]);
       }
     );

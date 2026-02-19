@@ -1,6 +1,6 @@
-# Open Sprint
+# Lord of the Sprints
 
-**Build _good_ software at the speed of thought, and never pay for SaaS again.**
+**One tool to rule them all — build _good_ software at the speed of thought, and never pay for SaaS again.**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Node.js >= 20](https://img.shields.io/badge/Node.js-%3E%3D20-green.svg)](https://nodejs.org/)
@@ -8,60 +8,64 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 <p align="center">
-  <img src="docs/assets/hero-demo.gif" alt="OpenSprint — Sketch, Plan, Execute, Evaluate, Deliver" width="800" />
+  <img src="docs/assets/hero-demo.gif" alt="Lord of the Sprints — Sketch, Plan, Execute, Evaluate, Deliver" width="800" />
 </p>
 
-Tired of _managing AI_ and just want to _build good software_? Open Sprint guides you across five phases of product development — SPEED: **Sketch**, **Plan**, **Execute**, **Evaluate**, and **Deliver** — to transform a high-level product idea into well-architected, working software with minimal manual intervention. The built-in AI orchestration layer manages a whole team of agents, from product visionaries that help you write PRDs, to coders and QA to build and test your software.
+Tired of _managing AI_ and just want to _build good software_? Lord of the Sprints guides you across five phases of product development — SPEED: **Sketch**, **Plan**, **Execute**, **Evaluate**, and **Deliver** — to transform a high-level product idea into well-architected, working software with minimal manual intervention. The built-in AI orchestration layer manages a whole fellowship of agents, from visionary product sages who help you write PRDs, to coders and QA to forge and test your software.
 
-## Why Open Sprint?
+Even the smallest developer can ship great software. But they shouldn't have to do it alone.
 
-Building software with AI today is **fragmented and unstructured**. Developers use AI coding assistants for individual tasks, but there is no cohesive system that manages the full journey from idea to deployed product. This leads to:
+## Why Lord of the Sprints?
+
+Building software with AI today is **fragmented and unstructured**. Developers use AI coding assistants for individual tasks, but there is no cohesive system that manages the full journey from idea to deployed product — like setting out for Mordor without a map, a fellowship, or a plan. This leads to:
 
 - **No architectural coherence** — AI-generated code lacks a unified vision because each prompt is handled in isolation
 - **Manual orchestration overhead** — users spend time managing prompts, context windows, and task sequencing instead of making product decisions
 - **No feedback loop** — there is no structured way to validate completed work and feed findings back into development
-- **Tooling headaches** - using advanced AI tools currently requires deep technical familiarity with terminal commands, preventing ordinary people from participating in their full power.
+- **Tooling headaches** — using advanced AI tools currently requires deep technical familiarity with terminal commands, preventing ordinary people from participating in their full power
 
-Open Sprint solves this with a Product-Driven web UI that maintains context across the entire lifecycle and automates the orchestration of agents. Humans focus on _what_ to build and _why_; AI handles _how_.
+Lord of the Sprints solves this with a Product-Driven web UI that maintains context across the entire lifecycle and automates the orchestration of agents. Humans focus on _what_ to build and _why_; the Fellowship handles _how_.
 
-_Open Sprint_: The speed of a full-out open sprint. Agile methodology sprints of quick iteration and user feedback. Open source software. And a nod to OpenAI for starting this crazy new era.
+> _"The board is set. The pieces are moving."_
 
 ### What about Gas Town?
 
-You've probably heard about [Gas Town](<[url](https://github.com/steveyegge/gastown)>), the original AI orchestrator.
+You've probably heard about [Gas Town](https://github.com/steveyegge/gastown), the original AI orchestrator.
 
-Open Sprint takes the concept of an AI orchestrator and levels it up: now you're not working in terminals giving text-only prompts and trying to keep track of agents, you're working in a web-first workflow that gives Jira a run for its money. Brainstorm your PRD alongside an agent in a Google Docs-like interface. Track project status and provide feedback (including wonderful web features like attaching screenshots and replying inline). Once you've opened your sprint, you'll never be able to stop!
+Lord of the Sprints takes the concept of an AI orchestrator and levels it up: now you're not working in terminals giving text-only prompts and trying to keep track of agents across the plains of Gorgoroth — you're working in a web-first workflow that gives Jira a run for its money. Brainstorm your PRD alongside an agent in a Google Docs-like interface. Track project status and provide feedback (including wonderful web features like attaching screenshots and replying inline). Once your fellowship sets out, the journey has only one end.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/toddmedema/OpenSprint.dev.git
-cd opensprint
+git clone https://github.com/toddmedema/lordofthesprints.git
+cd lordofthesprints
 npm install
 npm run dev
 ```
 
-Then open your browser to http://localhost:5173 and get building!
+Then open your browser to http://localhost:5173 and begin your quest!
 
 ### Integrations
 
-To run a team of AI agents, you'll need at least one existing agent subscription and API key. The orchestration layer is designed to work on top of any AI agent that can read prompts and return outputs, so it's BYO-AI!
+To assemble your fellowship of AI agents, you'll need at least one existing agent subscription and API key. The orchestration layer is designed to work on top of any AI agent that can read prompts and return outputs, so it's BYO-AI — bring your own wizard.
 
 We currently natively support Claude and Cursor APIs, as well as custom APIs via inputting your own CLI command that calls the agents. Please open an issue if you'd like native support for other AI providers!
 
-## Architecture
+## The SPEED Quest
 
 ```mermaid
 flowchart LR
-    A["🌙 Sketch"] -->|PRD| B["📋 Plan"]
+    A["✨ Sketch"] -->|PRD| B["📋 Plan"]
     B -->|Epics & Tasks| C["🔨 Execute"]
     C -->|Working Code| D["✅ Evaluate"]
     D -->|Feedback| B
+    D -->|Approved| E["🔥 Deliver"]
 
     style A fill:#3B82F6,color:#fff
     style B fill:#8B5CF6,color:#fff
     style C fill:#F59E0B,color:#fff
     style D fill:#10B981,color:#fff
+    style E fill:#EF4444,color:#fff
 ```
 
 | Phase        | What happens                                                                     |
@@ -70,28 +74,28 @@ flowchart LR
 | **Plan**     | AI decomposes the PRD into epics, tasks, and a dependency graph                  |
 | **Execute**  | AI agents autonomously execute tasks with two-agent code + review cycles         |
 | **Evaluate** | Submit feedback that AI categorizes and maps back to plan epics for iteration    |
-| **Deliver**  | Ship your code and deliver value!                                                |
+| **Deliver**  | Ship your code and deliver value to the free peoples of the world!               |
 
-### The Agent Team
+## The Fellowship
 
-Open Sprint orchestrates a team of nine specialized agents — each responsible for a distinct part of the SPEED lifecycle:
+Lord of the Sprints orchestrates a fellowship of nine specialized agents — each responsible for a distinct part of the SPEED quest. They have been chosen carefully, for each possesses a unique skill that the others do not.
 
-| Agent          | Fellowship Member                                                                          | Phase              | Description                                                                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Dreamer**    | <img src="docs/assets/agent-icons/dreamer.svg" width="24" height="24" alt="" /> Gandalf    | Sketch             | The wise conversationalist who refines your idea into a PRD, asking the hard questions and challenging assumptions before the journey begins.   |
-| **Planner**    | <img src="docs/assets/agent-icons/planner.svg" width="24" height="24" alt="" /> Aragorn    | Plan               | The brilliant strategist who decomposes a PRD into epics, tasks, and a dependency graph — knowing every milestone and danger on the road ahead. |
-| **Harmonizer** | <img src="docs/assets/agent-icons/harmonizer.svg" width="24" height="24" alt="" /> Frodo   | Execute / Evaluate | The steady keeper of the central mission, quietly ensuring the PRD stays true even as implementation forces difficult compromises.              |
-| **Analyst**    | <img src="docs/assets/agent-icons/analyst.svg" width="24" height="24" alt="" /> Legolas    | Evaluate           | With eyes that miss nothing, categorizes every piece of user feedback and maps it to the right epic before anyone else has processed it.        |
-| **Summarizer** | <img src="docs/assets/agent-icons/summarizer.svg" width="24" height="24" alt="" /> Samwise | Execute            | Ever-faithful and efficient, distills assembled context down to exactly what the Coder needs — nothing more, nothing less.                      |
-| **Auditor**    | <img src="docs/assets/agent-icons/auditor.svg" width="24" height="24" alt="" /> Gimli      | Re-execute         | Surveys what has _actually_ been built with unflinching honesty, then determines exactly — and only — what still needs doing.                   |
-| **Coder**      | <img src="docs/assets/agent-icons/coder.svg" width="24" height="24" alt="" /> Pippin       | Execute            | Full of energy and occasionally chaotic, dives into every task head-first and always ships working code with tests.                             |
-| **Reviewer**   | <img src="docs/assets/agent-icons/reviewer.svg" width="24" height="24" alt="" /> Boromir   | Execute            | Principled and demanding, validates every implementation against its acceptance criteria — approving only what truly serves the cause.          |
-| **Merger**     | <img src="docs/assets/agent-icons/merger.svg" width="24" height="24" alt="" /> Merry       | Execute            | Clever and unflappable, steps in when rebase conflicts block the road, resolves the mess with quiet competence, and keeps the journey moving.   |
+| Fellowship Member                                                                                                                                                                                                                                                                                                | Phase    | Description                                                                                                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/dreamer.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Gandalf</strong><span>Dreamer</span></span></span>       | Sketch   | The wise conversationalist who refines your idea into a PRD, asking the hard questions and challenging assumptions before the journey begins. _You shall not ship without a plan._  |
+| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/planner.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Aragorn</strong><span>Planner</span></span></span>       | Plan     | The brilliant strategist who decomposes a PRD into epics, tasks, and a dependency graph — knowing every milestone and danger on the road ahead.                                     |
+| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/harmonizer.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Frodo</strong><span>Harmonizer</span></span></span>   | All      | The steady keeper of the central mission, quietly ensuring the PRD stays true even as implementation forces difficult compromises. The Ringbearer of product vision.                |
+| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/analyst.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Legolas</strong><span>Analyst</span></span></span>       | Evaluate | With eyes that miss nothing, categorizes every piece of user feedback and maps it to the right epic before anyone else has processed it.                                            |
+| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/summarizer.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Samwise</strong><span>Summarizer</span></span></span> | Execute  | Ever-faithful and efficient, distills assembled context down to exactly what the Coder needs — nothing more, nothing less. _I can't carry the context for you, but I can carry it._ |
+| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/auditor.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Gimli</strong><span>Auditor</span></span></span>         | Execute  | Surveys what has _actually_ been built with unflinching honesty, then determines exactly — and only — what still needs doing.                                                       |
+| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/coder.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Pippin</strong><span>Coder</span></span></span>            | Execute  | Full of energy and occasionally chaotic, dives into every task head-first and always ships working code with tests.                                                                 |
+| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/reviewer.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Boromir</strong><span>Reviewer</span></span></span>     | Execute  | Principled and demanding, validates every implementation against its acceptance criteria — approving only what truly serves the cause.                                              |
+| <span style="display:inline-flex;align-items:center;gap:8px"><img src="packages/frontend/public/agent-icons/merger.svg" width="48" height="48" alt="" align="middle" /><span style="display:flex;flex-direction:column;align-items:flex-start"><strong>Merry</strong><span>Merger</span></span></span>           | Execute  | Clever and unflappable, steps in when rebase conflicts block the road, resolves the mess with quiet competence, and keeps the journey moving.                                       |
 
 ## Project Structure
 
 ```
-opensprint/
+lordofthesprints/
 ├── packages/
 │   ├── backend/    # Node.js + Express API server (TypeScript)
 │   ├── frontend/   # React + Vite application (TypeScript, Tailwind CSS)
@@ -130,16 +134,16 @@ All scripts can be run from the project root:
 
 ## Environment Variables
 
-| Variable                     | Default | Description                                                                                                                                                                         |
-| ---------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`          | —       | API key for Claude agent integration                                                                                                                                                |
-| `CURSOR_API_KEY`             | —       | API key for Cursor agent integration                                                                                                                                                |
-| `PORT`                       | `3100`  | Backend server port                                                                                                                                                                 |
-| `OPENSPRINT_PRESERVE_AGENTS` | unset   | When set to `1`, agent processes survive backend restarts. Automatically set in `npm run dev` so that `tsx watch` restarts don't kill running agents. Do **not** set in production. |
+| Variable                           | Default | Description                                                                                                                                                                         |
+| ---------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`                | —       | API key for Claude agent integration                                                                                                                                                |
+| `CURSOR_API_KEY`                   | —       | API key for Cursor agent integration                                                                                                                                                |
+| `PORT`                             | `3100`  | Backend server port                                                                                                                                                                 |
+| `LORDOFTHESPRINTS_PRESERVE_AGENTS` | unset   | When set to `1`, agent processes survive backend restarts. Automatically set in `npm run dev` so that `tsx watch` restarts don't kill running agents. Do **not** set in production. |
 
-## Developing on OpenSprint
+## Developing on Lord of the Sprints
 
-When using OpenSprint to develop _itself_, you should use two separate clones to avoid contention between the running server and the AI agents modifying code:
+When using Lord of the Sprints to develop _itself_, you should use two separate clones to avoid contention between the running server and the AI agents modifying code — much like keeping the One Ring away from the Eye of Sauron while still making use of its power:
 
 - **Control clone** — runs the backend/frontend server (`npm run dev`)
 - **Dev clone** — the target repo where the orchestrator and AI agents make changes
@@ -150,32 +154,32 @@ This prevents `tsx watch` from restarting the server when agents commit code, an
 
 ```bash
 # 1. Clone a second copy as the development target
-git clone <your-origin-url> ~/opensprint-dev
-cd ~/opensprint-dev && npm install
+git clone <your-origin-url> ~/lordofthesprints-dev
+cd ~/lordofthesprints-dev && npm install
 
 # 2. Copy project state from the control clone
-cp -r /path/to/control-clone/.opensprint ~/opensprint-dev/.opensprint
-cp /path/to/control-clone/.env ~/opensprint-dev/.env
+cp -r /path/to/control-clone/.lordofthesprints ~/lordofthesprints-dev/.lordofthesprints
+cp /path/to/control-clone/.env ~/lordofthesprints-dev/.env
 
 # 3. Update the project's repoPath (via API or direct edit)
 #    Option A — API (while server is running):
 curl -X PUT http://localhost:3100/api/v1/projects/<PROJECT_ID> \
   -H 'Content-Type: application/json' \
-  -d '{"repoPath": "/Users/you/opensprint-dev"}'
+  -d '{"repoPath": "/Users/you/lordofthesprints-dev"}'
 
-#    Option B — edit ~/.opensprint/projects.json directly
+#    Option B — edit ~/.lordofthesprints/projects.json directly
 ```
 
-### Daily workflow
+### Daily Workflow
 
 - Run `npm run dev` from the **control clone** only
 - The orchestrator creates git worktrees from the **dev clone** and runs agents there
-- Run `bd` commands from `~/opensprint-dev` (that's where `.beads/` lives)
+- Run `bd` commands from `~/lordofthesprints-dev` (that's where `.beads/` lives)
 - After agents push changes, `git pull` in the control clone to pick them up
 
 ## Contributing
 
-Contributions are welcome! Whether it's a bug report, feature request, or pull request — all input is appreciated.
+All members of the fellowship are welcome! Whether it's a bug report, feature request, or pull request — all input is appreciated. Even the smallest contribution can change the course of the future.
 
 1. **Fork** the repository
 2. **Create a branch** for your feature or fix: `git checkout -b my-feature`
@@ -189,7 +193,7 @@ This project uses [Beads](https://github.com/toddmedema/beads) (`bd`) for task a
 
 ### Reporting Bugs
 
-Open a [GitHub Issue](https://github.com/toddmedema/opensprint/issues) with:
+Open a [GitHub Issue](https://github.com/toddmedema/lordofthesprints/issues) with:
 
 - Steps to reproduce
 - Expected vs actual behavior
@@ -198,3 +202,7 @@ Open a [GitHub Issue](https://github.com/toddmedema/opensprint/issues) with:
 ## License
 
 This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) — you are free to use, modify, and distribute it, but derivative works must remain open source under the same license.
+
+---
+
+_"The greatest adventure is what lies ahead."_
