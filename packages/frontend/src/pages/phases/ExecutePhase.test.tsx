@@ -8,6 +8,7 @@ import { setSelectedTaskId, taskUpdated } from "../../store/slices/executeSlice"
 import projectReducer from "../../store/slices/projectSlice";
 import planReducer from "../../store/slices/planSlice";
 import executeReducer from "../../store/slices/executeSlice";
+import websocketReducer from "../../store/slices/websocketSlice";
 const mockGet = vi.fn().mockResolvedValue({});
 const mockMarkDone = vi.fn().mockResolvedValue(undefined);
 const mockUnblock = vi.fn().mockResolvedValue({ taskUnblocked: true });
@@ -28,6 +29,7 @@ vi.mock("../../api/client", () => ({
     },
     execute: {
       status: vi.fn().mockResolvedValue({}),
+      liveOutput: vi.fn().mockResolvedValue({ output: "" }),
     },
     agents: {
       active: (...args: unknown[]) => mockAgentsActive(...args),
@@ -67,15 +69,24 @@ function createStore(
     awaitingApproval: boolean;
     agentOutput: string[];
     taskDetailError: string | null;
-  }>
+  }>,
+  websocketOverrides?: Partial<{ connected: boolean }>
 ) {
   return configureStore({
     reducer: {
       project: projectReducer,
       plan: planReducer,
       execute: executeReducer,
+      websocket: websocketReducer,
     },
     preloadedState: {
+      websocket: {
+        connected: false,
+        hilRequest: null,
+        hilNotification: null,
+        deliverToast: null,
+        ...websocketOverrides,
+      },
       plan: {
         plans: [basePlan],
         dependencyGraph: null,
@@ -1418,10 +1429,14 @@ describe("ExecutePhase Redux integration", () => {
         assignee: null,
       },
     ];
-    const store = createStore(tasks, {
-      selectedTaskId: "epic-1.1",
-      agentOutput: ["Line 1\n", "Line 2\n", "Line 3\n"],
-    });
+    const store = createStore(
+      tasks,
+      {
+        selectedTaskId: "epic-1.1",
+        agentOutput: ["Line 1\n", "Line 2\n", "Line 3\n"],
+      },
+      { connected: true },
+    );
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
@@ -1436,6 +1451,32 @@ describe("ExecutePhase Redux integration", () => {
     expect(liveOutput).toHaveClass("overflow-y-auto");
     expect(liveOutput).toHaveTextContent("Line 2");
     expect(liveOutput).toHaveTextContent("Line 3");
+  });
+
+  it("shows connecting state and retry button when WebSocket is not connected", async () => {
+    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("live-output-connecting")).toBeInTheDocument();
+      expect(screen.getByText("Connecting to live output…")).toBeInTheDocument();
+      expect(screen.getByTestId("live-output-retry")).toBeInTheDocument();
+    });
   });
 
   it("task detail sidebar header shows only task title, not redundant Task label", async () => {

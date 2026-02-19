@@ -69,6 +69,27 @@ describe("Execute API", () => {
     });
   });
 
+  describe("GET /projects/:projectId/execute/tasks/:taskId/output", () => {
+    it("returns empty output when no task is running", async () => {
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/execute/tasks/task-123/output`,
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({ output: "" });
+    });
+
+    it("returns 404 for non-existent project", async () => {
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/nonexistent-id/execute/tasks/task-123/output`,
+      );
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBeDefined();
+      expect(res.body.error.code).toBe("PROJECT_NOT_FOUND");
+    });
+  });
+
   describe("POST /projects/:projectId/execute/nudge", () => {
     it("should accept nudge and return status", async () => {
       const res = await request(app)

@@ -6,6 +6,7 @@ import executeReducer, {
   fetchExecuteStatus,
   fetchTaskDetail,
   fetchArchivedSessions,
+  fetchLiveOutputBackfill,
   markTaskDone,
   unblockTask,
   setSelectedTaskId,
@@ -34,6 +35,7 @@ vi.mock("../../api/client", () => ({
     plans: { list: vi.fn() },
     execute: {
       status: vi.fn(),
+      liveOutput: vi.fn(),
     },
   },
 }));
@@ -93,6 +95,7 @@ describe("executeSlice", () => {
     vi.mocked(api.tasks.markDone).mockReset();
     vi.mocked(api.plans.list).mockReset();
     vi.mocked(api.execute.status).mockReset();
+    vi.mocked(api.execute.liveOutput).mockReset();
   });
 
   function createStore() {
@@ -173,6 +176,32 @@ describe("executeSlice", () => {
         })
       );
       expect(store.getState().execute.agentOutput).toEqual(["Creating file..."]);
+    });
+
+    it("fetchLiveOutputBackfill.fulfilled sets agentOutput when task matches selectedTaskId", async () => {
+      vi.mocked(api.execute.liveOutput).mockResolvedValue({
+        output: "Existing output from server\n",
+      });
+      const store = createStore();
+      store.dispatch(setSelectedTaskId("task-1"));
+      await store.dispatch(
+        fetchLiveOutputBackfill({ projectId: "proj-1", taskId: "task-1" })
+      );
+      expect(store.getState().execute.agentOutput).toEqual([
+        "Existing output from server\n",
+      ]);
+    });
+
+    it("fetchLiveOutputBackfill.fulfilled does not set agentOutput when task differs from selectedTaskId", async () => {
+      vi.mocked(api.execute.liveOutput).mockResolvedValue({
+        output: "Output for task-2\n",
+      });
+      const store = createStore();
+      store.dispatch(setSelectedTaskId("task-1"));
+      await store.dispatch(
+        fetchLiveOutputBackfill({ projectId: "proj-1", taskId: "task-2" })
+      );
+      expect(store.getState().execute.agentOutput).toEqual([]);
     });
 
     it("setOrchestratorRunning sets orchestrator state", () => {
