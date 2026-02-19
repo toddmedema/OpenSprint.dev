@@ -157,4 +157,73 @@ describe("EvalPhase feedback form", () => {
     expect(select.value).toBe("");
     expect(screen.getByPlaceholderText(/Describe a bug/)).toHaveValue("");
   });
+
+  it("omits priority from submission when none selected", async () => {
+    const { api } = await import("../../api/client");
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <EvalPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Describe a bug/)).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText(/Describe a bug/), "Feedback without priority");
+    await user.click(screen.getByRole("button", { name: /Submit Feedback/i }));
+
+    await waitFor(() => {
+      expect(api.feedback.submit).toHaveBeenCalledWith(
+        "proj-1",
+        "Feedback without priority",
+        undefined,
+        undefined,
+        undefined
+      );
+    });
+  });
+
+  it("disables priority dropdown while submitting", async () => {
+    const { api } = await import("../../api/client");
+    let resolveSubmit: (value: unknown) => void;
+    vi.mocked(api.feedback.submit).mockImplementation(
+      () => new Promise((r) => { resolveSubmit = r; })
+    );
+
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <EvalPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Describe a bug/)).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText(/Describe a bug/), "Test feedback");
+    await user.click(screen.getByRole("button", { name: /Submit Feedback/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("feedback-priority-select")).toBeDisabled();
+    });
+
+    resolveSubmit!({
+      id: "fb-new",
+      text: "Test feedback",
+      category: "bug",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("feedback-priority-select")).not.toBeDisabled();
+    });
+  });
 });
