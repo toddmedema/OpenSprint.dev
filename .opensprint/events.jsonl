@@ -330,3 +330,13 @@
 {"timestamp":"2026-02-20T18:24:13.057Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-blq2","event":"agent.spawned","data":{"phase":"review","model":"composer-1.5","attempt":1}}
 {"timestamp":"2026-02-20T18:27:21.805Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"transition.complete","data":{"from":"review","attempt":1}}
 {"timestamp":"2026-02-20T18:27:21.805Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-blq2","event":"task.completed","data":{"attempt":1}}
+{"timestamp":"2026-02-20T18:27:26.139Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"push.succeeded"}
+{"timestamp":"2026-02-20T18:27:34.122Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sv74","event":"transition.start_task","data":{"from":"idle","attempt":1}}
+{"timestamp":"2026-02-20T18:27:35.329Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sv74","event":"agent.spawned","data":{"phase":"coding","model":"composer-1.5","attempt":1}}
+{"timestamp":"2026-02-20T18:30:56.251Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sv74","event":"crash_recovery.started","data":{"hasAssignment":true,"phase":"coding"}}
+{"timestamp":"2026-02-20T18:30:59.459Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sv74","event":"crash_recovery.started","data":{"hasAssignment":true,"phase":"coding"}}
+{"timestamp":"2026-02-20T18:31:02.077Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sv74","event":"crash_recovery.started","data":{"hasAssignment":true,"phase":"coding"}}
+{"timestamp":"2026-02-20T18:31:11.297Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sv74","event":"crash_recovery.started","data":{"hasAssignment":true,"phase":"coding"}}
+{"timestamp":"2026-02-20T18:35:29.105Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sv74","event":"agent.spawned","data":{"phase":"review","model":"composer-1.5","attempt":1}}
+{"timestamp":"2026-02-20T18:41:38.703Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"transition.complete","data":{"from":"review","attempt":1}}
+{"timestamp":"2026-02-20T18:41:38.704Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sv74","event":"task.completed","data":{"attempt":1}}
