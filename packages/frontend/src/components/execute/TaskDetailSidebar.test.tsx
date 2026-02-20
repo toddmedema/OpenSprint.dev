@@ -132,6 +132,67 @@ describe("TaskDetailSidebar", () => {
     expect(screen.getByTestId("task-detail-title")).toHaveTextContent("Task A");
   });
 
+  it("shows task title immediately from cached list data while detail loads (feedback t586o4)", () => {
+    const props = createMinimalProps({
+      taskDetailLoading: true,
+      taskDetail: null,
+      selectedTaskData: {
+        id: "epic-1.1",
+        title: "Cached Task Title",
+        epicId: "epic-1",
+        kanbanColumn: "ready" as const,
+        priority: 1,
+        assignee: "agent@test",
+        type: "task" as const,
+        status: "open" as const,
+        labels: [],
+        dependencies: [],
+        description: "",
+        createdAt: "",
+        updatedAt: "",
+      },
+    });
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>,
+    );
+
+    expect(screen.getByTestId("task-detail-title")).toHaveTextContent("Cached Task Title");
+    expect(screen.getByTestId("task-detail-loading")).toBeInTheDocument();
+  });
+
+  it("keeps task title visible when detail fetch fails (error shown below name)", () => {
+    const props = createMinimalProps({
+      taskDetailError: "Failed to load task details",
+      taskDetail: null,
+      taskDetailLoading: false,
+      selectedTaskData: {
+        id: "epic-1.1",
+        title: "Task With Error",
+        epicId: "epic-1",
+        kanbanColumn: "ready" as const,
+        priority: 1,
+        assignee: null,
+        type: "task" as const,
+        status: "open" as const,
+        labels: [],
+        dependencies: [],
+        description: "",
+        createdAt: "",
+        updatedAt: "",
+      },
+    });
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>,
+    );
+
+    expect(screen.getByTestId("task-detail-title")).toHaveTextContent("Task With Error");
+    expect(screen.getByTestId("task-detail-error")).toHaveTextContent("Failed to load task details");
+  });
+
   it("renders Mark done button when task is not done and not blocked", () => {
     const props = createMinimalProps();
     render(
