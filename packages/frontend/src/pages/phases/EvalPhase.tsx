@@ -32,6 +32,7 @@ const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
 
 export const FEEDBACK_COLLAPSED_KEY_PREFIX = "opensprint-eval-feedback-collapsed";
+export const EVALUATE_FEEDBACK_FILTER_KEY = "opensprint.evaluateFeedbackFilter";
 
 function getFeedbackCollapsedKey(projectId: string): string {
   return `${FEEDBACK_COLLAPSED_KEY_PREFIX}-${projectId}`;
@@ -77,13 +78,43 @@ interface EvalPhaseProps {
   onNavigateToBuildTask?: (taskId: string) => void;
 }
 
-export type FeedbackStatusFilter = "all" | "pending" | "resolved";
+export type FeedbackStatusFilter = "all" | "pending" | "mapped" | "resolved";
 
 function matchesStatusFilter(item: FeedbackItem, filter: FeedbackStatusFilter): boolean {
   if (filter === "all") return true;
-  if (filter === "pending") return item.status === "pending" || item.status === "mapped";
+  if (filter === "pending") return item.status === "pending";
+  if (filter === "mapped") return item.status === "mapped";
   if (filter === "resolved") return item.status === "resolved";
   return true;
+}
+
+function countByStatus(feedback: FeedbackItem[], filter: FeedbackStatusFilter): number {
+  return feedback.filter((item) => matchesStatusFilter(item, filter)).length;
+}
+
+const VALID_FILTER_VALUES: FeedbackStatusFilter[] = ["all", "pending", "mapped", "resolved"];
+
+function loadFeedbackStatusFilter(): FeedbackStatusFilter {
+  if (typeof window === "undefined") return "pending";
+  try {
+    const stored = localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY);
+    if (!stored) return "pending";
+    if (VALID_FILTER_VALUES.includes(stored as FeedbackStatusFilter)) {
+      return stored as FeedbackStatusFilter;
+    }
+  } catch {
+    // ignore
+  }
+  return "pending";
+}
+
+function saveFeedbackStatusFilter(value: FeedbackStatusFilter): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, value);
+  } catch {
+    // ignore
+  }
 }
 
 const categoryColors: Record<string, string> = {
@@ -487,7 +518,9 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() =>
     loadFeedbackCollapsedIds(projectId)
   );
-  const [statusFilter, setStatusFilter] = useState<FeedbackStatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<FeedbackStatusFilter>(() =>
+    loadFeedbackStatusFilter()
+  );
 
   const addImagesFromFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files).filter(isImageFile);
@@ -729,20 +762,23 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
 
           {/* Feedback Feed */}
           <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-            <h3 className="text-sm font-semibold text-theme-text">
-              Feedback History ({filteredFeedback.length})
-            </h3>
+            <h3 className="text-sm font-semibold text-theme-text">Feedback History</h3>
             {feedback.length > 0 && (
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as FeedbackStatusFilter)}
+                onChange={(e) => {
+                  const value = e.target.value as FeedbackStatusFilter;
+                  setStatusFilter(value);
+                  saveFeedbackStatusFilter(value);
+                }}
                 className="input text-sm py-1.5 px-2.5 w-auto min-w-[7rem] bg-theme-input-bg text-theme-input-text ring-theme-ring"
                 aria-label="Filter feedback by status"
                 data-testid="feedback-status-filter"
               >
-                <option value="all">All</option>
-                <option value="pending">Pending</option>
-                <option value="resolved">Resolved</option>
+                <option value="all">All ({feedback.length})</option>
+                <option value="pending">Pending ({countByStatus(feedback, "pending")})</option>
+                <option value="mapped">Mapped ({countByStatus(feedback, "mapped")})</option>
+                <option value="resolved">Resolved ({countByStatus(feedback, "resolved")})</option>
               </select>
             )}
           </div>
@@ -757,9 +793,11 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
             <div className="text-center py-10 text-theme-muted text-sm">
               {statusFilter === "pending"
                 ? "No pending feedback yet."
-                : statusFilter === "resolved"
-                  ? "No resolved feedback yet."
-                  : "No feedback matches the current filter."}
+                : statusFilter === "mapped"
+                  ? "No mapped feedback yet."
+                  : statusFilter === "resolved"
+                    ? "No resolved feedback yet."
+                    : "No feedback matches the current filter."}
             </div>
           ) : (
             <div className="space-y-3">

@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
-import { EvalPhase } from "./EvalPhase";
+import { EvalPhase, EVALUATE_FEEDBACK_FILTER_KEY } from "./EvalPhase";
 import projectReducer from "../../store/slices/projectSlice";
 import websocketReducer from "../../store/slices/websocketSlice";
 import sketchReducer from "../../store/slices/sketchSlice";
@@ -12,6 +12,7 @@ import executeReducer from "../../store/slices/executeSlice";
 import evalReducer from "../../store/slices/evalSlice";
 import deliverReducer from "../../store/slices/deliverSlice";
 import notificationReducer from "../../store/slices/notificationSlice";
+import type { FeedbackItem } from "@opensprint/shared";
 
 vi.mock("../../api/client", () => ({
   api: {
@@ -30,7 +31,29 @@ vi.mock("../../api/client", () => ({
   },
 }));
 
-function createStore() {
+function createStore(overrides?: { evalFeedback?: FeedbackItem[] }) {
+  const preloadedState: Record<string, unknown> = {
+    project: {
+      data: {
+        id: "proj-1",
+        name: "Test Project",
+        repoPath: "/tmp/test",
+        currentPhase: "eval",
+        createdAt: "",
+        updatedAt: "",
+      },
+      loading: false,
+      error: null,
+    },
+  };
+  if (overrides?.evalFeedback) {
+    preloadedState.eval = {
+      feedback: overrides.evalFeedback,
+      loading: false,
+      submitting: false,
+      error: null,
+    };
+  }
   return configureStore({
     reducer: {
       project: projectReducer,
@@ -42,22 +65,18 @@ function createStore() {
       deliver: deliverReducer,
       notification: notificationReducer,
     },
-    preloadedState: {
-      project: {
-        data: {
-          id: "proj-1",
-          name: "Test Project",
-          repoPath: "/tmp/test",
-          currentPhase: "eval",
-          createdAt: "",
-          updatedAt: "",
-        },
-        loading: false,
-        error: null,
-      },
-    },
+    preloadedState,
   });
 }
+
+const mockFeedbackItems: FeedbackItem[] = [
+  { id: "fb-1", text: "Bug 1", category: "bug", mappedPlanId: null, createdTaskIds: [], status: "pending", createdAt: "2024-01-01T00:00:01Z" },
+  { id: "fb-2", text: "Bug 2", category: "bug", mappedPlanId: null, createdTaskIds: [], status: "pending", createdAt: "2024-01-01T00:00:02Z" },
+  { id: "fb-3", text: "Bug 3", category: "bug", mappedPlanId: null, createdTaskIds: [], status: "mapped", createdAt: "2024-01-01T00:00:03Z" },
+  { id: "fb-4", text: "Bug 4", category: "bug", mappedPlanId: null, createdTaskIds: [], status: "mapped", createdAt: "2024-01-01T00:00:04Z" },
+  { id: "fb-5", text: "Bug 5", category: "bug", mappedPlanId: null, createdTaskIds: [], status: "mapped", createdAt: "2024-01-01T00:00:05Z" },
+  { id: "fb-6", text: "Bug 6", category: "bug", mappedPlanId: null, createdTaskIds: [], status: "resolved", createdAt: "2024-01-01T00:00:06Z" },
+];
 
 describe("EvalPhase feedback form", () => {
   beforeEach(() => {
@@ -369,6 +388,124 @@ describe("EvalPhase feedback form", () => {
       await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument(), {
         timeout: 200,
       });
+    });
+  });
+
+  describe("feedback status filter", () => {
+    beforeEach(() => {
+      localStorage.removeItem(EVALUATE_FEEDBACK_FILTER_KEY);
+    });
+
+    it("defaults to Pending when no localStorage key exists", async () => {
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+      });
+
+      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
+      expect(filterSelect.value).toBe("pending");
+    });
+
+    it("title does not display a count", async () => {
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole("heading", { name: "Feedback History" })).toBeInTheDocument();
+      });
+
+      const heading = screen.getByRole("heading", { name: "Feedback History" });
+      expect(heading.textContent).toBe("Feedback History");
+      expect(heading.textContent).not.toMatch(/\(\d+\)/);
+    });
+
+    it("each dropdown option displays its count", async () => {
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole("option", { name: "All (6)" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "Pending (2)" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "Mapped (3)" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "Resolved (1)" })).toBeInTheDocument();
+    });
+
+    it("writes filter selection to localStorage on change", async () => {
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const user = userEvent.setup();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+      });
+
+      expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBeNull();
+
+      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "resolved");
+      expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("resolved");
+
+      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "mapped");
+      expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("mapped");
+
+      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "all");
+      expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("all");
+    });
+
+    it("restores previously selected filter from localStorage on mount", async () => {
+      localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "mapped");
+
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+      });
+
+      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
+      expect(filterSelect.value).toBe("mapped");
+    });
+
+    it("falls back to Pending when localStorage has invalid value", async () => {
+      localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "invalid");
+
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+      });
+
+      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
+      expect(filterSelect.value).toBe("pending");
     });
   });
 });
