@@ -152,23 +152,29 @@ export function ProjectSetup() {
       <div className="max-w-2xl mx-auto px-6 py-10">
         <h1 className="text-2xl font-bold text-theme-text mb-8">Create New Project</h1>
 
-        <div className="flex items-center gap-2 mb-8">
-          {STEPS.map((s, i) => (
-            <div key={s.key} className="flex items-center gap-2">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  i <= currentStepIndex ? "bg-brand-600 text-white" : "bg-theme-surface-muted text-theme-muted"
-                }`}
-              >
-                {i + 1}
-              </div>
-              <span className={`text-sm ${i <= currentStepIndex ? "text-theme-text" : "text-theme-muted"}`}>{s.label}</span>
-              {i < STEPS.length - 1 && (
-                <div className={`w-8 h-0.5 ${i < currentStepIndex ? "bg-brand-600" : "bg-theme-border"}`} />
-              )}
-            </div>
-          ))}
-        </div>
+        <nav aria-label="Setup wizard steps" className="overflow-x-auto mb-8">
+          <ol className="flex items-center gap-2 min-w-0">
+            {STEPS.map((s, i) => (
+              <li key={s.key} className="flex items-center gap-2 shrink-0">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium shrink-0 ${
+                    i <= currentStepIndex ? "bg-brand-600 text-white" : "bg-theme-surface-muted text-theme-muted"
+                  }`}
+                >
+                  {i + 1}
+                </div>
+                <span
+                  className={`text-sm whitespace-nowrap ${i <= currentStepIndex ? "text-theme-text" : "text-theme-muted"}`}
+                >
+                  {s.label}
+                </span>
+                {i < STEPS.length - 1 && (
+                  <div className={`w-8 h-0.5 shrink-0 ${i < currentStepIndex ? "bg-brand-600" : "bg-theme-border"}`} />
+                )}
+              </li>
+            ))}
+          </ol>
+        </nav>
 
         <div className="card p-6">
           {step === "basics" && (
