@@ -2,6 +2,9 @@
  * Serialized git commit queue (PRD §5.9).
  * Async FIFO queue with single worker for all main-branch git operations.
  * Prevents .git/index.lock contention when multiple agents trigger commits.
+ *
+ * Conflict-aware: when the repo has unmerged files, beads/PRD exports are
+ * written and staged but the commit is deferred until the repo is clean.
  */
 
 import { exec } from "child_process";
@@ -10,6 +13,16 @@ import { BeadsService } from "./beads.service.js";
 import { BranchManager } from "./branch-manager.js";
 
 const execAsync = promisify(exec);
+
+/** Thrown when a worktree_merge job cannot proceed due to existing unmerged files. */
+export class RepoConflictError extends Error {
+  constructor(public readonly unmergedFiles: string[]) {
+    super(
+      `Cannot proceed: repo has ${unmergedFiles.length} unmerged file(s): ${unmergedFiles.join(", ")}`
+    );
+    this.name = "RepoConflictError";
+  }
+}
 
 /** Job types for main-branch git operations.
  * Commit message patterns per PRD §5.9:
@@ -48,11 +61,14 @@ export interface GitCommitQueueService {
   enqueueAndWait(job: GitCommitJob): Promise<void>;
   /** Wait for all queued jobs to complete (for tests). */
   drain(): Promise<void>;
+  /** Flush any deferred commits after conflict resolution. Safe to call at any time. */
+  retryPendingCommits(repoPath: string): Promise<void>;
 }
 
 interface QueuedItem {
   job: GitCommitJob;
   resolve?: () => void;
+  reject?: (err: Error) => void;
 }
 
 class GitCommitQueueImpl implements GitCommitQueueService {
@@ -61,6 +77,99 @@ class GitCommitQueueImpl implements GitCommitQueueService {
   private beads = new BeadsService();
   private branchManager = new BranchManager();
   private drainResolvers: Array<() => void> = [];
+
+  /**
+   * Files staged but not yet committed, keyed by repoPath.
+   * Values are deduplicated file paths (e.g. ".beads/issues.jsonl").
+   */
+  private pendingFiles = new Map<string, Set<string>>();
+
+  // ─── Pre-flight checks ───
+
+  private async hasUnmergedFiles(repoPath: string): Promise<string[]> {
+    try {
+      const { stdout } = await execAsync("git diff --name-only --diff-filter=U", {
+        cwd: repoPath,
+        timeout: 10_000,
+      });
+      return stdout.trim().split("\n").filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  // ─── Deferred commit tracking ───
+
+  private trackPendingFile(repoPath: string, filePath: string): void {
+    let files = this.pendingFiles.get(repoPath);
+    if (!files) {
+      files = new Set();
+      this.pendingFiles.set(repoPath, files);
+    }
+    files.add(filePath);
+  }
+
+  /**
+   * Stage files and commit. Returns true if a commit was created, false if
+   * there was nothing to commit (file unchanged since last commit).
+   * Throws on real git errors.
+   */
+  private async addAndCommit(repoPath: string, files: string[], message: string): Promise<boolean> {
+    const addCmd = files.map((f) => `git add ${f}`).join(" && ");
+    const escaped = message.replace(/"/g, '\\"');
+    try {
+      await execAsync(`${addCmd} && git commit -m "${escaped}"`, {
+        cwd: repoPath,
+        timeout: 30_000,
+      });
+      return true;
+    } catch (err: unknown) {
+      const e = err as { stdout?: string; stderr?: string };
+      const output = (e.stdout || "") + (e.stderr || "");
+      if (output.includes("nothing to commit") || output.includes("nothing added to commit")) {
+        return false;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Commit any previously deferred files. Called when the repo is clean
+   * (no unmerged files) before executing the next job.
+   */
+  private async flushPendingCommits(repoPath: string): Promise<void> {
+    const files = this.pendingFiles.get(repoPath);
+    if (!files || files.size === 0) return;
+
+    const unmerged = await this.hasUnmergedFiles(repoPath);
+    if (unmerged.length > 0) {
+      console.warn(
+        `[git-commit-queue] Cannot flush pending commits — ${unmerged.length} unmerged file(s) remain`
+      );
+      return;
+    }
+
+    const fileList = [...files];
+    const msg = `deferred commit: ${fileList.join(", ")}`;
+
+    try {
+      const committed = await this.addAndCommit(repoPath, fileList, msg);
+      if (committed) {
+        console.log(
+          `[git-commit-queue] Flushed ${fileList.length} deferred file(s): ${fileList.join(", ")}`
+        );
+      } else {
+        console.log(
+          `[git-commit-queue] Deferred files already committed (conflict resolution included them)`
+        );
+      }
+      this.pendingFiles.delete(repoPath);
+    } catch (err) {
+      console.warn("[git-commit-queue] Flush of deferred commits failed:", err);
+    }
+  }
+
+  // ─── Job execution ───
 
   private async processNext(): Promise<void> {
     if (this.queue.length === 0) {
@@ -72,20 +181,32 @@ class GitCommitQueueImpl implements GitCommitQueueService {
 
     const item = this.queue.shift()!;
     const job = item.job;
-    const maxRetries = 2; // PRD: retry once; if fails again, log and proceed
+    const maxRetries = 2;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        await this.executeJob(job);
+        const unmerged = await this.hasUnmergedFiles(job.repoPath);
+
+        if (unmerged.length > 0) {
+          await this.executeDeferredJob(job, unmerged);
+        } else {
+          await this.flushPendingCommits(job.repoPath);
+          await this.executeJob(job);
+        }
+
         item.resolve?.();
         break;
       } catch (err) {
         console.warn(`[git-commit-queue] Job failed (attempt ${attempt + 1}/${maxRetries}):`, err);
         if (attempt === maxRetries - 1) {
-          console.error(
-            `[git-commit-queue] Job failed after ${maxRetries} attempts, proceeding to next:`,
-            job
-          );
+          if (err instanceof RepoConflictError) {
+            item.reject?.(err);
+          } else {
+            console.error(
+              `[git-commit-queue] Job failed after ${maxRetries} attempts, proceeding to next:`,
+              job
+            );
+          }
           item.resolve?.();
         }
       }
@@ -94,17 +215,16 @@ class GitCommitQueueImpl implements GitCommitQueueService {
     setImmediate(() => this.processNext());
   }
 
+  /**
+   * Execute a job normally (repo has no conflicts).
+   */
   private async executeJob(job: GitCommitJob): Promise<void> {
     const { repoPath } = job;
 
     switch (job.type) {
       case "beads_export": {
         await this.beads.export(repoPath, ".beads/issues.jsonl");
-        const msg = `beads: ${job.summary}`.replace(/"/g, '\\"');
-        await execAsync(`git add .beads/issues.jsonl && git commit -m "${msg}"`, {
-          cwd: repoPath,
-          timeout: 30000,
-        });
+        await this.addAndCommit(repoPath, [".beads/issues.jsonl"], `beads: ${job.summary}`);
         break;
       }
       case "prd_update": {
@@ -116,11 +236,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
               : job.planId
                 ? `prd: updated after Plan ${job.planId} built`
                 : "prd: updated";
-        const escaped = msg.replace(/"/g, '\\"');
-        await execAsync(`git add .opensprint/prd.json && git commit -m "${escaped}"`, {
-          cwd: repoPath,
-          timeout: 30000,
-        });
+        await this.addAndCommit(repoPath, [".opensprint/prd.json"], msg);
         break;
       }
       case "worktree_merge": {
@@ -132,6 +248,46 @@ class GitCommitQueueImpl implements GitCommitQueueService {
     }
   }
 
+  /**
+   * Handle a job when the repo has unmerged files.
+   * beads/PRD: write + stage the file but skip commit (deferred).
+   * worktree_merge: cannot proceed — throw RepoConflictError.
+   */
+  private async executeDeferredJob(job: GitCommitJob, unmerged: string[]): Promise<void> {
+    const { repoPath } = job;
+
+    switch (job.type) {
+      case "beads_export": {
+        await this.beads.export(repoPath, ".beads/issues.jsonl");
+        await execAsync("git add .beads/issues.jsonl", {
+          cwd: repoPath,
+          timeout: 10_000,
+        });
+        this.trackPendingFile(repoPath, ".beads/issues.jsonl");
+        console.warn(
+          `[git-commit-queue] Deferred beads commit (${unmerged.length} unmerged file(s)); staged .beads/issues.jsonl`
+        );
+        break;
+      }
+      case "prd_update": {
+        await execAsync("git add .opensprint/prd.json", {
+          cwd: repoPath,
+          timeout: 10_000,
+        });
+        this.trackPendingFile(repoPath, ".opensprint/prd.json");
+        console.warn(
+          `[git-commit-queue] Deferred PRD commit (${unmerged.length} unmerged file(s)); staged .opensprint/prd.json`
+        );
+        break;
+      }
+      case "worktree_merge": {
+        throw new RepoConflictError(unmerged);
+      }
+    }
+  }
+
+  // ─── Public API ───
+
   async enqueue(job: GitCommitJob): Promise<void> {
     this.queue.push({ job });
     if (!this.processing) {
@@ -141,8 +297,8 @@ class GitCommitQueueImpl implements GitCommitQueueService {
   }
 
   async enqueueAndWait(job: GitCommitJob): Promise<void> {
-    return new Promise<void>((resolve) => {
-      this.queue.push({ job, resolve });
+    return new Promise<void>((resolve, reject) => {
+      this.queue.push({ job, resolve, reject });
       if (!this.processing) {
         this.processing = true;
         setImmediate(() => this.processNext());
@@ -155,6 +311,10 @@ class GitCommitQueueImpl implements GitCommitQueueService {
     return new Promise<void>((resolve) => {
       this.drainResolvers.push(resolve);
     });
+  }
+
+  async retryPendingCommits(repoPath: string): Promise<void> {
+    await this.flushPendingCommits(repoPath);
   }
 }
 

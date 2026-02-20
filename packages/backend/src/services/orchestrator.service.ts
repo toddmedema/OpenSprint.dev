@@ -1230,6 +1230,7 @@ export class OrchestratorService {
           try {
             await this.branchManager.pushMainToOrigin(repoPath);
             console.log("[orchestrator] Direct push succeeded after rebase error");
+            await gitCommitQueue.retryPendingCommits(repoPath);
             return;
           } catch (pushErr) {
             console.warn("[orchestrator] Direct push after rebase error failed:", pushErr);
@@ -1242,6 +1243,7 @@ export class OrchestratorService {
           await this.branchManager.rebaseContinue(repoPath);
           await this.branchManager.pushMainToOrigin(repoPath);
           console.log("[orchestrator] Auto-resolved rebase continued, push succeeded");
+          await gitCommitQueue.retryPendingCommits(repoPath);
           return;
         } catch (contErr) {
           console.warn(
@@ -1260,6 +1262,7 @@ export class OrchestratorService {
         if (resolved) {
           await this.branchManager.pushMainToOrigin(repoPath);
           console.log("[orchestrator] Merger agent resolved conflicts, push succeeded");
+          await gitCommitQueue.retryPendingCommits(repoPath);
         } else {
           console.warn("[orchestrator] Merger agent failed to resolve conflicts, aborting rebase");
           await this.branchManager.rebaseAbort(repoPath);
