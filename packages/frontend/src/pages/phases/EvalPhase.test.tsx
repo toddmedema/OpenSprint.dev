@@ -429,7 +429,7 @@ describe("EvalPhase feedback form", () => {
       expect(heading.textContent).not.toMatch(/\(\d+\)/);
     });
 
-    it("each dropdown option displays its count (Pending = pending+mapped, Resolved)", async () => {
+    it("each dropdown option displays its count (All = total, Pending = pending+mapped, Resolved)", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       render(
         <Provider store={store}>
@@ -441,8 +441,26 @@ describe("EvalPhase feedback form", () => {
         expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
       });
 
+      expect(screen.getByRole("option", { name: "All (6)" })).toBeInTheDocument();
       expect(screen.getByRole("option", { name: "Pending (5)" })).toBeInTheDocument();
       expect(screen.getByRole("option", { name: "Resolved (1)" })).toBeInTheDocument();
+    });
+
+    it("All option appears first in dropdown above Pending and Resolved", async () => {
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+      });
+
+      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
+      const options = Array.from(filterSelect.options).map((o) => o.value);
+      expect(options).toEqual(["all", "pending", "resolved"]);
     });
 
     it("writes filter selection to localStorage on change", async () => {
@@ -459,6 +477,9 @@ describe("EvalPhase feedback form", () => {
       });
 
       expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBeNull();
+
+      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "all");
+      expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("all");
 
       await user.selectOptions(screen.getByTestId("feedback-status-filter"), "resolved");
       expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("resolved");
@@ -483,6 +504,24 @@ describe("EvalPhase feedback form", () => {
 
       const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
       expect(filterSelect.value).toBe("resolved");
+    });
+
+    it("restores 'all' from localStorage when previously selected", async () => {
+      localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "all");
+
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+      });
+
+      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
+      expect(filterSelect.value).toBe("all");
     });
 
     it("treats legacy localStorage 'mapped' as Pending", async () => {
@@ -560,6 +599,27 @@ describe("EvalPhase feedback form", () => {
       expect(screen.getByText("Bug 6")).toBeInTheDocument();
       expect(screen.queryByText("Bug 1")).not.toBeInTheDocument();
       expect(screen.queryByText("Bug 3")).not.toBeInTheDocument();
+    });
+
+    it("All filter shows feedback of every status", async () => {
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const user = userEvent.setup();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+
+      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "all");
+
+      expect(screen.getByText("Bug 1")).toBeInTheDocument();
+      expect(screen.getByText("Bug 2")).toBeInTheDocument();
+      expect(screen.getByText("Bug 3")).toBeInTheDocument();
+      expect(screen.getByText("Bug 4")).toBeInTheDocument();
+      expect(screen.getByText("Bug 5")).toBeInTheDocument();
+      expect(screen.getByText("Bug 6")).toBeInTheDocument();
     });
   });
 });
