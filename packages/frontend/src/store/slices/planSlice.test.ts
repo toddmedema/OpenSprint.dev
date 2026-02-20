@@ -4,6 +4,7 @@ import planReducer, {
   fetchPlans,
   fetchPlanStatus,
   decomposePlans,
+  generatePlan,
   executePlan,
   reExecutePlan,
   fetchPlanChat,
@@ -26,6 +27,7 @@ vi.mock("../../api/client", () => ({
     plans: {
       list: vi.fn(),
       decompose: vi.fn(),
+      generate: vi.fn(),
       execute: vi.fn(),
       reExecute: vi.fn(),
       archive: vi.fn(),
@@ -68,6 +70,7 @@ describe("planSlice", () => {
   beforeEach(() => {
     vi.mocked(api.plans.list).mockReset();
     vi.mocked(api.plans.decompose).mockReset();
+    vi.mocked(api.plans.generate).mockReset();
     vi.mocked(api.plans.execute).mockReset();
     vi.mocked(api.plans.reExecute).mockReset();
     vi.mocked(api.plans.archive).mockReset();
@@ -315,6 +318,81 @@ describe("planSlice", () => {
       await store.dispatch(decomposePlans("proj-1"));
 
       expect(store.getState().plan.error).toBe("Failed to decompose PRD");
+    });
+  });
+
+  describe("generatePlan thunk", () => {
+    const generatedPlan: Plan = {
+      metadata: {
+        planId: "dark-mode",
+        beadEpicId: "epic-2",
+        gateTaskId: "gate-2",
+        shippedAt: null,
+        complexity: "medium",
+      },
+      content: "# Dark Mode\n\nAdd dark/light toggle.",
+      status: "planning",
+      taskCount: 2,
+      doneTaskCount: 0,
+      dependencyCount: 0,
+    };
+
+    it("sets generating true on pending and clears error", async () => {
+      let resolveApi: (v: Plan) => void;
+      const apiPromise = new Promise<Plan>((r) => {
+        resolveApi = r;
+      });
+      vi.mocked(api.plans.generate).mockReturnValue(apiPromise as never);
+      const store = createStore();
+      const dispatchPromise = store.dispatch(
+        generatePlan({ projectId: "proj-1", description: "Add dark mode" })
+      );
+
+      expect(store.getState().plan.generating).toBe(true);
+      expect(store.getState().plan.error).toBeNull();
+
+      resolveApi!(generatedPlan);
+      await dispatchPromise;
+    });
+
+    it("appends generated plan to plans array on fulfilled", async () => {
+      vi.mocked(api.plans.generate).mockResolvedValue(generatedPlan);
+      const store = createStore();
+      store.dispatch(setPlansAndGraph({ plans: [mockPlan], dependencyGraph: mockGraph }));
+
+      await store.dispatch(
+        generatePlan({ projectId: "proj-1", description: "Add dark mode" })
+      );
+
+      const state = store.getState().plan;
+      expect(state.generating).toBe(false);
+      expect(state.plans).toHaveLength(2);
+      expect(state.plans[1].metadata.planId).toBe("dark-mode");
+      expect(api.plans.generate).toHaveBeenCalledWith("proj-1", {
+        description: "Add dark mode",
+      });
+    });
+
+    it("sets error and clears generating on rejected", async () => {
+      vi.mocked(api.plans.generate).mockRejectedValue(new Error("Agent unavailable"));
+      const store = createStore();
+      await store.dispatch(
+        generatePlan({ projectId: "proj-1", description: "Add dark mode" })
+      );
+
+      const state = store.getState().plan;
+      expect(state.generating).toBe(false);
+      expect(state.error).toBe("Agent unavailable");
+    });
+
+    it("uses fallback error message when error has no message", async () => {
+      vi.mocked(api.plans.generate).mockRejectedValue(new Error());
+      const store = createStore();
+      await store.dispatch(
+        generatePlan({ projectId: "proj-1", description: "Some feature" })
+      );
+
+      expect(store.getState().plan.error).toBe("Failed to generate plan");
     });
   });
 
