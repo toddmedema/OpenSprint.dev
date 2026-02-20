@@ -194,89 +194,6 @@ export function TaskDetailSidebar({
               <div className="flex flex-wrap items-center gap-2 text-xs text-theme-muted">
                 <span className="text-theme-muted">{PRIORITY_LABELS[taskDetail.priority] ?? "Medium"}</span>
               </div>
-              {taskDetail.sourceFeedbackId && (
-                <SourceFeedbackSection
-                  projectId={projectId}
-                  feedbackId={taskDetail.sourceFeedbackId}
-                  plans={plans}
-                  expanded={sourceFeedbackExpanded[taskDetail.sourceFeedbackId] ?? true}
-                  onToggle={() =>
-                    setSourceFeedbackExpanded((prev) => ({
-                      ...prev,
-                      [taskDetail.sourceFeedbackId!]: !(prev[taskDetail.sourceFeedbackId!] ?? true),
-                    }))
-                  }
-                />
-              )}
-              {(() => {
-                const desc = taskDetail.description ?? "";
-                const isOnlyFeedbackId = /^Feedback ID:\s*.+$/.test(desc.trim());
-                const displayDesc = taskDetail.sourceFeedbackId && isOnlyFeedbackId ? "" : desc;
-                return displayDesc ? (
-                  <div className="border-b border-theme-border">
-                    <button
-                      type="button"
-                      onClick={() => setDescriptionSectionExpanded((prev) => !prev)}
-                      className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
-                      aria-expanded={descriptionSectionExpanded}
-                      aria-controls="description-content"
-                      aria-label={descriptionSectionExpanded ? "Collapse Description" : "Expand Description"}
-                      id="description-header"
-                    >
-                      <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">
-                        Description
-                      </h4>
-                      <span className="text-theme-muted text-xs">
-                        {descriptionSectionExpanded ? "▼" : "▶"}
-                      </span>
-                    </button>
-                    {descriptionSectionExpanded && (
-                      <div
-                        id="description-content"
-                        role="region"
-                        aria-labelledby="description-header"
-                        className="px-4 pb-4"
-                      >
-                        <div
-                          className="prose-task-description prose-execute-task"
-                          data-testid="task-description-markdown"
-                        >
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayDesc}</ReactMarkdown>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : null;
-              })()}
-              {(taskDetail.dependencies ?? []).filter(
-                (d) => d.targetId && d.type !== "discovered-from"
-              ).length > 0 && (
-                <div className="text-xs">
-                  <span className="text-theme-muted">Depends on:</span>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-1.5">
-                    {taskDetail.dependencies
-                      .filter((d) => d.targetId && d.type !== "discovered-from")
-                      .map((d) => {
-                        const depTask = tasks.find((t) => t.id === d.targetId);
-                        const label = depTask?.title ?? d.targetId;
-                        const col = depTask?.kanbanColumn ?? "backlog";
-                        return (
-                          <button
-                            key={d.targetId}
-                            type="button"
-                            onClick={() => onSelectTask(d.targetId!)}
-                            className="inline-flex items-center gap-1.5 text-left hover:underline text-brand-600 hover:text-brand-500 transition-colors"
-                          >
-                            <TaskStatusBadge column={col} size="xs" title={COLUMN_LABELS[col]} />
-                            <span className="truncate max-w-[200px]" title={label}>
-                              {label}
-                            </span>
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <div className="text-sm text-theme-muted" data-testid="task-detail-empty">
@@ -284,6 +201,98 @@ export function TaskDetailSidebar({
             </div>
           )}
         </div>
+
+        {taskDetail?.sourceFeedbackId && (
+          <SourceFeedbackSection
+            projectId={projectId}
+            feedbackId={taskDetail.sourceFeedbackId}
+            plans={plans}
+            expanded={sourceFeedbackExpanded[taskDetail.sourceFeedbackId] ?? true}
+            onToggle={() =>
+              setSourceFeedbackExpanded((prev) => ({
+                ...prev,
+                [taskDetail.sourceFeedbackId!]: !(prev[taskDetail.sourceFeedbackId!] ?? true),
+              }))
+            }
+          />
+        )}
+
+        {taskDetail && (() => {
+          const desc = taskDetail.description ?? "";
+          const isOnlyFeedbackId = /^Feedback ID:\s*.+$/.test(desc.trim());
+          const displayDesc = taskDetail.sourceFeedbackId && isOnlyFeedbackId ? "" : desc;
+          const hasDeps =
+            (taskDetail.dependencies ?? []).filter((d) => d.targetId && d.type !== "discovered-from").length > 0;
+          if (!displayDesc && !hasDeps) return null;
+          return (
+            <div className="p-4 border-b border-theme-border">
+              {displayDesc ? (
+                <div className="border-b border-theme-border">
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionSectionExpanded((prev) => !prev)}
+                    className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
+                    aria-expanded={descriptionSectionExpanded}
+                    aria-controls="description-content"
+                    aria-label={descriptionSectionExpanded ? "Collapse Description" : "Expand Description"}
+                    id="description-header"
+                  >
+                    <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">
+                      Description
+                    </h4>
+                    <span className="text-theme-muted text-xs">
+                      {descriptionSectionExpanded ? "▼" : "▶"}
+                    </span>
+                  </button>
+                  {descriptionSectionExpanded && (
+                    <div
+                      id="description-content"
+                      role="region"
+                      aria-labelledby="description-header"
+                      className="px-4 pb-4"
+                    >
+                      <div
+                        className="prose-task-description prose-execute-task"
+                        data-testid="task-description-markdown"
+                      >
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayDesc}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+              {hasDeps && (
+                <div className={displayDesc ? "pt-0" : ""}>
+                  <div className="text-xs">
+                    <span className="text-theme-muted">Depends on:</span>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-1.5">
+                      {taskDetail.dependencies
+                        .filter((d) => d.targetId && d.type !== "discovered-from")
+                        .map((d) => {
+                          const depTask = tasks.find((t) => t.id === d.targetId);
+                          const label = depTask?.title ?? d.targetId;
+                          const col = depTask?.kanbanColumn ?? "backlog";
+                          return (
+                            <button
+                              key={d.targetId}
+                              type="button"
+                              onClick={() => onSelectTask(d.targetId!)}
+                              className="inline-flex items-center gap-1.5 text-left hover:underline text-brand-600 hover:text-brand-500 transition-colors"
+                            >
+                              <TaskStatusBadge column={col} size="xs" title={COLUMN_LABELS[col]} />
+                              <span className="truncate max-w-[200px]" title={label}>
+                                {label}
+                              </span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         <div className="border-b border-theme-border">
           <button
