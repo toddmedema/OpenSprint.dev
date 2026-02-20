@@ -6,6 +6,12 @@ import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("orphan-recovery");
 
+/** Normalize a single string, array, or nullish value into a Set for exclude checks. */
+function toExcludeSet(ids?: string | string[] | null): Set<string> {
+  if (!ids) return new Set();
+  return new Set(Array.isArray(ids) ? ids : [ids]);
+}
+
 /**
  * Orphan recovery: detect and retry abandoned IN_PROGRESS tasks.
  * When an agent is killed, its task remains in_progress with no active process.
@@ -25,18 +31,19 @@ export class OrphanRecoveryService {
    * Complements recoverOrphanedTasks by finding orphaned worktrees via heartbeat age.
    *
    * @param repoPath - Path to the project repository (with .beads)
-   * @param excludeTaskId - Optional task ID to exclude
+   * @param excludeTaskIds - Task ID(s) to exclude from recovery
    */
   async recoverFromStaleHeartbeats(
     repoPath: string,
-    excludeTaskId?: string | null,
+    excludeTaskIds?: string | string[] | null
   ): Promise<{ recovered: string[] }> {
+    const excludeSet = toExcludeSet(excludeTaskIds);
     const worktreeBase = this.branchManager.getWorktreeBasePath();
     const stale = await heartbeatService.findStaleHeartbeats(worktreeBase);
     const recovered: string[] = [];
 
     for (const { taskId } of stale) {
-      if (excludeTaskId && taskId === excludeTaskId) continue;
+      if (excludeSet.has(taskId)) continue;
       try {
         const task = await this.beads.show(repoPath, taskId);
         if (task.status === "in_progress") {
@@ -62,16 +69,15 @@ export class OrphanRecoveryService {
    * The branch is preserved for the next agent attempt.
    *
    * @param repoPath - Path to the project repository (with .beads)
-   * @param excludeTaskId - Optional task ID to exclude (e.g. current task being recovered by crash recovery)
+   * @param excludeTaskIds - Task ID(s) to exclude (e.g. currently active agent tasks)
    */
   async recoverOrphanedTasks(
     repoPath: string,
-    excludeTaskId?: string | null,
+    excludeTaskIds?: string | string[] | null
   ): Promise<{ recovered: string[] }> {
+    const excludeSet = toExcludeSet(excludeTaskIds);
     const orphans = await this.beads.listInProgressWithAgentAssignee(repoPath);
-    const toRecover = excludeTaskId
-      ? orphans.filter((t) => t.id !== excludeTaskId)
-      : orphans;
+    const toRecover = orphans.filter((t) => !excludeSet.has(t.id));
 
     const recovered: string[] = [];
 

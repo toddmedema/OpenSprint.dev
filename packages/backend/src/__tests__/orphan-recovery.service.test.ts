@@ -86,13 +86,27 @@ describe("OrphanRecoveryService", () => {
     expect(stdout.trim()).toBe("main");
   });
 
-  it("should exclude task when excludeTaskId is provided", async () => {
+  it("should exclude task when excludeTaskId is provided as string", async () => {
     mockListInProgress = [
       { id: "task-a", status: "in_progress", assignee: "agent-1" },
       { id: "task-b", status: "in_progress", assignee: "agent-1" },
     ];
 
     const { recovered } = await service.recoverOrphanedTasks(repoPath, "task-a");
+
+    expect(recovered).toEqual(["task-b"]);
+    expect(mockUpdateCalls).toHaveLength(1);
+    expect(mockUpdateCalls[0].id).toBe("task-b");
+  });
+
+  it("should exclude multiple tasks when excludeTaskIds is provided as array", async () => {
+    mockListInProgress = [
+      { id: "task-a", status: "in_progress", assignee: "agent-1" },
+      { id: "task-b", status: "in_progress", assignee: "agent-1" },
+      { id: "task-c", status: "in_progress", assignee: "agent-1" },
+    ];
+
+    const { recovered } = await service.recoverOrphanedTasks(repoPath, ["task-a", "task-c"]);
 
     expect(recovered).toEqual(["task-b"]);
     expect(mockUpdateCalls).toHaveLength(1);

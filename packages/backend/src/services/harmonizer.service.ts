@@ -6,6 +6,7 @@
 
 import type { PrdSectionKey } from "@opensprint/shared";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
+import { JSON_OUTPUT_PREAMBLE } from "../utils/agent-prompts.js";
 
 const VALID_SECTION_KEYS: PrdSectionKey[] = [
   "executive_summary",
@@ -41,12 +42,14 @@ build_it — A Plan has just been approved for execution (Execute!).
 ## Task
 Review the approved Plan against the current PRD. Update any PRD sections that should reflect the Plan's decisions, scope, technical approach, or acceptance criteria. The PRD is the living document; it should stay aligned with what is being built.
 
+Return no_changes_needed promptly when the Plan adds no new information beyond the PRD. Prefer targeted updates to specific sections over rewriting entire sections. Only update sections that meaningfully differ from the Plan. change_log_entry should be one sentence describing the update (for HIL approval display).
+
 ## Approved Plan (${planId})
 
 ${planContent}
 
 ## Output
-Respond with ONLY valid JSON. No other text. Use one of these formats:
+${JSON_OUTPUT_PREAMBLE} Use one of these formats:
 
 **If updates are needed:**
 {"status":"success","prd_updates":[{"section":"<section_key>","action":"update","content":"<markdown>","change_log_entry":"<description>"}]}
@@ -69,12 +72,14 @@ scope_change — A user has submitted validation feedback that was categorized a
 ## Task
 Review the feedback against the current PRD. Determine if updates are necessary. If so, produce targeted section updates that incorporate the scope change. The PRD is the living document; it should reflect the approved scope change.
 
+Return no_changes_needed promptly when the feedback adds no new information beyond the PRD. Prefer targeted updates to specific sections. change_log_entry should be one sentence (for HIL approval display). If the feedback is vague or could apply to multiple sections, propose updates to the most relevant section and note ambiguity in change_log_entry.
+
 ## Feedback
 
 "${feedbackText.replace(/"/g, '\\"')}"
 
 ## Output
-Respond with ONLY valid JSON. No other text. Use one of these formats:
+${JSON_OUTPUT_PREAMBLE} Use one of these formats:
 
 **If updates are needed:**
 {"status":"success","prd_updates":[{"section":"<section_key>","action":"update","content":"<markdown>","change_log_entry":"<description>"}]}

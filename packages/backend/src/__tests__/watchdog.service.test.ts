@@ -16,6 +16,12 @@ vi.mock("../services/orphan-recovery.service.js", () => ({
   },
 }));
 
+vi.mock("../services/active-agents.service.js", () => ({
+  activeAgentsService: {
+    list: vi.fn().mockReturnValue([]),
+  },
+}));
+
 vi.mock("../services/event-log.service.js", () => ({
   eventLogService: {
     append: vi.fn().mockResolvedValue(undefined),
@@ -30,6 +36,7 @@ vi.mock("../services/branch-manager.js", () => ({
 
 import { heartbeatService } from "../services/heartbeat.service.js";
 import { orphanRecoveryService } from "../services/orphan-recovery.service.js";
+import { activeAgentsService } from "../services/active-agents.service.js";
 import { eventLogService } from "../services/event-log.service.js";
 
 describe("WatchdogService", () => {
@@ -98,7 +105,7 @@ describe("WatchdogService", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accessing private method for testing
     await (watchdog as any).runChecks();
 
-    expect(orphanRecoveryService.recoverOrphanedTasks).toHaveBeenCalledWith(tmpDir);
+    expect(orphanRecoveryService.recoverOrphanedTasks).toHaveBeenCalledWith(tmpDir, []);
     expect(eventLogService.append).toHaveBeenCalledWith(
       tmpDir,
       expect.objectContaining({
@@ -106,6 +113,28 @@ describe("WatchdogService", () => {
         data: expect.objectContaining({ recovered: ["task-orphan-1", "task-orphan-2"] }),
       })
     );
+  });
+
+  it("should exclude active agent tasks from orphan recovery", async () => {
+    vi.mocked(activeAgentsService.list).mockReturnValue([
+      {
+        id: "task-active",
+        phase: "coding",
+        role: "coder",
+        label: "Active task",
+        startedAt: new Date().toISOString(),
+      },
+    ]);
+    vi.mocked(orphanRecoveryService.recoverOrphanedTasks).mockResolvedValue({ recovered: [] });
+
+    watchdog.start([{ projectId: "proj-1", repoPath: tmpDir }]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accessing private method for testing
+    await (watchdog as any).runChecks();
+
+    expect(activeAgentsService.list).toHaveBeenCalledWith("proj-1");
+    expect(orphanRecoveryService.recoverOrphanedTasks).toHaveBeenCalledWith(tmpDir, [
+      "task-active",
+    ]);
   });
 
   it("should not log orphan event when none recovered", async () => {

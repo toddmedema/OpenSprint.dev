@@ -271,9 +271,10 @@ export class ContextAssembler {
 
   private generateCodingPrompt(config: ActiveTaskConfig, context: TaskContext): string {
     let prompt = `# Task: ${context.title}\n\n`;
+    prompt += `Implement the task. Do not re-explain the task or list options — start implementing.\n\n`;
     prompt += `## Objective\n\n${context.description}\n\n`;
     prompt += `## Context\n\n`;
-    prompt += `You are implementing a task as part of a larger feature. Review the provided context files:\n\n`;
+    prompt += `You are implementing a task as part of a larger feature. If the task description specifies file paths, use them. If not, infer from the plan's Technical Approach and project structure. Review the provided context files:\n\n`;
     prompt += `- \`context/plan.md\` — the full feature specification\n`;
     prompt += `- \`context/prd_excerpt.md\` — relevant product requirements\n`;
     prompt += `- \`context/deps/\` — output from tasks this depends on\n\n`;
@@ -299,7 +300,7 @@ export class ContextAssembler {
     }
 
     prompt += `${config.useExistingBranch ? "4" : "3"}. Write comprehensive tests (unit, and integration where applicable).\n`;
-    prompt += `${config.useExistingBranch ? "5" : "4"}. **Commit after each meaningful change** — with descriptive WIP messages. Do not wait until the end to commit. (e.g., after implementing a function, after writing its tests). This protects your work if the process is interrupted.\n`;
+    prompt += `${config.useExistingBranch ? "5" : "4"}. **Commit after each logical unit** — with descriptive messages (e.g., "Add login API endpoint", "Add auth tests"). Do not wait until the end to commit. This protects your work if the process is interrupted.\n`;
     prompt += `${config.useExistingBranch ? "6" : "5"}. Run \`${config.testCommand}\` and ensure all tests pass.\n`;
     prompt += `${config.useExistingBranch ? "7" : "6"}. Write your result to \`.opensprint/active/${config.taskId}/result.json\` using this exact JSON format:\n`;
     prompt += `   \`\`\`json\n`;
@@ -307,6 +308,7 @@ export class ContextAssembler {
     prompt += `   \`\`\`\n`;
     prompt += `   Use \`"status": "success"\` when the task is done, or \`"status": "failed"\` if you could not finish it.\n`;
     prompt += `   The \`status\` field MUST be exactly \`"success"\` or \`"failed"\` — no other values.\n\n`;
+    prompt += `If tests fail after implementation, fix them before writing result.json. Do not report success with failing tests.\n\n`;
 
     if (config.previousFailure) {
       prompt += `## Previous Attempt\n\n`;
@@ -314,7 +316,7 @@ export class ContextAssembler {
 
       if (config.previousTestOutput) {
         prompt += `### Test Output\n\n\`\`\`\n${config.previousTestOutput.slice(0, 5000)}\n\`\`\`\n\n`;
-        prompt += `Fix the failing tests without breaking the passing ones.\n\n`;
+        prompt += `Focus fixes on the specific failing assertions. Avoid broad refactors unless the failure indicates a design flaw. Fix the failing tests without breaking the passing ones.\n\n`;
       }
     }
 
@@ -377,7 +379,7 @@ export class ContextAssembler {
     let prompt = `# Review Task: ${context.title}\n\n`;
 
     prompt += `## Objective\n\n`;
-    prompt += `You are reviewing the implementation of a task. Your review covers **two dimensions**:\n`;
+    prompt += `You are reviewing the implementation of a task. Review efficiently — if the implementation clearly meets acceptance criteria and tests pass, approve with a brief summary. Reject only when scope or quality issues exist. Your review covers **two dimensions**:\n`;
     prompt += `1. **Scope compliance** — Does the implementation match the original ticket and meet all acceptance criteria?\n`;
     prompt += `2. **Code quality** — Is the code correct, clear, well-tested, and production-ready?\n\n`;
     prompt += `Approve only if BOTH dimensions pass. Reject with specific, actionable feedback if either fails.\n\n`;
@@ -437,8 +439,8 @@ export class ContextAssembler {
     prompt += `1. Read the original ticket, acceptance criteria, and context files above to fully understand the scope.\n`;
     prompt += `2. Review the diff: \`git diff main...${config.branch}\`\n`;
     prompt += `3. Walk through the checklist above, checking each item.\n`;
-    prompt += `4. Run the full test suite: \`${config.testCommand}\` — confirm ALL tests pass (not just the new ones).\n`;
-    prompt += `5. If prior reviews rejected this task, verify those specific issues were resolved.\n`;
+    prompt += `4. Run the full test suite: \`${config.testCommand}\` — confirm ALL tests pass (not just the new ones). Regressions in other tests are grounds for rejection.\n`;
+    prompt += `5. If prior reviews rejected this task, verify each previously cited issue was resolved. If not, reject and list which issues remain.\n`;
     prompt += `6. Write your result to \`.opensprint/active/${config.taskId}/result.json\` using this exact JSON format:\n`;
     prompt += `   If approving (do NOT merge — the orchestrator will merge after you exit):\n`;
     prompt += `   \`\`\`json\n`;
@@ -451,9 +453,9 @@ export class ContextAssembler {
     prompt += `   The \`status\` field MUST be exactly \`"approved"\` or \`"rejected"\`. The \`summary\` field is required. \`issues\` and \`notes\` are optional.\n\n`;
 
     prompt += `## Important\n\n`;
-    prompt += `- Be **specific** in rejection feedback — cite file names, line numbers, and concrete problems so the coding agent can fix them.\n`;
+    prompt += `- In rejection feedback, cite file:line or snippet. Vague feedback like "improve tests" is not actionable.\n`;
     prompt += `- Do NOT approve out of lenience. If acceptance criteria are unmet or tests fail, reject.\n`;
-    prompt += `- Do NOT reject for style nitpicks that don't affect correctness or readability.\n`;
+    prompt += `- Do NOT reject for style preferences (e.g., 2-space vs 4-space) unless the project has an explicit style guide in the repo.\n`;
     prompt += `- Do NOT merge the branch — the orchestrator handles merging after approval.\n`;
 
     return prompt;

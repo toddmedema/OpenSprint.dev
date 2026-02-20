@@ -23,11 +23,16 @@ const agentClient = new AgentClient();
 
 const FIX_EPIC_SYSTEM_PROMPT = `You are the Planner agent for OpenSprint (PRD §12.3.2). Your task is to analyze failed test output and produce a structured list of fix tasks.
 
+Focus on failure messages and stack traces; skip verbose setup logs when possible.
+
 Given the raw test output from a pre-deployment test run, create an indexed task list to fix all errors and failures. Each task should:
-1. Address a specific failing test or error
+1. Address a specific failing test or error — cite the specific failing test name or error message in the description
 2. Be atomic (implementable in one coding session)
 3. Have clear acceptance criteria (the test must pass after the fix)
-4. Include dependencies where one fix blocks another (e.g., fix data model before API)
+4. Order tasks so root-cause fixes (e.g., missing env var, schema migration) come first; dependent fixes (e.g., API that uses the schema) come after
+5. Include dependencies where one fix blocks another (e.g., fix data model before API)
+
+If the test output shows multiple independent failures (different files/modules), create separate tasks. If failures share a root cause, one task may fix several.
 
 Respond with ONLY valid JSON in this exact format (you may wrap in a markdown json code block):
 {
@@ -67,7 +72,7 @@ export interface CreateFixEpicResult {
 export async function createFixEpicFromTestOutput(
   projectId: string,
   repoPath: string,
-  testOutput: string,
+  testOutput: string
 ): Promise<CreateFixEpicResult | null> {
   const settings = await projectService.getSettings(projectId);
 
@@ -100,7 +105,13 @@ Output your response as JSON with status and tasks array.`;
 
   const parsed = extractJsonFromAgentResponse<{
     status?: string;
-    tasks?: Array<{ index?: number; title: string; description?: string; priority?: number; depends_on?: number[] }>;
+    tasks?: Array<{
+      index?: number;
+      title: string;
+      description?: string;
+      priority?: number;
+      depends_on?: number[];
+    }>;
   }>(response.content, "tasks");
   if (!parsed) {
     log.warn("Agent did not return valid JSON with tasks");

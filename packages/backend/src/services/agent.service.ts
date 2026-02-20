@@ -32,6 +32,8 @@ export interface InvokePlanningAgentOptions {
   messages: PlanningMessage[];
   /** Optional system prompt */
   systemPrompt?: string;
+  /** Optional image attachments (base64 or data URLs). Passed to Claude when config.type is 'claude'. */
+  images?: string[];
   /** Working directory for CLI agents (cursor/custom) */
   cwd?: string;
   /** Callback for streaming text chunks */
@@ -222,22 +224,54 @@ export class AgentService {
   }
 
   /**
+   * Parse data URL or base64 string to { media_type, data } for Anthropic image blocks.
+   */
+  private parseImageForClaude(img: string): {
+    media_type: "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+    data: string;
+  } {
+    const VALID = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+    if (img.startsWith("data:")) {
+      const match = img.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        const mt = match[1].toLowerCase();
+        const media_type = VALID.includes(mt as (typeof VALID)[number])
+          ? (mt as (typeof VALID)[number])
+          : "image/png";
+        return { media_type, data: match[2] };
+      }
+    }
+    return { media_type: "image/png", data: img };
+  }
+
+  /**
    * Claude API integration using @anthropic-ai/sdk.
-   * Supports streaming via onChunk.
+   * Supports streaming via onChunk and images when options.images is provided.
    */
   private async invokeClaudePlanningAgent(
     options: InvokePlanningAgentOptions
   ): Promise<PlanningAgentResponse> {
-    const { config, messages, systemPrompt, onChunk } = options;
+    const { config, messages, systemPrompt, images, onChunk } = options;
 
     const model = config.model ?? "claude-sonnet-4-20250514";
     const client = this.getAnthropic();
 
-    // Convert to Anthropic message format (role + content)
-    const anthropicMessages = messages.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    }));
+    // Convert to Anthropic message format. When images exist, last user message gets content as array.
+    const anthropicMessages = messages.map((m, i) => {
+      const isLastUser = m.role === "user" && i === messages.length - 1;
+      const hasImages = isLastUser && images && images.length > 0;
+      if (hasImages) {
+        const imageBlocks = images!.map((img) => {
+          const { media_type, data } = this.parseImageForClaude(img);
+          return { type: "image" as const, source: { type: "base64" as const, media_type, data } };
+        });
+        return {
+          role: m.role as "user",
+          content: [{ type: "text" as const, text: m.content }, ...imageBlocks],
+        };
+      }
+      return { role: m.role as "user" | "assistant", content: m.content };
+    });
 
     if (onChunk) {
       // Streaming path

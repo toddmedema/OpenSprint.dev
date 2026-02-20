@@ -22,6 +22,7 @@ import { writeJsonAtomic } from "../utils/file-utils.js";
 import { generateShortFeedbackId } from "../utils/feedback-id.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
+import { JSON_OUTPUT_PREAMBLE } from "../utils/agent-prompts.js";
 import { triggerDeploy } from "./deploy-trigger.service.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -40,26 +41,33 @@ User feedback: "${truncated}"`;
 
 const FEEDBACK_CATEGORIZATION_PROMPT = `You are an AI assistant that categorizes user feedback about a software product (PRD §12.3.4 Analyst contract).
 
-Given the user's feedback text, the PRD (Product Requirements Document), and available plans, determine:
-1. The category: "bug" (something broken), "feature" (new capability request), "ux" (usability improvement), or "scope" (fundamental change to requirements)
+${JSON_OUTPUT_PREAMBLE}
+
+**Category guide:** bug = broken/incorrect behavior; feature = new capability request; ux = usability/copy/layout improvement; scope = fundamental requirement change requiring PRD update.
+
+Given the user's feedback (and any attached images), the PRD, and available plans, determine:
+1. The category: "bug" | "feature" | "ux" | "scope"
 2. Which feature/plan it relates to (if identifiable) — use the planId from the available plans list
 3. The mapped epic ID — use the beadEpicId from the plan you mapped to (or null if no plan)
 4. Whether this is a scope change — true if the feedback fundamentally alters requirements/PRD; false otherwise
 5. Proposed tasks in indexed Planner format — same structure as Planner output: index, title, description, priority, depends_on
 
-Respond in JSON format:
+When feedback maps to no plan, use mapped_plan_id: null, mapped_epic_id: null and propose_tasks as a new epic candidate. For proposed_tasks: use a single task when feedback addresses one concern; use multiple only when feedback clearly describes distinct work items.
+
+For replies (parent_id present), consider the parent's category and mapped plan — the reply often refines or adds to the parent. If the feedback is a single word or too vague to categorize, default to "ux" and propose_tasks: [] with a generic title.
+
+JSON format:
 {
   "category": "bug" | "feature" | "ux" | "scope",
   "mapped_plan_id": "plan-id-if-identifiable or null",
   "mapped_epic_id": "beadEpicId-from-plan or null",
   "is_scope_change": true | false,
   "proposed_tasks": [
-    { "index": 0, "title": "Task title", "description": "Detailed spec with acceptance criteria", "priority": 1, "depends_on": [] },
-    { "index": 1, "title": "Another task", "description": "...", "priority": 2, "depends_on": [0] }
+    { "index": 0, "title": "Task title", "description": "Detailed spec with acceptance criteria", "priority": 1, "depends_on": [] }
   ]
 }
 
-priority: 0 (highest) to 4 (lowest). depends_on: array of task indices (0-based) this task is blocked by. Use a single task when feedback addresses one concern; use multiple only when clearly independent.`;
+priority: 0 (highest) to 4 (lowest). depends_on: array of task indices (0-based) this task is blocked by.`;
 
 export class FeedbackService {
   private projectService = new ProjectService();
@@ -274,6 +282,7 @@ export class FeedbackService {
           },
         ],
         systemPrompt: FEEDBACK_CATEGORIZATION_PROMPT,
+        images: item.images,
         cwd: project.repoPath,
         tracking: {
           id: agentId,
@@ -288,10 +297,14 @@ export class FeedbackService {
       const parsed = extractJsonFromAgentResponse<Record<string, unknown>>(response.content);
       if (parsed) {
         const validCategories: FeedbackCategory[] = ["bug", "feature", "ux", "scope"];
-        item.category = validCategories.includes(parsed.category)
-          ? (parsed.category as FeedbackCategory)
-          : "bug";
-        item.mappedPlanId = parsed.mapped_plan_id ?? parsed.mappedPlanId ?? firstPlanId;
+        const rawCategory = parsed.category;
+        item.category =
+          typeof rawCategory === "string" &&
+          validCategories.includes(rawCategory as FeedbackCategory)
+            ? (rawCategory as FeedbackCategory)
+            : "bug";
+        const rawMappedPlanId = parsed.mapped_plan_id ?? parsed.mappedPlanId ?? firstPlanId;
+        item.mappedPlanId = typeof rawMappedPlanId === "string" ? rawMappedPlanId : firstPlanId;
 
         // mapped_epic_id: resolve from Plan beadEpicId if not provided (PRD §12.3.4)
         const rawMappedEpicId = parsed.mapped_epic_id ?? parsed.mappedEpicId;
@@ -477,9 +490,7 @@ export class FeedbackService {
 
     // User-specified priority (0-4) overrides AI-suggested and category-based default
     const userPriorityOverride =
-      typeof item.userPriority === "number" &&
-      item.userPriority >= 0 &&
-      item.userPriority <= 4
+      typeof item.userPriority === "number" && item.userPriority >= 0 && item.userPriority <= 4
         ? item.userPriority
         : undefined;
 
@@ -526,9 +537,7 @@ export class FeedbackService {
       for (const task of sorted) {
         try {
           const priority =
-            userPriorityOverride ??
-            task.priority ??
-            (item.category === "bug" ? 0 : 2);
+            userPriorityOverride ?? task.priority ?? (item.category === "bug" ? 0 : 2);
           const issue = await this.createBeadTaskWithRetry(repoPath, task.title, {
             type: beadType,
             priority,
@@ -578,8 +587,7 @@ export class FeedbackService {
       // Legacy: create from task_titles only
       for (const title of taskTitles) {
         try {
-          const priority =
-            userPriorityOverride ?? (item.category === "bug" ? 0 : 2);
+          const priority = userPriorityOverride ?? (item.category === "bug" ? 0 : 2);
           const issue = await this.createBeadTaskWithRetry(repoPath, title, {
             type: beadType,
             priority,

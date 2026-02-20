@@ -16,6 +16,7 @@ import { HEARTBEAT_STALE_MS } from "@opensprint/shared";
 import { BranchManager } from "./branch-manager.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { orphanRecoveryService } from "./orphan-recovery.service.js";
+import { activeAgentsService } from "./active-agents.service.js";
 import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -95,9 +96,15 @@ export class WatchdogService {
   /**
    * Periodic orphan recovery (not just on startup).
    * Catches tasks that slip through crash recovery.
+   * Excludes tasks with actively running agents to avoid sabotaging in-flight work.
    */
   private async checkOrphanedTasks(target: WatchdogTarget): Promise<void> {
-    const { recovered } = await orphanRecoveryService.recoverOrphanedTasks(target.repoPath);
+    const activeAgents = activeAgentsService.list(target.projectId);
+    const activeTaskIds = activeAgents.map((a) => a.id);
+    const { recovered } = await orphanRecoveryService.recoverOrphanedTasks(
+      target.repoPath,
+      activeTaskIds
+    );
     if (recovered.length > 0) {
       log.warn("Recovered orphaned tasks", { count: recovered.length, recovered });
 

@@ -853,8 +853,8 @@ You are implementing a task as part of a larger feature. Review the provided con
 1. Work in the worktree at `<worktree_path>` (already set up by the orchestrator).
 2. Implement the task according to the acceptance criteria.
 3. Write comprehensive tests (unit, and integration where applicable).
-4. Run `<test_command>` and ensure all tests pass.
-5. Do NOT commit — the orchestrator will commit your changes after you exit.
+4. Commit after each logical unit (e.g., after implementing a function, after writing its tests) — this protects work if the process is interrupted.
+5. Run `<test_command>` and ensure all tests pass.
 6. Write your completion summary to `.opensprint/active/<invocation-id>/result.json`.
 
 ## Previous Attempt (if retry)
@@ -906,7 +906,7 @@ The orchestrator invokes agents as subprocesses: `claude --task-file <path>`, `c
 1. The orchestrator creates the worktree and sets up the task directory.
 2. The Coder CLI process is invoked and runs in the worktree.
 3. When the process exits, the orchestrator checks for `result.json`.
-4. If `status` is `success`, the orchestrator commits all changes in the worktree (Coder does not commit), then runs the test command as a sanity check.
+4. If `status` is `success`, the orchestrator commits any remaining uncommitted changes (Coder commits incrementally during work for crash resilience), then runs the test command as a sanity check.
 5. If tests pass, the task moves to In Review and the Reviewer is triggered (same worktree).
 6. If tests fail or `status` is `failed`, the error handling flow (Section 9.2) is triggered.
 

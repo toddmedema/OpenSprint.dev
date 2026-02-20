@@ -5,6 +5,7 @@
  */
 
 import type { TaskContext } from "./context-assembler.js";
+import { JSON_OUTPUT_PREAMBLE } from "../utils/agent-prompts.js";
 import {
   SUMMARIZER_DEPENDENCY_THRESHOLD,
   SUMMARIZER_PLAN_WORD_THRESHOLD,
@@ -39,14 +40,14 @@ export function buildSummarizerPrompt(
   taskId: string,
   context: TaskContext,
   dependencyCount: number,
-  planWordCount: number,
+  planWordCount: number
 ): string {
   const depsSection =
     context.dependencyOutputs.length > 0
       ? `## Dependency Outputs\n\n${context.dependencyOutputs
           .map(
             (d) =>
-              `### Task ${d.taskId}\n\n**Summary:** ${d.summary}\n\n**Diff:**\n\`\`\`\n${d.diff.slice(0, 4000)}${d.diff.length > 4000 ? "\n... (truncated)" : ""}\n\`\`\``,
+              `### Task ${d.taskId}\n\n**Summary:** ${d.summary}\n\n**Diff:**\n\`\`\`\n${d.diff.slice(0, 3000)}${d.diff.length > 3000 ? "\n... (truncated)" : ""}\n\`\`\``
           )
           .join("\n\n")}`
       : "";
@@ -57,6 +58,8 @@ export function buildSummarizerPrompt(
 You are condensing context for task ${taskId} because thresholds are exceeded:
 - Dependencies: ${dependencyCount} (threshold: >${SUMMARIZER_DEPENDENCY_THRESHOLD})
 - Plan word count: ${planWordCount} (threshold: >${SUMMARIZER_PLAN_WORD_THRESHOLD})
+
+The Coder will implement ONE task. Prioritize information relevant to that task: acceptance criteria, technical approach, dependency outputs that affect this task's inputs. Preserve exact interface contracts (API paths, types, function signatures) — the Coder needs these verbatim. If the Plan references specific file paths or modules, include them in the summary; do not summarize them away.
 
 Produce a focused summary that preserves:
 - Architectural decisions and interface contracts
@@ -74,7 +77,7 @@ ${context.prdExcerpt}
 ${depsSection}
 
 ## Output
-Respond with ONLY valid JSON. No other text.
+${JSON_OUTPUT_PREAMBLE} No markdown outside the summary field.
 
 **On success:**
 {"status":"success","summary":"<markdown summary preserving key context>"}

@@ -5,6 +5,7 @@
  */
 
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
+import { JSON_OUTPUT_PREAMBLE } from "../utils/agent-prompts.js";
 
 /** Delta task format — same as Planner (PRD §12.3.2) */
 export interface DeltaTask {
@@ -46,23 +47,28 @@ You have been provided:
 ## Task
 
 ### Step 1: Capability Audit
-Analyze the codebase and completed task history. Build a mental model of:
+Analyze the codebase and completed task history. When key_files/ is large, focus on files most relevant to the Plan epic (e.g., routes, components mentioned in the plan). Build a mental model of:
 1. **Implemented features** — what functionality exists in the codebase
 2. **Data models** — schemas, types, entities
 3. **API surface** — endpoints, routes, handlers
 4. **UI components** — pages, screens, key components
 5. **Integration points** — external services, config, environment
 
+capability_summary should enable a human to understand what exists without reading the codebase. Use ## headers for: Implemented Features, Data Models, API Surface, UI Components.
+
 ### Step 2: Delta Analysis
 1. Compare plan_old and plan_new to identify what changed
-2. Cross-reference with your capability audit to determine what already exists
-3. Produce an indexed task list for ONLY the delta work — tasks needed to go from current state to the new Plan requirements
-4. If the new Plan adds requirements, create tasks for them
-5. If the new Plan removes or simplifies requirements, no tasks needed for removals
-6. If nothing has changed or the new Plan is fully satisfied by current capabilities, return no_changes_needed
+2. Cross-reference with your capability audit and completed_tasks.json to determine what already exists
+3. Do NOT produce tasks that duplicate already-implemented work
+4. Produce an indexed task list for ONLY the delta work — tasks needed to go from current state to the new Plan requirements
+5. If the new Plan adds requirements, create tasks for them
+6. If the new Plan removes or simplifies requirements, do NOT create tasks to remove code — just omit them. Delta = additions and modifications only.
+7. If nothing has changed or the new Plan is fully satisfied by current capabilities, return no_changes_needed
+
+For depends_on: use 0-based indices into YOUR tasks array. Ensure no circular dependencies.
 
 ## Output
-Respond with ONLY valid JSON. No other text.
+${JSON_OUTPUT_PREAMBLE}
 
 **If delta tasks are needed:**
 {"status":"success","capability_summary":"<markdown>","tasks":[{"index":0,"title":"Task title","description":"Detailed spec","priority":1,"depends_on":[]}]}

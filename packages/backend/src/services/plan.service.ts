@@ -38,23 +38,8 @@ const PLAN_TEMPLATE_STRUCTURE = PLAN_MARKDOWN_SECTIONS.join(", ");
 
 const DECOMPOSE_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. You analyze Product Requirements Documents (PRDs) and suggest a breakdown into discrete, implementable features (Plans).
 
-Your task: Given the full PRD, produce a feature decomposition. For each feature:
-1. Create a Plan with a clear title and full markdown specification
-2. Break the Plan into granular, atomic tasks that an AI coding agent can implement
-3. Specify task dependencies (dependsOn) where one task must complete before another
-4. Recommend implementation order (foundational/risky first)
-5. Create at least one UI/UX mockup per Plan using ASCII wireframes
+**Output format:** Produce exactly the JSON output — no preamble, no explanation after the JSON block. Respond with ONLY valid JSON in this exact format:
 
-Plan markdown MUST follow this structure (PRD §7.2.3). Each plan's content must include these sections in order:
-${PLAN_MARKDOWN_SECTIONS.map((s) => `- ## ${s}`).join("\n")}
-
-Template structure: ${PLAN_TEMPLATE_STRUCTURE}
-
-Tasks should be atomic, implementable in one agent session, with clear acceptance criteria in the description.
-
-MOCKUPS: Every Plan MUST include at least one mockup. Mockups are ASCII wireframes that illustrate key screens, components, or UI states for the feature. Use box-drawing characters, labels, and annotations. Even backend-heavy features should include a mockup of the admin/monitoring UI, API response shape, or data flow diagram. Include multiple mockups if the feature has several distinct views or states.
-
-Respond with ONLY valid JSON in this exact format. You may use a markdown code block with language "json" for readability. The JSON structure:
 {
   "plans": [
     {
@@ -72,15 +57,35 @@ Respond with ONLY valid JSON in this exact format. You may use a markdown code b
   ]
 }
 
-complexity: low, medium, high, or very_high. priority: 0=highest. dependsOn: array of task titles this task depends on (blocked by). dependsOnPlans: array of other plan titles (slugified, e.g. "user-auth") this plan depends on - use empty array if none. mockups: array of {title, content} — ASCII wireframes illustrating the UI; at least one required per plan.`;
+complexity: low, medium, high, or very_high. priority: 0=highest. dependsOn: array of task titles this task depends on (blocked by) — use exact titles from your own output. dependsOnPlans: array of slugified plan titles (lowercase, hyphens) that match other plan titles in your output; e.g. if Plan A is "User Authentication", another plan depending on it uses dependsOnPlans: ["user-authentication"]. mockups: array of {title, content} — ASCII wireframes; at least one required per plan.
+
+**Task:** Given the full PRD, produce a feature decomposition. For each feature:
+1. Create a Plan with a clear title and full markdown specification
+2. Break the Plan into granular, atomic tasks that an AI coding agent can implement
+3. Specify task dependencies (dependsOn) where one task must complete before another
+4. Recommend implementation order (foundational/risky first)
+5. Create at least one UI/UX mockup per Plan using ASCII wireframes
+
+Do NOT create plans that are single massive tasks — each plan should decompose into 2+ atomic tasks.
+
+Plan markdown MUST follow this structure (PRD §7.2.3). Each plan's content must include these sections in order:
+${PLAN_MARKDOWN_SECTIONS.map((s) => `- ## ${s}`).join("\n")}
+
+Template structure: ${PLAN_TEMPLATE_STRUCTURE}
+
+Tasks should be atomic, implementable in one agent session, with clear acceptance criteria in the description.
+
+MOCKUPS: Every Plan MUST include at least one mockup. Backend-heavy features: include a mockup of the admin/monitoring UI, API response shape, or data flow diagram — not "N/A". Use box-drawing characters, labels, and annotations.
+
+If the PRD mentions integration points or external services, ensure tasks include setup/configuration steps.`;
 
 const TASK_GENERATION_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. Given a feature plan specification (and optional PRD context), break it down into granular, atomic implementation tasks that an AI coding agent can complete in a single session.
 
 For each task:
 1. Title: Clear, specific action (e.g. "Add user login API endpoint", not "Handle auth")
-2. Description: Detailed spec with acceptance criteria, which files to create/modify, and how to verify
+2. Description: Detailed spec with acceptance criteria, which files to create/modify, and how to verify. Include the test command or verification step (e.g., "Run npm test to verify"). For tasks that modify existing files, specify which files.
 3. Priority: 0 (highest — foundational/blocking) to 4 (lowest — polish/optional)
-4. dependsOn: Array of other task titles this task is blocked by (use exact titles from your list)
+4. dependsOn: Array of other task titles this task is blocked by — use exact titles from your own output, copy them verbatim
 
 Guidelines:
 - Tasks must be atomic: one coding session, one concern
@@ -106,18 +111,13 @@ Respond with ONLY valid JSON in this exact format (no markdown wrapper):
 }
 
 Rules:
-- taskIdsToClose: array of beads task IDs (e.g. bd-a3f8.1, opensprint.dev-xyz.2) that are already implemented. Use the exact IDs from the plan/task summary.
+- taskIdsToClose: array of beads task IDs from the provided plan summary — not indices. The orchestrator passes these; use them exactly (e.g. bd-a3f8.1, opensprint.dev-xyz.2).
 - Do NOT include gate tasks (IDs ending in .0) — those are closed by user "Build It!" action.
 - Do NOT include epic IDs — only close individual implementation tasks.
 - If nothing is implemented, return {"taskIdsToClose": [], "reason": "No existing implementation found"}.
-- Be conservative: only include tasks where the implementation clearly exists. When in doubt, leave the task open.`;
+- Be conservative: only include tasks where the implementation clearly exists. When evidence is ambiguous (e.g., similar but not identical functionality), do NOT close the task. When in doubt, leave the task open.`;
 
-const COMPLEXITY_EVALUATION_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. Your task is to evaluate the implementation complexity of a feature plan based on its title and content.
-
-Consider: scope of work, technical risk, number of components, integration points, data model changes, API surface, UI complexity, and testing effort.
-
-Respond with ONLY valid JSON in this exact format (no markdown wrapper):
-{"complexity": "low" | "medium" | "high" | "very_high"}
+const COMPLEXITY_EVALUATION_SYSTEM_PROMPT = `Evaluate complexity (low|medium|high|very_high) based on scope, risk, integrations. Respond with JSON only: {"complexity":"<value>"}
 
 - low: Small, isolated change; few files; minimal risk
 - medium: Moderate scope; several components; standard patterns
