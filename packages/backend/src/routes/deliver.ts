@@ -19,7 +19,9 @@ import { ensureEasConfig } from "../services/eas-config.js";
 import { testRunner } from "../services/test-runner.js";
 import { createFixEpicFromTestOutput } from "../services/deploy-fix-epic.service.js";
 import { getErrorMessage } from "../utils/error-utils.js";
+import { createLogger } from "../utils/logger.js";
 
+const log = createLogger("deliver");
 const projectService = new ProjectService();
 
 export const deliverRouter = Router({ mergeParams: true });
@@ -93,7 +95,7 @@ deliverRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
 
     runDeployAsync(projectId, record.id, project.repoPath, settings, target)
       .catch((err) => {
-        console.error(`[deliver] Deploy ${record.id} failed:`, err);
+        log.error("Deploy failed", { deployId: record.id, err });
       })
       .finally(() => {
         activeDeployments.delete(projectId);
@@ -205,7 +207,7 @@ deliverRouter.post("/:deployId/rollback", async (req: Request<DeployIdParams>, r
         settings.deployment.rollbackCommand!,
         rolledBackDeployId
       ).catch((err) => {
-        console.error(`[deliver] Rollback ${rollbackRecord.id} failed:`, err);
+        log.error("Rollback failed", { rollbackId: rollbackRecord.id, err });
       });
 
       const body: ApiResponse<{ deployId: string }> = { data: { deployId: rollbackRecord.id } };

@@ -5,8 +5,10 @@ import { promisify } from "util";
 import type { TaskType, TaskPriority } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
+import { createLogger } from "../utils/logger.js";
 
 const execAsync = promisify(exec);
+const log = createLogger("beads");
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const MAX_BUFFER_BYTES = 2 * 1024 * 1024; // 2MB for large list output
@@ -182,7 +184,7 @@ export class BeadsService {
       }
     } catch (err: unknown) {
       const e = err as { stderr?: string; message?: string };
-      console.warn(`[beads] daemon start failed for ${repoPath}: ${e.stderr ?? e.message}`);
+      log.warn("daemon start failed", { repoPath, err: e.stderr ?? e.message });
     }
   }
 
@@ -207,9 +209,7 @@ export class BeadsService {
     } catch (err: unknown) {
       const e = err as { stderr?: string; message?: string };
       lastError = e.stderr ?? e.message ?? String(err);
-      console.warn(
-        `[beads] sync --import-only failed for ${repoPath}, trying import: ${lastError}`
-      );
+      log.warn("sync --import-only failed, trying import", { repoPath, err: lastError });
     }
 
     // 2. Fallback: import with orphan-handling skip (handles missing-parent edge cases)
@@ -335,7 +335,7 @@ export class BeadsService {
 
       const stderr = err.stderr || err.stdout || err.message;
       if (this.isStaleDbError(stderr)) {
-        console.warn(`[beads] Stale DB detected for ${fullCmd}, invalidating sync and retrying`);
+        log.warn("Stale DB detected, invalidating sync and retrying", { command: fullCmd });
         this.invalidateSyncState(repoPath);
         await this.ensureSyncBeforeExec(repoPath);
         try {
@@ -495,14 +495,14 @@ export class BeadsService {
       });
     } catch (err: unknown) {
       const e = err as { stderr?: string; message?: string };
-      console.warn(`[beads] pre-export import failed: ${e.stderr ?? e.message}`);
+      log.warn("pre-export import failed", { err: e.stderr ?? e.message });
     }
 
     try {
       await this.exec(repoPath, `export -o ${outputPath}`);
     } catch (err: unknown) {
       const e = err as { message?: string };
-      console.warn(`[beads] export failed, retrying with --force: ${e.message}`);
+      log.warn("export failed, retrying with --force", { err: e.message });
       await this.exec(repoPath, `export -o ${outputPath} --force`);
     }
   }
@@ -577,9 +577,10 @@ export class BeadsService {
     }
     if ((result.status as string) !== "closed") {
       // bd close succeeded but verification still shows old status — trust the write
-      console.warn(
-        `[beads] Close verification stale for ${id} (status=${result.status}); trusting bd close success`
-      );
+      log.warn("Close verification stale, trusting bd close success", {
+        id,
+        status: result.status,
+      });
       result = { ...result, status: "closed" } as BeadsIssue;
     }
     return result;

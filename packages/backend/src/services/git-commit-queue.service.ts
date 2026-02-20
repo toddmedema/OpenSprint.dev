@@ -15,8 +15,10 @@ import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { BeadsService } from "./beads.service.js";
 import { BranchManager } from "./branch-manager.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { createLogger } from "../utils/logger.js";
 
 const execAsync = promisify(exec);
+const log = createLogger("git-commit-queue");
 
 /** Thrown when a worktree_merge job cannot proceed due to existing unmerged files. */
 export class RepoConflictError extends Error {
@@ -175,9 +177,9 @@ class GitCommitQueueImpl implements GitCommitQueueService {
 
     const unmerged = await this.hasUnmergedFiles(repoPath);
     if (unmerged.length > 0) {
-      console.warn(
-        `[git-commit-queue] Cannot flush pending commits — ${unmerged.length} unmerged file(s) remain`
-      );
+      log.warn("Cannot flush pending commits — unmerged files remain", {
+        unmergedCount: unmerged.length,
+      });
       return;
     }
 
@@ -187,18 +189,14 @@ class GitCommitQueueImpl implements GitCommitQueueService {
     try {
       const committed = await this.addAndCommit(repoPath, fileList, msg);
       if (committed) {
-        console.log(
-          `[git-commit-queue] Flushed ${fileList.length} deferred file(s): ${fileList.join(", ")}`
-        );
+        log.info("Flushed deferred files", { count: fileList.length, files: fileList });
       } else {
-        console.log(
-          `[git-commit-queue] Deferred files already committed (conflict resolution included them)`
-        );
+        log.info("Deferred files already committed (conflict resolution included them)");
       }
       this.pendingFiles.delete(repoPath);
       await this.persistPendingFiles(repoPath);
     } catch (err) {
-      console.warn("[git-commit-queue] Flush of deferred commits failed:", err);
+      log.warn("Flush of deferred commits failed", { err });
     }
   }
 
@@ -230,15 +228,12 @@ class GitCommitQueueImpl implements GitCommitQueueService {
         item.resolve?.();
         break;
       } catch (err) {
-        console.warn(`[git-commit-queue] Job failed (attempt ${attempt + 1}/${maxRetries}):`, err);
+        log.warn("Job failed", { attempt: attempt + 1, maxRetries, err });
         if (attempt === maxRetries - 1) {
           if (err instanceof RepoConflictError) {
             item.reject?.(err);
           } else {
-            console.error(
-              `[git-commit-queue] Job failed after ${maxRetries} attempts, proceeding to next:`,
-              job
-            );
+            log.error("Job failed after retries, proceeding to next", { maxRetries, job });
           }
           item.resolve?.();
         }
@@ -297,9 +292,9 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           timeout: 10_000,
         });
         await this.trackPendingFile(repoPath, ".beads/issues.jsonl");
-        console.warn(
-          `[git-commit-queue] Deferred beads commit (${unmerged.length} unmerged file(s)); staged .beads/issues.jsonl`
-        );
+        log.warn("Deferred beads commit; staged .beads/issues.jsonl", {
+          unmergedCount: unmerged.length,
+        });
         break;
       }
       case "prd_update": {
@@ -308,9 +303,9 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           timeout: 10_000,
         });
         await this.trackPendingFile(repoPath, ".opensprint/prd.json");
-        console.warn(
-          `[git-commit-queue] Deferred PRD commit (${unmerged.length} unmerged file(s)); staged .opensprint/prd.json`
-        );
+        log.warn("Deferred PRD commit; staged .opensprint/prd.json", {
+          unmergedCount: unmerged.length,
+        });
         break;
       }
       case "worktree_merge": {

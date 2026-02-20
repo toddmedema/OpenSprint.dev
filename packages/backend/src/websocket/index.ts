@@ -3,6 +3,9 @@ import type { Server } from "http";
 import type { ServerEvent, ClientEvent } from "@opensprint/shared";
 import { hilService } from "../services/hil-service.js";
 import { eventRelay } from "../services/event-relay.service.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("websocket");
 
 /** Map of projectId → Set of connected clients */
 const projectClients = new Map<string, Set<WebSocket>>();
@@ -33,9 +36,9 @@ export function setupWebSocket(server: Server): void {
 
     if (!projectId) {
       // Bare /ws connections accepted but not project-scoped
-      console.log("[WS] Client connected (no project scope)");
+      log.info("Client connected (no project scope)");
     } else {
-      console.log(`[WS] Client connected to project ${projectId}`);
+      log.info("Client connected to project", { projectId });
       if (!projectClients.has(projectId)) {
         projectClients.set(projectId, new Set());
       }
@@ -49,7 +52,7 @@ export function setupWebSocket(server: Server): void {
         const event = JSON.parse(data.toString()) as ClientEvent;
         handleClientEvent(ws, event);
       } catch (err) {
-        console.error("[WS] Invalid message:", err);
+        log.error("Invalid message", { err });
       }
     });
 
@@ -64,28 +67,28 @@ export function setupWebSocket(server: Server): void {
           projectClients.delete(projectId);
         }
       }
-      console.log("[WS] Client disconnected");
+      log.info("Client disconnected");
     });
   });
 }
 
 function handleClientEvent(ws: WebSocket, event: ClientEvent): void {
   if (!event || typeof event !== "object" || !event.type) {
-    console.warn("[WS] Ignoring malformed client event");
+    log.warn("Ignoring malformed client event");
     return;
   }
   switch (event.type) {
     case "agent.subscribe": {
       if ("taskId" in event && event.taskId) {
         agentSubscriptions.get(ws)?.add(event.taskId);
-        console.log(`[WS] Client subscribed to agent output for task ${event.taskId}`);
+        log.info("Client subscribed to agent output", { taskId: event.taskId });
       }
       break;
     }
     case "agent.unsubscribe": {
       if ("taskId" in event && event.taskId) {
         agentSubscriptions.get(ws)?.delete(event.taskId);
-        console.log(`[WS] Client unsubscribed from agent output for task ${event.taskId}`);
+        log.info("Client unsubscribed from agent output", { taskId: event.taskId });
       }
       break;
     }
@@ -96,7 +99,7 @@ function handleClientEvent(ws: WebSocket, event: ClientEvent): void {
       break;
     }
     default:
-      console.warn(`[WS] Unknown client event type: ${(event as { type?: string }).type}`);
+      log.warn("Unknown client event type", { type: (event as { type?: string }).type });
   }
 }
 

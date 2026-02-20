@@ -8,8 +8,10 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { registerAgentProcess, unregisterAgentProcess } from "./agent-process-registry.js";
+import { createLogger } from "../utils/logger.js";
 
 const execAsync = promisify(exec);
+const log = createLogger("agent-client");
 
 const OUTPUT_POLL_MS = 500;
 
@@ -205,7 +207,7 @@ export class AgentClient {
     const stdio: ["ignore", "pipe" | number, "pipe" | number] =
       outputFd !== undefined ? ["ignore", outputFd, outputFd] : ["ignore", "pipe", "pipe"];
 
-    console.log("[agent] Spawning agent subprocess", {
+    log.info("Spawning agent subprocess", {
       type: config.type,
       agentRole: agentRole ?? "coder",
       command,
@@ -301,7 +303,7 @@ export class AgentClient {
         .finally(() => {
           cleanup();
           Promise.resolve(onExit(code)).catch((err) => {
-            console.error("[agent-client] onExit callback failed:", err);
+            log.error("onExit callback failed", { err });
           });
         });
     });
@@ -316,7 +318,7 @@ export class AgentClient {
       onOutput(`[Agent error: ${friendly}]\n`);
       cleanup();
       Promise.resolve(onExit(1)).catch((exitErr) => {
-        console.error("[agent-client] onExit callback failed:", exitErr);
+        log.error("onExit callback failed", { err: exitErr });
       });
     });
 
@@ -505,7 +507,7 @@ export class AgentClient {
     }
 
     const hasCursorKey = Boolean(process.env.CURSOR_API_KEY);
-    console.log("[agent] Cursor CLI starting", {
+    log.info("Cursor CLI starting", {
       model: config.model ?? "default",
       promptLen: fullPrompt.length,
       cwd,
@@ -514,7 +516,7 @@ export class AgentClient {
 
     try {
       const content = await this.runCursorAgentSpawn(args, cwd);
-      console.log("[agent] Cursor CLI completed", { outputLen: content.length });
+      log.info("Cursor CLI completed", { outputLen: content.length });
       if (options.onChunk) {
         options.onChunk(content);
       }
@@ -539,7 +541,7 @@ export class AgentClient {
           ? error.message
           : (error as { stderr?: string }).stderr || (error as Error).message;
 
-      console.error("[agent] Cursor CLI failed:", raw, isTimeout ? "(timeout)" : "");
+      log.error("Cursor CLI failed", { raw, isTimeout });
       throw new AppError(
         isTimeout ? 504 : 502,
         ErrorCodes.AGENT_INVOKE_FAILED,

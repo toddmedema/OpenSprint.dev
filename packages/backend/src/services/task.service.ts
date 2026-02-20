@@ -14,6 +14,9 @@ import { ContextAssembler } from "./context-assembler.js";
 import { BranchManager } from "./branch-manager.js";
 import { FeedbackService } from "./feedback.service.js";
 import type { BeadsIssue } from "./beads.service.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("task");
 
 export class TaskService {
   private projectService = new ProjectService();
@@ -302,7 +305,7 @@ export class TaskService {
 
     // PRD §10.2: Auto-resolve feedback when all its created tasks are Done
     this.feedbackService.checkAutoResolveOnTaskDone(projectId, taskId).catch((err) => {
-      console.warn(`[task] Auto-resolve feedback on task done failed for ${taskId}:`, err);
+      log.warn("Auto-resolve feedback on task done failed", { taskId, err });
     });
 
     const epicId = this.extractEpicId(taskId);
@@ -332,7 +335,7 @@ export class TaskService {
           const settings = await this.projectService.getSettings(projectId);
           if (settings.deployment.autoDeployOnEpicCompletion) {
             triggerDeploy(projectId).catch((err) => {
-              console.warn(`[task] Auto-deploy on epic completion failed for ${projectId}:`, err);
+              log.warn("Auto-deploy on epic completion failed", { projectId, err });
             });
           }
         }

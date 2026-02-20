@@ -23,6 +23,9 @@ import { generateShortFeedbackId } from "../utils/feedback-id.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { triggerDeploy } from "./deploy-trigger.service.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("feedback");
 
 /**
  * Build a user-friendly description for scope change HIL approval (PRD §6.5.1).
@@ -176,7 +179,7 @@ export class FeedbackService {
 
     // Invoke planning agent for categorization (async)
     this.categorizeFeedback(projectId, item).catch((err) => {
-      console.error(`Failed to categorize feedback ${id}:`, err);
+      log.error("Failed to categorize feedback", { id, err });
     });
 
     return item;
@@ -355,7 +358,7 @@ export class FeedbackService {
           try {
             proposal = await this.chatService.getScopeChangeProposal(projectId, item.text);
           } catch (err) {
-            console.warn("[feedback] Could not get scope-change proposal for modal:", err);
+            log.warn("Could not get scope-change proposal for modal", { err });
           }
 
           const scopeChangeMetadata = proposal
@@ -410,7 +413,7 @@ export class FeedbackService {
               await this.chatService.syncPrdFromScopeChangeFeedback(projectId, item.text);
             }
           } catch (err) {
-            console.error("[feedback] PRD sync on scope-change approval failed:", err);
+            log.error("PRD sync on scope-change approval failed", { err });
           }
         }
       } else {
@@ -420,7 +423,7 @@ export class FeedbackService {
         item.taskTitles = [item.text.slice(0, 80)];
       }
     } catch (error) {
-      console.error(`AI categorization failed for feedback ${item.id}:`, error);
+      log.error("AI categorization failed for feedback", { feedbackId: item.id, error });
       item.category = "bug";
       item.mappedPlanId = firstPlanId;
       item.taskTitles = [item.text.slice(0, 80)];
@@ -430,7 +433,7 @@ export class FeedbackService {
     try {
       item.createdTaskIds = await this.createBeadTasksFromFeedback(projectId, item);
     } catch (err) {
-      console.error(`[feedback] Failed to create beads tasks for ${item.id}:`, err);
+      log.error("Failed to create beads tasks", { feedbackId: item.id, err });
     }
     item.status = "mapped";
 
@@ -510,7 +513,7 @@ export class FeedbackService {
       feedbackSourceBeadId = sourceBead.id;
       item.feedbackSourceBeadId = feedbackSourceBeadId;
     } catch (err) {
-      console.error(`[feedback] Failed to create feedback source bead for ${item.id}:`, err);
+      log.error("Failed to create feedback source bead", { feedbackId: item.id, err });
     }
 
     const beadType = this.categoryToBeadType(item.category);
@@ -545,12 +548,12 @@ export class FeedbackService {
                   "discovered-from"
                 );
               } catch (depErr) {
-                console.error(`[feedback] Failed to add discovered-from for ${issue.id}:`, depErr);
+                log.error("Failed to add discovered-from", { taskId: issue.id, err: depErr });
               }
             }
           }
         } catch (err) {
-          console.error(`[feedback] Failed to create beads task "${task.title}":`, err);
+          log.error("Failed to create beads task", { title: task.title, err });
         }
       }
 
@@ -565,10 +568,7 @@ export class FeedbackService {
               try {
                 await this.beadsService.addDependency(repoPath, childId, parentId);
               } catch (depErr) {
-                console.error(
-                  `[feedback] Failed to add blocks dep ${childId} -> ${parentId}:`,
-                  depErr
-                );
+                log.error("Failed to add blocks dep", { childId, parentId, err: depErr });
               }
             }
           }
@@ -596,12 +596,12 @@ export class FeedbackService {
                   "discovered-from"
                 );
               } catch (depErr) {
-                console.error(`[feedback] Failed to add discovered-from for ${issue.id}:`, depErr);
+                log.error("Failed to add discovered-from", { taskId: issue.id, err: depErr });
               }
             }
           }
         } catch (err) {
-          console.error(`[feedback] Failed to create beads task "${title}":`, err);
+          log.error("Failed to create beads task", { title, err });
         }
       }
     }
@@ -635,35 +635,33 @@ export class FeedbackService {
         }
 
         if (attempt < MAX_RETRIES) {
-          console.warn(
-            `[feedback] UNIQUE constraint on attempt ${attempt + 1}/${MAX_RETRIES + 1} ` +
-              `for "${title}", retrying after delay...`
-          );
+          log.warn("UNIQUE constraint, retrying", {
+            attempt: attempt + 1,
+            maxRetries: MAX_RETRIES + 1,
+            title,
+          });
           await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
           continue;
         }
 
         // All retries with parent exhausted; try without parent as fallback
         if (options.parentId) {
-          console.warn(
-            `[feedback] UNIQUE constraint persists under parent ${options.parentId}, ` +
-              `creating standalone task: "${title}"`
-          );
+          log.warn("UNIQUE constraint persists under parent, creating standalone task", {
+            parentId: options.parentId,
+            title,
+          });
           try {
             return await this.beadsService.create(repoPath, title, {
               ...options,
               parentId: undefined,
             });
           } catch (fallbackErr) {
-            console.error(
-              `[feedback] Standalone fallback also failed for "${title}":`,
-              fallbackErr
-            );
+            log.error("Standalone fallback also failed", { title, err: fallbackErr });
             return null;
           }
         }
 
-        console.error(`[feedback] UNIQUE constraint with no parent fallback for "${title}"`);
+        log.error("UNIQUE constraint with no parent fallback", { title });
         return null;
       }
     }
@@ -686,12 +684,10 @@ export class FeedbackService {
     const pending = items.filter((item) => item.status === "pending");
     if (pending.length === 0) return 0;
 
-    console.log(
-      `[feedback] Retrying categorization for ${pending.length} pending feedback item(s)`
-    );
+    log.info("Retrying categorization for pending feedback", { count: pending.length });
     for (const item of pending) {
       this.categorizeFeedback(projectId, item).catch((err) => {
-        console.error(`[feedback] Retry failed for ${item.id}:`, err);
+        log.error("Retry failed for feedback", { feedbackId: item.id, err });
       });
     }
     return pending.length;
@@ -714,7 +710,7 @@ export class FeedbackService {
     await this.saveFeedback(projectId, item);
 
     this.categorizeFeedback(projectId, item).catch((err) => {
-      console.error(`[feedback] Recategorize failed for ${item.id}:`, err);
+      log.error("Recategorize failed for feedback", { feedbackId: item.id, err });
     });
 
     return item;
@@ -780,10 +776,7 @@ export class FeedbackService {
       const settings = await this.projectService.getSettings(projectId);
       if (settings.deployment.autoDeployOnEvalResolution) {
         triggerDeploy(projectId).catch((err) => {
-          console.warn(
-            `[feedback] Auto-deploy on Evaluate resolution failed for ${projectId}:`,
-            err
-          );
+          log.warn("Auto-deploy on Evaluate resolution failed", { projectId, err });
         });
       }
     }

@@ -4,7 +4,9 @@ import { ProjectService } from "./project.service.js";
 import { deployStorageService } from "./deploy-storage.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { runDeployAsync } from "../routes/deliver.js";
+import { createLogger } from "../utils/logger.js";
 
+const log = createLogger("deploy");
 const projectService = new ProjectService();
 
 const activeAutoDeployments = new Set<string>();
@@ -28,7 +30,7 @@ function getCommitHash(repoPath: string): string | null {
  */
 export async function triggerDeploy(projectId: string): Promise<string | null> {
   if (activeAutoDeployments.has(projectId)) {
-    console.warn(`[deploy] Skipping auto-deploy for ${projectId}: deployment already in progress`);
+    log.warn("Skipping auto-deploy: deployment already in progress", { projectId });
     return null;
   }
 
@@ -57,7 +59,7 @@ export async function triggerDeploy(projectId: string): Promise<string | null> {
 
     runDeployAsync(projectId, record.id, project.repoPath, settings, target)
       .catch((err) => {
-        console.error(`[deploy] Deploy ${record.id} failed:`, err);
+        log.error("Deploy failed", { deployId: record.id, err });
       })
       .finally(() => {
         activeAutoDeployments.delete(projectId);
@@ -66,7 +68,7 @@ export async function triggerDeploy(projectId: string): Promise<string | null> {
     return record.id;
   } catch (err) {
     activeAutoDeployments.delete(projectId);
-    console.error(`[deploy] Trigger deploy failed for project ${projectId}:`, err);
+    log.error("Trigger deploy failed for project", { projectId, err });
     return null;
   }
 }

@@ -2,7 +2,9 @@ import { v4 as uuid } from "uuid";
 import type { HilConfig } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { broadcastToProject } from "../websocket/index.js";
+import { createLogger } from "../utils/logger.js";
 
+const log = createLogger("hil");
 type HilCategory = keyof HilConfig;
 
 /** Internal HIL category for test failures — always automated, never configurable (PRD §6.5.1) */
@@ -53,7 +55,7 @@ export class HilService {
     for (const [id, req] of this.pendingRequests) {
       const age = now - new Date(req.createdAt).getTime();
       if (age > HIL_REQUEST_TTL_MS) {
-        console.warn(`[HIL] Auto-resolving stale request ${id} (age: ${Math.round(age / 1000)}s)`);
+        log.warn("Auto-resolving stale request", { id, ageSec: Math.round(age / 1000) });
         const cb = this.resolveCallbacks.get(id);
         if (cb) {
           cb(true, "Auto-approved: request timed out");
@@ -82,7 +84,7 @@ export class HilService {
   ): Promise<{ approved: boolean; notes?: string }> {
     // PRD §6.5.1: Test failures are always automated — never configurable
     if (category === "testFailuresAndRetries") {
-      console.log(`[HIL] Automated decision for testFailuresAndRetries: ${description}`);
+      log.info("Automated decision for testFailuresAndRetries", { description });
       return { approved: defaultApproved };
     }
 
@@ -97,7 +99,7 @@ export class HilService {
     switch (mode) {
       case "automated":
         // Log and proceed automatically with default
-        console.log(`[HIL] Automated decision for ${category}: ${description}`);
+        log.info("Automated decision", { category, description });
         return { approved: defaultApproved };
 
       case "notify_and_proceed": {
@@ -116,7 +118,7 @@ export class HilService {
             scopeChangeProposedUpdates: scopeChangeMetadata.scopeChangeProposedUpdates,
           }),
         });
-        console.log(`[HIL] Notify-and-proceed for ${category}: ${description}`);
+        log.info("Notify-and-proceed", { category, description });
         return { approved: defaultApproved };
       }
 
@@ -135,7 +137,7 @@ export class HilService {
             scopeChangeProposedUpdates: scopeChangeMetadata.scopeChangeProposedUpdates,
           }),
         });
-        console.log(`[HIL] Waiting for approval on ${category}: ${description}`);
+        log.info("Waiting for approval", { category, description });
 
         return new Promise<{ approved: boolean; notes?: string }>((resolve) => {
           this.resolveCallbacks.set(request.id, (approved, notes) => {
@@ -156,7 +158,7 @@ export class HilService {
   respondToRequest(requestId: string, approved: boolean, notes?: string): void {
     const request = this.pendingRequests.get(requestId);
     if (!request) {
-      console.warn(`[HIL] Unknown request ID: ${requestId}`);
+      log.warn("Unknown request ID", { requestId });
       return;
     }
 
@@ -172,7 +174,7 @@ export class HilService {
     }
 
     this.pendingRequests.delete(requestId);
-    console.log(`[HIL] Request ${requestId} resolved: ${approved ? "approved" : "rejected"}`);
+    log.info("Request resolved", { requestId, approved });
   }
 
   /**

@@ -19,7 +19,9 @@ import { broadcastToProject, sendAgentOutputToProject } from "../websocket/index
 import { normalizeCodingStatus } from "./result-normalizers.js";
 import { eventLogService } from "./event-log.service.js";
 import type { TaskAssignment } from "./orchestrator.service.js";
+import { createLogger } from "../utils/logger.js";
 
+const log = createLogger("crash-recovery");
 const RECOVERY_POLL_MS = 30_000;
 
 function isPidAlive(pid: number): boolean {
@@ -182,7 +184,7 @@ export class CrashRecoveryService {
     state.status.totalFailed = persisted.totalFailed;
 
     if (!persisted.currentTaskId || !persisted.branchName) {
-      console.log("[orchestrator] Recovery: no active task in persisted state, starting fresh");
+      log.info("Recovery: no active task in persisted state, starting fresh");
       await callbacks.clearPersistedState(repoPath);
       return;
     }
@@ -191,7 +193,7 @@ export class CrashRecoveryService {
     const branchName = persisted.branchName;
     const pid = persisted.agentPid;
 
-    console.log("[orchestrator] Recovery: found persisted active task", {
+    log.info("Recovery: found persisted active task", {
       projectId,
       taskId,
       phase: persisted.currentPhase,
@@ -258,17 +260,19 @@ export class CrashRecoveryService {
     }
 
     const inactiveMs = Date.now() - lastOutput;
-    console.log(`[orchestrator] Recovery: agent PID ${pid} still alive`, {
+    log.info("Recovery: agent PID still alive", {
+      pid,
       lastOutputSource,
       inactiveForSec: Math.round(inactiveMs / 1000),
       timeoutSec: Math.round(AGENT_INACTIVITY_TIMEOUT_MS / 1000),
     });
 
     if (inactiveMs > AGENT_INACTIVITY_TIMEOUT_MS) {
-      console.warn(
-        `[orchestrator] Recovery: agent PID ${pid} exceeded inactivity timeout ` +
-          `(${Math.round(inactiveMs / 1000)}s > ${Math.round(AGENT_INACTIVITY_TIMEOUT_MS / 1000)}s), killing`
-      );
+      log.warn("Recovery: agent exceeded inactivity timeout, killing", {
+        pid,
+        inactiveSec: Math.round(inactiveMs / 1000),
+        timeoutSec: Math.round(AGENT_INACTIVITY_TIMEOUT_MS / 1000),
+      });
       this.killPidGracefully(pid);
 
       await this.performCrashRecovery(
@@ -285,7 +289,7 @@ export class CrashRecoveryService {
       return;
     }
 
-    console.log(`[orchestrator] Recovery: resuming monitoring for PID ${pid}`);
+    log.info("Recovery: resuming monitoring for PID", { pid });
 
     state.status.currentTask = taskId;
     state.status.currentPhase = persisted.currentPhase;
@@ -320,9 +324,7 @@ export class CrashRecoveryService {
         if (initialBytes.data.length > 0) {
           outputReadOffset = initialBytes.offset;
           sendAgentOutputToProject(projectId, taskId, initialBytes.data);
-          console.log(
-            `[orchestrator] Recovery: streamed ${initialBytes.data.length} bytes of prior agent output`
-          );
+          log.info("Recovery: streamed prior agent output", { bytes: initialBytes.data.length });
         }
       } catch {
         // Output file may not exist (agent using pipes, or not yet started writing)
@@ -357,10 +359,11 @@ export class CrashRecoveryService {
         const elapsed = Date.now() - currentLastOutput;
         if (elapsed > AGENT_INACTIVITY_TIMEOUT_MS && isPidAlive(pid)) {
           state.timers.clear("recoveryPoll");
-          console.warn(
-            `[orchestrator] Recovery: agent timeout for ${taskId} ` +
-              `(${Math.round(elapsed / 1000)}s of inactivity), killing PID ${pid}`
-          );
+          log.warn("Recovery: agent timeout, killing", {
+            taskId,
+            pid,
+            inactiveSec: Math.round(elapsed / 1000),
+          });
           state.agent.killedDueToTimeout = true;
           this.killPidGracefully(pid);
           setTimeout(async () => {
@@ -378,7 +381,7 @@ export class CrashRecoveryService {
                 "timeout"
               );
             } catch (err) {
-              console.error("[orchestrator] Recovery: timeout handler failed:", err);
+              log.error("Recovery: timeout handler failed", { err });
               await this.performCrashRecovery(
                 projectId,
                 repoPath,
@@ -398,7 +401,7 @@ export class CrashRecoveryService {
         if (isPidAlive(pid)) return;
         state.timers.clear("recoveryPoll");
 
-        console.log(`[orchestrator] Recovery: agent PID ${pid} has exited, handling result`);
+        log.info("Recovery: agent PID has exited, handling result", { pid });
         try {
           const task = await deps.beads.show(repoPath, taskId);
           if (persisted.currentPhase === "review") {
@@ -407,7 +410,7 @@ export class CrashRecoveryService {
             await callbacks.handleCodingDone(projectId, repoPath, task, branchName, null);
           }
         } catch (err) {
-          console.error("[orchestrator] Recovery: post-exit handling failed:", err);
+          log.error("Recovery: post-exit handling failed", { err });
           await this.performCrashRecovery(
             projectId,
             repoPath,
@@ -475,9 +478,7 @@ export class CrashRecoveryService {
     callbacks: CrashRecoveryCallbacks
   ): Promise<void> {
     activeAgentsService.unregister(taskId);
-    console.log(
-      `[orchestrator] Recovery: crash recovery for task ${taskId} (branch ${branchName})`
-    );
+    log.info("Recovery: crash recovery for task", { taskId, branchName });
 
     // Read assignment.json if available (GUPP pattern — richer recovery context)
     let assignment: TaskAssignment | null = null;
@@ -487,7 +488,7 @@ export class CrashRecoveryService {
     try {
       const raw = await readFile(path.join(assignmentDir, OPENSPRINT_PATHS.assignment), "utf-8");
       assignment = JSON.parse(raw) as TaskAssignment;
-      console.log("[orchestrator] Recovery: found assignment.json", {
+      log.info("Recovery: found assignment.json", {
         taskId: assignment.taskId,
         phase: assignment.phase,
         attempt: assignment.attempt,
@@ -529,21 +530,21 @@ export class CrashRecoveryService {
     const commitCount = await deps.branchManager.getCommitCountAhead(repoPath, branchName);
     const diff = await deps.branchManager.captureBranchDiff(repoPath, branchName);
     if (diff) {
-      console.log(
-        `[orchestrator] Recovery: captured ${diff.length} bytes of diff from ${branchName} (${commitCount} commits ahead)`
-      );
+      log.info("Recovery: captured diff from branch", {
+        branchName,
+        diffBytes: diff.length,
+        commitCount,
+      });
     }
 
     try {
       await deps.branchManager.removeTaskWorktree(repoPath, taskId);
     } catch (err) {
-      console.warn("[orchestrator] Recovery: worktree cleanup failed:", err);
+      log.warn("Recovery: worktree cleanup failed", { err });
     }
 
     if (commitCount > 0) {
-      console.log(
-        `[orchestrator] Recovery: preserving branch ${branchName} with ${commitCount} commits`
-      );
+      log.info("Recovery: preserving branch", { branchName, commitCount });
       try {
         await deps.beads.comment(
           repoPath,
@@ -551,7 +552,7 @@ export class CrashRecoveryService {
           `Agent crashed (backend restart). Branch preserved with ${commitCount} commits for next attempt.`
         );
       } catch (err) {
-        console.warn("[orchestrator] Recovery: failed to add comment:", err);
+        log.warn("Recovery: failed to add comment", { err });
       }
     } else {
       try {
@@ -566,7 +567,7 @@ export class CrashRecoveryService {
           "Agent crashed (backend restart). No committed work found, task requeued."
         );
       } catch (err) {
-        console.warn("[orchestrator] Recovery: failed to add comment:", err);
+        log.warn("Recovery: failed to add comment", { err });
       }
     }
 
@@ -591,7 +592,7 @@ export class CrashRecoveryService {
       assignee: null,
     });
 
-    console.log(`[orchestrator] Recovery: task ${taskId} requeued, resuming normal operation`);
+    log.info("Recovery: task requeued, resuming normal operation", { taskId });
   }
 
   /** Try to advance to review if result.json exists with success status. Returns true if advanced. */
@@ -618,9 +619,7 @@ export class CrashRecoveryService {
     const commitCount = await deps.branchManager.getCommitCountAhead(repoPath, branchName);
     if (!(result?.status === "success" && commitCount > 0)) return false;
 
-    console.log(
-      `[orchestrator] Recovery: found successful result.json with ${commitCount} commits, advancing to review`
-    );
+    log.info("Recovery: found successful result.json, advancing to review", { commitCount });
 
     try {
       const task = await deps.beads.show(repoPath, taskId);
@@ -679,7 +678,7 @@ export class CrashRecoveryService {
         return true;
       }
     } catch (err) {
-      console.warn("[orchestrator] Recovery: result.json advance-to-review failed:", err);
+      log.warn("Recovery: result.json advance-to-review failed", { err });
     }
     return false;
   }

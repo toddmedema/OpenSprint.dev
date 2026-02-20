@@ -3,8 +3,10 @@ import fs from "fs/promises";
 import os from "os";
 import path from "path";
 import { promisify } from "util";
+import { createLogger } from "../utils/logger.js";
 
 const execAsync = promisify(exec);
+const log = createLogger("branch-manager");
 
 /** Thrown when `pushMain` rebase encounters conflicts. Repo is left in rebase state. */
 export class RebaseConflictError extends Error {
@@ -79,7 +81,7 @@ export class BranchManager {
       // Delete the task branch
       await this.git(repoPath, `branch -D ${branchName}`);
     } catch (error) {
-      console.error(`Failed to revert branch ${branchName}:`, error);
+      log.error("Failed to revert branch", { branchName, error });
       // Force checkout main even if something failed
       try {
         await this.git(repoPath, "checkout -f main");
@@ -130,7 +132,7 @@ export class BranchManager {
     try {
       await this.git(repoPath, `push -u origin ${branchName}`);
     } catch (error) {
-      console.warn(`[branch-manager] pushBranch ${branchName} failed:`, error);
+      log.warn("pushBranch failed", { branchName, error });
       throw error;
     }
   }
@@ -145,7 +147,7 @@ export class BranchManager {
     try {
       await this.git(repoPath, "fetch origin main");
     } catch (error) {
-      console.warn("[branch-manager] pushMain: fetch failed, pushing anyway:", error);
+      log.warn("pushMain: fetch failed, pushing anyway", { error });
     }
 
     try {
@@ -250,7 +252,7 @@ export class BranchManager {
       await this.git(repoPath, `commit -m "WIP: ${taskId}"`);
       return true;
     } catch (error) {
-      console.warn(`[branch-manager] commitWip failed for ${taskId}:`, error);
+      log.warn("commitWip failed", { taskId, error });
       return false;
     }
   }
@@ -288,9 +290,9 @@ export class BranchManager {
           const stat = await fs.stat(lockPath);
           const lockAge = Date.now() - stat.mtimeMs;
           if (lockAge > 30_000) {
-            console.warn(
-              `[branch-manager] Removing stale .git/index.lock (age: ${Math.round(lockAge / 1000)}s)`
-            );
+            log.warn("Removing stale .git/index.lock", {
+              ageSec: Math.round(lockAge / 1000),
+            });
             await fs.unlink(lockPath);
             return;
           }
@@ -304,7 +306,7 @@ export class BranchManager {
 
     // Timeout reached — force-remove the lock as last resort
     try {
-      console.warn("[branch-manager] Git lock wait timed out, force-removing .git/index.lock");
+      log.warn("Git lock wait timed out, force-removing .git/index.lock");
       await fs.unlink(lockPath);
     } catch {
       // Lock may have been removed concurrently
@@ -321,7 +323,9 @@ export class BranchManager {
 
     const currentBranch = await this.getCurrentBranch(repoPath);
     if (currentBranch !== "main") {
-      console.warn(`[branch-manager] Expected main but on ${currentBranch}, switching to main`);
+      log.warn("Expected main but on different branch, switching to main", {
+        currentBranch,
+      });
       try {
         await this.git(repoPath, "reset --hard HEAD");
         await this.git(repoPath, "checkout main");
@@ -449,7 +453,7 @@ export class BranchManager {
       return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[branch-manager] npm install in ${repoPath} failed:`, msg);
+      log.warn("npm install failed", { repoPath, err: msg });
       return false;
     }
   }
@@ -465,9 +469,7 @@ export class BranchManager {
     const resolvedRepo = await fs.realpath(repoPath).catch(() => repoPath);
     const resolvedWt = await fs.realpath(wtPath).catch(() => wtPath);
     if (resolvedRepo === resolvedWt) {
-      console.warn(
-        "[branch-manager] symlinkNodeModules: wtPath equals repoPath, skipping to avoid circular symlinks"
-      );
+      log.warn("symlinkNodeModules: wtPath equals repoPath, skipping to avoid circular symlinks");
       return;
     }
 
@@ -481,13 +483,14 @@ export class BranchManager {
       if (code === "ENOENT") {
         const ensured = await this.ensureNodeModules(repoPath);
         if (!ensured) {
-          console.warn(
-            `[branch-manager] Skipping root node_modules symlink: ${srcRoot} does not exist (no package.json or npm install failed)`
-          );
+          log.warn("Skipping root node_modules symlink: does not exist", {
+            srcRoot,
+            reason: "no package.json or npm install failed",
+          });
           return;
         }
       } else {
-        console.warn(`[branch-manager] Skipping root node_modules symlink:`, code ?? err);
+        log.warn("Skipping root node_modules symlink", { code: code ?? err });
         return;
       }
     }
@@ -496,7 +499,7 @@ export class BranchManager {
       await this.forceSymlink(srcRoot, destRoot);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[branch-manager] Failed to symlink root node_modules: ${msg}`);
+      log.warn("Failed to symlink root node_modules", { err: msg });
     }
 
     // Symlink per-package node_modules (for .vite caches etc.)
@@ -528,9 +531,9 @@ export class BranchManager {
     const resolvedTarget = await fs.realpath(target).catch(() => path.resolve(target));
     const resolvedLink = path.resolve(linkPath);
     if (resolvedTarget === resolvedLink) {
-      console.warn(
-        `[branch-manager] forceSymlink: target === linkPath (${resolvedTarget}), skipping circular symlink`
-      );
+      log.warn("forceSymlink: target === linkPath, skipping circular symlink", {
+        path: resolvedTarget,
+      });
       return;
     }
 
@@ -541,9 +544,9 @@ export class BranchManager {
         // Don't delete a real directory that isn't a symlink
         const stat = await fs.lstat(linkPath);
         if (stat.isDirectory() && !stat.isSymbolicLink()) {
-          console.warn(
-            `[branch-manager] forceSymlink: ${linkPath} is a real directory, refusing to replace`
-          );
+          log.warn("forceSymlink: path is a real directory, refusing to replace", {
+            linkPath,
+          });
           return;
         }
         await fs.rm(linkPath, { recursive: true, force: true });

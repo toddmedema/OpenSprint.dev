@@ -7,6 +7,9 @@ import fs from "fs/promises";
 import path from "path";
 import type { ProjectIndex, ProjectIndexEntry } from "@opensprint/shared";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("project-index");
 
 function getProjectIndexPaths(): { dir: string; file: string } {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
@@ -37,9 +40,9 @@ async function loadIndex(): Promise<ProjectIndex> {
     // Filter out corrupt entries missing required fields
     const valid = parsed.projects.filter(isValidEntry);
     if (valid.length < parsed.projects.length) {
-      console.warn(
-        `[project-index] Filtered ${parsed.projects.length - valid.length} corrupt entries from project index`
-      );
+      log.warn("Filtered corrupt entries from project index", {
+        filtered: parsed.projects.length - valid.length,
+      });
     }
     return { projects: valid };
   } catch {

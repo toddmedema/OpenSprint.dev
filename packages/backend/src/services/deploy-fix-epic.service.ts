@@ -14,7 +14,9 @@ import { ProjectService } from "./project.service.js";
 import { gitCommitQueue } from "./git-commit-queue.service.js";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
+import { createLogger } from "../utils/logger.js";
 
+const log = createLogger("deploy-fix-epic");
 const projectService = new ProjectService();
 const beads = new BeadsService();
 const agentClient = new AgentClient();
@@ -92,7 +94,7 @@ Output your response as JSON with status and tasks array.`;
       cwd: repoPath,
     });
   } catch (err) {
-    console.error("[deploy-fix-epic] Planning agent invocation failed:", err);
+    log.error("Planning agent invocation failed", { err });
     return null;
   }
 
@@ -101,12 +103,12 @@ Output your response as JSON with status and tasks array.`;
     tasks?: Array<{ index?: number; title: string; description?: string; priority?: number; depends_on?: number[] }>;
   }>(response.content, "tasks");
   if (!parsed) {
-    console.warn("[deploy-fix-epic] Agent did not return valid JSON with tasks");
+    log.warn("Agent did not return valid JSON with tasks");
     return null;
   }
 
   if (parsed.status !== "success" || !Array.isArray(parsed.tasks) || parsed.tasks.length === 0) {
-    console.warn("[deploy-fix-epic] Agent returned no tasks or failed status");
+    log.warn("Agent returned no tasks or failed status");
     return null;
   }
 

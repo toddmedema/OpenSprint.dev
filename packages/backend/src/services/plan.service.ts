@@ -31,7 +31,9 @@ import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
+import { createLogger } from "../utils/logger.js";
 
+const log = createLogger("plan");
 const PLAN_TEMPLATE_STRUCTURE = PLAN_MARKDOWN_SECTIONS.join(", ");
 
 const DECOMPOSE_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. You analyze Product Requirements Documents (PRDs) and suggest a breakdown into discrete, implementable features (Plans).
@@ -208,7 +210,7 @@ export class PlanService {
       ).length;
       return { total: children.length, done };
     } catch (err) {
-      console.warn("[plan] countTasks failed, using default:", getErrorMessage(err));
+      log.warn("countTasks failed, using default", { err: getErrorMessage(err) });
       return { total: 0, done: 0 };
     }
   }
@@ -253,7 +255,7 @@ export class PlanService {
         }
       }
     } catch (err) {
-      console.warn("[plan] buildDependencyEdgesCore: beads unavailable:", getErrorMessage(err));
+      log.warn("buildDependencyEdgesCore: beads unavailable", { err: getErrorMessage(err) });
     }
 
     // 2. Parse Plan markdown for "## Dependencies" section
@@ -306,12 +308,12 @@ export class PlanService {
             const plan = await this.getPlan(projectId, planId);
             plans.push(plan);
           } catch (err) {
-            console.warn(`[plan] Skipping broken plan ${planId}:`, getErrorMessage(err));
+            log.warn("Skipping broken plan", { planId, err: getErrorMessage(err) });
           }
         }
       }
     } catch (err) {
-      console.warn("[plan] No plans directory or read failed:", getErrorMessage(err));
+      log.warn("No plans directory or read failed", { err: getErrorMessage(err) });
     }
 
     const edges = await this.buildDependencyEdges(plans, repoPath);
@@ -476,7 +478,7 @@ export class PlanService {
     // Validate against template (warn only, don't block) — PRD §7.2.3
     const validation = validatePlanContent(body.content);
     if (validation.warnings.length > 0) {
-      console.warn(`[plan] Plan ${planId} validation: ${validation.warnings.join("; ")}`);
+      log.warn("Plan validation", { planId, warnings: validation.warnings });
     }
 
     // Create beads epic
@@ -575,7 +577,7 @@ export class PlanService {
     // Validate against template (warn only, don't block) — PRD §7.2.3
     const validation = validatePlanContent(body.content);
     if (validation.warnings.length > 0) {
-      console.warn(`[plan] Plan ${planId} validation on update: ${validation.warnings.join("; ")}`);
+      log.warn("Plan validation on update", { planId, warnings: validation.warnings });
     }
 
     return this.getPlan(projectId, planId);
@@ -628,15 +630,13 @@ export class PlanService {
       }>;
     }>(response.content, "tasks");
     if (!parsed) {
-      console.warn(
-        "[plan] Task generation agent did not return valid JSON, shipping without tasks"
-      );
+      log.warn("Task generation agent did not return valid JSON, shipping without tasks");
       return 0;
     }
 
     const tasks = parsed.tasks ?? [];
     if (tasks.length === 0) {
-      console.warn("[plan] Task generation returned no tasks");
+      log.warn("Task generation returned no tasks");
       return 0;
     }
 
@@ -669,7 +669,7 @@ export class PlanService {
       }
     }
 
-    console.log(`[plan] Generated ${tasks.length} tasks for plan ${plan.metadata.planId}`);
+    log.info("Generated tasks for plan", { count: tasks.length, planId: plan.metadata.planId });
 
     // Broadcast task creation events
     for (const [, taskId] of taskIdMap) {
@@ -707,7 +707,7 @@ export class PlanService {
           await this.autoReviewPlanAgainstRepo(projectId, [updatedPlan]);
         }
       } catch (err) {
-        console.error("[plan] Task generation failed, shipping without tasks:", err);
+        log.error("Task generation failed, shipping without tasks", { err });
         // Ship proceeds even if task generation fails; user can add tasks manually
       }
     }
@@ -732,7 +732,7 @@ export class PlanService {
     try {
       await this.chatService.syncPrdFromPlanShip(projectId, planId, plan.content);
     } catch (err) {
-      console.error("[plan] PRD sync on build approval failed:", err);
+      log.error("PRD sync on build approval failed", { err });
       // Build approval succeeds even if PRD sync fails; user can manually update PRD
     }
 
@@ -852,9 +852,7 @@ ${planNew}`;
 
     const auditorResult = parseAuditorResult(auditorResponse.content);
     if (!auditorResult || auditorResult.status === "failed") {
-      console.error(
-        "[plan] Auditor failed or returned invalid result, falling back to full rebuild"
-      );
+      log.error("Auditor failed or returned invalid result, falling back to full rebuild");
       return this.shipPlan(projectId, planId);
     }
 
@@ -1372,7 +1370,7 @@ ${planNew}`;
         reason?: string;
       }>(response.content, "taskIdsToClose");
       if (!parsed) {
-        console.warn("[plan] Auto-review agent did not return valid JSON, skipping");
+        log.warn("Auto-review agent did not return valid JSON, skipping");
         return;
       }
 
@@ -1390,17 +1388,15 @@ ${planNew}`;
             assignee: null,
           });
         } catch (err) {
-          console.warn(`[plan] Auto-review: failed to close task ${taskId}:`, err);
+          log.warn("Auto-review: failed to close task", { taskId, err });
         }
       }
 
       if (toClose.length > 0) {
-        console.log(
-          `[plan] Auto-review marked ${toClose.length} task(s) as done: ${toClose.join(", ")}`
-        );
+        log.info("Auto-review marked tasks as done", { count: toClose.length, taskIds: toClose });
       }
     } catch (err) {
-      console.error("[plan] Auto-review against repo failed:", err);
+      log.error("Auto-review against repo failed", { err });
       // Decompose succeeded; auto-review is best-effort
     }
   }
@@ -1418,7 +1414,7 @@ ${planNew}`;
       }
       return context || "The PRD is currently empty.";
     } catch (err) {
-      console.warn("[plan] buildPrdContext: PRD unavailable:", getErrorMessage(err));
+      log.warn("buildPrdContext: PRD unavailable", { err: getErrorMessage(err) });
       return "No PRD exists yet.";
     }
   }
@@ -1535,7 +1531,7 @@ ${planNew}`;
     try {
       await this.autoReviewPlanAgainstRepo(projectId, created);
     } catch (err) {
-      console.error("[plan] Auto-review after decompose failed:", err);
+      log.error("Auto-review after decompose failed", { err });
       // Decompose succeeded; auto-review is best-effort
     }
 

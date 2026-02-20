@@ -1,5 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import type { ApiErrorResponse } from "@opensprint/shared";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("error-handler");
 
 export class AppError extends Error {
   constructor(
@@ -14,7 +17,7 @@ export class AppError extends Error {
 }
 
 export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction): void {
-  console.error(`[Error] ${err.message}`, err.stack);
+  log.error("Request error", { message: err.message, stack: err.stack });
 
   if (err instanceof AppError) {
     const body: ApiErrorResponse = {

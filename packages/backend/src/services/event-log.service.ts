@@ -8,6 +8,9 @@
 import fs from "fs/promises";
 import path from "path";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("event-log");
 
 export interface OrchestratorEvent {
   timestamp: string;
@@ -28,7 +31,7 @@ export class EventLogService {
       await fs.mkdir(path.dirname(logPath), { recursive: true });
       await fs.appendFile(logPath, JSON.stringify(event) + "\n", "utf-8");
     } catch (err) {
-      console.warn("[event-log] Failed to append event:", err);
+      log.warn("Failed to append event", { err });
     }
   }
 

@@ -2,6 +2,9 @@ import fs from "fs/promises";
 import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { BranchManager } from "./branch-manager.js";
 import { heartbeatService } from "./heartbeat.service.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("orphan-recovery");
 
 /**
  * Orphan recovery: detect and retry abandoned IN_PROGRESS tasks.
@@ -77,17 +80,12 @@ export class OrphanRecoveryService {
         await this.recoverOne(repoPath, task);
         recovered.push(task.id);
       } catch (err) {
-        console.warn(
-          `[orphan-recovery] Failed to recover ${task.id}:`,
-          (err as Error).message,
-        );
+        log.warn("Failed to recover task", { taskId: task.id, err: (err as Error).message });
       }
     }
 
     if (recovered.length > 0) {
-      console.warn(
-        `[orphan-recovery] Recovered ${recovered.length} orphaned task(s): ${recovered.join(", ")}`,
-      );
+      log.warn("Recovered orphaned tasks", { count: recovered.length, recovered });
     }
 
     return { recovered };

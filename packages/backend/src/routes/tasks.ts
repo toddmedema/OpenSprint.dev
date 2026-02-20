@@ -1,7 +1,9 @@
 import { Router, Request } from 'express';
 import { TaskService } from '../services/task.service.js';
 import type { ApiResponse, Task, AgentSession } from '@opensprint/shared';
+import { createLogger } from '../utils/logger.js';
 
+const log = createLogger('tasks');
 const taskService = new TaskService();
 
 export const tasksRouter = Router({ mergeParams: true });
@@ -65,7 +67,7 @@ tasksRouter.get('/:taskId', async (req: Request<TaskParams>, res, next) => {
     const durationMs = Math.round(performance.now() - start);
     res.set('Server-Timing', `task-detail;dur=${durationMs};desc="Task detail load"`);
     if (durationMs > 500) {
-      console.warn(`[tasks] GET /:taskId slow: ${durationMs}ms for ${req.params.taskId}`);
+      log.warn("GET /:taskId slow", { durationMs, taskId: req.params.taskId });
     }
     const body: ApiResponse<Task> = { data: task };
     res.json(body);

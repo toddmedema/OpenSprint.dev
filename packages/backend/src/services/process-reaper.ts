@@ -1,5 +1,7 @@
 import { execSync } from "child_process";
+import { createLogger } from "../utils/logger.js";
 
+const log = createLogger("reaper");
 const REAP_INTERVAL_MS = 60_000;
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -67,7 +69,7 @@ function reapOrphanedWorkers(): void {
     }
 
     if (killed > 0) {
-      console.log(`[reaper] Killed ${killed} orphaned worker(s)`);
+      log.info("Killed orphaned workers", { killed });
     }
   } catch {
     /* ps not available or timed out — skip silently */
@@ -105,7 +107,7 @@ function reapOrphanedClaudeProcesses(): void {
     }
 
     if (killed > 0) {
-      console.log(`[reaper] Killed ${killed} orphaned claude process(es)`);
+      log.info("Killed orphaned claude processes", { killed });
     }
   } catch {
     /* ps not available or timed out — skip silently */

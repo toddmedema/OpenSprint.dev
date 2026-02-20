@@ -3,7 +3,9 @@ import { ProjectService } from "../services/project.service.js";
 import { PlanService } from "../services/plan.service.js";
 import { orchestratorService } from "../services/orchestrator.service.js";
 import type { CreateProjectRequest, ApiResponse, Project } from "@opensprint/shared";
+import { createLogger } from "../utils/logger.js";
 
+const log = createLogger("projects");
 const projectService = new ProjectService();
 const planService = new PlanService();
 
@@ -79,7 +81,7 @@ projectsRouter.put("/:id", async (req, res, next) => {
     // otherwise subsequent requests may hit the old directory or a half-ready state.
     if (repoPathChanged) {
       const projectId = req.params.id;
-      console.log(`[projects] repoPath changed for ${projectId}, restarting orchestrator`);
+      log.info("repoPath changed, restarting orchestrator", { projectId });
       orchestratorService.stopProject(projectId);
       await orchestratorService.ensureRunning(projectId);
     }

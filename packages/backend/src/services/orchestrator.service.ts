@@ -45,6 +45,9 @@ import { normalizeCodingStatus, normalizeReviewStatus } from "./result-normalize
 import { getPlanComplexityForTask } from "./plan-complexity.js";
 import { eventLogService } from "./event-log.service.js";
 import { agentIdentityService, type AttemptOutcome } from "./agent-identity.service.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("orchestrator");
 
 /**
  * Failure types for smarter recovery routing.
@@ -313,9 +316,7 @@ export class OrchestratorService {
         break;
     }
 
-    console.log(
-      `[orchestrator] Transition [${projectId}]: ${prev} → ${t.to} (task: ${state.status.currentTask ?? "none"})`
-    );
+    log.info(`Transition [${projectId}]: ${prev} → ${t.to} (task: ${state.status.currentTask ?? "none"})`);
 
     const repoPath = this.repoPathCache.get(projectId);
     if (repoPath) {
@@ -370,7 +371,7 @@ export class OrchestratorService {
       await fs.mkdir(path.dirname(statePath), { recursive: true });
       await writeJsonAtomic(statePath, persisted);
     } catch (err) {
-      console.warn("[orchestrator] Failed to persist state:", err);
+      log.warn("Failed to persist state", { err });
     }
   }
 
@@ -457,7 +458,7 @@ export class OrchestratorService {
     const state = this.state.get(projectId);
     if (!state) return;
 
-    console.log(`[orchestrator] Stopping orchestrator for project ${projectId}`);
+    log.info(`Stopping orchestrator for project ${projectId}`);
 
     state.timers.clearAll();
 
@@ -479,7 +480,7 @@ export class OrchestratorService {
     state.loopActive = false;
     this.state.delete(projectId);
 
-    console.log(`[orchestrator] Orchestrator stopped for project ${projectId}`);
+    log.info(`Orchestrator stopped for project ${projectId}`);
   }
 
   /** Stop all running orchestrators (for graceful shutdown). */
@@ -510,7 +511,7 @@ export class OrchestratorService {
     try {
       orphanResult = await orphanRecoveryService.recoverOrphanedTasks(repoPath, excludeTaskId);
     } catch (err) {
-      console.error("[orchestrator] Orphan recovery failed:", err);
+      log.error("Orphan recovery failed", { err });
       orphanResult = { recovered: [] };
     }
     // Stale heartbeat recovery: identify orphaned tasks via heartbeat files > 2 min old
@@ -521,14 +522,14 @@ export class OrchestratorService {
         excludeTaskId
       );
     } catch (err) {
-      console.error("[orchestrator] Stale heartbeat recovery failed:", err);
+      log.error("Stale heartbeat recovery failed", { err });
       staleHeartbeatResult = { recovered: [] };
     }
     const recovered = [...new Set([...orphanResult.recovered, ...staleHeartbeatResult.recovered])];
     if (recovered.length > 0) {
-      console.warn(
-        `[orchestrator] Recovered ${recovered.length} orphaned task(s) on startup: ${recovered.join(", ")}`
-      );
+      log.warn(`Recovered ${recovered.length} orphaned task(s) on startup`, {
+        recovered,
+      });
     }
 
     // Crash recovery: check for persisted state from a previous run
@@ -551,7 +552,7 @@ export class OrchestratorService {
         },
         WATCHDOG_INTERVAL_MS
       );
-      console.log("[orchestrator] Watchdog started (60s interval) for project", projectId);
+      log.info("Watchdog started (60s interval) for project", { projectId });
     }
 
     // Kick off the loop if idle (recovery may have left it active for PID-alive monitoring)
@@ -575,7 +576,7 @@ export class OrchestratorService {
       return;
     }
 
-    console.log("[orchestrator] Nudge received, starting loop for project", projectId);
+    log.info("Nudge received, starting loop for project", { projectId });
     this.runLoop(projectId);
   }
 
@@ -654,7 +655,7 @@ export class OrchestratorService {
       state.status.queueDepth = readyTasks.length;
 
       if (readyTasks.length === 0) {
-        console.log("[orchestrator] No ready tasks, going idle", { projectId });
+        log.info("No ready tasks, going idle", { projectId });
         if (state.status.currentTask) activeAgentsService.unregister(state.status.currentTask);
         this.resetTaskState(state);
         state.loopActive = false;
@@ -676,16 +677,14 @@ export class OrchestratorService {
           task = t;
           break;
         }
-        console.log("[orchestrator] Skipping task (blockers not all closed)", {
+        log.info("Skipping task (blockers not all closed)", {
           projectId,
           taskId: t.id,
           title: t.title,
         });
       }
       if (!task) {
-        console.log("[orchestrator] No task with all blockers closed, going idle", {
-          projectId,
-        });
+        log.info("No task with all blockers closed, going idle", { projectId });
         if (state.status.currentTask) activeAgentsService.unregister(state.status.currentTask);
         this.resetTaskState(state);
         state.loopActive = false;
@@ -696,7 +695,7 @@ export class OrchestratorService {
         });
         return;
       }
-      console.log("[orchestrator] Picking task", { projectId, taskId: task.id, title: task.title });
+      log.info("Picking task", { projectId, taskId: task.id, title: task.title });
 
       // 3. Assign the task
       await this.beads.update(repoPath, task.id, {
@@ -734,7 +733,7 @@ export class OrchestratorService {
       // 5. Execute the coding phase (creates worktree, no checkout in main WT)
       await this.executeCodingPhase(projectId, repoPath, task, undefined);
     } catch (error) {
-      console.error(`Orchestrator loop error for project ${projectId}:`, error);
+      log.error(`Orchestrator loop error for project ${projectId}`, { error });
       // Retry loop after delay
       state.loopActive = false;
       state.timers.setTimeout("loop", () => this.runLoop(projectId), 10000);
@@ -849,7 +848,7 @@ export class OrchestratorService {
 
       await this.persistState(projectId, repoPath);
     } catch (error) {
-      console.error(`Coding phase failed for task ${task.id}:`, error);
+      log.error(`Coding phase failed for task ${task.id}`, { error });
       await this.handleTaskFailure(
         projectId,
         repoPath,
@@ -1049,7 +1048,7 @@ export class OrchestratorService {
 
       await this.persistState(projectId, repoPath);
     } catch (error) {
-      console.error(`Review phase failed for task ${task.id}:`, error);
+      log.error(`Review phase failed for task ${task.id}`, { error });
       await this.handleTaskFailure(
         projectId,
         repoPath,
@@ -1196,7 +1195,7 @@ export class OrchestratorService {
         taskTitle: task.title || task.id,
       });
     } catch (mergeErr) {
-      console.warn("[orchestrator] Merge to main failed:", mergeErr);
+      log.warn("Merge to main failed", { mergeErr });
       const merged = await this.branchManager.verifyMerge(repoPath, branchName);
       if (!merged) {
         await this.handleTaskFailure(
@@ -1232,7 +1231,7 @@ export class OrchestratorService {
         outcome: "success",
         durationMs: Date.now() - new Date(state.agent.startedAt).getTime(),
       })
-      .catch((err) => console.warn("[orchestrator] Failed to record attempt:", err));
+      .catch((err) => log.warn("Failed to record attempt", { err }));
 
     // PRD §5.9: Orchestrator manages beads persistence explicitly via export at checkpoints
     gitCommitQueue.enqueue({
@@ -1296,7 +1295,7 @@ export class OrchestratorService {
     // Fire-and-forget: push to remote, auto-deploy, and feedback checks.
     // These don't block the main loop — the next task can start immediately.
     this.postCompletionAsync(projectId, repoPath, task.id).catch((err) => {
-      console.warn(`[orchestrator] Post-completion async work failed for ${task.id}:`, err);
+      log.warn("Post-completion async work failed", { taskId: task.id, err });
     });
   }
 
@@ -1318,14 +1317,12 @@ export class OrchestratorService {
         this.pushInProgress.delete(projectId);
       }
     } else {
-      console.log(
-        "[orchestrator] Push already in progress, skipping (will retry on next completion)"
-      );
+      log.info("Push already in progress, skipping (will retry on next completion)");
     }
 
     // PRD §10.2: Auto-resolve feedback when all its created tasks are Done
     this.feedbackService.checkAutoResolveOnTaskDone(projectId, taskId).catch((err) => {
-      console.warn(`[orchestrator] Auto-resolve feedback on task done failed for ${taskId}:`, err);
+      log.warn("Auto-resolve feedback on task done failed", { taskId, err });
     });
 
     // PRD §7.5.3: Auto-deploy on epic completion
@@ -1344,10 +1341,7 @@ export class OrchestratorService {
         const settings = await this.projectService.getSettings(projectId);
         if (settings.deployment.autoDeployOnEpicCompletion) {
           triggerDeploy(projectId).catch((err) => {
-            console.warn(
-              `[orchestrator] Auto-deploy on epic completion failed for ${projectId}:`,
-              err
-            );
+            log.warn("Auto-deploy on epic completion failed", { projectId, err });
           });
         }
       }
@@ -1372,7 +1366,7 @@ export class OrchestratorService {
         .catch(() => {});
     } catch (err) {
       if (!(err instanceof RebaseConflictError)) {
-        console.warn("[orchestrator] pushMain failed (non-conflict):", err);
+        log.warn("pushMain failed (non-conflict)", { err });
         return;
       }
 
@@ -1383,51 +1377,44 @@ export class OrchestratorService {
       if (err.conflictedFiles.length === 0) {
         const rebaseActive = await this.branchManager.isRebaseInProgress(repoPath);
         if (!rebaseActive) {
-          console.log(
-            "[orchestrator] Rebase error with no conflicts and no rebase in progress, attempting direct push"
-          );
+          log.info("Rebase error with no conflicts and no rebase in progress, attempting direct push");
           try {
             await this.branchManager.pushMainToOrigin(repoPath);
-            console.log("[orchestrator] Direct push succeeded after rebase error");
+            log.info("Direct push succeeded after rebase error");
             await gitCommitQueue.retryPendingCommits(repoPath);
             return;
           } catch (pushErr) {
-            console.warn("[orchestrator] Direct push after rebase error failed:", pushErr);
+            log.warn("Direct push after rebase error failed", { pushErr });
             return;
           }
         }
 
-        console.log("[orchestrator] Rebase paused with no unmerged files, continuing directly");
+        log.info("Rebase paused with no unmerged files, continuing directly");
         try {
           await this.branchManager.rebaseContinue(repoPath);
           await this.branchManager.pushMainToOrigin(repoPath);
-          console.log("[orchestrator] Auto-resolved rebase continued, push succeeded");
+          log.info("Auto-resolved rebase continued, push succeeded");
           await gitCommitQueue.retryPendingCommits(repoPath);
           return;
         } catch (contErr) {
-          console.warn(
-            "[orchestrator] rebaseContinue failed, falling through to merger agent:",
-            contErr
-          );
+          log.warn("rebaseContinue failed, falling through to merger agent", { contErr });
         }
       }
 
-      console.log(
-        `[orchestrator] Rebase conflict in ${err.conflictedFiles.length} file(s), spawning merger agent`
-      );
+      log.info(`Rebase conflict in ${err.conflictedFiles.length} file(s), spawning merger agent`);
 
       try {
         const resolved = await this.spawnMergerAgent(projectId, repoPath, err.conflictedFiles);
         if (resolved) {
           await this.branchManager.pushMainToOrigin(repoPath);
-          console.log("[orchestrator] Merger agent resolved conflicts, push succeeded");
+          log.info("Merger agent resolved conflicts, push succeeded");
           await gitCommitQueue.retryPendingCommits(repoPath);
         } else {
-          console.warn("[orchestrator] Merger agent failed to resolve conflicts, aborting rebase");
+          log.warn("Merger agent failed to resolve conflicts, aborting rebase");
           await this.branchManager.rebaseAbort(repoPath);
         }
       } catch (mergeErr) {
-        console.warn("[orchestrator] Merger agent error, aborting rebase:", mergeErr);
+        log.warn("Merger agent error, aborting rebase", { mergeErr });
         await this.branchManager.rebaseAbort(repoPath);
       }
     }
@@ -1485,7 +1472,7 @@ export class OrchestratorService {
         },
         onExit: async (code: number | null) => {
           state.timers.clear("mergerTimeout");
-          console.log(`[orchestrator] Merger agent exited with code ${code}`);
+          log.info("Merger agent exited", { code });
 
           // Clean up prompt dir
           await fs.rm(mergerDir, { recursive: true, force: true }).catch(() => {});
@@ -1503,10 +1490,10 @@ export class OrchestratorService {
             const result = JSON.parse(raw) as { status: string; summary?: string };
             await fs.unlink(resultPath).catch(() => {});
             if (result.status === "success") {
-              console.log(`[orchestrator] Merger agent: ${result.summary ?? "conflicts resolved"}`);
+              log.info("Merger agent", { summary: result.summary ?? "conflicts resolved" });
               resolve(true);
             } else {
-              console.warn(`[orchestrator] Merger agent reported status: ${result.status}`);
+              log.warn("Merger agent reported status", { status: result.status });
               resolve(false);
             }
             return;
@@ -1522,7 +1509,7 @@ export class OrchestratorService {
       state.timers.setTimeout(
         "mergerTimeout",
         () => {
-          console.warn("[orchestrator] Merger agent timed out after 5 minutes");
+          log.warn("Merger agent timed out after 5 minutes");
           handle.kill();
         },
         300_000
@@ -1558,9 +1545,7 @@ export class OrchestratorService {
     const wtPath = state.activeWorktreePath;
     const isInfraFailure = INFRA_FAILURE_TYPES.includes(failureType);
 
-    console.error(
-      `Task ${task.id} failed [${failureType}] (attempt ${cumulativeAttempts}): ${reason}`
-    );
+    log.error(`Task ${task.id} failed [${failureType}] (attempt ${cumulativeAttempts})`, { reason });
 
     eventLogService
       .append(repoPath, {
@@ -1585,7 +1570,7 @@ export class OrchestratorService {
         outcome: failureType as AttemptOutcome,
         durationMs: Date.now() - new Date(state.agent.startedAt || Date.now()).getTime(),
       })
-      .catch((err) => console.warn("[orchestrator] Failed to record attempt:", err));
+      .catch((err) => log.warn("Failed to record attempt", { err }));
 
     // Capture diff before any cleanup (for richer retry context and session archive)
     let previousDiff = "";
@@ -1633,15 +1618,15 @@ export class OrchestratorService {
         : `Attempt ${cumulativeAttempts} failed [${failureType}]: ${reason.slice(0, 500)}`;
     await this.beads
       .comment(repoPath, task.id, commentText)
-      .catch((err) => console.warn("[orchestrator] Failed to add failure comment:", err));
+      .catch((err) => log.warn("Failed to add failure comment", { err }));
 
     // Infrastructure failures get free retries (up to MAX_INFRA_RETRIES)
     if (isInfraFailure && state.infraRetries < MAX_INFRA_RETRIES) {
       state.infraRetries += 1;
       state.attempt = cumulativeAttempts + 1;
-      console.log(
-        `[orchestrator] Infrastructure retry ${state.infraRetries}/${MAX_INFRA_RETRIES} for ${task.id} [${failureType}]`
-      );
+      log.info(`Infrastructure retry ${state.infraRetries}/${MAX_INFRA_RETRIES} for ${task.id}`, {
+        failureType,
+      });
 
       // Clean up worktree but keep the branch for retry
       if (wtPath) {
@@ -1679,9 +1664,7 @@ export class OrchestratorService {
       }
 
       state.attempt = cumulativeAttempts + 1;
-      console.log(
-        `[orchestrator] Retrying ${task.id} (attempt ${state.attempt}), preserving branch`
-      );
+      log.info(`Retrying ${task.id} (attempt ${state.attempt}), preserving branch`);
 
       await this.persistState(projectId, repoPath);
 
@@ -1707,9 +1690,7 @@ export class OrchestratorService {
         await this.blockTask(projectId, repoPath, task, cumulativeAttempts, reason);
       } else {
         const newPriority = currentPriority + 1;
-        console.log(
-          `[orchestrator] Demoting ${task.id} priority ${currentPriority} → ${newPriority} after ${cumulativeAttempts} failures`
-        );
+        log.info(`Demoting ${task.id} priority ${currentPriority} → ${newPriority} after ${cumulativeAttempts} failures`);
 
         try {
           await this.beads.update(repoPath, task.id, {
@@ -1783,7 +1764,7 @@ export class OrchestratorService {
         "status"
       );
       if (parsed && parsed.status === "success" && parsed.summary?.trim()) {
-        console.log(`[orchestrator] Summarizer condensed context for task ${taskId}`);
+        log.info("Summarizer condensed context for task", { taskId });
         return {
           ...context,
           planContent: parsed.summary.trim(),
@@ -1793,10 +1774,10 @@ export class OrchestratorService {
         };
       }
     } catch (err) {
-      console.warn(
-        `[orchestrator] Summarizer failed for ${taskId}, using raw context:`,
-        getErrorMessage(err)
-      );
+      log.warn("Summarizer failed, using raw context", {
+        taskId,
+        err: getErrorMessage(err),
+      });
     }
     return context;
   }
@@ -1809,7 +1790,7 @@ export class OrchestratorService {
     try {
       await fs.access(path.join(wtPath, "node_modules"));
     } catch {
-      console.warn("[orchestrator] Pre-flight: node_modules missing, re-symlinking");
+      log.warn("Pre-flight: node_modules missing, re-symlinking");
       await this.branchManager.symlinkNodeModules(repoPath, wtPath);
     }
 
@@ -1830,9 +1811,7 @@ export class OrchestratorService {
   ): Promise<void> {
     const state = this.getState(projectId);
 
-    console.log(
-      `[orchestrator] Blocking ${task.id} after ${cumulativeAttempts} cumulative failures at max priority`
-    );
+    log.info(`Blocking ${task.id} after ${cumulativeAttempts} cumulative failures at max priority`);
 
     try {
       await this.beads.update(repoPath, task.id, {
@@ -1840,7 +1819,7 @@ export class OrchestratorService {
         assignee: "",
       });
     } catch (err) {
-      console.warn("[orchestrator] Failed to block task:", err);
+      log.warn("Failed to block task", { err });
     }
 
     this.transition(projectId, { to: "fail" });

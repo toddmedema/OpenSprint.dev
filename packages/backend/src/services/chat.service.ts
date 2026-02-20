@@ -18,6 +18,7 @@ import { hilService } from "./hil-service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { getErrorMessage } from "../utils/error-utils.js";
+import { createLogger } from "../utils/logger.js";
 import {
   buildHarmonizerPromptBuildIt,
   buildHarmonizerPromptScopeChange,
@@ -26,6 +27,7 @@ import {
   type HarmonizerPrdUpdate,
 } from "./harmonizer.service.js";
 
+const log = createLogger("chat");
 const ARCHITECTURE_SECTIONS = ["technical_architecture", "data_model", "api_contracts"] as const;
 
 const SECTION_DISPLAY_NAMES: Record<string, string> = {
@@ -285,7 +287,7 @@ export class ChatService {
     const phase = isPlanContext ? "plan" : "sketch";
     const label = isPlanContext ? "Plan chat" : "Sketch chat";
     try {
-      console.log("[chat] Invoking planning agent", {
+      log.info("Invoking planning agent", {
         type: agentConfig.type,
         model: agentConfig.model ?? "default",
         context,
@@ -298,11 +300,11 @@ export class ChatService {
         tracking: { id: agentId, projectId, phase, role: "dreamer", label },
       });
 
-      console.log("[chat] Planning agent returned", { contentLen: response.content?.length ?? 0 });
+      log.info("Planning agent returned", { contentLen: response.content?.length ?? 0 });
       responseContent = response.content;
     } catch (error) {
       const msg = getErrorMessage(error);
-      console.error("Agent invocation failed:", error);
+      log.error("Agent invocation failed", { error });
       responseContent =
         "I was unable to connect to the planning agent.\n\n" +
         `**Error:** ${msg}\n\n` +

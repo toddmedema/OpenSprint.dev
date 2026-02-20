@@ -12,6 +12,9 @@ import type { AgentConfig, ProjectSettings } from "@opensprint/shared";
 import { OPENSPRINT_PATHS, getCodingAgentForComplexity } from "@opensprint/shared";
 import type { PlanComplexity } from "@opensprint/shared";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("agent-identity");
 
 export type AttemptOutcome =
   | "success"
@@ -125,10 +128,13 @@ export class AgentIdentityService {
     if (sameTypeCount >= 2 && baseConfig.model) {
       const escalated = this.escalateModel(baseConfig.model);
       if (escalated && escalated !== baseConfig.model) {
-        console.log(
-          `[agent-identity] Escalating model for ${taskId}: ${baseConfig.model} → ${escalated} ` +
-            `(${sameTypeCount} consecutive ${failureType} failures)`
-        );
+        log.info("Escalating model", {
+          taskId,
+          from: baseConfig.model,
+          to: escalated,
+          sameTypeCount,
+          failureType,
+        });
         return { ...baseConfig, model: escalated };
       }
     }
@@ -175,7 +181,7 @@ export class AgentIdentityService {
       await fs.mkdir(path.dirname(statsPath), { recursive: true });
       await writeJsonAtomic(statsPath, stats);
     } catch (err) {
-      console.warn("[agent-identity] Failed to persist agent stats:", err);
+      log.warn("Failed to persist agent stats", { err });
     }
   }
 }

@@ -11,6 +11,9 @@ import { heartbeatService } from "./heartbeat.service.js";
 import { BranchManager } from "./branch-manager.js";
 import { broadcastToProject, sendAgentOutputToProject } from "../websocket/index.js";
 import { TimerRegistry } from "./timer-registry.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("agent-lifecycle");
 
 /** Check whether a PID is still running */
 function isPidAlive(pid: number): boolean {
@@ -135,7 +138,7 @@ export class AgentLifecycleManager {
         try {
           await onDone(code);
         } catch (err) {
-          console.error(`[agent-lifecycle] onDone failed for ${taskId} (exit code ${code}):`, err);
+          log.error("onDone failed", { taskId, exitCode: code, err });
         }
       },
     });
@@ -185,9 +188,7 @@ export class AgentLifecycleManager {
         if (pidDead) {
           if (runState.exitHandled) return;
           runState.exitHandled = true;
-          console.warn(
-            `Agent process dead for task ${taskId} (PID ${proc.pid}), recovering immediately`
-          );
+          log.warn("Agent process dead, recovering immediately", { taskId, pid: proc.pid });
           runState.activeProcess = null;
           this.cleanupTimers(timers);
           heartbeatService.deleteHeartbeat(wtPath, taskId).catch(() => {});
@@ -195,24 +196,24 @@ export class AgentLifecycleManager {
             .commitWip(wtPath, taskId)
             .then(() => onDone(null))
             .catch((err) => {
-              console.error(`[agent-lifecycle] Post-death handler failed for ${taskId}:`, err);
+              log.error("Post-death handler failed", { taskId, err });
               return onDone(null);
             })
             .catch((err) => {
-              console.error(`[agent-lifecycle] onDone fallback also failed for ${taskId}:`, err);
+              log.error("onDone fallback also failed", { taskId, err });
             });
           return;
         }
 
         if (elapsed > AGENT_INACTIVITY_TIMEOUT_MS) {
-          console.warn(`Agent timeout for task ${taskId}: ${elapsed}ms of inactivity`);
+          log.warn("Agent timeout", { taskId, elapsedMs: elapsed });
           if (runState.activeProcess) {
             runState.killedDueToTimeout = true;
             this.branchManager
               .commitWip(wtPath, taskId)
               .then(() => runState.activeProcess?.kill())
               .catch((err) => {
-                console.error(`[agent-lifecycle] Inactivity handler failed for ${taskId}:`, err);
+                log.error("Inactivity handler failed", { taskId, err });
                 runState.activeProcess?.kill();
               });
           }
