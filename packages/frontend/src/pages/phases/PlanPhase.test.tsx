@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
@@ -148,6 +148,7 @@ function createStore(plansOverride?: (typeof basePlan)[], planError?: string | n
         reExecutingPlanId: null,
         archivingPlanId: null,
         error: planError ?? null,
+        executeError: null,
         backgroundError: null,
       },
       execute: {
@@ -616,6 +617,205 @@ describe("PlanPhase executePlan thunk", () => {
   });
 });
 
+describe("PlanPhase Execute! loading and double-click prevention", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("disables Execute! button immediately on click (before async resolves)", async () => {
+    let resolveDeps: (v: { prerequisitePlanIds: string[] }) => void;
+    mockGetCrossEpicDependencies.mockImplementation(
+      () => new Promise((r) => { resolveDeps = r; })
+    );
+    const plans = [
+      { ...basePlan, status: "planning" as const, metadata: { ...basePlan.metadata } },
+    ];
+    const store = createStore(plans);
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const executeBtn = await screen.findByRole("button", { name: "Execute!" });
+    await user.click(executeBtn);
+
+    expect(store.getState().plan.executingPlanId).toBe("archive-test-feature");
+    const btn = screen.getByTestId("execute-button");
+    expect(btn).toBeDisabled();
+
+    resolveDeps!({ prerequisitePlanIds: [] });
+    await waitFor(() => {
+      expect(mockExecute).toHaveBeenCalled();
+    });
+  });
+
+  it("shows spinner inside Execute! button while executing", async () => {
+    let resolveExec: () => void;
+    mockGetCrossEpicDependencies.mockResolvedValue({ prerequisitePlanIds: [] });
+    mockExecute.mockImplementation(
+      () => new Promise<void>((r) => { resolveExec = r; })
+    );
+    const plans = [
+      { ...basePlan, status: "planning" as const, metadata: { ...basePlan.metadata } },
+    ];
+    const store = createStore(plans);
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const executeBtn = await screen.findByRole("button", { name: "Execute!" });
+    await user.click(executeBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("execute-spinner")).toBeInTheDocument();
+      expect(screen.getByText("Executing…")).toBeInTheDocument();
+    });
+
+    resolveExec!();
+    await waitFor(() => {
+      expect(store.getState().plan.executingPlanId).toBeNull();
+    });
+  });
+
+  it("prevents duplicate executions on rapid clicks", async () => {
+    mockGetCrossEpicDependencies.mockResolvedValue({ prerequisitePlanIds: [] });
+    mockExecute.mockImplementation(() => new Promise<void>((r) => setTimeout(r, 100)));
+    const plans = [
+      { ...basePlan, status: "planning" as const, metadata: { ...basePlan.metadata } },
+    ];
+    const store = createStore(plans);
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const executeBtn = await screen.findByRole("button", { name: "Execute!" });
+    await user.click(executeBtn);
+
+    const btn = screen.getByTestId("execute-button");
+    expect(btn).toBeDisabled();
+  });
+
+  it("shows inline error on the EpicCard when execution fails", async () => {
+    mockGetCrossEpicDependencies.mockResolvedValue({ prerequisitePlanIds: [] });
+    mockExecute.mockRejectedValue(new Error("Agent spawn failed"));
+    mockPlansList.mockResolvedValue({
+      plans: [{ ...basePlan, status: "planning" as const, metadata: { ...basePlan.metadata } }],
+      edges: [],
+    });
+    const plans = [
+      { ...basePlan, status: "planning" as const, metadata: { ...basePlan.metadata } },
+    ];
+    const store = createStore(plans);
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const executeBtn = await screen.findByRole("button", { name: "Execute!" });
+    await user.click(executeBtn);
+
+    await waitFor(() => {
+      expect(store.getState().plan.executeError).toEqual({
+        planId: "archive-test-feature",
+        message: "Agent spawn failed",
+      });
+    });
+
+    const inlineError = screen.getByTestId("execute-error-inline");
+    expect(inlineError).toBeInTheDocument();
+    expect(within(inlineError).getByText("Agent spawn failed")).toBeInTheDocument();
+
+    const btn = screen.getByTestId("execute-button");
+    expect(btn).not.toBeDisabled();
+  });
+
+  it("re-enables Execute! button after failure so user can retry", async () => {
+    mockGetCrossEpicDependencies.mockResolvedValue({ prerequisitePlanIds: [] });
+    mockExecute.mockRejectedValue(new Error("Fail"));
+    const plans = [
+      { ...basePlan, status: "planning" as const, metadata: { ...basePlan.metadata } },
+    ];
+    const store = createStore(plans);
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Execute!" }));
+
+    await waitFor(() => {
+      expect(store.getState().plan.executingPlanId).toBeNull();
+    });
+
+    const btn = screen.getByTestId("execute-button");
+    expect(btn).not.toBeDisabled();
+  });
+
+  it("clears inline error when dismiss button is clicked", async () => {
+    mockGetCrossEpicDependencies.mockResolvedValue({ prerequisitePlanIds: [] });
+    mockExecute.mockRejectedValue(new Error("Fail"));
+    const plans = [
+      { ...basePlan, status: "planning" as const, metadata: { ...basePlan.metadata } },
+    ];
+    const store = createStore(plans);
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Execute!" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("execute-error-inline")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /dismiss execute error/i }));
+    expect(screen.queryByTestId("execute-error-inline")).not.toBeInTheDocument();
+    expect(store.getState().plan.executeError).toBeNull();
+  });
+
+  it("re-enables button when cross-epic modal is shown (modal overlay blocks interaction)", async () => {
+    mockGetCrossEpicDependencies.mockResolvedValue({
+      prerequisitePlanIds: ["user-auth"],
+    });
+    const plans = [
+      { ...basePlan, status: "planning" as const, metadata: { ...basePlan.metadata } },
+    ];
+    const store = createStore(plans);
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Execute!" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Cross-epic dependencies/)).toBeInTheDocument();
+    });
+
+    expect(store.getState().plan.executingPlanId).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /Cancel/ }));
+    expect(screen.queryByText(/Cross-epic dependencies/)).not.toBeInTheDocument();
+  });
+});
+
 describe("PlanPhase reExecutePlan thunk", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1064,6 +1264,7 @@ describe("PlanPhase Generate Plan", () => {
           reExecutingPlanId: null,
           archivingPlanId: null,
           error: null,
+          executeError: null,
           backgroundError: null,
         },
         execute: {

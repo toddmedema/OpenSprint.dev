@@ -310,4 +310,156 @@ describe("EpicCard", () => {
     expect(screen.getByText("Auth Feature")).toBeInTheDocument();
     expect(screen.getByText(/0\/0/)).toBeInTheDocument();
   });
+
+  it("shows spinner inside Execute! button when plan is executing", () => {
+    const plan: Plan = { ...basePlan, status: "planning" };
+    render(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId="auth-feature"
+        reExecutingPlanId={null}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onReship={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("execute-spinner")).toBeInTheDocument();
+    expect(screen.getByText("Executing…")).toBeInTheDocument();
+  });
+
+  it("does not show spinner when a different plan is executing", () => {
+    const plan: Plan = { ...basePlan, status: "planning" };
+    render(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId="other-plan"
+        reExecutingPlanId={null}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onReship={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId("execute-spinner")).not.toBeInTheDocument();
+    expect(screen.getByText("Execute!")).toBeInTheDocument();
+  });
+
+  it("disables Execute! button when any plan is executing", () => {
+    const plan: Plan = { ...basePlan, status: "planning" };
+    render(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId="other-plan"
+        reExecutingPlanId={null}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onReship={vi.fn()}
+      />
+    );
+
+    const btn = screen.getByTestId("execute-button");
+    expect(btn).toBeDisabled();
+  });
+
+  it("shows inline error when executeError matches this plan", () => {
+    const plan: Plan = { ...basePlan, status: "planning" };
+    render(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        executeError={{ planId: "auth-feature", message: "Network timeout" }}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("execute-error-inline")).toBeInTheDocument();
+    expect(screen.getByText("Network timeout")).toBeInTheDocument();
+  });
+
+  it("does not show inline error when executeError is for a different plan", () => {
+    const plan: Plan = { ...basePlan, status: "planning" };
+    render(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        executeError={{ planId: "other-plan", message: "Network timeout" }}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId("execute-error-inline")).not.toBeInTheDocument();
+  });
+
+  it("calls onClearError when inline error dismiss button is clicked", async () => {
+    const onClearError = vi.fn();
+    const user = userEvent.setup();
+    const plan: Plan = { ...basePlan, status: "planning" };
+    render(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        executeError={{ planId: "auth-feature", message: "Network timeout" }}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={onClearError}
+      />
+    );
+
+    const dismissBtn = screen.getByRole("button", { name: /dismiss execute error/i });
+    await user.click(dismissBtn);
+    expect(onClearError).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not show inline error when executeError is null", () => {
+    const plan: Plan = { ...basePlan, status: "planning" };
+    render(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        executeError={null}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onReship={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId("execute-error-inline")).not.toBeInTheDocument();
+  });
+
+  it("Execute! button is enabled when no plan is executing and no error", () => {
+    const plan: Plan = { ...basePlan, status: "planning" };
+    render(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onReship={vi.fn()}
+      />
+    );
+
+    const btn = screen.getByTestId("execute-button");
+    expect(btn).not.toBeDisabled();
+  });
 });

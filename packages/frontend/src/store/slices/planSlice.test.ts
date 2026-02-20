@@ -15,6 +15,8 @@ import planReducer, {
   setSelectedPlanId,
   addPlanLocally,
   setPlanError,
+  setExecutingPlanId,
+  clearExecuteError,
   clearPlanBackgroundError,
   setPlansAndGraph,
   resetPlan,
@@ -97,6 +99,7 @@ describe("planSlice", () => {
       expect(state.planStatus).toBeNull();
       expect(state.error).toBeNull();
       expect(state.backgroundError).toBeNull();
+      expect(state.executeError).toBeNull();
     });
   });
 
@@ -171,6 +174,36 @@ describe("planSlice", () => {
       expect(state.decomposing).toBe(false);
       expect(state.error).toBeNull();
       expect(state.backgroundError).toBeNull();
+      expect(state.executeError).toBeNull();
+    });
+
+    it("setExecutingPlanId sets executingPlanId synchronously", () => {
+      const store = createStore();
+      store.dispatch(setExecutingPlanId("plan-42"));
+      expect(store.getState().plan.executingPlanId).toBe("plan-42");
+    });
+
+    it("setExecutingPlanId(null) clears executingPlanId", () => {
+      const store = createStore();
+      store.dispatch(setExecutingPlanId("plan-42"));
+      store.dispatch(setExecutingPlanId(null));
+      expect(store.getState().plan.executingPlanId).toBeNull();
+    });
+
+    it("setExecutingPlanId clears executeError when setting a plan ID", () => {
+      const store = createStore();
+      vi.mocked(api.plans.execute).mockRejectedValue(new Error("Fail"));
+      store.dispatch(setExecutingPlanId("plan-1"));
+      expect(store.getState().plan.executeError).toBeNull();
+    });
+
+    it("clearExecuteError clears executeError", async () => {
+      vi.mocked(api.plans.execute).mockRejectedValue(new Error("Execute failed"));
+      const store = createStore();
+      await store.dispatch(executePlan({ projectId: "proj-1", planId: "plan-123" }));
+      expect(store.getState().plan.executeError).not.toBeNull();
+      store.dispatch(clearExecuteError());
+      expect(store.getState().plan.executeError).toBeNull();
     });
   });
 
@@ -451,12 +484,38 @@ describe("planSlice", () => {
       expect(state.error).toBe("Execute failed");
     });
 
+    it("sets executeError with planId and message on rejected", async () => {
+      vi.mocked(api.plans.execute).mockRejectedValue(new Error("Execute failed"));
+      const store = createStore();
+      await store.dispatch(executePlan({ projectId: "proj-1", planId: "plan-123" }));
+
+      const state = store.getState().plan;
+      expect(state.executeError).toEqual({ planId: "plan-123", message: "Execute failed" });
+    });
+
+    it("clears executeError on next successful execution", async () => {
+      vi.mocked(api.plans.execute)
+        .mockRejectedValueOnce(new Error("Execute failed"))
+        .mockResolvedValueOnce(undefined);
+      const store = createStore();
+
+      await store.dispatch(executePlan({ projectId: "proj-1", planId: "plan-123" }));
+      expect(store.getState().plan.executeError).not.toBeNull();
+
+      await store.dispatch(executePlan({ projectId: "proj-1", planId: "plan-123" }));
+      expect(store.getState().plan.executingPlanId).toBeNull();
+    });
+
     it("uses fallback error message when error has no message", async () => {
       vi.mocked(api.plans.execute).mockRejectedValue(new Error());
       const store = createStore();
       await store.dispatch(executePlan({ projectId: "proj-1", planId: "plan-123" }));
 
       expect(store.getState().plan.error).toBe("Failed to start execute");
+      expect(store.getState().plan.executeError).toEqual({
+        planId: "plan-123",
+        message: "Failed to start execute",
+      });
     });
   });
 

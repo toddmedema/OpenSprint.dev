@@ -153,6 +153,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     try {
       const deps = await api.plans.getCrossEpicDependencies(projectId, planId);
       if (deps.prerequisitePlanIds.length > 0) {
+        dispatch(setExecutingPlanId(null));
         setCrossEpicModal({ planId, prerequisitePlanIds: deps.prerequisitePlanIds });
         return;
       }
@@ -411,10 +412,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           planId={crossEpicModal.planId}
           prerequisitePlanIds={crossEpicModal.prerequisitePlanIds}
           onConfirm={handleCrossEpicConfirm}
-          onCancel={() => {
-            setCrossEpicModal(null);
-            dispatch(setExecutingPlanId(null));
-          }}
+          onCancel={() => setCrossEpicModal(null)}
           confirming={executingPlanId === crossEpicModal.planId}
         />
       )}
