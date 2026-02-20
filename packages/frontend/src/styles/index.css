@@ -247,9 +247,8 @@ html[data-theme="dark"] {
   }
 
   /* Execute task detail markdown: WCAG AA contrast (4.5:1 normal, 3:1 large) in light/dark themes.
-   * Uses theme tokens (--color-text, --color-code-text, etc.) for consistent contrast with
-   * Plan markdown and PRD display. Higher specificity (.prose.prose-execute-task) ensures
-   * our variables override prose-gray defaults. */
+   * Uses explicit text-gray-900/dark:text-gray-100 (feedback kutduv) so text is readable.
+   * Higher specificity (.prose.prose-execute-task) ensures our variables override prose defaults. */
   .prose.prose-execute-task {
     --tw-prose-body: var(--color-text);
     --tw-prose-headings: var(--color-text);
@@ -270,9 +269,19 @@ html[data-theme="dark"] {
     --tw-prose-th-borders: var(--color-border);
     --tw-prose-td-borders: var(--color-border);
   }
-  /* Execute task description markdown: prose + layout utilities. */
+  /* Execute task description markdown: prose + layout + explicit high-contrast text (feedback kutduv). */
   .prose-task-description {
-    @apply prose prose-sm prose-gray dark:prose-invert prose-execute-task max-w-none bg-theme-surface p-4 rounded-lg border border-theme-border text-theme-text text-xs overflow-y-auto min-h-0 max-h-[50vh] prose-headings:text-theme-text prose-p:text-theme-text prose-li:text-theme-text prose-td:text-theme-text prose-th:text-theme-text prose-em:text-theme-text prose-a:text-brand-600 dark:prose-a:text-brand-400 prose-code:text-theme-text prose-strong:text-theme-text prose-blockquote:text-theme-text prose-blockquote:border-theme-border prose-hr:border-theme-border prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg prose-kbd:text-theme-text prose-figcaption:text-theme-text;
+    @apply prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none p-4 rounded-lg border overflow-y-auto min-h-0 max-h-[50vh] text-xs;
+    @apply bg-theme-surface border-theme-border;
+    @apply text-gray-900 dark:text-gray-100;
+    @apply prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-p:text-gray-900 dark:prose-p:text-gray-100 prose-li:text-gray-900 dark:prose-li:text-gray-100;
+    @apply prose-td:text-gray-900 dark:prose-td:text-gray-100 prose-th:text-gray-900 dark:prose-th:text-gray-100;
+    @apply prose-em:text-gray-900 dark:prose-em:text-gray-100 prose-code:text-gray-900 dark:prose-code:text-gray-100;
+    @apply prose-strong:text-gray-900 dark:prose-strong:text-gray-100 prose-blockquote:text-gray-900 dark:prose-blockquote:text-gray-100;
+    @apply prose-blockquote:border-theme-border prose-hr:border-theme-border;
+    @apply prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg;
+    @apply prose-kbd:text-gray-900 dark:prose-kbd:text-gray-100 prose-figcaption:text-gray-900 dark:prose-figcaption:text-gray-100;
+    @apply prose-a:text-brand-600 dark:prose-a:text-brand-400;
   }
 
   html[data-theme="dark"] .prose.prose-execute-task {

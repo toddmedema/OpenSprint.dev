@@ -244,6 +244,36 @@ describe("TaskDetailSidebar", () => {
     expect(screen.getByText("Implement feature")).toBeInTheDocument();
   });
 
+  it("renders task description markdown with theme-aware prose styles for WCAG contrast", () => {
+    const props = createMinimalProps({
+      taskDetail: {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [],
+        description: "Plain paragraph",
+        createdAt: "",
+        updatedAt: "",
+      },
+    });
+
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>,
+    );
+
+    const markdownEl = screen.getByTestId("task-description-markdown");
+    expect(markdownEl).toHaveClass("prose-task-description");
+    expect(markdownEl).toHaveClass("prose-execute-task");
+  });
+
   describe("Priority dropdown", () => {
     const taskDetailWithPriority = (priority: number) => ({
       id: "epic-1.1",
