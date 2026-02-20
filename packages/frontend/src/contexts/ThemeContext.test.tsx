@@ -7,7 +7,7 @@ const storage: Record<string, string> = {};
 let matchMediaMatches = false;
 
 function TestConsumer() {
-  const { preference, resolved, setTheme } = useTheme();
+  const { preference, resolved, setTheme, setForceLightMode } = useTheme();
   return (
     <div>
       <span data-testid="preference">{preference}</span>
@@ -20,6 +20,12 @@ function TestConsumer() {
       </button>
       <button type="button" onClick={() => setTheme("system")}>
         System
+      </button>
+      <button type="button" onClick={() => setForceLightMode(true)}>
+        Force Light
+      </button>
+      <button type="button" onClick={() => setForceLightMode(false)}>
+        Unforce Light
       </button>
     </div>
   );
@@ -95,6 +101,34 @@ describe("ThemeProvider", () => {
     );
     expect(screen.getByTestId("preference")).toHaveTextContent("dark");
     expect(screen.getByTestId("resolved")).toHaveTextContent("dark");
+  });
+
+  it("setForceLightMode(true) forces data-theme=light regardless of preference (Sketch phase)", async () => {
+    const user = userEvent.setup();
+    storage["opensprint.theme"] = "dark";
+    render(
+      <ThemeProvider>
+        <TestConsumer />
+      </ThemeProvider>
+    );
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    await user.click(screen.getByRole("button", { name: "Force Light" }));
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(screen.getByTestId("preference")).toHaveTextContent("dark");
+  });
+
+  it("setForceLightMode(false) restores theme to resolved preference", async () => {
+    const user = userEvent.setup();
+    storage["opensprint.theme"] = "dark";
+    render(
+      <ThemeProvider>
+        <TestConsumer />
+      </ThemeProvider>
+    );
+    await user.click(screen.getByRole("button", { name: "Force Light" }));
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    await user.click(screen.getByRole("button", { name: "Unforce Light" }));
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
   });
 });
 

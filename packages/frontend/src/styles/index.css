@@ -166,77 +166,6 @@ html[data-theme="dark"] {
     @apply bg-theme-bg text-theme-text;
   }
 
-  /* Sketch phase always uses light mode per feedback */
-  html.sketch-phase-light {
-    @apply bg-theme-bg text-theme-text;
-  }
-html.sketch-phase-light {
-  --color-bg: #f9fafb;
-  --color-bg-elevated: #ffffff;
-  --color-text: #111827;
-  --color-text-muted: #6b7280;
-  --color-surface: #ffffff;
-  --color-border: #e5e7eb;
-  --color-border-subtle: #f3f4f6;
-  --color-ring: #d1d5db;
-  --color-input-bg: #ffffff;
-  --color-input-text: #111827;
-  --color-input-placeholder: #9ca3af;
-  --color-code-bg: #1f2937;
-  --color-code-text: #10b981;
-  --color-overlay: rgba(0, 0, 0, 0.4);
-  --color-surface-muted: #f3f4f6;
-  --color-error-bg: #fef2f2;
-  --color-error-text: #b91c1c;
-  --color-error-border: #fecaca;
-  --color-error-solid: #dc2626;
-  --color-error-solid-hover: #b91c1c;
-  --color-success-bg: #f0fdf4;
-  --color-success-text: #166534;
-  --color-success-border: #bbf7d0;
-  --color-success-solid: #22c55e;
-  --color-success-muted: #10b981;
-  --color-warning-bg: #fffbeb;
-  --color-warning-text: #b45309;
-  --color-warning-border: #fde68a;
-  --color-info-bg: #eff6ff;
-  --color-info-text: #1d4ed8;
-  --color-info-border: #bfdbfe;
-  --color-feedback-bug-bg: #fef2f2;
-  --color-feedback-bug-text: #b91c1c;
-  --color-feedback-feature-bg: #faf5ff;
-  --color-feedback-feature-text: #7c3aed;
-  --color-feedback-ux-bg: #eff6ff;
-  --color-feedback-ux-text: #1d4ed8;
-  --color-feedback-scope-bg: #fefce8;
-  --color-feedback-scope-text: #a16207;
-  --color-notification-error: #dc2626;
-  --color-notification-warning: #d97706;
-  --color-notification-info: #2563eb;
-  --color-notification-success: #059669;
-  --color-status-backlog: #eab308;
-  --color-status-ready: #3b82f6;
-  --color-status-in-progress: #a855f7;
-  --color-status-in-review: #f97316;
-  --color-status-done: #22c55e;
-  --color-status-blocked: #ef4444;
-  --color-graph-edge: #d1d5db;
-  --color-graph-edge-critical: #dc2626;
-  --color-graph-text: #111827;
-  --color-graph-node-default-fill: #f9fafb;
-  --color-graph-node-default-stroke: #e5e7eb;
-  --color-graph-status-planning-fill: #fef3c7;
-  --color-graph-status-planning-stroke: #f59e0b;
-  --color-graph-status-building-fill: #dbeafe;
-  --color-graph-status-building-stroke: #3b82f6;
-  --color-graph-status-complete-fill: #d1fae5;
-  --color-graph-status-complete-stroke: #10b981;
-  --color-graph-arrow: #9ca3af;
-  --color-graph-arrow-critical: #dc2626;
-  --color-scrollbar-track: #e5e7eb;
-  --color-scrollbar-thumb: #9ca3af;
-  --color-scrollbar-thumb-hover: #6b7280;
-}
   body {
     @apply antialiased;
   }
@@ -341,7 +270,7 @@ html.sketch-phase-light {
     --tw-prose-th-borders: var(--color-border);
     --tw-prose-td-borders: var(--color-border);
   }
-  html[data-theme="dark"]:not(.sketch-phase-light) .prose.prose-execute-task {
+  html[data-theme="dark"] .prose.prose-execute-task {
     --tw-prose-invert-body: var(--color-text);
     --tw-prose-invert-headings: var(--color-text);
     --tw-prose-invert-lead: var(--color-text);

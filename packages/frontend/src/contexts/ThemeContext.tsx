@@ -21,6 +21,8 @@ interface ThemeContextValue {
   resolved: ResolvedTheme;
   /** Set theme preference and persist. */
   setTheme: (preference: ThemePreference) => void;
+  /** Force light mode (e.g. Sketch phase). When true, data-theme is "light" regardless of preference. */
+  setForceLightMode: (force: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -38,6 +40,7 @@ interface ThemeProviderProps {
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const [preference, setPreference] = useState<ThemePreference>("system");
   const [resolved, setResolved] = useState<ResolvedTheme>("light");
+  const [forceLightMode, setForceLightMode] = useState(false);
 
   const setTheme = useCallback((next: ThemePreference) => {
     applyTheme(next);
@@ -50,24 +53,28 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     const res = getResolvedTheme();
     setPreference(pref);
     setResolved(res);
-    document.documentElement.setAttribute("data-theme", res);
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => {
       if (pref === "system") {
         const newRes = media.matches ? "dark" : "light";
         setResolved(newRes);
-        document.documentElement.setAttribute("data-theme", newRes);
       }
     };
     media.addEventListener("change", handler);
     return () => media.removeEventListener("change", handler);
   }, []);
 
+  useEffect(() => {
+    const effective = forceLightMode ? "light" : resolved;
+    document.documentElement.setAttribute("data-theme", effective);
+  }, [forceLightMode, resolved]);
+
   const value: ThemeContextValue = {
     preference,
     resolved,
     setTheme,
+    setForceLightMode,
   };
 
   return (

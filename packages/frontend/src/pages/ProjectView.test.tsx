@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
+import { ThemeProvider } from "../contexts/ThemeContext";
 import { ProjectView } from "./ProjectView";
 import projectReducer from "../store/slices/projectSlice";
 import websocketReducer, { setDeliverToast } from "../store/slices/websocketSlice";
@@ -82,12 +83,14 @@ function createStore() {
 function renderWithRouter(initialPath: string, store = createStore()) {
   return render(
     <Provider store={store}>
-      <MemoryRouter initialEntries={[initialPath]}>
-        <LocationDisplay />
-        <Routes>
-          <Route path="/projects/:projectId/:phase?" element={<ProjectView />} />
-        </Routes>
-      </MemoryRouter>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={[initialPath]}>
+          <LocationDisplay />
+          <Routes>
+            <Route path="/projects/:projectId/:phase?" element={<ProjectView />} />
+          </Routes>
+        </MemoryRouter>
+      </ThemeProvider>
     </Provider>
   );
 }
@@ -129,29 +132,29 @@ describe("ProjectView URL behavior", () => {
     });
   });
 
-  it("adds sketch-phase-light to document when on sketch phase (light mode)", async () => {
-    document.documentElement.classList.remove("sketch-phase-light");
+  it("sets data-theme=light on document when on sketch phase (Sketch phase always light mode)", async () => {
+    document.documentElement.removeAttribute("data-theme");
     const { unmount } = renderWithRouter("/projects/proj-1/sketch");
 
     await waitFor(() => {
       expect(screen.getByText("Test Project")).toBeInTheDocument();
     });
 
-    expect(document.documentElement.classList.contains("sketch-phase-light")).toBe(true);
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
 
     unmount();
-    expect(document.documentElement.classList.contains("sketch-phase-light")).toBe(false);
+    expect(document.documentElement.getAttribute("data-theme")).not.toBe("light");
   });
 
-  it("does not add sketch-phase-light when on plan phase", async () => {
-    document.documentElement.classList.remove("sketch-phase-light");
+  it("does not force light mode when on plan phase", async () => {
+    localStorage.setItem("opensprint.theme", "dark");
     renderWithRouter("/projects/proj-1/plan");
 
     await waitFor(() => {
       expect(screen.getByText("Test Project")).toBeInTheDocument();
     });
 
-    expect(document.documentElement.classList.contains("sketch-phase-light")).toBe(false);
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
   });
 });
 
