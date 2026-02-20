@@ -113,3 +113,14 @@
 {"timestamp":"2026-02-20T07:01:09.307Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-srl.33","event":"agent.spawned","data":{"phase":"review","model":"composer-1.5","attempt":2}}
 {"timestamp":"2026-02-20T07:05:01.886Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"transition.complete","data":{"from":"review","attempt":2}}
 {"timestamp":"2026-02-20T07:05:01.886Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-srl.33","event":"task.completed","data":{"attempt":2}}
+{"timestamp":"2026-02-20T07:05:05.404Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"push.succeeded"}
+{"timestamp":"2026-02-20T07:05:12.715Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-cxx.36","event":"transition.start_task","data":{"from":"idle","attempt":1}}
+{"timestamp":"2026-02-20T07:05:13.821Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-cxx.36","event":"agent.spawned","data":{"phase":"coding","model":"composer-1.5","attempt":1}}
+{"timestamp":"2026-02-20T07:07:15.899Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"watchdog.orphan_recovery","data":{"recovered":["opensprint.dev-cxx.36"]}}
+{"timestamp":"2026-02-20T07:08:05.396Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-cxx.36","event":"task.failed","data":{"failureType":"test_failure","attempt":1,"reason":"Tests failed: 1 failed, 0 passed"}}
+{"timestamp":"2026-02-20T07:08:07.227Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-cxx.36","event":"agent.spawned","data":{"phase":"coding","model":"composer-1.5","attempt":2}}
+{"timestamp":"2026-02-20T07:16:25.403Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-cxx.36","event":"crash_recovery.started","data":{"hasAssignment":true,"phase":"coding"}}
+{"timestamp":"2026-02-20T07:16:30.489Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-cxx.36","event":"crash_recovery.started","data":{"hasAssignment":true,"phase":"coding"}}
+{"timestamp":"2026-02-20T07:21:31.466Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-cxx.36","event":"agent.spawned","data":{"phase":"review","model":"composer-1.5","attempt":2}}
+{"timestamp":"2026-02-20T07:25:03.748Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-cxx.36","event":"task.completed","data":{"attempt":2}}
+{"timestamp":"2026-02-20T07:25:03.748Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"transition.complete","data":{"from":"review","attempt":2}}
