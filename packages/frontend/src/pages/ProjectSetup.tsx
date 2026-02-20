@@ -39,12 +39,12 @@ export function ProjectSetup() {
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [repoPath, setRepoPath] = useState("");
   const [planningAgent, setPlanningAgent] = useState({
-    type: "claude" as AgentType,
+    type: "cursor" as AgentType,
     model: "",
     cliCommand: "",
   });
   const [codingAgent, setCodingAgent] = useState({
-    type: "claude" as AgentType,
+    type: "cursor" as AgentType,
     model: "",
     cliCommand: "",
   });

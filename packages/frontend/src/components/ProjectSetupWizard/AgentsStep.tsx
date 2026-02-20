@@ -37,41 +37,34 @@ export function AgentsStep({
   onSaveKey,
   modelRefreshTrigger,
 }: AgentsStepProps) {
-  const needsApiKeys = envKeys && (!envKeys.anthropic || !envKeys.cursor);
+  const needsAnthropic =
+    envKeys &&
+    !envKeys.anthropic &&
+    (planningAgent.type === "claude" || codingAgent.type === "claude");
+  const needsCursor =
+    envKeys &&
+    !envKeys.cursor &&
+    (planningAgent.type === "cursor" || codingAgent.type === "cursor");
 
   return (
     <div className="space-y-6" data-testid="agents-step">
-      {needsApiKeys && (
+      {(needsAnthropic || needsCursor) && (
         <>
           <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
             <p className="text-sm text-theme-warning-text">
-              <strong>API keys required:</strong> Add{" "}
-              <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and/or{" "}
-              <code className="font-mono text-xs">CURSOR_API_KEY</code> to your project&apos;s{" "}
-              <code className="font-mono text-xs">.env</code> file to use Claude and Cursor. Get
-              keys from{" "}
-              <a
-                href="https://console.anthropic.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:opacity-80"
-              >
-                Anthropic Console
-              </a>{" "}
-              and{" "}
-              <a
-                href="https://cursor.com/settings"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:opacity-80"
-              >
-                Cursor → Integrations → User API Keys
-              </a>
-              .
+              <strong>API key required:</strong>{" "}
+              {needsAnthropic && needsCursor
+                ? <>Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and <code className="font-mono text-xs">CURSOR_API_KEY</code> to continue.</>
+                : needsAnthropic
+                  ? <>Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> to use Claude. Get one from{" "}
+                    <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">Anthropic Console</a>.</>
+                  : <>Add your <code className="font-mono text-xs">CURSOR_API_KEY</code> to use Cursor. Get one from{" "}
+                    <a href="https://cursor.com/settings" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">Cursor → Integrations → User API Keys</a>.</>
+              }
             </p>
           </div>
           <div className="space-y-3">
-            {envKeys && !envKeys.anthropic && (
+            {needsAnthropic && (
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-theme-muted mb-1">
@@ -96,7 +89,7 @@ export function AgentsStep({
                 </button>
               </div>
             )}
-            {envKeys && !envKeys.cursor && (
+            {needsCursor && (
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-theme-muted mb-1">

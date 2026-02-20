@@ -15,23 +15,6 @@ const DEFAULT_TIMEOUT_MS = 30000;
 const MAX_BUFFER_BYTES = 2 * 1024 * 1024; // 2MB for large list output
 
 /**
- * All backend bd commands use --no-daemon to bypass the daemon and access
- * storage directly. This prevents the bd CLI from auto-starting a background
- * daemon on each invocation — a behaviour that previously caused thousands
- * of orphaned daemon processes and 50+ GB of leaked RAM.
- */
-const BD_GLOBAL_FLAGS = "--no-daemon";
-
-/** Repo paths where this backend has started a daemon (for shutdown cleanup) */
-const managedReposForShutdown = new Set<string>();
-
-/**
- * Repo paths where daemon has been ensured in this process.
- * Once ensured, skip daemon stop+start on subsequent exec calls (~200ms savings each).
- */
-const daemonEnsuredRepos = new Set<string>();
-
-/**
  * Per-repo sync state: when we last synced and JSONL mtime at that moment.
  * Used for mtime-based invalidation: if JSONL mtime > jsonlMtimeAtSync, re-sync
  * before running beads commands (handles git pull, external exports, etc.).
@@ -44,9 +27,6 @@ const syncStateMap = new Map<string, SyncState>();
 
 /** Path to backend.pid file for file-based lock (prevents multiple backends managing same repo) */
 const BACKEND_PID_FILE = ".beads/backend.pid";
-
-/** Beads backend type: Dolt runs single-process (no daemon); SQLite uses daemon */
-type BeadsBackend = "dolt" | "sqlite";
 
 /**
  * Raw shape returned by `bd list --json` / `bd show --json`.
@@ -77,49 +57,19 @@ export interface BeadsIssue {
  */
 export class BeadsService {
   /**
-   * Returns the beads backend for the repo. Dolt runs single-process (no daemon);
-   * SQLite uses a daemon for sync.
-   */
-  private getBeadsBackend(repoPath: string): BeadsBackend {
-    try {
-      const metaPath = path.join(repoPath, ".beads/metadata.json");
-      const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as { database?: string };
-      return meta?.database === "dolt" ? "dolt" : "sqlite";
-    } catch {
-      return "sqlite";
-    }
-  }
-
-  /**
-   * Ensures the repo is ready for beads commands. For SQLite: starts daemon (with
-   * stop-before-start to prevent accumulation) and syncs JSONL. For Dolt: only
-   * syncs JSONL (Dolt runs single-process, no daemon).
+   * Ensures the repo is ready for beads commands. Syncs JSONL into the database
+   * if needed. The bd CLI no longer has a daemon subsystem.
    */
   async ensureDaemon(repoPath: string): Promise<void> {
-    if (this.getBeadsBackend(repoPath) === "sqlite") {
-      await this.startDaemonIfNeeded(repoPath);
-    }
     await this.ensureSyncBeforeExec(repoPath);
   }
 
   /**
-   * Stops bd daemons for the given repo paths. Called on backend shutdown
-   * to clean up daemons this process started. Skips Dolt repos (no daemon).
-   * Also removes backend.pid so the next backend can claim the repo.
+   * Removes backend.pid for the given repo paths so the next backend can claim
+   * the repo. Called on shutdown. The bd CLI no longer has a daemon subsystem.
    */
   async stopDaemonsForRepos(repoPaths: string[]): Promise<void> {
     for (const p of repoPaths) {
-      if (this.getBeadsBackend(p) === "dolt") continue;
-      try {
-        await execAsync("bd daemon stop", {
-          cwd: p,
-          timeout: 5_000,
-          env: { ...process.env },
-        });
-      } catch {
-        /* ignore — may not be running */
-      }
-      // Remove our backend.pid claim so next backend can take over cleanly
       try {
         const pidPath = path.join(p, BACKEND_PID_FILE);
         if (fs.existsSync(pidPath)) {
@@ -134,80 +84,14 @@ export class BeadsService {
     }
   }
 
-  /** Returns repo paths where this backend has started a daemon */
+  /** Returns repo paths managed by this backend (empty; daemon subsystem removed). */
   static getManagedRepoPaths(): string[] {
-    return Array.from(managedReposForShutdown);
+    return [];
   }
 
   /** Reset module-level state (for tests only) */
   static resetForTesting(): void {
-    managedReposForShutdown.clear();
-    daemonEnsuredRepos.clear();
     syncStateMap.clear();
-  }
-
-  /**
-   * Starts daemon if needed (SQLite only). Dolt runs single-process with no daemon.
-   * Always runs `bd daemon stop` before `bd daemon start` to prevent accumulation.
-   * Skips if another backend holds backend.pid lock.
-   */
-  private async startDaemonIfNeeded(repoPath: string): Promise<void> {
-    if (this.getBeadsBackend(repoPath) === "dolt") return;
-    // Already ensured daemon for this repo in this process — skip stop+start (~200ms each)
-    if (daemonEnsuredRepos.has(repoPath)) return;
-
-    const beadsDir = path.join(repoPath, ".beads");
-    const backendPidPath = path.join(repoPath, BACKEND_PID_FILE);
-
-    // File-based lock: if another backend has backend.pid and that PID is alive, skip
-    try {
-      if (fs.existsSync(backendPidPath)) {
-        const content = fs.readFileSync(backendPidPath, "utf-8").trim();
-        const otherPid = parseInt(content, 10);
-        if (!isNaN(otherPid) && otherPid !== process.pid) {
-          try {
-            process.kill(otherPid, 0); // signal 0 = existence check
-            return; // Another backend is managing this repo
-          } catch {
-            /* otherPid is dead — we can take over */
-          }
-        }
-      }
-    } catch {
-      /* best effort */
-    }
-
-    // Stop any potentially stale daemon before starting fresh
-    try {
-      await execAsync("bd daemon stop", {
-        cwd: repoPath,
-        timeout: 5_000,
-        env: { ...process.env },
-      });
-    } catch {
-      /* ignore — may not be running */
-    }
-
-    try {
-      await execAsync("bd daemon start", {
-        cwd: repoPath,
-        timeout: 10_000,
-        env: { ...process.env },
-      });
-      managedReposForShutdown.add(repoPath);
-      daemonEnsuredRepos.add(repoPath);
-
-      // Write our PID to claim we're managing this repo
-      try {
-        fs.mkdirSync(beadsDir, { recursive: true });
-        fs.writeFileSync(backendPidPath, String(process.pid), "utf-8");
-      } catch {
-        /* best effort — may not be writable */
-      }
-    } catch (err: unknown) {
-      const e = err as { stderr?: string; message?: string };
-      log.warn("daemon start failed", { repoPath, err: e.stderr ?? e.message });
-    }
   }
 
   /**
@@ -268,7 +152,7 @@ export class BeadsService {
 
     // 1. Try beads-recommended sync --import-only
     try {
-      await execAsync(`bd ${BD_GLOBAL_FLAGS} sync --import-only`, {
+      await execAsync(`bd sync --import-only`, {
         cwd: repoPath,
         timeout: 30_000,
         maxBuffer: MAX_BUFFER_BYTES,
@@ -284,7 +168,7 @@ export class BeadsService {
     for (const orphanHandling of ["allow", "skip"] as const) {
       try {
         await execAsync(
-          `bd ${BD_GLOBAL_FLAGS} import -i "${jsonlPath}" --orphan-handling ${orphanHandling}`,
+          `bd import -i "${jsonlPath}" --orphan-handling ${orphanHandling}`,
           {
             cwd: repoPath,
             timeout: 30_000,
@@ -371,8 +255,7 @@ export class BeadsService {
 
   /**
    * Execute a bd command in the context of a project directory.
-   * Ensures daemon is running (with stop-before-start to prevent accumulation)
-   * then runs the command with --no-daemon for direct storage access.
+   * Ensures beads is ready, then runs the command.
    * Auto-recovers from stale-database errors by running sync import and retrying once.
    */
   private async exec(
@@ -382,7 +265,7 @@ export class BeadsService {
   ): Promise<string> {
     await this.ensureDaemon(repoPath);
     const timeout = options?.timeout ?? DEFAULT_TIMEOUT_MS;
-    const fullCmd = `bd ${BD_GLOBAL_FLAGS} ${command}`;
+    const fullCmd = `bd ${command}`;
     try {
       const { stdout } = await execAsync(fullCmd, {
         cwd: repoPath,
@@ -534,10 +417,10 @@ export class BeadsService {
     }
   }
 
-  /** Initialize beads in a project repository. Uses SQLite backend. */
+  /** Initialize beads in a project repository. */
   async init(repoPath: string): Promise<void> {
     try {
-      await execAsync(`bd ${BD_GLOBAL_FLAGS} init --backend sqlite`, {
+      await execAsync(`bd init`, {
         cwd: repoPath,
         timeout: DEFAULT_TIMEOUT_MS,
       });
@@ -546,7 +429,7 @@ export class BeadsService {
       const msg = err.stderr || err.stdout || err.message;
       if (msg.includes("already initialized")) return;
       throw new AppError(502, ErrorCodes.BEADS_COMMAND_FAILED, `Beads init failed: ${msg}`, {
-        command: "bd init --backend sqlite",
+        command: "bd init",
         stderr: msg,
       });
     }
@@ -575,7 +458,7 @@ export class BeadsService {
     // Use --orphan-handling allow so child issues whose parent was deleted are
     // still imported — using 'skip' previously caused a stale-DB export loop.
     try {
-      await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${outputPath}" --orphan-handling allow`, {
+      await execAsync(`bd import -i "${outputPath}" --orphan-handling allow`, {
         cwd: repoPath,
         timeout: 30_000,
         maxBuffer: MAX_BUFFER_BYTES,
@@ -594,7 +477,7 @@ export class BeadsService {
       });
       try {
         const jsonlPath = path.join(repoPath, ".beads/issues.jsonl");
-        await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${jsonlPath}" --orphan-handling allow`, {
+        await execAsync(`bd import -i "${jsonlPath}" --orphan-handling allow`, {
           cwd: repoPath,
           timeout: 30_000,
           maxBuffer: MAX_BUFFER_BYTES,

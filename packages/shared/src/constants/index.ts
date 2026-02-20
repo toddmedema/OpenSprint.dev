@@ -11,7 +11,7 @@ export const OPENSPRINT_PATHS = {
   feedback: `${OPENSPRINT_DIR}/feedback`,
   active: `${OPENSPRINT_DIR}/active`,
   settings: `${OPENSPRINT_DIR}/settings.json`,
-  orchestratorState: `${OPENSPRINT_DIR}/orchestrator-state.json`,
+  orchestratorCounters: `${OPENSPRINT_DIR}/orchestrator-counters.json`,
   deployments: `${OPENSPRINT_DIR}/deployments`,
   eventsLog: `${OPENSPRINT_DIR}/events.jsonl`,
   pendingCommits: `${OPENSPRINT_DIR}/pending-commits.json`,

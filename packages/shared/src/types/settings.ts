@@ -20,7 +20,7 @@ export type DeploymentMode = "expo" | "custom";
 /** Deployment target (staging/production) */
 export type DeploymentTarget = "staging" | "production";
 
-/** Deployment target config (PRD §7.5.2/7.5.4): staging/production targets with per-target command/webhook */
+/** Deployment target config (PRD ?7.5.2/7.5.4): staging/production targets with per-target command/webhook */
 export interface DeploymentTargetConfig {
   name: string;
   /** Shell command for this target (custom mode) */
@@ -36,15 +36,15 @@ export interface DeploymentConfig {
   mode: DeploymentMode;
   /** Target environment (default: production) */
   target?: DeploymentTarget;
-  /** Deployment targets with per-target command/webhook (PRD §7.5.2/7.5.4) */
+  /** Deployment targets with per-target command/webhook (PRD ?7.5.2/7.5.4) */
   targets?: DeploymentTargetConfig[];
-  /** Environment variables for deployment (PRD §7.5.4) */
+  /** Environment variables for deployment (PRD ?7.5.4) */
   envVars?: Record<string, string>;
-  /** Auto-deploy when all tasks in an epic reach Done (PRD §7.5.3). Default: false. */
+  /** Auto-deploy when all tasks in an epic reach Done (PRD ?7.5.3). Default: false. */
   autoDeployOnEpicCompletion?: boolean;
-  /** Auto-deploy when all critical feedback (bugs) are resolved (PRD §7.5.3). Default: false. */
+  /** Auto-deploy when all critical feedback (bugs) are resolved (PRD ?7.5.3). Default: false. */
   autoDeployOnEvalResolution?: boolean;
-  /** Auto-resolve feedback when all its created tasks are Done (PRD §10.2). Default: false. */
+  /** Auto-resolve feedback when all its created tasks are Done (PRD ?10.2). Default: false. */
   autoResolveFeedbackOnTaskCompletion?: boolean;
   expoConfig?: {
     projectId?: string;
@@ -79,7 +79,7 @@ export function getDeploymentTargetConfig(
   return config.targets?.find((t) => t.name === targetName);
 }
 
-/** Default deployment configuration (PRD §6.4, §7.5.3) */
+/** Default deployment configuration (PRD ?6.4, ?7.5.3) */
 export const DEFAULT_DEPLOYMENT_CONFIG: DeploymentConfig = {
   mode: "custom",
   autoDeployOnEpicCompletion: false,
@@ -90,7 +90,7 @@ export const DEFAULT_DEPLOYMENT_CONFIG: DeploymentConfig = {
 /** HIL notification mode for each category */
 export type HilNotificationMode = "automated" | "notify_and_proceed" | "requires_approval";
 
-/** Human-in-the-loop decision categories (PRD §6.5.1: test failures are always automated, not configurable) */
+/** Human-in-the-loop decision categories (PRD ?6.5.1: test failures are always automated, not configurable) */
 export interface HilConfig {
   scopeChanges: HilNotificationMode;
   architectureDecisions: HilNotificationMode;
@@ -102,14 +102,17 @@ export type HilConfigInput = HilConfig;
 /** Review mode controls when the review agent is invoked after coding */
 export type ReviewMode = "always" | "never" | "on-failure-only";
 
-/** Default review mode for new projects (PRD §7.3.2: two-agent cycle is recommended) */
+/** Default review mode for new projects (PRD ?7.3.2: two-agent cycle is recommended) */
 export const DEFAULT_REVIEW_MODE: ReviewMode = "always";
+
+/** Strategy when file scope is unknown for parallel scheduling */
+export type UnknownScopeStrategy = "conservative" | "optimistic";
 
 /** Full project settings stored at .opensprint/settings.json */
 export interface ProjectSettings {
   planningAgent: AgentConfig;
   codingAgent: AgentConfig;
-  /** Optional per-complexity coding agent overrides (PRD §12.4) */
+  /** Optional per-complexity coding agent overrides (PRD ?12.4) */
   codingAgentByComplexity?: CodingAgentByComplexity;
   deployment: DeploymentConfig;
   hilConfig: HilConfig;
@@ -118,11 +121,15 @@ export interface ProjectSettings {
   testCommand?: string | null;
   /** When to invoke the review agent after coding completes (default: "always") */
   reviewMode?: ReviewMode;
+  /** Max concurrent Coder/Reviewer agents per project. 1 = v1 sequential behavior. */
+  maxConcurrentCoders?: number;
+  /** How to handle tasks with no file-scope prediction: "conservative" (serialize) or "optimistic" (parallelize, rely on merger) */
+  unknownScopeStrategy?: UnknownScopeStrategy;
 }
 
 /**
  * Resolve the coding agent config for a given task complexity.
- * Falls back through: exact complexity override → default codingAgent.
+ * Falls back through: exact complexity override ? default codingAgent.
  */
 export function getCodingAgentForComplexity(
   settings: ProjectSettings,

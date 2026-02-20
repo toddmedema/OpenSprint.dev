@@ -14,6 +14,12 @@ const projectClients = new Map<string, Set<WebSocket>>();
 const agentSubscriptions = new Map<WebSocket, Set<string>>();
 
 let wss: WebSocketServer;
+let clientHasConnected = false;
+
+/** Whether any WebSocket client has connected since this server booted. */
+export function hasClientConnected(): boolean {
+  return clientHasConnected;
+}
 
 export function setupWebSocket(server: Server): void {
   eventRelay.init(projectClients, agentSubscriptions);
@@ -34,8 +40,9 @@ export function setupWebSocket(server: Server): void {
       return;
     }
 
+    clientHasConnected = true;
+
     if (!projectId) {
-      // Bare /ws connections accepted but not project-scoped
       log.info("Client connected (no project scope)");
     } else {
       log.info("Client connected to project", { projectId });

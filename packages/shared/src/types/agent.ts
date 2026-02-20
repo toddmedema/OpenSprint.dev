@@ -142,10 +142,16 @@ export interface PendingFeedbackCategorization {
   category?: string;
 }
 
-/** Build orchestrator status (always-on per PRDv2 §5.7) */
+/** Active task entry within OrchestratorStatus (v2 multi-slot model) */
+export interface ActiveTaskEntry {
+  taskId: string;
+  phase: AgentPhase;
+  startedAt: string;
+}
+
+/** Build orchestrator status (always-on per PRDv2 §5.7, v2 multi-slot model) */
 export interface OrchestratorStatus {
-  currentTask: string | null;
-  currentPhase: AgentPhase | null;
+  activeTasks: ActiveTaskEntry[];
   queueDepth: number;
   totalDone: number;
   totalFailed: number;

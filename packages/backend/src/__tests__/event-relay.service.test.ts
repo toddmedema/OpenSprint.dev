@@ -49,8 +49,7 @@ describe('EventRelayService', () => {
       expect(() => {
         eventRelay.broadcast('nonexistent', {
           type: 'execute.status',
-          running: true,
-          currentTask: null,
+          activeTasks: [],
           queueDepth: 0,
         });
       }).not.toThrow();

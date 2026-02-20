@@ -68,14 +68,9 @@ export function HomeScreen() {
     <Layout>
       <div className="max-w-6xl mx-auto px-6 py-10">
         {/* Header */}
-        <div className="flex items-center justify-between mb-10">
-          <div>
-            <h1 className="text-3xl font-bold text-theme-text">Projects</h1>
-            <p className="mt-1 text-theme-muted">Manage your AI-powered development projects</p>
-          </div>
-          <button onClick={() => navigate("/projects/new")} className="btn-primary">
-            Create New Project
-          </button>
+        <div className="mb-10">
+          <h1 className="text-3xl font-bold text-theme-text">Projects</h1>
+          <p className="mt-1 text-theme-muted">Manage your AI-powered development projects</p>
         </div>
 
         {/* Project Grid */}
@@ -83,21 +78,6 @@ export function HomeScreen() {
           <div className="text-center py-20 text-theme-muted">Loading projects...</div>
         ) : projects.length === 0 ? (
           <div className="text-center py-20">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-theme-border-subtle flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-theme-muted"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M12 4.5v15m7.5-7.5h-15"
-                />
-              </svg>
-            </div>
             <h3 className="text-lg font-medium text-theme-text mb-1">No projects yet</h3>
             <p className="text-theme-muted mb-6">Get started by creating your first project</p>
             <button onClick={() => navigate("/projects/new")} className="btn-primary">

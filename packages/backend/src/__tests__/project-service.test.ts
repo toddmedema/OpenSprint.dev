@@ -77,6 +77,10 @@ describe("ProjectService", () => {
     const beadsStat = await fs.stat(beadsDir);
     expect(beadsStat.isDirectory()).toBe(true);
 
+    // Verify AGENTS.md created with bd instruction
+    const agentsMd = await fs.readFile(path.join(repoPath, "AGENTS.md"), "utf-8");
+    expect(agentsMd).toContain("Use 'bd' for task tracking");
+
     // PRD §5.9: Verify .gitignore has orchestrator-state and worktrees
     const gitignorePath = path.join(repoPath, ".gitignore");
     const gitignore = await fs.readFile(gitignorePath, "utf-8");
@@ -147,6 +151,48 @@ describe("ProjectService", () => {
     const found = all.find((p) => p.id === project.id);
     expect(found).toBeDefined();
     expect((found as Record<string, unknown>).description).toBeUndefined();
+  });
+
+  it("should append bd instruction to existing AGENTS.md that lacks it", async () => {
+    const repoPath = path.join(tempDir, "existing-agents-md");
+    await fs.mkdir(repoPath, { recursive: true });
+    await fs.writeFile(path.join(repoPath, "AGENTS.md"), "# My Project\n\nCustom instructions here.\n");
+
+    await projectService.createProject({
+      name: "Existing AGENTS.md",
+      repoPath,
+      planningAgent: { type: "claude", model: null, cliCommand: null },
+      codingAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    const content = await fs.readFile(path.join(repoPath, "AGENTS.md"), "utf-8");
+    expect(content).toContain("# My Project");
+    expect(content).toContain("Custom instructions here.");
+    expect(content).toContain("Use 'bd' for task tracking");
+  });
+
+  it("should not duplicate bd instruction if AGENTS.md already has it", async () => {
+    const repoPath = path.join(tempDir, "agents-md-with-bd");
+    await fs.mkdir(repoPath, { recursive: true });
+    await fs.writeFile(
+      path.join(repoPath, "AGENTS.md"),
+      "# My Project\n\nUse 'bd' for task tracking\n"
+    );
+
+    await projectService.createProject({
+      name: "Already Has BD",
+      repoPath,
+      planningAgent: { type: "claude", model: null, cliCommand: null },
+      codingAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    const content = await fs.readFile(path.join(repoPath, "AGENTS.md"), "utf-8");
+    const matches = content.match(/Use 'bd' for task tracking/g);
+    expect(matches).toHaveLength(1);
   });
 
   it("should reject empty project name", async () => {

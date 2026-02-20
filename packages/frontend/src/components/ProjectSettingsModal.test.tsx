@@ -145,7 +145,7 @@ describe("ProjectSettingsModal", () => {
     expect(tabsContainer).toHaveClass("flex-shrink-0");
   });
 
-  it("hides API key banner, inputs, and status when both keys are configured", async () => {
+  it("hides API key banner when all keys for selected providers are configured", async () => {
     mockGetKeys.mockResolvedValue({ anthropic: true, cursor: true });
 
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
@@ -156,17 +156,12 @@ describe("ProjectSettingsModal", () => {
 
     await screen.findByText("Planning Agent Slot");
 
-    expect(screen.queryByText(/API keys required/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/API key required/)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("sk-ant-...")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        /Both API keys configured|Claude API key configured|Cursor API key configured/
-      )
-    ).not.toBeInTheDocument();
   });
 
-  it("shows API key banner and inputs when at least one key is missing", async () => {
+  it("shows anthropic key input when claude is selected and key is missing", async () => {
     mockGetKeys.mockResolvedValue({ anthropic: false, cursor: true });
 
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
@@ -175,7 +170,7 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    await screen.findByText(/API keys required/);
+    await screen.findByText(/API key required/);
     expect(screen.getByPlaceholderText("sk-ant-...")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
   });

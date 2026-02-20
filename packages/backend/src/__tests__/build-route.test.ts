@@ -47,8 +47,7 @@ describe("Execute API", () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
       expect(res.body.data).toMatchObject({
-        currentTask: null,
-        currentPhase: null,
+        activeTasks: [],
         queueDepth: 0,
         totalDone: 0,
         totalFailed: 0,
@@ -96,7 +95,7 @@ describe("Execute API", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
-      expect(res.body.data.currentTask).toBeNull();
+      expect(res.body.data.activeTasks).toBeDefined();
       expect(res.body.data.queueDepth).toBeGreaterThanOrEqual(0);
     });
 

@@ -196,6 +196,19 @@ export class ProjectService {
     await this.beads.configSet(repoPath, "auto-flush", false);
     await this.beads.configSet(repoPath, "auto-commit", false);
 
+    // Ensure AGENTS.md exists and contains bd task-tracking instruction
+    const agentsMdPath = path.join(repoPath, "AGENTS.md");
+    const bdInstruction = "Use 'bd' for task tracking";
+    try {
+      let agentsContent = await fs.readFile(agentsMdPath, "utf-8");
+      if (!agentsContent.includes(bdInstruction)) {
+        agentsContent = agentsContent.trimEnd() + `\n\n${bdInstruction}\n`;
+        await fs.writeFile(agentsMdPath, agentsContent);
+      }
+    } catch {
+      await fs.writeFile(agentsMdPath, `# Agent Instructions\n\n${bdInstruction}\n`);
+    }
+
     // PRD §5.9: Add orchestrator state and worktrees to .gitignore during setup
     const gitignorePath = path.join(repoPath, ".gitignore");
     const gitignoreEntries = [".opensprint/orchestrator-state.json", ".opensprint/worktrees/"];

@@ -50,7 +50,7 @@ describe("HomeScreen", () => {
 
     await screen.findByText("No projects yet");
     expect(screen.getByText("Get started by creating your first project")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /create new project/i })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /create new project/i })).toBeInTheDocument();
   });
 
   it("renders project cards when projects exist", async () => {
@@ -79,7 +79,7 @@ describe("HomeScreen", () => {
     );
 
     await screen.findByText("No projects yet");
-    const createButton = screen.getAllByRole("button", { name: /create new project/i })[0];
+    const createButton = screen.getByRole("button", { name: /create new project/i });
     await user.click(createButton);
 
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/new");

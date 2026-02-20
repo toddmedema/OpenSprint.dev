@@ -96,12 +96,12 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
   }, [activeTab]);
 
   const planningAgent = settings?.planningAgent ?? {
-    type: "claude" as AgentType,
+    type: "cursor" as AgentType,
     model: null,
     cliCommand: null,
   };
   const codingAgent = settings?.codingAgent ?? {
-    type: "claude" as AgentType,
+    type: "cursor" as AgentType,
     model: null,
     cliCommand: null,
   };
@@ -335,93 +335,90 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
 
               {activeTab === "agents" && (
                 <div className="space-y-6">
-                  {envKeys && (!envKeys.anthropic || !envKeys.cursor) && (
-                    <>
-                      <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
-                        <p className="text-sm text-theme-warning-text">
-                          <strong>API keys required:</strong> Add{" "}
-                          <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and/or{" "}
-                          <code className="font-mono text-xs">CURSOR_API_KEY</code> to your
-                          project&apos;s <code className="font-mono text-xs">.env</code> file to use
-                          Claude and Cursor. Get keys from{" "}
-                          <a
-                            href="https://console.anthropic.com/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline hover:opacity-80"
-                          >
-                            Anthropic Console
-                          </a>{" "}
-                          and{" "}
-                          <a
-                            href="https://cursor.com/settings"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline hover:opacity-80"
-                          >
-                            Cursor → Integrations → User API Keys
-                          </a>
-                          .
-                        </p>
-                      </div>
-                      <div className="space-y-3">
-                        {!envKeys.anthropic && (
-                          <div className="flex gap-2 items-end">
-                            <div className="flex-1">
-                              <label className="block text-xs font-medium text-theme-muted mb-1">
-                                ANTHROPIC_API_KEY (Claude)
-                              </label>
-                              <input
-                                type="password"
-                                className="input font-mono text-sm"
-                                placeholder="sk-ant-..."
-                                value={keyInput.anthropic}
-                                onChange={(e) =>
-                                  setKeyInput((p) => ({ ...p, anthropic: e.target.value }))
-                                }
-                                autoComplete="off"
-                              />
+                  {(() => {
+                    const selectedTypes = new Set([
+                      planningAgent.type,
+                      codingAgent.type,
+                      ...Object.values(codingAgentByComplexity).map((c) => c.type),
+                    ]);
+                    const needsAnthropic =
+                      envKeys && !envKeys.anthropic && selectedTypes.has("claude");
+                    const needsCursor =
+                      envKeys && !envKeys.cursor && selectedTypes.has("cursor");
+                    return (needsAnthropic || needsCursor) ? (
+                      <>
+                        <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
+                          <p className="text-sm text-theme-warning-text">
+                            <strong>API key required:</strong>{" "}
+                            {needsAnthropic && needsCursor
+                              ? <>Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and <code className="font-mono text-xs">CURSOR_API_KEY</code> to continue.</>
+                              : needsAnthropic
+                                ? <>Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> to use Claude. Get one from{" "}
+                                  <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">Anthropic Console</a>.</>
+                                : <>Add your <code className="font-mono text-xs">CURSOR_API_KEY</code> to use Cursor. Get one from{" "}
+                                  <a href="https://cursor.com/settings" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">Cursor → Integrations → User API Keys</a>.</>
+                            }
+                          </p>
+                        </div>
+                        <div className="space-y-3">
+                          {needsAnthropic && (
+                            <div className="flex gap-2 items-end">
+                              <div className="flex-1">
+                                <label className="block text-xs font-medium text-theme-muted mb-1">
+                                  ANTHROPIC_API_KEY (Claude)
+                                </label>
+                                <input
+                                  type="password"
+                                  className="input font-mono text-sm"
+                                  placeholder="sk-ant-..."
+                                  value={keyInput.anthropic}
+                                  onChange={(e) =>
+                                    setKeyInput((p) => ({ ...p, anthropic: e.target.value }))
+                                  }
+                                  autoComplete="off"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleSaveKey("ANTHROPIC_API_KEY")}
+                                disabled={!keyInput.anthropic.trim() || savingKey !== null}
+                                className="btn-primary text-sm disabled:opacity-50"
+                              >
+                                {savingKey === "ANTHROPIC_API_KEY" ? "Saving…" : "Save"}
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleSaveKey("ANTHROPIC_API_KEY")}
-                              disabled={!keyInput.anthropic.trim() || savingKey !== null}
-                              className="btn-primary text-sm disabled:opacity-50"
-                            >
-                              {savingKey === "ANTHROPIC_API_KEY" ? "Saving…" : "Save"}
-                            </button>
-                          </div>
-                        )}
-                        {!envKeys.cursor && (
-                          <div className="flex gap-2 items-end">
-                            <div className="flex-1">
-                              <label className="block text-xs font-medium text-theme-muted mb-1">
-                                CURSOR_API_KEY
-                              </label>
-                              <input
-                                type="password"
-                                className="input font-mono text-sm"
-                                placeholder="key_..."
-                                value={keyInput.cursor}
-                                onChange={(e) =>
-                                  setKeyInput((p) => ({ ...p, cursor: e.target.value }))
-                                }
-                                autoComplete="off"
-                              />
+                          )}
+                          {needsCursor && (
+                            <div className="flex gap-2 items-end">
+                              <div className="flex-1">
+                                <label className="block text-xs font-medium text-theme-muted mb-1">
+                                  CURSOR_API_KEY
+                                </label>
+                                <input
+                                  type="password"
+                                  className="input font-mono text-sm"
+                                  placeholder="key_..."
+                                  value={keyInput.cursor}
+                                  onChange={(e) =>
+                                    setKeyInput((p) => ({ ...p, cursor: e.target.value }))
+                                  }
+                                  autoComplete="off"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleSaveKey("CURSOR_API_KEY")}
+                                disabled={!keyInput.cursor.trim() || savingKey !== null}
+                                className="btn-primary text-sm disabled:opacity-50"
+                              >
+                                {savingKey === "CURSOR_API_KEY" ? "Saving…" : "Save"}
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleSaveKey("CURSOR_API_KEY")}
-                              disabled={!keyInput.cursor.trim() || savingKey !== null}
-                              className="btn-primary text-sm disabled:opacity-50"
-                            >
-                              {savingKey === "CURSOR_API_KEY" ? "Saving…" : "Save"}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
+                          )}
+                        </div>
+                      </>
+                    ) : null;
+                  })()}
                   <div>
                     <h3 className="text-sm font-semibold text-theme-text mb-3">
                       Planning Agent Slot

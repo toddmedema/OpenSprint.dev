@@ -450,6 +450,7 @@ export class PlanService {
         description: string;
         priority?: number;
         dependsOn?: string[];
+        files?: { modify?: string[]; create?: string[] };
       }>;
     }
   ): Promise<Plan> {
@@ -513,6 +514,12 @@ export class PlanService {
         taskIdMap.set(task.title, taskResult.id);
         createdTaskIds.push(taskResult.id);
         createdTaskTitles.push(task.title);
+
+        // Store file-scope predictions as label for parallel scheduling
+        if (task.files && (task.files.modify?.length || task.files.create?.length)) {
+          const filesJson = JSON.stringify(task.files);
+          await this.beads.addLabel(repoPath, taskResult.id, `files:${filesJson}`);
+        }
 
         // Add blocks dependency on gating task
         await this.beads.addDependency(repoPath, taskResult.id, gateTaskId);

@@ -5,7 +5,7 @@
 Agents frequently crash with:
 
 ```
-AppError: Beads command failed after sync retry: bd --no-daemon show opensprint.dev-0jmc.5 --json
+AppError: Beads command failed after sync retry: bd show opensprint.dev-0jmc.5 --json
 {
   "error": "Database out of sync with JSONL. Run 'bd sync --import-only' to fix.
   The JSONL file has been updated (e.g., after 'git pull') but the database
@@ -93,12 +93,6 @@ Effects:
 2. **Sync state**: Replace `syncEnsuredRepos: Set<string>` with `syncState: Map<string, { lastSyncMs: number; jsonlMtime: number }>`.
 3. **`ensureSyncBeforeExec`**: Check `.beads/issues.jsonl` mtime vs `syncState`; if newer, run `syncImport` and update state.
 4. **`exec` stale error path**: Clear sync state, call `ensureSyncBeforeExec`, retry once. Rethrow `BEADS_SYNC_FAILED` from `syncImport` if it throws.
-
-## Backend: SQLite vs Dolt
-
-- **SQLite** (default): Uses a daemon for sync; `ensureDaemon` starts/stops the daemon before commands.
-- **Dolt**: Runs single-process with no daemon; `ensureDaemon` skips daemon start/stop and only runs `ensureSyncBeforeExec`.
-- Both backends use the same mtime-based sync/import flow for JSONL.
 
 ## Entry Points
 

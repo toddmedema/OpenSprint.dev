@@ -39,9 +39,7 @@ export interface PrdUpdatedEvent {
 
 export interface ExecuteStatusEvent {
   type: "execute.status";
-  currentTask: string | null;
-  /** Coding vs review sub-phase for current task (PRD §7.3.2) */
-  currentPhase?: AgentPhase | null;
+  activeTasks: Array<{ taskId: string; phase: AgentPhase; startedAt: string }>;
   queueDepth: number;
   /** True when orchestrator is paused waiting for HIL approval (PRD §6.5) */
   awaitingApproval?: boolean;

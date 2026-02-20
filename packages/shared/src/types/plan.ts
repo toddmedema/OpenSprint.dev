@@ -75,12 +75,19 @@ export interface UpdatePlanRequest {
   content: string;
 }
 
+/** Predicted file scope for a task (for parallel scheduling) */
+export interface TaskFileScope {
+  modify?: string[];
+  create?: string[];
+}
+
 /** Suggested task from AI decomposition (before creation) */
 export interface SuggestedTask {
   title: string;
   description: string;
   priority?: number;
   dependsOn?: string[];
+  files?: TaskFileScope;
 }
 
 /** Suggested plan from AI decomposition (returned by POST /plans/suggest) */

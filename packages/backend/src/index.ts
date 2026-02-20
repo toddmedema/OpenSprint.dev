@@ -11,7 +11,8 @@ config({ path: path.resolve(process.cwd(), "../../.env") });
 
 // Note: Beads removed the daemon subsystem (gastown#1302). BEADS_NO_DAEMON
 // and --no-daemon are no longer used.
-import { setupWebSocket, closeWebSocket } from "./websocket/index.js";
+import { exec } from "child_process";
+import { setupWebSocket, closeWebSocket, hasClientConnected } from "./websocket/index.js";
 import { DEFAULT_API_PORT } from "@opensprint/shared";
 import { ProjectService } from "./services/project.service.js";
 import { BeadsService } from "./services/beads.service.js";
@@ -155,7 +156,7 @@ async function initAlwaysOnOrchestrator(): Promise<void> {
         const open = nonEpicTasks.filter((t) => t.status === "open");
 
         const status = await orchestratorService.getStatus(project.id);
-        const agentRunning = status.currentTask !== null;
+        const agentRunning = status.activeTasks.length > 0;
 
         logOrchestrator.info("Project status", {
           name: project.name,
@@ -232,6 +233,8 @@ server.on("error", (err: NodeJS.ErrnoException) => {
   process.exit(1);
 });
 
+const FRONTEND_PORT = parseInt(process.env.FRONTEND_PORT || "5173", 10);
+
 server.listen(port, () => {
   logStartup.info("OpenSprint backend listening", { url: `http://localhost:${port}` });
   logStartup.info("WebSocket server ready", { url: `ws://localhost:${port}/ws` });
@@ -239,6 +242,20 @@ server.listen(port, () => {
   initAlwaysOnOrchestrator().catch((err) => {
     logOrchestrator.error("Always-on init failed", { err });
   });
+
+  // Auto-open frontend if no browser reconnects within 10s
+  setTimeout(() => {
+    if (hasClientConnected()) return;
+    const url = `http://localhost:${FRONTEND_PORT}`;
+    logStartup.info("No WebSocket client connected — opening frontend", { url });
+    const cmd =
+      process.platform === "darwin" ? "open" :
+      process.platform === "win32" ? "start" :
+      "xdg-open";
+    exec(`${cmd} ${url}`, (err) => {
+      if (err) logStartup.warn("Could not open browser", { err: err.message });
+    });
+  }, 10_000);
 });
 
 process.on("SIGINT", shutdown);

@@ -40,15 +40,15 @@ Install dependencies, clone the repo, and start the dev server. Pick your OS:
 <summary><strong>macOS</strong></summary>
 
 ```bash
-# Install prerequisites (Node.js, Dolt, Beads)
-brew install node dolt
+# Install prerequisites (Node.js, Beads)
+brew install node
 curl -sSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash
 
 # Clone and run
 git clone https://github.com/toddmedema/OpenSprint.dev.git
 cd opensprint
 npm install
-bd init --backend dolt
+bd init
 npm run dev
 ```
 
@@ -59,15 +59,14 @@ npm run dev
 
 ```bash
 # Install Node.js >= 20 (https://nodejs.org/en/download)
-# Then install Dolt and Beads:
-sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash'
+# Then install Beads:
 curl -sSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash
 
 # Clone and run
 git clone https://github.com/toddmedema/OpenSprint.dev.git
 cd opensprint
 npm install
-bd init --backend dolt
+bd init
 npm run dev
 ```
 
@@ -77,15 +76,15 @@ npm run dev
 <summary><strong>Windows</strong></summary>
 
 ```powershell
-# Install prerequisites (Node.js, Dolt, Beads) — requires Chocolatey (https://chocolatey.org)
-choco install nodejs dolt
+# Install prerequisites (Node.js, Beads) — requires Chocolatey (https://chocolatey.org)
+choco install nodejs
 irm https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.ps1 | iex
 
 # Clone and run
 git clone https://github.com/toddmedema/OpenSprint.dev.git
 cd opensprint
 npm install
-bd init --backend dolt
+bd init
 npm run dev
 ```
 
@@ -93,7 +92,7 @@ npm run dev
 
 Then open your browser to http://localhost:5173 and get building!
 
-If `bd init --backend dolt` fails (e.g. CGO not available), fall back to SQLite with `bd init`. You can also install Beads from source with Go: `go install github.com/steveyegge/beads/cmd/bd@latest`
+You can also install Beads from source with Go: `go install github.com/steveyegge/beads/cmd/bd@latest`
 
 ### Integrations
 
@@ -226,7 +225,7 @@ All scripts can be run from the project root:
 | **Backend**        | Node.js, Express, WebSocket (ws), TypeScript, Vitest                    |
 | **Frontend**       | React 19, React Router, Vite, Tailwind CSS, TypeScript                  |
 | **Shared**         | TypeScript types and constants consumed by both packages                |
-| **Issue Tracking** | [Beads](https://github.com/steveyegge/beads) + [Dolt](https://github.com/dolthub/dolt) — git-native issue tracker |
+| **Issue Tracking** | [Beads](https://github.com/steveyegge/beads) — git-native issue tracker |
 
 ## Prerequisites
 
@@ -234,7 +233,6 @@ All of these are installed as part of the [Quick Start](#quick-start) scripts ab
 
 - [Node.js](https://nodejs.org/) >= 20.0.0 (npm included)
 - Git
-- [Dolt](https://github.com/dolthub/dolt) — embedded SQL database used by Beads (`dolt version` to verify)
 - [Beads](https://github.com/steveyegge/beads) (`bd`) — git-native issue tracking CLI (`bd version` to verify)
 
 ## Environment Variables
@@ -294,7 +292,7 @@ Contributions are welcome! Whether it's a bug report, feature request, or pull r
 
 ### Issue Tracking with Beads
 
-This project uses [Beads](https://github.com/steveyegge/beads) (`bd`) for task and issue tracking backed by [Dolt](https://github.com/dolthub/dolt). Both are installed as part of the [Quick Start](#quick-start). Run `bd onboard` to get started, then `bd ready` to find available work.
+This project uses [Beads](https://github.com/steveyegge/beads) (`bd`) for task and issue tracking. It is installed as part of the [Quick Start](#quick-start). Run `bd onboard` to get started, then `bd ready` to find available work.
 
 ### Reporting Bugs
 

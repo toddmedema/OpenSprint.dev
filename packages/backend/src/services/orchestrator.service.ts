@@ -8,6 +8,7 @@ import type {
   ReviewAgentResult,
   TestResults,
   PendingFeedbackCategorization,
+  AgentConfig,
 } from "@opensprint/shared";
 import {
   OPENSPRINT_PATHS,
@@ -40,10 +41,7 @@ import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { TimerRegistry } from "./timer-registry.js";
 import { AgentLifecycleManager, type AgentRunState } from "./agent-lifecycle.js";
-import {
-  CrashRecoveryService,
-  type PersistedOrchestratorState as CrashPersistedState,
-} from "./crash-recovery.service.js";
+import { CrashRecoveryService } from "./crash-recovery.service.js";
 import { normalizeCodingStatus, normalizeReviewStatus } from "./result-normalizers.js";
 import { getPlanComplexityForTask } from "./plan-complexity.js";
 import { eventLogService } from "./event-log.service.js";
@@ -75,15 +73,12 @@ interface RetryContext {
   previousFailure?: string;
   reviewFeedback?: string;
   useExistingBranch?: boolean;
-  /** Full test runner output from the previous attempt */
   previousTestOutput?: string;
-  /** Git diff from the previous attempt */
   previousDiff?: string;
-  /** Type of failure that triggered this retry */
   failureType?: FailureType;
 }
 
-/** Watchdog interval: 5 minutes (PRDv2 §5.7) */
+/** Watchdog interval: 60 seconds */
 const WATCHDOG_INTERVAL_MS = 60 * 1000;
 
 /**
@@ -97,21 +92,11 @@ export interface TaskAssignment {
   branchName: string;
   worktreePath: string;
   promptPath: string;
-  agentConfig: import("@opensprint/shared").AgentConfig;
+  agentConfig: AgentConfig;
   attempt: number;
   retryContext?: RetryContext;
   createdAt: string;
 }
-
-/** Polling interval for monitoring orphaned agent processes during crash recovery */
-
-// ─── State Persistence Types (PRDv2 §5.8) ───
-
-/**
- * Serializable orchestrator state persisted to `.opensprint/orchestrator-state.json`.
- * Written atomically on every state transition so the backend can recover after a crash.
- */
-type PersistedOrchestratorState = CrashPersistedState;
 
 /** Check whether a PID is still running */
 function isPidAlive(pid: number): boolean {
@@ -160,26 +145,27 @@ interface PhaseResult {
   testOutput: string;
 }
 
+// ─── Slot-based State Model (v2) ───
+
+/** Per-task agent slot. Encapsulates all state for one active agent. */
+export interface AgentSlot {
+  taskId: string;
+  taskTitle: string | null;
+  branchName: string;
+  worktreePath: string | null;
+  agent: AgentRunState;
+  phase: "coding" | "review";
+  attempt: number;
+  phaseResult: PhaseResult;
+  infraRetries: number;
+  timers: TimerRegistry;
+}
+
 interface OrchestratorState {
   status: OrchestratorStatus;
-  /** True when the orchestrator loop is actively running (internal tracking, not exposed) */
   loopActive: boolean;
-  /** Centralized timer registry — all timers go here for clean teardown */
-  timers: TimerRegistry;
-  /** Agent process state shared with AgentLifecycleManager */
-  agent: AgentRunState;
-  attempt: number;
-  /** Results from the last coding phase (diff, summary, test output) */
-  phaseResult: PhaseResult;
-  /** Branch name of the currently active task (for persistence) */
-  activeBranchName: string | null;
-  /** Title of the current task (for persistence/logging) */
-  activeTaskTitle: string | null;
-  /** Filesystem path of the active task's git worktree (null when idle) */
-  activeWorktreePath: string | null;
-  /** Number of infrastructure-caused retries for the current task (not counted toward backoff) */
-  infraRetries: number;
-  /** Feedback items awaiting categorization (PRDv2 §5.8) */
+  globalTimers: TimerRegistry;
+  slots: Map<string, AgentSlot>;
   pendingFeedbackCategorizations: PendingFeedbackCategorization[];
 }
 
@@ -195,11 +181,19 @@ type TransitionTarget =
     }
   | { to: "enter_review"; taskId: string; queueDepth: number }
   | { to: "complete"; taskId: string }
-  | { to: "fail" };
+  | { to: "fail"; taskId: string };
+
+/** Persisted counters (lightweight replacement for orchestrator-state.json) */
+interface OrchestratorCounters {
+  totalDone: number;
+  totalFailed: number;
+  queueDepth: number;
+}
 
 /**
  * Build orchestrator service.
- * Manages the single-agent build loop: poll bd ready -> assign -> spawn agent -> monitor -> handle result.
+ * Manages the multi-agent build loop: poll bd ready -> assign -> spawn agent -> monitor -> handle result.
+ * Supports concurrent coder agents via slot-based state model.
  */
 export class OrchestratorService {
   private state = new Map<string, OrchestratorState>();
@@ -214,6 +208,8 @@ export class OrchestratorService {
   private crashRecovery = new CrashRecoveryService();
   /** Cached repoPath per project (avoids async lookup in synchronous transition()) */
   private repoPathCache = new Map<string, string>();
+  /** Cached maxConcurrentCoders per project (avoids async lookup in synchronous nudge()) */
+  private maxSlotsCache = new Map<string, number>();
   /** Guard against concurrent pushes per project */
   private pushInProgress = new Set<string>();
   /** Promise per project that resolves when the current push completes */
@@ -224,22 +220,8 @@ export class OrchestratorService {
       this.state.set(projectId, {
         status: this.defaultStatus(),
         loopActive: false,
-        timers: new TimerRegistry(),
-        agent: {
-          activeProcess: null,
-          lastOutputTime: 0,
-          outputLog: [],
-          outputLogBytes: 0,
-          startedAt: "",
-          exitHandled: false,
-          killedDueToTimeout: false,
-        },
-        attempt: 1,
-        phaseResult: { codingDiff: "", codingSummary: "", testResults: null, testOutput: "" },
-        activeBranchName: null,
-        activeTaskTitle: null,
-        activeWorktreePath: null,
-        infraRetries: 0,
+        globalTimers: new TimerRegistry(),
+        slots: new Map(),
         pendingFeedbackCategorizations: [],
       });
     }
@@ -248,32 +230,59 @@ export class OrchestratorService {
 
   private defaultStatus(): OrchestratorStatus {
     return {
-      currentTask: null,
-      currentPhase: null,
+      activeTasks: [],
       queueDepth: 0,
       totalDone: 0,
       totalFailed: 0,
     };
   }
 
+  /** Create a new AgentSlot for a task */
+  private createSlot(taskId: string, taskTitle: string | null, branchName: string, attempt: number): AgentSlot {
+    return {
+      taskId,
+      taskTitle,
+      branchName,
+      worktreePath: null,
+      agent: {
+        activeProcess: null,
+        lastOutputTime: 0,
+        outputLog: [],
+        outputLogBytes: 0,
+        startedAt: "",
+        exitHandled: false,
+        killedDueToTimeout: false,
+      },
+      phase: "coding",
+      attempt,
+      phaseResult: { codingDiff: "", codingSummary: "", testResults: null, testOutput: "" },
+      infraRetries: 0,
+      timers: new TimerRegistry(),
+    };
+  }
+
+  /** Build activeTasks array from current slots for status/broadcast */
+  private buildActiveTasks(state: OrchestratorState): OrchestratorStatus["activeTasks"] {
+    const tasks: OrchestratorStatus["activeTasks"] = [];
+    for (const slot of state.slots.values()) {
+      tasks.push({
+        taskId: slot.taskId,
+        phase: slot.phase,
+        startedAt: slot.agent.startedAt || new Date().toISOString(),
+      });
+    }
+    return tasks;
+  }
+
   /**
    * Centralized state transition with logging and broadcasting.
-   *
-   * All phase transitions flow through here to ensure consistent state
-   * mutations, structured logging, and WebSocket broadcasts.
    */
   private transition(projectId: string, t: TransitionTarget): void {
     const state = this.getState(projectId);
-    const prev = state.status.currentPhase ?? "idle";
 
     switch (t.to) {
-      case "start_task":
-        state.status.currentTask = t.taskId;
-        state.status.currentPhase = "coding";
-        state.activeBranchName = t.branchName;
-        state.activeTaskTitle = t.taskTitle;
-        state.activeWorktreePath = null;
-        state.attempt = t.attempt;
+      case "start_task": {
+        const slot = state.slots.get(t.taskId);
         broadcastToProject(projectId, {
           type: "task.updated",
           taskId: t.taskId,
@@ -282,14 +291,15 @@ export class OrchestratorService {
         });
         broadcastToProject(projectId, {
           type: "execute.status",
-          currentTask: t.taskId,
-          currentPhase: "coding",
+          activeTasks: this.buildActiveTasks(state),
           queueDepth: t.queueDepth,
         });
         break;
+      }
 
-      case "enter_review":
-        state.status.currentPhase = "review";
+      case "enter_review": {
+        const slot = state.slots.get(t.taskId);
+        if (slot) slot.phase = "review";
         broadcastToProject(projectId, {
           type: "task.updated",
           taskId: t.taskId,
@@ -298,15 +308,15 @@ export class OrchestratorService {
         });
         broadcastToProject(projectId, {
           type: "execute.status",
-          currentTask: t.taskId,
-          currentPhase: "review",
+          activeTasks: this.buildActiveTasks(state),
           queueDepth: t.queueDepth,
         });
         break;
+      }
 
       case "complete":
         state.status.totalDone += 1;
-        this.resetTaskState(state);
+        this.removeSlot(state, t.taskId);
         broadcastToProject(projectId, {
           type: "task.updated",
           taskId: t.taskId,
@@ -317,12 +327,13 @@ export class OrchestratorService {
 
       case "fail":
         state.status.totalFailed += 1;
-        this.resetTaskState(state);
+        this.removeSlot(state, t.taskId);
         break;
     }
 
+    const activeTask = state.slots.get(t.taskId);
     log.info(
-      `Transition [${projectId}]: ${prev} → ${t.to} (task: ${state.status.currentTask ?? "none"})`
+      `Transition [${projectId}]: → ${t.to} (task: ${t.taskId})`
     );
 
     const repoPath = this.repoPathCache.get(projectId);
@@ -331,157 +342,148 @@ export class OrchestratorService {
         .append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
-          taskId: state.status.currentTask ?? "",
+          taskId: t.taskId,
           event: `transition.${t.to}`,
-          data: { from: prev, attempt: state.attempt },
+          data: { attempt: activeTask?.attempt },
         })
         .catch(() => {});
     }
   }
 
-  /** Clear all task-related fields when returning to idle */
-  private resetTaskState(state: OrchestratorState): void {
-    state.status.currentTask = null;
-    state.status.currentPhase = null;
-    state.activeBranchName = null;
-    state.activeTaskTitle = null;
-    state.activeWorktreePath = null;
-  }
-
-  // ─── State Persistence (PRDv2 §5.8) ───
-
-  /**
-   * Persist current orchestrator state to `.opensprint/orchestrator-state.json`.
-   * Uses atomic write (tmp + rename) to prevent corruption.
-   */
-  private async persistState(projectId: string, repoPath: string): Promise<void> {
-    const state = this.getState(projectId);
-    const persisted: PersistedOrchestratorState = {
-      projectId,
-      currentTaskId: state.status.currentTask,
-      currentTaskTitle: state.activeTaskTitle,
-      currentPhase: state.status.currentPhase,
-      branchName: state.activeBranchName,
-      worktreePath: state.activeWorktreePath,
-      agentPid: state.agent.activeProcess?.pid ?? null,
-      attempt: state.attempt,
-      startedAt: state.agent.startedAt || null,
-      lastTransition: new Date().toISOString(),
-      lastOutputTimestamp: state.agent.lastOutputTime || null,
-      queueDepth: state.status.queueDepth,
-      totalDone: state.status.totalDone,
-      totalFailed: state.status.totalFailed,
-    };
-
-    const statePath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorState);
-    try {
-      await fs.mkdir(path.dirname(statePath), { recursive: true });
-      await writeJsonAtomic(statePath, persisted);
-    } catch (err) {
-      log.warn("Failed to persist state", { err });
+  /** Remove a slot and clean up its per-slot timers */
+  private removeSlot(state: OrchestratorState, taskId: string): void {
+    const slot = state.slots.get(taskId);
+    if (slot) {
+      slot.timers.clearAll();
+      state.slots.delete(taskId);
     }
+    state.status.activeTasks = this.buildActiveTasks(state);
   }
 
-  /** Load persisted state from disk (returns null if none exists or is unreadable) */
-  private async loadPersistedState(repoPath: string): Promise<PersistedOrchestratorState | null> {
-    const statePath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorState);
+  /** Delete assignment.json for a task */
+  private async deleteAssignment(repoPath: string, taskId: string): Promise<void> {
+    const assignmentPath = path.join(
+      repoPath,
+      OPENSPRINT_PATHS.active,
+      taskId,
+      OPENSPRINT_PATHS.assignment
+    );
     try {
-      const raw = await fs.readFile(statePath, "utf-8");
-      return JSON.parse(raw) as PersistedOrchestratorState;
-    } catch {
-      return null;
-    }
-  }
-
-  /** Clear persisted state (task completed or recovered) */
-  private async clearPersistedState(repoPath: string): Promise<void> {
-    const statePath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorState);
-    try {
-      await fs.unlink(statePath);
+      await fs.unlink(assignmentPath);
     } catch {
       // File may not exist
     }
   }
 
-  // ─── Crash Recovery (PRDv2 §5.8) — delegates to CrashRecoveryService ───
+  // ─── Counters Persistence ───
 
-  private getCrashRecoveryCallbacks() {
-    return {
-      clearPersistedState: (rp: string) => this.clearPersistedState(rp),
-      persistState: (pid: string, rp: string) => this.persistState(pid, rp),
-      handleCodingDone: (pid: string, rp: string, t: BeadsIssue, bn: string, ec: number | null) =>
-        this.handleCodingDone(pid, rp, t, bn, ec),
-      handleReviewDone: (pid: string, rp: string, t: BeadsIssue, bn: string, ec: number | null) =>
-        this.handleReviewDone(pid, rp, t, bn, ec),
-      handleTaskFailure: (
-        pid: string,
-        rp: string,
-        t: BeadsIssue,
-        bn: string,
-        reason: string,
-        tr: TestResults | null,
-        ft: string
-      ) => this.handleTaskFailure(pid, rp, t, bn, reason, tr, ft as FailureType),
-      executeReviewPhase: (pid: string, rp: string, t: BeadsIssue, bn: string) =>
-        this.executeReviewPhase(pid, rp, t, bn),
-      performMergeAndDone: (pid: string, rp: string, t: BeadsIssue, bn: string) =>
-        this.performMergeAndDone(pid, rp, t, bn),
-    };
-  }
-
-  private getCrashRecoveryDeps() {
-    return {
-      beads: this.beads,
-      projectService: this.projectService,
-      branchManager: this.branchManager,
-      sessionManager: this.sessionManager,
-      testRunner: this.testRunner,
-    };
-  }
-
-  private async recoverFromPersistedState(
-    projectId: string,
-    repoPath: string,
-    persisted: PersistedOrchestratorState
-  ): Promise<void> {
+  private async persistCounters(projectId: string, repoPath: string): Promise<void> {
     const state = this.getState(projectId);
-    await this.crashRecovery.recoverFromPersistedState(
-      projectId,
-      repoPath,
-      persisted,
-      state,
-      this.getCrashRecoveryDeps(),
-      this.getCrashRecoveryCallbacks()
-    );
+    const counters: OrchestratorCounters = {
+      totalDone: state.status.totalDone,
+      totalFailed: state.status.totalFailed,
+      queueDepth: state.status.queueDepth,
+    };
+    const countersPath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorCounters);
+    try {
+      await fs.mkdir(path.dirname(countersPath), { recursive: true });
+      await writeJsonAtomic(countersPath, counters);
+    } catch (err) {
+      log.warn("Failed to persist counters", { err });
+    }
+  }
+
+  private async loadCounters(repoPath: string): Promise<OrchestratorCounters | null> {
+    const countersPath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorCounters);
+    try {
+      const raw = await fs.readFile(countersPath, "utf-8");
+      return JSON.parse(raw) as OrchestratorCounters;
+    } catch {
+      return null;
+    }
+  }
+
+  // ─── Crash Recovery (GUPP-style: scan assignment.json files) ───
+
+  private async recoverActiveSlots(projectId: string, repoPath: string): Promise<void> {
+    const orphaned = await this.crashRecovery.findOrphanedAssignments(repoPath);
+    if (orphaned.length === 0) return;
+
+    const state = this.getState(projectId);
+
+    for (const { taskId, assignment } of orphaned) {
+      log.info("Recovery: found orphaned assignment", {
+        taskId,
+        phase: assignment.phase,
+      });
+
+      let task: BeadsIssue;
+      try {
+        task = await this.beads.show(repoPath, taskId);
+      } catch {
+        log.warn("Recovery: task not found, cleaning up assignment", { taskId });
+        await this.deleteAssignment(repoPath, taskId);
+        continue;
+      }
+
+      // Check if task is still in_progress — if not, clean up stale assignment
+      if ((task.status as string) !== "in_progress") {
+        log.info("Recovery: task no longer in_progress, removing stale assignment", {
+          taskId,
+          status: task.status,
+        });
+        await this.deleteAssignment(repoPath, taskId);
+        continue;
+      }
+
+      // Requeue the task: reset to open and let the loop pick it up
+      try {
+        await this.beads.update(repoPath, taskId, { status: "open", assignee: "" });
+        await this.beads.comment(
+          repoPath,
+          taskId,
+          "Agent crashed (backend restart). Task requeued for next attempt."
+        );
+      } catch (err) {
+        log.warn("Recovery: failed to requeue task", { taskId, err });
+      }
+
+      await this.deleteAssignment(repoPath, taskId);
+      state.status.totalFailed += 1;
+
+      broadcastToProject(projectId, {
+        type: "task.updated",
+        taskId,
+        status: "open",
+        assignee: null,
+      });
+    }
   }
 
   // ─── Lifecycle ───
 
-  /**
-   * Stop the orchestrator for a project, tearing down all timers and killing any
-   * active agent process. Used when repoPath changes to allow a clean restart.
-   */
   stopProject(projectId: string): void {
     const state = this.state.get(projectId);
     if (!state) return;
 
     log.info(`Stopping orchestrator for project ${projectId}`);
 
-    state.timers.clearAll();
+    state.globalTimers.clearAll();
 
-    if (state.agent.activeProcess) {
-      if (state.status.currentTask) {
-        activeAgentsService.unregister(state.status.currentTask);
-      }
-      const preserveAgents = process.env.OPENSPRINT_PRESERVE_AGENTS === "1";
-      if (!preserveAgents) {
-        try {
-          state.agent.activeProcess.kill();
-        } catch {
-          // Process may already be dead
+    for (const slot of state.slots.values()) {
+      slot.timers.clearAll();
+      if (slot.agent.activeProcess) {
+        activeAgentsService.unregister(slot.taskId);
+        const preserveAgents = process.env.OPENSPRINT_PRESERVE_AGENTS === "1";
+        if (!preserveAgents) {
+          try {
+            slot.agent.activeProcess.kill();
+          } catch {
+            // Process may already be dead
+          }
         }
+        slot.agent.activeProcess = null;
       }
-      state.agent.activeProcess = null;
     }
 
     state.loopActive = false;
@@ -490,18 +492,12 @@ export class OrchestratorService {
     log.info(`Orchestrator stopped for project ${projectId}`);
   }
 
-  /** Stop all running orchestrators (for graceful shutdown). */
   stopAll(): void {
     for (const projectId of [...this.state.keys()]) {
       this.stopProject(projectId);
     }
   }
 
-  /**
-   * Initialize the always-on orchestrator for a project (PRDv2 §5.7).
-   * Called once on backend boot. Checks for persisted state and recovers if needed,
-   * then starts the loop and the 5-minute watchdog (PRDv2 §5.8).
-   */
   async ensureRunning(projectId: string): Promise<OrchestratorStatus> {
     await this.projectService.getProject(projectId);
     const state = this.getState(projectId);
@@ -509,50 +505,46 @@ export class OrchestratorService {
     this.repoPathCache.set(projectId, repoPath);
 
     // Orphan recovery: reset in_progress tasks with agent assignee but no active process
-    const persisted = await this.loadPersistedState(repoPath);
-    const excludeTaskId =
-      persisted?.currentTaskId && persisted.agentPid && isPidAlive(persisted.agentPid)
-        ? persisted.currentTaskId
-        : undefined;
-    let orphanResult: { recovered: string[] };
     try {
-      orphanResult = await orphanRecoveryService.recoverOrphanedTasks(repoPath, excludeTaskId);
+      const orphanResult = await orphanRecoveryService.recoverOrphanedTasks(repoPath);
+      if (orphanResult.recovered.length > 0) {
+        log.warn(`Recovered ${orphanResult.recovered.length} orphaned task(s) on startup`);
+      }
     } catch (err) {
       log.error("Orphan recovery failed", { err });
-      orphanResult = { recovered: [] };
-    }
-    // Stale heartbeat recovery: identify orphaned tasks via heartbeat files > 2 min old
-    let staleHeartbeatResult: { recovered: string[] };
-    try {
-      staleHeartbeatResult = await orphanRecoveryService.recoverFromStaleHeartbeats(
-        repoPath,
-        excludeTaskId
-      );
-    } catch (err) {
-      log.error("Stale heartbeat recovery failed", { err });
-      staleHeartbeatResult = { recovered: [] };
-    }
-    const recovered = [...new Set([...orphanResult.recovered, ...staleHeartbeatResult.recovered])];
-    if (recovered.length > 0) {
-      log.warn(`Recovered ${recovered.length} orphaned task(s) on startup`, {
-        recovered,
-      });
     }
 
-    // Crash recovery: check for persisted state from a previous run
-    if (persisted && persisted.currentTaskId) {
-      await this.recoverFromPersistedState(projectId, repoPath, persisted);
-    } else if (persisted) {
-      // Persisted state exists but no active task — restore counters and clean up
-      state.status.totalDone =
-        persisted.totalDone ?? (persisted as { totalCompleted?: number }).totalCompleted ?? 0;
-      state.status.totalFailed = persisted.totalFailed;
-      await this.clearPersistedState(repoPath);
+    // Stale heartbeat recovery
+    try {
+      const staleResult = await orphanRecoveryService.recoverFromStaleHeartbeats(repoPath);
+      if (staleResult.recovered.length > 0) {
+        log.warn(`Recovered ${staleResult.recovered.length} stale heartbeat task(s) on startup`);
+      }
+    } catch (err) {
+      log.error("Stale heartbeat recovery failed", { err });
+    }
+
+    // GUPP-style crash recovery: scan assignment.json files
+    await this.recoverActiveSlots(projectId, repoPath);
+
+    // Cache maxConcurrentCoders for synchronous nudge()
+    try {
+      const settings = await this.projectService.getSettings(projectId);
+      this.maxSlotsCache.set(projectId, settings.maxConcurrentCoders ?? 1);
+    } catch {
+      this.maxSlotsCache.set(projectId, 1);
+    }
+
+    // Restore counters from persisted file
+    const counters = await this.loadCounters(repoPath);
+    if (counters) {
+      state.status.totalDone = counters.totalDone;
+      state.status.totalFailed = counters.totalFailed;
     }
 
     // Start watchdog timer if not already running
-    if (!state.timers.has("watchdog")) {
-      state.timers.setInterval(
+    if (!state.globalTimers.has("watchdog")) {
+      state.globalTimers.setInterval(
         "watchdog",
         () => {
           this.nudge(projectId);
@@ -562,7 +554,6 @@ export class OrchestratorService {
       log.info("Watchdog started (60s interval) for project", { projectId });
     }
 
-    // Kick off the loop if idle (recovery may have left it active for PID-alive monitoring)
     if (!state.loopActive) {
       this.nudge(projectId);
     }
@@ -570,16 +561,12 @@ export class OrchestratorService {
     return state.status;
   }
 
-  /**
-   * Event-driven dispatch trigger (PRDv2 §5.7).
-   * Called on: agent completion, feedback submission, "Build it!" click, watchdog tick.
-   * If the loop is idle (no active task, no pending loop timer), starts the loop.
-   */
   nudge(projectId: string): void {
     const state = this.getState(projectId);
 
-    // Don't start a second loop if one is already active, has an agent running, or is scheduled
-    if (state.loopActive || state.timers.has("loop") || state.agent.activeProcess) {
+    const maxSlots = this.maxSlotsCache.get(projectId) ?? 1;
+
+    if (state.loopActive || state.globalTimers.has("loop") || state.slots.size >= maxSlots) {
       return;
     }
 
@@ -587,53 +574,47 @@ export class OrchestratorService {
     this.runLoop(projectId);
   }
 
-  /** Get orchestrator status */
   async getStatus(projectId: string): Promise<OrchestratorStatus> {
     await this.projectService.getProject(projectId);
     const state = this.getState(projectId);
     return {
       ...state.status,
-      worktreePath: state.activeWorktreePath ?? null,
+      activeTasks: this.buildActiveTasks(state),
+      worktreePath: state.slots.size === 1
+        ? [...state.slots.values()][0]?.worktreePath ?? null
+        : null,
       pendingFeedbackCategorizations: state.pendingFeedbackCategorizations ?? [],
     };
   }
 
-  /**
-   * Get live agent output for a task when it is the current orchestrator task.
-   * Returns empty string when task is not running or has no output.
-   */
   async getLiveOutput(projectId: string, taskId: string): Promise<string> {
     await this.projectService.getProject(projectId);
     const state = this.getState(projectId);
-    if (state.status.currentTask !== taskId || !state.agent.outputLog.length) {
+    const slot = state.slots.get(taskId);
+    if (!slot || !slot.agent.outputLog.length) {
       return "";
     }
-    return state.agent.outputLog.join("");
+    return slot.agent.outputLog.join("");
   }
 
-  /**
-   * Get active agents for the project (from central ActiveAgentsService registry).
-   * If the registry is empty but the orchestrator has a current task (e.g. after backend restart
-   * while agent survived), synthesize an entry from orchestrator state so the UI shows correctly.
-   */
   async getActiveAgents(projectId: string): Promise<ActiveAgent[]> {
     await this.projectService.getProject(projectId);
     const registered = activeAgentsService.list(projectId);
     if (registered.length > 0) return registered;
 
     const state = this.getState(projectId);
-    if (!state.status.currentTask || !state.status.currentPhase) return [];
-
-    return [
-      {
-        id: state.status.currentTask,
-        phase: state.status.currentPhase,
-        role: state.status.currentPhase === "review" ? "reviewer" : "coder",
-        label: state.activeTaskTitle ?? state.status.currentTask,
-        startedAt: state.agent.startedAt || new Date().toISOString(),
-        branchName: state.activeBranchName ?? undefined,
-      },
-    ];
+    const agents: ActiveAgent[] = [];
+    for (const slot of state.slots.values()) {
+      agents.push({
+        id: slot.taskId,
+        phase: slot.phase,
+        role: slot.phase === "review" ? "reviewer" : "coder",
+        label: slot.taskTitle ?? slot.taskId,
+        startedAt: slot.agent.startedAt || new Date().toISOString(),
+        branchName: slot.branchName,
+      });
+    }
+    return agents;
   }
 
   // ─── Main Orchestrator Loop ───
@@ -641,41 +622,42 @@ export class OrchestratorService {
   private async runLoop(projectId: string): Promise<void> {
     const state = this.getState(projectId);
 
-    // Mark the loop as active to prevent duplicate loops
     state.loopActive = true;
-    state.timers.clear("loop");
+    state.globalTimers.clear("loop");
 
     try {
       const repoPath = await this.projectService.getRepoPath(projectId);
+      const settings = await this.projectService.getSettings(projectId);
+      const maxSlots = settings.maxConcurrentCoders ?? 1;
+      this.maxSlotsCache.set(projectId, maxSlots);
 
-      // 1. Poll bd ready for next task
       let readyTasks = await this.beads.ready(repoPath);
 
-      // Filter out Plan approval gate tasks — they are closed by user "Build It!", not by agents
       readyTasks = readyTasks.filter((t) => (t.title ?? "") !== "Plan approval gate");
-      // Filter out epics — they are containers, not work items; agents implement tasks/bugs
       readyTasks = readyTasks.filter((t) => (t.issue_type ?? t.type) !== "epic");
-      // Filter out blocked tasks — they require user intervention to unblock (PRDv2 §9.1)
-      // Use beads native blocked status (bd update --status blocked); bd ready may exclude them but filter as safety
       readyTasks = readyTasks.filter((t) => (t.status as string) !== "blocked");
+      // Exclude tasks that already have an active slot
+      readyTasks = readyTasks.filter((t) => !state.slots.has(t.id));
 
       state.status.queueDepth = readyTasks.length;
 
-      if (readyTasks.length === 0) {
-        log.info("No ready tasks, going idle", { projectId });
-        if (state.status.currentTask) activeAgentsService.unregister(state.status.currentTask);
-        this.resetTaskState(state);
+      const slotsAvailable = maxSlots - state.slots.size;
+      if (readyTasks.length === 0 || slotsAvailable <= 0) {
+        log.info("No ready tasks or no slots available, going idle", {
+          projectId,
+          readyTasks: readyTasks.length,
+          slotsAvailable,
+        });
         state.loopActive = false;
         broadcastToProject(projectId, {
           type: "execute.status",
-          currentTask: null,
-          queueDepth: 0,
+          activeTasks: this.buildActiveTasks(state),
+          queueDepth: state.status.queueDepth,
         });
         return;
       }
 
-      // 2. Pick the highest-priority task (pre-flight: verify all blockers are closed)
-      //    Fetch the status map once so the loop doesn't call listAll per task.
+      // Pick the highest-priority task with all blockers closed
       const statusMap = await this.beads.getStatusMap(repoPath);
       let task: BeadsIssue | null = null;
       for (const t of readyTasks) {
@@ -692,58 +674,56 @@ export class OrchestratorService {
       }
       if (!task) {
         log.info("No task with all blockers closed, going idle", { projectId });
-        if (state.status.currentTask) activeAgentsService.unregister(state.status.currentTask);
-        this.resetTaskState(state);
         state.loopActive = false;
         broadcastToProject(projectId, {
           type: "execute.status",
-          currentTask: null,
+          activeTasks: this.buildActiveTasks(state),
           queueDepth: 0,
         });
         return;
       }
       log.info("Picking task", { projectId, taskId: task.id, title: task.title });
 
-      // 3. Assign the task
+      // Assign the task
       await this.beads.update(repoPath, task.id, {
         status: "in_progress",
         assignee: "agent-1",
       });
 
-      // PRD §5.9: Beads export at checkpoint after claim
       gitCommitQueue.enqueue({
         type: "beads_export",
         repoPath,
         summary: `claimed ${task.id}`,
       });
 
-      // Load cumulative attempt count from bead metadata (PRDv2 §9.1)
       const cumulativeAttempts = await this.beads.getCumulativeAttempts(repoPath, task.id);
+      const branchName = `opensprint/${task.id}`;
+
+      // Create a slot for this task
+      const slot = this.createSlot(task.id, task.title ?? null, branchName, cumulativeAttempts + 1);
+      state.slots.set(task.id, slot);
 
       this.transition(projectId, {
         to: "start_task",
         taskId: task.id,
         taskTitle: task.title ?? null,
-        branchName: `opensprint/${task.id}`,
+        branchName,
         attempt: cumulativeAttempts + 1,
         queueDepth: readyTasks.length - 1,
       });
 
-      // Persist state: idle → coding transition (PRDv2 §5.8)
-      await this.persistState(projectId, repoPath);
+      await this.persistCounters(projectId, repoPath);
 
-      // agent.started (with startedAt) is broadcast from executeCodingPhase after agent spawn
-
-      // 4. Verify main WT is on main (assertion, not corrective checkout)
       await this.branchManager.ensureOnMain(repoPath);
 
-      // 5. Execute the coding phase (creates worktree, no checkout in main WT)
-      await this.executeCodingPhase(projectId, repoPath, task, undefined);
+      await this.executeCodingPhase(projectId, repoPath, task, slot, undefined);
+
+      // Mark loop as idle so nudge can fire again for additional slots
+      state.loopActive = false;
     } catch (error) {
       log.error(`Orchestrator loop error for project ${projectId}`, { error });
-      // Retry loop after delay
       state.loopActive = false;
-      state.timers.setTimeout("loop", () => this.runLoop(projectId), 10000);
+      state.globalTimers.setTimeout("loop", () => this.runLoop(projectId), 10000);
     }
   }
 
@@ -751,15 +731,15 @@ export class OrchestratorService {
     projectId: string,
     repoPath: string,
     task: BeadsIssue,
+    slot: AgentSlot,
     retryContext?: RetryContext
   ): Promise<void> {
-    const state = this.getState(projectId);
     const settings = await this.projectService.getSettings(projectId);
-    const branchName = `opensprint/${task.id}`;
+    const branchName = slot.branchName;
 
     try {
       const wtPath = await this.branchManager.createTaskWorktree(repoPath, task.id);
-      state.activeWorktreePath = wtPath;
+      slot.worktreePath = wtPath;
 
       await this.preflightCheck(repoPath, wtPath, task.id);
 
@@ -781,7 +761,7 @@ export class OrchestratorService {
         repoPath: wtPath,
         branch: branchName,
         testCommand: resolveTestCommand(settings) || 'echo "No test command configured"',
-        attempt: state.attempt,
+        attempt: slot.attempt,
         phase: "coding",
         previousFailure: retryContext?.previousFailure ?? null,
         reviewFeedback: retryContext?.reviewFeedback ?? null,
@@ -798,20 +778,19 @@ export class OrchestratorService {
       const complexity = await getPlanComplexityForTask(repoPath, task);
       let agentConfig = getCodingAgentForComplexity(settings, complexity);
 
-      // Model escalation: on retries with repeated failures, try a more capable model
-      if (retryContext?.failureType && state.attempt > 1) {
+      if (retryContext?.failureType && slot.attempt > 1) {
         const recentAttempts = await agentIdentityService.getRecentAttempts(repoPath, task.id);
         agentConfig = agentIdentityService.selectAgentForRetry(
           settings,
           task.id,
-          state.attempt,
+          slot.attempt,
           retryContext.failureType,
           complexity,
           recentAttempts
         );
       }
 
-      // Write assignment.json before spawn (GUPP recovery: if we crash, re-read and re-spawn)
+      // Write assignment.json before spawn (GUPP recovery)
       const assignment: TaskAssignment = {
         taskId: task.id,
         projectId,
@@ -820,7 +799,7 @@ export class OrchestratorService {
         worktreePath: wtPath,
         promptPath,
         agentConfig,
-        attempt: state.attempt,
+        attempt: slot.attempt,
         retryContext,
         createdAt: new Date().toISOString(),
       };
@@ -835,12 +814,12 @@ export class OrchestratorService {
           branchName,
           promptPath,
           agentConfig,
-          agentLabel: state.activeTaskTitle ?? task.id,
+          agentLabel: slot.taskTitle ?? task.id,
           role: "coder",
           onDone: (code) => this.handleCodingDone(projectId, repoPath, task, branchName, code),
         },
-        state.agent,
-        state.timers
+        slot.agent,
+        slot.timers
       );
 
       eventLogService
@@ -849,11 +828,11 @@ export class OrchestratorService {
           projectId,
           taskId: task.id,
           event: "agent.spawned",
-          data: { phase: "coding", model: agentConfig.model, attempt: state.attempt },
+          data: { phase: "coding", model: agentConfig.model, attempt: slot.attempt },
         })
         .catch(() => {});
 
-      await this.persistState(projectId, repoPath);
+      await this.persistCounters(projectId, repoPath);
     } catch (error) {
       log.error(`Coding phase failed for task ${task.id}`, { error });
       await this.handleTaskFailure(
@@ -876,7 +855,12 @@ export class OrchestratorService {
     exitCode: number | null
   ): Promise<void> {
     const state = this.getState(projectId);
-    const wtPath = state.activeWorktreePath ?? repoPath;
+    const slot = state.slots.get(task.id);
+    if (!slot) {
+      log.warn("handleCodingDone: no slot found for task", { taskId: task.id });
+      return;
+    }
+    const wtPath = slot.worktreePath ?? repoPath;
 
     const result = (await this.sessionManager.readResult(
       wtPath,
@@ -888,12 +872,12 @@ export class OrchestratorService {
     }
 
     if (!result) {
-      const failureType: FailureType = state.agent.killedDueToTimeout
+      const failureType: FailureType = slot.agent.killedDueToTimeout
         ? "timeout"
         : exitCode === 143 || exitCode === 137
           ? "agent_crash"
           : "no_result";
-      state.agent.killedDueToTimeout = false;
+      slot.agent.killedDueToTimeout = false;
       await this.handleTaskFailure(
         projectId,
         repoPath,
@@ -907,11 +891,11 @@ export class OrchestratorService {
     }
 
     if (result.status === "success") {
-      state.phaseResult.codingDiff = await this.branchManager.captureBranchDiff(
+      slot.phaseResult.codingDiff = await this.branchManager.captureBranchDiff(
         repoPath,
         branchName
       );
-      state.phaseResult.codingSummary = result.summary ?? "";
+      slot.phaseResult.codingSummary = result.summary ?? "";
 
       const settings = await this.projectService.getSettings(projectId);
       const testCommand = resolveTestCommand(settings) || undefined;
@@ -922,7 +906,7 @@ export class OrchestratorService {
         // Fall back to full suite
       }
       const scopedResult = await this.testRunner.runScopedTests(wtPath, changedFiles, testCommand);
-      state.phaseResult.testOutput = scopedResult.rawOutput;
+      slot.phaseResult.testOutput = scopedResult.rawOutput;
 
       if (scopedResult.failed > 0) {
         await this.handleTaskFailure(
@@ -937,7 +921,7 @@ export class OrchestratorService {
         return;
       }
 
-      state.phaseResult.testResults = scopedResult;
+      slot.phaseResult.testResults = scopedResult;
 
       await this.branchManager.commitWip(wtPath, task.id);
 
@@ -951,7 +935,7 @@ export class OrchestratorService {
           taskId: task.id,
           queueDepth: state.status.queueDepth,
         });
-        await this.persistState(projectId, repoPath);
+        await this.persistCounters(projectId, repoPath);
         await this.executeReviewPhase(projectId, repoPath, task, branchName);
       }
     } else {
@@ -975,8 +959,13 @@ export class OrchestratorService {
     branchName: string
   ): Promise<void> {
     const state = this.getState(projectId);
+    const slot = state.slots.get(task.id);
+    if (!slot) {
+      log.warn("executeReviewPhase: no slot found for task", { taskId: task.id });
+      return;
+    }
     const settings = await this.projectService.getSettings(projectId);
-    const wtPath = state.activeWorktreePath ?? repoPath;
+    const wtPath = slot.worktreePath ?? repoPath;
 
     try {
       const config: ActiveTaskConfig = {
@@ -986,7 +975,7 @@ export class OrchestratorService {
         repoPath: wtPath,
         branch: branchName,
         testCommand: resolveTestCommand(settings) || 'echo "No test command configured"',
-        attempt: state.attempt,
+        attempt: slot.attempt,
         phase: "review",
         previousFailure: null,
         reviewFeedback: null,
@@ -1021,7 +1010,7 @@ export class OrchestratorService {
         worktreePath: wtPath,
         promptPath,
         agentConfig,
-        attempt: state.attempt,
+        attempt: slot.attempt,
         createdAt: new Date().toISOString(),
       };
       await writeJsonAtomic(path.join(taskDir, OPENSPRINT_PATHS.assignment), assignment);
@@ -1035,12 +1024,12 @@ export class OrchestratorService {
           branchName,
           promptPath,
           agentConfig,
-          agentLabel: state.activeTaskTitle ?? task.id,
+          agentLabel: slot.taskTitle ?? task.id,
           role: "reviewer",
           onDone: (code) => this.handleReviewDone(projectId, repoPath, task, branchName, code),
         },
-        state.agent,
-        state.timers
+        slot.agent,
+        slot.timers
       );
 
       eventLogService
@@ -1049,11 +1038,11 @@ export class OrchestratorService {
           projectId,
           taskId: task.id,
           event: "agent.spawned",
-          data: { phase: "review", model: agentConfig.model, attempt: state.attempt },
+          data: { phase: "review", model: agentConfig.model, attempt: slot.attempt },
         })
         .catch(() => {});
 
-      await this.persistState(projectId, repoPath);
+      await this.persistCounters(projectId, repoPath);
     } catch (error) {
       log.error(`Review phase failed for task ${task.id}`, { error });
       await this.handleTaskFailure(
@@ -1076,7 +1065,12 @@ export class OrchestratorService {
     exitCode: number | null
   ): Promise<void> {
     const state = this.getState(projectId);
-    const wtPath = state.activeWorktreePath ?? repoPath;
+    const slot = state.slots.get(task.id);
+    if (!slot) {
+      log.warn("handleReviewDone: no slot found for task", { taskId: task.id });
+      return;
+    }
+    const wtPath = slot.worktreePath ?? repoPath;
     const result = (await this.sessionManager.readResult(
       wtPath,
       task.id
@@ -1105,17 +1099,17 @@ export class OrchestratorService {
 
       const session = await this.sessionManager.createSession(repoPath, {
         taskId: task.id,
-        attempt: state.attempt,
+        attempt: slot.attempt,
         agentType: (await this.projectService.getSettings(projectId)).codingAgent.type,
         agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || "",
         gitBranch: branchName,
         status: "rejected",
-        outputLog: state.agent.outputLog.join(""),
+        outputLog: slot.agent.outputLog.join(""),
         failureReason: result.summary || "Review rejected (no summary provided)",
         gitDiff: gitDiff || undefined,
-        startedAt: state.agent.startedAt,
+        startedAt: slot.agent.startedAt,
       });
-      await this.sessionManager.archiveSession(repoPath, task.id, state.attempt, session, wtPath);
+      await this.sessionManager.archiveSession(repoPath, task.id, slot.attempt, session, wtPath);
 
       await this.handleTaskFailure(
         projectId,
@@ -1128,12 +1122,12 @@ export class OrchestratorService {
         reviewFeedback
       );
     } else {
-      const failureType: FailureType = state.agent.killedDueToTimeout
+      const failureType: FailureType = slot.agent.killedDueToTimeout
         ? "timeout"
         : exitCode === 143 || exitCode === 137
           ? "agent_crash"
           : "no_result";
-      state.agent.killedDueToTimeout = false;
+      slot.agent.killedDueToTimeout = false;
       await this.handleTaskFailure(
         projectId,
         repoPath,
@@ -1146,11 +1140,6 @@ export class OrchestratorService {
     }
   }
 
-  /**
-   * Build a formatted history of past review rejections for this task.
-   * Used to give the reviewer context about what was previously rejected
-   * and what the coding agent was asked to fix.
-   */
   private async buildReviewHistory(repoPath: string, taskId: string): Promise<string> {
     try {
       const sessions = await this.sessionManager.listSessions(repoPath, taskId);
@@ -1176,7 +1165,8 @@ export class OrchestratorService {
 
   /**
    * Merge to main, close task, archive session, clean up.
-   * Shared by both the direct-merge path (reviewMode: "never") and the review-approved path.
+   * Uses async merge pattern: enqueues merge with callbacks and releases the slot immediately,
+   * allowing the next task to start while the merge is in progress.
    */
   private async performMergeAndDone(
     projectId: string,
@@ -1185,20 +1175,79 @@ export class OrchestratorService {
     branchName: string
   ): Promise<void> {
     const state = this.getState(projectId);
-    const wtPath = state.activeWorktreePath ?? repoPath;
+    const slot = state.slots.get(task.id);
+    if (!slot) {
+      log.warn("performMergeAndDone: no slot found for task", { taskId: task.id });
+      return;
+    }
+    const wtPath = slot.worktreePath ?? repoPath;
 
-    // Wait for any lingering git operations in the worktree to finish
     await this.branchManager.waitForGitReady(wtPath);
-
-    // Commit any remaining changes in worktree before merge
     await this.branchManager.commitWip(wtPath, task.id);
 
-    // Wait for any in-progress push to complete. A previous task's push may have
-    // hit rebase conflicts and left unmerged files in main; merging now would
-    // fail with RepoConflictError. PRD §5.9.
     await this.waitForPushComplete(projectId);
 
-    // Merge to main via serialized queue (PRD §5.9). beadsClose folds merge + close + export into one commit.
+    // --- Pre-merge (synchronous): archive session, record attempt, close task ---
+
+    const settings = await this.projectService.getSettings(projectId);
+    agentIdentityService
+      .recordAttempt(repoPath, {
+        taskId: task.id,
+        agentId: `${settings.codingAgent.type}-${settings.codingAgent.model ?? "default"}`,
+        model: settings.codingAgent.model ?? "unknown",
+        attempt: slot.attempt,
+        startedAt: slot.agent.startedAt,
+        completedAt: new Date().toISOString(),
+        outcome: "success",
+        durationMs: Date.now() - new Date(slot.agent.startedAt).getTime(),
+      })
+      .catch((err) => log.warn("Failed to record attempt", { err }));
+
+    const session = await this.sessionManager.createSession(repoPath, {
+      taskId: task.id,
+      attempt: slot.attempt,
+      agentType: settings.codingAgent.type,
+      agentModel: settings.codingAgent.model || "",
+      gitBranch: branchName,
+      status: "approved",
+      outputLog: slot.agent.outputLog.join(""),
+      gitDiff: slot.phaseResult.codingDiff,
+      summary: slot.phaseResult.codingSummary || undefined,
+      testResults: slot.phaseResult.testResults ?? undefined,
+      startedAt: slot.agent.startedAt,
+    });
+    await this.sessionManager.archiveSession(repoPath, task.id, slot.attempt, session, wtPath);
+
+    // Capture slot data before removing it
+    const slotPhaseResult = { ...slot.phaseResult };
+    const slotAttempt = slot.attempt;
+
+    // Transition to complete — this removes the slot and frees capacity
+    this.transition(projectId, { to: "complete", taskId: task.id });
+
+    eventLogService
+      .append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId: task.id,
+        event: "task.completed",
+        data: { attempt: slotAttempt },
+      })
+      .catch(() => {});
+
+    await this.persistCounters(projectId, repoPath);
+
+    broadcastToProject(projectId, {
+      type: "agent.completed",
+      taskId: task.id,
+      status: "approved",
+      testResults: slotPhaseResult.testResults,
+    });
+
+    // Immediately nudge to fill the freed slot
+    this.nudge(projectId);
+
+    // --- Async merge: enqueue merge job, do cleanup in callbacks ---
     try {
       await gitCommitQueue.enqueueAndWait({
         type: "worktree_merge",
@@ -1207,13 +1256,16 @@ export class OrchestratorService {
         taskTitle: task.title || task.id,
         beadsClose: {
           taskId: task.id,
-          reason: state.phaseResult.codingSummary || "Implemented and tested",
+          reason: slotPhaseResult.codingSummary || "Implemented and tested",
         },
       });
+
+      // Clean up worktree and branch after merge
+      await this.branchManager.removeTaskWorktree(repoPath, task.id);
+      await this.branchManager.deleteBranch(repoPath, branchName);
     } catch (mergeErr) {
       log.warn("Merge to main failed", { mergeErr });
 
-      // If RepoConflictError with merge-in-progress, try merger agent to resolve
       if (mergeErr instanceof RepoConflictError) {
         const mergeActive = await this.branchManager.isMergeInProgress(repoPath);
         if (mergeActive) {
@@ -1227,11 +1279,10 @@ export class OrchestratorService {
             );
             if (resolved) {
               log.info("Merger agent resolved merge conflicts, continuing");
-              // Merge commit exists; close task and export beads (separate commit in this path)
               await this.beads.close(
                 repoPath,
                 task.id,
-                state.phaseResult.codingSummary || "Implemented and tested"
+                slotPhaseResult.codingSummary || "Implemented and tested"
               );
               gitCommitQueue.enqueue({
                 type: "beads_export",
@@ -1240,147 +1291,40 @@ export class OrchestratorService {
               });
             } else {
               await this.branchManager.mergeAbort(repoPath);
-              await this.handleTaskFailure(
-                projectId,
-                repoPath,
-                task,
-                branchName,
-                `Merge to main failed: ${mergeErr}`,
-                null,
-                "merge_conflict"
-              );
-              return;
+              log.error("Merger agent failed for completed task", { taskId: task.id });
             }
           } catch (mergerErr) {
             log.warn("Merger agent error during merge resolution", { mergerErr });
             await this.branchManager.mergeAbort(repoPath);
-            await this.handleTaskFailure(
-              projectId,
-              repoPath,
-              task,
-              branchName,
-              `Merge to main failed: ${mergeErr}`,
-              null,
-              "merge_conflict"
-            );
-            return;
           }
-        } else {
-          // Unmerged files but no merge state — stale/rebased state, fail the task
-          await this.handleTaskFailure(
-            projectId,
-            repoPath,
-            task,
-            branchName,
-            `Merge to main failed: ${mergeErr}`,
-            null,
-            "merge_conflict"
-          );
-          return;
         }
       } else {
         const merged = await this.branchManager.verifyMerge(repoPath, branchName);
         if (!merged) {
-          await this.handleTaskFailure(
-            projectId,
-            repoPath,
-            task,
-            branchName,
-            `Merge to main failed: ${mergeErr}`,
-            null,
-            "merge_conflict"
-          );
-          return;
+          log.error("Merge failed for completed task (non-conflict)", { taskId: task.id });
         }
+      }
+
+      // Clean up regardless
+      try {
+        await this.branchManager.removeTaskWorktree(repoPath, task.id);
+        await this.branchManager.deleteBranch(repoPath, branchName);
+      } catch {
+        // best-effort cleanup
       }
     }
 
-    // Task closed in beads by worktree_merge job (beadsClose)
-
-    // Record successful attempt for performance tracking
-    const settings = await this.projectService.getSettings(projectId);
-    agentIdentityService
-      .recordAttempt(repoPath, {
-        taskId: task.id,
-        agentId: `${settings.codingAgent.type}-${settings.codingAgent.model ?? "default"}`,
-        model: settings.codingAgent.model ?? "unknown",
-        attempt: state.attempt,
-        startedAt: state.agent.startedAt,
-        completedAt: new Date().toISOString(),
-        outcome: "success",
-        durationMs: Date.now() - new Date(state.agent.startedAt).getTime(),
-      })
-      .catch((err) => log.warn("Failed to record attempt", { err }));
-
-    const session = await this.sessionManager.createSession(repoPath, {
-      taskId: task.id,
-      attempt: state.attempt,
-      agentType: (await this.projectService.getSettings(projectId)).codingAgent.type,
-      agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || "",
-      gitBranch: branchName,
-      status: "approved",
-      outputLog: state.agent.outputLog.join(""),
-      gitDiff: state.phaseResult.codingDiff,
-      summary: state.phaseResult.codingSummary || undefined,
-      testResults: state.phaseResult.testResults ?? undefined,
-      startedAt: state.agent.startedAt,
-    });
-    await this.sessionManager.archiveSession(repoPath, task.id, state.attempt, session, wtPath);
-
-    // Clean up worktree then delete branch
-    await this.branchManager.removeTaskWorktree(repoPath, task.id);
-    await this.branchManager.deleteBranch(repoPath, branchName);
-
-    // Transition to complete immediately — don't block on push
-    this.transition(projectId, { to: "complete", taskId: task.id });
-
-    eventLogService
-      .append(repoPath, {
-        timestamp: new Date().toISOString(),
-        projectId,
-        taskId: task.id,
-        event: "task.completed",
-        data: { attempt: state.attempt },
-      })
-      .catch(() => {});
-
-    // Clear persisted state: task completed successfully (PRDv2 §5.8)
-    await this.clearPersistedState(repoPath);
-
-    broadcastToProject(projectId, {
-      type: "agent.completed",
-      taskId: task.id,
-      status: "approved",
-      testResults: state.phaseResult.testResults,
-    });
-
-    // Mark loop as idle, then re-trigger after a short delay to let git settle
-    state.loopActive = false;
-    state.timers.setTimeout(
-      "loop",
-      () => {
-        this.nudge(projectId);
-      },
-      3000
-    );
-
     // Fire-and-forget: push to remote, auto-deploy, and feedback checks.
-    // These don't block the main loop — the next task can start immediately.
     this.postCompletionAsync(projectId, repoPath, task.id).catch((err) => {
       log.warn("Post-completion async work failed", { taskId: task.id, err });
     });
   }
 
-  /**
-   * Background work after task completion: push to remote, auto-deploy checks,
-   * and feedback auto-resolution. These are fire-and-forget from the main loop.
-   */
   private async postCompletionAsync(
     projectId: string,
     repoPath: string,
     taskId: string
   ): Promise<void> {
-    // Push main to remote (with merger fallback for rebase conflicts)
     if (!this.pushInProgress.has(projectId)) {
       let resolvePush!: () => void;
       const pushPromise = new Promise<void>((r) => {
@@ -1402,12 +1346,10 @@ export class OrchestratorService {
       log.info("Push already in progress, skipping (will retry on next completion)");
     }
 
-    // PRD §10.2: Auto-resolve feedback when all its created tasks are Done
     this.feedbackService.checkAutoResolveOnTaskDone(projectId, taskId).catch((err) => {
       log.warn("Auto-resolve feedback on task done failed", { taskId, err });
     });
 
-    // PRD §7.5.3: Auto-deploy on epic completion
     const epicId = extractEpicId(taskId);
     if (epicId) {
       const allIssues = await this.beads.listAll(repoPath);
@@ -1430,24 +1372,13 @@ export class OrchestratorService {
     }
   }
 
-  /**
-   * Wait for any in-progress push to complete. Prevents worktree_merge from
-   * seeing unmerged files left by a concurrent push's rebase conflicts.
-   */
   private async waitForPushComplete(projectId: string): Promise<void> {
     if (!this.pushInProgress.has(projectId)) return;
     const entry = this.pushCompletion.get(projectId);
     if (entry) await entry.promise;
   }
 
-  /**
-   * Push main to remote, spawning a merger agent to resolve rebase conflicts if needed.
-   * On unrecoverable failure, logs a warning but does not throw — the task is already
-   * done; we just couldn't push yet.
-   */
   private async pushMainWithMergerFallback(projectId: string, repoPath: string): Promise<void> {
-    // Wait for pending git commit queue jobs (e.g. beads_export) to flush before rebasing.
-    // Without this, fire-and-forget enqueue() calls can leave unstaged changes that block rebase.
     await gitCommitQueue.drain();
 
     try {
@@ -1466,10 +1397,6 @@ export class OrchestratorService {
         return;
       }
 
-      // If git auto-resolved all conflicts (no unmerged files), check whether a rebase
-      // is actually in progress. The rebase command can fail for non-conflict reasons
-      // (e.g. already up-to-date divergence, completed despite exit code), leaving no
-      // rebase state on disk. In that case, just push directly.
       if (err.conflictedFiles.length === 0) {
         const rebaseActive = await this.branchManager.isRebaseInProgress(repoPath);
         if (!rebaseActive) {
@@ -1518,10 +1445,6 @@ export class OrchestratorService {
     }
   }
 
-  /**
-   * Spawn a merger agent to resolve conflicts. Returns true if resolution succeeded.
-   * Supports rebase (push) and merge (merge-to-main) conflict resolution.
-   */
   private async spawnMergerAgent(
     projectId: string,
     repoPath: string,
@@ -1537,7 +1460,6 @@ export class OrchestratorService {
       mode,
     });
 
-    // Write prompt to a temporary file in .opensprint/
     const mergerDir = path.join(repoPath, OPENSPRINT_PATHS.active, "_merger");
     await fs.mkdir(mergerDir, { recursive: true });
     const promptPath = path.join(mergerDir, "prompt.md");
@@ -1551,7 +1473,6 @@ export class OrchestratorService {
     }
 
     const mergerId = `_merger:${projectId}`;
-
     const state = this.getState(projectId);
 
     return new Promise<boolean>((resolve) => {
@@ -1571,13 +1492,11 @@ export class OrchestratorService {
           sendAgentOutputToProject(projectId, "_merger", chunk);
         },
         onExit: async (code: number | null) => {
-          state.timers.clear("mergerTimeout");
+          state.globalTimers.clear("mergerTimeout");
           log.info("Merger agent exited", { code });
 
-          // Clean up prompt dir
           await fs.rm(mergerDir, { recursive: true, force: true }).catch(() => {});
 
-          // Check if conflict state is still active (agent failed to complete)
           const isRebase = mode === "rebase";
           const conflictStillActive = isRebase
             ? await this.branchManager.isRebaseInProgress(repoPath)
@@ -1587,7 +1506,6 @@ export class OrchestratorService {
             return;
           }
 
-          // Read result.json if agent wrote one — its status is authoritative
           try {
             const raw = await fs.readFile(resultPath, "utf-8");
             const result = JSON.parse(raw) as { status: string; summary?: string };
@@ -1608,8 +1526,7 @@ export class OrchestratorService {
         },
       });
 
-      // Safety timeout: kill merger after 5 minutes
-      state.timers.setTimeout(
+      state.globalTimers.setTimeout(
         "mergerTimeout",
         () => {
           log.warn("Merger agent timed out after 5 minutes");
@@ -1621,17 +1538,7 @@ export class OrchestratorService {
   }
 
   /**
-   * Progressive backoff error handler (PRDv2 §9.1) with failure classification.
-   *
-   * Key improvements:
-   *   - Infrastructure failures (crash, timeout, merge_conflict) get free retries
-   *     and don't count toward the progressive backoff budget.
-   *   - On immediate retries, the branch and worktree are PRESERVED so the agent
-   *     can build on its previous work rather than starting from scratch.
-   *   - On demotion points (every 3rd backoff-eligible failure), branch is deleted
-   *     for a clean slate.
-   *   - Richer retry context: test output, diff, and failure type are passed to
-   *     the next coding attempt.
+   * Progressive backoff error handler with failure classification.
    */
   private async handleTaskFailure(
     projectId: string,
@@ -1644,8 +1551,13 @@ export class OrchestratorService {
     reviewFeedback?: string
   ): Promise<void> {
     const state = this.getState(projectId);
-    const cumulativeAttempts = state.attempt;
-    const wtPath = state.activeWorktreePath;
+    const slot = state.slots.get(task.id);
+    if (!slot) {
+      log.warn("handleTaskFailure: no slot found for task", { taskId: task.id });
+      return;
+    }
+    const cumulativeAttempts = slot.attempt;
+    const wtPath = slot.worktreePath;
     const isInfraFailure = INFRA_FAILURE_TYPES.includes(failureType);
 
     log.error(`Task ${task.id} failed [${failureType}] (attempt ${cumulativeAttempts})`, {
@@ -1662,7 +1574,6 @@ export class OrchestratorService {
       })
       .catch(() => {});
 
-    // Record failed attempt for performance tracking / model escalation
     const failSettings = await this.projectService.getSettings(projectId);
     agentIdentityService
       .recordAttempt(repoPath, {
@@ -1670,14 +1581,13 @@ export class OrchestratorService {
         agentId: `${failSettings.codingAgent.type}-${failSettings.codingAgent.model ?? "default"}`,
         model: failSettings.codingAgent.model ?? "unknown",
         attempt: cumulativeAttempts,
-        startedAt: state.agent.startedAt,
+        startedAt: slot.agent.startedAt,
         completedAt: new Date().toISOString(),
         outcome: failureType as AttemptOutcome,
-        durationMs: Date.now() - new Date(state.agent.startedAt || Date.now()).getTime(),
+        durationMs: Date.now() - new Date(slot.agent.startedAt || Date.now()).getTime(),
       })
       .catch((err) => log.warn("Failed to record attempt", { err }));
 
-    // Capture diff before any cleanup (for richer retry context and session archive)
     let previousDiff = "";
     let gitDiff = "";
     try {
@@ -1694,19 +1604,18 @@ export class OrchestratorService {
       // Branch may not exist
     }
 
-    // Archive failure session (always, even on immediate retry)
     const session = await this.sessionManager.createSession(repoPath, {
       taskId: task.id,
       attempt: cumulativeAttempts,
-      agentType: (await this.projectService.getSettings(projectId)).codingAgent.type,
-      agentModel: (await this.projectService.getSettings(projectId)).codingAgent.model || "",
+      agentType: failSettings.codingAgent.type,
+      agentModel: failSettings.codingAgent.model || "",
       gitBranch: branchName,
       status: "failed",
-      outputLog: state.agent.outputLog.join(""),
+      outputLog: slot.agent.outputLog.join(""),
       failureReason: reason,
       testResults: testResults ?? undefined,
       gitDiff: gitDiff || undefined,
-      startedAt: state.agent.startedAt,
+      startedAt: slot.agent.startedAt,
     });
     await this.sessionManager.archiveSession(
       repoPath,
@@ -1716,7 +1625,6 @@ export class OrchestratorService {
       wtPath ?? undefined
     );
 
-    // Add failure comment for audit trail (PRD §7.3.2: rejection feedback as bead comment)
     const commentText =
       failureType === "review_rejection" && reviewFeedback
         ? `Review rejected (attempt ${cumulativeAttempts}):\n\n${reviewFeedback.slice(0, 2000)}`
@@ -1725,69 +1633,66 @@ export class OrchestratorService {
       .comment(repoPath, task.id, commentText)
       .catch((err) => log.warn("Failed to add failure comment", { err }));
 
-    // Infrastructure failures get free retries (up to MAX_INFRA_RETRIES)
-    if (isInfraFailure && state.infraRetries < MAX_INFRA_RETRIES) {
-      state.infraRetries += 1;
-      state.attempt = cumulativeAttempts + 1;
-      log.info(`Infrastructure retry ${state.infraRetries}/${MAX_INFRA_RETRIES} for ${task.id}`, {
+    // Infrastructure failures get free retries
+    if (isInfraFailure && slot.infraRetries < MAX_INFRA_RETRIES) {
+      slot.infraRetries += 1;
+      slot.attempt = cumulativeAttempts + 1;
+      log.info(`Infrastructure retry ${slot.infraRetries}/${MAX_INFRA_RETRIES} for ${task.id}`, {
         failureType,
       });
 
-      // Clean up worktree but keep the branch for retry
       if (wtPath) {
         await this.branchManager.removeTaskWorktree(repoPath, task.id);
-        state.activeWorktreePath = null;
+        slot.worktreePath = null;
       }
 
-      await this.persistState(projectId, repoPath);
-      await this.executeCodingPhase(projectId, repoPath, task, {
+      await this.persistCounters(projectId, repoPath);
+      await this.executeCodingPhase(projectId, repoPath, task, slot, {
         previousFailure: reason,
         reviewFeedback,
         useExistingBranch: true,
         previousDiff,
-        previousTestOutput: state.phaseResult.testOutput || undefined,
+        previousTestOutput: slot.phaseResult.testOutput || undefined,
         failureType,
       });
       return;
     }
 
-    // Reset infra retry counter for agent-attributable failures
     if (!isInfraFailure) {
-      state.infraRetries = 0;
+      slot.infraRetries = 0;
     }
 
-    // Persist cumulative attempt count on the bead issue (PRDv2 §9.1)
     await this.beads.setCumulativeAttempts(repoPath, task.id, cumulativeAttempts);
 
     const isDemotionPoint = cumulativeAttempts % BACKOFF_FAILURE_THRESHOLD === 0;
 
     if (!isDemotionPoint) {
-      // Immediate retry — KEEP the branch so agent builds on previous work
+      // Immediate retry — keep the branch
       if (wtPath) {
         await this.branchManager.removeTaskWorktree(repoPath, task.id);
-        state.activeWorktreePath = null;
+        slot.worktreePath = null;
       }
 
-      state.attempt = cumulativeAttempts + 1;
-      log.info(`Retrying ${task.id} (attempt ${state.attempt}), preserving branch`);
+      slot.attempt = cumulativeAttempts + 1;
+      log.info(`Retrying ${task.id} (attempt ${slot.attempt}), preserving branch`);
 
-      await this.persistState(projectId, repoPath);
+      await this.persistCounters(projectId, repoPath);
 
-      await this.executeCodingPhase(projectId, repoPath, task, {
+      await this.executeCodingPhase(projectId, repoPath, task, slot, {
         previousFailure: reason,
         reviewFeedback,
         useExistingBranch: true,
         previousDiff,
-        previousTestOutput: state.phaseResult.testOutput || undefined,
+        previousTestOutput: slot.phaseResult.testOutput || undefined,
         failureType,
       });
     } else {
-      // Demotion point: clean slate — delete branch and worktree
+      // Demotion point: clean slate — remove slot, delete branch
       if (wtPath) {
         await this.branchManager.removeTaskWorktree(repoPath, task.id);
-        state.activeWorktreePath = null;
       }
       await this.branchManager.deleteBranch(repoPath, branchName);
+      await this.deleteAssignment(repoPath, task.id);
 
       const currentPriority = task.priority ?? 2;
 
@@ -1809,8 +1714,8 @@ export class OrchestratorService {
           // Task may already be in the right state
         }
 
-        this.transition(projectId, { to: "fail" });
-        await this.clearPersistedState(repoPath);
+        this.transition(projectId, { to: "fail", taskId: task.id });
+        await this.persistCounters(projectId, repoPath);
 
         broadcastToProject(projectId, {
           type: "task.updated",
@@ -1825,24 +1730,17 @@ export class OrchestratorService {
           testResults: null,
         });
 
-        state.loopActive = false;
-        state.timers.setTimeout(
-          "loop",
-          () => {
-            this.nudge(projectId);
-          },
-          2000
-        );
+        // Nudge to fill the freed slot
+        this.nudge(projectId);
       }
     }
   }
 
   // ─── Helpers ───
 
-  /** Run Summarizer agent to condense context when thresholds exceeded (PRD §7.3.2, §12.3.5) */
   private async runSummarizer(
     projectId: string,
-    settings: { planningAgent: import("@opensprint/shared").AgentConfig },
+    settings: { planningAgent: AgentConfig },
     taskId: string,
     context: TaskContext
   ): Promise<TaskContext> {
@@ -1890,10 +1788,8 @@ export class OrchestratorService {
   }
 
   private async preflightCheck(repoPath: string, wtPath: string, taskId: string): Promise<void> {
-    // 1. Ensure git is ready (no stale locks)
     await this.branchManager.waitForGitReady(wtPath);
 
-    // 2. Ensure node_modules symlink is intact
     try {
       await fs.access(path.join(wtPath, "node_modules"));
     } catch {
@@ -1901,14 +1797,9 @@ export class OrchestratorService {
       await this.branchManager.symlinkNodeModules(repoPath, wtPath);
     }
 
-    // 3. Clear stale result.json from a previous run
     await this.sessionManager.clearResult(wtPath, taskId);
   }
 
-  /**
-   * Block a task after progressive backoff exhaustion (PRDv2 §9.1).
-   * Sets beads status to blocked via bd update --status blocked; emits task.blocked.
-   */
   private async blockTask(
     projectId: string,
     repoPath: string,
@@ -1916,8 +1807,6 @@ export class OrchestratorService {
     cumulativeAttempts: number,
     reason: string
   ): Promise<void> {
-    const state = this.getState(projectId);
-
     log.info(`Blocking ${task.id} after ${cumulativeAttempts} cumulative failures at max priority`);
 
     try {
@@ -1929,8 +1818,8 @@ export class OrchestratorService {
       log.warn("Failed to block task", { err });
     }
 
-    this.transition(projectId, { to: "fail" });
-    await this.clearPersistedState(repoPath);
+    this.transition(projectId, { to: "fail", taskId: task.id });
+    await this.persistCounters(projectId, repoPath);
 
     broadcastToProject(projectId, {
       type: "task.blocked",
@@ -1951,15 +1840,8 @@ export class OrchestratorService {
       testResults: null,
     });
 
-    // Mark loop idle and schedule next iteration
-    state.loopActive = false;
-    state.timers.setTimeout(
-      "loop",
-      () => {
-        this.nudge(projectId);
-      },
-      2000
-    );
+    // Nudge to fill the freed slot
+    this.nudge(projectId);
   }
 }
 

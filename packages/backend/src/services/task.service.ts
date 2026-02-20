@@ -39,12 +39,14 @@ export class TaskService {
     const tasks = allIssues.map((issue) => this.beadsIssueToTask(issue, readyIds, idToIssue));
     await this.enrichTasksWithTestResults(project.repoPath, tasks);
 
-    // Override kanban column for current task when orchestrator phase is review (PRD §7.3.2)
+    // Override kanban column for active review tasks (PRD §7.3.2)
     const buildStatus = await orchestratorService.getStatus(projectId);
-    if (buildStatus.currentTask && buildStatus.currentPhase === "review") {
-      const currentTask = tasks.find((t) => t.id === buildStatus.currentTask);
-      if (currentTask && currentTask.kanbanColumn === "in_progress") {
-        currentTask.kanbanColumn = "in_review";
+    for (const active of buildStatus.activeTasks) {
+      if (active.phase === "review") {
+        const reviewTask = tasks.find((t) => t.id === active.taskId);
+        if (reviewTask && reviewTask.kanbanColumn === "in_progress") {
+          reviewTask.kanbanColumn = "in_review";
+        }
       }
     }
     return tasks;

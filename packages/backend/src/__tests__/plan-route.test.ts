@@ -30,8 +30,7 @@ vi.mock("../services/orchestrator.service.js", () => ({
     nudge: vi.fn(),
     ensureRunning: vi.fn(),
     getStatus: vi.fn().mockResolvedValue({
-      currentTask: null,
-      currentPhase: null,
+      activeTasks: [],
       queueDepth: 0,
       totalDone: 0,
       totalFailed: 0,
