@@ -70,14 +70,15 @@ describe("ActiveAgentsList", () => {
     expect(dot).toBeNull();
   });
 
-  it("renders button with no visible border (border-0)", async () => {
+  it("renders button with no visible border (border-none)", async () => {
     renderActiveAgentsList();
 
     await waitFor(() => {
       expect(screen.getByText("No agents running")).toBeInTheDocument();
     });
     const button = screen.getByTitle("Active agents");
-    expect(button.className).toContain("border-0");
+    expect(button.className).toContain("border-none");
+    expect(button.className).toContain("ring-0");
     expect(button.className).not.toContain("border-theme-border");
   });
 
