@@ -1,0 +1,25 @@
+{
+  "id": "h236ra",
+  "text": "When setting up a new project, the default for all approvals settings should be automatic",
+  "category": "ux",
+  "mappedPlanId": "project-setup-wizard",
+  "createdTaskIds": ["opensprint.dev-9q3.8"],
+  "status": "mapped",
+  "createdAt": "2026-02-20T20:34:46.697Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-9q3",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Change default Human-in-the-Loop preferences to Automated",
+      "description": "Update the Project Setup Wizard's Human-in-the-Loop configuration step so that all three decision categories (Scope Changes, Architecture Decisions, Dependency Modifications) default to 'Automated' instead of the current defaults where Scope Changes and Architecture Decisions default to 'Requires approval'. Acceptance criteria:\n- When a user reaches the HIL preferences step of the setup wizard, all three category toggles default to 'Automated'\n- Users can still change any category to 'Notify and proceed' or 'Requires approval'\n- Existing projects are not affected; only new project defaults change\n- Update any seed/default config in ProjectSettings initialization to reflect the new defaults",
+      "priority": 3,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Change default Human-in-the-Loop preferences to Automated"],
+  "feedbackSourceBeadId": "opensprint.dev-uufi"
+}
