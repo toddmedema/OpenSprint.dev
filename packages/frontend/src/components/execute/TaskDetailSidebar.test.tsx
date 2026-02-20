@@ -243,6 +243,115 @@ describe("TaskDetailSidebar", () => {
     expect(screen.getByText("Implement feature")).toBeInTheDocument();
   });
 
+  describe("Priority dropdown", () => {
+    const taskDetailWithPriority = (priority: number) => ({
+      id: "epic-1.1",
+      title: "Task A",
+      epicId: "epic-1",
+      kanbanColumn: "in_progress" as const,
+      priority,
+      assignee: null,
+      type: "task" as const,
+      status: "in_progress" as const,
+      labels: [],
+      dependencies: [],
+      description: "",
+      createdAt: "",
+      updatedAt: "",
+    });
+
+    it("shows current priority as clickable element when taskDetail is loaded", () => {
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(1),
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      const trigger = screen.getByTestId("priority-dropdown-trigger");
+      expect(trigger).toBeInTheDocument();
+      expect(trigger).toHaveTextContent("High");
+      expect(trigger).toHaveAttribute(
+        "aria-label",
+        "Priority: High. Click to change",
+      );
+    });
+
+    it("opens dropdown with all 5 priority levels when clicked", async () => {
+      const user = userEvent.setup();
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(2),
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      await user.click(screen.getByTestId("priority-dropdown-trigger"));
+      const dropdown = screen.getByTestId("priority-dropdown");
+      expect(dropdown).toBeInTheDocument();
+      expect(dropdown).toHaveAttribute("role", "listbox");
+      for (const p of [0, 1, 2, 3, 4]) {
+        expect(screen.getByTestId(`priority-option-${p}`)).toBeInTheDocument();
+      }
+      expect(screen.getByText("0: Critical")).toBeInTheDocument();
+      expect(screen.getByText("1: High")).toBeInTheDocument();
+      expect(screen.getByText("2: Medium")).toBeInTheDocument();
+      expect(screen.getByText("3: Low")).toBeInTheDocument();
+      expect(screen.getByText("4: Lowest")).toBeInTheDocument();
+    });
+
+    it("persists via API and closes dropdown when selecting a new priority", async () => {
+      const user = userEvent.setup();
+      mockUpdatePriority.mockResolvedValue({ ...taskDetailWithPriority(0), priority: 0 });
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(1),
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      await user.click(screen.getByTestId("priority-dropdown-trigger"));
+      expect(screen.getByTestId("priority-dropdown")).toBeInTheDocument();
+      await user.click(screen.getByTestId("priority-option-0"));
+      expect(mockUpdatePriority).toHaveBeenCalledWith("proj-1", "epic-1.1", 0);
+      expect(screen.queryByTestId("priority-dropdown")).not.toBeInTheDocument();
+    });
+
+    it("does not call API when selecting the same priority", async () => {
+      const user = userEvent.setup();
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(2),
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      await user.click(screen.getByTestId("priority-dropdown-trigger"));
+      await user.click(screen.getByTestId("priority-option-2"));
+      expect(mockUpdatePriority).not.toHaveBeenCalled();
+    });
+
+    it("closes dropdown on outside click", async () => {
+      const user = userEvent.setup();
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(2),
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      await user.click(screen.getByTestId("priority-dropdown-trigger"));
+      expect(screen.getByTestId("priority-dropdown")).toBeInTheDocument();
+      await user.click(document.body);
+      expect(screen.queryByTestId("priority-dropdown")).not.toBeInTheDocument();
+    });
+  });
+
   it("Source Feedback and Live Output use matching content wrapper (p-4 pt-0)", async () => {
     mockGet.mockResolvedValue({
       id: "fb-1",
