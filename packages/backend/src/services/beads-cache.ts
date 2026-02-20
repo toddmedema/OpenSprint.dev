@@ -63,6 +63,10 @@ export const beadsCache = {
     listAllCache.delete(listAllKey(repoPath));
     showCache.delete(showKey(repoPath, taskId));
   },
+  /** Invalidate listAll cache when beads state changes (e.g. update, close, sync) */
+  invalidateListAll: (repoPath: string): void => {
+    listAllCache.delete(listAllKey(repoPath));
+  },
   clear: (): void => {
     listAllCache.clear();
     showCache.clear();

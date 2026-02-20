@@ -6,6 +6,7 @@ import type { TaskType, TaskPriority } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { createLogger } from "../utils/logger.js";
+import { beadsCache } from "./beads-cache.js";
 
 const execAsync = promisify(exec);
 const log = createLogger("beads");
@@ -323,10 +324,11 @@ export class BeadsService {
         timeout,
         maxBuffer: MAX_BUFFER_BYTES,
       });
-      // Invalidate sync state after write commands so the next read triggers a fresh import.
+      // Invalidate sync state and task cache after write commands so the next read triggers a fresh import.
       // This prevents stale-DB errors when list follows rapid create/update/close ops.
       if (/^(create|update|close|dep |sync)/.test(command)) {
         this.invalidateSyncState(repoPath);
+        beadsCache.invalidateListAll(repoPath);
       }
       return stdout;
     } catch (error: unknown) {
