@@ -58,6 +58,11 @@ export const beadsCache = {
     get(showCache, showKey(repoPath, id)),
   setShow: <T>(repoPath: string, id: string, value: T): void =>
     set(showCache, showKey(repoPath, id), value),
+  /** Invalidate cache for a task mutation (e.g. priority update) so subsequent reads return fresh data */
+  invalidateForTask: (repoPath: string, taskId: string): void => {
+    listAllCache.delete(listAllKey(repoPath));
+    showCache.delete(showKey(repoPath, taskId));
+  },
   clear: (): void => {
     listAllCache.clear();
     showCache.clear();

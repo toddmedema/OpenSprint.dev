@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/tool
 import type { AgentSession, Task, KanbanColumn, Plan } from "@opensprint/shared";
 import { api } from "../../api/client";
 import { setPlansAndGraph } from "./planSlice";
+import { setDeliverToast } from "./websocketSlice";
 
 /** Task display shape for kanban (subset of Task) */
 export type TaskCard = Pick<
@@ -114,6 +115,27 @@ export const markTaskDone = createAsyncThunk(
   }
 );
 
+export const updateTaskPriority = createAsyncThunk(
+  "execute/updateTaskPriority",
+  async (
+    {
+      projectId,
+      taskId,
+      priority,
+      previousPriority,
+    }: { projectId: string; taskId: string; priority: number; previousPriority: number },
+    { dispatch, rejectWithValue }
+  ) => {
+    try {
+      const task = await api.tasks.updatePriority(projectId, taskId, priority);
+      return { task, taskId };
+    } catch (err) {
+      dispatch(setDeliverToast({ message: "Failed to update priority", variant: "failed" }));
+      return rejectWithValue({ previousPriority });
+    }
+  }
+);
+
 export const unblockTask = createAsyncThunk(
   "execute/unblockTask",
   async (
@@ -183,19 +205,24 @@ const executeSlice = createSlice({
     },
     taskUpdated(
       state,
-      action: PayloadAction<{ taskId: string; status?: string; assignee?: string | null }>
+      action: PayloadAction<{
+        taskId: string;
+        status?: string;
+        assignee?: string | null;
+        priority?: number;
+      }>
     ) {
-      const task = state.tasks.find((t) => t.id === action.payload.taskId);
+      const { taskId, status, assignee, priority } = action.payload;
+      const task = state.tasks.find((t) => t.id === taskId);
       if (task) {
-        if (action.payload.status !== undefined) {
-          task.kanbanColumn = mapStatusToKanban(action.payload.status);
-        }
-        if (action.payload.assignee !== undefined) {
-          task.assignee = action.payload.assignee;
-        }
+        if (status !== undefined) task.kanbanColumn = mapStatusToKanban(status);
+        if (assignee !== undefined) task.assignee = assignee;
+        if (priority !== undefined) task.priority = priority;
       }
-      if (state.taskDetail?.id === action.payload.taskId && action.payload.status !== undefined) {
-        state.taskDetail.kanbanColumn = mapStatusToKanban(action.payload.status);
+      if (state.taskDetail?.id === taskId) {
+        if (status !== undefined) state.taskDetail.kanbanColumn = mapStatusToKanban(status);
+        if (assignee !== undefined) state.taskDetail.assignee = assignee;
+        if (priority !== undefined) state.taskDetail.priority = priority;
       }
     },
     setTasks(state, action: PayloadAction<Task[]>) {
@@ -325,6 +352,28 @@ const executeSlice = createSlice({
       .addCase(unblockTask.rejected, (state, action) => {
         state.unblockLoading = false;
         state.error = action.error.message ?? "Failed to unblock";
+      })
+      // updateTaskPriority — optimistic update, revert on error
+      .addCase(updateTaskPriority.pending, (state, action) => {
+        const { taskId, priority } = action.meta.arg;
+        const task = state.tasks.find((t) => t.id === taskId);
+        if (task) task.priority = priority;
+        if (state.taskDetail?.id === taskId) state.taskDetail.priority = priority;
+      })
+      .addCase(updateTaskPriority.fulfilled, (state, action) => {
+        const { task } = action.payload;
+        if (state.taskDetail?.id === task.id) state.taskDetail = task;
+        const t = state.tasks.find((x) => x.id === task.id);
+        if (t) t.priority = task.priority;
+      })
+      .addCase(updateTaskPriority.rejected, (state, action) => {
+        const payload = action.payload as { previousPriority: number } | undefined;
+        if (!payload) return;
+        const { taskId } = action.meta.arg;
+        const previousPriority = payload.previousPriority;
+        const task = state.tasks.find((t) => t.id === taskId);
+        if (task) task.priority = previousPriority;
+        if (state.taskDetail?.id === taskId) state.taskDetail.priority = previousPriority;
       });
   },
 });

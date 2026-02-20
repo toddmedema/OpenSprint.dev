@@ -284,6 +284,17 @@ export class TaskService {
     return { taskUnblocked: true };
   }
 
+  /** Update a task's priority (0–4). Runs bd update <id> -p <priority>. */
+  async updatePriority(projectId: string, taskId: string, priority: number): Promise<Task> {
+    if (priority < 0 || priority > 4) {
+      throw AppError.badRequest("Priority must be 0–4");
+    }
+    const project = await this.projectService.getProject(projectId);
+    await this.beads.update(project.repoPath, taskId, { priority });
+    beadsCache.invalidateForTask(project.repoPath, taskId);
+    return this.getTask(projectId, taskId);
+  }
+
   /** Manually mark a task as done. If it was the last task in its epic, closes the epic too. */
   async markDone(projectId: string, taskId: string): Promise<{ taskClosed: boolean; epicClosed?: boolean }> {
     const project = await this.projectService.getProject(projectId);

@@ -59,6 +59,27 @@ tasksRouter.post('/:taskId/done', async (req: Request<TaskParams>, res, next) =>
   }
 });
 
+// PATCH /projects/:projectId/tasks/:taskId — Update task (e.g. priority)
+tasksRouter.patch('/:taskId', async (req: Request<TaskParams>, res, next) => {
+  try {
+    const { priority } = req.body ?? {};
+    if (typeof priority !== 'number' || priority < 0 || priority > 4) {
+      return res.status(400).json({
+        error: { code: 'BAD_REQUEST', message: 'priority must be a number 0–4' },
+      });
+    }
+    const task = await taskService.updatePriority(
+      req.params.projectId,
+      req.params.taskId,
+      priority,
+    );
+    const body: ApiResponse<Task> = { data: task };
+    res.json(body);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /projects/:projectId/tasks/:taskId — Get task details
 tasksRouter.get('/:taskId', async (req: Request<TaskParams>, res, next) => {
   const start = performance.now();

@@ -187,6 +187,11 @@ export const api = {
     ready: (projectId: string) => request<Task[]>(`/projects/${projectId}/tasks/ready`),
     get: (projectId: string, taskId: string) =>
       request<Task>(`/projects/${projectId}/tasks/${taskId}`),
+    updatePriority: (projectId: string, taskId: string, priority: number) =>
+      request<Task>(`/projects/${projectId}/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ priority }),
+      }),
     sessions: (projectId: string, taskId: string) =>
       request<AgentSession[]>(`/projects/${projectId}/tasks/${taskId}/sessions`),
     session: (projectId: string, taskId: string, attempt: number) =>
