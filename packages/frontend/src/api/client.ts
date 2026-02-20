@@ -283,6 +283,11 @@ export const api = {
         parent: string | null;
         entries: { name: string; path: string; isDirectory: boolean }[];
       }>(`/fs/browse${path ? `?path=${encodeURIComponent(path)}` : ""}`),
+    createFolder: (parentPath: string, name: string) =>
+      request<{ path: string }>("/fs/create-folder", {
+        method: "POST",
+        body: JSON.stringify({ parentPath, name }),
+      }),
     detectTestFramework: (path: string) =>
       request<{ framework: string; testCommand: string } | null>(
         `/fs/detect-test-framework?path=${encodeURIComponent(path)}`

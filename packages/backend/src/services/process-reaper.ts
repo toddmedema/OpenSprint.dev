@@ -5,7 +5,7 @@ const log = createLogger("reaper");
 const REAP_INTERVAL_MS = 60_000;
 let timer: ReturnType<typeof setInterval> | null = null;
 
-const ORPHAN_CMD_SIGNATURES = ["vitest", "bd daemon --start", "bd daemon start"];
+const ORPHAN_CMD_SIGNATURES = ["vitest"];
 const ORPHAN_CLAUDE_SIGNATURES = ["claude", "--print"];
 
 /**

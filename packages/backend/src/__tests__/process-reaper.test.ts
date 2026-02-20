@@ -121,7 +121,7 @@ describe("parseOrphanedProcesses", () => {
   });
 });
 
-describe("reaper kills orphaned bd daemons", () => {
+describe("reaper kills orphaned processes", () => {
   afterEach(() => {
     stopProcessReaper();
     mockExecSync.mockClear();
@@ -129,7 +129,7 @@ describe("reaper kills orphaned bd daemons", () => {
     process.kill = originalKill;
   });
 
-  it("kills orphaned bd daemon processes found via ps", () => {
+  it("does not kill bd daemon processes (daemon subsystem removed)", () => {
     if (process.platform === "win32") return;
 
     const psOutput = [
@@ -145,9 +145,7 @@ describe("reaper kills orphaned bd daemons", () => {
     startProcessReaper();
 
     const killCalls = mockKill.mock.calls.filter((c: unknown[]) => c[1] === "SIGKILL");
-    expect(killCalls.length).toBe(2);
-    expect(killCalls[0][0]).toBe(36806);
-    expect(killCalls[1][0]).toBe(36857);
+    expect(killCalls.length).toBe(0);
   });
 
   it("kills orphaned claude --print processes", () => {

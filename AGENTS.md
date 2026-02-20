@@ -10,17 +10,17 @@ OpenSprint is a web application that guides users through the full software deve
 
 ## Beads Quick Reference
 
-**Always use `--no-daemon`** to prevent bd from auto-starting background daemon processes (they leak memory).
+Beads removed the daemon subsystem (no `--no-daemon` flag).
 
 ```bash
-bd --no-daemon ready                          # Find next available work (priority-sorted, all deps resolved)
-bd --no-daemon show <id>                      # View issue details and audit trail
-bd --no-daemon update <id> --claim            # Atomically claim a task (sets assignee + in_progress)
-bd --no-daemon close <id> --reason "..."      # Mark work done
-bd --no-daemon create "Title" -t <type> -p <priority>  # Create an issue (types: bug/feature/task/epic/chore)
-bd --no-daemon dep add <child> <parent>       # Add dependency (blocks, related, parent-child)
-bd --no-daemon list --json                    # List all issues with JSON output
-bd --no-daemon sync                           # Sync with git
+bd ready                          # Find next available work (priority-sorted, all deps resolved)
+bd show <id>                      # View issue details and audit trail
+bd update <id> --claim            # Atomically claim a task (sets assignee + in_progress)
+bd close <id> --reason "..."      # Mark work done
+bd create "Title" -t <type> -p <priority>  # Create an issue (types: bug/feature/task/epic/chore)
+bd dep add <child> <parent>       # Add dependency (blocks, related, parent-child)
+bd list --json                    # List all issues with JSON output
+bd sync                           # Sync with git
 ```
 
 ## Task Workflow
@@ -55,8 +55,8 @@ Beads supports hierarchical IDs for organizing work:
    ```bash
    git fetch origin
    git rebase origin/main
-   bd --no-daemon close <task-id> --reason "Implemented and tested"   # if not already closed
-   bd --no-daemon sync
+   bd close <task-id> --reason "Implemented and tested"   # if not already closed
+   bd sync
    git add .beads/issues.jsonl
    git reset --soft origin/main
    git commit -m "Implement X (closes <task-id>)"

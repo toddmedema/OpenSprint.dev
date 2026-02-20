@@ -1,5 +1,5 @@
 import { Router, Request } from "express";
-import { readdir, stat } from "fs/promises";
+import { readdir, stat, mkdir } from "fs/promises";
 import { join, resolve, dirname } from "path";
 import { existsSync } from "fs";
 import type { ApiResponse } from "@opensprint/shared";
@@ -36,7 +36,7 @@ fsRouter.get("/browse", async (req: Request<object, object, object, { path?: str
 
     const entries = await readdir(targetPath, { withFileTypes: true });
     const dirEntries = entries
-      .filter((e) => e.isDirectory())
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
       .map((e) => ({
         name: e.name,
         path: join(targetPath, e.name),
@@ -57,6 +57,76 @@ fsRouter.get("/browse", async (req: Request<object, object, object, { path?: str
     next(err);
   }
 });
+
+interface CreateFolderBody {
+  parentPath: string;
+  name: string;
+}
+
+// POST /fs/create-folder — Create a new folder and return its path
+fsRouter.post(
+  "/create-folder",
+  async (req: Request<object, object, CreateFolderBody>, res, next) => {
+    try {
+      const { parentPath, name } = req.body ?? {};
+      if (!parentPath || typeof parentPath !== "string" || !name || typeof name !== "string") {
+        res.status(400).json({
+          error: { code: "INVALID_INPUT", message: "parentPath and name are required" },
+        });
+        return;
+      }
+      const trimmedName = name.trim();
+      if (!trimmedName || trimmedName === "." || trimmedName === "..") {
+        res.status(400).json({
+          error: { code: "INVALID_INPUT", message: "Invalid folder name" },
+        });
+        return;
+      }
+      if (trimmedName.includes("/") || trimmedName.includes("\\")) {
+        res.status(400).json({
+          error: { code: "INVALID_INPUT", message: "Folder name cannot contain path separators" },
+        });
+        return;
+      }
+
+      const parentResolved = resolve(parentPath);
+      const newPath = join(parentResolved, trimmedName);
+      if (!newPath.startsWith(parentResolved)) {
+        res.status(400).json({
+          error: { code: "INVALID_INPUT", message: "Invalid path" },
+        });
+        return;
+      }
+
+      if (!existsSync(parentResolved)) {
+        res.status(400).json({
+          error: { code: "NOT_FOUND", message: "Parent directory does not exist" },
+        });
+        return;
+      }
+      const parentStat = await stat(parentResolved);
+      if (!parentStat.isDirectory()) {
+        res.status(400).json({
+          error: { code: "NOT_DIRECTORY", message: "Parent path is not a directory" },
+        });
+        return;
+      }
+
+      if (existsSync(newPath)) {
+        res.status(409).json({
+          error: { code: "ALREADY_EXISTS", message: "A file or folder with that name already exists" },
+        });
+        return;
+      }
+
+      await mkdir(newPath, { recursive: false });
+      const body: ApiResponse<{ path: string }> = { data: { path: newPath } };
+      res.json(body);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // GET /fs/detect-test-framework?path=/some/path — Detect test framework from project files
 fsRouter.get(

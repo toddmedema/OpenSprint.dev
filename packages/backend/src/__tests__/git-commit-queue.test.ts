@@ -153,8 +153,8 @@ describe("GitCommitQueue", () => {
     }
 
     // Create an issue to close
-    await execAsync('bd --no-daemon create "Test task" -t task -p 2 --json', { cwd: repoPath });
-    await execAsync("bd --no-daemon sync", { cwd: repoPath });
+    await execAsync('bd create "Test task" -t task -p 2 --json', { cwd: repoPath });
+    await execAsync("bd sync", { cwd: repoPath });
 
     const issuesPath = path.join(repoPath, ".beads/issues.jsonl");
     const issuesContent = await fs.readFile(issuesPath, "utf-8");

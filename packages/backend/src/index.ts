@@ -1,6 +1,5 @@
 import path from "path";
 import fs from "fs";
-import { execSync } from "child_process";
 import { config } from "dotenv";
 import { createServer } from "http";
 import { createApp } from "./app.js";
@@ -10,11 +9,8 @@ config({ path: path.resolve(process.cwd(), ".env") });
 config({ path: path.resolve(process.cwd(), "../.env") });
 config({ path: path.resolve(process.cwd(), "../../.env") });
 
-// Prevent the bd CLI from auto-starting daemon processes. Without this, every
-// `bd` invocation (from our service, agents, test runners) spawns a detached
-// daemon that is never reaped — previously causing 3000+ orphaned processes
-// and 50+ GB of leaked RAM. All child processes inherit this.
-process.env.BEADS_NO_DAEMON = "1";
+// Note: Beads removed the daemon subsystem (gastown#1302). BEADS_NO_DAEMON
+// and --no-daemon are no longer used.
 import { setupWebSocket, closeWebSocket } from "./websocket/index.js";
 import { DEFAULT_API_PORT } from "@opensprint/shared";
 import { ProjectService } from "./services/project.service.js";
@@ -209,18 +205,7 @@ const shutdown = async () => {
   stopProcessReaper();
   watchdogService.stop();
   orchestratorService.stopAll();
-  // Stop bd daemons for all repos this backend managed
-  const managedRepos = BeadsService.getManagedRepoPaths();
-  if (managedRepos.length > 0) {
-    const beads = new BeadsService();
-    await beads.stopDaemonsForRepos(managedRepos);
-  }
-  // Kill any lingering bd daemons spawned by this or previous sessions
-  try {
-    execSync("bd daemon killall 2>/dev/null", { timeout: 5_000 });
-  } catch {
-    /* best effort */
-  }
+  // Beads removed the daemon subsystem — no daemons to stop on shutdown.
   removePidFile();
   closeWebSocket();
   server.close(() => {
