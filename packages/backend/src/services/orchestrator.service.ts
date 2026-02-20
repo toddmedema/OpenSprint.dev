@@ -316,7 +316,9 @@ export class OrchestratorService {
         break;
     }
 
-    log.info(`Transition [${projectId}]: ${prev} → ${t.to} (task: ${state.status.currentTask ?? "none"})`);
+    log.info(
+      `Transition [${projectId}]: ${prev} → ${t.to} (task: ${state.status.currentTask ?? "none"})`
+    );
 
     const repoPath = this.repoPathCache.get(projectId);
     if (repoPath) {
@@ -1354,6 +1356,10 @@ export class OrchestratorService {
    * done; we just couldn't push yet.
    */
   private async pushMainWithMergerFallback(projectId: string, repoPath: string): Promise<void> {
+    // Wait for pending git commit queue jobs (e.g. beads_export) to flush before rebasing.
+    // Without this, fire-and-forget enqueue() calls can leave unstaged changes that block rebase.
+    await gitCommitQueue.drain();
+
     try {
       await this.branchManager.pushMain(repoPath);
       eventLogService
@@ -1377,7 +1383,9 @@ export class OrchestratorService {
       if (err.conflictedFiles.length === 0) {
         const rebaseActive = await this.branchManager.isRebaseInProgress(repoPath);
         if (!rebaseActive) {
-          log.info("Rebase error with no conflicts and no rebase in progress, attempting direct push");
+          log.info(
+            "Rebase error with no conflicts and no rebase in progress, attempting direct push"
+          );
           try {
             await this.branchManager.pushMainToOrigin(repoPath);
             log.info("Direct push succeeded after rebase error");
@@ -1545,7 +1553,9 @@ export class OrchestratorService {
     const wtPath = state.activeWorktreePath;
     const isInfraFailure = INFRA_FAILURE_TYPES.includes(failureType);
 
-    log.error(`Task ${task.id} failed [${failureType}] (attempt ${cumulativeAttempts})`, { reason });
+    log.error(`Task ${task.id} failed [${failureType}] (attempt ${cumulativeAttempts})`, {
+      reason,
+    });
 
     eventLogService
       .append(repoPath, {
@@ -1690,7 +1700,9 @@ export class OrchestratorService {
         await this.blockTask(projectId, repoPath, task, cumulativeAttempts, reason);
       } else {
         const newPriority = currentPriority + 1;
-        log.info(`Demoting ${task.id} priority ${currentPriority} → ${newPriority} after ${cumulativeAttempts} failures`);
+        log.info(
+          `Demoting ${task.id} priority ${currentPriority} → ${newPriority} after ${cumulativeAttempts} failures`
+        );
 
         try {
           await this.beads.update(repoPath, task.id, {

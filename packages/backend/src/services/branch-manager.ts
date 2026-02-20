@@ -150,6 +150,11 @@ export class BranchManager {
       log.warn("pushMain: fetch failed, pushing anyway", { error });
     }
 
+    // Commit any uncommitted changes so rebase doesn't fail with "unstaged changes".
+    // This catches races where fire-and-forget jobs (beads_export, event log writes)
+    // modify tracked files between merge and push.
+    await this.commitWip(repoPath, "pre-push");
+
     try {
       await this.git(repoPath, "rebase origin/main");
     } catch (rebaseErr) {
