@@ -253,6 +253,44 @@ describe("GitCommitQueue", () => {
       expect((caughtError as RepoConflictError).unmergedFiles.length).toBeGreaterThan(0);
     });
 
+    it("should persist pending state to disk for crash recovery", async () => {
+      await createMergeConflict(repoPath);
+
+      await fs.mkdir(path.join(repoPath, ".opensprint"), { recursive: true });
+      await fs.writeFile(
+        path.join(repoPath, ".opensprint/prd.json"),
+        JSON.stringify({ version: 1, sections: {}, changeLog: [] })
+      );
+
+      // Deferred during conflict
+      await gitCommitQueue.enqueueAndWait({
+        type: "prd_update",
+        repoPath,
+        source: "sketch",
+      });
+
+      // Verify pending-commits.json was written to disk
+      const pendingPath = path.join(repoPath, ".opensprint/pending-commits.json");
+      const pendingRaw = await fs.readFile(pendingPath, "utf-8");
+      const pending = JSON.parse(pendingRaw);
+      expect(pending.files).toContain(".opensprint/prd.json");
+
+      // Resolve conflicts
+      await resolveConflicts(repoPath);
+
+      // Flush — should clean up the pending-commits.json file
+      await gitCommitQueue.retryPendingCommits(repoPath);
+
+      // Verify the file is cleaned up
+      let fileExists = true;
+      try {
+        await fs.access(pendingPath);
+      } catch {
+        fileExists = false;
+      }
+      expect(fileExists).toBe(false);
+    });
+
     it("retryPendingCommits should be a no-op when repo still has conflicts", async () => {
       await createMergeConflict(repoPath);
 

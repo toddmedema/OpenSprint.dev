@@ -1,0 +1,145 @@
+/**
+ * Independent watchdog service (Witness Pattern).
+ *
+ * Runs on its own timer, separate from the orchestrator's main loop, to detect
+ * and recover from failure conditions that the orchestrator itself can't see:
+ *  - Stale agent heartbeats (agent hung/crashed without clean exit)
+ *  - Orphaned in_progress tasks (no active process)
+ *  - Stale .git/index.lock files
+ *
+ * Started alongside the orchestrator from index.ts.
+ */
+
+import fs from "fs/promises";
+import path from "path";
+import { HEARTBEAT_STALE_MS } from "@opensprint/shared";
+import { BranchManager } from "./branch-manager.js";
+import { heartbeatService } from "./heartbeat.service.js";
+import { orphanRecoveryService } from "./orphan-recovery.service.js";
+import { eventLogService } from "./event-log.service.js";
+
+const WATCHDOG_POLL_MS = 5 * 60 * 1000; // 5 minutes
+const GIT_LOCK_STALE_MS = 10 * 60 * 1000; // 10 minutes
+
+interface WatchdogTarget {
+  projectId: string;
+  repoPath: string;
+}
+
+export class WatchdogService {
+  private interval: NodeJS.Timeout | null = null;
+  private branchManager = new BranchManager();
+  private targets: WatchdogTarget[] = [];
+
+  start(targets: WatchdogTarget[]): void {
+    if (this.interval) return;
+    this.targets = targets;
+
+    this.interval = setInterval(() => {
+      this.runChecks().catch((err) => {
+        console.warn("[watchdog] Check cycle failed:", err);
+      });
+    }, WATCHDOG_POLL_MS);
+
+    console.log(
+      `[watchdog] Started (${WATCHDOG_POLL_MS / 1000}s interval) for ${targets.length} project(s)`
+    );
+  }
+
+  stop(): void {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+  }
+
+  private async runChecks(): Promise<void> {
+    for (const target of this.targets) {
+      try {
+        await this.checkAgentHealth(target);
+        await this.checkOrphanedTasks(target);
+        await this.checkGitLockHealth(target);
+      } catch (err) {
+        console.warn(`[watchdog] Checks failed for ${target.projectId}:`, err);
+      }
+    }
+  }
+
+  /**
+   * Detect stale heartbeats — agents that appear to have died without
+   * the orchestrator noticing (e.g. SIGKILL, OOM).
+   */
+  private async checkAgentHealth(target: WatchdogTarget): Promise<void> {
+    const worktreeBase = this.branchManager.getWorktreeBasePath();
+    const stale = await heartbeatService.findStaleHeartbeats(worktreeBase);
+
+    for (const { taskId, heartbeat } of stale) {
+      const staleSec = Math.round((Date.now() - heartbeat.lastOutputTimestamp) / 1000);
+      console.warn(`[watchdog] Stale heartbeat: task ${taskId} (${staleSec}s since last output)`);
+
+      eventLogService
+        .append(target.repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId: target.projectId,
+          taskId,
+          event: "watchdog.stale_heartbeat",
+          data: { staleSec, threshold: HEARTBEAT_STALE_MS / 1000 },
+        })
+        .catch(() => {});
+    }
+  }
+
+  /**
+   * Periodic orphan recovery (not just on startup).
+   * Catches tasks that slip through crash recovery.
+   */
+  private async checkOrphanedTasks(target: WatchdogTarget): Promise<void> {
+    const { recovered } = await orphanRecoveryService.recoverOrphanedTasks(target.repoPath);
+    if (recovered.length > 0) {
+      console.warn(
+        `[watchdog] Recovered ${recovered.length} orphaned task(s): ${recovered.join(", ")}`
+      );
+
+      eventLogService
+        .append(target.repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId: target.projectId,
+          taskId: "",
+          event: "watchdog.orphan_recovery",
+          data: { recovered },
+        })
+        .catch(() => {});
+    }
+  }
+
+  /**
+   * Detect and remove stale .git/index.lock files that prevent git operations.
+   */
+  private async checkGitLockHealth(target: WatchdogTarget): Promise<void> {
+    const lockPath = path.join(target.repoPath, ".git", "index.lock");
+    try {
+      const stat = await fs.stat(lockPath);
+      const ageMs = Date.now() - stat.mtimeMs;
+      if (ageMs > GIT_LOCK_STALE_MS) {
+        console.warn(
+          `[watchdog] Removing stale .git/index.lock (${Math.round(ageMs / 1000)}s old)`
+        );
+        await fs.unlink(lockPath);
+
+        eventLogService
+          .append(target.repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId: target.projectId,
+            taskId: "",
+            event: "watchdog.stale_lock_removed",
+            data: { ageMs },
+          })
+          .catch(() => {});
+      }
+    } catch {
+      // No lock file — healthy
+    }
+  }
+}
+
+export const watchdogService = new WatchdogService();

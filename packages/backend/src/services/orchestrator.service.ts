@@ -43,6 +43,8 @@ import {
 } from "./crash-recovery.service.js";
 import { normalizeCodingStatus, normalizeReviewStatus } from "./result-normalizers.js";
 import { getPlanComplexityForTask } from "./plan-complexity.js";
+import { eventLogService } from "./event-log.service.js";
+import { agentIdentityService, type AttemptOutcome } from "./agent-identity.service.js";
 
 /**
  * Failure types for smarter recovery routing.
@@ -77,6 +79,23 @@ interface RetryContext {
 
 /** Watchdog interval: 5 minutes (PRDv2 §5.7) */
 const WATCHDOG_INTERVAL_MS = 60 * 1000;
+
+/**
+ * GUPP-style assignment file: everything an agent needs to self-start.
+ * Written before agent spawn so crash recovery can simply re-read and re-spawn.
+ */
+export interface TaskAssignment {
+  taskId: string;
+  projectId: string;
+  phase: "coding" | "review";
+  branchName: string;
+  worktreePath: string;
+  promptPath: string;
+  agentConfig: import("@opensprint/shared").AgentConfig;
+  attempt: number;
+  retryContext?: RetryContext;
+  createdAt: string;
+}
 
 /** Polling interval for monitoring orphaned agent processes during crash recovery */
 
@@ -187,6 +206,10 @@ export class OrchestratorService {
   private feedbackService = new FeedbackService();
   private lifecycleManager = new AgentLifecycleManager();
   private crashRecovery = new CrashRecoveryService();
+  /** Cached repoPath per project (avoids async lookup in synchronous transition()) */
+  private repoPathCache = new Map<string, string>();
+  /** Guard against concurrent pushes per project */
+  private pushInProgress = new Set<string>();
 
   private getState(projectId: string): OrchestratorState {
     if (!this.state.has(projectId)) {
@@ -293,6 +316,19 @@ export class OrchestratorService {
     console.log(
       `[orchestrator] Transition [${projectId}]: ${prev} → ${t.to} (task: ${state.status.currentTask ?? "none"})`
     );
+
+    const repoPath = this.repoPathCache.get(projectId);
+    if (repoPath) {
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: state.status.currentTask ?? "",
+          event: `transition.${t.to}`,
+          data: { from: prev, attempt: state.attempt },
+        })
+        .catch(() => {});
+    }
   }
 
   /** Clear all task-related fields when returning to idle */
@@ -462,6 +498,7 @@ export class OrchestratorService {
     await this.projectService.getProject(projectId);
     const state = this.getState(projectId);
     const repoPath = await this.projectService.getRepoPath(projectId);
+    this.repoPathCache.set(projectId, repoPath);
 
     // Orphan recovery: reset in_progress tasks with agent assignee but no active process
     const persisted = await this.loadPersistedState(repoPath);
@@ -753,7 +790,35 @@ export class OrchestratorService {
       const promptPath = path.join(taskDir, "prompt.md");
 
       const complexity = await getPlanComplexityForTask(repoPath, task);
-      const agentConfig = getCodingAgentForComplexity(settings, complexity);
+      let agentConfig = getCodingAgentForComplexity(settings, complexity);
+
+      // Model escalation: on retries with repeated failures, try a more capable model
+      if (retryContext?.failureType && state.attempt > 1) {
+        const recentAttempts = await agentIdentityService.getRecentAttempts(repoPath, task.id);
+        agentConfig = agentIdentityService.selectAgentForRetry(
+          settings,
+          task.id,
+          state.attempt,
+          retryContext.failureType,
+          complexity,
+          recentAttempts
+        );
+      }
+
+      // Write assignment.json before spawn (GUPP recovery: if we crash, re-read and re-spawn)
+      const assignment: TaskAssignment = {
+        taskId: task.id,
+        projectId,
+        phase: "coding",
+        branchName,
+        worktreePath: wtPath,
+        promptPath,
+        agentConfig,
+        attempt: state.attempt,
+        retryContext,
+        createdAt: new Date().toISOString(),
+      };
+      await writeJsonAtomic(path.join(taskDir, OPENSPRINT_PATHS.assignment), assignment);
 
       this.lifecycleManager.run(
         {
@@ -771,6 +836,16 @@ export class OrchestratorService {
         state.agent,
         state.timers
       );
+
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: task.id,
+          event: "agent.spawned",
+          data: { phase: "coding", model: agentConfig.model, attempt: state.attempt },
+        })
+        .catch(() => {});
 
       await this.persistState(projectId, repoPath);
     } catch (error) {
@@ -931,6 +1006,20 @@ export class OrchestratorService {
       const complexity = await getPlanComplexityForTask(repoPath, task);
       const agentConfig = getCodingAgentForComplexity(settings, complexity);
 
+      // Write assignment.json before spawn (GUPP recovery)
+      const assignment: TaskAssignment = {
+        taskId: task.id,
+        projectId,
+        phase: "review",
+        branchName,
+        worktreePath: wtPath,
+        promptPath,
+        agentConfig,
+        attempt: state.attempt,
+        createdAt: new Date().toISOString(),
+      };
+      await writeJsonAtomic(path.join(taskDir, OPENSPRINT_PATHS.assignment), assignment);
+
       this.lifecycleManager.run(
         {
           projectId,
@@ -947,6 +1036,16 @@ export class OrchestratorService {
         state.agent,
         state.timers
       );
+
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: task.id,
+          event: "agent.spawned",
+          data: { phase: "review", model: agentConfig.model, attempt: state.attempt },
+        })
+        .catch(() => {});
 
       await this.persistState(projectId, repoPath);
     } catch (error) {
@@ -1120,6 +1219,21 @@ export class OrchestratorService {
       state.phaseResult.codingSummary || "Implemented and tested"
     );
 
+    // Record successful attempt for performance tracking
+    const settings = await this.projectService.getSettings(projectId);
+    agentIdentityService
+      .recordAttempt(repoPath, {
+        taskId: task.id,
+        agentId: `${settings.codingAgent.type}-${settings.codingAgent.model ?? "default"}`,
+        model: settings.codingAgent.model ?? "unknown",
+        attempt: state.attempt,
+        startedAt: state.agent.startedAt,
+        completedAt: new Date().toISOString(),
+        outcome: "success",
+        durationMs: Date.now() - new Date(state.agent.startedAt).getTime(),
+      })
+      .catch((err) => console.warn("[orchestrator] Failed to record attempt:", err));
+
     // PRD §5.9: Orchestrator manages beads persistence explicitly via export at checkpoints
     gitCommitQueue.enqueue({
       type: "beads_export",
@@ -1146,19 +1260,21 @@ export class OrchestratorService {
     await this.branchManager.removeTaskWorktree(repoPath, task.id);
     await this.branchManager.deleteBranch(repoPath, branchName);
 
-    // Push main to remote so completed work reaches origin.
-    // If rebase conflicts with origin/main, spawn a merger agent to resolve them.
-    await this.pushMainWithMergerFallback(projectId, repoPath);
-
+    // Transition to complete immediately — don't block on push
     this.transition(projectId, { to: "complete", taskId: task.id });
+
+    eventLogService
+      .append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId: task.id,
+        event: "task.completed",
+        data: { attempt: state.attempt },
+      })
+      .catch(() => {});
 
     // Clear persisted state: task completed successfully (PRDv2 §5.8)
     await this.clearPersistedState(repoPath);
-
-    // PRD §10.2: Auto-resolve feedback when all its created tasks are Done
-    this.feedbackService.checkAutoResolveOnTaskDone(projectId, task.id).catch((err) => {
-      console.warn(`[orchestrator] Auto-resolve feedback on task done failed for ${task.id}:`, err);
-    });
 
     broadcastToProject(projectId, {
       type: "agent.completed",
@@ -1167,8 +1283,53 @@ export class OrchestratorService {
       testResults: state.phaseResult.testResults,
     });
 
-    // PRD §7.5.3: Auto-deploy on epic completion — only when all epic tasks are Done and config enabled
-    const epicId = extractEpicId(task.id);
+    // Mark loop as idle, then re-trigger after a short delay to let git settle
+    state.loopActive = false;
+    state.timers.setTimeout(
+      "loop",
+      () => {
+        this.nudge(projectId);
+      },
+      3000
+    );
+
+    // Fire-and-forget: push to remote, auto-deploy, and feedback checks.
+    // These don't block the main loop — the next task can start immediately.
+    this.postCompletionAsync(projectId, repoPath, task.id).catch((err) => {
+      console.warn(`[orchestrator] Post-completion async work failed for ${task.id}:`, err);
+    });
+  }
+
+  /**
+   * Background work after task completion: push to remote, auto-deploy checks,
+   * and feedback auto-resolution. These are fire-and-forget from the main loop.
+   */
+  private async postCompletionAsync(
+    projectId: string,
+    repoPath: string,
+    taskId: string
+  ): Promise<void> {
+    // Push main to remote (with merger fallback for rebase conflicts)
+    if (!this.pushInProgress.has(projectId)) {
+      this.pushInProgress.add(projectId);
+      try {
+        await this.pushMainWithMergerFallback(projectId, repoPath);
+      } finally {
+        this.pushInProgress.delete(projectId);
+      }
+    } else {
+      console.log(
+        "[orchestrator] Push already in progress, skipping (will retry on next completion)"
+      );
+    }
+
+    // PRD §10.2: Auto-resolve feedback when all its created tasks are Done
+    this.feedbackService.checkAutoResolveOnTaskDone(projectId, taskId).catch((err) => {
+      console.warn(`[orchestrator] Auto-resolve feedback on task done failed for ${taskId}:`, err);
+    });
+
+    // PRD §7.5.3: Auto-deploy on epic completion
+    const epicId = extractEpicId(taskId);
     if (epicId) {
       const allIssues = await this.beads.listAll(repoPath);
       const implTasks = allIssues.filter(
@@ -1191,16 +1352,6 @@ export class OrchestratorService {
         }
       }
     }
-
-    // Mark loop as idle, then re-trigger after a short delay to let git settle
-    state.loopActive = false;
-    state.timers.setTimeout(
-      "loop",
-      () => {
-        this.nudge(projectId);
-      },
-      3000
-    );
   }
 
   /**
@@ -1211,6 +1362,14 @@ export class OrchestratorService {
   private async pushMainWithMergerFallback(projectId: string, repoPath: string): Promise<void> {
     try {
       await this.branchManager.pushMain(repoPath);
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: "",
+          event: "push.succeeded",
+        })
+        .catch(() => {});
     } catch (err) {
       if (!(err instanceof RebaseConflictError)) {
         console.warn("[orchestrator] pushMain failed (non-conflict):", err);
@@ -1402,6 +1561,31 @@ export class OrchestratorService {
     console.error(
       `Task ${task.id} failed [${failureType}] (attempt ${cumulativeAttempts}): ${reason}`
     );
+
+    eventLogService
+      .append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId: task.id,
+        event: `task.failed`,
+        data: { failureType, attempt: cumulativeAttempts, reason: reason.slice(0, 500) },
+      })
+      .catch(() => {});
+
+    // Record failed attempt for performance tracking / model escalation
+    const failSettings = await this.projectService.getSettings(projectId);
+    agentIdentityService
+      .recordAttempt(repoPath, {
+        taskId: task.id,
+        agentId: `${failSettings.codingAgent.type}-${failSettings.codingAgent.model ?? "default"}`,
+        model: failSettings.codingAgent.model ?? "unknown",
+        attempt: cumulativeAttempts,
+        startedAt: state.agent.startedAt,
+        completedAt: new Date().toISOString(),
+        outcome: failureType as AttemptOutcome,
+        durationMs: Date.now() - new Date(state.agent.startedAt || Date.now()).getTime(),
+      })
+      .catch((err) => console.warn("[orchestrator] Failed to record attempt:", err));
 
     // Capture diff before any cleanup (for richer retry context and session archive)
     let previousDiff = "";

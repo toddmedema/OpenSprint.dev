@@ -1,6 +1,6 @@
 # Lord of the Sprints
 
-**One tool to rule them all — build _good_ software at the speed of thought, and never pay for SaaS again.**
+**The Fellowship of AI agent — plan and build software at the speed of thought, and never pay for SaaS again.**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Node.js >= 20](https://img.shields.io/badge/Node.js-%3E%3D20-green.svg)](https://nodejs.org/)

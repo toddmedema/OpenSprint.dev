@@ -13,8 +13,12 @@ export const OPENSPRINT_PATHS = {
   settings: `${OPENSPRINT_DIR}/settings.json`,
   orchestratorState: `${OPENSPRINT_DIR}/orchestrator-state.json`,
   deployments: `${OPENSPRINT_DIR}/deployments`,
+  eventsLog: `${OPENSPRINT_DIR}/events.jsonl`,
+  pendingCommits: `${OPENSPRINT_DIR}/pending-commits.json`,
+  agentStats: `${OPENSPRINT_DIR}/agent-stats.json`,
   heartbeat: "heartbeat.json",
   agentOutputLog: "agent-output.log",
+  assignment: "assignment.json",
 } as const;
 
 /** Heartbeat interval in milliseconds (10 seconds) */

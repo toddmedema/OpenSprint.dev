@@ -41,6 +41,8 @@ packages/frontend/.vite/
 .opensprint/conversations/
 .opensprint/sessions/
 .opensprint/orchestrator-state.json
+.opensprint/pending-commits.json
+.opensprint/agent-stats.json
 packages/backend/.opensprint/
 
 # Temporary files

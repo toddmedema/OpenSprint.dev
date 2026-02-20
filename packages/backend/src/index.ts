@@ -21,6 +21,7 @@ import { ProjectService } from "./services/project.service.js";
 import { BeadsService } from "./services/beads.service.js";
 import { FeedbackService } from "./services/feedback.service.js";
 import { orchestratorService } from "./services/orchestrator.service.js";
+import { watchdogService } from "./services/watchdog.service.js";
 import { startProcessReaper, stopProcessReaper } from "./services/process-reaper.js";
 import {
   killAllTrackedAgentProcesses,
@@ -136,6 +137,9 @@ async function initAlwaysOnOrchestrator(): Promise<void> {
       `[orchestrator] ${validProjects.length} project(s) registered — starting always-on orchestrator`
     );
 
+    // Start independent watchdog alongside orchestrator
+    watchdogService.start(validProjects.map((p) => ({ projectId: p.id, repoPath: p.repoPath })));
+
     for (const project of validProjects) {
       try {
         // Auto-start always-on orchestrator for each project (PRDv2 §5.7)
@@ -192,6 +196,7 @@ const shutdown = async () => {
     await killAllTrackedAgentProcesses();
   }
   stopProcessReaper();
+  watchdogService.stop();
   orchestratorService.stopAll();
   // Stop bd daemons for all repos this backend managed
   const managedRepos = BeadsService.getManagedRepoPaths();

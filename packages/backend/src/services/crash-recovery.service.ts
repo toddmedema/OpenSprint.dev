@@ -1,5 +1,5 @@
 import path from "path";
-import { open as fsOpen, stat as fsStat } from "fs/promises";
+import { open as fsOpen, stat as fsStat, readdir, readFile } from "fs/promises";
 import type {
   AgentPhase,
   CodingAgentResult,
@@ -17,6 +17,8 @@ import { activeAgentsService } from "./active-agents.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { broadcastToProject, sendAgentOutputToProject } from "../websocket/index.js";
 import { normalizeCodingStatus } from "./result-normalizers.js";
+import { eventLogService } from "./event-log.service.js";
+import type { TaskAssignment } from "./orchestrator.service.js";
 
 const RECOVERY_POLL_MS = 30_000;
 
@@ -424,9 +426,42 @@ export class CrashRecoveryService {
   }
 
   /**
+   * Scan `.opensprint/active/` for assignment.json files (GUPP pattern).
+   * Returns assignments for tasks whose agents are no longer alive.
+   */
+  async findOrphanedAssignments(
+    repoPath: string
+  ): Promise<Array<{ taskId: string; assignment: TaskAssignment }>> {
+    const activeDir = path.join(repoPath, OPENSPRINT_PATHS.active);
+    const orphaned: Array<{ taskId: string; assignment: TaskAssignment }> = [];
+
+    try {
+      const entries = await readdir(activeDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith("_")) continue;
+        const assignmentPath = path.join(activeDir, entry.name, OPENSPRINT_PATHS.assignment);
+        try {
+          const raw = await readFile(assignmentPath, "utf-8");
+          const assignment = JSON.parse(raw) as TaskAssignment;
+          orphaned.push({ taskId: entry.name, assignment });
+        } catch {
+          // No assignment.json — skip
+        }
+      }
+    } catch {
+      // No active directory — nothing to recover
+    }
+
+    return orphaned;
+  }
+
+  /**
    * Crash recovery with checkpoint detection.
    * Checks if the branch has meaningful committed work and preserves it
    * for the next attempt. Advances to review if result.json shows success.
+   *
+   * Enhanced with GUPP pattern: reads assignment.json for richer context
+   * about the agent that was running.
    */
   async performCrashRecovery(
     projectId: string,
@@ -443,6 +478,36 @@ export class CrashRecoveryService {
     console.log(
       `[orchestrator] Recovery: crash recovery for task ${taskId} (branch ${branchName})`
     );
+
+    // Read assignment.json if available (GUPP pattern — richer recovery context)
+    let assignment: TaskAssignment | null = null;
+    const assignmentDir = worktreePath
+      ? path.join(worktreePath, OPENSPRINT_PATHS.active, taskId)
+      : path.join(repoPath, OPENSPRINT_PATHS.active, taskId);
+    try {
+      const raw = await readFile(path.join(assignmentDir, OPENSPRINT_PATHS.assignment), "utf-8");
+      assignment = JSON.parse(raw) as TaskAssignment;
+      console.log("[orchestrator] Recovery: found assignment.json", {
+        taskId: assignment.taskId,
+        phase: assignment.phase,
+        attempt: assignment.attempt,
+      });
+    } catch {
+      // No assignment — use persisted state fallback
+    }
+
+    eventLogService
+      .append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId,
+        event: "crash_recovery.started",
+        data: {
+          hasAssignment: !!assignment,
+          phase: assignment?.phase ?? persisted?.currentPhase ?? "unknown",
+        },
+      })
+      .catch(() => {});
 
     if (worktreePath && persisted && persisted.currentPhase === "coding") {
       const advanced = await this.tryAdvanceToReview(

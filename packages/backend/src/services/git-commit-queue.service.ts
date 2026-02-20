@@ -9,8 +9,12 @@
 
 import { exec } from "child_process";
 import { promisify } from "util";
+import fs from "fs/promises";
+import path from "path";
+import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { BeadsService } from "./beads.service.js";
 import { BranchManager } from "./branch-manager.js";
+import { writeJsonAtomic } from "../utils/file-utils.js";
 
 const execAsync = promisify(exec);
 
@@ -98,15 +102,41 @@ class GitCommitQueueImpl implements GitCommitQueueService {
     }
   }
 
-  // ─── Deferred commit tracking ───
+  // ─── Deferred commit tracking (persisted to disk for crash safety) ───
 
-  private trackPendingFile(repoPath: string, filePath: string): void {
+  private async trackPendingFile(repoPath: string, filePath: string): Promise<void> {
     let files = this.pendingFiles.get(repoPath);
     if (!files) {
       files = new Set();
       this.pendingFiles.set(repoPath, files);
     }
     files.add(filePath);
+    await this.persistPendingFiles(repoPath);
+  }
+
+  private async persistPendingFiles(repoPath: string): Promise<void> {
+    const files = this.pendingFiles.get(repoPath);
+    const pendingPath = path.join(repoPath, OPENSPRINT_PATHS.pendingCommits);
+    if (!files || files.size === 0) {
+      await fs.unlink(pendingPath).catch(() => {});
+      return;
+    }
+    await fs.mkdir(path.dirname(pendingPath), { recursive: true });
+    await writeJsonAtomic(pendingPath, { files: [...files] });
+  }
+
+  private async loadPendingFiles(repoPath: string): Promise<void> {
+    const pendingPath = path.join(repoPath, OPENSPRINT_PATHS.pendingCommits);
+    try {
+      const data = JSON.parse(await fs.readFile(pendingPath, "utf-8"));
+      if (data.files?.length) {
+        const existing = this.pendingFiles.get(repoPath) ?? new Set<string>();
+        for (const f of data.files) existing.add(f);
+        this.pendingFiles.set(repoPath, existing);
+      }
+    } catch {
+      /* no file = no pending */
+    }
   }
 
   /**
@@ -138,6 +168,8 @@ class GitCommitQueueImpl implements GitCommitQueueService {
    * (no unmerged files) before executing the next job.
    */
   private async flushPendingCommits(repoPath: string): Promise<void> {
+    await this.loadPendingFiles(repoPath);
+
     const files = this.pendingFiles.get(repoPath);
     if (!files || files.size === 0) return;
 
@@ -164,6 +196,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
         );
       }
       this.pendingFiles.delete(repoPath);
+      await this.persistPendingFiles(repoPath);
     } catch (err) {
       console.warn("[git-commit-queue] Flush of deferred commits failed:", err);
     }
@@ -263,7 +296,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           cwd: repoPath,
           timeout: 10_000,
         });
-        this.trackPendingFile(repoPath, ".beads/issues.jsonl");
+        await this.trackPendingFile(repoPath, ".beads/issues.jsonl");
         console.warn(
           `[git-commit-queue] Deferred beads commit (${unmerged.length} unmerged file(s)); staged .beads/issues.jsonl`
         );
@@ -274,7 +307,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           cwd: repoPath,
           timeout: 10_000,
         });
-        this.trackPendingFile(repoPath, ".opensprint/prd.json");
+        await this.trackPendingFile(repoPath, ".opensprint/prd.json");
         console.warn(
           `[git-commit-queue] Deferred PRD commit (${unmerged.length} unmerged file(s)); staged .opensprint/prd.json`
         );

@@ -1,8 +1,8 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { OPENSPRINT_PATHS } from '@opensprint/shared';
-import { heartbeatService } from './heartbeat.service.js';
-import type { AgentSession, AgentSessionStatus, TestResults, AgentType } from '@opensprint/shared';
+import fs from "fs/promises";
+import path from "path";
+import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import { heartbeatService } from "./heartbeat.service.js";
+import type { AgentSession, AgentSessionStatus, TestResults, AgentType } from "@opensprint/shared";
 
 /**
  * Manages active task directories and session archival.
@@ -19,9 +19,9 @@ export class SessionManager {
    * Read the result.json from a completed agent run.
    */
   async readResult(repoPath: string, taskId: string): Promise<unknown | null> {
-    const resultPath = path.join(this.getActiveDir(repoPath, taskId), 'result.json');
+    const resultPath = path.join(this.getActiveDir(repoPath, taskId), "result.json");
     try {
-      const raw = await fs.readFile(resultPath, 'utf-8');
+      const raw = await fs.readFile(resultPath, "utf-8");
       return JSON.parse(raw);
     } catch {
       return null;
@@ -33,7 +33,7 @@ export class SessionManager {
    * doesn't mistakenly read it after a new agent invocation.
    */
   async clearResult(repoPath: string, taskId: string): Promise<void> {
-    const resultPath = path.join(this.getActiveDir(repoPath, taskId), 'result.json');
+    const resultPath = path.join(this.getActiveDir(repoPath, taskId), "result.json");
     try {
       await fs.unlink(resultPath);
     } catch {
@@ -59,7 +59,7 @@ export class SessionManager {
       testResults?: TestResults;
       failureReason?: string;
       startedAt: string;
-    },
+    }
   ): Promise<AgentSession> {
     const session: AgentSession = {
       taskId: params.taskId,
@@ -95,25 +95,23 @@ export class SessionManager {
     taskId: string,
     attempt: number,
     session: AgentSession,
-    worktreePath?: string,
+    worktreePath?: string
   ): Promise<void> {
     // Active files live in the worktree (if provided), archive goes to main repo
     const activeDirSource = this.getActiveDir(worktreePath ?? repoPath, taskId);
-    const sessionDir = path.join(
-      repoPath,
-      OPENSPRINT_PATHS.sessions,
-      `${taskId}-${attempt}`,
-    );
+    const sessionDir = path.join(repoPath, OPENSPRINT_PATHS.sessions, `${taskId}-${attempt}`);
 
     // Write session metadata
     await fs.mkdir(sessionDir, { recursive: true });
-    await fs.writeFile(
-      path.join(sessionDir, 'session.json'),
-      JSON.stringify(session, null, 2),
-    );
+    await fs.writeFile(path.join(sessionDir, "session.json"), JSON.stringify(session, null, 2));
 
-    // Clean up heartbeat file before archiving (not useful in archive)
+    // Clean up heartbeat and assignment files before archiving (runtime state, not useful in archive)
     await heartbeatService.deleteHeartbeat(worktreePath ?? repoPath, taskId);
+    try {
+      await fs.unlink(path.join(activeDirSource, OPENSPRINT_PATHS.assignment));
+    } catch {
+      // May not exist
+    }
 
     // Copy active directory contents to session archive
     try {
@@ -155,16 +153,16 @@ export class SessionManager {
   async readSession(
     repoPath: string,
     taskId: string,
-    attempt: number,
+    attempt: number
   ): Promise<AgentSession | null> {
     const sessionPath = path.join(
       repoPath,
       OPENSPRINT_PATHS.sessions,
       `${taskId}-${attempt}`,
-      'session.json',
+      "session.json"
     );
     try {
-      const raw = await fs.readFile(sessionPath, 'utf-8');
+      const raw = await fs.readFile(sessionPath, "utf-8");
       return JSON.parse(raw);
     } catch {
       return null;
@@ -182,9 +180,9 @@ export class SessionManager {
       const entries = await fs.readdir(sessionsDir);
       for (const entry of entries) {
         if (entry.startsWith(`${taskId}-`)) {
-          const sessionPath = path.join(sessionsDir, entry, 'session.json');
+          const sessionPath = path.join(sessionsDir, entry, "session.json");
           try {
-            const raw = await fs.readFile(sessionPath, 'utf-8');
+            const raw = await fs.readFile(sessionPath, "utf-8");
             sessions.push(JSON.parse(raw));
           } catch {
             // Skip broken sessions
@@ -210,7 +208,7 @@ export class SessionManager {
     try {
       const entries = await fs.readdir(sessionsDir);
       for (const entry of entries) {
-        const lastHyphen = entry.lastIndexOf('-');
+        const lastHyphen = entry.lastIndexOf("-");
         if (lastHyphen <= 0) continue;
         const taskId = entry.slice(0, lastHyphen);
         const attemptStr = entry.slice(lastHyphen + 1);
@@ -233,9 +231,9 @@ export class SessionManager {
       arr.sort((a, b) => a.attempt - b.attempt);
       const sessions: AgentSession[] = [];
       for (const { entry } of arr) {
-        const sessionPath = path.join(sessionsDir, entry, 'session.json');
+        const sessionPath = path.join(sessionsDir, entry, "session.json");
         try {
-          const raw = await fs.readFile(sessionPath, 'utf-8');
+          const raw = await fs.readFile(sessionPath, "utf-8");
           sessions.push(JSON.parse(raw));
         } catch {
           // Skip broken sessions
