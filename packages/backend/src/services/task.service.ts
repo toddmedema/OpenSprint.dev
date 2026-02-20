@@ -29,7 +29,10 @@ export class TaskService {
   /** List all tasks for a project with computed kanban columns and test results */
   async listTasks(projectId: string): Promise<Task[]> {
     const project = await this.projectService.getProject(projectId);
-    const allIssues = await this.beads.listAll(project.repoPath);
+    const allIssues =
+      beadsCache.getListAll<BeadsIssue[]>(project.repoPath) ??
+      (await this.beads.listAll(project.repoPath));
+    beadsCache.setListAll(project.repoPath, allIssues);
     const readyIds = this.computeReadyIdsFromListAll(allIssues);
     const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
 

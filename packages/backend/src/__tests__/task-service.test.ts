@@ -79,6 +79,17 @@ describe("TaskService", () => {
     expect(beadsListAllCalls).toBe(1);
   });
 
+  it("getTask uses listAll cache when listTasks was called first (task click after Execute load)", async () => {
+    await taskService.listTasks("proj-1");
+    expect(beadsListAllCalls).toBe(1);
+    const task = await taskService.getTask("proj-1", "task-1");
+    expect(task).toBeDefined();
+    expect(task.id).toBe("task-1");
+    // listAll came from cache (listTasks), only show was invoked
+    expect(beadsListAllCalls).toBe(1);
+    expect(beadsShowCalls).toBe(1);
+  });
+
   it("listTasks does not call beads.ready (computes ready from listAll)", async () => {
     const tasks = await taskService.listTasks("proj-1");
     expect(tasks).toBeDefined();
