@@ -78,12 +78,10 @@ interface EvalPhaseProps {
   onNavigateToBuildTask?: (taskId: string) => void;
 }
 
-export type FeedbackStatusFilter = "all" | "pending" | "mapped" | "resolved";
+export type FeedbackStatusFilter = "pending" | "resolved";
 
 function matchesStatusFilter(item: FeedbackItem, filter: FeedbackStatusFilter): boolean {
-  if (filter === "all") return true;
-  if (filter === "pending") return item.status === "pending";
-  if (filter === "mapped") return item.status === "mapped";
+  if (filter === "pending") return item.status === "pending" || item.status === "mapped";
   if (filter === "resolved") return item.status === "resolved";
   return true;
 }
@@ -92,7 +90,7 @@ function countByStatus(feedback: FeedbackItem[], filter: FeedbackStatusFilter): 
   return feedback.filter((item) => matchesStatusFilter(item, filter)).length;
 }
 
-const VALID_FILTER_VALUES: FeedbackStatusFilter[] = ["all", "pending", "mapped", "resolved"];
+const VALID_FILTER_VALUES: FeedbackStatusFilter[] = ["pending", "resolved"];
 
 function loadFeedbackStatusFilter(): FeedbackStatusFilter {
   if (typeof window === "undefined") return "pending";
@@ -102,6 +100,8 @@ function loadFeedbackStatusFilter(): FeedbackStatusFilter {
     if (VALID_FILTER_VALUES.includes(stored as FeedbackStatusFilter)) {
       return stored as FeedbackStatusFilter;
     }
+    // Legacy values: "all" and "mapped" collapse to "pending"
+    if (stored === "all" || stored === "mapped") return "pending";
   } catch {
     // ignore
   }
@@ -775,9 +775,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                 aria-label="Filter feedback by status"
                 data-testid="feedback-status-filter"
               >
-                <option value="all">All ({feedback.length})</option>
                 <option value="pending">Pending ({countByStatus(feedback, "pending")})</option>
-                <option value="mapped">Mapped ({countByStatus(feedback, "mapped")})</option>
                 <option value="resolved">Resolved ({countByStatus(feedback, "resolved")})</option>
               </select>
             )}
@@ -793,11 +791,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
             <div className="text-center py-10 text-theme-muted text-sm">
               {statusFilter === "pending"
                 ? "No pending feedback yet."
-                : statusFilter === "mapped"
-                  ? "No mapped feedback yet."
-                  : statusFilter === "resolved"
-                    ? "No resolved feedback yet."
-                    : "No feedback matches the current filter."}
+                : "No resolved feedback yet."}
             </div>
           ) : (
             <div className="space-y-3">

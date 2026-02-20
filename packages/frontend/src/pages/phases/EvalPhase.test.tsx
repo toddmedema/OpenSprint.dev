@@ -429,7 +429,7 @@ describe("EvalPhase feedback form", () => {
       expect(heading.textContent).not.toMatch(/\(\d+\)/);
     });
 
-    it("each dropdown option displays its count", async () => {
+    it("each dropdown option displays its count (Pending = pending+mapped, Resolved)", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       render(
         <Provider store={store}>
@@ -441,9 +441,7 @@ describe("EvalPhase feedback form", () => {
         expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
       });
 
-      expect(screen.getByRole("option", { name: "All (6)" })).toBeInTheDocument();
-      expect(screen.getByRole("option", { name: "Pending (2)" })).toBeInTheDocument();
-      expect(screen.getByRole("option", { name: "Mapped (3)" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "Pending (5)" })).toBeInTheDocument();
       expect(screen.getByRole("option", { name: "Resolved (1)" })).toBeInTheDocument();
     });
 
@@ -465,14 +463,29 @@ describe("EvalPhase feedback form", () => {
       await user.selectOptions(screen.getByTestId("feedback-status-filter"), "resolved");
       expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("resolved");
 
-      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "mapped");
-      expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("mapped");
-
-      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "all");
-      expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("all");
+      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "pending");
+      expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("pending");
     });
 
     it("restores previously selected filter from localStorage on mount", async () => {
+      localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "resolved");
+
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+      });
+
+      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
+      expect(filterSelect.value).toBe("resolved");
+    });
+
+    it("treats legacy localStorage 'mapped' as Pending", async () => {
       localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "mapped");
 
       const store = createStore({ evalFeedback: mockFeedbackItems });
@@ -487,7 +500,7 @@ describe("EvalPhase feedback form", () => {
       });
 
       const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      expect(filterSelect.value).toBe("mapped");
+      expect(filterSelect.value).toBe("pending");
     });
 
     it("falls back to Pending when localStorage has invalid value", async () => {
@@ -506,6 +519,47 @@ describe("EvalPhase feedback form", () => {
 
       const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
       expect(filterSelect.value).toBe("pending");
+    });
+
+    it("Pending filter shows both pending and mapped items", async () => {
+      localStorage.removeItem(EVALUATE_FEEDBACK_FILTER_KEY);
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+
+      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
+      expect(filterSelect.value).toBe("pending");
+
+      // Pending filter (default) shows 5 items: 2 pending + 3 mapped
+      expect(screen.getByText("Bug 1")).toBeInTheDocument();
+      expect(screen.getByText("Bug 2")).toBeInTheDocument();
+      expect(screen.getByText("Bug 3")).toBeInTheDocument();
+      expect(screen.getByText("Bug 4")).toBeInTheDocument();
+      expect(screen.getByText("Bug 5")).toBeInTheDocument();
+      expect(screen.queryByText("Bug 6")).not.toBeInTheDocument();
+    });
+
+    it("Resolved filter shows only resolved items", async () => {
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const user = userEvent.setup();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+
+      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "resolved");
+
+      expect(screen.getByText("Bug 6")).toBeInTheDocument();
+      expect(screen.queryByText("Bug 1")).not.toBeInTheDocument();
+      expect(screen.queryByText("Bug 3")).not.toBeInTheDocument();
     });
   });
 });
