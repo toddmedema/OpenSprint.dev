@@ -228,6 +228,7 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
   const [taskIdToStartedAt, setTaskIdToStartedAt] = useState<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [artifactsSectionExpanded, setArtifactsSectionExpanded] = useState(true);
+  const [descriptionSectionExpanded, setDescriptionSectionExpanded] = useState(true);
   const [sourceFeedbackExpanded, setSourceFeedbackExpanded] = useState<Record<string, boolean>>({});
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [searchInputValue, setSearchInputValue] = useState("");
@@ -723,11 +724,36 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
                     const isOnlyFeedbackId = /^Feedback ID:\s*.+$/.test(desc.trim());
                     const displayDesc = taskDetail.sourceFeedbackId && isOnlyFeedbackId ? "" : desc;
                     return displayDesc ? (
-                      <div
-                        className="prose prose-sm prose-gray dark:prose-invert prose-execute-task max-w-none bg-theme-surface p-4 rounded-lg border border-theme-border text-theme-text text-xs overflow-y-auto min-h-0 max-h-[50vh] prose-headings:text-theme-text prose-p:text-theme-text prose-li:text-theme-text prose-td:text-theme-text prose-th:text-theme-text prose-em:text-theme-text prose-a:text-brand-600 dark:prose-a:text-brand-400 prose-code:text-theme-text prose-strong:text-theme-text prose-blockquote:text-theme-text prose-blockquote:border-theme-border prose-hr:border-theme-border prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg prose-kbd:text-theme-text prose-figcaption:text-theme-text"
-                        data-testid="task-description-markdown"
-                      >
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayDesc}</ReactMarkdown>
+                      <div className="border-b border-theme-border">
+                        <button
+                          type="button"
+                          onClick={() => setDescriptionSectionExpanded((prev) => !prev)}
+                          className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
+                          aria-expanded={descriptionSectionExpanded}
+                          aria-controls="description-content"
+                          aria-label={descriptionSectionExpanded ? "Collapse Description" : "Expand Description"}
+                          id="description-header"
+                        >
+                          <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">
+                            Description
+                          </h4>
+                          <span className="text-theme-muted text-xs">{descriptionSectionExpanded ? "▼" : "▶"}</span>
+                        </button>
+                        {descriptionSectionExpanded && (
+                          <div
+                            id="description-content"
+                            role="region"
+                            aria-labelledby="description-header"
+                            className="px-4 pb-4"
+                          >
+                            <div
+                              className="prose prose-sm prose-gray dark:prose-invert prose-execute-task max-w-none bg-theme-surface p-4 rounded-lg border border-theme-border text-theme-text text-xs overflow-y-auto min-h-0 max-h-[50vh] prose-headings:text-theme-text prose-p:text-theme-text prose-li:text-theme-text prose-td:text-theme-text prose-th:text-theme-text prose-em:text-theme-text prose-a:text-brand-600 dark:prose-a:text-brand-400 prose-code:text-theme-text prose-strong:text-theme-text prose-blockquote:text-theme-text prose-blockquote:border-theme-border prose-hr:border-theme-border prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg prose-kbd:text-theme-text prose-figcaption:text-theme-text"
+                              data-testid="task-description-markdown"
+                            >
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayDesc}</ReactMarkdown>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : null;
                   })()}
