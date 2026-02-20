@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Provider } from "react-redux";
+import { Provider, useSelector } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
+import type { RootState } from "../../store";
 import { TaskDetailSidebar } from "./TaskDetailSidebar";
-import executeReducer from "../../store/slices/executeSlice";
+import executeReducer, { fetchTaskDetail } from "../../store/slices/executeSlice";
 import planReducer from "../../store/slices/planSlice";
 import projectReducer from "../../store/slices/projectSlice";
 import websocketReducer from "../../store/slices/websocketSlice";
@@ -349,6 +350,45 @@ describe("TaskDetailSidebar", () => {
       expect(screen.getByTestId("priority-dropdown")).toBeInTheDocument();
       await user.click(document.body);
       expect(screen.queryByTestId("priority-dropdown")).not.toBeInTheDocument();
+    });
+
+    it("reverts UI and shows toast when API fails", async () => {
+      const user = userEvent.setup();
+      mockUpdatePriority.mockRejectedValue(new Error("Network error"));
+      const store = createStore();
+      const taskDetail = taskDetailWithPriority(1);
+      store.dispatch(
+        fetchTaskDetail.fulfilled(taskDetail, "", {
+          projectId: "proj-1",
+          taskId: "epic-1.1",
+        })
+      );
+      function Wrapper() {
+        const detail = useSelector((s: RootState) => s.execute.taskDetail);
+        const loading = useSelector((s: RootState) => s.execute.taskDetailLoading);
+        const error = useSelector((s: RootState) => s.execute.taskDetailError);
+        const props = createMinimalProps({
+          taskDetail: detail,
+          taskDetailLoading: loading,
+          taskDetailError: error,
+        });
+        return <TaskDetailSidebar {...props} />;
+      }
+      render(
+        <Provider store={store}>
+          <Wrapper />
+        </Provider>,
+      );
+      expect(screen.getByTestId("priority-dropdown-trigger")).toHaveTextContent("High");
+      await user.click(screen.getByTestId("priority-dropdown-trigger"));
+      await user.click(screen.getByTestId("priority-option-0"));
+      await vi.waitFor(() => {
+        expect(screen.getByTestId("priority-dropdown-trigger")).toHaveTextContent("High");
+      });
+      expect(store.getState().websocket.deliverToast).toEqual({
+        message: "Failed to update priority",
+        variant: "failed",
+      });
     });
   });
 
