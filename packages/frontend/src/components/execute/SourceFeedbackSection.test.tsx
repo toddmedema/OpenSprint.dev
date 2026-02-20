@@ -144,4 +144,56 @@ describe("SourceFeedbackSection", () => {
 
     expect(mockFeedbackGet).not.toHaveBeenCalled();
   });
+
+  it("uses same content wrapper and container styling as Live Output (p-4 pt-0, bg-theme-code-bg)", async () => {
+    mockFeedbackGet.mockResolvedValue({
+      id: "fb-1",
+      text: "Test feedback",
+      category: "bug",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "mapped",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+
+    const { container } = render(
+      <Provider store={createStore()}>
+        <SourceFeedbackSection
+          projectId="proj-1"
+          feedbackId="fb-1"
+          plans={[]}
+          expanded={true}
+          onToggle={() => {}}
+        />
+      </Provider>,
+    );
+
+    await screen.findByText("Test feedback");
+
+    const contentRegion = container.querySelector("#source-feedback-content");
+    expect(contentRegion).toBeInTheDocument();
+    expect(contentRegion).toHaveClass("p-4", "pt-0");
+
+    const card = screen.getByTestId("source-feedback-card");
+    expect(card).toHaveClass("bg-theme-code-bg", "rounded-lg", "border", "border-theme-border", "overflow-hidden", "p-4");
+  });
+
+  it("shows loading state with matching container styling", () => {
+    mockFeedbackGet.mockImplementation(() => new Promise(() => {}));
+
+    render(
+      <Provider store={createStore()}>
+        <SourceFeedbackSection
+          projectId="proj-1"
+          feedbackId="fb-1"
+          plans={[]}
+          expanded={true}
+          onToggle={() => {}}
+        />
+      </Provider>,
+    );
+
+    expect(screen.getByTestId("source-feedback-loading")).toBeInTheDocument();
+    expect(screen.getByText("Loading feedback…")).toBeInTheDocument();
+  });
 });

@@ -239,4 +239,51 @@ describe("TaskDetailSidebar", () => {
     // Markdown renders list items; "1." is from <ol>, content is "Implement feature"
     expect(screen.getByText("Implement feature")).toBeInTheDocument();
   });
+
+  it("Source Feedback and Live Output use matching content wrapper (p-4 pt-0)", async () => {
+    mockGet.mockResolvedValue({
+      id: "fb-1",
+      text: "Add feature",
+      category: "feature",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "mapped",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+    const props = createMinimalProps({
+      taskDetail: {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [],
+        description: "",
+        sourceFeedbackId: "fb-1",
+        createdAt: "",
+        updatedAt: "",
+      },
+      sourceFeedbackExpanded: { "fb-1": true },
+      artifactsSectionExpanded: true,
+    });
+
+    const { container } = render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>,
+    );
+
+    await screen.findByText("Add feature");
+
+    const sourceFeedbackContent = container.querySelector("#source-feedback-content");
+    const artifactsContent = container.querySelector("#artifacts-content");
+    expect(sourceFeedbackContent).toBeInTheDocument();
+    expect(artifactsContent).toBeInTheDocument();
+    expect(sourceFeedbackContent).toHaveClass("p-4", "pt-0");
+    expect(artifactsContent).toHaveClass("p-4", "pt-0");
+  });
 });
