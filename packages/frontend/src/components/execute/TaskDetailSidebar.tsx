@@ -130,7 +130,11 @@ export function TaskDetailSidebar({
     <>
       <div className="flex items-center justify-between p-4 border-b border-theme-border shrink-0">
         <div className="min-w-0 flex-1 pr-2">
-          <h3 className="font-semibold text-theme-text truncate" data-testid="task-detail-title">
+          {/* Title hidden on desktop (md+) to avoid duplication with task list; shown on mobile when sidebar overlays */}
+          <h3
+            className="font-semibold text-theme-text truncate block md:hidden"
+            data-testid="task-detail-title"
+          >
             {selectedTaskData?.title ?? taskDetail?.title ?? selectedTask ?? ""}
           </h3>
           {(selectedTaskData?.epicId ?? taskDetail?.epicId) && (() => {
