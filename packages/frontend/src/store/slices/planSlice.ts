@@ -28,6 +28,8 @@ export interface PlanState {
   /** Plan ID currently being archived — for loading state */
   archivingPlanId: string | null;
   error: string | null;
+  /** Per-plan error for Execute! failures (shown inline on the card) */
+  executeError: { planId: string; message: string } | null;
   /** Unobtrusive toast for background refresh failures (does not reset page) */
   backgroundError: string | null;
 }
@@ -45,6 +47,7 @@ const initialState: PlanState = {
   reExecutingPlanId: null,
   archivingPlanId: null,
   error: null,
+  executeError: null,
   backgroundError: null,
 };
 
@@ -164,6 +167,15 @@ const planSlice = createSlice({
     setPlanError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
     },
+    setExecutingPlanId(state, action: PayloadAction<string | null>) {
+      state.executingPlanId = action.payload;
+      if (action.payload) {
+        state.executeError = null;
+      }
+    },
+    clearExecuteError(state) {
+      state.executeError = null;
+    },
     clearPlanBackgroundError(state) {
       state.backgroundError = null;
     },
@@ -242,8 +254,10 @@ const planSlice = createSlice({
         state.executingPlanId = null;
       })
       .addCase(executePlan.rejected, (state, action) => {
+        const message = action.error.message || "Failed to start execute";
         state.executingPlanId = null;
-        state.error = action.error.message || "Failed to start execute";
+        state.error = message;
+        state.executeError = { planId: action.meta.arg.planId, message };
       })
       .addCase(reExecutePlan.pending, (state, action) => {
         state.reExecutingPlanId = action.meta.arg.planId;
@@ -310,6 +324,8 @@ export const {
   setSelectedPlanId,
   addPlanLocally,
   setPlanError,
+  setExecutingPlanId,
+  clearExecuteError,
   clearPlanBackgroundError,
   setPlansAndGraph,
   resetPlan,

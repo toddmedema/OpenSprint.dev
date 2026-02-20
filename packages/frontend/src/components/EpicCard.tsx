@@ -7,9 +7,11 @@ export interface EpicCardProps {
   tasks: Task[];
   executingPlanId: string | null;
   reExecutingPlanId: string | null;
+  executeError?: { planId: string; message: string } | null;
   onSelect: () => void;
   onShip: () => void;
   onReship: () => void;
+  onClearError?: () => void;
 }
 
 const statusConfig: Record<
@@ -56,9 +58,11 @@ export function EpicCard({
   tasks,
   executingPlanId,
   reExecutingPlanId,
+  executeError,
   onSelect,
   onShip,
   onReship,
+  onClearError,
 }: EpicCardProps) {
   const progress = plan.taskCount > 0 ? (plan.doneTaskCount / plan.taskCount) * 100 : 0;
   const config = statusConfig[plan.status] ?? defaultStatus;
@@ -157,17 +161,52 @@ export function EpicCard({
 
         {/* Action buttons */}
         {plan.status === "planning" && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onShip();
-            }}
-            disabled={!!executingPlanId}
-            className="btn-primary text-xs w-full py-2 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg font-medium"
-          >
-            {executingPlanId === plan.metadata.planId ? "Executing…" : "Execute!"}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShip();
+              }}
+              disabled={!!executingPlanId}
+              className="btn-primary text-xs w-full py-2 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg font-medium inline-flex items-center justify-center"
+              data-testid="execute-button"
+            >
+              {executingPlanId === plan.metadata.planId ? (
+                <>
+                  <svg className="animate-spin -ml-0.5 mr-1.5 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" aria-hidden="true" data-testid="execute-spinner">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Executing…
+                </>
+              ) : (
+                "Execute!"
+              )}
+            </button>
+            {executeError?.planId === plan.metadata.planId && (
+              <div
+                className="mt-2 text-xs text-theme-error-text bg-theme-error-bg border border-theme-error-border rounded-lg p-2 flex items-start gap-2"
+                data-testid="execute-error-inline"
+                role="alert"
+              >
+                <span className="flex-1 min-w-0">{executeError.message}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClearError?.();
+                  }}
+                  className="shrink-0 text-theme-error-text hover:opacity-80"
+                  aria-label="Dismiss execute error"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </>
         )}
         {plan.status === "complete" &&
           plan.metadata.shippedAt &&

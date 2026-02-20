@@ -14,6 +14,8 @@ import {
   setSelectedPlanId,
   generatePlan,
   setPlanError,
+  setExecutingPlanId,
+  clearExecuteError,
 } from "../../store/slices/planSlice";
 import { addNotification } from "../../store/slices/notificationSlice";
 import { api } from "../../api/client";
@@ -66,6 +68,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   const reExecutingPlanId = useAppSelector((s) => s.plan.reExecutingPlanId);
   const archivingPlanId = useAppSelector((s) => s.plan.archivingPlanId);
   const planError = useAppSelector((s) => s.plan.error);
+  const executeError = useAppSelector((s) => s.plan.executeError);
   const generating = useAppSelector((s) => s.plan.generating);
   const executeTasks = useAppSelector((s) => s.execute.tasks);
 
@@ -146,6 +149,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   }, [currentChatMessages]);
 
   const handleShip = async (planId: string) => {
+    dispatch(setExecutingPlanId(planId));
     try {
       const deps = await api.plans.getCrossEpicDependencies(projectId, planId);
       if (deps.prerequisitePlanIds.length > 0) {
@@ -391,9 +395,11 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                 tasks={planIdToTasks.get(plan.metadata.planId) ?? []}
                 executingPlanId={executingPlanId}
                 reExecutingPlanId={reExecutingPlanId}
+                executeError={executeError}
                 onSelect={() => handleSelectPlan(plan)}
                 onShip={() => handleShip(plan.metadata.planId)}
                 onReship={() => handleReship(plan.metadata.planId)}
+                onClearError={() => dispatch(clearExecuteError())}
               />
             ))}
           </div>
@@ -405,7 +411,10 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           planId={crossEpicModal.planId}
           prerequisitePlanIds={crossEpicModal.prerequisitePlanIds}
           onConfirm={handleCrossEpicConfirm}
-          onCancel={() => setCrossEpicModal(null)}
+          onCancel={() => {
+            setCrossEpicModal(null);
+            dispatch(setExecutingPlanId(null));
+          }}
           confirming={executingPlanId === crossEpicModal.planId}
         />
       )}
