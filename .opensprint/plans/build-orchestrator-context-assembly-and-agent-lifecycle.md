@@ -2,4 +2,4 @@
 
 ## Overview
 
-Implement the build orchestrator loop...
+Implement the build orchestrator loop
