@@ -113,3 +113,8 @@ export interface CrossEpicDependenciesResponse {
   /** Plan IDs that must be executed first (in dependency order) */
   prerequisitePlanIds: string[];
 }
+
+/** Request body for POST /projects/:id/plans/generate — AI generates plan from freeform description */
+export interface GeneratePlanRequest {
+  description: string;
+}
