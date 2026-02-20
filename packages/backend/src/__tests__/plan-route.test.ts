@@ -68,7 +68,7 @@ describe("Plan REST endpoints - task decomposition", () => {
 
   afterEach(async () => {
     process.env.HOME = originalHome;
-    await fs.rm(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+    await fs.rm(tempDir, { recursive: true, force: true });
   });
 
   it(

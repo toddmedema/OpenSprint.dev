@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { KeyboardShortcutTooltip } from "./KeyboardShortcutTooltip";
 
@@ -16,7 +16,7 @@ describe("KeyboardShortcutTooltip", () => {
     vi.stubGlobal("navigator", originalNavigator);
   });
 
-  it("does not show tooltip before hover delay", () => {
+  it("does not show tooltip before hover delay", async () => {
     vi.stubGlobal("navigator", {
       ...originalNavigator,
       platform: "Win32",
@@ -30,17 +30,15 @@ describe("KeyboardShortcutTooltip", () => {
     );
 
     const button = screen.getByRole("button", { name: "Submit" });
-    fireEvent.mouseEnter(button);
+    await userEvent.hover(button);
 
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
+    vi.advanceTimersByTime(200);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
-  it("shows Ctrl + Enter tooltip after hover delay on Windows", () => {
+  it("shows Ctrl + Enter tooltip after hover delay on Windows", async () => {
     vi.stubGlobal("navigator", {
       ...originalNavigator,
       platform: "Win32",
@@ -54,17 +52,15 @@ describe("KeyboardShortcutTooltip", () => {
     );
 
     const button = screen.getByRole("button", { name: "Submit" });
-    fireEvent.mouseEnter(button);
-    act(() => {
-      vi.advanceTimersByTime(300);
-    });
+    await userEvent.hover(button);
+    vi.advanceTimersByTime(300);
 
     const tooltip = screen.getByRole("tooltip");
     expect(tooltip).toBeInTheDocument();
     expect(tooltip).toHaveTextContent("Ctrl + Enter to submit");
   });
 
-  it("shows Cmd + Enter tooltip after hover delay on macOS", () => {
+  it("shows Cmd + Enter tooltip after hover delay on macOS", async () => {
     vi.stubGlobal("navigator", {
       ...originalNavigator,
       platform: "MacIntel",
@@ -78,17 +74,15 @@ describe("KeyboardShortcutTooltip", () => {
     );
 
     const button = screen.getByRole("button", { name: "Submit" });
-    fireEvent.mouseEnter(button);
-    act(() => {
-      vi.advanceTimersByTime(300);
-    });
+    await userEvent.hover(button);
+    vi.advanceTimersByTime(300);
 
     const tooltip = screen.getByRole("tooltip");
     expect(tooltip).toBeInTheDocument();
     expect(tooltip).toHaveTextContent("Cmd + Enter to submit");
   });
 
-  it("dismisses tooltip on mouse leave", () => {
+  it("dismisses tooltip on mouse leave", async () => {
     vi.stubGlobal("navigator", {
       ...originalNavigator,
       platform: "Win32",
@@ -102,18 +96,15 @@ describe("KeyboardShortcutTooltip", () => {
     );
 
     const button = screen.getByRole("button", { name: "Submit" });
-    fireEvent.mouseEnter(button);
-    act(() => {
-      vi.advanceTimersByTime(300);
-    });
+    await userEvent.hover(button);
+    vi.advanceTimersByTime(300);
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
 
-    fireEvent.mouseLeave(button);
+    await userEvent.unhover(button);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("does not interfere with button click", async () => {
-    vi.useRealTimers();
     const onClick = vi.fn();
     vi.stubGlobal("navigator", {
       ...originalNavigator,
@@ -130,7 +121,7 @@ describe("KeyboardShortcutTooltip", () => {
     );
 
     const button = screen.getByRole("button", { name: "Submit" });
-    await userEvent.setup().click(button);
+    await userEvent.click(button);
 
     expect(onClick).toHaveBeenCalledTimes(1);
   });

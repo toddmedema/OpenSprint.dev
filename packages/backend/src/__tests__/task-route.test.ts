@@ -37,7 +37,7 @@ describe("Tasks REST - task-to-kanban-column mapping", () => {
 
   afterEach(async () => {
     process.env.HOME = originalHome;
-    await fs.rm(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+    await fs.rm(tempDir, { recursive: true, force: true });
   });
 
   it(
