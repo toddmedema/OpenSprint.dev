@@ -230,7 +230,7 @@ describe("EvalPhase feedback form", () => {
     const originalNavigator = global.navigator;
 
     beforeEach(() => {
-      vi.useFakeTimers();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
       vi.stubGlobal("navigator", { ...originalNavigator });
     });
 
@@ -259,11 +259,13 @@ describe("EvalPhase feedback form", () => {
 
       const submitButton = screen.getByRole("button", { name: /Submit Feedback/i });
       await userEvent.hover(submitButton);
-      vi.advanceTimersByTime(300);
-
-      const tooltip = screen.getByRole("tooltip");
-      expect(tooltip).toBeInTheDocument();
-      expect(tooltip).toHaveTextContent("Cmd + Enter to submit");
+      await waitFor(
+        () => {
+          const tooltip = screen.getByRole("tooltip");
+          expect(tooltip).toHaveTextContent("Cmd + Enter to submit");
+        },
+        { timeout: 500 }
+      );
     });
 
     it("shows Ctrl + Enter tooltip on Windows after hover delay", async () => {
@@ -286,11 +288,13 @@ describe("EvalPhase feedback form", () => {
 
       const submitButton = screen.getByRole("button", { name: /Submit Feedback/i });
       await userEvent.hover(submitButton);
-      vi.advanceTimersByTime(300);
-
-      const tooltip = screen.getByRole("tooltip");
-      expect(tooltip).toBeInTheDocument();
-      expect(tooltip).toHaveTextContent("Ctrl + Enter to submit");
+      await waitFor(
+        () => {
+          const tooltip = screen.getByRole("tooltip");
+          expect(tooltip).toHaveTextContent("Ctrl + Enter to submit");
+        },
+        { timeout: 500 }
+      );
     });
 
     it("dismisses tooltip when cursor leaves button", async () => {
@@ -313,11 +317,14 @@ describe("EvalPhase feedback form", () => {
 
       const submitButton = screen.getByRole("button", { name: /Submit Feedback/i });
       await userEvent.hover(submitButton);
-      vi.advanceTimersByTime(300);
-      expect(screen.getByRole("tooltip")).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument(), {
+        timeout: 500,
+      });
 
       await userEvent.unhover(submitButton);
-      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument(), {
+        timeout: 200,
+      });
     });
   });
 });
