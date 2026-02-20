@@ -72,12 +72,19 @@ export function SourceFeedbackSection({
           id="source-feedback-content"
           role="region"
           aria-labelledby="source-feedback-header"
-          className="px-4 pb-4"
+          className="p-4 pt-0"
         >
           {loading ? (
-            <div className="text-xs text-theme-muted py-2">Loading feedback…</div>
+            <div className="bg-theme-code-bg rounded-lg border border-theme-border overflow-hidden">
+              <div className="p-4 text-xs text-theme-muted" data-testid="source-feedback-loading">
+                Loading feedback…
+              </div>
+            </div>
           ) : feedback ? (
-            <div className="card p-3 text-xs space-y-2" data-testid="source-feedback-card">
+            <div
+              className="bg-theme-code-bg rounded-lg border border-theme-border overflow-hidden p-4 text-xs space-y-2"
+              data-testid="source-feedback-card"
+            >
               <div className="flex items-start justify-between gap-2 overflow-hidden flex-wrap">
                 <span
                   className={`inline-flex rounded-full px-2 py-0.5 font-medium flex-shrink-0 ${
