@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
@@ -22,10 +22,6 @@ function createStore(initialItems: { id: string; message: string; severity: stri
 }
 
 describe("NotificationBar", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
   it("renders nothing when no notifications", () => {
     const store = createStore();
     const { container } = render(
@@ -37,7 +33,7 @@ describe("NotificationBar", () => {
   });
 
   it("renders notification with message and dismiss button", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     const store = createStore([{ id: "n1", message: "Something went wrong", severity: "error" }]);
     render(
       <Provider store={store}>
@@ -48,7 +44,6 @@ describe("NotificationBar", () => {
     const dismissBtn = screen.getByRole("button", { name: /dismiss/i });
     expect(dismissBtn).toBeInTheDocument();
     await user.click(dismissBtn);
-    vi.advanceTimersByTime(250);
     expect(store.getState().notification.items).toHaveLength(0);
   });
 
@@ -78,7 +73,7 @@ describe("NotificationBar", () => {
   });
 
   it("is keyboard dismissable with Escape", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     const store = createStore([{ id: "n1", message: "Test", severity: "error" }]);
     render(
       <Provider store={store}>
@@ -88,7 +83,6 @@ describe("NotificationBar", () => {
     const dismissBtn = screen.getByRole("button", { name: /dismiss/i });
     dismissBtn.focus();
     await user.keyboard("{Escape}");
-    vi.advanceTimersByTime(250);
     expect(store.getState().notification.items).toHaveLength(0);
   });
 });

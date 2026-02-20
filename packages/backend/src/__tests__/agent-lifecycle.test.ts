@@ -73,13 +73,17 @@ describe("AgentLifecycleManager", () => {
       pid: 9999,
     };
 
-    mockInvokeCodingAgent.mockImplementation((_path: string, _config: unknown, options: { onExit?: (code: number | null) => void }) => {
-      return mockHandle;
-    });
+    mockInvokeCodingAgent.mockImplementation(
+      (_path: string, _config: unknown, _options: { onExit?: (code: number | null) => void }) => {
+        return mockHandle;
+      }
+    );
 
-    mockInvokeReviewAgent.mockImplementation((_path: string, _config: unknown, options: { onExit?: (code: number | null) => void }) => {
-      return mockHandle;
-    });
+    mockInvokeReviewAgent.mockImplementation(
+      (_path: string, _config: unknown, _options: { onExit?: (code: number | null) => void }) => {
+        return mockHandle;
+      }
+    );
   });
 
   describe("run", () => {
@@ -92,11 +96,14 @@ describe("AgentLifecycleManager", () => {
       expect(runState.startedAt).toBeTruthy();
       expect(runState.outputLog).toEqual([]);
       expect(runState.exitHandled).toBe(false);
-      expect(mockBroadcastToProject).toHaveBeenCalledWith("proj-1", expect.objectContaining({
-        type: "agent.started",
-        taskId: "task-1",
-        phase: "coding",
-      }));
+      expect(mockBroadcastToProject).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          type: "agent.started",
+          taskId: "task-1",
+          phase: "coding",
+        })
+      );
       expect(timers.has("heartbeat")).toBe(true);
       expect(timers.has("inactivity")).toBe(true);
     });
@@ -110,10 +117,12 @@ describe("AgentLifecycleManager", () => {
 
     it("invokes onDone and cleans up when agent exits via onExit", async () => {
       let capturedOnExit: ((code: number | null) => void) | undefined;
-      mockInvokeCodingAgent.mockImplementation((_path: string, _config: unknown, options: { onExit?: (code: number | null) => void }) => {
-        capturedOnExit = options.onExit;
-        return { kill: vi.fn(), pid: 9999 };
-      });
+      mockInvokeCodingAgent.mockImplementation(
+        (_path: string, _config: unknown, options: { onExit?: (code: number | null) => void }) => {
+          capturedOnExit = options.onExit;
+          return { kill: vi.fn(), pid: 9999 };
+        }
+      );
 
       manager.run(baseParams, runState, timers);
       expect(baseParams.onDone).not.toHaveBeenCalled();
@@ -130,10 +139,12 @@ describe("AgentLifecycleManager", () => {
 
     it("appends output chunks to runState.outputLog", () => {
       let capturedOnOutput: ((chunk: string) => void) | undefined;
-      mockInvokeCodingAgent.mockImplementation((_path: string, _config: unknown, options: { onOutput?: (chunk: string) => void }) => {
-        capturedOnOutput = options.onOutput;
-        return { kill: vi.fn(), pid: 9999 };
-      });
+      mockInvokeCodingAgent.mockImplementation(
+        (_path: string, _config: unknown, options: { onOutput?: (chunk: string) => void }) => {
+          capturedOnOutput = options.onOutput;
+          return { kill: vi.fn(), pid: 9999 };
+        }
+      );
 
       manager.run(baseParams, runState, timers);
 
@@ -147,10 +158,12 @@ describe("AgentLifecycleManager", () => {
 
     it("does not call onDone twice when onExit is invoked multiple times", async () => {
       let capturedOnExit: ((code: number | null) => void) | undefined;
-      mockInvokeCodingAgent.mockImplementation((_path: string, _config: unknown, options: { onExit?: (code: number | null) => void }) => {
-        capturedOnExit = options.onExit;
-        return { kill: vi.fn(), pid: 9999 };
-      });
+      mockInvokeCodingAgent.mockImplementation(
+        (_path: string, _config: unknown, options: { onExit?: (code: number | null) => void }) => {
+          capturedOnExit = options.onExit;
+          return { kill: vi.fn(), pid: 9999 };
+        }
+      );
 
       manager.run(baseParams, runState, timers);
 

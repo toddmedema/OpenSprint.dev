@@ -102,7 +102,7 @@ describe("DependencyGraph", () => {
     expect(onPlanClick).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({ planId: "auth" }),
-      }),
+      })
     );
   });
 
@@ -192,9 +192,6 @@ describe("DependencyGraph", () => {
       expect(rects.length).toBeGreaterThanOrEqual(3);
     });
 
-    const nodeRects = Array.from(document.querySelectorAll("svg rect")).filter(
-      (r) => r.getAttribute("width") === "100",
-    );
     const textEls = document.querySelectorAll("svg text");
     expect(textEls.length).toBeGreaterThanOrEqual(3);
 
@@ -214,15 +211,30 @@ describe("DependencyGraph", () => {
       nodeDefaultStroke: "#4b5563",
     };
     document.documentElement.setAttribute("data-theme", "dark");
-    document.documentElement.style.setProperty("--color-graph-status-planning-fill", darkTokens.planningFill);
+    document.documentElement.style.setProperty(
+      "--color-graph-status-planning-fill",
+      darkTokens.planningFill
+    );
     document.documentElement.style.setProperty("--color-graph-status-planning-stroke", "#f59e0b");
-    document.documentElement.style.setProperty("--color-graph-status-building-fill", darkTokens.buildingFill);
+    document.documentElement.style.setProperty(
+      "--color-graph-status-building-fill",
+      darkTokens.buildingFill
+    );
     document.documentElement.style.setProperty("--color-graph-status-building-stroke", "#60a5fa");
-    document.documentElement.style.setProperty("--color-graph-status-complete-fill", darkTokens.completeFill);
+    document.documentElement.style.setProperty(
+      "--color-graph-status-complete-fill",
+      darkTokens.completeFill
+    );
     document.documentElement.style.setProperty("--color-graph-status-complete-stroke", "#34d399");
     document.documentElement.style.setProperty("--color-graph-text", darkTokens.text);
-    document.documentElement.style.setProperty("--color-graph-node-default-fill", darkTokens.nodeDefaultFill);
-    document.documentElement.style.setProperty("--color-graph-node-default-stroke", darkTokens.nodeDefaultStroke);
+    document.documentElement.style.setProperty(
+      "--color-graph-node-default-fill",
+      darkTokens.nodeDefaultFill
+    );
+    document.documentElement.style.setProperty(
+      "--color-graph-node-default-stroke",
+      darkTokens.nodeDefaultStroke
+    );
 
     const graphWithStatuses: PlanDependencyGraph = {
       plans: [

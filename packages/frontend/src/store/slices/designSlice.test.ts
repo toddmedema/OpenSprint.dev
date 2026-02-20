@@ -3,15 +3,9 @@ import { configureStore } from "@reduxjs/toolkit";
 import designReducer, {
   addUserMessage,
   setDesignError,
-  setPrdContent,
-  setPrdHistory,
   resetDesign,
   fetchDesignChat,
-  fetchPrd,
-  fetchPrdHistory,
   sendDesignMessage,
-  savePrdSection,
-  uploadPrdFile,
   type DesignState,
 } from "./designSlice";
 

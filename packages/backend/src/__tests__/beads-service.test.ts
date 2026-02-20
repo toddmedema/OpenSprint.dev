@@ -458,7 +458,7 @@ describe("BeadsService", () => {
         if (cmd.includes("sync --import-only")) {
           return { stdout: "", stderr: "" };
         }
-        if (cmd.includes("import -i") && cmd.includes("--orphan-handling skip")) {
+        if (cmd.includes("import -i") && cmd.includes("--orphan-handling allow")) {
           return { stdout: "", stderr: "" };
         }
         return { stdout: "[]", stderr: "" };
@@ -470,7 +470,7 @@ describe("BeadsService", () => {
       expect(execCalls.filter((c) => c.includes("list --all"))).toHaveLength(2);
     });
 
-    it("falls back to import --orphan-handling skip when sync fails", async () => {
+    it("falls back to import --orphan-handling allow when sync fails", async () => {
       const execCalls: string[] = [];
       let listCallCount = 0;
       mockExecImpl = async (cmd: string) => {
@@ -489,7 +489,7 @@ describe("BeadsService", () => {
             stderr: "parent issue does not exist",
           });
         }
-        if (cmd.includes("import -i") && cmd.includes("--orphan-handling skip")) {
+        if (cmd.includes("import -i") && cmd.includes("--orphan-handling allow")) {
           return { stdout: "", stderr: "" };
         }
         return { stdout: "[]", stderr: "" };
@@ -498,7 +498,7 @@ describe("BeadsService", () => {
       expect(result).toEqual([]);
       const syncCall = execCalls.find((c) => c.includes("sync --import-only"));
       const importCall = execCalls.find(
-        (c) => c.includes("import -i") && c.includes("--orphan-handling skip")
+        (c) => c.includes("import -i") && c.includes("--orphan-handling allow")
       );
       expect(syncCall).toBeDefined();
       expect(importCall).toBeDefined();
@@ -518,7 +518,7 @@ describe("BeadsService", () => {
         return { stdout: "[]", stderr: "" };
       };
       await expect(beads.listAll("/repo")).rejects.toThrow(
-        /bd sync --import-only|bd import -i .beads\/issues.jsonl --orphan-handling skip/
+        /bd sync --import-only|bd import -i .beads\/issues.jsonl --orphan-handling allow/
       );
     });
 
@@ -579,7 +579,7 @@ describe("BeadsService", () => {
         (c) =>
           c.includes("import -i") &&
           c.includes(".beads/issues.jsonl") &&
-          c.includes("--orphan-handling skip")
+          c.includes("--orphan-handling allow")
       );
       const exportIdx = execCalls.findIndex((c) => c.includes("export -o"));
       expect(importIdx).toBeGreaterThanOrEqual(0);

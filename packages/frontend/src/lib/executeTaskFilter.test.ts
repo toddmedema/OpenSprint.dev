@@ -3,7 +3,6 @@ import {
   matchesStatusFilter,
   matchesSearchQuery,
   filterTasksByStatusAndSearch,
-  type StatusFilter,
 } from "./executeTaskFilter";
 import type { Task } from "@opensprint/shared";
 
@@ -85,7 +84,13 @@ describe("executeTaskFilter", () => {
     const tasks: Task[] = [
       { ...baseTask, id: "t1", title: "Login task", kanbanColumn: "done" as const },
       { ...baseTask, id: "t2", title: "Logout task", kanbanColumn: "ready" as const },
-      { ...baseTask, id: "t3", title: "Fix password reset", description: "Reset flow", kanbanColumn: "ready" as const },
+      {
+        ...baseTask,
+        id: "t3",
+        title: "Fix password reset",
+        description: "Reset flow",
+        kanbanColumn: "ready" as const,
+      },
     ];
 
     it("returns all tasks when status=all and empty search", () => {

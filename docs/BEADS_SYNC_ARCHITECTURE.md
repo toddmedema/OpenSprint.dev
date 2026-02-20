@@ -33,7 +33,7 @@ The JSONL can be updated **after** the first sync by:
 In `syncImport()`:
 
 - Primary `bd sync --import-only` is tried; on failure, it catches and logs
-- Fallback `bd import -i .beads/issues.jsonl --orphan-handling skip` is tried; on failure, it also catches and logs
+- Fallback `bd import -i .beads/issues.jsonl --orphan-handling allow` is tried; on failure, it also catches and logs
 - Neither path throws
 
 Result: when **both** commands fail, `syncImport` returns without fixing anything. The caller retries the original command, which fails again with the same stale error. The user sees “failed after sync retry”, but the sync never actually succeeded.
@@ -61,7 +61,7 @@ Effects:
 
 ### Pillar 2: `syncImport` throws on total failure
 
-If both `sync --import-only` and `import --orphan-handling skip` fail:
+If both `sync --import-only` and `import --orphan-handling allow` fail:
 
 - Throw `AppError` with `BEADS_SYNC_FAILED` and clear instructions
 - Do not silently continue

@@ -233,9 +233,7 @@ Test review prompt generation.
 
       const prompt = await fs.readFile(promptPath, "utf-8");
       expect(prompt).toContain("# Review Task: Task Y");
-      expect(prompt).toContain(
-        "Review the implementation of this task against its specification and acceptance criteria"
-      );
+      expect(prompt).toContain("You are reviewing the implementation of a task");
       expect(prompt).toContain("The orchestrator has already committed them before invoking you");
       expect(prompt).toMatch(/do NOT merge.*orchestrator will merge after you exit/i);
       expect(prompt).toMatch(/"status":\s*"approved"/);

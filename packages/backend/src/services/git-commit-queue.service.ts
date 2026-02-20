@@ -271,6 +271,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
         await this.branchManager.ensureOnMain(repoPath);
         const msg = `merge: ${job.branchName} — ${job.taskTitle}`;
         await this.branchManager.mergeToMain(repoPath, job.branchName, msg);
+        await this.beads.syncFromJsonl(repoPath);
         break;
       }
     }

@@ -191,7 +191,8 @@ export class BeadsService {
   /**
    * Import JSONL into the database to fix staleness (e.g. after git pull).
    * Tries `bd sync --import-only` first (beads-recommended for "Database out of sync").
-   * Falls back to `bd import --orphan-handling skip` when sync fails (e.g. orphan/missing-parent).
+   * Falls back to `bd import --orphan-handling allow` so orphan issues (children whose
+   * parent was deleted or not yet imported) are still ingested rather than silently dropped.
    * Throws if both fail — no silent continuation with a still-stale DB.
    */
   private async syncImport(repoPath: string): Promise<void> {
@@ -212,9 +213,10 @@ export class BeadsService {
       log.warn("sync --import-only failed, trying import", { repoPath, err: lastError });
     }
 
-    // 2. Fallback: import with orphan-handling skip (handles missing-parent edge cases)
+    // 2. Fallback: import with --orphan-handling allow so child issues whose parent
+    //    was deleted or never exported are still imported (prevents stale-DB loops).
     try {
-      await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${jsonlPath}" --orphan-handling skip`, {
+      await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${jsonlPath}" --orphan-handling allow`, {
         cwd: repoPath,
         timeout: 30_000,
         maxBuffer: MAX_BUFFER_BYTES,
@@ -224,11 +226,11 @@ export class BeadsService {
       const e = err as { stderr?: string; message?: string };
       const importError = e.stderr ?? e.message ?? String(err);
       const manualFix =
-        " Run in the project directory: bd sync --import-only (or bd import -i .beads/issues.jsonl --orphan-handling skip)";
+        " Run in the project directory: bd sync --import-only (or bd import -i .beads/issues.jsonl --orphan-handling allow)";
       throw new AppError(
         502,
         ErrorCodes.BEADS_SYNC_FAILED,
-        `Beads database sync failed. Both sync --import-only and import --orphan-handling skip failed.${manualFix}\nLast error: ${importError}`,
+        `Beads database sync failed. Both sync --import-only and import --orphan-handling allow failed.${manualFix}\nLast error: ${importError}`,
         {
           syncError: lastError,
           importError,
@@ -290,7 +292,7 @@ export class BeadsService {
    * Execute a bd command in the context of a project directory.
    * Ensures daemon is running (with stop-before-start to prevent accumulation)
    * then runs the command with --no-daemon for direct storage access.
-   * Auto-recovers from stale-database errors by running import --orphan-handling skip and retrying once.
+   * Auto-recovers from stale-database errors by running sync import and retrying once.
    */
   private async exec(
     repoPath: string,
@@ -349,7 +351,7 @@ export class BeadsService {
           const retryErr = retryError as { stderr?: string; stdout?: string; message: string };
           const retryStderr = retryErr.stderr || retryErr.stdout || retryErr.message;
           const manualFix =
-            " To fix manually, run in the project directory: bd sync --import-only (or bd import -i .beads/issues.jsonl --orphan-handling skip)";
+            " To fix manually, run in the project directory: bd sync --import-only (or bd import -i .beads/issues.jsonl --orphan-handling allow)";
           throw new AppError(
             502,
             ErrorCodes.BEADS_COMMAND_FAILED,
@@ -487,8 +489,11 @@ export class BeadsService {
    * the commit queue indefinitely.
    */
   async export(repoPath: string, outputPath: string): Promise<void> {
+    // Pre-import: ingest any issues added externally (worktrees, git merges).
+    // Use --orphan-handling allow so child issues whose parent was deleted are
+    // still imported — using 'skip' previously caused a stale-DB export loop.
     try {
-      await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${outputPath}" --orphan-handling skip`, {
+      await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${outputPath}" --orphan-handling allow`, {
         cwd: repoPath,
         timeout: 30_000,
         maxBuffer: MAX_BUFFER_BYTES,
@@ -501,9 +506,22 @@ export class BeadsService {
     try {
       await this.exec(repoPath, `export -o ${outputPath}`);
     } catch (err: unknown) {
-      const e = err as { message?: string };
-      log.warn("export failed, retrying with --force", { err: e.message });
-      await this.exec(repoPath, `export -o ${outputPath} --force`);
+      // Normal export failed — try one more full import with allow before forcing.
+      log.warn("export failed, running full import before force retry", {
+        err: (err as { message?: string }).message,
+      });
+      try {
+        const jsonlPath = path.join(repoPath, ".beads/issues.jsonl");
+        await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${jsonlPath}" --orphan-handling allow`, {
+          cwd: repoPath,
+          timeout: 30_000,
+          maxBuffer: MAX_BUFFER_BYTES,
+        });
+        await this.exec(repoPath, `export -o ${outputPath}`);
+      } catch {
+        log.warn("export still failed after re-import, forcing to unblock commit queue");
+        await this.exec(repoPath, `export -o ${outputPath} --force`);
+      }
     }
   }
 
@@ -770,6 +788,16 @@ export class BeadsService {
   /** Check whether an issue has a specific label */
   hasLabel(issue: BeadsIssue, label: string): boolean {
     return Array.isArray(issue.labels) && issue.labels.includes(label);
+  }
+
+  /**
+   * Force a fresh import from JSONL into the database.
+   * Call after operations that modify the JSONL outside of beads (e.g. worktree merges,
+   * git pulls) so the DB includes any externally-added issues before the next export.
+   */
+  async syncFromJsonl(repoPath: string): Promise<void> {
+    this.invalidateSyncState(repoPath);
+    await this.syncImport(repoPath);
   }
 
   /** Sync beads with git */

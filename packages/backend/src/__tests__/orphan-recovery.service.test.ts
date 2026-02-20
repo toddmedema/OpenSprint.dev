@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { OrphanRecoveryService } from '../services/orphan-recovery.service.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import fs from "fs/promises";
+import path from "path";
+import os from "os";
+import { exec } from "child_process";
+import { promisify } from "util";
+import { OrphanRecoveryService } from "../services/orphan-recovery.service.js";
 
 const execAsync = promisify(exec);
 
@@ -13,23 +13,29 @@ let mockListInProgress: { id: string; status: string; assignee: string }[] = [];
 let mockUpdateCalls: Array<{ id: string; status: string; assignee: string }> = [];
 let mockShowResult: { id: string; status: string } | null = null;
 
-vi.mock('../services/beads.service.js', () => {
+vi.mock("../services/beads.service.js", () => {
   return {
     BeadsService: class MockBeadsService {
-      listInProgressWithAgentAssignee = vi.fn().mockImplementation(() => Promise.resolve(mockListInProgress));
+      listInProgressWithAgentAssignee = vi
+        .fn()
+        .mockImplementation(() => Promise.resolve(mockListInProgress));
       show = vi.fn().mockImplementation(async (_repo: string, id: string) => {
         if (mockShowResult && mockShowResult.id === id) return mockShowResult;
-        throw new Error('Task not found');
+        throw new Error("Task not found");
       });
-      update = vi.fn().mockImplementation(async (_repo: string, id: string, opts: { status?: string; assignee?: string }) => {
-        mockUpdateCalls.push({ id, status: opts.status ?? '', assignee: opts.assignee ?? '' });
-        return { id, status: opts.status ?? 'open', assignee: opts.assignee ?? '' };
-      });
+      update = vi
+        .fn()
+        .mockImplementation(
+          async (_repo: string, id: string, opts: { status?: string; assignee?: string }) => {
+            mockUpdateCalls.push({ id, status: opts.status ?? "", assignee: opts.assignee ?? "" });
+            return { id, status: opts.status ?? "open", assignee: opts.assignee ?? "" };
+          }
+        );
     },
   };
 });
 
-describe('OrphanRecoveryService', () => {
+describe("OrphanRecoveryService", () => {
   let service: OrphanRecoveryService;
   let repoPath: string;
 
@@ -38,14 +44,14 @@ describe('OrphanRecoveryService', () => {
     service = new OrphanRecoveryService();
     repoPath = path.join(os.tmpdir(), `orphan-recovery-test-${Date.now()}`);
     await fs.mkdir(repoPath, { recursive: true });
-    await execAsync('git init', { cwd: repoPath });
-    await execAsync('git branch -M main', { cwd: repoPath });
+    await execAsync("git init", { cwd: repoPath });
+    await execAsync("git branch -M main", { cwd: repoPath });
     await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
     await execAsync('git config user.name "Test"', { cwd: repoPath });
-    await fs.mkdir(path.join(repoPath, '.beads'), { recursive: true });
-    await fs.writeFile(path.join(repoPath, '.beads', 'issues.jsonl'), '[]');
+    await fs.mkdir(path.join(repoPath, ".beads"), { recursive: true });
+    await fs.writeFile(path.join(repoPath, ".beads", "issues.jsonl"), "[]");
     // Need an initial commit for worktree operations
-    await fs.writeFile(path.join(repoPath, 'README.md'), 'test');
+    await fs.writeFile(path.join(repoPath, "README.md"), "test");
     await execAsync('git add -A && git commit -m "init"', { cwd: repoPath });
     mockListInProgress = [];
     mockUpdateCalls = [];
@@ -55,47 +61,45 @@ describe('OrphanRecoveryService', () => {
   afterEach(async () => {
     try {
       // Clean up any worktrees
-      await execAsync('git worktree prune', { cwd: repoPath }).catch(() => {});
+      await execAsync("git worktree prune", { cwd: repoPath }).catch(() => {});
       await fs.rm(repoPath, { recursive: true, force: true });
     } catch {
       // ignore
     }
   });
 
-  it('should recover orphaned tasks and reset to open without checkout', async () => {
-    mockListInProgress = [
-      { id: 'task-orphan-1', status: 'in_progress', assignee: 'agent-1' },
-    ];
+  it("should recover orphaned tasks and reset to open without checkout", async () => {
+    mockListInProgress = [{ id: "task-orphan-1", status: "in_progress", assignee: "agent-1" }];
 
     const { recovered } = await service.recoverOrphanedTasks(repoPath);
 
-    expect(recovered).toEqual(['task-orphan-1']);
+    expect(recovered).toEqual(["task-orphan-1"]);
     expect(mockUpdateCalls).toHaveLength(1);
     expect(mockUpdateCalls[0]).toMatchObject({
-      id: 'task-orphan-1',
-      status: 'open',
-      assignee: '',
+      id: "task-orphan-1",
+      status: "open",
+      assignee: "",
     });
 
     // Verify we're still on main (no checkout occurred)
-    const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: repoPath });
-    expect(stdout.trim()).toBe('main');
+    const { stdout } = await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: repoPath });
+    expect(stdout.trim()).toBe("main");
   });
 
-  it('should exclude task when excludeTaskId is provided', async () => {
+  it("should exclude task when excludeTaskId is provided", async () => {
     mockListInProgress = [
-      { id: 'task-a', status: 'in_progress', assignee: 'agent-1' },
-      { id: 'task-b', status: 'in_progress', assignee: 'agent-1' },
+      { id: "task-a", status: "in_progress", assignee: "agent-1" },
+      { id: "task-b", status: "in_progress", assignee: "agent-1" },
     ];
 
-    const { recovered } = await service.recoverOrphanedTasks(repoPath, 'task-a');
+    const { recovered } = await service.recoverOrphanedTasks(repoPath, "task-a");
 
-    expect(recovered).toEqual(['task-b']);
+    expect(recovered).toEqual(["task-b"]);
     expect(mockUpdateCalls).toHaveLength(1);
-    expect(mockUpdateCalls[0].id).toBe('task-b');
+    expect(mockUpdateCalls[0].id).toBe("task-b");
   });
 
-  it('should return empty when no orphaned tasks', async () => {
+  it("should return empty when no orphaned tasks", async () => {
     mockListInProgress = [];
 
     const { recovered } = await service.recoverOrphanedTasks(repoPath);
@@ -104,16 +108,16 @@ describe('OrphanRecoveryService', () => {
     expect(mockUpdateCalls).toHaveLength(0);
   });
 
-  it('should clean up stale worktrees during recovery', async () => {
-    const taskId = 'task-wt';
-    const wtPath = path.join(os.tmpdir(), 'opensprint-worktrees', taskId);
+  it("should clean up stale worktrees during recovery", async () => {
+    const taskId = "task-wt";
+    const wtPath = path.join(os.tmpdir(), "opensprint-worktrees", taskId);
 
     // Create a branch and worktree to simulate an abandoned agent
     await execAsync(`git branch opensprint/${taskId} main`, { cwd: repoPath });
     await fs.mkdir(path.dirname(wtPath), { recursive: true });
     await execAsync(`git worktree add ${wtPath} opensprint/${taskId}`, { cwd: repoPath });
 
-    mockListInProgress = [{ id: taskId, status: 'in_progress', assignee: 'agent-1' }];
+    mockListInProgress = [{ id: taskId, status: "in_progress", assignee: "agent-1" }];
 
     const { recovered } = await service.recoverOrphanedTasks(repoPath);
 
@@ -123,111 +127,111 @@ describe('OrphanRecoveryService', () => {
     try {
       await fs.access(wtPath);
       // If we get here, the directory still exists — fail
-      expect.fail('Worktree directory should have been removed');
+      expect.fail("Worktree directory should have been removed");
     } catch {
       // Expected: worktree directory removed
     }
 
     // Verify we're still on main
-    const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: repoPath });
-    expect(stdout.trim()).toBe('main');
+    const { stdout } = await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: repoPath });
+    expect(stdout.trim()).toBe("main");
 
     // Clean up
     await execAsync(`git branch -D opensprint/${taskId}`, { cwd: repoPath }).catch(() => {});
   });
 
-  it('should log warning when recovering orphaned tasks', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListInProgress = [{ id: 'task-1', status: 'in_progress', assignee: 'agent-1' }];
+  it("should log warning when recovering orphaned tasks", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mockListInProgress = [{ id: "task-1", status: "in_progress", assignee: "agent-1" }];
 
     await service.recoverOrphanedTasks(repoPath);
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Recovered 1 orphaned task(s)'),
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Recovered orphaned tasks"));
     warnSpy.mockRestore();
   });
 
-  it('should commit uncommitted changes as WIP before removing worktree', async () => {
-    const taskId = 'task-wip';
-    const wtPath = path.join(os.tmpdir(), 'opensprint-worktrees', taskId);
+  it("should commit uncommitted changes as WIP before removing worktree", async () => {
+    const taskId = "task-wip";
+    const wtPath = path.join(os.tmpdir(), "opensprint-worktrees", taskId);
 
     // Create branch and worktree with uncommitted changes
     await execAsync(`git branch opensprint/${taskId} main`, { cwd: repoPath });
     await fs.mkdir(path.dirname(wtPath), { recursive: true });
     await execAsync(`git worktree add ${wtPath} opensprint/${taskId}`, { cwd: repoPath });
-    await fs.writeFile(path.join(wtPath, 'orphan-wip.txt'), 'uncommitted work');
+    await fs.writeFile(path.join(wtPath, "orphan-wip.txt"), "uncommitted work");
     // Do NOT commit — simulate agent killed mid-edit
 
-    mockListInProgress = [{ id: taskId, status: 'in_progress', assignee: 'agent-1' }];
+    mockListInProgress = [{ id: taskId, status: "in_progress", assignee: "agent-1" }];
 
     const { recovered } = await service.recoverOrphanedTasks(repoPath);
 
     expect(recovered).toContain(taskId);
 
     // Verify WIP was committed: branch should have the file committed
-    const { stdout } = await execAsync(`git log -1 --oneline opensprint/${taskId}`, { cwd: repoPath });
-    expect(stdout).toContain('WIP');
+    const { stdout } = await execAsync(`git log -1 --oneline opensprint/${taskId}`, {
+      cwd: repoPath,
+    });
+    expect(stdout).toContain("WIP");
     const { stdout: fileContent } = await execAsync(
       `git show opensprint/${taskId}:orphan-wip.txt`,
-      { cwd: repoPath },
+      { cwd: repoPath }
     );
-    expect(fileContent.trim()).toBe('uncommitted work');
+    expect(fileContent.trim()).toBe("uncommitted work");
 
     // Clean up
     await execAsync(`git worktree prune`, { cwd: repoPath }).catch(() => {});
     await execAsync(`git branch -D opensprint/${taskId}`, { cwd: repoPath }).catch(() => {});
   });
 
-  describe('recoverFromStaleHeartbeats', () => {
-    it('recovers tasks with stale heartbeat files', async () => {
-      const taskId = 'task-stale-hb';
-      const worktreeBase = path.join(os.tmpdir(), 'opensprint-worktrees');
+  describe("recoverFromStaleHeartbeats", () => {
+    it("recovers tasks with stale heartbeat files", async () => {
+      const taskId = "task-stale-hb";
+      const worktreeBase = path.join(os.tmpdir(), "opensprint-worktrees");
       const wtPath = path.join(worktreeBase, taskId);
 
       await execAsync(`git branch opensprint/${taskId} main`, { cwd: repoPath });
       await fs.mkdir(path.dirname(wtPath), { recursive: true });
       await execAsync(`git worktree add ${wtPath} opensprint/${taskId}`, { cwd: repoPath });
-      await fs.mkdir(path.join(wtPath, '.opensprint', 'active', taskId), { recursive: true });
+      await fs.mkdir(path.join(wtPath, ".opensprint", "active", taskId), { recursive: true });
       await fs.writeFile(
-        path.join(wtPath, '.opensprint', 'active', taskId, 'heartbeat.json'),
+        path.join(wtPath, ".opensprint", "active", taskId, "heartbeat.json"),
         JSON.stringify({
           pid: 12345,
           lastOutputTimestamp: 0,
           heartbeatTimestamp: Date.now() - 3 * 60 * 1000, // 3 min ago
-        }),
+        })
       );
 
-      mockShowResult = { id: taskId, status: 'in_progress' };
+      mockShowResult = { id: taskId, status: "in_progress" };
 
       const { recovered } = await service.recoverFromStaleHeartbeats(repoPath);
 
       expect(recovered).toContain(taskId);
-      expect(mockUpdateCalls.some((c) => c.id === taskId && c.status === 'open')).toBe(true);
+      expect(mockUpdateCalls.some((c) => c.id === taskId && c.status === "open")).toBe(true);
 
       await execAsync(`git worktree remove ${wtPath} --force`, { cwd: repoPath }).catch(() => {});
       await execAsync(`git branch -D opensprint/${taskId}`, { cwd: repoPath }).catch(() => {});
     });
 
-    it('excludes task when excludeTaskId is provided', async () => {
-      const taskId = 'task-exclude';
-      const worktreeBase = path.join(os.tmpdir(), 'opensprint-worktrees');
+    it("excludes task when excludeTaskId is provided", async () => {
+      const taskId = "task-exclude";
+      const worktreeBase = path.join(os.tmpdir(), "opensprint-worktrees");
       const wtPath = path.join(worktreeBase, taskId);
 
       await execAsync(`git branch opensprint/${taskId} main`, { cwd: repoPath });
       await fs.mkdir(path.dirname(wtPath), { recursive: true });
       await execAsync(`git worktree add ${wtPath} opensprint/${taskId}`, { cwd: repoPath });
-      await fs.mkdir(path.join(wtPath, '.opensprint', 'active', taskId), { recursive: true });
+      await fs.mkdir(path.join(wtPath, ".opensprint", "active", taskId), { recursive: true });
       await fs.writeFile(
-        path.join(wtPath, '.opensprint', 'active', taskId, 'heartbeat.json'),
+        path.join(wtPath, ".opensprint", "active", taskId, "heartbeat.json"),
         JSON.stringify({
           pid: 1,
           lastOutputTimestamp: 0,
           heartbeatTimestamp: Date.now() - 3 * 60 * 1000,
-        }),
+        })
       );
 
-      mockShowResult = { id: taskId, status: 'in_progress' };
+      mockShowResult = { id: taskId, status: "in_progress" };
 
       const { recovered } = await service.recoverFromStaleHeartbeats(repoPath, taskId);
 

@@ -3,9 +3,13 @@ import request from "supertest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
+import { exec } from "child_process";
+import { promisify } from "util";
 import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG } from "@opensprint/shared";
+
+const execAsync = promisify(exec);
 
 describe("Deliver API (phase routes for deployment records)", () => {
   let app: ReturnType<typeof createApp>;
@@ -25,8 +29,9 @@ describe("Deliver API (phase routes for deployment records)", () => {
     await fs.mkdir(repoPath, { recursive: true });
     await fs.writeFile(
       path.join(repoPath, "package.json"),
-      JSON.stringify({ name: "test", scripts: { test: "echo ok" } }),
+      JSON.stringify({ name: "test", scripts: { test: "echo ok" } })
     );
+    await execAsync("git init && git add -A && git commit -m init", { cwd: repoPath });
     const project = await projectService.createProject({
       name: "Deploy Test Project",
       repoPath,
@@ -50,9 +55,7 @@ describe("Deliver API (phase routes for deployment records)", () => {
 
   describe("GET /projects/:projectId/deliver/status", () => {
     it("should return deliver status for existing project", async () => {
-      const res = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/deliver/status`,
-      );
+      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/deliver/status`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
@@ -63,9 +66,7 @@ describe("Deliver API (phase routes for deployment records)", () => {
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app).get(
-        `${API_PREFIX}/projects/nonexistent-id/deliver/status`,
-      );
+      const res = await request(app).get(`${API_PREFIX}/projects/nonexistent-id/deliver/status`);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -75,18 +76,14 @@ describe("Deliver API (phase routes for deployment records)", () => {
 
   describe("GET /projects/:projectId/deliver/history", () => {
     it("should return empty history for new project", async () => {
-      const res = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/deliver/history`,
-      );
+      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/deliver/history`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app).get(
-        `${API_PREFIX}/projects/nonexistent-id/deliver/history`,
-      );
+      const res = await request(app).get(`${API_PREFIX}/projects/nonexistent-id/deliver/history`);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -95,8 +92,7 @@ describe("Deliver API (phase routes for deployment records)", () => {
 
   describe("POST /projects/:projectId/deliver", () => {
     it("should accept deploy and return deployId", async () => {
-      const res = await request(app)
-        .post(`${API_PREFIX}/projects/${projectId}/deliver`);
+      const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
 
       expect(res.status).toBe(202);
       expect(res.body.data).toBeDefined();
@@ -105,8 +101,7 @@ describe("Deliver API (phase routes for deployment records)", () => {
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app)
-        .post(`${API_PREFIX}/projects/nonexistent-id/deliver`);
+      const res = await request(app).post(`${API_PREFIX}/projects/nonexistent-id/deliver`);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -193,7 +188,7 @@ describe("Deliver API (phase routes for deployment records)", () => {
       await new Promise((r) => setTimeout(r, 500));
 
       const historyRes = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=1`,
+        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=1`
       );
       expect(historyRes.status).toBe(200);
       expect(historyRes.body.data.length).toBeGreaterThan(0);
@@ -223,10 +218,10 @@ describe("Deliver API (phase routes for deployment records)", () => {
       expect(res.status).toBe(202);
       expect(res.body.data.deployId).toBeDefined();
 
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 2000));
 
       const historyRes = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=1`,
+        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=1`
       );
       const record = historyRes.body.data[0];
       expect(record.target).toBe("production");
@@ -236,19 +231,19 @@ describe("Deliver API (phase routes for deployment records)", () => {
   describe("POST /projects/:projectId/deliver/:deployId/rollback", () => {
     it("should mark original deploy as rolled_back on success", async () => {
       await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 2000));
 
       await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 2000));
 
       const historyBefore = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=5`,
+        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=5`
       );
       const deployToRestore = historyBefore.body.data[1];
       const currentDeploy = historyBefore.body.data[0];
 
       const rollbackRes = await request(app).post(
-        `${API_PREFIX}/projects/${projectId}/deliver/${deployToRestore.id}/rollback`,
+        `${API_PREFIX}/projects/${projectId}/deliver/${deployToRestore.id}/rollback`
       );
       expect(rollbackRes.status).toBe(202);
       const rollbackDeployId = rollbackRes.body.data.deployId;
@@ -256,7 +251,7 @@ describe("Deliver API (phase routes for deployment records)", () => {
       await new Promise((r) => setTimeout(r, 500));
 
       const historyRes = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=5`,
+        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=5`
       );
       const records = historyRes.body.data;
 
@@ -265,7 +260,7 @@ describe("Deliver API (phase routes for deployment records)", () => {
       expect(rollbackRecord.status).toBe("success");
 
       const rolledBackRecord = records.find(
-        (r: { id: string; rolledBackBy?: string }) => r.id === currentDeploy.id,
+        (r: { id: string; rolledBackBy?: string }) => r.id === currentDeploy.id
       );
       expect(rolledBackRecord).toBeDefined();
       expect(rolledBackRecord.status).toBe("rolled_back");

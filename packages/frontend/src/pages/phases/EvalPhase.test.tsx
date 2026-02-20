@@ -9,7 +9,7 @@ import websocketReducer from "../../store/slices/websocketSlice";
 import sketchReducer from "../../store/slices/sketchSlice";
 import planReducer from "../../store/slices/planSlice";
 import executeReducer from "../../store/slices/executeSlice";
-import evalReducer, { submitFeedback } from "../../store/slices/evalSlice";
+import evalReducer from "../../store/slices/evalSlice";
 import deliverReducer from "../../store/slices/deliverSlice";
 import notificationReducer from "../../store/slices/notificationSlice";
 
@@ -189,7 +189,10 @@ describe("EvalPhase feedback form", () => {
     const { api } = await import("../../api/client");
     let resolveSubmit: (value: unknown) => void;
     vi.mocked(api.feedback.submit).mockImplementation(
-      () => new Promise((r) => { resolveSubmit = r; })
+      () =>
+        new Promise((r) => {
+          resolveSubmit = r;
+        })
     );
 
     const store = createStore();
