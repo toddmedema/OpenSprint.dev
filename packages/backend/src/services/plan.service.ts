@@ -1420,6 +1420,115 @@ ${planNew}`;
   }
 
   /**
+   * Generate a plan from a freeform feature description using the Planner agent.
+   * Invokes the planning agent with a specialized prompt, materializes the result
+   * as a plan markdown + beads epic + gating task + child tasks, then returns the Plan.
+   */
+  async generatePlanFromDescription(
+    projectId: string,
+    description: string
+  ): Promise<Plan> {
+    const repoPath = await this.getRepoPath(projectId);
+    const settings = await this.projectService.getSettings(projectId);
+    const prdContext = await this.buildPrdContext(projectId);
+
+    const systemPrompt = `You are an AI planning assistant for OpenSprint. The user will describe a feature idea in freeform text. Your job is to produce a complete, implementation-ready feature plan.
+
+Plan markdown MUST follow this structure (PRD §7.2.3). Each plan's content must include these sections in order:
+${PLAN_MARKDOWN_SECTIONS.map((s) => `- ## ${s}`).join("\n")}
+
+Template structure: ${PLAN_TEMPLATE_STRUCTURE}
+
+Tasks should be atomic, implementable in one agent session, with clear acceptance criteria in the description.
+
+MOCKUPS: Include at least one mockup (ASCII wireframe or text diagram) illustrating key UI for the feature.
+
+Respond with ONLY valid JSON (you may wrap in a markdown json code block):
+{
+  "title": "Feature Name",
+  "content": "# Feature Name\\n\\n## Overview\\n...full markdown...",
+  "complexity": "medium",
+  "mockups": [{"title": "Main Screen", "content": "ASCII wireframe"}],
+  "tasks": [
+    {"title": "Task title", "description": "Detailed spec", "priority": 1, "dependsOn": []}
+  ]
+}
+
+complexity: low, medium, high, or very_high. priority: 0=highest. dependsOn: array of other task titles this task depends on.`;
+
+    const prompt = `Generate a complete feature plan for the following idea.\n\n## Feature Idea\n\n${description}\n\n## PRD Context\n\n${prdContext}`;
+
+    const agentId = `plan-generate-${projectId}-${Date.now()}`;
+
+    const response = await agentService.invokePlanningAgent({
+      config: settings.planningAgent,
+      messages: [{ role: "user", content: prompt }],
+      systemPrompt,
+      cwd: repoPath,
+      tracking: {
+        id: agentId,
+        projectId,
+        phase: "plan",
+        role: "planner",
+        label: "Generate plan from description",
+      },
+    });
+
+    const parsed = extractJsonFromAgentResponse<{
+      title?: string;
+      content?: string;
+      complexity?: string;
+      mockups?: Array<{ title: string; content: string }>;
+      tasks?: Array<{
+        title: string;
+        description: string;
+        priority?: number;
+        dependsOn?: string[];
+      }>;
+    }>(response.content, "title");
+
+    if (!parsed || !parsed.title) {
+      throw new AppError(
+        400,
+        ErrorCodes.DECOMPOSE_PARSE_FAILED,
+        "Planning agent did not return a valid plan. Response: " +
+          response.content.slice(0, 500),
+        { responsePreview: response.content.slice(0, 500) }
+      );
+    }
+
+    const plan = await this.createPlan(projectId, {
+      title: parsed.title,
+      content: parsed.content || `# ${parsed.title}\n\n${description}`,
+      complexity: parsed.complexity as PlanComplexity | undefined,
+      mockups: (parsed.mockups ?? []).map((m) => ({
+        title: m.title || "Mockup",
+        content: m.content || "",
+      })),
+      tasks: (parsed.tasks ?? []).map((t) => ({
+        title: t.title || "Untitled task",
+        description: t.description || "",
+        priority: Math.min(4, Math.max(0, t.priority ?? 2)),
+        dependsOn: t.dependsOn ?? [],
+      })),
+    });
+
+    // Auto-review against codebase
+    try {
+      await this.autoReviewPlanAgainstRepo(projectId, [plan]);
+    } catch (err) {
+      log.error("Auto-review after generate failed", { err });
+    }
+
+    broadcastToProject(projectId, {
+      type: "plan.generated",
+      planId: plan.metadata.planId,
+    });
+
+    return plan;
+  }
+
+  /**
    * AI-assisted decomposition (suggest only): Planning agent analyzes PRD and returns suggested plans.
    * Does NOT create plans or beads — returns JSON for user to accept/modify. PRD §7.2.2
    */

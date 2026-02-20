@@ -17,6 +17,8 @@ export interface PlanState {
   chatMessages: Record<string, Message[]>;
   loading: boolean;
   decomposing: boolean;
+  /** Whether a plan is currently being generated from a feature description */
+  generating: boolean;
   /** Plan status for Dream CTA (plan/replan/none) */
   planStatus: PlanStatusResponse | null;
   /** Plan ID currently being executed (Execute!) — for loading state */
@@ -37,6 +39,7 @@ const initialState: PlanState = {
   chatMessages: {},
   loading: false,
   decomposing: false,
+  generating: false,
   planStatus: null,
   executingPlanId: null,
   reExecutingPlanId: null,
@@ -65,6 +68,13 @@ export const fetchPlans = createAsyncThunk("plan/fetchPlans", async (arg: FetchP
 export const decomposePlans = createAsyncThunk("plan/decompose", async (projectId: string) => {
   await api.plans.decompose(projectId);
 });
+
+export const generatePlan = createAsyncThunk(
+  "plan/generate",
+  async ({ projectId, description }: { projectId: string; description: string }) => {
+    return api.plans.generate(projectId, { description });
+  }
+);
 
 export const executePlan = createAsyncThunk(
   "plan/execute",
@@ -209,6 +219,19 @@ const planSlice = createSlice({
       .addCase(decomposePlans.rejected, (state, action) => {
         state.decomposing = false;
         state.error = action.error.message || "Failed to decompose PRD";
+      })
+      // generatePlan
+      .addCase(generatePlan.pending, (state) => {
+        state.generating = true;
+        state.error = null;
+      })
+      .addCase(generatePlan.fulfilled, (state, action) => {
+        state.generating = false;
+        state.plans.push(action.payload);
+      })
+      .addCase(generatePlan.rejected, (state, action) => {
+        state.generating = false;
+        state.error = action.error.message || "Failed to generate plan";
       })
       // executePlan / reExecutePlan
       .addCase(executePlan.pending, (state, action) => {

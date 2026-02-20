@@ -27,6 +27,22 @@ plansRouter.post("/decompose", async (req: Request<ProjectParams>, res, next) =>
   }
 });
 
+// POST /projects/:projectId/plans/generate — AI generate a plan from freeform feature description
+plansRouter.post("/generate", async (req: Request<ProjectParams>, res, next) => {
+  try {
+    const { description } = req.body as { description?: string };
+    if (!description?.trim()) {
+      res.status(400).json({ error: { code: "VALIDATION", message: "description is required" } });
+      return;
+    }
+    const plan = await planService.generatePlanFromDescription(req.params.projectId, description.trim());
+    const body: ApiResponse<Plan> = { data: plan };
+    res.status(201).json(body);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /projects/:projectId/plans/suggest — AI suggest plans from PRD (no creation; for user to accept/modify)
 plansRouter.post("/suggest", async (req: Request<ProjectParams>, res, next) => {
   try {

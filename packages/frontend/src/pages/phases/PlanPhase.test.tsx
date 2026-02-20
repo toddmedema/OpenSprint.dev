@@ -8,6 +8,7 @@ import { PlanPhase, DEPENDENCY_GRAPH_EXPANDED_KEY } from "./PlanPhase";
 import projectReducer from "../../store/slices/projectSlice";
 import planReducer from "../../store/slices/planSlice";
 import executeReducer from "../../store/slices/executeSlice";
+import notificationReducer from "../../store/slices/notificationSlice";
 
 beforeAll(() => {
   global.ResizeObserver = class {
@@ -74,6 +75,20 @@ const mockPlansCreate = vi.fn().mockResolvedValue({
   doneTaskCount: 0,
   dependencyCount: 0,
 });
+const mockGenerate = vi.fn().mockResolvedValue({
+  metadata: {
+    planId: "generated-feature",
+    beadEpicId: "e2",
+    gateTaskId: "e2.0",
+    complexity: "medium",
+    shippedAt: null,
+  },
+  content: "# Generated Feature\n\nContent.",
+  status: "planning",
+  taskCount: 2,
+  doneTaskCount: 0,
+  dependencyCount: 0,
+});
 vi.mock("../../api/client", () => ({
   api: {
     plans: {
@@ -85,6 +100,7 @@ vi.mock("../../api/client", () => ({
       getCrossEpicDependencies: (...args: unknown[]) => mockGetCrossEpicDependencies(...args),
       execute: (...args: unknown[]) => mockExecute(...args),
       reExecute: (...args: unknown[]) => mockReExecute(...args),
+      generate: (...args: unknown[]) => mockGenerate(...args),
     },
     tasks: { list: vi.fn().mockResolvedValue([]) },
     chat: {
@@ -116,6 +132,7 @@ function createStore(plansOverride?: (typeof basePlan)[], planError?: string | n
       project: projectReducer,
       plan: planReducer,
       execute: executeReducer,
+      notification: notificationReducer,
     },
     preloadedState: {
       plan: {
@@ -125,6 +142,7 @@ function createStore(plansOverride?: (typeof basePlan)[], planError?: string | n
         chatMessages: {},
         loading: false,
         decomposing: false,
+        generating: false,
         planStatus: null,
         executingPlanId: null,
         reExecutingPlanId: null,
@@ -226,37 +244,30 @@ describe("PlanPhase Redux integration", () => {
     expect(screen.queryByText("Failed to load plans")).not.toBeInTheDocument();
   });
 
-  it("keeps chatInput and showAddPlanModal as local state (Add Feature opens modal)", async () => {
+  it("renders inline feature description textarea and Generate Plan button", () => {
     const store = createStore();
-    const user = userEvent.setup();
     render(
       <Provider store={store}>
         <PlanPhase projectId="proj-1" />
       </Provider>
     );
 
-    const addButton = screen.getAllByRole("button", { name: /add feature/i })[0];
-    await user.click(addButton);
-
-    expect(screen.getByText("Feature Title")).toBeInTheDocument();
+    expect(screen.getByTestId("feature-description-input")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/describe your feature idea/i)).toBeInTheDocument();
+    expect(screen.getByTestId("generate-plan-button")).toBeInTheDocument();
+    expect(screen.getByText("Generate Plan")).toBeInTheDocument();
   });
 
-  it("closes Add Plan modal when X close button is clicked", async () => {
+  it("disables Generate Plan button when feature description is empty", () => {
     const store = createStore();
-    const user = userEvent.setup();
     render(
       <Provider store={store}>
         <PlanPhase projectId="proj-1" />
       </Provider>
     );
 
-    await user.click(screen.getAllByRole("button", { name: /add feature/i })[0]);
-    expect(screen.getByText("Feature Title")).toBeInTheDocument();
-
-    const closeBtn = screen.getByRole("button", { name: "Close add plan modal" });
-    await user.click(closeBtn);
-
-    expect(screen.queryByText("Feature Title")).not.toBeInTheDocument();
+    const button = screen.getByTestId("generate-plan-button");
+    expect(button).toBeDisabled();
   });
 });
 
@@ -867,5 +878,241 @@ describe("PlanPhase sendPlanMessage thunk", () => {
       "Add more detail to the auth section",
       "plan:archive-test-feature"
     );
+  });
+});
+
+describe("PlanPhase Generate Plan", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("enables Generate Plan button when user types a description", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const textarea = screen.getByTestId("feature-description-input");
+    const button = screen.getByTestId("generate-plan-button");
+
+    expect(button).toBeDisabled();
+    await user.type(textarea, "A user authentication feature");
+    expect(button).not.toBeDisabled();
+  });
+
+  it("keeps Generate Plan button disabled for whitespace-only input", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const textarea = screen.getByTestId("feature-description-input");
+    const button = screen.getByTestId("generate-plan-button");
+
+    await user.type(textarea, "   ");
+    expect(button).toBeDisabled();
+  });
+
+  it("calls generate API and shows toast when Generate Plan is clicked", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const textarea = screen.getByTestId("feature-description-input");
+    await user.type(textarea, "Add dark mode support");
+
+    const button = screen.getByTestId("generate-plan-button");
+    await user.click(button);
+
+    await waitFor(() => {
+      expect(mockGenerate).toHaveBeenCalledWith("proj-1", { description: "Add dark mode support" });
+    });
+
+    const notifications = store.getState().notification.items;
+    const planningToast = notifications.find(
+      (n: { message: string }) => n.message === "Planning in progress"
+    );
+    expect(planningToast).toBeDefined();
+  });
+
+  it("clears the textarea after submitting", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const textarea = screen.getByTestId("feature-description-input") as HTMLTextAreaElement;
+    await user.type(textarea, "Some feature");
+    await user.click(screen.getByTestId("generate-plan-button"));
+
+    expect(textarea.value).toBe("");
+  });
+
+  it("shows success notification after plan is generated", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await user.type(screen.getByTestId("feature-description-input"), "Feature idea");
+    await user.click(screen.getByTestId("generate-plan-button"));
+
+    await waitFor(() => {
+      const notifications = store.getState().notification.items;
+      const successToast = notifications.find(
+        (n: { message: string }) => n.message === "Plan generated successfully"
+      );
+      expect(successToast).toBeDefined();
+    });
+  });
+
+  it("shows error notification when generation fails", async () => {
+    mockGenerate.mockRejectedValueOnce(new Error("Agent unavailable"));
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await user.type(screen.getByTestId("feature-description-input"), "Feature idea");
+    await user.click(screen.getByTestId("generate-plan-button"));
+
+    await waitFor(() => {
+      const notifications = store.getState().notification.items;
+      const errorToast = notifications.find((n: { severity: string }) => n.severity === "error");
+      expect(errorToast).toBeDefined();
+    });
+  });
+
+  it("renders the generate-plan-section with correct testid", () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    expect(screen.getByTestId("generate-plan-section")).toBeInTheDocument();
+  });
+
+  it("renders 'Add a Feature' label for the textarea", () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    expect(screen.getByText("Add a Feature")).toBeInTheDocument();
+    expect(screen.getByLabelText("Add a Feature")).toBeInTheDocument();
+  });
+
+  it("textarea accepts multi-line text", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const textarea = screen.getByTestId("feature-description-input") as HTMLTextAreaElement;
+    await user.type(textarea, "Line 1{enter}Line 2{enter}Line 3");
+    expect(textarea.value).toContain("Line 1");
+    expect(textarea.value).toContain("Line 2");
+    expect(textarea.value).toContain("Line 3");
+  });
+
+  it("shows 'Generating…' text on the button while generating", () => {
+    const store = configureStore({
+      reducer: {
+        project: projectReducer,
+        plan: planReducer,
+        execute: executeReducer,
+        notification: notificationReducer,
+      },
+      preloadedState: {
+        plan: {
+          plans: [basePlan],
+          dependencyGraph: null,
+          selectedPlanId: "archive-test-feature",
+          chatMessages: {},
+          loading: false,
+          decomposing: false,
+          generating: true,
+          planStatus: null,
+          executingPlanId: null,
+          reExecutingPlanId: null,
+          archivingPlanId: null,
+          error: null,
+          backgroundError: null,
+        },
+        execute: {
+          tasks: [],
+          plans: [],
+          orchestratorRunning: false,
+          awaitingApproval: false,
+          currentTaskId: null,
+          currentPhase: null,
+          selectedTaskId: null,
+          taskDetail: null,
+          taskDetailLoading: false,
+          taskDetailError: null,
+          agentOutput: [],
+          completionState: null,
+          archivedSessions: [],
+          archivedLoading: false,
+          markDoneLoading: false,
+          unblockLoading: false,
+          statusLoading: false,
+          loading: false,
+          error: null,
+        },
+      },
+    });
+
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    expect(screen.getByText("Generating\u2026")).toBeInTheDocument();
+    const textarea = screen.getByTestId("feature-description-input");
+    expect(textarea).toBeDisabled();
+  });
+
+  it("does not call generate API when description is empty", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const button = screen.getByTestId("generate-plan-button");
+    await user.click(button);
+
+    expect(mockGenerate).not.toHaveBeenCalled();
   });
 });

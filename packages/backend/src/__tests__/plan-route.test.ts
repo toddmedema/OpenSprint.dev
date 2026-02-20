@@ -670,6 +670,165 @@ describe("Plan REST endpoints - task decomposition", () => {
     );
   });
 
+  describe("POST /projects/:id/plans/generate", () => {
+    beforeEach(async () => {
+      mockPlanningAgentInvoke.mockClear();
+      const project = await projectService.getProject(projectId);
+      const prdPath = path.join(project.repoPath, OPENSPRINT_PATHS.prd);
+      await fs.mkdir(path.dirname(prdPath), { recursive: true });
+      await fs.writeFile(
+        prdPath,
+        JSON.stringify({
+          version: 1,
+          sections: {
+            executive_summary: {
+              content: "A todo app with user auth",
+              version: 1,
+              updated_at: new Date().toISOString(),
+            },
+          },
+        }),
+        "utf-8"
+      );
+    });
+
+    it(
+      "generates a plan from a freeform description, creating epic + gate + child tasks",
+      { timeout: 15000 },
+      async () => {
+        // First call: generate plan; second call: auto-review against repo
+        mockPlanningAgentInvoke
+          .mockResolvedValueOnce({
+            content: JSON.stringify({
+              title: "Dark Mode Support",
+              content:
+                "# Dark Mode Support\n\n## Overview\n\nAdd dark/light theme toggle.\n\n## Acceptance Criteria\n\n- Toggle works",
+              complexity: "medium",
+              mockups: [{ title: "Toggle UI", content: "[Dark] [Light]" }],
+              tasks: [
+                {
+                  title: "Create theme context",
+                  description: "React context for theme state",
+                  priority: 0,
+                  dependsOn: [],
+                },
+                {
+                  title: "Add toggle component",
+                  description: "UI toggle button",
+                  priority: 1,
+                  dependsOn: ["Create theme context"],
+                },
+              ],
+            }),
+          })
+          .mockResolvedValueOnce({
+            content: JSON.stringify({ changes: [] }),
+          });
+
+        const app = createApp();
+        const res = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
+          .send({ description: "Add dark mode support with a toggle" });
+
+        expect(res.status).toBe(201);
+        expect(res.body.data).toBeDefined();
+        const plan = res.body.data;
+        expect(plan.metadata.planId).toBe("dark-mode-support");
+        expect(plan.metadata.beadEpicId).toBeDefined();
+        expect(plan.metadata.gateTaskId).toBeDefined();
+        expect(plan.metadata.complexity).toBe("medium");
+        expect(plan.taskCount).toBe(2);
+        expect(plan.content).toContain("Dark Mode Support");
+
+        const project = await projectService.getProject(projectId);
+        const allIssues = await beads.listAll(project.repoPath);
+        const epicId = plan.metadata.beadEpicId;
+        const childTasks = allIssues.filter(
+          (i: { id: string; issue_type?: string; type?: string }) =>
+            i.id.startsWith(epicId + ".") &&
+            i.id !== plan.metadata.gateTaskId &&
+            (i.issue_type ?? i.type) !== "epic"
+        );
+        expect(childTasks.length).toBe(2);
+        expect(childTasks.map((t: { title: string }) => t.title)).toContain("Create theme context");
+        expect(childTasks.map((t: { title: string }) => t.title)).toContain("Add toggle component");
+
+        // First invocation is the plan generation itself
+        const invokeArgs = mockPlanningAgentInvoke.mock.calls[0][0];
+        expect(invokeArgs.messages[0].content).toContain("Add dark mode support with a toggle");
+        expect(invokeArgs.tracking.role).toBe("planner");
+      }
+    );
+
+    it("returns 400 when description is empty", async () => {
+      const app = createApp();
+      const res = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
+        .send({ description: "" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.message).toContain("description is required");
+      expect(mockPlanningAgentInvoke).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when description is missing", async () => {
+      const app = createApp();
+      const res = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.message).toContain("description is required");
+      expect(mockPlanningAgentInvoke).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when description is whitespace only", async () => {
+      const app = createApp();
+      const res = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
+        .send({ description: "   \n\t  " });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.message).toContain("description is required");
+      expect(mockPlanningAgentInvoke).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when agent returns invalid JSON", { timeout: 10000 }, async () => {
+      mockPlanningAgentInvoke.mockResolvedValueOnce({
+        content: "I cannot produce valid JSON for this request.",
+      });
+
+      const app = createApp();
+      const res = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
+        .send({ description: "Build a chat feature" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("DECOMPOSE_PARSE_FAILED");
+    });
+
+    it("generates plan even without tasks in agent response", { timeout: 15000 }, async () => {
+      mockPlanningAgentInvoke.mockResolvedValueOnce({
+        content: JSON.stringify({
+          title: "Simple Feature",
+          content: "# Simple Feature\n\n## Overview\n\nA simple feature.",
+          complexity: "low",
+          tasks: [],
+        }),
+      });
+
+      const app = createApp();
+      const res = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
+        .send({ description: "A simple feature with no tasks" });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.taskCount).toBe(0);
+      expect(res.body.data.metadata.beadEpicId).toBeDefined();
+      expect(res.body.data.metadata.gateTaskId).toBeDefined();
+    });
+  });
+
   describe("POST /projects/:id/plans/suggest", () => {
     beforeEach(async () => {
       mockPlanningAgentInvoke.mockClear();

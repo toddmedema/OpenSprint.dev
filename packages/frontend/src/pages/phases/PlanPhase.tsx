@@ -12,11 +12,11 @@ import {
   fetchSinglePlan,
   updatePlan,
   setSelectedPlanId,
-  addPlanLocally,
+  generatePlan,
   setPlanError,
 } from "../../store/slices/planSlice";
+import { addNotification } from "../../store/slices/notificationSlice";
 import { api } from "../../api/client";
-import { AddPlanModal } from "../../components/AddPlanModal";
 import { CloseButton } from "../../components/CloseButton";
 import { CrossEpicConfirmModal } from "../../components/CrossEpicConfirmModal";
 import { DependencyGraph } from "../../components/DependencyGraph";
@@ -66,10 +66,11 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   const reExecutingPlanId = useAppSelector((s) => s.plan.reExecutingPlanId);
   const archivingPlanId = useAppSelector((s) => s.plan.archivingPlanId);
   const planError = useAppSelector((s) => s.plan.error);
+  const generating = useAppSelector((s) => s.plan.generating);
   const executeTasks = useAppSelector((s) => s.execute.tasks);
 
   /* ── Local UI state (preserved by mount-all) ── */
-  const [showAddPlanModal, setShowAddPlanModal] = useState(false);
+  const [featureDescription, setFeatureDescription] = useState("");
   const [crossEpicModal, setCrossEpicModal] = useState<{
     planId: string;
     prerequisitePlanIds: string[];
@@ -186,8 +187,25 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     }
   };
 
-  const handlePlanCreated = (plan: Plan) => {
-    dispatch(addPlanLocally(plan));
+  const handleGeneratePlan = async () => {
+    const description = featureDescription.trim();
+    if (!description || generating) return;
+
+    dispatch(addNotification({ message: "Planning in progress", severity: "info" }));
+    setFeatureDescription("");
+
+    const result = await dispatch(generatePlan({ projectId, description }));
+    if (generatePlan.fulfilled.match(result)) {
+      dispatch(addNotification({ message: "Plan generated successfully", severity: "success" }));
+      dispatch(fetchPlans({ projectId, background: true }));
+    } else {
+      dispatch(
+        addNotification({
+          message: result.error?.message || "Failed to generate plan",
+          severity: "error",
+        })
+      );
+    }
   };
 
   const handleSelectPlan = useCallback(
@@ -296,6 +314,36 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           )}
         </div>
 
+        {/* Generate Plan input */}
+        <div className="card mb-6 p-4" data-testid="generate-plan-section">
+          <label
+            htmlFor="feature-description"
+            className="block text-sm font-medium text-theme-text mb-2"
+          >
+            Add a Feature
+          </label>
+          <textarea
+            id="feature-description"
+            className="input w-full text-sm min-h-[100px] resize-y"
+            value={featureDescription}
+            onChange={(e) => setFeatureDescription(e.target.value)}
+            placeholder="Describe your feature idea\u2026"
+            disabled={generating}
+            data-testid="feature-description-input"
+          />
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={handleGeneratePlan}
+              disabled={!featureDescription.trim() || generating}
+              className="btn-primary text-sm disabled:opacity-50"
+              data-testid="generate-plan-button"
+            >
+              {generating ? "Generating\u2026" : "Generate Plan"}
+            </button>
+          </div>
+        </div>
+
         {/* Plan Cards */}
         <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
           <div className="flex items-center gap-3">
@@ -314,26 +362,15 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
               </select>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAddPlanModal(true)}
-            className="btn-primary text-sm"
-          >
-            Add Feature
-          </button>
         </div>
 
         {loading ? (
           <div className="text-center py-10 text-theme-muted">Loading plans...</div>
         ) : plans.length === 0 ? (
           <div className="text-center py-10">
-            <p className="text-theme-muted mb-4">
-              No plans yet. Use &ldquo;Plan it&rdquo; from the Sketch phase to decompose the PRD into
-              feature plans and tasks, or add a plan manually.
+            <p className="text-theme-muted">
+              No plans yet. Describe a feature above to generate a plan, or use &ldquo;Plan it&rdquo; from the Sketch phase.
             </p>
-            <button type="button" onClick={() => setShowAddPlanModal(true)} className="btn-primary">
-              Add Feature
-            </button>
           </div>
         ) : filteredAndSortedPlans.length === 0 ? (
           <div className="text-center py-10">
@@ -362,14 +399,6 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           </div>
         )}
       </div>
-
-      {showAddPlanModal && (
-        <AddPlanModal
-          projectId={projectId}
-          onClose={() => setShowAddPlanModal(false)}
-          onCreated={handlePlanCreated}
-        />
-      )}
 
       {crossEpicModal && (
         <CrossEpicConfirmModal
