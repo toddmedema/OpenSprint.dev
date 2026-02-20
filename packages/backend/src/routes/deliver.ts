@@ -242,9 +242,15 @@ export async function runDeployAsync(
   const effectiveTarget = targetName ?? getDefaultDeploymentTarget(config);
   const targetConfig = getDeploymentTargetConfig(config, effectiveTarget);
   const envVars = config.envVars ?? {};
+  const pendingLogs: Promise<unknown>[] = [];
   const emit = (chunk: string) => {
-    deployStorageService.appendLog(projectId, deployId, chunk);
+    pendingLogs.push(deployStorageService.appendLog(projectId, deployId, chunk).catch(() => {}));
     broadcastToProject(projectId, { type: "deliver.output", deployId, chunk });
+  };
+  const drainLogs = () => {
+    const p = Promise.allSettled(pendingLogs);
+    pendingLogs.length = 0;
+    return p;
   };
 
   try {
@@ -268,6 +274,7 @@ export async function runDeployAsync(
         testResult.rawOutput || failMsg
       );
 
+      await drainLogs();
       await deployStorageService.updateRecord(projectId, deployId, {
         status: "failed",
         completedAt: new Date().toISOString(),
@@ -321,6 +328,7 @@ export async function runDeployAsync(
         } catch {
           // ignore parse errors
         }
+        await drainLogs();
         await deployStorageService.updateRecord(projectId, deployId, {
           status: "success",
           completedAt: new Date().toISOString(),
@@ -329,6 +337,7 @@ export async function runDeployAsync(
         broadcastToProject(projectId, { type: "deliver.completed", deployId, success: true });
       } catch (err) {
         const msg = getErrorMessage(err);
+        await drainLogs();
         await deployStorageService.updateRecord(projectId, deployId, {
           status: "failed",
           completedAt: new Date().toISOString(),
@@ -342,6 +351,7 @@ export async function runDeployAsync(
 
       if (customCommand) {
         await runCommandStreaming("sh", ["-c", customCommand], repoPath, emit, envVars);
+        await drainLogs();
         await deployStorageService.updateRecord(projectId, deployId, {
           status: "success",
           completedAt: new Date().toISOString(),
@@ -350,6 +360,7 @@ export async function runDeployAsync(
       } else if (webhookUrl) {
         const result = await deploymentService.deployWithWebhook(projectId, webhookUrl, envVars);
         emit(`Webhook POST to ${webhookUrl}\n`);
+        await drainLogs();
         await deployStorageService.updateRecord(projectId, deployId, {
           status: result.success ? "success" : "failed",
           completedAt: new Date().toISOString(),
@@ -380,6 +391,7 @@ export async function runDeployAsync(
   } catch (err) {
     const msg = getErrorMessage(err);
     emit(`Error: ${msg}\n`);
+    await drainLogs();
     await deployStorageService.updateRecord(projectId, deployId, {
       status: "failed",
       completedAt: new Date().toISOString(),
@@ -397,13 +409,15 @@ async function runRollbackAsync(
   rollbackCommand: string,
   rolledBackDeployId: string | null
 ): Promise<void> {
+  const pendingLogs: Promise<unknown>[] = [];
   const emit = (chunk: string) => {
-    deployStorageService.appendLog(projectId, deployId, chunk);
+    pendingLogs.push(deployStorageService.appendLog(projectId, deployId, chunk).catch(() => {}));
     broadcastToProject(projectId, { type: "deliver.output", deployId, chunk });
   };
 
   try {
     await runCommandStreaming("sh", ["-c", rollbackCommand], repoPath, emit);
+    await Promise.allSettled(pendingLogs);
     await deployStorageService.updateRecord(projectId, deployId, {
       status: "success",
       completedAt: new Date().toISOString(),
@@ -418,6 +432,7 @@ async function runRollbackAsync(
   } catch (err) {
     const msg = getErrorMessage(err);
     emit(`Error: ${msg}\n`);
+    await Promise.allSettled(pendingLogs);
     await deployStorageService.updateRecord(projectId, deployId, {
       status: "failed",
       completedAt: new Date().toISOString(),

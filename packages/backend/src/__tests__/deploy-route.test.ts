@@ -29,7 +29,10 @@ describe("Deliver API (phase routes for deployment records)", () => {
     await fs.mkdir(repoPath, { recursive: true });
     await fs.writeFile(
       path.join(repoPath, "package.json"),
-      JSON.stringify({ name: "test", scripts: { test: "echo ok" } })
+      JSON.stringify({
+        name: "test",
+        scripts: { test: "echo 'Tests: 1 passed, 0 failed, 1 total'" },
+      })
     );
     await execAsync("git init && git add -A && git commit -m init", { cwd: repoPath });
     const project = await projectService.createProject({
@@ -50,7 +53,10 @@ describe("Deliver API (phase routes for deployment records)", () => {
 
   afterEach(async () => {
     process.env.HOME = originalHome;
-    await fs.rm(tempDir, { recursive: true, force: true });
+    await new Promise((r) => setTimeout(r, 1000));
+    await fs
+      .rm(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
+      .catch(() => {});
   });
 
   describe("GET /projects/:projectId/deliver/status", () => {
@@ -180,67 +186,85 @@ describe("Deliver API (phase routes for deployment records)", () => {
     });
   });
 
-  describe("POST /projects/:projectId/deliver - record fields", () => {
-    it("should create deploy record with commitHash, target, mode from settings", async () => {
-      await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
-
-      // Wait for deploy to complete (echo is fast)
+  async function waitForHistoryCount(count: number, maxMs = 30_000) {
+    const start = Date.now();
+    while (Date.now() - start < maxMs) {
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=10`
+      );
+      const completed = (res.body.data ?? []).filter(
+        (r: { status: string }) => r.status !== "running" && r.status !== "pending"
+      );
+      if (completed.length >= count) return res.body.data;
       await new Promise((r) => setTimeout(r, 500));
+    }
+    const final = await request(app).get(
+      `${API_PREFIX}/projects/${projectId}/deliver/history?limit=10`
+    );
+    return final.body.data ?? [];
+  }
 
-      const historyRes = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=1`
-      );
-      expect(historyRes.status).toBe(200);
-      expect(historyRes.body.data.length).toBeGreaterThan(0);
+  describe("POST /projects/:projectId/deliver - record fields", () => {
+    it(
+      "should create deploy record with commitHash, target, mode from settings",
+      { timeout: 30_000 },
+      async () => {
+        await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
 
-      const record = historyRes.body.data[0];
-      expect(record.target).toBe("staging");
-      expect(record.mode).toBe("custom");
-      // commitHash may be a SHA or null if git fails
-      expect(typeof record.commitHash === "string" || record.commitHash === null).toBe(true);
-    });
+        const history = await waitForHistoryCount(1);
+        expect(history.length).toBeGreaterThan(0);
 
-    it("should deploy to specified target when body.target provided (PRD §7.5.4)", async () => {
-      await request(app)
-        .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
-        .send({
-          mode: "custom",
-          targets: [
-            { name: "staging", command: "echo deploy-staging", isDefault: true },
-            { name: "production", command: "echo deploy-production" },
-          ],
-        });
+        const record = history[0];
+        expect(record.target).toBe("staging");
+        expect(record.mode).toBe("custom");
+        expect(typeof record.commitHash === "string" || record.commitHash === null).toBe(true);
+      }
+    );
 
-      const res = await request(app)
-        .post(`${API_PREFIX}/projects/${projectId}/deliver`)
-        .send({ target: "production" });
+    it(
+      "should deploy to specified target when body.target provided (PRD §7.5.4)",
+      { timeout: 30_000 },
+      async () => {
+        await request(app)
+          .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
+          .send({
+            mode: "custom",
+            targets: [
+              { name: "staging", command: "echo deploy-staging", isDefault: true },
+              { name: "production", command: "echo deploy-production" },
+            ],
+          });
 
-      expect(res.status).toBe(202);
-      expect(res.body.data.deployId).toBeDefined();
+        const res = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/deliver`)
+          .send({ target: "production" });
 
-      await new Promise((r) => setTimeout(r, 2000));
+        expect(res.status).toBe(202);
+        expect(res.body.data.deployId).toBeDefined();
 
-      const historyRes = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=1`
-      );
-      const record = historyRes.body.data[0];
-      expect(record.target).toBe("production");
-    });
+        const history = await waitForHistoryCount(1);
+        const record = history[0];
+        expect(record.target).toBe("production");
+      }
+    );
   });
 
   describe("POST /projects/:projectId/deliver/:deployId/rollback", () => {
-    it("should mark original deploy as rolled_back on success", async () => {
-      await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
-      await new Promise((r) => setTimeout(r, 2000));
+    it("should mark original deploy as rolled_back on success", { timeout: 120_000 }, async () => {
+      const res1 = await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
+      expect(res1.status).toBe(202);
+      await waitForHistoryCount(1);
+      // Allow activeDeployments.delete() in .finally() to run before next deploy
+      await new Promise((r) => setTimeout(r, 200));
 
-      await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
-      await new Promise((r) => setTimeout(r, 2000));
+      const res2 = await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
+      expect(res2.status).toBe(202);
+      const historyData = await waitForHistoryCount(2);
+      await new Promise((r) => setTimeout(r, 200));
 
-      const historyBefore = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/deliver/history?limit=5`
-      );
-      const deployToRestore = historyBefore.body.data[1];
-      const currentDeploy = historyBefore.body.data[0];
+      expect(historyData.length).toBeGreaterThanOrEqual(2);
+      const deployToRestore = historyData[1];
+      const currentDeploy = historyData[0];
 
       const rollbackRes = await request(app).post(
         `${API_PREFIX}/projects/${projectId}/deliver/${deployToRestore.id}/rollback`
@@ -248,7 +272,7 @@ describe("Deliver API (phase routes for deployment records)", () => {
       expect(rollbackRes.status).toBe(202);
       const rollbackDeployId = rollbackRes.body.data.deployId;
 
-      await new Promise((r) => setTimeout(r, 500));
+      await waitForHistoryCount(3);
 
       const historyRes = await request(app).get(
         `${API_PREFIX}/projects/${projectId}/deliver/history?limit=5`

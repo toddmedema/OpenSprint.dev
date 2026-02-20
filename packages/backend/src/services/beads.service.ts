@@ -21,6 +21,14 @@ const MAX_BUFFER_BYTES = 2 * 1024 * 1024; // 2MB for large list output
  */
 const BD_GLOBAL_FLAGS = "--no-daemon";
 
+/**
+ * Escape a string for safe inclusion in a double-quoted shell argument.
+ * Prevents command substitution via backticks/$(…) and variable expansion.
+ */
+function shellEscapeDQ(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/`/g, "\\`").replace(/\$/g, "\\$");
+}
+
 /** Repo paths where this backend has started a daemon (for shutdown cleanup) */
 const managedReposForShutdown = new Set<string>();
 
@@ -536,10 +544,10 @@ export class BeadsService {
       parentId?: string;
     } = {}
   ): Promise<BeadsIssue> {
-    let cmd = `create "${title}" --json`;
+    let cmd = `create "${shellEscapeDQ(title)}" --json`;
     if (options.type) cmd += ` -t ${options.type}`;
     if (options.priority !== undefined) cmd += ` -p ${options.priority}`;
-    if (options.description) cmd += ` -d "${options.description.replace(/"/g, '\\"')}"`;
+    if (options.description) cmd += ` -d "${shellEscapeDQ(options.description)}"`;
     if (options.parentId) cmd += ` --parent ${options.parentId}`;
     const stdout = await this.exec(repoPath, cmd);
     return this.parseJson(stdout);
@@ -559,8 +567,8 @@ export class BeadsService {
   ): Promise<BeadsIssue> {
     let cmd = `update ${id} --json`;
     if (options.status) cmd += ` --status ${options.status}`;
-    if (options.assignee !== undefined) cmd += ` --assignee "${options.assignee}"`;
-    if (options.description) cmd += ` -d "${options.description.replace(/"/g, '\\"')}"`;
+    if (options.assignee !== undefined) cmd += ` --assignee "${shellEscapeDQ(options.assignee)}"`;
+    if (options.description) cmd += ` -d "${shellEscapeDQ(options.description)}"`;
     if (options.priority !== undefined) cmd += ` -p ${options.priority}`;
     if (options.claim) cmd += ` --claim`;
     const stdout = await this.exec(repoPath, cmd);
@@ -571,7 +579,7 @@ export class BeadsService {
    * @param force - If true, use --force to close even when blocked by open issues (e.g. manual mark done).
    */
   async close(repoPath: string, id: string, reason: string, force = false): Promise<BeadsIssue> {
-    let cmd = `close ${id} --reason "${reason.replace(/"/g, '\\"')}" --json`;
+    let cmd = `close ${id} --reason "${shellEscapeDQ(reason)}" --json`;
     if (force) cmd += " --force";
     const stdout = await this.exec(repoPath, cmd);
     const arr = this.parseJsonArray(stdout);
@@ -744,8 +752,7 @@ export class BeadsService {
 
   /** Add a comment to an issue */
   async comment(repoPath: string, id: string, message: string): Promise<void> {
-    const escaped = message.replace(/"/g, '\\"');
-    await this.exec(repoPath, `comment ${id} "${escaped}"`);
+    await this.exec(repoPath, `comment ${id} "${shellEscapeDQ(message)}"`);
   }
 
   /** Add a label to an issue */
