@@ -269,18 +269,20 @@ html[data-theme="dark"] {
     --tw-prose-th-borders: var(--color-border);
     --tw-prose-td-borders: var(--color-border);
   }
-  /* Execute task description markdown: prose + layout + explicit high-contrast text (feedback kutduv). */
+  /* Execute task description markdown: prose + layout + explicit high-contrast text (feedback kutduv).
+   * Uses !important to override prose-neutral/prose-invert defaults for WCAG AA contrast. */
   .prose-task-description {
     @apply prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none p-4 rounded-lg border overflow-y-auto min-h-0 max-h-[50vh] text-xs;
     @apply bg-theme-surface border-theme-border;
-    @apply text-gray-900 dark:text-gray-100;
-    @apply prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-p:text-gray-900 dark:prose-p:text-gray-100 prose-li:text-gray-900 dark:prose-li:text-gray-100;
-    @apply prose-td:text-gray-900 dark:prose-td:text-gray-100 prose-th:text-gray-900 dark:prose-th:text-gray-100;
-    @apply prose-em:text-gray-900 dark:prose-em:text-gray-100 prose-code:text-gray-900 dark:prose-code:text-gray-100;
-    @apply prose-strong:text-gray-900 dark:prose-strong:text-gray-100 prose-blockquote:text-gray-900 dark:prose-blockquote:text-gray-100;
+    @apply !text-gray-900 dark:!text-gray-100;
+    @apply prose-headings:!text-gray-900 dark:prose-headings:!text-gray-100 prose-p:!text-gray-900 dark:prose-p:!text-gray-100 prose-li:!text-gray-900 dark:prose-li:!text-gray-100;
+    @apply prose-td:!text-gray-900 dark:prose-td:!text-gray-100 prose-th:!text-gray-900 dark:prose-th:!text-gray-100;
+    @apply prose-em:!text-gray-900 dark:prose-em:!text-gray-100 prose-code:!text-gray-900 dark:prose-code:!text-gray-100;
+    @apply prose-strong:!text-gray-900 dark:prose-strong:!text-gray-100 prose-blockquote:!text-gray-900 dark:prose-blockquote:!text-gray-100;
+    @apply prose-ol:!text-gray-900 dark:prose-ol:!text-gray-100 prose-ul:!text-gray-900 dark:prose-ul:!text-gray-100;
     @apply prose-blockquote:border-theme-border prose-hr:border-theme-border;
     @apply prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg;
-    @apply prose-kbd:text-gray-900 dark:prose-kbd:text-gray-100 prose-figcaption:text-gray-900 dark:prose-figcaption:text-gray-100;
+    @apply prose-kbd:!text-gray-900 dark:prose-kbd:!text-gray-100 prose-figcaption:!text-gray-900 dark:prose-figcaption:!text-gray-100;
     @apply prose-a:text-brand-600 dark:prose-a:text-brand-400;
   }
 
@@ -310,4 +312,47 @@ html[data-theme="dark"] {
 [data-testid="plan-markdown-editor"] > div > :first-child,
 [data-testid="plan-markdown-editor"] [contenteditable="true"] > :first-child {
   margin-top: 0 !important;
+}
+
+/* Execute task description markdown: force high-contrast on descendants (feedback kutduv).
+   Raw CSS ensures override of any prose-neutral/prose-invert defaults. */
+html[data-theme="light"] [data-testid="task-description-markdown"] p,
+html[data-theme="light"] [data-testid="task-description-markdown"] li,
+html[data-theme="light"] [data-testid="task-description-markdown"] h1,
+html[data-theme="light"] [data-testid="task-description-markdown"] h2,
+html[data-theme="light"] [data-testid="task-description-markdown"] h3,
+html[data-theme="light"] [data-testid="task-description-markdown"] h4,
+html[data-theme="light"] [data-testid="task-description-markdown"] td,
+html[data-theme="light"] [data-testid="task-description-markdown"] th,
+html[data-theme="light"] [data-testid="task-description-markdown"] blockquote,
+html[data-theme="light"] [data-testid="task-description-markdown"] em,
+html[data-theme="light"] [data-testid="task-description-markdown"] strong,
+html[data-theme="light"] [data-testid="task-description-markdown"] code:not(pre code),
+html:not([data-theme]) [data-testid="task-description-markdown"] p,
+html:not([data-theme]) [data-testid="task-description-markdown"] li,
+html:not([data-theme]) [data-testid="task-description-markdown"] h1,
+html:not([data-theme]) [data-testid="task-description-markdown"] h2,
+html:not([data-theme]) [data-testid="task-description-markdown"] h3,
+html:not([data-theme]) [data-testid="task-description-markdown"] h4,
+html:not([data-theme]) [data-testid="task-description-markdown"] td,
+html:not([data-theme]) [data-testid="task-description-markdown"] th,
+html:not([data-theme]) [data-testid="task-description-markdown"] blockquote,
+html:not([data-theme]) [data-testid="task-description-markdown"] em,
+html:not([data-theme]) [data-testid="task-description-markdown"] strong,
+html:not([data-theme]) [data-testid="task-description-markdown"] code:not(pre code) {
+  color: #111827 !important;
+}
+html[data-theme="dark"] [data-testid="task-description-markdown"] p,
+html[data-theme="dark"] [data-testid="task-description-markdown"] li,
+html[data-theme="dark"] [data-testid="task-description-markdown"] h1,
+html[data-theme="dark"] [data-testid="task-description-markdown"] h2,
+html[data-theme="dark"] [data-testid="task-description-markdown"] h3,
+html[data-theme="dark"] [data-testid="task-description-markdown"] h4,
+html[data-theme="dark"] [data-testid="task-description-markdown"] td,
+html[data-theme="dark"] [data-testid="task-description-markdown"] th,
+html[data-theme="dark"] [data-testid="task-description-markdown"] blockquote,
+html[data-theme="dark"] [data-testid="task-description-markdown"] em,
+html[data-theme="dark"] [data-testid="task-description-markdown"] strong,
+html[data-theme="dark"] [data-testid="task-description-markdown"] code:not(pre code) {
+  color: #f3f4f6 !important;
 }
