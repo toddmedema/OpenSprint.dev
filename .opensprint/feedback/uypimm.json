@@ -1,0 +1,29 @@
+{
+  "id": "uypimm",
+  "text": "Ability to drag to widen the sidebars in Sketch and Execute mode, just like how you can drag to widen the sidebar in Plan mode",
+  "category": "ux",
+  "mappedPlanId": "agent-invocation-service",
+  "createdTaskIds": [
+    "opensprint.dev-z0v.17"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-20T07:31:19.059Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-z0v",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Add draggable sidebar resizing to Sketch and Execute phases",
+      "description": "Extend the drag-to-resize sidebar behavior already implemented in Plan mode to the Sketch and Execute phase layouts. Extract the existing resize handle/logic from the Plan sidebar into a shared, reusable component (e.g., ResizableSidebar or a resize hook). Apply it to:\n\n1. **Sketch phase** — the PRD section sidebar and/or the chat panel divider.\n2. **Execute phase** — the task detail sidebar and/or the Kanban side panel.\n\nAcceptance criteria:\n- Users can click-and-drag the sidebar edge to resize in both Sketch and Execute modes.\n- Resize behavior matches the existing Plan mode implementation (cursor style, min/max width constraints, smooth drag tracking).\n- Sidebar width preference persists across navigation within a session (in component state or localStorage).\n- Resize handle is visually consistent across all three phases.\n- No regressions to Plan mode resize behavior.",
+      "priority": 3,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": [
+    "Add draggable sidebar resizing to Sketch and Execute phases"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-a9nq"
+}

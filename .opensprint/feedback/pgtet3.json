@@ -1,0 +1,28 @@
+{
+  "id": "pgtet3",
+  "text": "The \"Add Feature\" prompt in Plan mode should actually be a single large text input: Describe your feature idea. The button prompt is then \"Generate Plan\", which shows a toast \"Planning in progress\" and kicks off a Planner agent to generate an epic and plan for the feature the user described.",
+  "category": "ux",
+  "mappedPlanId": "plan-phase-feature-decomposition",
+  "createdTaskIds": [
+    "opensprint.dev-vwf.23"
+  ],
+  "status": "mapped",
+  "createdAt": "2026-02-20T07:27:15.055Z",
+  "parent_id": null,
+  "depth": 0,
+  "mappedEpicId": "opensprint.dev-vwf",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Redesign Add Feature prompt as single text input with Generate Plan button",
+      "description": "Replace the current 'Add Feature' prompt in Plan mode with a single large multi-line text input (placeholder: 'Describe your feature idea…'). The submit button label should read 'Generate Plan'. On submit: (1) show a toast notification 'Planning in progress', (2) invoke the Planner agent with the user's feature description as input, (3) on completion, create the epic, gating task, plan markdown, and child tasks via the orchestrator, and (4) update the Plan list to include the newly generated plan. Acceptance criteria: the old prompt UI is removed; the new text input accepts freeform multi-line text; the Generate Plan button is disabled while input is empty; a toast appears immediately on submission; the Planner agent is invoked and its output is materialized as a new plan and beads epic.",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": [
+    "Redesign Add Feature prompt as single text input with Generate Plan button"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-me9h"
+}
