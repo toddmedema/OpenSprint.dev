@@ -4,6 +4,7 @@ import { resolveTestCommand } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { BeadsService } from "./beads.service.js";
 import { beadsCache } from "./beads-cache.js";
+import { listTasksCache } from "./list-tasks-cache.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { SessionManager } from "./session-manager.js";
@@ -26,9 +27,15 @@ export class TaskService {
   private contextAssembler = new ContextAssembler();
   private branchManager = new BranchManager();
 
-  /** List all tasks for a project with computed kanban columns and test results */
+  /** List all tasks for a project with computed kanban columns and test results.
+   * Uses short-TTL cache (7s) so rapid page loads and duplicate requests return instantly.
+   * Invalidated on task mutations (create, update, close).
+   */
   async listTasks(projectId: string): Promise<Task[]> {
     const project = await this.projectService.getProject(projectId);
+    const cached = listTasksCache.get(project.repoPath);
+    if (cached) return cached;
+
     const allIssues =
       beadsCache.getListAll<BeadsIssue[]>(project.repoPath) ??
       (await this.beads.listAll(project.repoPath));
@@ -49,6 +56,8 @@ export class TaskService {
         }
       }
     }
+
+    listTasksCache.set(project.repoPath, tasks);
     return tasks;
   }
 
@@ -279,6 +288,7 @@ export class TaskService {
     }
 
     await this.beads.sync(project.repoPath);
+    listTasksCache.invalidate(project.repoPath);
     broadcastToProject(projectId, {
       type: "task.updated",
       taskId,
@@ -312,6 +322,7 @@ export class TaskService {
 
     await this.beads.close(project.repoPath, taskId, "Manually marked done", true);
     await this.beads.sync(project.repoPath);
+    listTasksCache.invalidate(project.repoPath);
     broadcastToProject(projectId, {
       type: "task.updated",
       taskId,
@@ -339,6 +350,7 @@ export class TaskService {
         if (epicIssue && (epicIssue.status as string) !== "closed") {
           await this.beads.close(project.repoPath, epicId, "All tasks done", true);
           await this.beads.sync(project.repoPath);
+          listTasksCache.invalidate(project.repoPath);
           broadcastToProject(projectId, {
             type: "task.updated",
             taskId: epicId,

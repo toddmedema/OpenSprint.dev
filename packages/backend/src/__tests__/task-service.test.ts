@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { TaskService } from "../services/task.service.js";
 import { beadsCache } from "../services/beads-cache.js";
+import { listTasksCache } from "../services/list-tasks-cache.js";
 import { SessionManager } from "../services/session-manager.js";
 import type { BeadsIssue } from "../services/beads.service.js";
 
@@ -21,6 +22,7 @@ describe("TaskService", () => {
 
   beforeEach(async () => {
     beadsCache.clear();
+    listTasksCache.clear();
     beadsShowCalls = 0;
     beadsListAllCalls = 0;
     beadsReadyCalls = 0;
@@ -88,6 +90,12 @@ describe("TaskService", () => {
     // listAll came from cache (listTasks), only show was invoked
     expect(beadsListAllCalls).toBe(1);
     expect(beadsShowCalls).toBe(1);
+  });
+
+  it("listTasks uses cache on second call (reduces beads invocations)", async () => {
+    await taskService.listTasks("proj-1");
+    await taskService.listTasks("proj-1");
+    expect(beadsListAllCalls).toBe(1);
   });
 
   it("listTasks does not call beads.ready (computes ready from listAll)", async () => {
@@ -265,5 +273,19 @@ describe("TaskService", () => {
     expect(tasks.find((t) => t.id === "task-no-session")?.testResults).toBeUndefined();
 
     loadSpy.mockRestore();
+  });
+
+  it("listTasks cache is invalidated on markDone (mutations refresh cache)", async () => {
+    const { BeadsService } = await import("../services/beads.service.js");
+    vi.spyOn(BeadsService.prototype, "close").mockResolvedValue(undefined as never);
+    vi.spyOn(BeadsService.prototype, "sync").mockResolvedValue(undefined as never);
+
+    await taskService.listTasks("proj-1");
+    expect(beadsListAllCalls).toBe(1);
+
+    await taskService.markDone("proj-1", "task-1");
+
+    await taskService.listTasks("proj-1");
+    expect(beadsListAllCalls).toBe(2);
   });
 });

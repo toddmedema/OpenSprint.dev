@@ -28,6 +28,7 @@ import { buildAuditorPrompt, parseAuditorResult } from "./auditor.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { broadcastToProject } from "../websocket/index.js";
+import { listTasksCache } from "./list-tasks-cache.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
@@ -599,6 +600,8 @@ export class PlanService {
       summary: `plan ${planId} created`,
     });
 
+    listTasksCache.invalidate(repoPath);
+
     const plan: Plan & { _createdTaskIds?: string[]; _createdTaskTitles?: string[] } = {
       metadata,
       content: body.content,
@@ -716,6 +719,8 @@ export class PlanService {
 
     log.info("Generated tasks for plan", { count: tasks.length, planId: plan.metadata.planId });
 
+    listTasksCache.invalidate(repoPath);
+
     // Broadcast task creation events
     for (const [, taskId] of taskIdMap) {
       broadcastToProject(projectId, {
@@ -759,6 +764,7 @@ export class PlanService {
 
     // Close the gating task
     await this.beads.close(repoPath, gateToClose, "Plan approved for build");
+    listTasksCache.invalidate(repoPath);
 
     // Clear re-execute gate after closing (next re-execute will create a new one)
     if (plan.metadata.reExecuteGateTaskId) {
@@ -960,6 +966,8 @@ ${planNew}`;
         assignee: null,
       });
     }
+
+    listTasksCache.invalidate(repoPath);
 
     return this.getPlan(projectId, planId);
   }
@@ -1269,15 +1277,17 @@ ${planNew}`;
       if (status === "open") {
         await this.beads.close(repoPath, task.id, "Archived plan");
         await this.beads.sync(repoPath);
-        broadcastToProject(projectId, {
-          type: "task.updated",
-          taskId: task.id,
-          status: "closed",
-          assignee: null,
-        });
+      broadcastToProject(projectId, {
+        type: "task.updated",
+        taskId: task.id,
+        status: "closed",
+        assignee: null,
+      });
       }
       // in_progress tasks are left unchanged
     }
+
+    listTasksCache.invalidate(repoPath);
 
     return this.getPlan(projectId, planId);
   }
@@ -1439,6 +1449,7 @@ ${planNew}`;
 
       if (toClose.length > 0) {
         log.info("Auto-review marked tasks as done", { count: toClose.length, taskIds: toClose });
+        listTasksCache.invalidate(repoPath);
       }
     } catch (err) {
       log.error("Auto-review against repo failed", { err });

@@ -43,6 +43,7 @@ import { eventLogService } from "./event-log.service.js";
 import { agentIdentityService, type AttemptOutcome } from "./agent-identity.service.js";
 import { createLogger } from "../utils/logger.js";
 import { PhaseExecutorService, type PhaseExecutorHost } from "./phase-executor.service.js";
+import { listTasksCache } from "./list-tasks-cache.js";
 
 const log = createLogger("orchestrator");
 
@@ -703,6 +704,7 @@ export class OrchestratorService {
         status: "in_progress",
         assignee: "agent-1",
       });
+      listTasksCache.invalidate(repoPath);
 
       gitCommitQueue.enqueue({
         type: "beads_export",
@@ -1079,6 +1081,7 @@ export class OrchestratorService {
       // Clean up worktree and branch after merge
       await this.branchManager.removeTaskWorktree(repoPath, task.id);
       await this.branchManager.deleteBranch(repoPath, branchName);
+      listTasksCache.invalidate(repoPath);
     } catch (mergeErr) {
       log.warn("Merge to main failed", { mergeErr });
 
@@ -1100,6 +1103,7 @@ export class OrchestratorService {
                 task.id,
                 slotPhaseResult.codingSummary || "Implemented and tested"
               );
+              listTasksCache.invalidate(repoPath);
               gitCommitQueue.enqueue({
                 type: "beads_export",
                 repoPath,
@@ -1528,6 +1532,7 @@ export class OrchestratorService {
             assignee: "",
             priority: newPriority,
           });
+          listTasksCache.invalidate(repoPath);
         } catch {
           // Task may already be in the right state
         }
@@ -1640,6 +1645,7 @@ export class OrchestratorService {
         status: "blocked",
         assignee: "",
       });
+      listTasksCache.invalidate(repoPath);
     } catch (err) {
       log.warn("Failed to block task", { err });
     }
