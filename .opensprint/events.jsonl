@@ -68,3 +68,18 @@
 {"timestamp":"2026-02-20T04:24:27.301Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-srl.28","event":"agent.spawned","data":{"phase":"review","model":"composer-1.5","attempt":2}}
 {"timestamp":"2026-02-20T04:32:16.608Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"transition.complete","data":{"from":"review","attempt":2}}
 {"timestamp":"2026-02-20T04:32:16.608Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-srl.28","event":"task.completed","data":{"attempt":2}}
+{"timestamp":"2026-02-20T04:32:22.976Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"push.succeeded"}
+{"timestamp":"2026-02-20T04:32:27.769Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-zar.8","event":"transition.start_task","data":{"from":"idle","attempt":1}}
+{"timestamp":"2026-02-20T04:32:30.093Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-zar.8","event":"agent.spawned","data":{"phase":"coding","model":"opus-4.6-thinking","attempt":1}}
+{"timestamp":"2026-02-20T04:37:14.243Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"watchdog.orphan_recovery","data":{"recovered":["opensprint.dev-zar.8"]}}
+{"timestamp":"2026-02-20T04:47:00.163Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-zar.8","event":"task.failed","data":{"failureType":"timeout","attempt":1,"reason":"Agent exited with code 143 without producing a result"}}
+{"timestamp":"2026-02-20T04:47:01.260Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-zar.8","event":"agent.spawned","data":{"phase":"coding","model":"opus-4.6-thinking","attempt":2}}
+{"timestamp":"2026-02-20T04:47:12.480Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-zar.8","event":"task.failed","data":{"failureType":"no_result","attempt":2,"reason":"Agent exited with code 1 without producing a result"}}
+{"timestamp":"2026-02-20T04:47:14.479Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-zar.8","event":"agent.spawned","data":{"phase":"coding","model":"opus-4.6-thinking","attempt":3}}
+{"timestamp":"2026-02-20T04:47:25.684Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-zar.8","event":"task.failed","data":{"failureType":"no_result","attempt":3,"reason":"Agent exited with code 1 without producing a result"}}
+{"timestamp":"2026-02-20T04:47:27.180Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"transition.fail","data":{"from":"coding","attempt":3}}
+{"timestamp":"2026-02-20T04:47:36.682Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-y5rn","event":"transition.start_task","data":{"from":"idle","attempt":1}}
+{"timestamp":"2026-02-20T04:47:37.884Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-y5rn","event":"agent.spawned","data":{"phase":"coding","model":"composer-1.5","attempt":1}}
+{"timestamp":"2026-02-20T04:52:14.384Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"watchdog.orphan_recovery","data":{"recovered":["opensprint.dev-y5rn"]}}
+{"timestamp":"2026-02-20T04:53:28.871Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-y5rn","event":"task.failed","data":{"failureType":"test_failure","attempt":1,"reason":"Tests failed: 1 failed, 0 passed"}}
+{"timestamp":"2026-02-20T04:53:30.610Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-y5rn","event":"agent.spawned","data":{"phase":"coding","model":"composer-1.5","attempt":2}}
