@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { RepoConflictError } from "../services/git-commit-queue.service.js";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -173,6 +174,9 @@ vi.mock("../services/branch-manager.js", () => {
       getConflictDiff: vi.fn().mockResolvedValue(""),
       rebaseContinue: vi.fn().mockResolvedValue(undefined),
       rebaseAbort: vi.fn().mockResolvedValue(undefined),
+      isMergeInProgress: vi.fn().mockResolvedValue(false),
+      mergeContinue: vi.fn().mockResolvedValue(undefined),
+      mergeAbort: vi.fn().mockResolvedValue(undefined),
       isRebaseInProgress: vi.fn().mockResolvedValue(false),
       commitWip: mockCommitWip,
     })),
@@ -229,13 +233,17 @@ vi.mock("../services/heartbeat.service.js", () => ({
   },
 }));
 
-vi.mock("../services/git-commit-queue.service.js", () => ({
-  gitCommitQueue: {
-    enqueue: mockGitQueueEnqueue,
-    enqueueAndWait: mockGitQueueEnqueueAndWait,
-    drain: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+vi.mock("../services/git-commit-queue.service.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/git-commit-queue.service.js")>();
+  return {
+    ...actual,
+    gitCommitQueue: {
+      enqueue: mockGitQueueEnqueue,
+      enqueueAndWait: mockGitQueueEnqueueAndWait,
+      drain: vi.fn().mockResolvedValue(undefined),
+    },
+  };
+});
 
 vi.mock("../utils/file-utils.js", () => ({
   writeJsonAtomic: (...args: unknown[]) => mockWriteJsonAtomic(...args),
@@ -2296,7 +2304,9 @@ describe("OrchestratorService", () => {
       mockRunScopedTests.mockResolvedValue({ passed: 2, failed: 0, rawOutput: "ok" });
       mockCommitWip.mockResolvedValue(undefined);
 
-      mockGitQueueEnqueueAndWait.mockRejectedValue(new Error("Merge conflict"));
+      mockGitQueueEnqueueAndWait.mockRejectedValue(
+        new RepoConflictError(["conflict.txt"])
+      );
       mockVerifyMerge.mockResolvedValue(false);
 
       let onExit: (code: number | null) => Promise<void> = async () => {};

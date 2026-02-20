@@ -226,6 +226,36 @@ export class BranchManager {
   }
 
   /**
+   * Check whether a merge is currently in progress (merge conflicted).
+   */
+  async isMergeInProgress(repoPath: string): Promise<boolean> {
+    try {
+      await fs.access(path.join(repoPath, ".git", "MERGE_HEAD"));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Stage resolved files and complete an in-progress merge.
+   */
+  async mergeContinue(repoPath: string): Promise<void> {
+    await this.git(repoPath, "add -A");
+    await execAsync("git -c core.editor=true commit --no-edit", {
+      cwd: repoPath,
+      timeout: 30000,
+    });
+  }
+
+  /**
+   * Abort an in-progress merge.
+   */
+  async mergeAbort(repoPath: string): Promise<void> {
+    await this.git(repoPath, "merge --abort").catch(() => {});
+  }
+
+  /**
    * Check whether a rebase is currently in progress.
    */
   async isRebaseInProgress(repoPath: string): Promise<boolean> {

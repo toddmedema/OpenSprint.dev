@@ -22,7 +22,10 @@ import { ProjectService } from "./project.service.js";
 import { agentService } from "./agent.service.js";
 import { triggerDeploy } from "./deploy-trigger.service.js";
 import { BranchManager, RebaseConflictError } from "./branch-manager.js";
-import { gitCommitQueue } from "./git-commit-queue.service.js";
+import {
+  gitCommitQueue,
+  RepoConflictError,
+} from "./git-commit-queue.service.js";
 import { ContextAssembler } from "./context-assembler.js";
 import { SessionManager } from "./session-manager.js";
 import { shouldInvokeSummarizer, buildSummarizerPrompt, countWords } from "./summarizer.service.js";
@@ -213,6 +216,8 @@ export class OrchestratorService {
   private repoPathCache = new Map<string, string>();
   /** Guard against concurrent pushes per project */
   private pushInProgress = new Set<string>();
+  /** Promise per project that resolves when the current push completes */
+  private pushCompletion = new Map<string, { promise: Promise<void>; resolve: () => void }>();
 
   private getState(projectId: string): OrchestratorState {
     if (!this.state.has(projectId)) {
@@ -1188,6 +1193,11 @@ export class OrchestratorService {
     // Commit any remaining changes in worktree before merge
     await this.branchManager.commitWip(wtPath, task.id);
 
+    // Wait for any in-progress push to complete. A previous task's push may have
+    // hit rebase conflicts and left unmerged files in main; merging now would
+    // fail with RepoConflictError. PRD §5.9.
+    await this.waitForPushComplete(projectId);
+
     // Merge to main via serialized queue (PRD §5.9)
     try {
       await gitCommitQueue.enqueueAndWait({
@@ -1198,18 +1208,76 @@ export class OrchestratorService {
       });
     } catch (mergeErr) {
       log.warn("Merge to main failed", { mergeErr });
-      const merged = await this.branchManager.verifyMerge(repoPath, branchName);
-      if (!merged) {
-        await this.handleTaskFailure(
-          projectId,
-          repoPath,
-          task,
-          branchName,
-          `Merge to main failed: ${mergeErr}`,
-          null,
-          "merge_conflict"
-        );
-        return;
+
+      // If RepoConflictError with merge-in-progress, try merger agent to resolve
+      if (mergeErr instanceof RepoConflictError) {
+        const mergeActive = await this.branchManager.isMergeInProgress(repoPath);
+        if (mergeActive) {
+          log.info("Merge conflicts detected, spawning merger agent to resolve");
+          try {
+            const resolved = await this.spawnMergerAgent(
+              projectId,
+              repoPath,
+              mergeErr.unmergedFiles,
+              "merge"
+            );
+            if (resolved) {
+              log.info("Merger agent resolved merge conflicts, continuing");
+              // Merge succeeded (agent ran git add + git commit) — fall through to close task
+            } else {
+              await this.branchManager.mergeAbort(repoPath);
+              await this.handleTaskFailure(
+                projectId,
+                repoPath,
+                task,
+                branchName,
+                `Merge to main failed: ${mergeErr}`,
+                null,
+                "merge_conflict"
+              );
+              return;
+            }
+          } catch (mergerErr) {
+            log.warn("Merger agent error during merge resolution", { mergerErr });
+            await this.branchManager.mergeAbort(repoPath);
+            await this.handleTaskFailure(
+              projectId,
+              repoPath,
+              task,
+              branchName,
+              `Merge to main failed: ${mergeErr}`,
+              null,
+              "merge_conflict"
+            );
+            return;
+          }
+        } else {
+          // Unmerged files but no merge state — stale/rebased state, fail the task
+          await this.handleTaskFailure(
+            projectId,
+            repoPath,
+            task,
+            branchName,
+            `Merge to main failed: ${mergeErr}`,
+            null,
+            "merge_conflict"
+          );
+          return;
+        }
+      } else {
+        const merged = await this.branchManager.verifyMerge(repoPath, branchName);
+        if (!merged) {
+          await this.handleTaskFailure(
+            projectId,
+            repoPath,
+            task,
+            branchName,
+            `Merge to main failed: ${mergeErr}`,
+            null,
+            "merge_conflict"
+          );
+          return;
+        }
       }
     }
 
@@ -1312,11 +1380,21 @@ export class OrchestratorService {
   ): Promise<void> {
     // Push main to remote (with merger fallback for rebase conflicts)
     if (!this.pushInProgress.has(projectId)) {
+      let resolvePush!: () => void;
+      const pushPromise = new Promise<void>((r) => {
+        resolvePush = r;
+      });
+      this.pushCompletion.set(projectId, { promise: pushPromise, resolve: resolvePush });
       this.pushInProgress.add(projectId);
       try {
         await this.pushMainWithMergerFallback(projectId, repoPath);
       } finally {
         this.pushInProgress.delete(projectId);
+        const entry = this.pushCompletion.get(projectId);
+        if (entry) {
+          entry.resolve();
+          this.pushCompletion.delete(projectId);
+        }
       }
     } else {
       log.info("Push already in progress, skipping (will retry on next completion)");
@@ -1348,6 +1426,16 @@ export class OrchestratorService {
         }
       }
     }
+  }
+
+  /**
+   * Wait for any in-progress push to complete. Prevents worktree_merge from
+   * seeing unmerged files left by a concurrent push's rebase conflicts.
+   */
+  private async waitForPushComplete(projectId: string): Promise<void> {
+    if (!this.pushInProgress.has(projectId)) return;
+    const entry = this.pushCompletion.get(projectId);
+    if (entry) await entry.promise;
   }
 
   /**
@@ -1429,13 +1517,14 @@ export class OrchestratorService {
   }
 
   /**
-   * Spawn a merger agent to resolve rebase conflicts. Returns true if resolution succeeded.
-   * The agent runs synchronously (we await its exit) since this is part of the push flow.
+   * Spawn a merger agent to resolve conflicts. Returns true if resolution succeeded.
+   * Supports rebase (push) and merge (merge-to-main) conflict resolution.
    */
   private async spawnMergerAgent(
     projectId: string,
     repoPath: string,
-    conflictedFiles: string[]
+    conflictedFiles: string[],
+    mode: "rebase" | "merge" = "rebase"
   ): Promise<boolean> {
     const settings = await this.projectService.getSettings(projectId);
     const conflictDiff = await this.branchManager.getConflictDiff(repoPath);
@@ -1443,6 +1532,7 @@ export class OrchestratorService {
     const prompt = this.contextAssembler.generateMergeConflictPrompt({
       conflictedFiles,
       conflictDiff,
+      mode,
     });
 
     // Write prompt to a temporary file in .opensprint/
@@ -1485,9 +1575,12 @@ export class OrchestratorService {
           // Clean up prompt dir
           await fs.rm(mergerDir, { recursive: true, force: true }).catch(() => {});
 
-          // Check if rebase is still in progress (agent failed to complete it)
-          const rebaseStillActive = await this.branchManager.isRebaseInProgress(repoPath);
-          if (rebaseStillActive) {
+          // Check if conflict state is still active (agent failed to complete)
+          const isRebase = mode === "rebase";
+          const conflictStillActive = isRebase
+            ? await this.branchManager.isRebaseInProgress(repoPath)
+            : await this.branchManager.isMergeInProgress(repoPath);
+          if (conflictStillActive) {
             resolve(false);
             return;
           }
@@ -1509,7 +1602,7 @@ export class OrchestratorService {
             // No result file — fall back to exit code
           }
 
-          resolve(code === 0 && !rebaseStillActive);
+          resolve(code === 0 && !conflictStillActive);
         },
       });
 

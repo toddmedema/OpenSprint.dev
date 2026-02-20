@@ -329,17 +329,30 @@ export class ContextAssembler {
   }
 
   /**
-   * Generate a prompt for the Merger agent to resolve rebase conflicts.
-   * This is a standalone prompt (not tied to ActiveTaskConfig) since merge
-   * conflicts happen outside the normal task lifecycle.
+   * Generate a prompt for the Merger agent to resolve conflicts.
+   * Supports both rebase (push) and merge (merge-to-main) conflict resolution.
    */
-  generateMergeConflictPrompt(opts: { conflictedFiles: string[]; conflictDiff: string }): string {
-    let prompt = `# Resolve Rebase Conflicts\n\n`;
+  generateMergeConflictPrompt(opts: {
+    conflictedFiles: string[];
+    conflictDiff: string;
+    mode?: "rebase" | "merge";
+  }): string {
+    const mode = opts.mode ?? "rebase";
+    const isMerge = mode === "merge";
+
+    let prompt = isMerge ? `# Resolve Merge Conflicts\n\n` : `# Resolve Rebase Conflicts\n\n`;
     prompt += `## Situation\n\n`;
-    prompt += `The orchestrator merged a task branch into local \`main\`, then ran \`git rebase origin/main\` `;
-    prompt += `to incorporate remote changes before pushing. The rebase hit conflicts that need manual resolution.\n\n`;
-    prompt += `The repository is currently in a **rebase-in-progress** state. Your job is to resolve all conflicts `;
-    prompt += `and allow the rebase to complete.\n\n`;
+    if (isMerge) {
+      prompt += `The orchestrator is merging a task branch into local \`main\`. The merge hit conflicts `;
+      prompt += `that need manual resolution.\n\n`;
+      prompt += `The repository is currently in a **merge-in-progress** state. Your job is to resolve all conflicts `;
+      prompt += `and complete the merge.\n\n`;
+    } else {
+      prompt += `The orchestrator merged a task branch into local \`main\`, then ran \`git rebase origin/main\` `;
+      prompt += `to incorporate remote changes before pushing. The rebase hit conflicts that need manual resolution.\n\n`;
+      prompt += `The repository is currently in a **rebase-in-progress** state. Your job is to resolve all conflicts `;
+      prompt += `and allow the rebase to complete.\n\n`;
+    }
 
     prompt += `## Conflicted Files\n\n`;
     for (const f of opts.conflictedFiles) {
@@ -355,20 +368,25 @@ export class ContextAssembler {
       }
     }
 
+    const continueCmd = isMerge
+      ? "`git add -A && git -c core.editor=true commit --no-edit`"
+      : "`git -c core.editor=true rebase --continue`";
+    const abortCmd = isMerge ? "`git merge --abort`" : "`git rebase --abort`";
+
     prompt += `## Instructions\n\n`;
     prompt += `1. For each conflicted file, open it, understand both sides, and resolve the conflict markers (\`<<<<<<<\`, \`=======\`, \`>>>>>>>\`). Keep the correct combination of both sides.\n`;
     prompt += `2. After resolving each file, stage it with \`git add <file>\`.\n`;
-    prompt += `3. Once ALL conflicts are resolved and staged, run: \`git -c core.editor=true rebase --continue\`\n`;
-    prompt += `4. Verify the rebase completed successfully (no more conflicts).\n`;
+    prompt += `3. Once ALL conflicts are resolved and staged, run: ${continueCmd}\n`;
+    prompt += `4. Verify the operation completed successfully (no more conflicts).\n`;
     prompt += `5. Write your result to \`.opensprint/merge-result.json\` using this exact JSON format:\n`;
     prompt += `   \`\`\`json\n`;
     prompt += `   { "status": "success", "summary": "Brief description of how conflicts were resolved" }\n`;
     prompt += `   \`\`\`\n`;
-    prompt += `   Use \`"status": "success"\` when all conflicts are resolved and the rebase completed.\n`;
+    prompt += `   Use \`"status": "success"\` when all conflicts are resolved and the ${isMerge ? "merge" : "rebase"} completed.\n`;
     prompt += `   Use \`"status": "failed"\` if you cannot resolve the conflicts.\n`;
     prompt += `   The \`status\` field MUST be exactly \`"success"\` or \`"failed"\`.\n\n`;
     prompt += `## Important\n\n`;
-    prompt += `- Do NOT run \`git rebase --abort\`. The orchestrator will handle cleanup if you fail.\n`;
+    prompt += `- Do NOT run ${abortCmd}. The orchestrator will handle cleanup if you fail.\n`;
     prompt += `- Do NOT run \`git push\`. The orchestrator will push after you exit.\n`;
     prompt += `- Focus only on resolving conflicts — do not make other code changes.\n`;
 
