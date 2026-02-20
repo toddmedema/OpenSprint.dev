@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from "../../store";
 import { submitFeedback, resolveFeedback, removeFeedbackItem } from "../../store/slices/evalSlice";
 import { TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
 import { TaskLinkTooltip } from "../../components/TaskLinkTooltip";
+import { KeyboardShortcutTooltip } from "../../components/KeyboardShortcutTooltip";
 
 /** Reply icon (message turn / corner up-right) */
 function ReplyIcon({ className }: { className?: string }) {
@@ -714,13 +715,15 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                   <polyline points="21 15 16 10 5 21" />
                 </svg>
               </button>
-              <button
-                onClick={handleSubmit}
-                disabled={submitting || !input.trim()}
-                className="btn-primary disabled:opacity-50"
-              >
-                {submitting ? "Submitting..." : "Submit Feedback"}
-              </button>
+              <KeyboardShortcutTooltip>
+                <button
+                  onClick={handleSubmit}
+                  disabled={submitting || !input.trim()}
+                  className="btn-primary disabled:opacity-50"
+                >
+                  {submitting ? "Submitting..." : "Submit Feedback"}
+                </button>
+              </KeyboardShortcutTooltip>
             </div>
           </div>
 

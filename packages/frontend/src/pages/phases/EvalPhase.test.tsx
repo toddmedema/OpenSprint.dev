@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
@@ -223,6 +223,101 @@ describe("EvalPhase feedback form", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("feedback-priority-select")).not.toBeDisabled();
+    });
+  });
+
+  describe("Submit Feedback button tooltip", () => {
+    const originalNavigator = global.navigator;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.stubGlobal("navigator", { ...originalNavigator });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.stubGlobal("navigator", originalNavigator);
+    });
+
+    it("shows Cmd + Enter tooltip on macOS after hover delay", async () => {
+      vi.stubGlobal("navigator", {
+        ...originalNavigator,
+        platform: "MacIntel",
+        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      });
+
+      const store = createStore();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /Submit Feedback/i })).toBeInTheDocument();
+      });
+
+      const submitButton = screen.getByRole("button", { name: /Submit Feedback/i });
+      await userEvent.hover(submitButton);
+      vi.advanceTimersByTime(300);
+
+      const tooltip = screen.getByRole("tooltip");
+      expect(tooltip).toBeInTheDocument();
+      expect(tooltip).toHaveTextContent("Cmd + Enter to submit");
+    });
+
+    it("shows Ctrl + Enter tooltip on Windows after hover delay", async () => {
+      vi.stubGlobal("navigator", {
+        ...originalNavigator,
+        platform: "Win32",
+        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      });
+
+      const store = createStore();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /Submit Feedback/i })).toBeInTheDocument();
+      });
+
+      const submitButton = screen.getByRole("button", { name: /Submit Feedback/i });
+      await userEvent.hover(submitButton);
+      vi.advanceTimersByTime(300);
+
+      const tooltip = screen.getByRole("tooltip");
+      expect(tooltip).toBeInTheDocument();
+      expect(tooltip).toHaveTextContent("Ctrl + Enter to submit");
+    });
+
+    it("dismisses tooltip when cursor leaves button", async () => {
+      vi.stubGlobal("navigator", {
+        ...originalNavigator,
+        platform: "Win32",
+        userAgent: "Mozilla/5.0",
+      });
+
+      const store = createStore();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /Submit Feedback/i })).toBeInTheDocument();
+      });
+
+      const submitButton = screen.getByRole("button", { name: /Submit Feedback/i });
+      await userEvent.hover(submitButton);
+      vi.advanceTimersByTime(300);
+      expect(screen.getByRole("tooltip")).toBeInTheDocument();
+
+      await userEvent.unhover(submitButton);
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     });
   });
 });
