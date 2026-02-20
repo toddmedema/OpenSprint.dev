@@ -665,7 +665,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                 ))}
               </div>
             )}
-            <div className="flex justify-end items-center gap-2">
+            <div className="flex justify-end items-center gap-2 flex-wrap">
               <select
                 value={priority ?? ""}
                 onChange={(e) => {
@@ -673,7 +673,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                   setPriority(v === "" ? null : Number(v));
                 }}
                 disabled={submitting}
-                className="input text-sm py-1.5 px-2.5 w-auto min-w-[10rem] bg-theme-input-bg text-theme-input-text ring-theme-ring"
+                className="input text-sm h-10 py-2 px-3 w-auto min-w-[10rem] bg-theme-input-bg text-theme-input-text ring-theme-ring"
                 aria-label="Priority (optional)"
                 data-testid="feedback-priority-select"
               >
@@ -696,7 +696,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={submitting || images.length >= MAX_IMAGES}
-                className="btn-secondary p-2 disabled:opacity-50"
+                className="btn-secondary h-10 w-10 shrink-0 p-0 flex items-center justify-center disabled:opacity-50"
                 title="Attach image"
                 aria-label="Attach image"
               >
@@ -719,7 +719,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || !input.trim()}
-                  className="btn-primary disabled:opacity-50"
+                  className="btn-primary h-10 disabled:opacity-50"
                 >
                   {submitting ? "Submitting..." : "Submit Feedback"}
                 </button>
