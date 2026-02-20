@@ -70,6 +70,17 @@ describe("ActiveAgentsList", () => {
     expect(dot).toBeNull();
   });
 
+  it("renders button with no visible border (border-0)", async () => {
+    renderActiveAgentsList();
+
+    await waitFor(() => {
+      expect(screen.getByText("No agents running")).toBeInTheDocument();
+    });
+    const button = screen.getByTitle("Active agents");
+    expect(button.className).toContain("border-0");
+    expect(button.className).not.toContain("border-theme-border");
+  });
+
   it("shows dropdown when button clicked", async () => {
     const user = userEvent.setup();
     renderActiveAgentsList();

@@ -190,7 +190,7 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border border-theme-border bg-theme-surface-muted hover:bg-theme-border-subtle text-theme-text transition-colors"
+        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border-0 bg-theme-surface-muted hover:bg-theme-border-subtle focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 text-theme-text transition-colors"
         aria-expanded={open}
         aria-haspopup="listbox"
         title="Active agents"
