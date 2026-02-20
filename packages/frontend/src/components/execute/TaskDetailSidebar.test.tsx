@@ -352,6 +352,19 @@ describe("TaskDetailSidebar", () => {
       updatedAt: "",
     });
 
+    it("shows priority as editable dropdown for status open", () => {
+      const props = createMinimalProps({
+        taskDetail: { ...taskDetailWithPriority(1), status: "open" as const },
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      expect(screen.getByTestId("priority-dropdown-trigger")).toBeInTheDocument();
+      expect(screen.queryByTestId("priority-read-only")).not.toBeInTheDocument();
+    });
+
     it("shows current priority as clickable element when taskDetail is loaded", () => {
       const props = createMinimalProps({
         taskDetail: taskDetailWithPriority(1),
@@ -511,8 +524,16 @@ describe("TaskDetailSidebar", () => {
         <Provider store={store}>
           <TaskDetailSidebar
             {...createMinimalProps({
-              taskDetail: { ...taskDetail, kanbanColumn: "done" as const },
-              selectedTaskData: { ...taskDetail, kanbanColumn: "done" as const },
+              taskDetail: {
+                ...taskDetail,
+                kanbanColumn: "done" as const,
+                status: "closed" as const,
+              },
+              selectedTaskData: {
+                ...taskDetail,
+                kanbanColumn: "done" as const,
+                status: "closed" as const,
+              },
               isDoneTask: true,
             })}
           />

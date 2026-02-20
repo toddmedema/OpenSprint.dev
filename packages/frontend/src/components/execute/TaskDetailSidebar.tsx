@@ -229,7 +229,7 @@ export function TaskDetailSidebar({
           ) : taskDetail ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-xs text-theme-muted">
-                {isDoneTask ? (
+                {(selectedTaskData ?? taskDetail)?.status === "closed" ? (
                   <span
                     className="text-theme-muted/80 cursor-default"
                     data-testid="priority-read-only"
