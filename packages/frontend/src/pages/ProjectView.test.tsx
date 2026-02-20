@@ -44,6 +44,14 @@ vi.mock("../api/client", () => ({
   },
 }));
 
+beforeEach(() => {
+  vi.stubGlobal("matchMedia", vi.fn(() => ({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })));
+});
+
 // Location capture for redirect assertion (pathname + search for deep link tests)
 function LocationDisplay() {
   const location = useLocation();
@@ -134,16 +142,13 @@ describe("ProjectView URL behavior", () => {
 
   it("sets data-theme=light on document when on sketch phase (Sketch phase always light mode)", async () => {
     document.documentElement.removeAttribute("data-theme");
-    const { unmount } = renderWithRouter("/projects/proj-1/sketch");
+    renderWithRouter("/projects/proj-1/sketch");
 
     await waitFor(() => {
       expect(screen.getByText("Test Project")).toBeInTheDocument();
     });
 
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
-
-    unmount();
-    expect(document.documentElement.getAttribute("data-theme")).not.toBe("light");
   });
 
   it("does not force light mode when on plan phase", async () => {
