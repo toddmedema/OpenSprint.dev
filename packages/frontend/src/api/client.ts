@@ -14,6 +14,7 @@ import type {
   CreatePlanRequest,
   UpdatePlanRequest,
   SuggestPlansResponse,
+  GeneratePlanRequest,
   CrossEpicDependenciesResponse,
   Task,
   AgentSession,
@@ -141,6 +142,11 @@ export const api = {
     decompose: (projectId: string) =>
       request<{ created: number; plans: Plan[] }>(`/projects/${projectId}/plans/decompose`, {
         method: "POST",
+      }),
+    generate: (projectId: string, data: GeneratePlanRequest) =>
+      request<Plan>(`/projects/${projectId}/plans/generate`, {
+        method: "POST",
+        body: JSON.stringify(data),
       }),
     get: (projectId: string, planId: string) =>
       request<Plan>(`/projects/${projectId}/plans/${planId}`),
