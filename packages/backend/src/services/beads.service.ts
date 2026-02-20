@@ -191,9 +191,10 @@ export class BeadsService {
   /**
    * Import JSONL into the database to fix staleness (e.g. after git pull).
    * Tries `bd sync --import-only` first (beads-recommended for "Database out of sync").
-   * Falls back to `bd import --orphan-handling allow` so orphan issues (children whose
-   * parent was deleted or not yet imported) are still ingested rather than silently dropped.
-   * Throws if both fail — no silent continuation with a still-stale DB.
+   * Falls back to `bd import` with progressively more permissive orphan-handling:
+   * - allow: child issues whose parent was deleted are still imported
+   * - skip: skip issues whose parent doesn't exist (partial import when JSONL has bad refs)
+   * Throws if all attempts fail — no silent continuation with a still-stale DB.
    */
   private async syncImport(repoPath: string): Promise<void> {
     let lastError: string | undefined;
@@ -213,30 +214,44 @@ export class BeadsService {
       log.warn("sync --import-only failed, trying import", { repoPath, err: lastError });
     }
 
-    // 2. Fallback: import with --orphan-handling allow so child issues whose parent
-    //    was deleted or never exported are still imported (prevents stale-DB loops).
-    try {
-      await execAsync(`bd ${BD_GLOBAL_FLAGS} import -i "${jsonlPath}" --orphan-handling allow`, {
-        cwd: repoPath,
-        timeout: 30_000,
-        maxBuffer: MAX_BUFFER_BYTES,
-      });
-      return;
-    } catch (err: unknown) {
-      const e = err as { stderr?: string; message?: string };
-      const importError = e.stderr ?? e.message ?? String(err);
-      const manualFix =
-        " Run in the project directory: bd sync --import-only (or bd import -i .beads/issues.jsonl --orphan-handling allow)";
-      throw new AppError(
-        502,
-        ErrorCodes.BEADS_SYNC_FAILED,
-        `Beads database sync failed. Both sync --import-only and import --orphan-handling allow failed.${manualFix}\nLast error: ${importError}`,
-        {
-          syncError: lastError,
-          importError,
+    // 2. Fallback: import with --orphan-handling allow (children whose parent was deleted)
+    for (const orphanHandling of ["allow", "skip"] as const) {
+      try {
+        await execAsync(
+          `bd ${BD_GLOBAL_FLAGS} import -i "${jsonlPath}" --orphan-handling ${orphanHandling}`,
+          {
+            cwd: repoPath,
+            timeout: 30_000,
+            maxBuffer: MAX_BUFFER_BYTES,
+          }
+        );
+        if (orphanHandling === "skip") {
+          log.warn(
+            "Recovery: import succeeded with --orphan-handling skip; some issues may be missing",
+            {
+              repoPath,
+            }
+          );
         }
-      );
+        return;
+      } catch (err: unknown) {
+        const e = err as { stderr?: string; message?: string };
+        lastError = e.stderr ?? e.message ?? String(err);
+        log.warn(`import --orphan-handling ${orphanHandling} failed`, { repoPath, err: lastError });
+      }
     }
+
+    const manualFix =
+      " Run in the project directory: bd sync --import-only, or bd import -i .beads/issues.jsonl --orphan-handling allow (or --orphan-handling skip to skip issues with missing parents).";
+    throw new AppError(
+      502,
+      ErrorCodes.BEADS_SYNC_FAILED,
+      `Beads database sync failed. All import attempts failed.${manualFix}\nLast error: ${lastError}`,
+      {
+        syncError: lastError,
+        importError: lastError,
+      }
+    );
   }
 
   /**
@@ -351,7 +366,7 @@ export class BeadsService {
           const retryErr = retryError as { stderr?: string; stdout?: string; message: string };
           const retryStderr = retryErr.stderr || retryErr.stdout || retryErr.message;
           const manualFix =
-            " To fix manually, run in the project directory: bd sync --import-only (or bd import -i .beads/issues.jsonl --orphan-handling allow)";
+            " To fix manually, run in the project directory: bd sync --import-only, or bd import -i .beads/issues.jsonl --orphan-handling allow (or --orphan-handling skip)";
           throw new AppError(
             502,
             ErrorCodes.BEADS_COMMAND_FAILED,

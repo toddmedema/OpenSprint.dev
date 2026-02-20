@@ -522,7 +522,49 @@ describe("BeadsService", () => {
       );
     });
 
-    it("throws BEADS_SYNC_FAILED when both sync and import fail", async () => {
+    it("falls back to import --orphan-handling skip when allow fails", async () => {
+      const execCalls: string[] = [];
+      let listCallCount = 0;
+      mockExecImpl = async (cmd: string) => {
+        execCalls.push(cmd);
+        if (cmd.includes("list --all")) {
+          listCallCount++;
+          if (listCallCount === 1) {
+            throw Object.assign(new Error("Database out of sync"), {
+              stderr: "Database out of sync with JSONL. Run 'bd sync --import-only' to fix.",
+            });
+          }
+          return { stdout: "[]", stderr: "" };
+        }
+        if (cmd.includes("sync --import-only")) {
+          throw Object.assign(new Error("sync failed"), {
+            stderr: "parent issue opensprint.dev-3uv does not exist",
+          });
+        }
+        if (cmd.includes("import -i") && cmd.includes("--orphan-handling allow")) {
+          throw Object.assign(new Error("import failed"), {
+            stderr: "parent issue opensprint.dev-3uv does not exist",
+          });
+        }
+        if (cmd.includes("import -i") && cmd.includes("--orphan-handling skip")) {
+          return { stdout: "", stderr: "" };
+        }
+        return { stdout: "[]", stderr: "" };
+      };
+      const result = await beads.listAll("/repo");
+      expect(result).toEqual([]);
+      const allowCall = execCalls.find(
+        (c) => c.includes("import -i") && c.includes("--orphan-handling allow")
+      );
+      const skipCall = execCalls.find(
+        (c) => c.includes("import -i") && c.includes("--orphan-handling skip")
+      );
+      expect(allowCall).toBeDefined();
+      expect(skipCall).toBeDefined();
+      expect(execCalls.indexOf(allowCall!)).toBeLessThan(execCalls.indexOf(skipCall!));
+    });
+
+    it("throws BEADS_SYNC_FAILED when sync, allow, and skip all fail", async () => {
       mockExecImpl = async (cmd: string) => {
         if (cmd.includes("sync --import-only") || cmd.includes("import -i")) {
           throw Object.assign(new Error("sync failed"), {

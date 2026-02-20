@@ -525,6 +525,21 @@ export class CrashRecoveryService {
       if (advanced) return;
     }
 
+    if (worktreePath && persisted && persisted.currentPhase === "review") {
+      const resumed = await this.tryResumeReview(
+        projectId,
+        repoPath,
+        taskId,
+        branchName,
+        worktreePath,
+        persisted,
+        state,
+        deps,
+        callbacks
+      );
+      if (resumed) return;
+    }
+
     await callbacks.clearPersistedState(repoPath);
 
     const commitCount = await deps.branchManager.getCommitCountAhead(repoPath, branchName);
@@ -681,6 +696,90 @@ export class CrashRecoveryService {
       log.warn("Recovery: result.json advance-to-review failed", { err });
     }
     return false;
+  }
+
+  /**
+   * Resume review phase when Reviewer died (e.g. backend restart).
+   * Restores orchestrator state and spawns a new Reviewer instead of requeueing.
+   * Returns true if resumed, false to fall through to requeue.
+   */
+  private async tryResumeReview(
+    projectId: string,
+    repoPath: string,
+    taskId: string,
+    branchName: string,
+    worktreePath: string,
+    persisted: PersistedOrchestratorState,
+    state: CrashRecoveryState,
+    deps: CrashRecoveryDeps,
+    callbacks: CrashRecoveryCallbacks
+  ): Promise<boolean> {
+    try {
+      // Validate worktree exists
+      await fsStat(worktreePath);
+    } catch {
+      log.warn("Recovery: resume review failed — worktree path invalid", { worktreePath });
+      return false;
+    }
+
+    const commitCount = await deps.branchManager.getCommitCountAhead(repoPath, branchName);
+    if (commitCount === 0) {
+      log.warn("Recovery: resume review failed — branch has no commits", { branchName });
+      return false;
+    }
+
+    const settings = await deps.projectService.getSettings(projectId);
+    const reviewMode = settings.reviewMode ?? DEFAULT_REVIEW_MODE;
+    if (reviewMode === "never") {
+      // Edge case: we shouldn't have review phase with "never", fall through to requeue
+      log.warn("Recovery: resume review skipped — reviewMode is never", { taskId });
+      return false;
+    }
+
+    let task: BeadsIssue;
+    try {
+      task = await deps.beads.show(repoPath, taskId);
+    } catch (err) {
+      log.warn("Recovery: resume review failed — task not found", { taskId, err });
+      return false;
+    }
+
+    log.info("Recovery: resuming review phase", { taskId, branchName });
+
+    eventLogService
+      .append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId,
+        event: "crash_recovery.resume_review",
+        data: { branchName, worktreePath },
+      })
+      .catch(() => {});
+
+    state.status.currentTask = taskId;
+    state.status.currentPhase = "review";
+    state.activeBranchName = branchName;
+    state.activeTaskTitle = persisted.currentTaskTitle ?? null;
+    state.activeWorktreePath = worktreePath;
+    state.attempt = persisted.attempt;
+    state.agent.startedAt = persisted.startedAt ?? new Date().toISOString();
+    state.loopActive = true;
+
+    await callbacks.persistState(projectId, repoPath);
+    broadcastToProject(projectId, {
+      type: "task.updated",
+      taskId,
+      status: "in_progress",
+      assignee: "agent-1",
+    });
+    broadcastToProject(projectId, {
+      type: "execute.status",
+      currentTask: taskId,
+      currentPhase: "review",
+      queueDepth: state.status.queueDepth,
+    });
+    await callbacks.executeReviewPhase(projectId, repoPath, task, branchName);
+    return true;
   }
 
   /**

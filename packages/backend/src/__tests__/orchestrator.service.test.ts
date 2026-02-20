@@ -609,7 +609,10 @@ describe("OrchestratorService", () => {
         testFramework: "vitest",
         codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
         reviewMode: "always",
-        deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
+        deployment: {
+          autoDeployOnEpicCompletion: false,
+          autoResolveFeedbackOnTaskCompletion: false,
+        },
       });
       mockCommitWip.mockResolvedValue(undefined);
       mockMergeToMain.mockResolvedValue(undefined);
@@ -727,6 +730,120 @@ describe("OrchestratorService", () => {
 
       // No commits — should requeue (result.json without commits is suspicious)
       expect(mockBeadsUpdate).toHaveBeenCalledWith(repoPath, "task-result-no-commits", {
+        status: "open",
+        assignee: "",
+      });
+    });
+
+    it("resumes review when crash recovery finds phase review and dead PID", async () => {
+      const wtPath = path.join(repoPath, "wt-review-resume");
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+      await fs.mkdir(path.join(wtPath, ".opensprint", "active", "task-review-resume"), {
+        recursive: true,
+      });
+      mockGetActiveDir.mockImplementation((base: string, tid: string) =>
+        path.join(base, ".opensprint", "active", tid)
+      );
+
+      const persistedState = {
+        projectId,
+        currentTaskId: "task-review-resume",
+        currentTaskTitle: "Task in review",
+        currentPhase: "review" as const,
+        branchName: "opensprint/task-review-resume",
+        worktreePath: wtPath,
+        agentPid: 999999999, // Dead PID
+        attempt: 1,
+        startedAt: new Date().toISOString(),
+        lastTransition: new Date().toISOString(),
+        lastOutputTimestamp: null,
+        queueDepth: 0,
+        totalDone: 0,
+        totalFailed: 0,
+      };
+
+      const statePath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorState);
+      await fs.writeFile(statePath, JSON.stringify(persistedState), "utf-8");
+
+      mockGetCommitCountAhead.mockResolvedValue(2);
+      mockBeadsShow.mockResolvedValue({
+        id: "task-review-resume",
+        title: "Task in review",
+        issue_type: "task",
+        priority: 2,
+        status: "in_progress",
+      });
+      mockGetSettings.mockResolvedValue({
+        testFramework: "vitest",
+        codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+        reviewMode: "always",
+        deployment: {
+          autoDeployOnEpicCompletion: false,
+          autoResolveFeedbackOnTaskCompletion: false,
+        },
+      });
+      mockBuildContext.mockResolvedValue({});
+      mockAssembleTaskDirectory.mockResolvedValue(undefined);
+
+      let reviewOnExit: (code: number | null) => Promise<void> = async () => {};
+      mockInvokeReviewAgent.mockImplementation(
+        (_p: string, _c: unknown, opts: { onExit?: (code: number | null) => Promise<void> }) => {
+          reviewOnExit = opts.onExit ?? (async () => {});
+          return { kill: vi.fn(), pid: 12347 };
+        }
+      );
+
+      await orchestrator.ensureRunning(projectId);
+
+      await new Promise((r) => setTimeout(r, 150));
+
+      // Should NOT requeue — should have resumed review
+      expect(mockBeadsUpdate).not.toHaveBeenCalledWith(
+        repoPath,
+        "task-review-resume",
+        expect.objectContaining({ status: "open" })
+      );
+
+      // Should NOT have removed worktree
+      expect(mockRemoveTaskWorktree).not.toHaveBeenCalledWith(repoPath, "task-review-resume");
+
+      // Should have invoked review agent
+      expect(mockInvokeReviewAgent).toHaveBeenCalled();
+
+      // Clean up: simulate review agent exit so we don't leave timers running
+      await reviewOnExit(0);
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    it("requeues when crash recovery finds phase review but worktree missing", async () => {
+      const persistedState = {
+        projectId,
+        currentTaskId: "task-review-no-wt",
+        currentTaskTitle: "Task in review",
+        currentPhase: "review" as const,
+        branchName: "opensprint/task-review-no-wt",
+        worktreePath: path.join(repoPath, "nonexistent-worktree"), // Path that doesn't exist
+        agentPid: 999999999,
+        attempt: 1,
+        startedAt: new Date().toISOString(),
+        lastTransition: new Date().toISOString(),
+        lastOutputTimestamp: null,
+        queueDepth: 0,
+        totalDone: 0,
+        totalFailed: 0,
+      };
+
+      const statePath = path.join(repoPath, OPENSPRINT_PATHS.orchestratorState);
+      await fs.writeFile(statePath, JSON.stringify(persistedState), "utf-8");
+
+      mockGetCommitCountAhead.mockResolvedValue(2);
+
+      await orchestrator.ensureRunning(projectId);
+
+      await new Promise((r) => setTimeout(r, 150));
+
+      // Worktree missing — should fall through to requeue
+      expect(mockBeadsUpdate).toHaveBeenCalledWith(repoPath, "task-review-no-wt", {
         status: "open",
         assignee: "",
       });
@@ -919,7 +1036,10 @@ describe("OrchestratorService", () => {
         testFramework: "vitest",
         codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
         reviewMode: "always",
-        deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
+        deployment: {
+          autoDeployOnEpicCompletion: false,
+          autoResolveFeedbackOnTaskCompletion: false,
+        },
       });
 
       mockBeadsReady.mockResolvedValue([task]);
@@ -1029,7 +1149,10 @@ describe("OrchestratorService", () => {
         testFramework: "vitest",
         codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
         reviewMode: "always",
-        deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
+        deployment: {
+          autoDeployOnEpicCompletion: false,
+          autoResolveFeedbackOnTaskCompletion: false,
+        },
       });
 
       mockBeadsReady.mockResolvedValue([task]);
@@ -1411,7 +1534,10 @@ describe("OrchestratorService", () => {
         codingAgent: defaultAgent,
         codingAgentByComplexity: { high: veryHighAgent },
         reviewMode: "always",
-        deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
+        deployment: {
+          autoDeployOnEpicCompletion: false,
+          autoResolveFeedbackOnTaskCompletion: false,
+        },
       });
       mockGetPlanComplexityForTask.mockResolvedValue("high");
 
@@ -1666,7 +1792,10 @@ describe("OrchestratorService", () => {
         testFramework: "vitest",
         codingAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
         reviewMode: "always",
-        deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
+        deployment: {
+          autoDeployOnEpicCompletion: false,
+          autoResolveFeedbackOnTaskCompletion: false,
+        },
       });
 
       mockBeadsReady.mockResolvedValue([task]);
@@ -1744,9 +1873,7 @@ describe("OrchestratorService", () => {
       mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
       mockCreateTaskWorktree.mockResolvedValue(wtPath);
-      mockGetActiveDir.mockReturnValue(
-        path.join(wtPath, ".opensprint", "active", "task-demotion")
-      );
+      mockGetActiveDir.mockReturnValue(path.join(wtPath, ".opensprint", "active", "task-demotion"));
       mockAssembleTaskDirectory.mockResolvedValue(undefined);
       mockGetChangedFiles.mockResolvedValue([]);
       mockReadResult.mockResolvedValue({ status: "success", summary: "Done" });
@@ -2026,7 +2153,9 @@ describe("OrchestratorService", () => {
       mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
       mockCreateTaskWorktree.mockResolvedValue(path.join(repoPathA, "wt-a"));
-      mockGetActiveDir.mockReturnValue(path.join(repoPathA, "wt-a", ".opensprint", "active", "task-a"));
+      mockGetActiveDir.mockReturnValue(
+        path.join(repoPathA, "wt-a", ".opensprint", "active", "task-a")
+      );
       mockAssembleTaskDirectory.mockResolvedValue(undefined);
 
       mockInvokeCodingAgent.mockReturnValue({ kill: vi.fn(), pid: 12345 });
@@ -2049,7 +2178,13 @@ describe("OrchestratorService", () => {
   describe("task selection - priority and blocked handling", () => {
     it("filters out blocked tasks from ready list", async () => {
       mockBeadsReady.mockResolvedValue([
-        { id: "task-blocked", title: "Blocked", issue_type: "task", priority: 2, status: "blocked" },
+        {
+          id: "task-blocked",
+          title: "Blocked",
+          issue_type: "task",
+          priority: 2,
+          status: "blocked",
+        },
         { id: "task-ready", title: "Ready", issue_type: "task", priority: 2, status: "open" },
       ]);
       mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
@@ -2069,18 +2204,26 @@ describe("OrchestratorService", () => {
         "task-ready",
         expect.objectContaining({ status: "in_progress" })
       );
-      expect(mockBeadsUpdate).not.toHaveBeenCalledWith(
-        repoPath,
-        "task-blocked",
-        expect.anything()
-      );
+      expect(mockBeadsUpdate).not.toHaveBeenCalledWith(repoPath, "task-blocked", expect.anything());
     });
 
     it("filters out epics and plan approval gate tasks", async () => {
       mockBeadsReady.mockResolvedValue([
         { id: "epic-1", title: "Epic", issue_type: "epic", priority: 3, status: "open" },
-        { id: "task-1.0", title: "Plan approval gate", issue_type: "task", priority: 2, status: "open" },
-        { id: "task-1.1", title: "Implement feature", issue_type: "task", priority: 2, status: "open" },
+        {
+          id: "task-1.0",
+          title: "Plan approval gate",
+          issue_type: "task",
+          priority: 2,
+          status: "open",
+        },
+        {
+          id: "task-1.1",
+          title: "Implement feature",
+          issue_type: "task",
+          priority: 2,
+          status: "open",
+        },
       ]);
       mockBeadsAreAllBlockersClosed.mockResolvedValue(true);
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
@@ -2106,9 +2249,7 @@ describe("OrchestratorService", () => {
         { id: "task-blocked", title: "Blocked", issue_type: "task", priority: 1, status: "open" },
         { id: "task-ready", title: "Ready", issue_type: "task", priority: 2, status: "open" },
       ]);
-      mockBeadsAreAllBlockersClosed
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce(true);
+      mockBeadsAreAllBlockersClosed.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
       mockBeadsGetCumulativeAttempts.mockResolvedValue(0);
       mockCreateTaskWorktree.mockResolvedValue(path.join(repoPath, "wt-ready"));
       mockGetActiveDir.mockReturnValue(
