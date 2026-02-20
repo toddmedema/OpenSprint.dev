@@ -1,0 +1,25 @@
+{
+  "id": "2amk3n",
+  "text": "When an evaluate feedback is processed and receives its categorization from the agent - the whole page should not refresh, only the specific feedback card that got updated",
+  "category": "bug",
+  "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
+  "createdTaskIds": ["opensprint.dev-srl.38"],
+  "status": "mapped",
+  "createdAt": "2026-02-20T18:51:06.427Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-srl",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Replace full-page refresh with granular feedback card update on categorization",
+      "description": "When the Analyst agent returns a categorization for a feedback item, only the affected FeedbackCard component should re-render with the new category/mapped_plan_id/proposed_tasks — not the entire Evaluate page. Acceptance criteria:\n1. After categorization completes, only the specific feedback card updates (no full page reload or re-mount of the feedback list).\n2. Use the WebSocket relay to push a targeted feedback-updated event containing the feedback ID and new data; the frontend subscribes and patches only the matching card's state.\n3. Other feedback cards, scroll position, and any expanded/collapsed states on the page remain unchanged.\n4. Verify with multiple feedback items: submitting and categorizing one does not visually disrupt others.\n5. Loading/spinner indicator should be scoped to the individual card being categorized, not page-level.",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Replace full-page refresh with granular feedback card update on categorization"],
+  "feedbackSourceBeadId": "opensprint.dev-ps43"
+}

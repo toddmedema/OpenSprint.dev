@@ -1,0 +1,24 @@
+{
+  "id": "89dvgm",
+  "text": "The priority should only be editable if the task is NOT done/complete",
+  "category": "ux",
+  "mappedPlanId": "build-phase-kanban-and-task-listing",
+  "createdTaskIds": ["opensprint.dev-cxx.40"],
+  "status": "mapped",
+  "createdAt": "2026-02-20T18:48:35.412Z",
+  "parent_id": "l71ya3",
+  "depth": 1,
+  "mappedEpicId": "opensprint.dev-cxx",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Disable priority editing for completed tasks in Execute details sidebar",
+      "description": "When rendering the priority dropdown in the Execute details sidebar, check the task's status. If the task status is 'closed' (done/complete), the priority field should be read-only and not present the editable dropdown. Acceptance criteria:\n- Priority field is editable (shows dropdown on click) for tasks with status 'open' or 'in_progress'\n- Priority field is non-editable (displayed as static text, no hover/click affordance) for tasks with status 'closed'\n- Visual styling clearly distinguishes the disabled state (e.g., muted text, no pointer cursor)\n- If a task transitions to closed while the sidebar is open, the priority field updates to read-only without requiring a page refresh (via WebSocket or state update)",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Disable priority editing for completed tasks in Execute details sidebar"],
+  "feedbackSourceBeadId": "opensprint.dev-y9di"
+}

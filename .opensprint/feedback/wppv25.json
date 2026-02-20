@@ -1,0 +1,24 @@
+{
+  "id": "wppv25",
+  "text": "Clicking \"Execute!\" on a Plan card should immediately disable the button and show a loading spinner in the button text to avoid accidentally clicking it multiple times and triggering multiple agents on the same task. The button should not become re-enabled / out of loading state until the agent has finished (whether successfully or with an error)",
+  "category": "ux",
+  "mappedPlanId": "plan-phase-feature-decomposition",
+  "createdTaskIds": ["opensprint.dev-vwf.24"],
+  "status": "mapped",
+  "createdAt": "2026-02-20T19:05:23.606Z",
+  "parent_id": null,
+  "depth": 0,
+  "mappedEpicId": "opensprint.dev-vwf",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Add loading state and double-click prevention to Execute! button",
+      "description": "When the user clicks \"Execute!\" on a Plan card, the button must immediately: (1) become disabled so no further clicks register, and (2) replace its label text with a spinner + loading indicator (e.g. \"Executing…\" with a spinner icon). The button must remain in this disabled/loading state until the orchestrator confirms the gating-task closure and agent dispatch have completed (success or error). On error, re-enable the button and show an inline error message so the user can retry. Acceptance criteria: - Clicking Execute! disables the button within the same event-loop tick (optimistic disable before any async call). - A visible spinner or animation appears inside the button while the operation is in flight. - No duplicate gating-task closures or duplicate agent spawns can result from rapid clicks. - On success the button transitions to its post-execution state (e.g. hidden or replaced with status). - On failure the button re-enables with an error toast/message and the plan remains in its pre-execution state.",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Add loading state and double-click prevention to Execute! button"],
+  "feedbackSourceBeadId": "opensprint.dev-opn6"
+}

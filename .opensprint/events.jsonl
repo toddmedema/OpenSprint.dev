@@ -340,3 +340,13 @@
 {"timestamp":"2026-02-20T18:35:29.105Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sv74","event":"agent.spawned","data":{"phase":"review","model":"composer-1.5","attempt":1}}
 {"timestamp":"2026-02-20T18:41:38.703Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"transition.complete","data":{"from":"review","attempt":1}}
 {"timestamp":"2026-02-20T18:41:38.704Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sv74","event":"task.completed","data":{"attempt":1}}
+{"timestamp":"2026-02-20T18:41:43.602Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"push.succeeded"}
+{"timestamp":"2026-02-20T18:41:52.297Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sjik","event":"transition.start_task","data":{"from":"idle","attempt":1}}
+{"timestamp":"2026-02-20T18:41:53.522Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sjik","event":"agent.spawned","data":{"phase":"coding","model":"composer-1.5","attempt":1}}
+{"timestamp":"2026-02-20T18:48:43.963Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sjik","event":"watchdog.stale_heartbeat","data":{"staleSec":360,"threshold":120}}
+{"timestamp":"2026-02-20T18:50:14.891Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sjik","event":"task.failed","data":{"failureType":"test_failure","attempt":1,"reason":"Tests failed: 1 failed, 0 passed"}}
+{"timestamp":"2026-02-20T18:50:16.446Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sjik","event":"agent.spawned","data":{"phase":"coding","model":"composer-1.5","attempt":2}}
+{"timestamp":"2026-02-20T19:03:38.633Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sjik","event":"transition.enter_review","data":{"from":"coding","attempt":2}}
+{"timestamp":"2026-02-20T19:03:39.304Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sjik","event":"agent.spawned","data":{"phase":"review","model":"composer-1.5","attempt":2}}
+{"timestamp":"2026-02-20T19:08:19.247Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"","event":"transition.complete","data":{"from":"review","attempt":2}}
+{"timestamp":"2026-02-20T19:08:19.248Z","projectId":"94c64729-46c0-431f-bcc7-9585c6e0eb2c","taskId":"opensprint.dev-sjik","event":"task.completed","data":{"attempt":2}}

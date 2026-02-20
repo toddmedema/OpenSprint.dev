@@ -1,0 +1,24 @@
+{
+  "id": "hd97nz",
+  "text": "This filter should still show an \"All\" option (above the other two options)",
+  "category": "ux",
+  "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
+  "createdTaskIds": ["opensprint.dev-srl.37"],
+  "status": "mapped",
+  "createdAt": "2026-02-20T18:49:29.161Z",
+  "parent_id": "cgso8y",
+  "depth": 1,
+  "mappedEpicId": "opensprint.dev-srl",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Keep 'All' option in feedback status filter dropdown",
+      "description": "Ensure the feedback status filter dropdown on the Evaluate page retains an 'All' option positioned above the other filter options (e.g. Pending, Resolved). The default selection should still be 'Pending' (per parent feedback), but 'All' must remain available for users who want to view all feedback items. Acceptance criteria: (1) 'All' appears as the first item in the filter dropdown, above Pending and Resolved; (2) 'All' shows the total count of all feedback items in parentheses; (3) Selecting 'All' displays feedback of every status; (4) Default on page load remains 'Pending' (or whatever is saved in localStorage per parent feedback).",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Keep 'All' option in feedback status filter dropdown"],
+  "feedbackSourceBeadId": "opensprint.dev-twxb"
+}
