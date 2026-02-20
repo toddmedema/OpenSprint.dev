@@ -94,6 +94,12 @@ Effects:
 3. **`ensureSyncBeforeExec`**: Check `.beads/issues.jsonl` mtime vs `syncState`; if newer, run `syncImport` and update state.
 4. **`exec` stale error path**: Clear sync state, call `ensureSyncBeforeExec`, retry once. Rethrow `BEADS_SYNC_FAILED` from `syncImport` if it throws.
 
+## Backend: SQLite vs Dolt
+
+- **SQLite** (default): Uses a daemon for sync; `ensureDaemon` starts/stops the daemon before commands.
+- **Dolt**: Runs single-process with no daemon; `ensureDaemon` skips daemon start/stop and only runs `ensureSyncBeforeExec`.
+- Both backends use the same mtime-based sync/import flow for JSONL.
+
 ## Entry Points
 
 Sync is triggered via `ensureDaemon`, which runs `ensureSyncBeforeExec`. Called from:

@@ -21,6 +21,16 @@ last-touched
 db.sqlite
 bd.db
 
+# Ephemeral store (SQLite - wisps/molecules, intentionally not versioned)
+ephemeral.sqlite3
+ephemeral.sqlite3-journal
+ephemeral.sqlite3-wal
+ephemeral.sqlite3-shm
+
+# Dolt backend (local database, rebuilt from issues.jsonl via bd sync)
+dolt-access.lock
+dolt/
+
 # Worktree redirect file (contains relative path to main repo's .beads/)
 # Must not be committed as paths would be wrong in other clones
 redirect

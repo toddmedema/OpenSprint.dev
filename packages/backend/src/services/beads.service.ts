@@ -45,6 +45,9 @@ const syncStateMap = new Map<string, SyncState>();
 /** Path to backend.pid file for file-based lock (prevents multiple backends managing same repo) */
 const BACKEND_PID_FILE = ".beads/backend.pid";
 
+/** Beads backend type: Dolt runs single-process (no daemon); SQLite uses daemon */
+type BeadsBackend = "dolt" | "sqlite";
+
 /**
  * Raw shape returned by `bd list --json` / `bd show --json`.
  * Field names use snake_case to match the beads CLI output.
@@ -74,23 +77,39 @@ export interface BeadsIssue {
  */
 export class BeadsService {
   /**
-   * Ensures a bd daemon is running for the repo. Runs `bd daemon stop` before
-   * `bd daemon start` to prevent accumulation across backend restarts.
-   * Skips if another backend instance holds the file-based lock (backend.pid).
-   * Also ensures beads DB is in sync with JSONL (mtime-based invalidation).
+   * Returns the beads backend for the repo. Dolt runs single-process (no daemon);
+   * SQLite uses a daemon for sync.
+   */
+  private getBeadsBackend(repoPath: string): BeadsBackend {
+    try {
+      const metaPath = path.join(repoPath, ".beads/metadata.json");
+      const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as { database?: string };
+      return meta?.database === "dolt" ? "dolt" : "sqlite";
+    } catch {
+      return "sqlite";
+    }
+  }
+
+  /**
+   * Ensures the repo is ready for beads commands. For SQLite: starts daemon (with
+   * stop-before-start to prevent accumulation) and syncs JSONL. For Dolt: only
+   * syncs JSONL (Dolt runs single-process, no daemon).
    */
   async ensureDaemon(repoPath: string): Promise<void> {
-    await this.startDaemonIfNeeded(repoPath);
+    if (this.getBeadsBackend(repoPath) === "sqlite") {
+      await this.startDaemonIfNeeded(repoPath);
+    }
     await this.ensureSyncBeforeExec(repoPath);
   }
 
   /**
    * Stops bd daemons for the given repo paths. Called on backend shutdown
-   * to clean up daemons this process started. Also removes backend.pid so
-   * the next backend can claim the repo without seeing a stale PID.
+   * to clean up daemons this process started. Skips Dolt repos (no daemon).
+   * Also removes backend.pid so the next backend can claim the repo.
    */
   async stopDaemonsForRepos(repoPaths: string[]): Promise<void> {
     for (const p of repoPaths) {
+      if (this.getBeadsBackend(p) === "dolt") continue;
       try {
         await execAsync("bd daemon stop", {
           cwd: p,
@@ -128,10 +147,12 @@ export class BeadsService {
   }
 
   /**
-   * Starts daemon if needed. Always runs `bd daemon stop` before `bd daemon start`
-   * to prevent accumulation. Skips if another backend holds backend.pid lock.
+   * Starts daemon if needed (SQLite only). Dolt runs single-process with no daemon.
+   * Always runs `bd daemon stop` before `bd daemon start` to prevent accumulation.
+   * Skips if another backend holds backend.pid lock.
    */
   private async startDaemonIfNeeded(repoPath: string): Promise<void> {
+    if (this.getBeadsBackend(repoPath) === "dolt") return;
     // Already ensured daemon for this repo in this process — skip stop+start (~200ms each)
     if (daemonEnsuredRepos.has(repoPath)) return;
 
@@ -190,6 +211,48 @@ export class BeadsService {
   }
 
   /**
+   * Normalize .beads/issues.jsonl so beads import accepts it.
+   * Beads does not accept status "tombstone"; replace with "closed" and set closed_at/close_reason.
+   * Mutates the file only if at least one issue had status tombstone.
+   */
+  private normalizeJsonlTombstones(repoPath: string): void {
+    const jsonlPath = path.join(repoPath, ".beads/issues.jsonl");
+    let content: string;
+    try {
+      content = fs.readFileSync(jsonlPath, "utf-8");
+    } catch {
+      return;
+    }
+    const lines = content.split("\n").filter((line) => line.trim());
+    let changed = false;
+    const normalized = lines.map((line) => {
+      try {
+        const issue = JSON.parse(line) as Record<string, unknown>;
+        if (issue.status !== "tombstone") return line;
+        changed = true;
+        issue.status = "closed";
+        if (issue.closed_at == null && issue.deleted_at != null) {
+          issue.closed_at = issue.deleted_at;
+        }
+        if (issue.close_reason == null) {
+          issue.close_reason = (issue.delete_reason as string) ?? "batch delete";
+        }
+        return JSON.stringify(issue);
+      } catch {
+        return line;
+      }
+    });
+    if (changed) {
+      fs.writeFileSync(
+        jsonlPath,
+        normalized.join("\n") + (content.endsWith("\n") ? "\n" : ""),
+        "utf-8"
+      );
+      log.info("Normalized tombstone status to closed in issues.jsonl", { repoPath });
+    }
+  }
+
+  /**
    * Import JSONL into the database to fix staleness (e.g. after git pull).
    * Tries `bd sync --import-only` first (beads-recommended for "Database out of sync").
    * Falls back to `bd import` with progressively more permissive orphan-handling:
@@ -200,6 +263,8 @@ export class BeadsService {
   private async syncImport(repoPath: string): Promise<void> {
     let lastError: string | undefined;
     const jsonlPath = path.join(repoPath, ".beads/issues.jsonl");
+
+    this.normalizeJsonlTombstones(repoPath);
 
     // 1. Try beads-recommended sync --import-only
     try {
@@ -469,10 +534,10 @@ export class BeadsService {
     }
   }
 
-  /** Initialize beads in a project repository */
+  /** Initialize beads in a project repository. Uses Dolt backend for faster performance. */
   async init(repoPath: string): Promise<void> {
     try {
-      await execAsync(`bd ${BD_GLOBAL_FLAGS} init`, {
+      await execAsync(`bd ${BD_GLOBAL_FLAGS} init --backend dolt`, {
         cwd: repoPath,
         timeout: DEFAULT_TIMEOUT_MS,
       });
@@ -480,8 +545,20 @@ export class BeadsService {
       const err = error as { stderr?: string; stdout?: string; message: string };
       const msg = err.stderr || err.stdout || err.message;
       if (msg.includes("already initialized")) return;
+      // Fallback to SQLite if Dolt requires CGO and binary was built without it
+      if (
+        msg.toLowerCase().includes("dolt") &&
+        (msg.includes("requires CGO") || msg.includes("CGO_ENABLED") || msg.includes("CGO "))
+      ) {
+        log.warn("Dolt init failed (CGO required), falling back to SQLite", { repoPath });
+        await execAsync(`bd ${BD_GLOBAL_FLAGS} init`, {
+          cwd: repoPath,
+          timeout: DEFAULT_TIMEOUT_MS,
+        });
+        return;
+      }
       throw new AppError(502, ErrorCodes.BEADS_COMMAND_FAILED, `Beads init failed: ${msg}`, {
-        command: "bd init",
+        command: "bd init --backend dolt",
         stderr: msg,
       });
     }

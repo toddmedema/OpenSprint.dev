@@ -754,6 +754,36 @@ describe("BeadsService", () => {
       fs.rmSync(uniqueRepo, { recursive: true, force: true });
     });
 
+    it("skips daemon start/stop for Dolt backend (single-process, no daemon)", async () => {
+      const doltRepo = path.join(os.tmpdir(), `beads-dolt-test-${Date.now()}`);
+      const beadsDir = path.join(doltRepo, ".beads");
+      fs.mkdirSync(beadsDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(beadsDir, "metadata.json"),
+        JSON.stringify({ database: "dolt", jsonl_export: "issues.jsonl" }),
+        "utf-8"
+      );
+
+      const execCalls: string[] = [];
+      mockExecImpl = async (cmd: string) => {
+        execCalls.push(cmd);
+        return { stdout: mockStdout, stderr: "" };
+      };
+
+      await beads.runBd(doltRepo, "list", ["--json"]);
+
+      const daemonStartStopCalls = execCalls.filter(
+        (c) => c.includes("daemon start") || c.includes("daemon stop")
+      );
+      expect(daemonStartStopCalls).toHaveLength(0);
+
+      await beads.stopDaemonsForRepos([doltRepo]);
+      const stopCalls = execCalls.filter((c) => c.includes("daemon stop"));
+      expect(stopCalls).toHaveLength(0);
+
+      fs.rmSync(doltRepo, { recursive: true, force: true });
+    });
+
     it("skips daemon start when another backend has backend.pid (file lock)", async () => {
       const tmpDir = path.join(os.tmpdir(), `beads-test-${Date.now()}`);
       fs.mkdirSync(path.join(tmpDir, ".beads"), { recursive: true });
