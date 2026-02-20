@@ -1096,7 +1096,7 @@ describe("PlanPhase Generate Plan", () => {
       </Provider>
     );
 
-    expect(screen.getByText("Generating")).toBeInTheDocument();
+    expect(screen.getByText("Generating…")).toBeInTheDocument();
     const textarea = screen.getByTestId("feature-description-input");
     expect(textarea).toBeDisabled();
   });
