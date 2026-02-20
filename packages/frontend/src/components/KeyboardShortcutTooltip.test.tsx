@@ -22,6 +22,7 @@ describe("KeyboardShortcutTooltip", () => {
       platform: "Win32",
       userAgent: "Mozilla/5.0 (Windows NT 10.0)",
     });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
     render(
       <KeyboardShortcutTooltip>
@@ -30,7 +31,7 @@ describe("KeyboardShortcutTooltip", () => {
     );
 
     const button = screen.getByRole("button", { name: "Submit" });
-    await userEvent.hover(button);
+    await user.hover(button);
 
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
@@ -44,6 +45,7 @@ describe("KeyboardShortcutTooltip", () => {
       platform: "Win32",
       userAgent: "Mozilla/5.0 (Windows NT 10.0)",
     });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
     render(
       <KeyboardShortcutTooltip>
@@ -52,7 +54,7 @@ describe("KeyboardShortcutTooltip", () => {
     );
 
     const button = screen.getByRole("button", { name: "Submit" });
-    await userEvent.hover(button);
+    await user.hover(button);
     vi.advanceTimersByTime(300);
 
     const tooltip = screen.getByRole("tooltip");
@@ -66,6 +68,7 @@ describe("KeyboardShortcutTooltip", () => {
       platform: "MacIntel",
       userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
     });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
     render(
       <KeyboardShortcutTooltip>
@@ -74,7 +77,7 @@ describe("KeyboardShortcutTooltip", () => {
     );
 
     const button = screen.getByRole("button", { name: "Submit" });
-    await userEvent.hover(button);
+    await user.hover(button);
     vi.advanceTimersByTime(300);
 
     const tooltip = screen.getByRole("tooltip");
@@ -88,6 +91,7 @@ describe("KeyboardShortcutTooltip", () => {
       platform: "Win32",
       userAgent: "Mozilla/5.0",
     });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
     render(
       <KeyboardShortcutTooltip>
@@ -96,11 +100,11 @@ describe("KeyboardShortcutTooltip", () => {
     );
 
     const button = screen.getByRole("button", { name: "Submit" });
-    await userEvent.hover(button);
+    await user.hover(button);
     vi.advanceTimersByTime(300);
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
 
-    await userEvent.unhover(button);
+    await user.unhover(button);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
@@ -111,6 +115,7 @@ describe("KeyboardShortcutTooltip", () => {
       platform: "Win32",
       userAgent: "Mozilla/5.0",
     });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
     render(
       <KeyboardShortcutTooltip>
@@ -121,7 +126,7 @@ describe("KeyboardShortcutTooltip", () => {
     );
 
     const button = screen.getByRole("button", { name: "Submit" });
-    await userEvent.click(button);
+    await user.click(button);
 
     expect(onClick).toHaveBeenCalledTimes(1);
   });
