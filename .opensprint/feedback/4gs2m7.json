@@ -1,0 +1,27 @@
+{
+  "id": "4gs2m7",
+  "text": "On ALL text inputs with submit buttons (chat input on Sketch page, Add Feature on Plan, Comment on Plan, etc), pressing cmd + enter / ctrl + enter should submit",
+  "category": "ux",
+  "mappedPlanId": "agent-invocation-service",
+  "createdTaskIds": ["opensprint.dev-z0v.21"],
+  "status": "mapped",
+  "createdAt": "2026-02-20T19:20:55.818Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-z0v",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Add Cmd+Enter / Ctrl+Enter submit shortcut to all text inputs with submit buttons",
+      "description": "Audit every text input paired with a submit button across the app (Sketch chat input, Plan 'Add Feature' input, Plan comment input, Verify feedback input, and any others) and attach a keydown listener that submits on Cmd+Enter (macOS) or Ctrl+Enter (Windows/Linux). Acceptance criteria:\n- All identified inputs submit on Cmd+Enter (macOS) and Ctrl+Enter (other OSes)\n- Existing Enter/click submit behavior is unchanged\n- Works for both single-line and multi-line (textarea) inputs\n- Extract a shared hook or utility (e.g. useSubmitShortcut) so future inputs get the behavior automatically\n- Unit tests verify the keyboard shortcut triggers submit and that plain Enter does not (for multi-line inputs)",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": [
+    "Add Cmd+Enter / Ctrl+Enter submit shortcut to all text inputs with submit buttons"
+  ],
+  "feedbackSourceBeadId": "opensprint.dev-jvz0"
+}

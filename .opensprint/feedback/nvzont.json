@@ -1,0 +1,25 @@
+{
+  "id": "nvzont",
+  "text": "Bug: Why does the Sketch page not respect the UI's dark mode theme?",
+  "category": "bug",
+  "mappedPlanId": "theme-support",
+  "createdTaskIds": ["opensprint.dev-ax8.9"],
+  "status": "mapped",
+  "createdAt": "2026-02-20T19:32:53.391Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-ax8",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Fix Sketch page dark mode theme application",
+      "description": "The Sketch (Spec) page does not respect the user's selected dark mode theme. Investigate why theme CSS variables or class propagation fails on the Sketch page and ensure all Sketch page components (chat panel, PRD editor, sidebar) inherit the active theme.\n\nAcceptance criteria:\n- When dark mode is active (via settings or system preference), the Sketch page renders with dark background, light text, and correctly themed input fields, buttons, and panels.\n- Verified across all three theme modes: light, dark, and system.\n- No hard-coded colors or missing theme token references remain in Sketch page components.",
+      "priority": 1,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Fix Sketch page dark mode theme application"],
+  "feedbackSourceBeadId": "opensprint.dev-tbpp"
+}
