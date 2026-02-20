@@ -411,4 +411,48 @@ Test review prompt generation.
       expect(serverTiming).toMatch(/task-detail;dur=\d+;desc="Task detail load"/);
     }
   );
+
+  it("PATCH /tasks/:taskId updates task priority (runs bd update)", async () => {
+    const app = createApp();
+    const project = await projectService.getProject(projectId);
+    const repoPath = project.repoPath;
+
+    const bead = await beads.create(repoPath, "Priority Update Test Task", {
+      type: "task",
+      priority: 2,
+      description: "Task to test priority update",
+    });
+
+    const res = await request(app)
+      .patch(`${API_PREFIX}/projects/${projectId}/tasks/${bead.id}`)
+      .set("Content-Type", "application/json")
+      .send({ priority: 0 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeDefined();
+    expect(res.body.data.id).toBe(bead.id);
+    expect(res.body.data.priority).toBe(0);
+
+    const showAfter = await beads.show(repoPath, bead.id);
+    expect((showAfter as { priority?: number }).priority).toBe(0);
+  });
+
+  it("PATCH /tasks/:taskId returns 400 when priority is invalid", async () => {
+    const app = createApp();
+    const project = await projectService.getProject(projectId);
+    const repoPath = project.repoPath;
+
+    const bead = await beads.create(repoPath, "Invalid Priority Test", {
+      type: "task",
+      priority: 2,
+    });
+
+    const res = await request(app)
+      .patch(`${API_PREFIX}/projects/${projectId}/tasks/${bead.id}`)
+      .set("Content-Type", "application/json")
+      .send({ priority: 5 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error?.message).toMatch(/0–4/i);
+  });
 });
