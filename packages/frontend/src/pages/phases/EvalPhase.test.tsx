@@ -79,6 +79,7 @@ describe("EvalPhase feedback form", () => {
     const select = screen.getByTestId("feedback-priority-select");
     expect(select).toHaveAttribute("aria-label", "Priority (optional)");
     expect(select).toHaveClass("input");
+    expect(select).toHaveClass("h-10");
 
     // Placeholder option
     expect(screen.getByRole("option", { name: "Priority (optional)" })).toBeInTheDocument();
@@ -226,6 +227,46 @@ describe("EvalPhase feedback form", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("feedback-priority-select")).not.toBeDisabled();
+    });
+  });
+
+  describe("feedback form control heights", () => {
+    it("applies consistent h-10 height to priority select and both buttons", async () => {
+      const store = createStore();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-priority-select")).toBeInTheDocument();
+      });
+
+      const prioritySelect = screen.getByTestId("feedback-priority-select");
+      const attachButton = screen.getByRole("button", { name: /Attach image/i });
+      const submitButton = screen.getByRole("button", { name: /Submit Feedback/i });
+
+      expect(prioritySelect).toHaveClass("h-10");
+      expect(attachButton).toHaveClass("h-10");
+      expect(submitButton).toHaveClass("h-10");
+    });
+
+    it("actions row has flex-wrap to prevent overflow at narrow viewports", async () => {
+      const store = createStore();
+      const { container } = render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-priority-select")).toBeInTheDocument();
+      });
+
+      const actionsRow = container.querySelector('[data-testid="feedback-priority-select"]')?.parentElement;
+      expect(actionsRow).toBeTruthy();
+      expect(actionsRow).toHaveClass("flex-wrap");
     });
   });
 
