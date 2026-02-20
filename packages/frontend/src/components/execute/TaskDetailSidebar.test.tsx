@@ -1,0 +1,242 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Provider } from "react-redux";
+import { configureStore } from "@reduxjs/toolkit";
+import { TaskDetailSidebar } from "./TaskDetailSidebar";
+import executeReducer from "../../store/slices/executeSlice";
+import planReducer from "../../store/slices/planSlice";
+import projectReducer from "../../store/slices/projectSlice";
+import websocketReducer from "../../store/slices/websocketSlice";
+
+const mockGet = vi.fn();
+vi.mock("../../api/client", () => ({
+  api: {
+    feedback: { get: (...args: unknown[]) => mockGet(...args) },
+  },
+}));
+
+const basePlan = {
+  metadata: {
+    planId: "plan-1",
+    beadEpicId: "epic-1",
+    gateTaskId: "epic-1.0",
+    complexity: "medium" as const,
+  },
+  content: "# Plan",
+  status: "building" as const,
+  taskCount: 1,
+  doneTaskCount: 0,
+  dependencyCount: 0,
+};
+
+function createMinimalProps(overrides: Record<string, unknown> = {}) {
+  return {
+    projectId: "proj-1",
+    selectedTask: "epic-1.1",
+    selectedTaskData: {
+      id: "epic-1.1",
+      title: "Task A",
+      epicId: "epic-1",
+      kanbanColumn: "in_progress" as const,
+      priority: 0,
+      assignee: null,
+      type: "task" as const,
+      status: "in_progress" as const,
+      labels: [],
+      dependencies: [],
+      description: "",
+      createdAt: "",
+      updatedAt: "",
+    },
+    taskDetail: null,
+    taskDetailLoading: false,
+    taskDetailError: null,
+    agentOutput: [],
+    completionState: null,
+    archivedSessions: [],
+    archivedLoading: false,
+    markDoneLoading: false,
+    unblockLoading: false,
+    taskIdToStartedAt: {},
+    plans: [basePlan],
+    tasks: [],
+    currentTaskId: null,
+    currentPhase: null,
+    wsConnected: false,
+    isDoneTask: false,
+    isBlockedTask: false,
+    sourceFeedbackExpanded: {},
+    setSourceFeedbackExpanded: vi.fn(),
+    descriptionSectionExpanded: true,
+    setDescriptionSectionExpanded: vi.fn(),
+    artifactsSectionExpanded: true,
+    setArtifactsSectionExpanded: vi.fn(),
+    onClose: vi.fn(),
+    onMarkDone: vi.fn(),
+    onUnblock: vi.fn(),
+    onSelectTask: vi.fn(),
+    ...overrides,
+  };
+}
+
+function createStore() {
+  return configureStore({
+    reducer: {
+      project: projectReducer,
+      plan: planReducer,
+      execute: executeReducer,
+      websocket: websocketReducer,
+    },
+    preloadedState: {
+      websocket: {
+        connected: false,
+        hilRequest: null,
+        hilNotification: null,
+        deliverToast: null,
+      },
+      plan: {
+        plans: [basePlan],
+        dependencyGraph: null,
+        selectedPlanId: null,
+        chatMessages: {},
+        loading: false,
+        decomposing: false,
+        executingPlanId: null,
+        reExecutingPlanId: null,
+        archivingPlanId: null,
+        error: null,
+      },
+    },
+  });
+}
+
+describe("TaskDetailSidebar", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockResolvedValue(null);
+  });
+
+  it("renders task title from selectedTaskData", () => {
+    const props = createMinimalProps();
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>,
+    );
+
+    expect(screen.getByTestId("task-detail-title")).toHaveTextContent("Task A");
+  });
+
+  it("renders Mark done button when task is not done and not blocked", () => {
+    const props = createMinimalProps();
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>,
+    );
+
+    expect(screen.getByRole("button", { name: /mark done/i })).toBeInTheDocument();
+    expect(screen.queryByTestId("sidebar-unblock-btn")).not.toBeInTheDocument();
+  });
+
+  it("renders Unblock button when task is blocked", () => {
+    const props = createMinimalProps({
+      selectedTaskData: {
+        id: "epic-1.1",
+        title: "Blocked Task",
+        epicId: "epic-1",
+        kanbanColumn: "blocked" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "blocked" as const,
+        labels: [],
+        dependencies: [],
+        description: "",
+        createdAt: "",
+        updatedAt: "",
+      },
+      isBlockedTask: true,
+    });
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>,
+    );
+
+    expect(screen.getByTestId("sidebar-unblock-btn")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /mark done/i })).not.toBeInTheDocument();
+  });
+
+  it("calls onClose when close button is clicked", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const props = createMinimalProps({ onClose });
+
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Close task detail" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows connecting state when wsConnected is false and task is not done", () => {
+    const props = createMinimalProps({ wsConnected: false, isDoneTask: false });
+
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>,
+    );
+
+    expect(screen.getByTestId("live-output-connecting")).toBeInTheDocument();
+    expect(screen.getByText("Connecting to live output…")).toBeInTheDocument();
+  });
+
+  it("shows task detail error when taskDetailError is set", () => {
+    const props = createMinimalProps({ taskDetailError: "Network error" });
+
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>,
+    );
+
+    expect(screen.getByTestId("task-detail-error")).toHaveTextContent("Network error");
+  });
+
+  it("renders task description markdown when taskDetail has description", () => {
+    const props = createMinimalProps({
+      taskDetail: {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [],
+        description: "## Steps\n\n1. Implement feature",
+        createdAt: "",
+        updatedAt: "",
+      },
+    });
+
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>,
+    );
+
+    expect(screen.getByTestId("task-description-markdown")).toBeInTheDocument();
+    expect(screen.getByText("Steps")).toBeInTheDocument();
+    // Markdown renders list items; "1." is from <ol>, content is "Implement feature"
+    expect(screen.getByText("Implement feature")).toBeInTheDocument();
+  });
+});

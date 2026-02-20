@@ -1655,7 +1655,8 @@ describe("ExecutePhase Redux integration", () => {
       timeout: 5000,
     });
     expect(descriptionContainer).toHaveTextContent("Final line");
-    expect(descriptionContainer).toHaveClass("overflow-y-auto");
+    // .prose-task-description (index.css) includes overflow-y-auto via @apply
+    expect(descriptionContainer).toHaveClass("prose-task-description");
   });
 
   it("task description markdown has theme-aware prose styles for WCAG AA contrast", async () => {
@@ -1697,24 +1698,10 @@ describe("ExecutePhase Redux integration", () => {
 
     const markdownContainer = await screen.findByTestId("task-description-markdown");
     expect(markdownContainer).toBeInTheDocument();
+    // Styles are in .prose-task-description (index.css @apply) and .prose-execute-task; element uses those classes
     const cn = markdownContainer.className;
-    expect(cn).toMatch(/text-theme-text/);
-    expect(cn).toMatch(/prose-headings:text-theme-text/);
-    expect(cn).toMatch(/prose-p:text-theme-text/);
-    expect(cn).toMatch(/prose-li:text-theme-text/);
-    expect(cn).toMatch(/prose-em:text-theme-text/);
-    expect(cn).toMatch(/prose-code:text-theme-text/);
-    expect(cn).toMatch(/prose-a:text-brand-600/);
-    expect(cn).toMatch(/dark:prose-a:text-brand-400/);
-    expect(cn).toMatch(/prose-pre:bg-theme-code-bg/);
-    expect(cn).toMatch(/prose-pre:text-theme-code-text/);
-    expect(cn).toMatch(/prose-blockquote:border-theme-border/);
-    expect(cn).toMatch(/prose-hr:border-theme-border/);
+    expect(cn).toMatch(/prose-task-description/);
     expect(cn).toMatch(/prose-execute-task/);
-    expect(cn).toMatch(/prose-gray/);
-    expect(cn).toMatch(/dark:prose-invert/);
-    expect(cn).toMatch(/prose-kbd:text-theme-text/);
-    expect(cn).toMatch(/prose-figcaption:text-theme-text/);
   });
 
   it("shows collapsible Description header between Source Feedback and description markdown when task has description", async () => {
