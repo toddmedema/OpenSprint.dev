@@ -1716,6 +1716,222 @@ describe("ExecutePhase Redux integration", () => {
     expect(cn).toMatch(/prose-kbd:text-theme-text/);
     expect(cn).toMatch(/prose-figcaption:text-theme-text/);
   });
+
+  it("shows collapsible Description header between Source Feedback and description markdown when task has description", async () => {
+    mockGet.mockResolvedValue({
+      id: "epic-1.1",
+      title: "Task with description",
+      kanbanColumn: "in_progress",
+      description: "Implement the feature",
+      type: "task",
+      status: "in_progress",
+      labels: [],
+      dependencies: [],
+      priority: 0,
+      assignee: null,
+      epicId: "epic-1",
+      createdAt: "",
+      updatedAt: "",
+    });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task with description",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const descHeader = await screen.findByRole("button", { name: /description/i });
+    expect(descHeader).toBeInTheDocument();
+    expect(screen.getByTestId("task-description-markdown")).toBeInTheDocument();
+    expect(screen.getByTestId("task-description-markdown")).toHaveTextContent("Implement the feature");
+  });
+
+  it("collapses and expands Description section when header is clicked", async () => {
+    mockGet.mockResolvedValue({
+      id: "epic-1.1",
+      title: "Task A",
+      kanbanColumn: "in_progress",
+      description: "Task details",
+      type: "task",
+      status: "in_progress",
+      labels: [],
+      dependencies: [],
+      priority: 0,
+      assignee: null,
+      epicId: "epic-1",
+      createdAt: "",
+      updatedAt: "",
+    });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const toggleBtn = await screen.findByRole("button", { name: /description/i });
+    expect(screen.getByTestId("task-description-markdown")).toBeInTheDocument();
+
+    await userEvent.click(toggleBtn);
+    expect(screen.queryByTestId("task-description-markdown")).not.toBeInTheDocument();
+
+    await userEvent.click(toggleBtn);
+    expect(screen.getByTestId("task-description-markdown")).toBeInTheDocument();
+  });
+
+  it("Description section defaults to expanded", async () => {
+    mockGet.mockResolvedValue({
+      id: "epic-1.1",
+      title: "Task A",
+      kanbanColumn: "in_progress",
+      description: "Visible by default",
+      type: "task",
+      status: "in_progress",
+      labels: [],
+      dependencies: [],
+      priority: 0,
+      assignee: null,
+      epicId: "epic-1",
+      createdAt: "",
+      updatedAt: "",
+    });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    const markdown = await screen.findByTestId("task-description-markdown");
+    expect(markdown).toBeInTheDocument();
+    expect(markdown).toHaveTextContent("Visible by default");
+  });
+
+  it("shows Description header between Source Feedback and description when task has both", async () => {
+    mockGet.mockResolvedValue({
+      id: "epic-1.1",
+      title: "Feedback task",
+      kanbanColumn: "in_progress",
+      description: "Implement from feedback",
+      type: "task",
+      status: "in_progress",
+      labels: [],
+      dependencies: [],
+      priority: 0,
+      assignee: null,
+      epicId: "epic-1",
+      createdAt: "",
+      updatedAt: "",
+      sourceFeedbackId: "fb-xyz",
+    });
+    mockFeedbackGet.mockResolvedValue({
+      id: "fb-xyz",
+      text: "Add dark mode",
+      category: "feature",
+      mappedPlanId: "plan-1",
+      createdTaskIds: ["epic-1.1"],
+      status: "mapped",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Feedback task",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await vi.waitFor(() => {
+      expect(mockFeedbackGet).toHaveBeenCalledWith("proj-1", "fb-xyz");
+    });
+
+    const sourceFeedbackBtn = screen.getByRole("button", { name: /source feedback/i });
+    const descriptionBtn = screen.getByRole("button", { name: /description/i });
+    const sourceFeedbackIdx = Array.from(document.body.querySelectorAll("button")).indexOf(sourceFeedbackBtn);
+    const descriptionIdx = Array.from(document.body.querySelectorAll("button")).indexOf(descriptionBtn);
+    expect(sourceFeedbackIdx).toBeLessThan(descriptionIdx);
+    expect(screen.getByTestId("task-description-markdown")).toHaveTextContent("Implement from feedback");
+  });
+
+  it("omits Description section when task has no description content", async () => {
+    mockGet.mockResolvedValue({
+      id: "epic-1.1",
+      title: "Task A",
+      kanbanColumn: "in_progress",
+      description: "",
+      type: "task",
+      status: "in_progress",
+      labels: [],
+      dependencies: [],
+      priority: 0,
+      assignee: null,
+      epicId: "epic-1",
+      createdAt: "",
+      updatedAt: "",
+    });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await vi.waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
+    });
+
+    expect(screen.queryByRole("button", { name: /description/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("task-description-markdown")).not.toBeInTheDocument();
+  });
 });
 
 describe("ExecutePhase task detail plan link", () => {
