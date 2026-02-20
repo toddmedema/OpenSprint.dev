@@ -1,8 +1,5 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import type { AgentSession, FeedbackItem, Plan, Task } from "@opensprint/shared";
-import { PRIORITY_LABELS, AGENT_ROLE_LABELS } from "@opensprint/shared";
+import { useState, useEffect, useMemo } from "react";
+import type { Task } from "@opensprint/shared";
 import { useAppDispatch, useAppSelector } from "../../store";
 import { api } from "../../api/client";
 import {
@@ -13,230 +10,66 @@ import {
   unblockTask,
   setSelectedTaskId,
 } from "../../store/slices/executeSlice";
-import { addNotification } from "../../store/slices/notificationSlice";
-import { wsSend, wsConnect } from "../../store/middleware/websocketMiddleware";
-import { CloseButton } from "../../components/CloseButton";
+import { wsSend } from "../../store/middleware/websocketMiddleware";
 import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
-import { BuildEpicCard, TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
+import { BuildEpicCard } from "../../components/kanban";
 import { sortEpicTasksByStatus } from "../../lib/executeTaskSort";
 import {
   filterTasksByStatusAndSearch,
   type StatusFilter as FilterStatusFilter,
 } from "../../lib/executeTaskFilter";
-import { formatUptime } from "../../lib/formatting";
+import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
+import { useTaskFilter } from "../../hooks/useTaskFilter";
+import { TaskDetailSidebar } from "../../components/execute/TaskDetailSidebar";
 
 interface ExecutePhaseProps {
   projectId: string;
   onNavigateToPlan?: (planId: string) => void;
 }
 
-function ArchivedSessionView({ sessions }: { sessions: AgentSession[] }) {
-  const [activeTab, setActiveTab] = useState<"output" | "diff">("output");
-  const [selectedIdx, setSelectedIdx] = useState(sessions.length - 1);
-  useEffect(() => {
-    setSelectedIdx(Math.max(0, sessions.length - 1));
-  }, [sessions]);
-  const safeIdx = Math.min(selectedIdx, Math.max(0, sessions.length - 1));
-  const session = sessions[safeIdx];
-  if (!session) return null;
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="px-4 py-2 border-b border-theme-border flex items-center gap-4 text-xs flex-wrap">
-        {sessions.length > 1 ? (
-          <select
-            value={safeIdx}
-            onChange={(e) => setSelectedIdx(Number(e.target.value))}
-            className="bg-theme-bg-elevated text-theme-success-muted border border-theme-border rounded px-2 py-1"
-          >
-            {sessions.map((s, i) => (
-              <option key={s.attempt} value={i}>
-                Attempt {s.attempt} ({s.status})
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="text-theme-muted">
-            Attempt {session.attempt} · {session.status} · {session.agentType}
-          </span>
-        )}
-        {session.testResults && session.testResults.total > 0 && (
-          <span className="text-theme-success-muted">
-            {session.testResults.passed} passed
-            {session.testResults.failed > 0 && `, ${session.testResults.failed} failed`}
-          </span>
-        )}
-        {session.failureReason && (
-          <span className="text-theme-warning-solid truncate max-w-[200px]" title={session.failureReason}>
-            {session.failureReason}
-          </span>
-        )}
-      </div>
-      <div className="flex gap-2 px-4 py-2 border-b border-theme-border shrink-0">
-        <button
-          type="button"
-          onClick={() => setActiveTab("output")}
-          className={`text-xs font-medium ${
-            activeTab === "output" ? "text-theme-success-muted" : "text-theme-muted hover:text-theme-text"
-          }`}
-        >
-          Output log
-        </button>
-        {session.gitDiff && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("diff")}
-            className={`text-xs font-medium ${
-              activeTab === "diff" ? "text-theme-success-muted" : "text-theme-muted hover:text-theme-text"
-            }`}
-          >
-            Git diff
-          </button>
-        )}
-      </div>
-      <pre className="flex-1 p-4 text-xs font-mono whitespace-pre-wrap overflow-y-auto">
-        {activeTab === "output" ? session.outputLog || "(no output)" : session.gitDiff || "(no diff)"}
-      </pre>
-    </div>
-  );
-}
-
-function getEpicTitleFromPlan(plan: Plan): string {
-  const firstLine = plan.content.split("\n")[0] ?? "";
-  const heading = firstLine.replace(/^#+\s*/, "").trim();
-  if (heading) return heading;
-  return plan.metadata.planId.replace(/-/g, " ");
-}
-
-const feedbackCategoryColors: Record<string, string> = {
-  bug: "bg-theme-feedback-bug-bg text-theme-feedback-bug-text",
-  feature: "bg-theme-feedback-feature-bg text-theme-feedback-feature-text",
-  ux: "bg-theme-feedback-ux-bg text-theme-feedback-ux-text",
-  scope: "bg-theme-feedback-scope-bg text-theme-feedback-scope-text",
-};
-
-function getFeedbackTypeLabel(item: FeedbackItem): string {
-  return item.category === "ux" ? "UX" : item.category.charAt(0).toUpperCase() + item.category.slice(1);
-}
-
-function SourceFeedbackSection({
-  projectId,
-  feedbackId,
-  plans,
-  expanded,
-  onToggle,
-}: {
-  projectId: string;
-  feedbackId: string;
-  plans: Plan[];
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const dispatch = useAppDispatch();
-  const [feedback, setFeedback] = useState<FeedbackItem | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!expanded) return;
-    setLoading(true);
-    api.feedback
-      .get(projectId, feedbackId)
-      .then(setFeedback)
-      .catch((err) => {
-        const msg = err instanceof Error ? err.message : "Failed to load feedback";
-        dispatch(addNotification({ message: msg, severity: "error" }));
-      })
-      .finally(() => setLoading(false));
-  }, [projectId, feedbackId, expanded, dispatch]);
-
-  const mappedPlan = feedback?.mappedPlanId
-    ? plans.find((p) => p.metadata.planId === feedback.mappedPlanId)
-    : null;
-  const planTitle = mappedPlan ? getEpicTitleFromPlan(mappedPlan) : feedback?.mappedPlanId ?? null;
-
-  return (
-    <div className="border-b border-theme-border">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
-        aria-expanded={expanded}
-        aria-controls="source-feedback-content"
-        aria-label={expanded ? "Collapse Source Feedback" : "Expand Source Feedback"}
-        id="source-feedback-header"
-      >
-        <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">
-          Source Feedback
-        </h4>
-        <span className="text-theme-muted text-xs">{expanded ? "▼" : "▶"}</span>
-      </button>
-      {expanded && (
-        <div
-          id="source-feedback-content"
-          role="region"
-          aria-labelledby="source-feedback-header"
-          className="px-4 pb-4"
-        >
-          {loading ? (
-            <div className="text-xs text-theme-muted py-2">Loading feedback…</div>
-          ) : feedback ? (
-            <div className="card p-3 text-xs space-y-2" data-testid="source-feedback-card">
-              <div className="flex items-start justify-between gap-2 overflow-hidden flex-wrap">
-                <span
-                  className={`inline-flex rounded-full px-2 py-0.5 font-medium flex-shrink-0 ${
-                    feedbackCategoryColors[feedback.category] ?? "bg-theme-border-subtle text-theme-muted"
-                  }`}
-                >
-                  {getFeedbackTypeLabel(feedback)}
-                </span>
-                {feedback.status === "resolved" && (
-                  <span
-                    className="inline-flex rounded-full px-2 py-0.5 font-medium flex-shrink-0 bg-theme-success-bg text-theme-success-text"
-                    aria-label="Resolved"
-                  >
-                    Resolved
-                  </span>
-                )}
-              </div>
-              <p className="text-theme-text whitespace-pre-wrap break-words min-w-0">
-                {feedback.text ?? "(No feedback text)"}
-              </p>
-              {planTitle && (
-                <div className="text-theme-muted">
-                  Mapped plan: <span className="font-medium text-theme-text">{planTitle}</span>
-                </div>
-              )}
-              {feedback.createdAt && (
-                <div className="text-theme-muted">
-                  {new Date(feedback.createdAt).toLocaleString()}
-                </div>
-              )}
-            </div>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}
-
 type StatusFilter = FilterStatusFilter;
-
-const SEARCH_DEBOUNCE_MS = 150;
 
 export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps) {
   const dispatch = useAppDispatch();
   const [taskIdToStartedAt, setTaskIdToStartedAt] = useState<Record<string, string>>({});
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [artifactsSectionExpanded, setArtifactsSectionExpanded] = useState(true);
   const [descriptionSectionExpanded, setDescriptionSectionExpanded] = useState(true);
   const [sourceFeedbackExpanded, setSourceFeedbackExpanded] = useState<Record<string, boolean>>({});
-  const [searchExpanded, setSearchExpanded] = useState(false);
-  const [searchInputValue, setSearchInputValue] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const {
+    statusFilter,
+    setStatusFilter,
+    searchExpanded,
+    searchInputValue,
+    setSearchInputValue,
+    searchQuery,
+    searchInputRef,
+    isSearchActive,
+    handleSearchExpand,
+    handleSearchClose,
+    handleSearchKeyDown,
+  } = useTaskFilter();
 
   const tasks = useAppSelector((s) => s.execute.tasks);
+  const plans = useAppSelector((s) => s.plan.plans);
+  const awaitingApproval = useAppSelector((s) => s.execute.awaitingApproval);
+  const selectedTask = useAppSelector((s) => s.execute.selectedTaskId);
+  const taskDetail = useAppSelector((s) => s.execute.taskDetail);
+  const taskDetailLoading = useAppSelector((s) => s.execute.taskDetailLoading);
+  const taskDetailError = useAppSelector((s) => s.execute.taskDetailError);
+  const agentOutput = useAppSelector((s) => s.execute.agentOutput);
+  const completionState = useAppSelector((s) => s.execute.completionState);
+  const archivedSessions = useAppSelector((s) => s.execute.archivedSessions);
+  const archivedLoading = useAppSelector((s) => s.execute.archivedLoading);
+  const markDoneLoading = useAppSelector((s) => s.execute.markDoneLoading);
+  const unblockLoading = useAppSelector((s) => s.execute.unblockLoading);
+  const loading = useAppSelector((s) => s.execute.loading);
+  const selectedTaskData = selectedTask ? tasks.find((t) => t.id === selectedTask) : null;
+  const isDoneTask = selectedTaskData?.kanbanColumn === "done";
+  const currentTaskId = useAppSelector((s) => s.execute.currentTaskId);
+  const currentPhase = useAppSelector((s) => s.execute.currentPhase);
+  const wsConnected = useAppSelector((s) => s.websocket?.connected ?? false);
+  const isBlockedTask = selectedTaskData?.kanbanColumn === "blocked";
 
   useEffect(() => {
     let cancelled = false;
@@ -262,28 +95,6 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
       clearInterval(interval);
     };
   }, [projectId]);
-  const plans = useAppSelector((s) => s.plan.plans);
-  const awaitingApproval = useAppSelector((s) => s.execute.awaitingApproval);
-  const selectedTask = useAppSelector((s) => s.execute.selectedTaskId);
-  const taskDetail = useAppSelector((s) => s.execute.taskDetail);
-  const taskDetailLoading = useAppSelector((s) => s.execute.taskDetailLoading);
-  const taskDetailError = useAppSelector((s) => s.execute.taskDetailError);
-  const agentOutput = useAppSelector((s) => s.execute.agentOutput);
-  const completionState = useAppSelector((s) => s.execute.completionState);
-  const archivedSessions = useAppSelector((s) => s.execute.archivedSessions);
-  const archivedLoading = useAppSelector((s) => s.execute.archivedLoading);
-  const markDoneLoading = useAppSelector((s) => s.execute.markDoneLoading);
-  const unblockLoading = useAppSelector((s) => s.execute.unblockLoading);
-  const loading = useAppSelector((s) => s.execute.loading);
-  const selectedTaskData = selectedTask ? tasks.find((t) => t.id === selectedTask) : null;
-  const isDoneTask = selectedTaskData?.kanbanColumn === "done";
-  const currentTaskId = useAppSelector((s) => s.execute.currentTaskId);
-  const currentPhase = useAppSelector((s) => s.execute.currentPhase);
-  const wsConnected = useAppSelector((s) => s.websocket?.connected ?? false);
-  const activeRoleLabel =
-    selectedTask && selectedTask === currentTaskId && currentPhase
-      ? AGENT_ROLE_LABELS[currentPhase === "coding" ? "coder" : "reviewer"]
-      : null;
 
   useEffect(() => {
     if (selectedTask) {
@@ -332,60 +143,11 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
     }
   }, [projectId, selectedTask, isDoneTask, dispatch]);
 
-  useEffect(() => {
-    if (searchExpanded) {
-      searchInputRef.current?.focus();
-    }
-  }, [searchExpanded]);
-
-  useEffect(() => {
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current);
-      searchDebounceRef.current = null;
-    }
-    if (searchInputValue === "") {
-      setSearchQuery("");
-      return;
-    }
-    const id = setTimeout(() => {
-      searchDebounceRef.current = null;
-      setSearchQuery(searchInputValue);
-    }, SEARCH_DEBOUNCE_MS);
-    searchDebounceRef.current = id;
-    return () => {
-      clearTimeout(id);
-      if (searchDebounceRef.current === id) searchDebounceRef.current = null;
-    };
-  }, [searchInputValue]);
-
-  const handleSearchExpand = () => {
-    setSearchExpanded(true);
-  };
-
-  const handleSearchClose = useCallback(() => {
-    setSearchInputValue("");
-    setSearchQuery("");
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current);
-      searchDebounceRef.current = null;
-    }
-    searchInputRef.current?.blur();
-    setSearchExpanded(false);
-  }, []);
-
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      handleSearchClose();
-    }
-  };
-
   const handleMarkDone = async () => {
     if (!selectedTask || isDoneTask) return;
     dispatch(markTaskDone({ projectId, taskId: selectedTask }));
   };
 
-  const isBlockedTask = selectedTaskData?.kanbanColumn === "blocked";
   const handleUnblock = async () => {
     if (!selectedTask || !isBlockedTask) return;
     dispatch(unblockTask({ projectId, taskId: selectedTask }));
@@ -406,8 +168,6 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
     [implTasks, statusFilter, searchQuery]
   );
 
-  const isSearchActive = searchQuery.trim().length > 0;
-
   const swimlanes = useMemo(() => {
     const epicIdToTitle = new Map<string, string>();
     plans.forEach((p) => {
@@ -421,7 +181,8 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
       byEpic.get(key)!.push(t);
     }
 
-    const allDone = (tasks: Task[]) => tasks.length > 0 && tasks.every((t) => t.kanbanColumn === "done");
+    const allDone = (tasks: Task[]) =>
+      tasks.length > 0 && tasks.every((t) => t.kanbanColumn === "done");
     const hideCompletedEpics = statusFilter === "all";
 
     const includeLane = (laneTasks: Task[]) =>
@@ -456,7 +217,7 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
       result.push({ epicId: "", epicTitle: "Other", tasks: sortEpicTasksByStatus(unassigned) });
     }
     return result;
-  }, [filteredTasks, plans]);
+  }, [filteredTasks, plans, statusFilter]);
 
   const totalTasks = implTasks.length;
   const readyCount = implTasks.filter((t) => t.kanbanColumn === "ready").length;
@@ -482,34 +243,36 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
         <div className="px-6 py-4 border-b border-theme-border bg-theme-surface shrink-0">
           <div className="flex items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-            {chipConfig.map(({ label, filter, count }) => {
-              const isActive = statusFilter === filter;
-              const isAll = filter === "all";
-              const handleClick = () => {
-                setStatusFilter(isActive && !isAll ? "all" : filter);
-              };
-              return (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={handleClick}
-                  data-testid={`filter-chip-${filter}`}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                    isActive
-                      ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
-                      : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
-                  }`}
-                  aria-pressed={isActive}
-                  aria-label={`${label} ${count}${isActive ? ", selected" : ""}`}
-                >
-                  <span>{label}</span>
-                  <span className={isActive ? "opacity-90" : "text-theme-muted"}>{count}</span>
-                </button>
-              );
-            })}
-            {awaitingApproval && (
-              <span className="ml-2 text-sm font-medium text-theme-warning-text">Awaiting approval…</span>
-            )}
+              {chipConfig.map(({ label, filter, count }) => {
+                const isActive = statusFilter === filter;
+                const isAll = filter === "all";
+                const handleClick = () => {
+                  setStatusFilter(isActive && !isAll ? "all" : filter);
+                };
+                return (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={handleClick}
+                    data-testid={`filter-chip-${filter}`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
+                        : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
+                    }`}
+                    aria-pressed={isActive}
+                    aria-label={`${label} ${count}${isActive ? ", selected" : ""}`}
+                  >
+                    <span>{label}</span>
+                    <span className={isActive ? "opacity-90" : "text-theme-muted"}>{count}</span>
+                  </button>
+                );
+              })}
+              {awaitingApproval && (
+                <span className="ml-2 text-sm font-medium text-theme-warning-text">
+                  Awaiting approval…
+                </span>
+              )}
             </div>
             <div className="flex items-center shrink-0">
               {searchExpanded ? (
@@ -534,7 +297,13 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
                     aria-label="Close search"
                     data-testid="execute-search-close"
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
@@ -569,7 +338,9 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
           {loading ? (
             <div className="text-center py-10 text-theme-muted">Loading tasks...</div>
           ) : implTasks.length === 0 ? (
-            <div className="text-center py-10 text-theme-muted">No tasks yet. Ship a Plan to start generating tasks.</div>
+            <div className="text-center py-10 text-theme-muted">
+              No tasks yet. Ship a Plan to start generating tasks.
+            </div>
           ) : swimlanes.length === 0 ? (
             <div className="text-center py-10 text-theme-muted">
               {isSearchActive
@@ -599,297 +370,51 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
 
       {selectedTask && (
         <>
-          {/* Backdrop for narrow screens: tap to close */}
           <button
             type="button"
             className="md:hidden fixed inset-0 bg-theme-overlay z-40 animate-fade-in"
             onClick={() => dispatch(setSelectedTaskId(null))}
             aria-label="Dismiss task detail"
           />
-          {/* Task detail panel: overlay on narrow, sidebar on md+ */}
           <ResizableSidebar
             storageKey="execute"
             defaultWidth={420}
             responsive
             className="fixed md:static inset-y-0 right-0 z-50 md:border-l border-theme-border shadow-xl md:shadow-none animate-slide-in-right md:animate-none"
           >
-            <div className="flex items-center justify-between p-4 border-b border-theme-border shrink-0">
-              <div className="min-w-0 flex-1 pr-2">
-              {/* Task title: show immediately from cached list data, never wait for detail API */}
-              <h3 className="font-semibold text-theme-text truncate" data-testid="task-detail-title">
-                {selectedTaskData?.title ?? taskDetail?.title ?? selectedTask ?? ""}
-              </h3>
-              {/* View plan link: use cached epicId from list or detail */}
-              {(selectedTaskData?.epicId ?? taskDetail?.epicId) && (() => {
-                const epicId = selectedTaskData?.epicId ?? taskDetail?.epicId;
-                const plan = plans.find((p) => p.metadata.beadEpicId === epicId);
-                if (!plan || !onNavigateToPlan) return null;
-                const planTitle = getEpicTitleFromPlan(plan);
-                return (
-                  <button
-                    type="button"
-                    onClick={() => onNavigateToPlan(plan.metadata.planId)}
-                    className="mt-1 text-xs text-brand-600 hover:text-brand-700 hover:underline truncate block text-left"
-                    title={`View plan: ${planTitle}`}
-                  >
-                    View plan: {planTitle}
-                  </button>
-                );
-              })()}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-              {isBlockedTask && (
-                <button
-                  type="button"
-                  onClick={handleUnblock}
-                  disabled={unblockLoading}
-                  className="text-xs py-1.5 px-3 font-medium text-theme-error-text hover:bg-theme-error-bg rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  data-testid="sidebar-unblock-btn"
-                >
-                  {unblockLoading ? "Unblocking…" : "Unblock"}
-                </button>
-              )}
-              {!isDoneTask && !isBlockedTask && (
-                <button
-                  type="button"
-                  onClick={handleMarkDone}
-                  disabled={markDoneLoading}
-                  className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {markDoneLoading ? "Marking…" : "Mark done"}
-                </button>
-              )}
-              <CloseButton onClick={() => dispatch(setSelectedTaskId(null))} ariaLabel="Close task detail" />
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto min-h-0">
-              <div className="p-4 border-b border-theme-border">
-              {/* Status details: consolidated below divider with color indicator, icon, assignee, running time */}
-              {(selectedTaskData ?? taskDetail) && (
-                <div className="flex flex-wrap items-center gap-2 mb-3 text-xs text-theme-muted" data-testid="task-detail-status-section">
-                  <TaskStatusBadge column={(taskDetail ?? selectedTaskData)!.kanbanColumn} size="xs" title={COLUMN_LABELS[(taskDetail ?? selectedTaskData)!.kanbanColumn]} />
-                  <span>{COLUMN_LABELS[(taskDetail ?? selectedTaskData)!.kanbanColumn]}</span>
-                  {((taskDetail ?? selectedTaskData)!.assignee) && (
-                    <>
-                      <span>·</span>
-                      <span className="text-brand-600">{((taskDetail ?? selectedTaskData)!).assignee}</span>
-                    </>
-                  )}
-                  {selectedTask && taskIdToStartedAt[selectedTask] && (
-                    <>
-                      <span>·</span>
-                      <span className="tabular-nums">{formatUptime(taskIdToStartedAt[selectedTask])}</span>
-                    </>
-                  )}
-                </div>
-              )}
-              {activeRoleLabel && (
-                <div className="mb-3 px-3 py-1.5 rounded-md bg-theme-warning-bg border border-theme-warning-border text-xs font-medium text-theme-warning-text">
-                  Active: {activeRoleLabel}
-                </div>
-              )}
-              {taskDetailError ? (
-                <div className="rounded-lg border border-theme-error-border bg-theme-error-bg p-4 text-sm text-theme-error-text" data-testid="task-detail-error">
-                  {taskDetailError}
-                </div>
-              ) : taskDetailLoading ? (
-                <div className="space-y-3" data-testid="task-detail-loading">
-                  <div className="h-4 w-3/4 bg-theme-surface-muted rounded animate-pulse" />
-                  <div className="h-3 w-full bg-theme-surface-muted rounded animate-pulse" />
-                  <div className="h-3 w-2/3 bg-theme-surface-muted rounded animate-pulse" />
-                  <div className="h-24 w-full bg-theme-surface-muted rounded animate-pulse" />
-                </div>
-              ) : taskDetail ? (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-theme-muted">
-                    <span className="text-theme-muted">{PRIORITY_LABELS[taskDetail.priority] ?? "Medium"}</span>
-                  </div>
-                  {taskDetail.sourceFeedbackId && (
-                    <SourceFeedbackSection
-                      projectId={projectId}
-                      feedbackId={taskDetail.sourceFeedbackId}
-                      plans={plans}
-                      expanded={sourceFeedbackExpanded[taskDetail.sourceFeedbackId] ?? true}
-                      onToggle={() =>
-                        setSourceFeedbackExpanded((prev) => ({
-                          ...prev,
-                          [taskDetail.sourceFeedbackId!]: !(prev[taskDetail.sourceFeedbackId!] ?? true),
-                        }))
-                      }
-                    />
-                  )}
-                  {(() => {
-                    const desc = taskDetail.description ?? "";
-                    const isOnlyFeedbackId = /^Feedback ID:\s*.+$/.test(desc.trim());
-                    const displayDesc = taskDetail.sourceFeedbackId && isOnlyFeedbackId ? "" : desc;
-                    return displayDesc ? (
-                      <div className="border-b border-theme-border">
-                        <button
-                          type="button"
-                          onClick={() => setDescriptionSectionExpanded((prev) => !prev)}
-                          className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
-                          aria-expanded={descriptionSectionExpanded}
-                          aria-controls="description-content"
-                          aria-label={descriptionSectionExpanded ? "Collapse Description" : "Expand Description"}
-                          id="description-header"
-                        >
-                          <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">
-                            Description
-                          </h4>
-                          <span className="text-theme-muted text-xs">{descriptionSectionExpanded ? "▼" : "▶"}</span>
-                        </button>
-                        {descriptionSectionExpanded && (
-                          <div
-                            id="description-content"
-                            role="region"
-                            aria-labelledby="description-header"
-                            className="px-4 pb-4"
-                          >
-                            <div
-                              className="prose prose-sm prose-gray dark:prose-invert prose-execute-task max-w-none bg-theme-surface p-4 rounded-lg border border-theme-border text-theme-text text-xs overflow-y-auto min-h-0 max-h-[50vh] prose-headings:text-theme-text prose-p:text-theme-text prose-li:text-theme-text prose-td:text-theme-text prose-th:text-theme-text prose-em:text-theme-text prose-a:text-brand-600 dark:prose-a:text-brand-400 prose-code:text-theme-text prose-strong:text-theme-text prose-blockquote:text-theme-text prose-blockquote:border-theme-border prose-hr:border-theme-border prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg prose-kbd:text-theme-text prose-figcaption:text-theme-text"
-                              data-testid="task-description-markdown"
-                            >
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayDesc}</ReactMarkdown>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : null;
-                  })()}
-                  {(taskDetail.dependencies ?? []).filter((d) => d.targetId && d.type !== "discovered-from").length > 0 && (
-                    <div className="text-xs">
-                      <span className="text-theme-muted">Depends on:</span>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-1.5">
-                        {taskDetail.dependencies
-                          .filter((d) => d.targetId && d.type !== "discovered-from")
-                          .map((d) => {
-                            const depTask = tasks.find((t) => t.id === d.targetId);
-                            const label = depTask?.title ?? d.targetId;
-                            const col = depTask?.kanbanColumn ?? "backlog";
-                            return (
-                              <button
-                                key={d.targetId}
-                                type="button"
-                                onClick={() => dispatch(setSelectedTaskId(d.targetId))}
-                                className="inline-flex items-center gap-1.5 text-left hover:underline text-brand-600 hover:text-brand-500 transition-colors"
-                              >
-                                <TaskStatusBadge column={col} size="xs" title={COLUMN_LABELS[col]} />
-                                <span className="truncate max-w-[200px]" title={label}>
-                                  {label}
-                                </span>
-                              </button>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-sm text-theme-muted" data-testid="task-detail-empty">
-                  Could not load task details.
-                </div>
-              )}
-              </div>
-
-              <div className="border-b border-theme-border">
-              <button
-                type="button"
-                onClick={() => setArtifactsSectionExpanded(!artifactsSectionExpanded)}
-                className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
-                aria-expanded={artifactsSectionExpanded}
-                aria-controls="artifacts-content"
-                aria-label={
-                  artifactsSectionExpanded
-                    ? `Collapse ${isDoneTask ? "Done Work Artifacts" : "Live agent output"}`
-                    : `Expand ${isDoneTask ? "Done Work Artifacts" : "Live agent output"}`
-                }
-                id="artifacts-header"
-              >
-                <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">
-                  {isDoneTask ? "Done Work Artifacts" : "Live agent output"}
-                </h4>
-                <span className="text-theme-muted text-xs">
-                  {artifactsSectionExpanded ? "▼" : "▶"}
-                </span>
-              </button>
-              {artifactsSectionExpanded && (
-              <div
-                id="artifacts-content"
-                role="region"
-                aria-labelledby="artifacts-header"
-                className="p-4 pt-0"
-              >
-              <div className="bg-theme-code-bg rounded-lg border border-theme-border overflow-hidden min-h-[200px] max-h-[400px] flex flex-col">
-                {taskDetailLoading ? (
-                  <div className="p-4 space-y-2" data-testid="artifacts-loading">
-                    <div className="h-3 w-full bg-theme-surface-muted rounded animate-pulse" />
-                    <div className="h-3 w-4/5 bg-theme-surface-muted rounded animate-pulse" />
-                    <div className="h-20 w-full bg-theme-surface-muted rounded animate-pulse mt-4" />
-                  </div>
-                ) : isDoneTask ? (
-                  archivedLoading ? (
-                    <div className="p-4 text-theme-muted text-sm">Loading archived sessions...</div>
-                  ) : archivedSessions.length === 0 ? (
-                    <div className="p-4 text-theme-muted text-sm">No archived sessions for this task.</div>
-                  ) : (
-                    <ArchivedSessionView sessions={archivedSessions} />
-                  )
-                ) : (
-                  <div className="flex flex-col min-h-0 flex-1">
-                    {!wsConnected ? (
-                      <div className="p-4 flex flex-col gap-3" data-testid="live-output-connecting">
-                        <div className="text-sm text-theme-muted flex items-center gap-2">
-                          <span className="inline-block w-4 h-4 border-2 border-theme-border border-t-brand-500 rounded-full animate-spin" aria-hidden />
-                          Connecting to live output…
-                        </div>
-                        <p className="text-xs text-theme-muted">
-                          If the connection fails, you can retry.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => dispatch(wsConnect({ projectId }))}
-                          className="text-xs font-medium text-brand-600 hover:text-brand-700 hover:underline self-start"
-                          data-testid="live-output-retry"
-                        >
-                          Retry connection
-                        </button>
-                      </div>
-                    ) : (
-                      <pre className="p-4 text-xs font-mono whitespace-pre-wrap text-theme-success-muted min-h-[120px] overflow-y-auto flex-1 min-h-0" data-testid="live-agent-output">
-                        {agentOutput.length > 0
-                          ? agentOutput.join("")
-                          : completionState && archivedSessions.length > 0
-                            ? (archivedSessions[archivedSessions.length - 1]?.outputLog ?? "Waiting for agent output...")
-                            : "Waiting for agent output..."}
-                      </pre>
-                    )}
-                    {completionState && (
-                      <div className="px-4 pb-4 border-t border-theme-border pt-3 mt-0">
-                        <div
-                          className={`text-sm font-medium ${
-                            completionState.status === "approved" ? "text-theme-success-muted" : "text-theme-warning-solid"
-                          }`}
-                        >
-                          Agent done: {completionState.status}
-                        </div>
-                        {completionState.testResults && completionState.testResults.total > 0 && (
-                          <div className="text-xs text-theme-muted mt-1">
-                            {completionState.testResults.passed} passed
-                            {completionState.testResults.failed > 0 ? `, ${completionState.testResults.failed} failed` : ""}
-                            {completionState.testResults.skipped > 0 &&
-                              `, ${completionState.testResults.skipped} skipped`}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              </div>
-              )}
-              </div>
-            </div>
+            <TaskDetailSidebar
+              projectId={projectId}
+              selectedTask={selectedTask}
+              selectedTaskData={selectedTaskData ?? null}
+              taskDetail={taskDetail}
+              taskDetailLoading={taskDetailLoading}
+              taskDetailError={taskDetailError}
+              agentOutput={agentOutput}
+              completionState={completionState}
+              archivedSessions={archivedSessions}
+              archivedLoading={archivedLoading}
+              markDoneLoading={markDoneLoading}
+              unblockLoading={unblockLoading}
+              taskIdToStartedAt={taskIdToStartedAt}
+              plans={plans}
+              tasks={tasks}
+              currentTaskId={currentTaskId}
+              currentPhase={currentPhase}
+              wsConnected={wsConnected}
+              isDoneTask={isDoneTask}
+              isBlockedTask={isBlockedTask}
+              sourceFeedbackExpanded={sourceFeedbackExpanded}
+              setSourceFeedbackExpanded={setSourceFeedbackExpanded}
+              descriptionSectionExpanded={descriptionSectionExpanded}
+              setDescriptionSectionExpanded={setDescriptionSectionExpanded}
+              artifactsSectionExpanded={artifactsSectionExpanded}
+              setArtifactsSectionExpanded={setArtifactsSectionExpanded}
+              onNavigateToPlan={onNavigateToPlan}
+              onClose={() => dispatch(setSelectedTaskId(null))}
+              onMarkDone={handleMarkDone}
+              onUnblock={handleUnblock}
+              onSelectTask={(taskId) => dispatch(setSelectedTaskId(taskId))}
+            />
           </ResizableSidebar>
         </>
       )}

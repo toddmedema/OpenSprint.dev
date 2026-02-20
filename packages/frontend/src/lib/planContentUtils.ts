@@ -31,6 +31,14 @@ export function parsePlanContent(content: string): { title: string; body: string
   return { title, body };
 }
 
+/** Extract display title from plan content (first heading) or fallback to planId. */
+export function getEpicTitleFromPlan(plan: { content: string; metadata: { planId: string } }): string {
+  const firstLine = plan.content.split("\n")[0] ?? "";
+  const heading = firstLine.replace(/^#+\s*/, "").trim();
+  if (heading) return heading;
+  return plan.metadata.planId.replace(/-/g, " ");
+}
+
 export function serializePlanContent(title: string, body: string): string {
   const trimmedTitle = title.trim();
   const trimmedBody = body.trim();
