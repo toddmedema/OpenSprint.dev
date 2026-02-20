@@ -1,0 +1,25 @@
+{
+  "id": "9gzgb0",
+  "text": "When viewing the live agent output in the Execute sidebar, it should default to always scrolling to the bottom/most recent messages as new messages come in. If the user scrolls up inside the container, it should disable auto-scrolling. If the user scrolls back down to the bottom of the container, it should re-enable auto-scrolling.",
+  "category": "ux",
+  "mappedPlanId": "build-phase-kanban-and-task-listing",
+  "createdTaskIds": ["opensprint.dev-cxx.38"],
+  "status": "mapped",
+  "createdAt": "2026-02-20T09:39:43.493Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-cxx",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Auto-scroll live agent output with scroll-aware toggling",
+      "description": "In the Execute phase sidebar's live agent output container, implement smart auto-scrolling behavior:\n\n1. **Default auto-scroll:** When new agent output lines arrive, the container automatically scrolls to the bottom so the user always sees the most recent output.\n2. **Disable on scroll-up:** If the user manually scrolls upward (away from the bottom), auto-scrolling is suspended so they can read earlier output without being yanked back down.\n3. **Re-enable on scroll-to-bottom:** When the user scrolls back down to the bottom of the container (within a small threshold, e.g. 50px), auto-scrolling re-engages and resumes following new output.\n\nAcceptance criteria:\n- New agent output causes the container to scroll to the latest message by default.\n- Scrolling up disables auto-scroll; a visual indicator (e.g. a 'Jump to bottom' pill/button) appears.\n- Clicking the 'Jump to bottom' indicator or manually scrolling to the bottom re-enables auto-scroll.\n- Auto-scroll state resets correctly when switching between tasks or agent sessions.\n- No performance degradation with large volumes of agent output (use requestAnimationFrame or similar for scroll updates).",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Auto-scroll live agent output with scroll-aware toggling"],
+  "feedbackSourceBeadId": "opensprint.dev-xc8c"
+}

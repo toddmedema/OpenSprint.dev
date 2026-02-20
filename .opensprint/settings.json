@@ -1,7 +1,7 @@
 {
   "planningAgent": {
     "type": "cursor",
-    "model": "opus-4.6-thinking",
+    "model": "claude-4.6-opus-high-thinking",
     "cliCommand": null
   },
   "codingAgent": {

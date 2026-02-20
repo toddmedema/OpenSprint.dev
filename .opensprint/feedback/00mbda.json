@@ -1,0 +1,25 @@
+{
+  "id": "00mbda",
+  "text": "In the live agent output in execute page sidebar, please replace all json blobs that are of \"type\":\"thinking\" to just the text \"Thinking...\"",
+  "category": "ux",
+  "mappedPlanId": "build-phase-kanban-and-task-listing",
+  "createdTaskIds": ["opensprint.dev-cxx.39"],
+  "status": "mapped",
+  "createdAt": "2026-02-20T09:58:31.867Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-cxx",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Filter thinking-type JSON from live agent output",
+      "description": "In the Execute phase sidebar that displays live agent output, detect streamed JSON objects where \"type\" is \"thinking\" and replace the entire JSON blob with the text \"Thinking...\" in the rendered output. Acceptance criteria: (1) JSON objects with `\"type\":\"thinking\"` are not displayed raw; instead a single line reading \"Thinking...\" is shown in their place. (2) All other agent output (non-thinking JSON, plain text, tool use, etc.) continues to render as before. (3) Detection works on streamed/chunked output, not just complete JSON objects — if a thinking blob arrives across multiple chunks, the raw JSON must never flash before being replaced.",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Filter thinking-type JSON from live agent output"],
+  "feedbackSourceBeadId": "opensprint.dev-n5sg"
+}
