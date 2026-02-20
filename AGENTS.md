@@ -28,9 +28,10 @@ bd --no-daemon sync                           # Sync with git
 1. Run `bd ready` to find the next task to work on
 2. Claim the task with `bd update <id> --claim`
 3. Create a feature branch: `git checkout -b opensprint/<task-id>`
-4. Implement the task, write tests, commit changes
+4. Implement the task, write tests — **commit incrementally** during work (crash resilience)
 5. Close the task: `bd close <id> --reason "Implemented and tested"`
 6. Run `bd sync` after closing
+7. **Before pushing:** squash all branch commits into one that includes both code changes and `.beads/issues.jsonl` (closed task)
 
 ## Issue Hierarchy
 
@@ -50,12 +51,20 @@ Beads supports hierarchical IDs for organizing work:
 1. **File issues for remaining work** — Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) — Tests, linters, builds
 3. **Update issue status** — Close finished work, update in-progress items
-4. **PUSH TO REMOTE** — This is MANDATORY:
+4. **PUSH TO REMOTE** — This is MANDATORY. Push directly to `origin/main` (no PRs):
    ```bash
-   git pull --rebase
-   bd --no-daemon sync --import-only   # import any issues pulled from remote
-   bd --no-daemon sync                 # export local changes to JSONL
-   git push
+   git fetch origin
+   git rebase origin/main
+   bd --no-daemon close <task-id> --reason "Implemented and tested"   # if not already closed
+   bd --no-daemon sync
+   git add .beads/issues.jsonl
+   git reset --soft origin/main
+   git commit -m "Implement X (closes <task-id>)"
+   git checkout main
+   git pull --rebase origin main
+   git merge opensprint/<task-id>
+   git push origin main
+   git branch -d opensprint/<task-id>
    git status  # MUST show "up to date with origin"
    ```
 5. **Clean up** — Clear stashes, prune remote branches
@@ -64,6 +73,7 @@ Beads supports hierarchical IDs for organizing work:
 
 **CRITICAL RULES:**
 
+- One commit on main per task (code + beads). Push directly to `origin/main` — no PRs
 - Work is NOT done until `git push` succeeds
 - NEVER stop before pushing — that leaves work stranded locally
 - NEVER say "ready to push when you are" — YOU must push

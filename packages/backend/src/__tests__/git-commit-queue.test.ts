@@ -144,6 +144,51 @@ describe("GitCommitQueue", () => {
     expect(stdout).toContain("beads:");
   });
 
+  it("should merge with beadsClose in single commit (merge + beads)", async () => {
+    const beadsDir = path.join(repoPath, ".beads");
+    try {
+      await fs.access(beadsDir);
+    } catch {
+      return; // bd init was skipped
+    }
+
+    // Create an issue to close
+    await execAsync('bd --no-daemon create "Test task" -t task -p 2 --json', { cwd: repoPath });
+    await execAsync("bd --no-daemon sync", { cwd: repoPath });
+
+    const issuesPath = path.join(repoPath, ".beads/issues.jsonl");
+    const issuesContent = await fs.readFile(issuesPath, "utf-8");
+    const lines = issuesContent.trim().split("\n").filter(Boolean);
+    const lastIssue = lines.length > 0 ? JSON.parse(lines[lines.length - 1]) : null;
+    const taskId = lastIssue?.id;
+    if (!taskId) return;
+
+    // Create task branch with a commit
+    await execAsync("git checkout -b opensprint/task-1", { cwd: repoPath });
+    await fs.writeFile(path.join(repoPath, "feature.ts"), "export const x = 1;");
+    await execAsync('git add feature.ts && git commit -m "add feature"', { cwd: repoPath });
+    await execAsync("git checkout main", { cwd: repoPath });
+
+    await gitCommitQueue.enqueueAndWait({
+      type: "worktree_merge",
+      repoPath,
+      branchName: "opensprint/task-1",
+      taskTitle: "Test task",
+      beadsClose: { taskId, reason: "Implemented" },
+    });
+
+    const { stdout: logOut } = await execAsync("git log -1 --oneline", { cwd: repoPath });
+    expect(logOut).toContain("merge:");
+    expect(logOut).toContain("closes");
+
+    const { stdout: treeOut } = await execAsync("git ls-tree -r HEAD --name-only", {
+      cwd: repoPath,
+    });
+    const treeFiles = treeOut.trim().split("\n").filter(Boolean);
+    expect(treeFiles).toContain("feature.ts");
+    expect(treeFiles).toContain(".beads/issues.jsonl");
+  });
+
   // ─── Conflict-aware tests ───
 
   describe("with unmerged files", () => {

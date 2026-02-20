@@ -945,7 +945,17 @@ describe("OrchestratorService", () => {
       await onExit(0);
       await new Promise((r) => setTimeout(r, 300));
 
-      expect(mockBeadsClose).toHaveBeenCalledWith(repoPath, "task-full-cycle", "Implemented");
+      expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "worktree_merge",
+          repoPath,
+          branchName: "opensprint/task-full-cycle",
+          beadsClose: {
+            taskId: "task-full-cycle",
+            reason: "Implemented",
+          },
+        })
+      );
       expect(mockBroadcastToProject).toHaveBeenCalledWith(
         projectId,
         expect.objectContaining({
@@ -1009,13 +1019,16 @@ describe("OrchestratorService", () => {
 
       await new Promise((r) => setTimeout(r, 300));
 
-      // Should have merged and closed
-      expect(mockBeadsClose).toHaveBeenCalledWith(repoPath, "task-complete-1", "Done");
+      // Should have merged (beadsClose folds close+export into merge job)
       expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
         expect.objectContaining({
           type: "worktree_merge",
           repoPath,
           branchName: "opensprint/task-complete-1",
+          beadsClose: {
+            taskId: "task-complete-1",
+            reason: "Done",
+          },
         })
       );
       expect(mockBroadcastToProject).toHaveBeenCalledWith(
@@ -1109,18 +1122,17 @@ describe("OrchestratorService", () => {
       await reviewOnExit(0);
       await new Promise((r) => setTimeout(r, 300));
 
-      // On result.json approved: merge and Done
+      // On result.json approved: merge with beadsClose (close+export folded into merge)
       expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
         expect.objectContaining({
           type: "worktree_merge",
           repoPath,
           branchName: "opensprint/task-review-approve",
+          beadsClose: {
+            taskId: "task-review-approve",
+            reason: "Implemented feature",
+          },
         })
-      );
-      expect(mockBeadsClose).toHaveBeenCalledWith(
-        repoPath,
-        "task-review-approve",
-        "Implemented feature"
       );
       expect(mockBroadcastToProject).toHaveBeenCalledWith(
         projectId,
@@ -1215,9 +1227,12 @@ describe("OrchestratorService", () => {
           type: "worktree_merge",
           repoPath,
           branchName: "opensprint/task-approve-normalize",
+          beadsClose: {
+            taskId: "task-approve-normalize",
+            reason: "Done",
+          },
         })
       );
-      expect(mockBeadsClose).toHaveBeenCalledWith(repoPath, "task-approve-normalize", "Done");
     });
   });
 

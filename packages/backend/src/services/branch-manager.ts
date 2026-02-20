@@ -639,6 +639,14 @@ export class BranchManager {
     }
   }
 
+  /**
+   * Merge a branch into main without committing. Leaves the merge result staged.
+   * Used when combining merge + beads export into a single commit.
+   */
+  async mergeToMainNoCommit(repoPath: string, branchName: string): Promise<void> {
+    await this.git(repoPath, `merge --no-commit --no-ff ${branchName}`);
+  }
+
   private async git(
     repoPath: string,
     command: string

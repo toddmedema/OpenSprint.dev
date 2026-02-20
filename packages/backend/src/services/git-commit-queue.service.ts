@@ -57,6 +57,8 @@ export interface WorktreeMergeJob {
   repoPath: string;
   branchName: string;
   taskTitle: string;
+  /** When present, merge + beads close + export in a single commit (no separate beads_export) */
+  beadsClose?: { taskId: string; reason: string };
 }
 
 export type GitCommitJob = BeadsExportJob | PrdUpdateJob | WorktreeMergeJob;
@@ -269,9 +271,18 @@ class GitCommitQueueImpl implements GitCommitQueueService {
       }
       case "worktree_merge": {
         await this.branchManager.ensureOnMain(repoPath);
-        const msg = `merge: ${job.branchName} — ${job.taskTitle}`;
-        await this.branchManager.mergeToMain(repoPath, job.branchName, msg);
-        await this.beads.syncFromJsonl(repoPath);
+        if (job.beadsClose) {
+          await this.branchManager.mergeToMainNoCommit(repoPath, job.branchName);
+          await this.beads.syncFromJsonl(repoPath);
+          await this.beads.close(repoPath, job.beadsClose.taskId, job.beadsClose.reason);
+          await this.beads.export(repoPath, ".beads/issues.jsonl");
+          const msg = `merge: ${job.branchName} — ${job.taskTitle} (closes ${job.beadsClose.taskId})`;
+          await this.addAndCommit(repoPath, [".beads/issues.jsonl"], msg);
+        } else {
+          const msg = `merge: ${job.branchName} — ${job.taskTitle}`;
+          await this.branchManager.mergeToMain(repoPath, job.branchName, msg);
+          await this.beads.syncFromJsonl(repoPath);
+        }
         break;
       }
     }

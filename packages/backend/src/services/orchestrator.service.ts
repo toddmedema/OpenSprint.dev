@@ -1198,13 +1198,17 @@ export class OrchestratorService {
     // fail with RepoConflictError. PRD §5.9.
     await this.waitForPushComplete(projectId);
 
-    // Merge to main via serialized queue (PRD §5.9)
+    // Merge to main via serialized queue (PRD §5.9). beadsClose folds merge + close + export into one commit.
     try {
       await gitCommitQueue.enqueueAndWait({
         type: "worktree_merge",
         repoPath,
         branchName,
         taskTitle: task.title || task.id,
+        beadsClose: {
+          taskId: task.id,
+          reason: state.phaseResult.codingSummary || "Implemented and tested",
+        },
       });
     } catch (mergeErr) {
       log.warn("Merge to main failed", { mergeErr });
@@ -1223,7 +1227,17 @@ export class OrchestratorService {
             );
             if (resolved) {
               log.info("Merger agent resolved merge conflicts, continuing");
-              // Merge succeeded (agent ran git add + git commit) — fall through to close task
+              // Merge commit exists; close task and export beads (separate commit in this path)
+              await this.beads.close(
+                repoPath,
+                task.id,
+                state.phaseResult.codingSummary || "Implemented and tested"
+              );
+              gitCommitQueue.enqueue({
+                type: "beads_export",
+                repoPath,
+                summary: `closed ${task.id}`,
+              });
             } else {
               await this.branchManager.mergeAbort(repoPath);
               await this.handleTaskFailure(
@@ -1281,12 +1295,7 @@ export class OrchestratorService {
       }
     }
 
-    // Close the task in beads
-    await this.beads.close(
-      repoPath,
-      task.id,
-      state.phaseResult.codingSummary || "Implemented and tested"
-    );
+    // Task closed in beads by worktree_merge job (beadsClose)
 
     // Record successful attempt for performance tracking
     const settings = await this.projectService.getSettings(projectId);
@@ -1302,13 +1311,6 @@ export class OrchestratorService {
         durationMs: Date.now() - new Date(state.agent.startedAt).getTime(),
       })
       .catch((err) => log.warn("Failed to record attempt", { err }));
-
-    // PRD §5.9: Orchestrator manages beads persistence explicitly via export at checkpoints
-    gitCommitQueue.enqueue({
-      type: "beads_export",
-      repoPath,
-      summary: `closed ${task.id}`,
-    });
 
     const session = await this.sessionManager.createSession(repoPath, {
       taskId: task.id,
