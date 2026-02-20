@@ -327,7 +327,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
             className="input w-full text-sm min-h-[100px] resize-y"
             value={featureDescription}
             onChange={(e) => setFeatureDescription(e.target.value)}
-            placeholder="Describe your feature idea\u2026"
+            placeholder="Describe your feature idea"
             disabled={generating}
             data-testid="feature-description-input"
           />
@@ -339,7 +339,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
               className="btn-primary text-sm disabled:opacity-50"
               data-testid="generate-plan-button"
             >
-              {generating ? "Generating\u2026" : "Generate Plan"}
+              {generating ? "Generating" : "Generate Plan"}
             </button>
           </div>
         </div>
@@ -369,7 +369,8 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         ) : plans.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-theme-muted">
-              No plans yet. Describe a feature above to generate a plan, or use &ldquo;Plan it&rdquo; from the Sketch phase.
+              No plans yet. Describe a feature above to generate a plan, or use &ldquo;Plan
+              it&rdquo; from the Sketch phase.
             </p>
           </div>
         ) : filteredAndSortedPlans.length === 0 ? (
