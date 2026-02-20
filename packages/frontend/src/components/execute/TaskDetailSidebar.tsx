@@ -229,44 +229,54 @@ export function TaskDetailSidebar({
           ) : taskDetail ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-xs text-theme-muted">
-                <div ref={priorityDropdownRef} className="relative inline-block">
-                  <button
-                    type="button"
-                    onClick={() => setPriorityDropdownOpen((o) => !o)}
-                    className="inline-flex items-center gap-1 rounded px-2 py-1 text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors"
-                    aria-haspopup="listbox"
-                    aria-expanded={priorityDropdownOpen}
-                    aria-label={`Priority: ${PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}. Click to change`}
-                    data-testid="priority-dropdown-trigger"
+                {isDoneTask ? (
+                  <span
+                    className="text-theme-muted/80 cursor-default"
+                    data-testid="priority-read-only"
+                    aria-label={`Priority: ${PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}`}
                   >
-                    <span>{PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}</span>
-                    <span className="text-[10px] opacity-70">{priorityDropdownOpen ? "▲" : "▼"}</span>
-                  </button>
-                  {priorityDropdownOpen && (
-                    <ul
-                      role="listbox"
-                      className="absolute left-0 top-full mt-1 z-50 min-w-[140px] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1"
-                      data-testid="priority-dropdown"
+                    {PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}
+                  </span>
+                ) : (
+                  <div ref={priorityDropdownRef} className="relative inline-block">
+                    <button
+                      type="button"
+                      onClick={() => setPriorityDropdownOpen((o) => !o)}
+                      className="inline-flex items-center gap-1 rounded px-2 py-1 text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors cursor-pointer"
+                      aria-haspopup="listbox"
+                      aria-expanded={priorityDropdownOpen}
+                      aria-label={`Priority: ${PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}. Click to change`}
+                      data-testid="priority-dropdown-trigger"
                     >
-                      {([0, 1, 2, 3, 4] as const).map((p) => (
-                        <li key={p} role="option">
-                          <button
-                            type="button"
-                            onClick={() => handlePrioritySelect(p)}
-                            className={`w-full text-left px-3 py-2 text-xs hover:bg-theme-border-subtle/50 transition-colors ${
-                              (taskDetail.priority ?? 1) === p
-                                ? "text-brand-600 font-medium"
-                                : "text-theme-text"
-                            }`}
-                            data-testid={`priority-option-${p}`}
-                          >
-                            {p}: {PRIORITY_LABELS[p]}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+                      <span>{PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}</span>
+                      <span className="text-[10px] opacity-70">{priorityDropdownOpen ? "▲" : "▼"}</span>
+                    </button>
+                    {priorityDropdownOpen && (
+                      <ul
+                        role="listbox"
+                        className="absolute left-0 top-full mt-1 z-50 min-w-[140px] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1"
+                        data-testid="priority-dropdown"
+                      >
+                        {([0, 1, 2, 3, 4] as const).map((p) => (
+                          <li key={p} role="option">
+                            <button
+                              type="button"
+                              onClick={() => handlePrioritySelect(p)}
+                              className={`w-full text-left px-3 py-2 text-xs hover:bg-theme-border-subtle/50 transition-colors ${
+                                (taskDetail.priority ?? 1) === p
+                                  ? "text-brand-600 font-medium"
+                                  : "text-theme-text"
+                              }`}
+                              data-testid={`priority-option-${p}`}
+                            >
+                              {p}: {PRIORITY_LABELS[p]}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ) : (

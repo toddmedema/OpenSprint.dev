@@ -443,6 +443,85 @@ describe("TaskDetailSidebar", () => {
       expect(screen.queryByTestId("priority-dropdown")).not.toBeInTheDocument();
     });
 
+    it("shows priority as read-only static text when task is done (closed)", () => {
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(2),
+        selectedTaskData: {
+          ...taskDetailWithPriority(2),
+          kanbanColumn: "done" as const,
+          status: "closed" as const,
+        },
+        isDoneTask: true,
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      expect(screen.getByTestId("priority-read-only")).toBeInTheDocument();
+      expect(screen.getByTestId("priority-read-only")).toHaveTextContent("Medium");
+      expect(screen.getByTestId("priority-read-only")).toHaveClass("cursor-default");
+      expect(screen.queryByTestId("priority-dropdown-trigger")).not.toBeInTheDocument();
+    });
+
+    it("does not open dropdown when priority is read-only (done task)", async () => {
+      const user = userEvent.setup();
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(1),
+        selectedTaskData: {
+          ...taskDetailWithPriority(1),
+          kanbanColumn: "done" as const,
+          status: "closed" as const,
+        },
+        isDoneTask: true,
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      const readOnly = screen.getByTestId("priority-read-only");
+      await user.click(readOnly);
+      expect(screen.queryByTestId("priority-dropdown")).not.toBeInTheDocument();
+    });
+
+    it("updates to read-only when task transitions to done while sidebar is open", async () => {
+      const store = createStore();
+      const taskDetail = taskDetailWithPriority(1);
+      store.dispatch(
+        fetchTaskDetail.fulfilled(taskDetail, "", {
+          projectId: "proj-1",
+          taskId: "epic-1.1",
+        }),
+      );
+      const { rerender } = render(
+        <Provider store={store}>
+          <TaskDetailSidebar
+            {...createMinimalProps({
+              taskDetail,
+              selectedTaskData: { ...taskDetail, kanbanColumn: "in_progress" as const },
+              isDoneTask: false,
+            })}
+          />
+        </Provider>,
+      );
+      expect(screen.getByTestId("priority-dropdown-trigger")).toBeInTheDocument();
+
+      rerender(
+        <Provider store={store}>
+          <TaskDetailSidebar
+            {...createMinimalProps({
+              taskDetail: { ...taskDetail, kanbanColumn: "done" as const },
+              selectedTaskData: { ...taskDetail, kanbanColumn: "done" as const },
+              isDoneTask: true,
+            })}
+          />
+        </Provider>,
+      );
+      expect(screen.getByTestId("priority-read-only")).toBeInTheDocument();
+      expect(screen.queryByTestId("priority-dropdown-trigger")).not.toBeInTheDocument();
+    });
+
     it("reverts UI and shows toast when API fails", async () => {
       const user = userEvent.setup();
       mockUpdatePriority.mockRejectedValue(new Error("Network error"));
