@@ -288,4 +288,25 @@ describe("TaskService", () => {
     await taskService.listTasks("proj-1");
     expect(beadsListAllCalls).toBe(2);
   });
+
+  it("listTasks cache is invalidated on unblock (update mutation)", async () => {
+    const { BeadsService } = await import("../services/beads.service.js");
+    vi.mocked(BeadsService.prototype.show).mockResolvedValue({
+      id: "task-1",
+      title: "Blocked Task",
+      status: "blocked",
+      issue_type: "task",
+      dependencies: [],
+    } as BeadsIssue);
+    vi.spyOn(BeadsService.prototype, "update").mockResolvedValue(undefined as never);
+    vi.spyOn(BeadsService.prototype, "sync").mockResolvedValue(undefined as never);
+
+    await taskService.listTasks("proj-1");
+    expect(beadsListAllCalls).toBe(1);
+
+    await taskService.unblock("proj-1", "task-1");
+
+    await taskService.listTasks("proj-1");
+    expect(beadsListAllCalls).toBe(2);
+  });
 });
