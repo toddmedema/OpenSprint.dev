@@ -33,7 +33,6 @@ bd sync
 ### Working with Issues
 
 Issues in Beads are:
-
 - **Git-native**: Stored in `.beads/issues.jsonl` and synced like code
 - **AI-friendly**: CLI-first design works perfectly with AI coding agents
 - **Branch-aware**: Issues can follow your branch workflow
@@ -42,19 +41,16 @@ Issues in Beads are:
 ## Why Beads?
 
 ✨ **AI-Native Design**
-
 - Built specifically for AI-assisted development workflows
 - CLI-first interface works seamlessly with AI coding agents
 - No context switching to web UIs
 
 🚀 **Developer Focused**
-
 - Issues live in your repo, right next to your code
 - Works offline, syncs when you push
 - Fast, lightweight, and stays out of your way
 
 🔧 **Git Integration**
-
 - Automatic sync with git commits
 - Branch-aware issue tracking
 - Intelligent JSONL merge resolution
@@ -67,8 +63,8 @@ Try Beads in your own projects:
 # Install Beads
 curl -sSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash
 
-# Initialize in your repo (Dolt backend for best performance)
-bd init --backend dolt
+# Initialize in your repo
+bd init
 
 # Create your first issue
 bd create "Try out Beads"
@@ -82,4 +78,4 @@ bd create "Try out Beads"
 
 ---
 
-_Beads: Issue tracking that moves at the speed of thought_ ⚡
+*Beads: Issue tracking that moves at the speed of thought* ⚡

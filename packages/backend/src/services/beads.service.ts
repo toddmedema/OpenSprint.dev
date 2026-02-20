@@ -534,10 +534,10 @@ export class BeadsService {
     }
   }
 
-  /** Initialize beads in a project repository. Uses Dolt backend for faster performance. */
+  /** Initialize beads in a project repository. Uses SQLite backend. */
   async init(repoPath: string): Promise<void> {
     try {
-      await execAsync(`bd ${BD_GLOBAL_FLAGS} init --backend dolt`, {
+      await execAsync(`bd ${BD_GLOBAL_FLAGS} init --backend sqlite`, {
         cwd: repoPath,
         timeout: DEFAULT_TIMEOUT_MS,
       });
@@ -545,20 +545,8 @@ export class BeadsService {
       const err = error as { stderr?: string; stdout?: string; message: string };
       const msg = err.stderr || err.stdout || err.message;
       if (msg.includes("already initialized")) return;
-      // Fallback to SQLite if Dolt requires CGO and binary was built without it
-      if (
-        msg.toLowerCase().includes("dolt") &&
-        (msg.includes("requires CGO") || msg.includes("CGO_ENABLED") || msg.includes("CGO "))
-      ) {
-        log.warn("Dolt init failed (CGO required), falling back to SQLite", { repoPath });
-        await execAsync(`bd ${BD_GLOBAL_FLAGS} init`, {
-          cwd: repoPath,
-          timeout: DEFAULT_TIMEOUT_MS,
-        });
-        return;
-      }
       throw new AppError(502, ErrorCodes.BEADS_COMMAND_FAILED, `Beads init failed: ${msg}`, {
-        command: "bd init --backend dolt",
+        command: "bd init --backend sqlite",
         stderr: msg,
       });
     }
