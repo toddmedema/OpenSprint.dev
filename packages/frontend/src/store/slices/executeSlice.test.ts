@@ -10,6 +10,7 @@ import executeReducer, {
   fetchLiveOutputBackfill,
   markTaskDone,
   unblockTask,
+  updateTaskPriority,
   setSelectedTaskId,
   appendAgentOutput,
   setOrchestratorRunning,
@@ -22,6 +23,7 @@ import executeReducer, {
   type ExecuteState,
 } from "./executeSlice";
 import planReducer from "./planSlice";
+import websocketReducer from "./websocketSlice";
 import type { Plan, PlanDependencyGraph, AgentSession, Task } from "@opensprint/shared";
 
 vi.mock("../../api/client", () => ({
@@ -32,6 +34,7 @@ vi.mock("../../api/client", () => ({
       sessions: vi.fn(),
       markDone: vi.fn(),
       unblock: vi.fn(),
+      updatePriority: vi.fn(),
     },
     plans: { list: vi.fn() },
     execute: {
@@ -94,6 +97,8 @@ describe("executeSlice", () => {
     vi.mocked(api.tasks.get).mockReset();
     vi.mocked(api.tasks.sessions).mockReset();
     vi.mocked(api.tasks.markDone).mockReset();
+    vi.mocked(api.tasks.unblock).mockReset();
+    vi.mocked(api.tasks.updatePriority).mockReset();
     vi.mocked(api.plans.list).mockReset();
     vi.mocked(api.execute.status).mockReset();
     vi.mocked(api.execute.liveOutput).mockReset();
@@ -101,7 +106,7 @@ describe("executeSlice", () => {
 
   function createStore() {
     return configureStore({
-      reducer: { execute: executeReducer, plan: planReducer },
+      reducer: { execute: executeReducer, plan: planReducer, websocket: websocketReducer },
       middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware().concat(agentOutputFilterMiddleware),
     });
@@ -251,6 +256,21 @@ describe("executeSlice", () => {
       store.dispatch(taskUpdated({ taskId: "task-1", status: "blocked" }));
       const task = store.getState().execute.tasks[0];
       expect(task.kanbanColumn).toBe("blocked");
+    });
+
+    it("taskUpdated updates priority in tasks and taskDetail", () => {
+      const store = createStore();
+      const taskWithDetail = { ...mockTask, id: "task-1" };
+      store.dispatch(setTasks([taskWithDetail]));
+      store.dispatch(setSelectedTaskId("task-1"));
+      store.dispatch(
+        fetchTaskDetail.fulfilled(taskWithDetail, "", { projectId: "p1", taskId: "task-1" })
+      );
+      store.dispatch(taskUpdated({ taskId: "task-1", priority: 0 }));
+      const task = store.getState().execute.tasks[0];
+      const detail = store.getState().execute.taskDetail;
+      expect(task.priority).toBe(0);
+      expect(detail?.priority).toBe(0);
     });
 
     it("setTasks replaces tasks", () => {
@@ -426,6 +446,63 @@ describe("executeSlice", () => {
         unblockTask({ projectId: "proj-1", taskId: "task-1", resetAttempts: true })
       );
       expect(api.tasks.unblock).toHaveBeenCalledWith("proj-1", "task-1", { resetAttempts: true });
+    });
+  });
+
+  describe("updateTaskPriority thunk", () => {
+    it("optimistically updates priority, then confirms on fulfilled", async () => {
+      const updatedTask = { ...mockTask, id: "task-1", priority: 0 };
+      vi.mocked(api.tasks.updatePriority).mockResolvedValue(updatedTask as never);
+      const store = createStore();
+      store.dispatch(setTasks([{ ...mockTask, priority: 1 }]));
+      store.dispatch(setSelectedTaskId("task-1"));
+      store.dispatch(
+        fetchTaskDetail.fulfilled({ ...mockTask, priority: 1 }, "", {
+          projectId: "proj-1",
+          taskId: "task-1",
+        })
+      );
+      const promise = store.dispatch(
+        updateTaskPriority({
+          projectId: "proj-1",
+          taskId: "task-1",
+          priority: 0,
+          previousPriority: 1,
+        })
+      );
+      // Optimistic update applied immediately
+      expect(store.getState().execute.taskDetail?.priority).toBe(0);
+      expect(store.getState().execute.tasks[0].priority).toBe(0);
+      await promise;
+      expect(api.tasks.updatePriority).toHaveBeenCalledWith("proj-1", "task-1", 0);
+      expect(store.getState().execute.taskDetail?.priority).toBe(0);
+    });
+
+    it("reverts priority and shows toast on rejected", async () => {
+      vi.mocked(api.tasks.updatePriority).mockRejectedValue(new Error("Network error"));
+      const store = createStore();
+      store.dispatch(setTasks([{ ...mockTask, id: "task-1", priority: 1 }]));
+      store.dispatch(setSelectedTaskId("task-1"));
+      store.dispatch(
+        fetchTaskDetail.fulfilled({ ...mockTask, id: "task-1", priority: 1 }, "", {
+          projectId: "proj-1",
+          taskId: "task-1",
+        })
+      );
+      await store.dispatch(
+        updateTaskPriority({
+          projectId: "proj-1",
+          taskId: "task-1",
+          priority: 0,
+          previousPriority: 1,
+        })
+      );
+      expect(store.getState().execute.taskDetail?.priority).toBe(1);
+      expect(store.getState().execute.tasks[0].priority).toBe(1);
+      expect(store.getState().websocket.deliverToast).toEqual({
+        message: "Failed to update priority",
+        variant: "failed",
+      });
     });
   });
 });

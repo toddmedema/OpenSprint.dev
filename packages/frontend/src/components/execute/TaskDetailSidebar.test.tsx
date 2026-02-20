@@ -10,9 +10,11 @@ import projectReducer from "../../store/slices/projectSlice";
 import websocketReducer from "../../store/slices/websocketSlice";
 
 const mockGet = vi.fn();
+const mockUpdatePriority = vi.fn();
 vi.mock("../../api/client", () => ({
   api: {
     feedback: { get: (...args: unknown[]) => mockGet(...args) },
+    tasks: { updatePriority: (...args: unknown[]) => mockUpdatePriority(...args) },
   },
 }));
 
@@ -115,6 +117,7 @@ describe("TaskDetailSidebar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGet.mockResolvedValue(null);
+    mockUpdatePriority.mockResolvedValue({});
   });
 
   it("renders task title from selectedTaskData", () => {
