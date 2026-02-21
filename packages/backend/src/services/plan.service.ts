@@ -1277,12 +1277,12 @@ ${planNew}`;
       if (status === "open") {
         await this.beads.close(repoPath, task.id, "Archived plan");
         await this.beads.sync(repoPath);
-      broadcastToProject(projectId, {
-        type: "task.updated",
-        taskId: task.id,
-        status: "closed",
-        assignee: null,
-      });
+        broadcastToProject(projectId, {
+          type: "task.updated",
+          taskId: task.id,
+          status: "closed",
+          assignee: null,
+        });
       }
       // in_progress tasks are left unchanged
     }
