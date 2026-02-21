@@ -498,6 +498,9 @@ export class ContextAssembler {
     prompt += `- [ ] **All tests pass** — Run \`${config.testCommand}\` and confirm zero failures\n`;
     prompt += `- [ ] **Consistent style** — Follows existing codebase patterns and conventions\n\n`;
 
+    prompt += `## Working directory\n\n`;
+    prompt += `The **repository root** is the directory that contains \`package.json\`, \`packages/backend\`, \`packages/frontend\`, etc. You MUST run the test command and any \`git\` commands from that directory. Its path is in \`.opensprint/active/${config.taskId}/config.json\` as \`repoPath\`. If your current working directory is \`.opensprint/active/${config.taskId}/\` (the task folder), change to the repo root first, e.g. \`cd "$(jq -r .repoPath .opensprint/active/${config.taskId}/config.json)"\` (or \`cd <repoPath>\` using the value from config.json), then run \`${config.testCommand}\`. Do not run \`npm test\` from the task folder — it has no \`package.json\` and will fail with ENOENT.\n\n`;
+
     prompt += `## Instructions\n\n`;
     prompt += `1. Read the original ticket, acceptance criteria, and context files above to fully understand the scope.\n`;
     if (hasProvidedDiff) {
@@ -506,7 +509,7 @@ export class ContextAssembler {
       prompt += `2. Review the diff: \`git diff main...${config.branch}\`\n`;
     }
     prompt += `3. Walk through the checklist above, checking each item.\n`;
-    prompt += `4. Run the full test suite: \`${config.testCommand}\` — confirm ALL tests pass (not just the new ones). Regressions in other tests are grounds for rejection.\n`;
+    prompt += `4. From the repository root (see Working directory above), run the full test suite: \`${config.testCommand}\` — confirm ALL tests pass (not just the new ones). Regressions in other tests are grounds for rejection.\n`;
     prompt += `5. If prior reviews rejected this task, verify each previously cited issue was resolved. If not, reject and list which issues remain.\n`;
     prompt += `6. Write your result to \`.opensprint/active/${config.taskId}/result.json\` using this exact JSON format:\n`;
     prompt += `   If approving (do NOT merge — the orchestrator will merge after you exit):\n`;

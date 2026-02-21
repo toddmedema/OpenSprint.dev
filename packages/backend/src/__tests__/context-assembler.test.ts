@@ -477,11 +477,16 @@ User authentication.
     expect(prompt).toContain("Test coverage");
     expect(prompt).toContain("All tests pass");
 
+    // Working directory (so reviewer runs tests from repo root, not task dir)
+    expect(prompt).toContain("## Working directory");
+    expect(prompt).toContain("config.json");
+    expect(prompt).toContain("repoPath");
+
     // Instructions
     expect(prompt).toContain("## Instructions");
     expect(prompt).toContain("Read the original ticket");
     expect(prompt).toContain(`git diff main...opensprint/bd-a3f8.2`);
-    expect(prompt).toContain("Run the full test suite: `npm test`");
+    expect(prompt).toContain("full test suite: `npm test`");
     expect(prompt).toContain("6. Write your result to `.opensprint/active/bd-a3f8.2/result.json`");
     expect(prompt).toContain('"status": "approved"');
     expect(prompt).toContain("do NOT merge");
