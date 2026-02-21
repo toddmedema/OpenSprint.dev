@@ -183,9 +183,11 @@ describe("SourceFeedbackSection", () => {
       "rounded-lg",
       "border",
       "border-theme-border",
-      "overflow-hidden",
-      "p-4"
+      "overflow-hidden"
     );
+    // Content uses p-4 on inner div to match Live Output structure (no extra indentation)
+    const innerContent = card.querySelector(".p-4");
+    expect(innerContent).toBeInTheDocument();
   });
 
   it("renders feedback category chip and Mapped plan when mappedPlanId and plans provided", async () => {

@@ -54,48 +54,50 @@ export function SourceFeedbackSection({
             </div>
           ) : feedback ? (
             <div
-              className="bg-theme-code-bg rounded-lg border border-theme-border overflow-hidden p-4 text-xs space-y-2"
+              className="bg-theme-code-bg rounded-lg border border-theme-border overflow-hidden"
               data-testid="source-feedback-card"
             >
-              <div className="flex items-start justify-between gap-2 overflow-hidden flex-wrap">
-                {feedback.status === "resolved" && (
-                  <span
-                    className="inline-flex rounded-full px-2 py-0.5 font-medium flex-shrink-0 bg-theme-success-bg text-theme-success-text"
-                    aria-label="Resolved"
-                  >
-                    Resolved
-                  </span>
-                )}
-                {feedback.category && (
-                  <span
-                    className="inline-flex rounded-full px-2 py-0.5 font-medium flex-shrink-0 bg-theme-surface-muted text-theme-text capitalize"
-                    aria-label={`Category: ${feedback.category}`}
-                  >
-                    {feedback.category === "ux"
-                      ? "UX"
-                      : feedback.category.charAt(0).toUpperCase() + feedback.category.slice(1)}
-                  </span>
-                )}
-              </div>
-              <p className="text-theme-text whitespace-pre-wrap break-words min-w-0">
-                {feedback.text ?? "(No feedback text)"}
-              </p>
-              {feedback.mappedPlanId && plans.length > 0 && (
-                <div className="text-theme-muted">
-                  Mapped plan:{" "}
-                  {getEpicTitleFromPlan(
-                    plans.find((p) => p.metadata.planId === feedback.mappedPlanId) ?? {
-                      content: "",
-                      metadata: { planId: feedback.mappedPlanId },
-                    }
+              <div className="p-4 text-xs space-y-2">
+                <div className="flex items-start justify-between gap-2 overflow-hidden flex-wrap">
+                  {feedback.status === "resolved" && (
+                    <span
+                      className="inline-flex rounded-full px-2 py-0.5 font-medium flex-shrink-0 bg-theme-success-bg text-theme-success-text"
+                      aria-label="Resolved"
+                    >
+                      Resolved
+                    </span>
+                  )}
+                  {feedback.category && (
+                    <span
+                      className="inline-flex rounded-full px-2 py-0.5 font-medium flex-shrink-0 bg-theme-surface-muted text-theme-text capitalize"
+                      aria-label={`Category: ${feedback.category}`}
+                    >
+                      {feedback.category === "ux"
+                        ? "UX"
+                        : feedback.category.charAt(0).toUpperCase() + feedback.category.slice(1)}
+                    </span>
                   )}
                 </div>
-              )}
-              {feedback.createdAt && (
-                <div className="text-theme-muted">
-                  {new Date(feedback.createdAt).toLocaleString()}
-                </div>
-              )}
+                <p className="text-theme-text whitespace-pre-wrap break-words min-w-0">
+                  {feedback.text ?? "(No feedback text)"}
+                </p>
+                {feedback.mappedPlanId && plans.length > 0 && (
+                  <div className="text-theme-muted">
+                    Mapped plan:{" "}
+                    {getEpicTitleFromPlan(
+                      plans.find((p) => p.metadata.planId === feedback.mappedPlanId) ?? {
+                        content: "",
+                        metadata: { planId: feedback.mappedPlanId },
+                      }
+                    )}
+                  </div>
+                )}
+                {feedback.createdAt && (
+                  <div className="text-theme-muted">
+                    {new Date(feedback.createdAt).toLocaleString()}
+                  </div>
+                )}
+              </div>
             </div>
           ) : null}
     </CollapsibleSection>
