@@ -1021,4 +1021,209 @@ describe("FeedbackService", () => {
       expect(stored.status).toBe("mapped");
     });
   });
+
+  describe("resolveFeedback cascade (parent → children)", () => {
+    it("should cascade resolve single-level children when parent is resolved", async () => {
+      const feedbackDir = path.join(tempDir, "my-project", OPENSPRINT_PATHS.feedback);
+      await fs.mkdir(feedbackDir, { recursive: true });
+      const parent = {
+        id: "fb-parent-1",
+        text: "Parent bug",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "mapped",
+        createdAt: new Date().toISOString(),
+      };
+      const child = {
+        id: "fb-child-1",
+        text: "Child reply",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "mapped",
+        createdAt: new Date().toISOString(),
+        parent_id: "fb-parent-1",
+        depth: 1,
+      };
+      await fs.writeFile(
+        path.join(feedbackDir, "fb-parent-1.json"),
+        JSON.stringify(parent),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(feedbackDir, "fb-child-1.json"),
+        JSON.stringify(child),
+        "utf-8"
+      );
+
+      const result = await feedbackService.resolveFeedback(projectId, "fb-parent-1");
+
+      expect(result.status).toBe("resolved");
+      const storedParent = await feedbackService.getFeedback(projectId, "fb-parent-1");
+      const storedChild = await feedbackService.getFeedback(projectId, "fb-child-1");
+      expect(storedParent.status).toBe("resolved");
+      expect(storedChild.status).toBe("resolved");
+    });
+
+    it("should cascade resolve recursively (grandchildren)", async () => {
+      const feedbackDir = path.join(tempDir, "my-project", OPENSPRINT_PATHS.feedback);
+      await fs.mkdir(feedbackDir, { recursive: true });
+      const parent = {
+        id: "fb-parent-2",
+        text: "Parent",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "mapped",
+        createdAt: new Date().toISOString(),
+      };
+      const child = {
+        id: "fb-child-2",
+        text: "Child",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "mapped",
+        createdAt: new Date().toISOString(),
+        parent_id: "fb-parent-2",
+        depth: 1,
+      };
+      const grandchild = {
+        id: "fb-grandchild-2",
+        text: "Grandchild",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "mapped",
+        createdAt: new Date().toISOString(),
+        parent_id: "fb-child-2",
+        depth: 2,
+      };
+      await fs.writeFile(
+        path.join(feedbackDir, "fb-parent-2.json"),
+        JSON.stringify(parent),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(feedbackDir, "fb-child-2.json"),
+        JSON.stringify(child),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(feedbackDir, "fb-grandchild-2.json"),
+        JSON.stringify(grandchild),
+        "utf-8"
+      );
+
+      await feedbackService.resolveFeedback(projectId, "fb-parent-2");
+
+      const storedParent = await feedbackService.getFeedback(projectId, "fb-parent-2");
+      const storedChild = await feedbackService.getFeedback(projectId, "fb-child-2");
+      const storedGrandchild = await feedbackService.getFeedback(projectId, "fb-grandchild-2");
+      expect(storedParent.status).toBe("resolved");
+      expect(storedChild.status).toBe("resolved");
+      expect(storedGrandchild.status).toBe("resolved");
+    });
+
+    it("should leave already-resolved children as resolved (no-op)", async () => {
+      const feedbackDir = path.join(tempDir, "my-project", OPENSPRINT_PATHS.feedback);
+      await fs.mkdir(feedbackDir, { recursive: true });
+      const parent = {
+        id: "fb-parent-3",
+        text: "Parent",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "mapped",
+        createdAt: new Date().toISOString(),
+      };
+      const child = {
+        id: "fb-child-3",
+        text: "Already resolved child",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "resolved",
+        createdAt: new Date().toISOString(),
+        parent_id: "fb-parent-3",
+        depth: 1,
+      };
+      await fs.writeFile(
+        path.join(feedbackDir, "fb-parent-3.json"),
+        JSON.stringify(parent),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(feedbackDir, "fb-child-3.json"),
+        JSON.stringify(child),
+        "utf-8"
+      );
+
+      await feedbackService.resolveFeedback(projectId, "fb-parent-3");
+
+      const storedChild = await feedbackService.getFeedback(projectId, "fb-child-3");
+      expect(storedChild.status).toBe("resolved");
+    });
+
+    it("should NOT resolve parent or siblings when resolving a child independently", async () => {
+      const feedbackDir = path.join(tempDir, "my-project", OPENSPRINT_PATHS.feedback);
+      await fs.mkdir(feedbackDir, { recursive: true });
+      const parent = {
+        id: "fb-parent-4",
+        text: "Parent",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "mapped",
+        createdAt: new Date().toISOString(),
+      };
+      const child1 = {
+        id: "fb-child-4a",
+        text: "Child 1",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "mapped",
+        createdAt: new Date().toISOString(),
+        parent_id: "fb-parent-4",
+        depth: 1,
+      };
+      const child2 = {
+        id: "fb-child-4b",
+        text: "Child 2",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "mapped",
+        createdAt: new Date().toISOString(),
+        parent_id: "fb-parent-4",
+        depth: 1,
+      };
+      await fs.writeFile(
+        path.join(feedbackDir, "fb-parent-4.json"),
+        JSON.stringify(parent),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(feedbackDir, "fb-child-4a.json"),
+        JSON.stringify(child1),
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(feedbackDir, "fb-child-4b.json"),
+        JSON.stringify(child2),
+        "utf-8"
+      );
+
+      await feedbackService.resolveFeedback(projectId, "fb-child-4a");
+
+      const storedParent = await feedbackService.getFeedback(projectId, "fb-parent-4");
+      const storedChild1 = await feedbackService.getFeedback(projectId, "fb-child-4a");
+      const storedChild2 = await feedbackService.getFeedback(projectId, "fb-child-4b");
+      expect(storedParent.status).toBe("mapped");
+      expect(storedChild1.status).toBe("resolved");
+      expect(storedChild2.status).toBe("mapped");
+    });
+  });
 });

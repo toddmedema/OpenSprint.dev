@@ -238,4 +238,53 @@ describe("Feedback REST API", () => {
     expect(res.status).toBe(404);
     expect(res.body.error?.code).toBe("FEEDBACK_NOT_FOUND");
   });
+
+  it("POST /projects/:id/feedback/:feedbackId/resolve should cascade to children", async () => {
+    const feedbackDir = path.join(tempDir, "my-project", OPENSPRINT_PATHS.feedback);
+    await fs.mkdir(feedbackDir, { recursive: true });
+    const parent = {
+      id: "fb-cascade-parent",
+      text: "Parent feedback",
+      category: "bug",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "mapped",
+      createdAt: new Date().toISOString(),
+    };
+    const child = {
+      id: "fb-cascade-child",
+      text: "Child reply",
+      category: "bug",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "mapped",
+      createdAt: new Date().toISOString(),
+      parent_id: "fb-cascade-parent",
+      depth: 1,
+    };
+    await fs.writeFile(
+      path.join(feedbackDir, "fb-cascade-parent.json"),
+      JSON.stringify(parent),
+      "utf-8"
+    );
+    await fs.writeFile(
+      path.join(feedbackDir, "fb-cascade-child.json"),
+      JSON.stringify(child),
+      "utf-8"
+    );
+
+    const res = await request(app).post(
+      `${API_PREFIX}/projects/${projectId}/feedback/fb-cascade-parent/resolve`
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe("resolved");
+
+    const childFile = await fs.readFile(
+      path.join(feedbackDir, "fb-cascade-child.json"),
+      "utf-8"
+    );
+    const savedChild = JSON.parse(childFile);
+    expect(savedChild.status).toBe("resolved");
+  });
 });

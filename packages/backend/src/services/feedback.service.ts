@@ -840,7 +840,28 @@ export class FeedbackService {
   }
 
   /**
+   * Recursively resolve all children of a feedback item (items whose parent_id matches).
+   * Cascades to grandchildren etc. Already-resolved children remain resolved (no-op).
+   */
+  private async cascadeResolveChildren(projectId: string, parentId: string): Promise<void> {
+    const items = await this.listFeedback(projectId);
+    const children = items.filter((i) => i.parent_id === parentId);
+    for (const child of children) {
+      if (child.status !== "resolved") {
+        child.status = "resolved";
+        await this.saveFeedback(projectId, child);
+        broadcastToProject(projectId, {
+          type: "feedback.resolved",
+          feedbackId: child.id,
+        });
+      }
+      await this.cascadeResolveChildren(projectId, child.id);
+    }
+  }
+
+  /**
    * Resolve a feedback item (status -> resolved).
+   * When resolving a parent, cascades to all children/replies recursively.
    * PRD §7.5.3: When all critical feedback (bugs) are resolved and autoDeployOnEvaluateResolution is enabled,
    * auto-triggers deployment.
    */
@@ -856,6 +877,8 @@ export class FeedbackService {
       type: "feedback.resolved",
       feedbackId: item.id,
     });
+
+    await this.cascadeResolveChildren(projectId, item.id);
 
     // PRD §7.5.3: Auto-deploy on Evaluate resolution — when all critical (bug) feedback resolved
     const items = await this.listFeedback(projectId);
