@@ -207,4 +207,31 @@ describe("PlanDetailContent", () => {
     expect(headerRow).toBeInTheDocument();
     expect(headerRow).not.toHaveClass("border-b");
   });
+
+  it("passes header and body to children render prop for sticky layout", () => {
+    const renderFn = vi.fn(({ header, body }: { header: unknown; body: unknown }) => (
+      <div data-testid="custom-layout">
+        <div data-testid="header-slot">{header}</div>
+        <div data-testid="body-slot">{body}</div>
+      </div>
+    ));
+    render(
+      <PlanDetailContent plan={mockPlan} onContentSave={onContentSave}>
+        {renderFn}
+      </PlanDetailContent>
+    );
+    expect(renderFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        header: expect.anything(),
+        body: expect.anything(),
+      })
+    );
+    expect(screen.getByTestId("custom-layout")).toBeInTheDocument();
+    expect(screen.getByTestId("header-slot")).toContainElement(
+      screen.getByRole("textbox", { name: /title/i })
+    );
+    expect(screen.getByTestId("body-slot")).toContainElement(
+      screen.getByTestId("plan-body-editor")
+    );
+  });
 });
