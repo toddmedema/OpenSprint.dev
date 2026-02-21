@@ -435,11 +435,14 @@ export class FeedbackService {
           }
         }
         if (!item.proposedTasks?.length) {
-          item.taskTitles = Array.isArray(parsed.task_titles)
+          const fromTaskTitles = Array.isArray(parsed.task_titles)
             ? parsed.task_titles.filter((t: unknown) => typeof t === "string")
             : parsed.suggestedTitle
               ? [String(parsed.suggestedTitle)]
               : [item.text.slice(0, 80)];
+          // Never leave taskTitles empty when we have feedback text (AI may return task_titles: [])
+          item.taskTitles =
+            fromTaskTitles.length > 0 ? fromTaskTitles : [item.text.slice(0, 80)];
         }
 
         // Handle scope changes with HIL (PRD §7.4.2, §15.1) — category=scope OR is_scope_change=true
@@ -561,10 +564,15 @@ export class FeedbackService {
     item: FeedbackItem
   ): Promise<string[]> {
     const proposedTasks = item.proposedTasks ?? [];
-    const taskTitles = item.taskTitles ?? [];
+    let taskTitles = item.taskTitles ?? [];
     const hasProposed = proposedTasks.length > 0;
-    const hasTitles = taskTitles.length > 0;
-    if (!hasProposed && !hasTitles) return [];
+    let hasTitles = taskTitles.length > 0;
+    if (!hasProposed && !hasTitles) {
+      if (item.text?.trim()) {
+        taskTitles = [item.text.slice(0, 80)];
+        hasTitles = true;
+      } else return [];
+    }
 
     // User-specified priority (0-4) overrides AI-suggested and category-based default
     const userPriorityOverride =
@@ -697,11 +705,11 @@ export class FeedbackService {
   }
 
   /**
-   * Create a beads task with retry logic for UNIQUE constraint failures.
-   * The beads CLI can generate child IDs that collide with existing tasks
-   * (stale counter). Retries give it a chance to advance; if all retries
-   * fail, falls back to creating the task without a parent so the feedback
-   * flow is not broken.
+   * Create a beads task with retry logic for duplicate-ID failures.
+   * The beads CLI (or backend) can generate child IDs that collide with existing tasks
+   * (stale counter). Errors may be SQLite "UNIQUE constraint failed" or MySQL "Error 1062: duplicate primary key".
+   * Retries give the counter a chance to advance; if all retries fail, falls back to creating
+   * the task without a parent so the feedback flow is not broken.
    */
   private async createBeadTaskWithRetry(
     repoPath: string,
@@ -715,14 +723,19 @@ export class FeedbackService {
         return await this.beadsService.create(repoPath, title, options);
       } catch (err) {
         const msg = getErrorMessage(err);
-        const isUniqueConstraint = msg.includes("UNIQUE constraint failed");
+        const details = (err as { details?: { stderr?: string } })?.details?.stderr ?? "";
+        const fullMsg = msg + details;
+        const isDuplicateKey =
+          fullMsg.includes("UNIQUE constraint failed") ||
+          fullMsg.includes("duplicate primary key") ||
+          fullMsg.includes("Error 1062");
 
-        if (!isUniqueConstraint) {
+        if (!isDuplicateKey) {
           throw err;
         }
 
         if (attempt < MAX_RETRIES) {
-          log.warn("UNIQUE constraint, retrying", {
+          log.warn("Duplicate task ID, retrying", {
             attempt: attempt + 1,
             maxRetries: MAX_RETRIES + 1,
             title,
@@ -733,7 +746,7 @@ export class FeedbackService {
 
         // All retries with parent exhausted; try without parent as fallback
         if (options.parentId) {
-          log.warn("UNIQUE constraint persists under parent, creating standalone task", {
+          log.warn("Duplicate ID persists under parent, creating standalone task", {
             parentId: options.parentId,
             title,
           });
@@ -748,7 +761,7 @@ export class FeedbackService {
           }
         }
 
-        log.error("UNIQUE constraint with no parent fallback", { title });
+        log.error("Duplicate task ID with no parent fallback", { title });
         return null;
       }
     }
