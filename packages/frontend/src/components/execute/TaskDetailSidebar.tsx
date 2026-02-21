@@ -8,6 +8,7 @@ import { useAppDispatch } from "../../store";
 import { updateTaskPriority } from "../../store/slices/executeSlice";
 import { wsConnect } from "../../store/middleware/websocketMiddleware";
 import { CloseButton } from "../CloseButton";
+import { PriorityIcon } from "../PriorityIcon";
 import { TaskStatusBadge, COLUMN_LABELS } from "../kanban";
 import { formatUptime } from "../../lib/formatting";
 import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
@@ -242,12 +243,13 @@ export function TaskDetailSidebar({
                     <button
                       type="button"
                       onClick={() => setPriorityDropdownOpen((o) => !o)}
-                      className="inline-flex items-center gap-1 rounded px-2 py-1 text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-2 rounded px-2 py-1 text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors cursor-pointer"
                       aria-haspopup="listbox"
                       aria-expanded={priorityDropdownOpen}
                       aria-label={`Priority: ${PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}. Click to change`}
                       data-testid="priority-dropdown-trigger"
                     >
+                      <PriorityIcon priority={taskDetail.priority ?? 1} size="sm" />
                       <span>{PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}</span>
                       <span className="text-[10px] opacity-70">{priorityDropdownOpen ? "▲" : "▼"}</span>
                     </button>
@@ -262,13 +264,14 @@ export function TaskDetailSidebar({
                             <button
                               type="button"
                               onClick={() => handlePrioritySelect(p)}
-                              className={`w-full text-left px-3 py-2 text-xs hover:bg-theme-border-subtle/50 transition-colors ${
+                              className={`w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-theme-border-subtle/50 transition-colors ${
                                 (taskDetail.priority ?? 1) === p
                                   ? "text-brand-600 font-medium"
                                   : "text-theme-text"
                               }`}
                               data-testid={`priority-option-${p}`}
                             >
+                              <PriorityIcon priority={p} size="sm" />
                               {p}: {PRIORITY_LABELS[p]}
                             </button>
                           </li>

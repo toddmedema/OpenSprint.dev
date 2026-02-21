@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider, useSelector } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
@@ -380,6 +380,37 @@ describe("TaskDetailSidebar", () => {
         "aria-label",
         "Priority: High. Click to change",
       );
+    });
+
+    it("renders PriorityIcon in the priority dropdown trigger", () => {
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(1),
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      const trigger = screen.getByTestId("priority-dropdown-trigger");
+      expect(within(trigger).getByRole("img", { name: "High" })).toBeInTheDocument();
+    });
+
+    it("renders PriorityIcon in each dropdown option with correct priority", async () => {
+      const user = userEvent.setup();
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(2),
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      await user.click(screen.getByTestId("priority-dropdown-trigger"));
+      const labels = ["Critical", "High", "Medium", "Low", "Lowest"] as const;
+      for (let p = 0; p <= 4; p++) {
+        const option = screen.getByTestId(`priority-option-${p}`);
+        expect(within(option).getByRole("img", { name: labels[p] })).toBeInTheDocument();
+      }
     });
 
     it("opens dropdown with all 5 priority levels when clicked", async () => {
