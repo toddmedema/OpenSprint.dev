@@ -578,8 +578,24 @@ export class OrchestratorService {
     const state = this.getState(projectId);
 
     const maxSlots = this.maxSlotsCache.get(projectId) ?? 1;
+    const slotsFull = state.slots.size >= maxSlots;
 
-    if (state.loopActive || state.globalTimers.has("loop") || state.slots.size >= maxSlots) {
+    if (state.loopActive || state.globalTimers.has("loop")) {
+      return;
+    }
+
+    if (slotsFull) {
+      // Analyst doesn't use a slot; allow loop to run when there's pending feedback
+      this.feedbackService
+        .getNextPendingFeedbackId(projectId)
+        .then((nextId) => {
+          const s = this.getState(projectId);
+          if (nextId && !s.loopActive && !s.globalTimers.has("loop")) {
+            log.info("Nudge (pending feedback), starting loop for project", { projectId });
+            this.runLoop(projectId);
+          }
+        })
+        .catch(() => {});
       return;
     }
 
@@ -616,21 +632,24 @@ export class OrchestratorService {
   async getActiveAgents(projectId: string): Promise<ActiveAgent[]> {
     await this.projectService.getProject(projectId);
     const registered = activeAgentsService.list(projectId);
-    if (registered.length > 0) return registered;
-
     const state = this.getState(projectId);
-    const agents: ActiveAgent[] = [];
-    for (const slot of state.slots.values()) {
-      agents.push({
-        id: slot.taskId,
-        phase: slot.phase,
-        role: slot.phase === "review" ? "reviewer" : "coder",
-        label: slot.taskTitle ?? slot.taskId,
-        startedAt: slot.agent.startedAt || new Date().toISOString(),
-        branchName: slot.branchName,
-      });
+    const byId = new Map<string, ActiveAgent>();
+    for (const a of registered) {
+      byId.set(a.id, a);
     }
-    return agents;
+    for (const slot of state.slots.values()) {
+      if (!byId.has(slot.taskId)) {
+        byId.set(slot.taskId, {
+          id: slot.taskId,
+          phase: slot.phase,
+          role: slot.phase === "review" ? "reviewer" : "coder",
+          label: slot.taskTitle ?? slot.taskId,
+          startedAt: slot.agent.startedAt || new Date().toISOString(),
+          branchName: slot.branchName,
+        });
+      }
+    }
+    return [...byId.values()];
   }
 
   // ─── Main Orchestrator Loop ───

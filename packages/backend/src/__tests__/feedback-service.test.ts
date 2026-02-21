@@ -556,6 +556,36 @@ describe("FeedbackService", () => {
     expect(mockBeadsAddDependency).toHaveBeenCalledTimes(3);
   });
 
+  it("should create at least one task when AI returns empty proposed_tasks and task_titles (UX categorized)", async () => {
+    // Prompt allows "propose_tasks: [] with a generic title" for vague feedback; if model returns task_titles: [] too we must still create a task
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "ux",
+        mapped_plan_id: "some-plan",
+        mapped_epic_id: "bd-epic-1",
+        is_scope_change: false,
+        proposed_tasks: [],
+        task_titles: [],
+      }),
+    });
+
+    const item = await feedbackService.submitFeedback(projectId, {
+      text: "Hovering over the upload image button should show the tooltip 'Attach image(s)'",
+    });
+
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
+
+    const updated = await feedbackService.getFeedback(projectId, item.id);
+    expect(updated.status).toBe("mapped");
+    expect(updated.category).toBe("ux");
+    expect(updated.createdTaskIds.length).toBeGreaterThanOrEqual(1);
+    expect(updated.createdTaskIds[0]).toBeDefined();
+    // Fallback uses feedback text as title (truncated to 80 chars)
+    expect(updated.taskTitles).toEqual([
+      "Hovering over the upload image button should show the tooltip 'Attach image(s)'",
+    ]);
+  });
+
   it("should trigger HIL when is_scope_change is true even if category is not scope", async () => {
     feedbackIdSequence = ["xyz123"];
     mockInvoke.mockResolvedValue({
