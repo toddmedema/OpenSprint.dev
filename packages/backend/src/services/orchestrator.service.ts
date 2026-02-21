@@ -3,7 +3,6 @@ import path from "path";
 import type {
   OrchestratorStatus,
   ActiveAgent,
-  ActiveTaskConfig,
   CodingAgentResult,
   ReviewAgentResult,
   TestResults,
@@ -16,20 +15,16 @@ import {
   MAX_PRIORITY_BEFORE_BLOCK,
   resolveTestCommand,
   DEFAULT_REVIEW_MODE,
-  getCodingAgentForComplexity,
 } from "@opensprint/shared";
 import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { ProjectService } from "./project.service.js";
 import { agentService } from "./agent.service.js";
 import { triggerDeploy } from "./deploy-trigger.service.js";
 import { BranchManager, RebaseConflictError } from "./branch-manager.js";
-import {
-  gitCommitQueue,
-  RepoConflictError,
-} from "./git-commit-queue.service.js";
+import { gitCommitQueue, RepoConflictError } from "./git-commit-queue.service.js";
 import { ContextAssembler } from "./context-assembler.js";
 import { SessionManager } from "./session-manager.js";
-import { shouldInvokeSummarizer, buildSummarizerPrompt, countWords } from "./summarizer.service.js";
+import { buildSummarizerPrompt, countWords } from "./summarizer.service.js";
 import type { TaskContext } from "./context-assembler.js";
 import { TestRunner } from "./test-runner.js";
 import { orphanRecoveryService } from "./orphan-recovery.service.js";
@@ -44,14 +39,10 @@ import { AgentLifecycleManager, type AgentRunState } from "./agent-lifecycle.js"
 import { CrashRecoveryService } from "./crash-recovery.service.js";
 import { FileScopeAnalyzer, type FileScope } from "./file-scope-analyzer.js";
 import { normalizeCodingStatus, normalizeReviewStatus } from "./result-normalizers.js";
-import { getPlanComplexityForTask } from "./plan-complexity.js";
 import { eventLogService } from "./event-log.service.js";
 import { agentIdentityService, type AttemptOutcome } from "./agent-identity.service.js";
 import { createLogger } from "../utils/logger.js";
-import {
-  PhaseExecutorService,
-  type PhaseExecutorHost,
-} from "./phase-executor.service.js";
+import { PhaseExecutorService, type PhaseExecutorHost } from "./phase-executor.service.js";
 
 const log = createLogger("orchestrator");
 
@@ -104,7 +95,7 @@ export interface TaskAssignment {
 }
 
 /** Check whether a PID is still running */
-function isPidAlive(pid: number): boolean {
+function _isPidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
@@ -172,6 +163,8 @@ interface OrchestratorState {
   loopActive: boolean;
   globalTimers: TimerRegistry;
   slots: Map<string, AgentSlot>;
+  /** Cached Summarizer output per taskId; reused on retries, cleared when slot is removed */
+  summarizerCache: Map<string, TaskContext>;
   pendingFeedbackCategorizations: PendingFeedbackCategorization[];
 }
 
@@ -236,6 +229,7 @@ export class OrchestratorService {
         loopActive: false,
         globalTimers: new TimerRegistry(),
         slots: new Map(),
+        summarizerCache: new Map(),
         pendingFeedbackCategorizations: [],
       });
     }
@@ -252,7 +246,12 @@ export class OrchestratorService {
   }
 
   /** Create a new AgentSlot for a task */
-  private createSlot(taskId: string, taskTitle: string | null, branchName: string, attempt: number): AgentSlot {
+  private createSlot(
+    taskId: string,
+    taskTitle: string | null,
+    branchName: string,
+    attempt: number
+  ): AgentSlot {
     return {
       taskId,
       taskTitle,
@@ -296,7 +295,7 @@ export class OrchestratorService {
 
     switch (t.to) {
       case "start_task": {
-        const slot = state.slots.get(t.taskId);
+        const _slot = state.slots.get(t.taskId);
         broadcastToProject(projectId, {
           type: "task.updated",
           taskId: t.taskId,
@@ -346,9 +345,7 @@ export class OrchestratorService {
     }
 
     const activeTask = state.slots.get(t.taskId);
-    log.info(
-      `Transition [${projectId}]: → ${t.to} (task: ${t.taskId})`
-    );
+    log.info(`Transition [${projectId}]: → ${t.to} (task: ${t.taskId})`);
 
     const repoPath = this.repoPathCache.get(projectId);
     if (repoPath) {
@@ -364,12 +361,13 @@ export class OrchestratorService {
     }
   }
 
-  /** Remove a slot and clean up its per-slot timers */
+  /** Remove a slot and clean up its per-slot timers and summarizer cache */
   private removeSlot(state: OrchestratorState, taskId: string): void {
     const slot = state.slots.get(taskId);
     if (slot) {
       slot.timers.clearAll();
       state.slots.delete(taskId);
+      state.summarizerCache.delete(taskId);
     }
     state.status.activeTasks = this.buildActiveTasks(state);
   }
@@ -424,6 +422,8 @@ export class OrchestratorService {
     if (orphaned.length === 0) return;
 
     const state = this.getState(projectId);
+    const allIssues = await this.beads.listAll(repoPath);
+    const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
 
     for (const { taskId, assignment } of orphaned) {
       log.info("Recovery: found orphaned assignment", {
@@ -431,10 +431,8 @@ export class OrchestratorService {
         phase: assignment.phase,
       });
 
-      let task: BeadsIssue;
-      try {
-        task = await this.beads.show(repoPath, taskId);
-      } catch {
+      const task = idToIssue.get(taskId);
+      if (!task) {
         log.warn("Recovery: task not found, cleaning up assignment", { taskId });
         await this.deleteAssignment(repoPath, taskId);
         continue;
@@ -591,13 +589,16 @@ export class OrchestratorService {
   async getStatus(projectId: string): Promise<OrchestratorStatus> {
     await this.projectService.getProject(projectId);
     const state = this.getState(projectId);
+    const pendingIds = await this.feedbackService.listPendingFeedbackIds(projectId);
+    const pendingFeedbackCategorizations: PendingFeedbackCategorization[] = pendingIds.map(
+      (feedbackId) => ({ feedbackId })
+    );
     return {
       ...state.status,
       activeTasks: this.buildActiveTasks(state),
-      worktreePath: state.slots.size === 1
-        ? [...state.slots.values()][0]?.worktreePath ?? null
-        : null,
-      pendingFeedbackCategorizations: state.pendingFeedbackCategorizations ?? [],
+      worktreePath:
+        state.slots.size === 1 ? ([...state.slots.values()][0]?.worktreePath ?? null) : null,
+      pendingFeedbackCategorizations,
     };
   }
 
@@ -640,14 +641,36 @@ export class OrchestratorService {
     state.globalTimers.clear("loop");
 
     try {
+      // Gastown-style mailbox: process one queued feedback (Analyst) before coding work
+      const nextFeedbackId = await this.feedbackService.getNextPendingFeedbackId(projectId);
+      if (nextFeedbackId) {
+        log.info("Processing queued feedback with Analyst", {
+          projectId,
+          feedbackId: nextFeedbackId,
+        });
+        try {
+          await this.feedbackService.processFeedbackWithAnalyst(projectId, nextFeedbackId);
+          await this.feedbackService.removeFromInbox(projectId, nextFeedbackId);
+        } catch (err) {
+          log.error("Analyst failed for queued feedback; leaving in inbox for retry", {
+            projectId,
+            feedbackId: nextFeedbackId,
+            err,
+          });
+        }
+        state.loopActive = false;
+        this.nudge(projectId);
+        return;
+      }
+
       const repoPath = await this.projectService.getRepoPath(projectId);
       const settings = await this.projectService.getSettings(projectId);
       const maxSlots = settings.maxConcurrentCoders ?? 1;
       this.maxSlotsCache.set(projectId, maxSlots);
 
-      let readyTasks = await this.beads.ready(repoPath);
+      const { tasks: readyTasksRaw } = await this.beads.readyWithStatusMap(repoPath);
 
-      readyTasks = readyTasks.filter((t) => (t.title ?? "") !== "Plan approval gate");
+      let readyTasks = readyTasksRaw.filter((t) => (t.title ?? "") !== "Plan approval gate");
       readyTasks = readyTasks.filter((t) => (t.issue_type ?? t.type) !== "epic");
       readyTasks = readyTasks.filter((t) => (t.status as string) !== "blocked");
       // Exclude tasks that already have an active slot
@@ -671,31 +694,8 @@ export class OrchestratorService {
         return;
       }
 
-      // Pick the highest-priority task with all blockers closed
-      const statusMap = await this.beads.getStatusMap(repoPath);
-      let task: BeadsIssue | null = null;
-      for (const t of readyTasks) {
-        const allClosed = await this.beads.areAllBlockersClosed(repoPath, t.id, statusMap);
-        if (allClosed) {
-          task = t;
-          break;
-        }
-        log.info("Skipping task (blockers not all closed)", {
-          projectId,
-          taskId: t.id,
-          title: t.title,
-        });
-      }
-      if (!task) {
-        log.info("No task with all blockers closed, going idle", { projectId });
-        state.loopActive = false;
-        broadcastToProject(projectId, {
-          type: "execute.status",
-          activeTasks: this.buildActiveTasks(state),
-          queueDepth: 0,
-        });
-        return;
-      }
+      // readyWithStatusMap already filtered to tasks with all blockers closed; pick first by priority
+      const task = readyTasks[0]!;
       log.info("Picking task", { projectId, taskId: task.id, title: task.title });
 
       // Assign the task
@@ -710,7 +710,7 @@ export class OrchestratorService {
         summary: `claimed ${task.id}`,
       });
 
-      const cumulativeAttempts = await this.beads.getCumulativeAttempts(repoPath, task.id);
+      const cumulativeAttempts = this.beads.getCumulativeAttemptsFromIssue(task);
       const branchName = `opensprint/${task.id}`;
 
       // Create a slot for this task
@@ -1478,7 +1478,9 @@ export class OrchestratorService {
       slot.infraRetries = 0;
     }
 
-    await this.beads.setCumulativeAttempts(repoPath, task.id, cumulativeAttempts);
+    await this.beads.setCumulativeAttempts(repoPath, task.id, cumulativeAttempts, {
+      currentLabels: (task.labels ?? []) as string[],
+    });
 
     const isDemotionPoint = cumulativeAttempts % BACKOFF_FAILURE_THRESHOLD === 0;
 
@@ -1553,6 +1555,14 @@ export class OrchestratorService {
   }
 
   // ─── Helpers ───
+
+  getCachedSummarizerContext(projectId: string, taskId: string): TaskContext | undefined {
+    return this.getState(projectId).summarizerCache.get(taskId);
+  }
+
+  setCachedSummarizerContext(projectId: string, taskId: string, context: TaskContext): void {
+    this.getState(projectId).summarizerCache.set(taskId, context);
+  }
 
   private async runSummarizer(
     projectId: string,

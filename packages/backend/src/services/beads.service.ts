@@ -25,6 +25,13 @@ interface SyncState {
 }
 const syncStateMap = new Map<string, SyncState>();
 
+/**
+ * Per-repo mutex: serialize all bd CLI invocations for the same repoPath.
+ * Beads 0.55+ embedded Dolt crashes with SIGSEGV when two bd processes run
+ * concurrently on the same repo (beads#1935). Only one bd command at a time per repo.
+ */
+const execMutexMap = new Map<string, Promise<unknown>>();
+
 /** Path to backend.pid file for file-based lock (prevents multiple backends managing same repo) */
 const BACKEND_PID_FILE = ".beads/backend.pid";
 
@@ -92,6 +99,22 @@ export class BeadsService {
   /** Reset module-level state (for tests only) */
   static resetForTesting(): void {
     syncStateMap.clear();
+    execMutexMap.clear();
+    beadsCache.clear();
+  }
+
+  /**
+   * Run fn with exclusive access to bd for this repo. Serializes all bd CLI
+   * invocations per repo to avoid beads 0.55+ Dolt SIGSEGV on concurrent access.
+   */
+  private async withBeadsMutex<T>(repoPath: string, fn: () => Promise<T>): Promise<T> {
+    const prev = execMutexMap.get(repoPath) ?? Promise.resolve();
+    const work = prev.then(
+      () => fn(),
+      () => fn()
+    );
+    execMutexMap.set(repoPath, work);
+    return work as Promise<T>;
   }
 
   /**
@@ -167,14 +190,11 @@ export class BeadsService {
     // 2. Fallback: import with --orphan-handling allow (children whose parent was deleted)
     for (const orphanHandling of ["allow", "skip"] as const) {
       try {
-        await execAsync(
-          `bd import -i "${jsonlPath}" --orphan-handling ${orphanHandling}`,
-          {
-            cwd: repoPath,
-            timeout: 30_000,
-            maxBuffer: MAX_BUFFER_BYTES,
-          }
-        );
+        await execAsync(`bd import -i "${jsonlPath}" --orphan-handling ${orphanHandling}`, {
+          cwd: repoPath,
+          timeout: 30_000,
+          maxBuffer: MAX_BUFFER_BYTES,
+        });
         if (orphanHandling === "skip") {
           log.warn(
             "Recovery: import succeeded with --orphan-handling skip; some issues may be missing",
@@ -257,8 +277,21 @@ export class BeadsService {
    * Execute a bd command in the context of a project directory.
    * Ensures beads is ready, then runs the command.
    * Auto-recovers from stale-database errors by running sync import and retrying once.
+   * Serialized per-repo via withBeadsMutex to avoid beads 0.55+ Dolt SIGSEGV.
    */
   private async exec(
+    repoPath: string,
+    command: string,
+    options?: { timeout?: number }
+  ): Promise<string> {
+    return this.withBeadsMutex(repoPath, () => this.execImpl(repoPath, command, options));
+  }
+
+  /**
+   * Internal exec implementation (no mutex). Call only from code already holding
+   * the beads mutex for this repo (exec, export, syncFromJsonl).
+   */
+  private async execImpl(
     repoPath: string,
     command: string,
     options?: { timeout?: number }
@@ -419,20 +452,22 @@ export class BeadsService {
 
   /** Initialize beads in a project repository. */
   async init(repoPath: string): Promise<void> {
-    try {
-      await execAsync(`bd init`, {
-        cwd: repoPath,
-        timeout: DEFAULT_TIMEOUT_MS,
-      });
-    } catch (error: unknown) {
-      const err = error as { stderr?: string; stdout?: string; message: string };
-      const msg = err.stderr || err.stdout || err.message;
-      if (msg.includes("already initialized")) return;
-      throw new AppError(502, ErrorCodes.BEADS_COMMAND_FAILED, `Beads init failed: ${msg}`, {
-        command: "bd init",
-        stderr: msg,
-      });
-    }
+    return this.withBeadsMutex(repoPath, async () => {
+      try {
+        await execAsync(`bd init`, {
+          cwd: repoPath,
+          timeout: DEFAULT_TIMEOUT_MS,
+        });
+      } catch (error: unknown) {
+        const err = error as { stderr?: string; stdout?: string; message: string };
+        const msg = err.stderr || err.stdout || err.message;
+        if (msg.includes("already initialized")) return;
+        throw new AppError(502, ErrorCodes.BEADS_COMMAND_FAILED, `Beads init failed: ${msg}`, {
+          command: "bd init",
+          stderr: msg,
+        });
+      }
+    });
   }
 
   /**
@@ -454,40 +489,38 @@ export class BeadsService {
    * the commit queue indefinitely.
    */
   async export(repoPath: string, outputPath: string): Promise<void> {
-    // Pre-import: ingest any issues added externally (worktrees, git merges).
-    // Use --orphan-handling allow so child issues whose parent was deleted are
-    // still imported — using 'skip' previously caused a stale-DB export loop.
-    try {
-      await execAsync(`bd import -i "${outputPath}" --orphan-handling allow`, {
-        cwd: repoPath,
-        timeout: 30_000,
-        maxBuffer: MAX_BUFFER_BYTES,
-      });
-    } catch (err: unknown) {
-      const e = err as { stderr?: string; message?: string };
-      log.warn("pre-export import failed", { err: e.stderr ?? e.message });
-    }
-
-    try {
-      await this.exec(repoPath, `export -o ${outputPath}`);
-    } catch (err: unknown) {
-      // Normal export failed — try one more full import with allow before forcing.
-      log.warn("export failed, running full import before force retry", {
-        err: (err as { message?: string }).message,
-      });
+    return this.withBeadsMutex(repoPath, async () => {
+      // Pre-import: ingest any issues added externally (worktrees, git merges).
+      // Use sync --import-only instead of bd import: import can fail with duplicate primary key
+      // (Error 1062) when DB already has the issue; sync --import-only merges correctly.
       try {
-        const jsonlPath = path.join(repoPath, ".beads/issues.jsonl");
-        await execAsync(`bd import -i "${jsonlPath}" --orphan-handling allow`, {
-          cwd: repoPath,
-          timeout: 30_000,
-          maxBuffer: MAX_BUFFER_BYTES,
-        });
-        await this.exec(repoPath, `export -o ${outputPath}`);
-      } catch {
-        log.warn("export still failed after re-import, forcing to unblock commit queue");
-        await this.exec(repoPath, `export -o ${outputPath} --force`);
+        await this.execImpl(repoPath, "sync --import-only");
+      } catch (err: unknown) {
+        const e = err as { stderr?: string; message?: string };
+        log.warn("pre-export sync failed, trying import", { err: e.stderr ?? e.message });
+        try {
+          await this.execImpl(repoPath, `import -i "${outputPath}" --orphan-handling allow`);
+        } catch (importErr: unknown) {
+          const ie = importErr as { stderr?: string; message?: string };
+          log.warn("pre-export import failed", { err: ie.stderr ?? ie.message });
+        }
       }
-    }
+
+      try {
+        await this.execImpl(repoPath, `export -o ${outputPath}`);
+      } catch (err: unknown) {
+        log.warn("export failed, running full import before force retry", {
+          err: (err as { message?: string }).message,
+        });
+        try {
+          await this.execImpl(repoPath, "sync --import-only");
+          await this.execImpl(repoPath, `export -o ${outputPath}`);
+        } catch {
+          log.warn("export still failed after re-import, forcing to unblock commit queue");
+          await this.execImpl(repoPath, `export -o ${outputPath} --force`);
+        }
+      }
+    });
   }
 
   /** Create a new issue */
@@ -570,30 +603,61 @@ export class BeadsService {
   }
 
   /**
-   * Get ready tasks (priority-sorted, all blocks deps resolved).
-   * bd ready may return tasks whose blockers are in_progress; we only consider
-   * a blocks dependency resolved when the blocker status is closed.
-   *
-   * Fetches the status map once and reuses it for all blocker checks to avoid
-   * redundant bd list calls (previously N+1 calls for N tasks).
+   * Extract blocker IDs from an issue's dependencies (no bd show). Used by ready()
+   * and by callers that already have the issue (e.g. context-assembler) to avoid redundant show.
    */
-  async ready(repoPath: string): Promise<BeadsIssue[]> {
-    const stdout = await this.exec(repoPath, "ready --json -n 0");
-    const rawTasks = this.parseJsonArray(stdout);
-    if (rawTasks.length === 0) return [];
+  getBlockersFromIssue(issue: BeadsIssue): string[] {
+    const deps =
+      (issue.dependencies as Array<{
+        id?: string;
+        issue_id?: string;
+        depends_on_id?: string;
+        type?: string;
+        dependency_type?: string;
+      }>) ?? [];
+    return deps
+      .filter((d) => (d.type ?? d.dependency_type) === "blocks")
+      .map((d) => d.depends_on_id ?? d.issue_id ?? d.id ?? "")
+      .filter((x): x is string => !!x);
+  }
 
-    const statusMap = await this.getStatusMap(repoPath);
+  /**
+   * Get ready tasks and status map in one listAll call.
+   * Use this when the caller also needs the status map (e.g. orchestrator) to avoid a second listAll.
+   */
+  async readyWithStatusMap(
+    repoPath: string
+  ): Promise<{ tasks: BeadsIssue[]; statusMap: Map<string, string> }> {
+    const allIssues = await this.listAll(repoPath);
+    const statusMap = new Map(allIssues.map((i) => [i.id, i.status]));
 
     const filtered: BeadsIssue[] = [];
-    for (const task of rawTasks) {
-      const blockers = await this.getBlockers(repoPath, task.id);
+    for (const issue of allIssues) {
+      const status = (issue.status as string) ?? "open";
+      if (status !== "open") continue;
+      if ((issue.issue_type ?? issue.type) === "epic") continue;
+
+      const blockers = this.getBlockersFromIssue(issue);
       const allBlockersClosed =
         blockers.length === 0 || blockers.every((bid) => statusMap.get(bid) === "closed");
       if (allBlockersClosed) {
-        filtered.push(task);
+        filtered.push(issue);
       }
     }
-    return filtered;
+
+    filtered.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+    return { tasks: filtered, statusMap };
+  }
+
+  /**
+   * Get ready tasks (priority-sorted, all blocks deps resolved).
+   * Uses listAll + in-memory filtering to avoid O(N) bd show calls (previously
+   * caused 60+ second stalls with 69 tasks). bd ready returns tasks whose blockers
+   * may be in_progress; we only consider a blocks dependency resolved when closed.
+   */
+  async ready(repoPath: string): Promise<BeadsIssue[]> {
+    const { tasks } = await this.readyWithStatusMap(repoPath);
+    return tasks;
   }
 
   /** List all issues (open + in_progress by default) */
@@ -602,10 +666,14 @@ export class BeadsService {
     return this.parseJsonArray(stdout);
   }
 
-  /** List all issues including closed (for kanban column computation) */
+  /** List all issues including closed (for kanban column computation). Uses short-TTL cache. */
   async listAll(repoPath: string): Promise<BeadsIssue[]> {
+    const cached = beadsCache.getListAll<BeadsIssue[]>(repoPath);
+    if (cached) return cached;
     const stdout = await this.exec(repoPath, "list --all --json --limit 0");
-    return this.parseJsonArray(stdout);
+    const result = this.parseJsonArray(stdout);
+    beadsCache.setListAll(repoPath, result);
+    return result;
   }
 
   /**
@@ -622,12 +690,17 @@ export class BeadsService {
     );
   }
 
-  /** Show full details of an issue (bd show returns a JSON array) */
+  /** Show full details of an issue (bd show returns a JSON array). Uses short-TTL cache. */
   async show(repoPath: string, id: string): Promise<BeadsIssue> {
+    const cached = beadsCache.getShow<BeadsIssue>(repoPath, id);
+    if (cached) return cached;
     const stdout = await this.exec(repoPath, `show ${id} --json`);
     const arr = this.parseJsonArray(stdout);
     const first = arr[0];
-    if (first) return first;
+    if (first) {
+      beadsCache.setShow(repoPath, id, first);
+      return first;
+    }
     throw new AppError(404, ErrorCodes.ISSUE_NOT_FOUND, `Issue ${id} not found`, { issueId: id });
   }
 
@@ -724,11 +797,10 @@ export class BeadsService {
   }
 
   /**
-   * Get cumulative attempt count from beads labels (PRDv2 §9.1).
-   * Looks for label "attempts:N"; returns 0 if none found.
+   * Get cumulative attempt count from an issue's labels (PRDv2 §9.1).
+   * Use when the caller already has the issue to avoid a show() call.
    */
-  async getCumulativeAttempts(repoPath: string, id: string): Promise<number> {
-    const issue = await this.show(repoPath, id);
+  getCumulativeAttemptsFromIssue(issue: BeadsIssue): number {
     const labels = (issue.labels ?? []) as string[];
     const attemptsLabel = labels.find((l) => /^attempts:\d+$/.test(l));
     if (!attemptsLabel) return 0;
@@ -737,12 +809,27 @@ export class BeadsService {
   }
 
   /**
+   * Get cumulative attempt count from beads labels (PRDv2 §9.1).
+   * Looks for label "attempts:N"; returns 0 if none found.
+   */
+  async getCumulativeAttempts(repoPath: string, id: string): Promise<number> {
+    const issue = await this.show(repoPath, id);
+    return this.getCumulativeAttemptsFromIssue(issue);
+  }
+
+  /**
    * Set cumulative attempt count via beads labels (PRDv2 §9.1).
    * Removes any existing attempts:X label, adds attempts:count.
+   * When currentLabels is provided, skips show() to avoid an extra bd call.
    */
-  async setCumulativeAttempts(repoPath: string, id: string, count: number): Promise<void> {
-    const issue = await this.show(repoPath, id);
-    const labels = (issue.labels ?? []) as string[];
+  async setCumulativeAttempts(
+    repoPath: string,
+    id: string,
+    count: number,
+    options?: { currentLabels?: string[] }
+  ): Promise<void> {
+    const labels =
+      options?.currentLabels ?? (((await this.show(repoPath, id)).labels ?? []) as string[]);
     const existingAttempts = labels.find((l) => /^attempts:\d+$/.test(l));
     if (existingAttempts) {
       await this.removeLabel(repoPath, id, existingAttempts);
@@ -786,8 +873,10 @@ export class BeadsService {
    * git pulls) so the DB includes any externally-added issues before the next export.
    */
   async syncFromJsonl(repoPath: string): Promise<void> {
-    this.invalidateSyncState(repoPath);
-    await this.syncImport(repoPath);
+    return this.withBeadsMutex(repoPath, async () => {
+      this.invalidateSyncState(repoPath);
+      await this.syncImport(repoPath);
+    });
   }
 
   /** Sync beads with git */

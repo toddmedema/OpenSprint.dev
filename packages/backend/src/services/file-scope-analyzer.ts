@@ -22,8 +22,14 @@ export class FileScopeAnalyzer {
   /**
    * Predict file scope for a task using available metadata.
    * Returns a FileScope with confidence level indicating the source.
+   * When idToIssue is provided (e.g. from listAll), avoids extra beads show() calls for blockers.
    */
-  async predict(repoPath: string, task: BeadsIssue, beads: BeadsService): Promise<FileScope> {
+  async predict(
+    repoPath: string,
+    task: BeadsIssue,
+    beads: BeadsService,
+    options?: { idToIssue?: Map<string, BeadsIssue> }
+  ): Promise<FileScope> {
     const scope: FileScope = {
       taskId: task.id,
       files: new Set(),
@@ -51,7 +57,7 @@ export class FileScopeAnalyzer {
     }
 
     // Layer 2: Inferred from dependency tasks' actual files
-    const depFiles = await this.inferFromDependencies(repoPath, task, beads);
+    const depFiles = await this.inferFromDependencies(repoPath, task, beads, options?.idToIssue);
     if (depFiles.size > 0) {
       scope.files = depFiles;
       for (const f of depFiles) {
@@ -74,7 +80,12 @@ export class FileScopeAnalyzer {
    * Record actual files changed by a task after completion.
    * Stores as `actual_files:<json>` label for future inference.
    */
-  async recordActual(repoPath: string, taskId: string, changedFiles: string[], beads: BeadsService): Promise<void> {
+  async recordActual(
+    repoPath: string,
+    taskId: string,
+    changedFiles: string[],
+    beads: BeadsService
+  ): Promise<void> {
     if (changedFiles.length === 0) return;
     const label = `actual_files:${JSON.stringify(changedFiles)}`;
     try {
@@ -117,19 +128,22 @@ export class FileScopeAnalyzer {
     return label ? label.slice(prefix.length) : null;
   }
 
-  /** Look at completed dependency tasks for actual_files labels */
+  /** Look at completed dependency tasks for actual_files labels. When idToIssue is provided, avoids beads show() calls. */
   private async inferFromDependencies(
     repoPath: string,
     task: BeadsIssue,
-    beads: BeadsService
+    beads: BeadsService,
+    idToIssue?: Map<string, BeadsIssue>
   ): Promise<Set<string>> {
     const files = new Set<string>();
 
     try {
-      const blockers = await beads.getBlockers(repoPath, task.id);
+      const blockers = idToIssue
+        ? beads.getBlockersFromIssue(task)
+        : await beads.getBlockers(repoPath, task.id);
       for (const blockerId of blockers) {
         try {
-          const blocker = await beads.show(repoPath, blockerId);
+          const blocker = idToIssue?.get(blockerId) ?? (await beads.show(repoPath, blockerId));
           const actualLabel = ((blocker.labels ?? []) as string[]).find((l: string) =>
             l.startsWith("actual_files:")
           );
@@ -154,7 +168,8 @@ export class FileScopeAnalyzer {
    */
   private extractDirectoriesFromText(text: string): Set<string> {
     const dirs = new Set<string>();
-    const pathPattern = /(?:^|\s)((?:src|lib|packages|app|components|services|utils|pages|routes|api|test|__tests__)(?:\/[a-zA-Z0-9_.-]+)*)/g;
+    const pathPattern =
+      /(?:^|\s)((?:src|lib|packages|app|components|services|utils|pages|routes|api|test|__tests__)(?:\/[a-zA-Z0-9_.-]+)*)/g;
     let match;
     while ((match = pathPattern.exec(text)) !== null) {
       dirs.add(match[1]);

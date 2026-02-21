@@ -6,7 +6,11 @@
 import fs from "fs/promises";
 import path from "path";
 import type { ActiveTaskConfig } from "@opensprint/shared";
-import { OPENSPRINT_PATHS, resolveTestCommand, getCodingAgentForComplexity } from "@opensprint/shared";
+import {
+  OPENSPRINT_PATHS,
+  resolveTestCommand,
+  getCodingAgentForComplexity,
+} from "@opensprint/shared";
 import type { BeadsIssue } from "./beads.service.js";
 import type { BranchManager } from "./branch-manager.js";
 import type { ContextAssembler } from "./context-assembler.js";
@@ -32,7 +36,10 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("phase-executor");
 
 export interface PhaseExecutorHost {
-  getState(projectId: string): { slots: Map<string, { agent: AgentRunState; timers: TimerRegistry } & AgentSlotLike>; status: { queueDepth: number } };
+  getState(projectId: string): {
+    slots: Map<string, { agent: AgentRunState; timers: TimerRegistry } & AgentSlotLike>;
+    status: { queueDepth: number };
+  };
   beads: import("./beads.service.js").BeadsService;
   projectService: import("./project.service.js").ProjectService;
   branchManager: BranchManager;
@@ -48,6 +55,8 @@ export interface PhaseExecutorHost {
     taskId: string,
     context: TaskContext
   ): Promise<TaskContext>;
+  getCachedSummarizerContext(projectId: string, taskId: string): TaskContext | undefined;
+  setCachedSummarizerContext(projectId: string, taskId: string, context: TaskContext): void;
   buildReviewHistory(repoPath: string, taskId: string): Promise<string>;
 }
 
@@ -77,11 +86,19 @@ export class PhaseExecutorService {
         repoPath,
         task.id,
         this.host.beads,
-        this.host.branchManager
+        this.host.branchManager,
+        { task }
       );
 
       if (shouldInvokeSummarizer(context)) {
-        context = await this.host.runSummarizer(projectId, settings, task.id, context);
+        const cached = retryContext && this.host.getCachedSummarizerContext(projectId, task.id);
+        if (cached) {
+          context = cached;
+          log.info("Using cached Summarizer context for retry", { taskId: task.id });
+        } else {
+          context = await this.host.runSummarizer(projectId, settings, task.id, context);
+          this.host.setCachedSummarizerContext(projectId, task.id, context);
+        }
       }
 
       const config: ActiveTaskConfig = {
@@ -145,7 +162,8 @@ export class PhaseExecutorService {
           agentConfig,
           agentLabel: slot.taskTitle ?? task.id,
           role: "coder",
-          onDone: (code) => this.callbacks.handleCodingDone(projectId, repoPath, task, branchName, code),
+          onDone: (code) =>
+            this.callbacks.handleCodingDone(projectId, repoPath, task, branchName, code),
         },
         slot.agent,
         slot.timers
@@ -213,7 +231,8 @@ export class PhaseExecutorService {
         repoPath,
         task.id,
         this.host.beads,
-        this.host.branchManager
+        this.host.branchManager,
+        { task }
       );
 
       context.reviewHistory = await this.host.buildReviewHistory(repoPath, task.id);
@@ -249,7 +268,8 @@ export class PhaseExecutorService {
           agentConfig,
           agentLabel: slot.taskTitle ?? task.id,
           role: "reviewer",
-          onDone: (code) => this.callbacks.handleReviewDone(projectId, repoPath, task, branchName, code),
+          onDone: (code) =>
+            this.callbacks.handleReviewDone(projectId, repoPath, task, branchName, code),
         },
         slot.agent,
         slot.timers

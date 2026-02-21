@@ -38,7 +38,7 @@ describe("SourceFeedbackSection", () => {
           expanded={false}
           onToggle={() => {}}
         />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.getByRole("button", { name: /source feedback/i })).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe("SourceFeedbackSection", () => {
           expanded={false}
           onToggle={onToggle}
         />
-      </Provider>,
+      </Provider>
     );
 
     await user.click(screen.getByRole("button", { name: /source feedback/i }));
@@ -76,7 +76,12 @@ describe("SourceFeedbackSection", () => {
     });
     const plans = [
       {
-        metadata: { planId: "plan-1", beadEpicId: "epic-1", gateTaskId: "epic-1.0", complexity: "medium" as const },
+        metadata: {
+          planId: "plan-1",
+          beadEpicId: "epic-1",
+          gateTaskId: "epic-1.0",
+          complexity: "medium" as const,
+        },
         content: "# Dark Mode",
         status: "building" as const,
         taskCount: 1,
@@ -94,7 +99,7 @@ describe("SourceFeedbackSection", () => {
           expanded={true}
           onToggle={() => {}}
         />
-      </Provider>,
+      </Provider>
     );
 
     expect(await screen.findByText("Add dark mode support")).toBeInTheDocument();
@@ -121,7 +126,7 @@ describe("SourceFeedbackSection", () => {
           expanded={true}
           onToggle={() => {}}
         />
-      </Provider>,
+      </Provider>
     );
 
     expect(await screen.findByText("Resolved")).toBeInTheDocument();
@@ -137,7 +142,7 @@ describe("SourceFeedbackSection", () => {
           expanded={false}
           onToggle={() => {}}
         />
-      </Provider>,
+      </Provider>
     );
 
     expect(mockFeedbackGet).not.toHaveBeenCalled();
@@ -163,7 +168,7 @@ describe("SourceFeedbackSection", () => {
           expanded={true}
           onToggle={() => {}}
         />
-      </Provider>,
+      </Provider>
     );
 
     await screen.findByText("Test feedback");
@@ -173,10 +178,17 @@ describe("SourceFeedbackSection", () => {
     expect(contentRegion).toHaveClass("p-4", "pt-0");
 
     const card = screen.getByTestId("source-feedback-card");
-    expect(card).toHaveClass("bg-theme-code-bg", "rounded-lg", "border", "border-theme-border", "overflow-hidden", "p-4");
+    expect(card).toHaveClass(
+      "bg-theme-code-bg",
+      "rounded-lg",
+      "border",
+      "border-theme-border",
+      "overflow-hidden",
+      "p-4"
+    );
   });
 
-  it("does not render feedback category chip or Mapped plan in Execute sidebar", async () => {
+  it("renders feedback category chip and Mapped plan when mappedPlanId and plans provided", async () => {
     mockFeedbackGet.mockResolvedValue({
       id: "fb-1",
       text: "Add dark mode support",
@@ -188,7 +200,12 @@ describe("SourceFeedbackSection", () => {
     });
     const plans = [
       {
-        metadata: { planId: "plan-1", beadEpicId: "epic-1", gateTaskId: "epic-1.0", complexity: "medium" as const },
+        metadata: {
+          planId: "plan-1",
+          beadEpicId: "epic-1",
+          gateTaskId: "epic-1.0",
+          complexity: "medium" as const,
+        },
         content: "# Dark Mode",
         status: "building" as const,
         taskCount: 1,
@@ -206,13 +223,13 @@ describe("SourceFeedbackSection", () => {
           expanded={true}
           onToggle={() => {}}
         />
-      </Provider>,
+      </Provider>
     );
 
     await screen.findByText("Add dark mode support");
-    expect(screen.queryByText("Feature")).not.toBeInTheDocument();
-    expect(screen.queryByText("Mapped plan:")).not.toBeInTheDocument();
-    expect(screen.queryByText("Dark Mode")).not.toBeInTheDocument();
+    expect(screen.getByText("Feature")).toBeInTheDocument();
+    expect(screen.getByText(/mapped plan:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dark Mode/)).toBeInTheDocument();
   });
 
   it("shows loading state with matching container styling", () => {
@@ -227,7 +244,7 @@ describe("SourceFeedbackSection", () => {
           expanded={true}
           onToggle={() => {}}
         />
-      </Provider>,
+      </Provider>
     );
 
     expect(screen.getByTestId("source-feedback-loading")).toBeInTheDocument();

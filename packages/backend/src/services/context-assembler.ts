@@ -128,18 +128,20 @@ export class ContextAssembler {
   }
 
   /**
-   * Build full context for a task given only taskId (ContextBuilder per feature decomposition).
+   * Build full context for a task.
    * - Gets Plan path from epic description, reads Plan markdown
    * - Extracts relevant PRD sections
    * - For each dependency task: gets git diff (main...branch) if branch exists, else uses archived session
+   * @param options.task - When provided, avoids beads.show(taskId) and beads.getBlockers (uses issue data).
    */
   async buildContext(
     repoPath: string,
     taskId: string,
     beads: BeadsService,
-    branchManager: BranchManager
+    branchManager: BranchManager,
+    options?: { task?: BeadsIssue }
   ): Promise<TaskContext> {
-    const task = await beads.show(repoPath, taskId);
+    const task = options?.task ?? (await beads.show(repoPath, taskId));
     const title = task.title ?? "";
     const description = (task.description as string) ?? "";
 
@@ -148,7 +150,9 @@ export class ContextAssembler {
       "# Plan\n\nNo plan content available.";
 
     const prdExcerpt = await this.extractPrdExcerpt(repoPath);
-    const dependencyTaskIds = await beads.getBlockers(repoPath, taskId);
+    const dependencyTaskIds = options?.task
+      ? beads.getBlockersFromIssue(task)
+      : await beads.getBlockers(repoPath, taskId);
     const dependencyOutputs = await this.collectDependencyOutputsWithGitDiff(
       repoPath,
       dependencyTaskIds,
@@ -156,7 +160,7 @@ export class ContextAssembler {
     );
 
     return {
-      taskId,
+      taskId: task.id,
       title,
       description,
       planContent,

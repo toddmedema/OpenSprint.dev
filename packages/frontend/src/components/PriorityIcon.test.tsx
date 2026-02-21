@@ -3,54 +3,54 @@ import { render, screen } from "@testing-library/react";
 import { PriorityIcon } from "./PriorityIcon";
 
 describe("PriorityIcon", () => {
-  it("renders correct SVG for Critical (0) with two upward chevrons", () => {
+  it("renders correct SVG for Critical (0) with shield/pennant and gradient", () => {
     const { container } = render(<PriorityIcon priority={0} />);
 
     const svg = screen.getByRole("img", { name: "Critical" });
     expect(svg).toBeInTheDocument();
-    expect(svg).toHaveAttribute("viewBox", "0 0 24 24");
-    const paths = container.querySelectorAll("path");
-    expect(paths).toHaveLength(2);
-    paths.forEach((p) => {
-      expect(p).toHaveAttribute("stroke", "currentColor");
-      expect(p).toHaveAttribute("fill", "none");
-    });
+    expect(svg).toHaveAttribute("viewBox", "0 0 16 16");
+    const defs = container.querySelector("defs linearGradient");
+    expect(defs).toBeInTheDocument();
+    const path = container.querySelector("path[fill]");
+    expect(path).toBeTruthy();
+    expect(path?.getAttribute("fill")).toMatch(/^url\(#/);
   });
 
   it("renders correct SVG for High (1) with single upward chevron", () => {
     const { container } = render(<PriorityIcon priority={1} />);
 
     expect(screen.getByRole("img", { name: "High" })).toBeInTheDocument();
-    const paths = container.querySelectorAll("path");
-    expect(paths).toHaveLength(1);
-    expect(paths[0]).toHaveAttribute("stroke", "currentColor");
+    const path = container.querySelector("path");
+    expect(path).toBeTruthy();
+    expect(path).toHaveAttribute("fill", "#ff5630");
   });
 
-  it("renders correct SVG for Medium (2) with horizontal line", () => {
+  it("renders correct SVG for Medium (2) with two horizontal bars", () => {
     const { container } = render(<PriorityIcon priority={2} />);
 
     expect(screen.getByRole("img", { name: "Medium" })).toBeInTheDocument();
     const path = container.querySelector("path");
     expect(path).toBeTruthy();
-    expect(path).toHaveAttribute("d", "M6 12h12");
+    expect(path).toHaveAttribute("fill", "#FFAB00");
   });
 
   it("renders correct SVG for Low (3) with single downward chevron", () => {
     const { container } = render(<PriorityIcon priority={3} />);
 
     expect(screen.getByRole("img", { name: "Low" })).toBeInTheDocument();
-    const paths = container.querySelectorAll("path");
-    expect(paths).toHaveLength(1);
-    expect(paths[0]).toHaveAttribute("stroke", "currentColor");
+    const path = container.querySelector("path");
+    expect(path).toBeTruthy();
+    expect(path).toHaveAttribute("fill", "#0065ff");
   });
 
-  it("renders correct SVG for Lowest (4) with two downward chevrons", () => {
+  it("renders correct SVG for Lowest (4) with two downward chevrons (duo-tone)", () => {
     const { container } = render(<PriorityIcon priority={4} />);
 
     expect(screen.getByRole("img", { name: "Lowest" })).toBeInTheDocument();
     const paths = container.querySelectorAll("path");
     expect(paths).toHaveLength(2);
-    paths.forEach((p) => expect(p).toHaveAttribute("fill", "none"));
+    expect(paths[0]).toHaveAttribute("fill", "#0065ff");
+    expect(paths[1]).toHaveAttribute("fill", "#2684ff");
   });
 
   it("applies sm size classes by default", () => {
@@ -80,7 +80,7 @@ describe("PriorityIcon", () => {
     expect(screen.getByRole("img", { name: "Medium" })).toBeInTheDocument();
     const path = container.querySelector("path");
     expect(path).toBeTruthy();
-    expect(path).toHaveAttribute("d", "M6 12h12");
+    expect(path).toHaveAttribute("fill", "#FFAB00");
   });
 
   it("falls back to Medium icon for negative priority", () => {
@@ -110,5 +110,19 @@ describe("PriorityIcon", () => {
 
     const svg = screen.getByRole("img", { name: "Medium" });
     expect(svg).toHaveClass("shrink-0");
+  });
+
+  it("multiple Critical icons on the same page have unique gradient IDs", () => {
+    const { container } = render(
+      <>
+        <PriorityIcon priority={0} />
+        <PriorityIcon priority={0} />
+      </>
+    );
+
+    const gradientIds = container.querySelectorAll("defs linearGradient[id]");
+    expect(gradientIds.length).toBe(2);
+    const ids = Array.from(gradientIds).map((el) => el.getAttribute("id"));
+    expect(new Set(ids).size).toBe(2);
   });
 });

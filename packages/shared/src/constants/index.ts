@@ -9,6 +9,8 @@ export const OPENSPRINT_PATHS = {
   conversations: `${OPENSPRINT_DIR}/conversations`,
   sessions: `${OPENSPRINT_DIR}/sessions`,
   feedback: `${OPENSPRINT_DIR}/feedback`,
+  /** Gastown-style mailbox: feedback IDs awaiting Analyst (removed only on successful process) */
+  feedbackInbox: `${OPENSPRINT_DIR}/feedback-inbox.json`,
   active: `${OPENSPRINT_DIR}/active`,
   settings: `${OPENSPRINT_DIR}/settings.json`,
   orchestratorCounters: `${OPENSPRINT_DIR}/orchestrator-counters.json`,
@@ -36,11 +38,15 @@ export const BACKOFF_FAILURE_THRESHOLD = 3;
 /** Maximum beads priority value; tasks at this level get blocked on next demotion (PRDv2 §9.1) */
 export const MAX_PRIORITY_BEFORE_BLOCK = 4;
 
-/** Summarizer: invoke when task has more than this many dependencies (PRD §7.3.2, §12.3.5) */
-export const SUMMARIZER_DEPENDENCY_THRESHOLD = 2;
+/**
+ * Summarizer: invoke when task has more than this many dependencies (PRD §7.3.2, §12.3.5).
+ */
+export const SUMMARIZER_DEPENDENCY_THRESHOLD = 5;
 
-/** Summarizer: invoke when Plan exceeds this many words (PRD §7.3.2, §12.3.5) */
-export const SUMMARIZER_PLAN_WORD_THRESHOLD = 2000;
+/**
+ * Summarizer: invoke when Plan exceeds this many words (PRD §7.3.2, §12.3.5).
+ */
+export const SUMMARIZER_PLAN_WORD_THRESHOLD = 5000;
 
 /** Default API port */
 export const DEFAULT_API_PORT = 3100;

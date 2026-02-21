@@ -1,6 +1,6 @@
 /**
  * Summarizer agent service — PRD §12.3.5.
- * Condenses context when thresholds are exceeded (>2 dependencies or >2000-word Plan).
+ * Condenses context when thresholds are exceeded (>5 dependencies or >5000-word Plan).
  * Used in context assembly pipeline before passing to Coder.
  */
 
@@ -24,7 +24,7 @@ export function countWords(text: string): number {
 
 /**
  * Check if Summarizer should be invoked per PRD §7.3.2, §12.3.5.
- * Thresholds: >2 dependencies OR >2000-word Plan.
+ * Thresholds: >5 dependencies OR >5000-word Plan.
  */
 export function shouldInvokeSummarizer(context: TaskContext): boolean {
   const dependencyCount = context.dependencyOutputs.length;

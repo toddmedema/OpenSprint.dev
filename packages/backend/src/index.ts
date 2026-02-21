@@ -175,13 +175,18 @@ async function initAlwaysOnOrchestrator(): Promise<void> {
             });
           }
         }
-        // Retry any pending feedback categorizations that failed during a previous run
-        feedbackService.retryPendingCategorizations(project.id).catch((err) => {
-          logOrchestrator.warn("Pending categorization retry failed", {
-            name: project.name,
-            err: (err as Error).message,
+        // Enqueue any pending feedback for orchestrator (Gastown-style mailbox); nudge to process
+        feedbackService
+          .retryPendingCategorizations(project.id)
+          .then((enqueued) => {
+            if (enqueued > 0) orchestratorService.nudge(project.id);
+          })
+          .catch((err) => {
+            logOrchestrator.warn("Pending feedback enqueue failed", {
+              name: project.name,
+              err: (err as Error).message,
+            });
           });
-        });
       } catch (err) {
         logOrchestrator.warn("Could not read tasks for project", {
           name: project.name,
@@ -249,9 +254,7 @@ server.listen(port, () => {
     const url = `http://localhost:${FRONTEND_PORT}`;
     logStartup.info("No WebSocket client connected — opening frontend", { url });
     const cmd =
-      process.platform === "darwin" ? "open" :
-      process.platform === "win32" ? "start" :
-      "xdg-open";
+      process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
     exec(`${cmd} ${url}`, (err) => {
       if (err) logStartup.warn("Could not open browser", { err: err.message });
     });

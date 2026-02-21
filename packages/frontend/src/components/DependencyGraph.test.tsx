@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { DependencyGraph } from "./DependencyGraph";
 import type { PlanDependencyGraph } from "@opensprint/shared";
 
@@ -94,9 +93,10 @@ describe("DependencyGraph", () => {
       expect(svg).toBeInTheDocument();
     });
 
-    // D3 renders nodes as g elements with rect and text; find by text content
+    // D3 renders nodes as g elements with rect and text; find by text content.
+    // Use fireEvent.click to avoid triggering d3-drag/d3-zoom handlers that fail in JSDOM.
     const authText = screen.getByText("auth");
-    await userEvent.click(authText);
+    fireEvent.click(authText);
 
     expect(onPlanClick).toHaveBeenCalledTimes(1);
     expect(onPlanClick).toHaveBeenCalledWith(

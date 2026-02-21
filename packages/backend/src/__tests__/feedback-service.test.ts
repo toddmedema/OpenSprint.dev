@@ -146,8 +146,6 @@ describe("FeedbackService", () => {
   });
 
   afterEach(async () => {
-    // Allow fire-and-forget categorizeFeedback promises to settle
-    await new Promise((r) => setTimeout(r, 300));
     process.env.HOME = originalHome;
     await fs.rm(tempDir, { recursive: true, force: true });
   });
@@ -248,12 +246,13 @@ describe("FeedbackService", () => {
       text: "Login broken on desktop",
     });
 
-    await feedbackService.submitFeedback(projectId, {
+    const child = await feedbackService.submitFeedback(projectId, {
       text: "Same on mobile",
       parent_id: parent.id,
     });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await feedbackService.processFeedbackWithAnalyst(projectId, parent.id);
+    await feedbackService.processFeedbackWithAnalyst(projectId, child.id);
 
     expect(mockInvoke).toHaveBeenCalledTimes(2);
     const replyPrompt = mockInvoke.mock.calls[1][0]?.prompt ?? "";
@@ -339,7 +338,7 @@ describe("FeedbackService", () => {
 
     expect(item.userPriority).toBe(3);
 
-    await new Promise((r) => setTimeout(r, 200));
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     const updated = await feedbackService.getFeedback(projectId, item.id);
     expect(updated.userPriority).toBe(3);
@@ -363,11 +362,11 @@ describe("FeedbackService", () => {
       }),
     });
 
-    await feedbackService.submitFeedback(projectId, {
+    const item = await feedbackService.submitFeedback(projectId, {
       text: "Feature without user priority",
     });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     const taskCreateCalls = mockBeadsCreate.mock.calls.filter((c) => c[2]?.type === "feature");
     expect(taskCreateCalls).toHaveLength(2);
@@ -395,9 +394,7 @@ describe("FeedbackService", () => {
 
     const repoPath = path.join(tempDir, "my-project");
     const feedbackDir = path.join(repoPath, OPENSPRINT_PATHS.feedback);
-    const raw = JSON.parse(
-      await fs.readFile(path.join(feedbackDir, `${item.id}.json`), "utf-8")
-    );
+    const raw = JSON.parse(await fs.readFile(path.join(feedbackDir, `${item.id}.json`), "utf-8"));
     expect(raw.userPriority).toBe(0);
   });
 
@@ -454,8 +451,7 @@ describe("FeedbackService", () => {
     expect(item.status).toBe("pending");
     expect(item.id).toBeDefined();
 
-    // Wait for async categorization + task creation
-    await new Promise((r) => setTimeout(r, 200));
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     const updated = await feedbackService.getFeedback(projectId, item.id);
     expect(updated.status).toBe("mapped");
@@ -503,7 +499,7 @@ describe("FeedbackService", () => {
       text: "Users want dark mode",
     });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     const updated = await feedbackService.getFeedback(projectId, item.id);
     expect(updated.category).toBe("feature");
@@ -540,6 +536,7 @@ describe("FeedbackService", () => {
   });
 
   it("should trigger HIL when is_scope_change is true even if category is not scope", async () => {
+    feedbackIdSequence = ["xyz123"];
     mockInvoke.mockResolvedValue({
       content: JSON.stringify({
         category: "feature",
@@ -558,11 +555,11 @@ describe("FeedbackService", () => {
       }),
     });
 
-    await feedbackService.submitFeedback(projectId, {
+    const item = await feedbackService.submitFeedback(projectId, {
       text: "We need a native mobile app",
     });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     expect(mockGetScopeChangeProposal).toHaveBeenCalledWith(
       projectId,
@@ -578,7 +575,7 @@ describe("FeedbackService", () => {
       text: "Something broke",
     });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     const updated = await feedbackService.getFeedback(projectId, item.id);
     expect(updated.status).toBe("mapped");
@@ -593,7 +590,7 @@ describe("FeedbackService", () => {
       text: "Random feedback",
     });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     const updated = await feedbackService.getFeedback(projectId, item.id);
     expect(updated.status).toBe("mapped");
@@ -602,6 +599,7 @@ describe("FeedbackService", () => {
   });
 
   it("should create bug-type bead when category is bug", async () => {
+    feedbackIdSequence = ["xyz123"];
     mockInvoke.mockResolvedValue({
       content: JSON.stringify({
         category: "bug",
@@ -610,8 +608,8 @@ describe("FeedbackService", () => {
       }),
     });
 
-    await feedbackService.submitFeedback(projectId, { text: "Login broken" });
-    await new Promise((r) => setTimeout(r, 200));
+    const item = await feedbackService.submitFeedback(projectId, { text: "Login broken" });
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     const createCalls = mockBeadsCreate.mock.calls;
     const bugCreateCall = createCalls.find((c) => c[2]?.type === "bug");
@@ -620,6 +618,7 @@ describe("FeedbackService", () => {
   });
 
   it("should create feature-type bead when category is feature", async () => {
+    feedbackIdSequence = ["xyz123"];
     mockInvoke.mockResolvedValue({
       content: JSON.stringify({
         category: "feature",
@@ -628,8 +627,8 @@ describe("FeedbackService", () => {
       }),
     });
 
-    await feedbackService.submitFeedback(projectId, { text: "Need dark mode" });
-    await new Promise((r) => setTimeout(r, 200));
+    const item = await feedbackService.submitFeedback(projectId, { text: "Need dark mode" });
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     const createCalls = mockBeadsCreate.mock.calls;
     // First call: feedback source (chore); second: task
@@ -639,6 +638,7 @@ describe("FeedbackService", () => {
   });
 
   it("should add discovered-from dependency from each task to feedback source bead", async () => {
+    feedbackIdSequence = ["xyz123"];
     mockInvoke.mockResolvedValue({
       content: JSON.stringify({
         category: "feature",
@@ -647,8 +647,8 @@ describe("FeedbackService", () => {
       }),
     });
 
-    await feedbackService.submitFeedback(projectId, { text: "Add feature" });
-    await new Promise((r) => setTimeout(r, 200));
+    const item = await feedbackService.submitFeedback(projectId, { text: "Add feature" });
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     expect(mockBeadsAddDependency).toHaveBeenCalledTimes(2);
     expect(mockBeadsAddDependency).toHaveBeenNthCalledWith(
@@ -701,8 +701,8 @@ describe("FeedbackService", () => {
       }),
     });
 
-    await feedbackService.submitFeedback(projectId, { text: "Buttons are cramped" });
-    await new Promise((r) => setTimeout(r, 200));
+    const item = await feedbackService.submitFeedback(projectId, { text: "Buttons are cramped" });
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     const createCalls = mockBeadsCreate.mock.calls;
     const feedbackSourceCall = createCalls[0];
@@ -720,11 +720,11 @@ describe("FeedbackService", () => {
         }),
       });
 
-      await feedbackService.submitFeedback(projectId, {
+      const item = await feedbackService.submitFeedback(projectId, {
         text: "We need to add a mobile app as a new platform",
       });
 
-      await new Promise((r) => setTimeout(r, 200));
+      await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
       expect(mockGetScopeChangeProposal).toHaveBeenCalledWith(
         projectId,
@@ -771,11 +771,11 @@ describe("FeedbackService", () => {
       });
       mockHilEvaluate.mockResolvedValue({ approved: true });
 
-      await feedbackService.submitFeedback(projectId, {
+      const item = await feedbackService.submitFeedback(projectId, {
         text: "Add mobile app",
       });
 
-      await new Promise((r) => setTimeout(r, 200));
+      await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
       expect(mockHilEvaluate).toHaveBeenCalledWith(
         projectId,
@@ -810,11 +810,11 @@ describe("FeedbackService", () => {
       });
       mockHilEvaluate.mockResolvedValue({ approved: false });
 
-      await feedbackService.submitFeedback(projectId, {
+      const item = await feedbackService.submitFeedback(projectId, {
         text: "Add mobile support - fundamental scope change",
       });
 
-      await new Promise((r) => setTimeout(r, 200));
+      await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
       expect(mockSyncPrdFromScopeChange).not.toHaveBeenCalled();
       expect(mockBeadsCreate).not.toHaveBeenCalled();
@@ -830,9 +830,9 @@ describe("FeedbackService", () => {
         }),
       });
 
-      await feedbackService.submitFeedback(projectId, { text: longFeedback });
+      const item = await feedbackService.submitFeedback(projectId, { text: longFeedback });
 
-      await new Promise((r) => setTimeout(r, 200));
+      await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
       const hilDesc = mockHilEvaluate.mock.calls[0][2];
       expect(hilDesc).toContain("A".repeat(200) + "…");
@@ -850,11 +850,11 @@ describe("FeedbackService", () => {
       });
       mockHilEvaluate.mockResolvedValue({ approved: true });
 
-      await feedbackService.submitFeedback(projectId, {
+      const item = await feedbackService.submitFeedback(projectId, {
         text: "Add mobile app as a new platform - scope change",
       });
 
-      await new Promise((r) => setTimeout(r, 200));
+      await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
       expect(mockSyncPrdFromScopeChange).toHaveBeenCalledTimes(1);
       expect(mockSyncPrdFromScopeChange).toHaveBeenCalledWith(
@@ -875,8 +875,8 @@ describe("FeedbackService", () => {
         }),
       });
 
-      await feedbackService.submitFeedback(projectId, { text: "Add feature" });
-      await new Promise((r) => setTimeout(r, 200));
+      const item = await feedbackService.submitFeedback(projectId, { text: "Add feature" });
+      await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
       expect(mockRegister).toHaveBeenCalledTimes(1);
       expect(mockRegister).toHaveBeenCalledWith(
@@ -895,8 +895,8 @@ describe("FeedbackService", () => {
     it("should unregister even when agent invocation throws", async () => {
       mockInvoke.mockRejectedValue(new Error("Agent timeout"));
 
-      await feedbackService.submitFeedback(projectId, { text: "Random feedback" });
-      await new Promise((r) => setTimeout(r, 200));
+      const item = await feedbackService.submitFeedback(projectId, { text: "Random feedback" });
+      await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
       expect(mockRegister).toHaveBeenCalledTimes(1);
       expect(mockUnregister).toHaveBeenCalledTimes(1);

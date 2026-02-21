@@ -1,11 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { RepoConflictError } from "../services/git-commit-queue.service.js";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { OrchestratorService, formatReviewFeedback } from "../services/orchestrator.service.js";
 import type { ReviewAgentResult } from "@opensprint/shared";
-import { OPENSPRINT_PATHS } from "@opensprint/shared";
 
 // ─── Mocks ───
 
@@ -123,6 +121,14 @@ vi.mock("../websocket/index.js", () => ({
 vi.mock("../services/beads.service.js", () => ({
   BeadsService: vi.fn().mockImplementation(() => ({
     ready: mockBeadsReady,
+    readyWithStatusMap: vi.fn().mockImplementation(async () => ({ tasks: await mockBeadsReady() })),
+    getCumulativeAttemptsFromIssue: vi.fn().mockImplementation((issue: { labels?: string[] }) => {
+      const labels = (issue?.labels ?? []) as string[];
+      const attemptsLabel = labels.find((l: string) => /^attempts:\d+$/.test(l));
+      if (!attemptsLabel) return 0;
+      const n = parseInt(attemptsLabel.split(":")[1]!, 10);
+      return Number.isNaN(n) ? 0 : n;
+    }),
     show: mockBeadsShow,
     update: mockBeadsUpdate,
     close: mockBeadsClose,
@@ -260,6 +266,18 @@ vi.mock("../services/plan-complexity.js", () => ({
 vi.mock("../services/crash-recovery.service.js", () => ({
   CrashRecoveryService: vi.fn().mockImplementation(() => ({
     findOrphanedAssignments: mockFindOrphanedAssignments,
+  })),
+}));
+
+const mockListPendingFeedbackIds = vi.fn().mockResolvedValue([]);
+const mockGetNextPendingFeedbackId = vi.fn().mockResolvedValue(null);
+vi.mock("../services/feedback.service.js", () => ({
+  FeedbackService: vi.fn().mockImplementation(() => ({
+    listPendingFeedbackIds: (...args: unknown[]) => mockListPendingFeedbackIds(...args),
+    getNextPendingFeedbackId: (...args: unknown[]) => mockGetNextPendingFeedbackId(...args),
+    processFeedbackWithAnalyst: vi.fn().mockResolvedValue(undefined),
+    removeFromInbox: vi.fn().mockResolvedValue(undefined),
+    checkAutoResolveOnTaskDone: vi.fn().mockResolvedValue(undefined),
   })),
 }));
 
@@ -432,7 +450,9 @@ describe("OrchestratorService (slot-based model)", () => {
           },
         },
       ]);
-      mockBeadsShow.mockResolvedValue({ id: "task-orphan", status: "in_progress" });
+      // Recovery uses listAll + id lookup instead of show per orphan
+      const orphanTask = { id: "task-orphan", status: "in_progress" };
+      mockBeadsListAll.mockResolvedValueOnce([orphanTask]);
 
       await orchestrator.ensureRunning(projectId);
 
@@ -445,7 +465,7 @@ describe("OrchestratorService (slot-based model)", () => {
 
   describe("single task dispatch (maxConcurrentCoders=1)", () => {
     it("creates a slot, spawns agent, writes assignment.json", async () => {
-      const { task, wtPath } = setupSingleTaskFlow();
+      const { task } = setupSingleTaskFlow();
       mockBeadsReady.mockResolvedValueOnce([task]);
 
       await orchestrator.ensureRunning(projectId);
