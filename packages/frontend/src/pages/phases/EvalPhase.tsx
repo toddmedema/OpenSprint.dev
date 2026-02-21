@@ -416,7 +416,11 @@ function FeedbackCard({
 
       {/* Inline reply composer (PRD §7.4.1: quote snippet of parent above text input) */}
       {isReplying && (
-        <div className="mt-2 ml-0 card p-3">
+        <div
+          className="mt-2 ml-0 card p-3"
+          onDragOver={replyImages.handleDragOver}
+          onDrop={replyImages.handleDrop}
+        >
           <blockquote className="mb-2 pl-3 border-l-2 border-theme-border text-sm text-theme-muted italic">
             {item.text && item.text.length > 80
               ? `${item.text.slice(0, 80)}…`
@@ -720,37 +724,12 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                   </ul>
                 )}
               </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
-                multiple
-                className="hidden"
-                onChange={handleFileInputChange}
+              <ImageAttachmentButton
+                attachment={imageAttachment}
+                variant="icon"
+                disabled={submitting}
+                data-testid="feedback-attach-image"
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={submitting || images.length >= MAX_IMAGES}
-                className="btn-secondary h-10 w-10 shrink-0 p-0 flex items-center justify-center disabled:opacity-50"
-                title="Attach image"
-                aria-label="Attach image"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-5 h-5"
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <polyline points="21 15 16 10 5 21" />
-                </svg>
-              </button>
               <KeyboardShortcutTooltip>
                 <button
                   onClick={handleSubmit}

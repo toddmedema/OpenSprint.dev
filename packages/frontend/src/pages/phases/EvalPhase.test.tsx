@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
@@ -762,6 +762,89 @@ describe("EvalPhase feedback form", () => {
 
       // Unknown task defaults to priority 1 (High)
       expect(screen.getByRole("img", { name: "High" })).toBeInTheDocument();
+    });
+  });
+
+  describe("reply image attachment", () => {
+    it("shows Attach image(s) button in reply composer to the left of Submit Reply", async () => {
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const user = userEvent.setup();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => expect(screen.getByText("Bug 1")).toBeInTheDocument());
+
+      const bug1Card = screen.getByText("Bug 1").closest(".card");
+      await user.click(within(bug1Card!).getByRole("button", { name: /^Reply$/ }));
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText("Write a reply...")).toBeInTheDocument();
+      });
+
+      const attachButton = screen.getByTestId("reply-attach-images");
+      const submitButton = screen.getByRole("button", { name: /Submit Reply/i });
+      expect(attachButton).toBeInTheDocument();
+      expect(attachButton).toHaveAttribute("aria-label", "Attach image(s)");
+      expect(attachButton).toHaveTextContent("Attach image(s)");
+
+      // Attach button should appear before Submit Reply in DOM order
+      const actionsRow = submitButton.closest(".flex");
+      expect(actionsRow).toBeTruthy();
+      const buttons = actionsRow!.querySelectorAll("button");
+      const attachIndex = Array.from(buttons).findIndex((b) => b === attachButton);
+      const submitIndex = Array.from(buttons).findIndex((b) => b === submitButton);
+      expect(attachIndex).toBeGreaterThanOrEqual(0);
+      expect(submitIndex).toBeGreaterThan(attachIndex);
+    });
+
+    it("persists attached images when submitting reply", async () => {
+      const { api } = await import("../../api/client");
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const user = userEvent.setup();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => expect(screen.getByText("Bug 1")).toBeInTheDocument());
+
+      const bug1Card = screen.getByText("Bug 1").closest(".card");
+      await user.click(within(bug1Card!).getByRole("button", { name: /^Reply$/ }));
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText("Write a reply...")).toBeInTheDocument();
+      });
+
+      // Create minimal valid PNG (1x1 pixel)
+      const base64 =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      const file = new File([bytes], "test.png", { type: "image/png" });
+
+      const fileInput = screen.getByTestId("reply-attach-images-input");
+      await user.upload(fileInput, file);
+
+      await waitFor(() => {
+        expect(screen.getByAltText("Attachment 1")).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText("Write a reply..."), "Here is a screenshot");
+      await user.click(screen.getByRole("button", { name: /Submit Reply/i }));
+
+      await waitFor(() => {
+        expect(api.feedback.submit).toHaveBeenCalledWith(
+          "proj-1",
+          "Here is a screenshot",
+          expect.any(Array),
+          "fb-1",
+          undefined
+        );
+      });
+      const call = vi.mocked(api.feedback.submit).mock.calls[0];
+      expect(call[2]).toHaveLength(1);
+      expect(call[2]![0]).toContain("data:image/png;base64,");
     });
   });
 });
