@@ -98,7 +98,6 @@ describe("SourceFeedbackSection", () => {
     );
 
     expect(await screen.findByText("Add dark mode support")).toBeInTheDocument();
-    expect(screen.getByText("Feature")).toBeInTheDocument();
     expect(screen.getByTestId("source-feedback-card")).toBeInTheDocument();
   });
 
@@ -126,7 +125,6 @@ describe("SourceFeedbackSection", () => {
     );
 
     expect(await screen.findByText("Resolved")).toBeInTheDocument();
-    expect(screen.getByText("Bug")).toBeInTheDocument();
   });
 
   it("does not fetch when collapsed", () => {
@@ -176,6 +174,45 @@ describe("SourceFeedbackSection", () => {
 
     const card = screen.getByTestId("source-feedback-card");
     expect(card).toHaveClass("bg-theme-code-bg", "rounded-lg", "border", "border-theme-border", "overflow-hidden", "p-4");
+  });
+
+  it("does not render feedback category chip or Mapped plan in Execute sidebar", async () => {
+    mockFeedbackGet.mockResolvedValue({
+      id: "fb-1",
+      text: "Add dark mode support",
+      category: "feature",
+      mappedPlanId: "plan-1",
+      createdTaskIds: [],
+      status: "mapped",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+    const plans = [
+      {
+        metadata: { planId: "plan-1", beadEpicId: "epic-1", gateTaskId: "epic-1.0", complexity: "medium" as const },
+        content: "# Dark Mode",
+        status: "building" as const,
+        taskCount: 1,
+        doneTaskCount: 0,
+        dependencyCount: 0,
+      },
+    ];
+
+    render(
+      <Provider store={createStore()}>
+        <SourceFeedbackSection
+          projectId="proj-1"
+          feedbackId="fb-1"
+          plans={plans}
+          expanded={true}
+          onToggle={() => {}}
+        />
+      </Provider>,
+    );
+
+    await screen.findByText("Add dark mode support");
+    expect(screen.queryByText("Feature")).not.toBeInTheDocument();
+    expect(screen.queryByText("Mapped plan:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dark Mode")).not.toBeInTheDocument();
   });
 
   it("shows loading state with matching container styling", () => {

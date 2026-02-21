@@ -3,23 +3,11 @@ import type { FeedbackItem, Plan } from "@opensprint/shared";
 import { useAppDispatch } from "../../store";
 import { api } from "../../api/client";
 import { addNotification } from "../../store/slices/notificationSlice";
-import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
-
-const feedbackCategoryColors: Record<string, string> = {
-  bug: "bg-theme-feedback-bug-bg text-theme-feedback-bug-text",
-  feature: "bg-theme-feedback-feature-bg text-theme-feedback-feature-text",
-  ux: "bg-theme-feedback-ux-bg text-theme-feedback-ux-text",
-  scope: "bg-theme-feedback-scope-bg text-theme-feedback-scope-text",
-};
-
-function getFeedbackTypeLabel(item: FeedbackItem): string {
-  return item.category === "ux" ? "UX" : item.category.charAt(0).toUpperCase() + item.category.slice(1);
-}
 
 export function SourceFeedbackSection({
   projectId,
   feedbackId,
-  plans,
+  plans: _plans,
   expanded,
   onToggle,
 }: {
@@ -45,11 +33,6 @@ export function SourceFeedbackSection({
       })
       .finally(() => setLoading(false));
   }, [projectId, feedbackId, expanded, dispatch]);
-
-  const mappedPlan = feedback?.mappedPlanId
-    ? plans.find((p) => p.metadata.planId === feedback.mappedPlanId)
-    : null;
-  const planTitle = mappedPlan ? getEpicTitleFromPlan(mappedPlan) : feedback?.mappedPlanId ?? null;
 
   return (
     <div className="border-b border-theme-border">
@@ -85,31 +68,19 @@ export function SourceFeedbackSection({
               className="bg-theme-code-bg rounded-lg border border-theme-border overflow-hidden p-4 text-xs space-y-2"
               data-testid="source-feedback-card"
             >
-              <div className="flex items-start justify-between gap-2 overflow-hidden flex-wrap">
-                <span
-                  className={`inline-flex rounded-full px-2 py-0.5 font-medium flex-shrink-0 ${
-                    feedbackCategoryColors[feedback.category] ?? "bg-theme-border-subtle text-theme-muted"
-                  }`}
-                >
-                  {getFeedbackTypeLabel(feedback)}
-                </span>
-                {feedback.status === "resolved" && (
+              {feedback.status === "resolved" && (
+                <div className="flex items-start justify-between gap-2 overflow-hidden flex-wrap">
                   <span
                     className="inline-flex rounded-full px-2 py-0.5 font-medium flex-shrink-0 bg-theme-success-bg text-theme-success-text"
                     aria-label="Resolved"
                   >
                     Resolved
                   </span>
-                )}
-              </div>
+                </div>
+              )}
               <p className="text-theme-text whitespace-pre-wrap break-words min-w-0">
                 {feedback.text ?? "(No feedback text)"}
               </p>
-              {planTitle && (
-                <div className="text-theme-muted">
-                  Mapped plan: <span className="font-medium text-theme-text">{planTitle}</span>
-                </div>
-              )}
               {feedback.createdAt && (
                 <div className="text-theme-muted">
                   {new Date(feedback.createdAt).toLocaleString()}
