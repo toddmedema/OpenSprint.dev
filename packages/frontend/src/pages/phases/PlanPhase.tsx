@@ -469,9 +469,9 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           >
             {({ header, body }) => (
               <>
-                {/* Fixed header: title + close (shrink-0, matches Execute sidebar) */}
+                {/* Sticky header: title + close (shrink-0, matches Execute sidebar) */}
                 <div
-                  className="flex items-center justify-between border-b border-theme-border shrink-0 bg-theme-bg"
+                  className="flex items-center justify-between border-b border-theme-border shrink-0 bg-theme-bg sticky top-0 z-10"
                   data-testid="plan-detail-sidebar-header"
                 >
                   {header}

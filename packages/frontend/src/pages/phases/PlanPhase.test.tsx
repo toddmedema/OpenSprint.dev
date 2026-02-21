@@ -327,7 +327,7 @@ describe("PlanPhase archive", () => {
     expect(screen.getByRole("separator", { name: "Resize sidebar" })).toBeInTheDocument();
   });
 
-  it("has plan details sidebar header fixed at top (shrink-0) with scrollable content below", () => {
+  it("has plan details sidebar header sticky at top (shrink-0) with scrollable content below", () => {
     const store = createStore();
     render(
       <Provider store={store}>
@@ -337,6 +337,8 @@ describe("PlanPhase archive", () => {
     const header = screen.getByTestId("plan-detail-sidebar-header");
     expect(header).toBeInTheDocument();
     expect(header).toHaveClass("shrink-0");
+    expect(header).toHaveClass("sticky");
+    expect(header).toHaveClass("top-0");
     expect(header).toHaveClass("border-b");
     expect(header).toHaveClass("bg-theme-bg");
     // Scrollable content area should be a sibling
