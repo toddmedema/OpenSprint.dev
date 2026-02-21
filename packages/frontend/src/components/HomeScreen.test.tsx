@@ -1,14 +1,24 @@
-import { describe, it, expect, vi } from "vitest";
+import "@testing-library/jest-dom/vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
+import { Provider } from "react-redux";
+import { configureStore } from "@reduxjs/toolkit";
 import { HomeScreen } from "./HomeScreen";
+import notificationReducer from "../store/slices/notificationSlice";
 
 const mockProjectsList = vi.fn();
+const mockArchive = vi.fn();
+const mockDelete = vi.fn();
 
 vi.mock("../api/client", () => ({
   api: {
-    projects: { list: (...args: unknown[]) => mockProjectsList(...args) },
+    projects: {
+      list: (...args: unknown[]) => mockProjectsList(...args),
+      archive: (...args: unknown[]) => mockArchive(...args),
+      delete: (...args: unknown[]) => mockDelete(...args),
+    },
   },
 }));
 
@@ -19,10 +29,15 @@ vi.mock("./layout/Layout", () => ({
 }));
 
 function renderHomeScreen() {
+  const store = configureStore({
+    reducer: { notification: notificationReducer },
+  });
   return render(
-    <MemoryRouter>
-      <HomeScreen />
-    </MemoryRouter>
+    <Provider store={store}>
+      <MemoryRouter>
+        <HomeScreen />
+      </MemoryRouter>
+    </Provider>
   );
 }
 
@@ -36,6 +51,12 @@ const mockProject = {
 };
 
 describe("HomeScreen", () => {
+  beforeEach(() => {
+    mockProjectsList.mockReset();
+    mockArchive.mockReset();
+    mockDelete.mockReset();
+  });
+
   it("shows loading state while fetching projects", async () => {
     mockProjectsList.mockImplementation(() => new Promise(() => {}));
 
@@ -71,11 +92,14 @@ describe("HomeScreen", () => {
       return <div data-testid="location">{useLocation().pathname}</div>;
     }
 
+    const store = configureStore({ reducer: { notification: notificationReducer } });
     render(
-      <MemoryRouter>
-        <HomeScreen />
-        <LocationDisplay />
-      </MemoryRouter>
+      <Provider store={store}>
+        <MemoryRouter>
+          <HomeScreen />
+          <LocationDisplay />
+        </MemoryRouter>
+      </Provider>
     );
 
     await screen.findByTestId("create-project-row");
@@ -93,11 +117,14 @@ describe("HomeScreen", () => {
       return <div data-testid="location">{useLocation().pathname}</div>;
     }
 
+    const store = configureStore({ reducer: { notification: notificationReducer } });
     render(
-      <MemoryRouter>
-        <HomeScreen />
-        <LocationDisplay />
-      </MemoryRouter>
+      <Provider store={store}>
+        <MemoryRouter>
+          <HomeScreen />
+          <LocationDisplay />
+        </MemoryRouter>
+      </Provider>
     );
 
     await screen.findByText("My Project");
@@ -115,5 +142,181 @@ describe("HomeScreen", () => {
     await screen.findByText("My Project");
     expect(screen.getByRole("columnheader", { name: /name/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /folder path/i })).toBeInTheDocument();
+  });
+
+  it("shows three-dot menu button on each project row", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+
+    renderHomeScreen();
+
+    await screen.findByText("My Project");
+    expect(screen.getByTestId("project-row-menu-proj-1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /project actions/i })).toBeInTheDocument();
+  });
+
+  it("opens dropdown with Archive and Delete when clicking three-dot menu", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+    const user = userEvent.setup();
+
+    renderHomeScreen();
+
+    await screen.findByText("My Project");
+    expect(screen.queryByTestId("project-row-dropdown-proj-1")).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+
+    expect(screen.getByTestId("project-row-dropdown-proj-1")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /archive/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /delete/i })).toBeInTheDocument();
+  });
+
+  it("shows Archive modal when clicking Archive in dropdown", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+    const user = userEvent.setup();
+
+    renderHomeScreen();
+
+    await screen.findByText("My Project");
+    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByRole("menuitem", { name: /archive/i }));
+
+    expect(screen.getByRole("heading", { name: /archive project/i })).toBeInTheDocument();
+    expect(
+      screen.getByText(/This will remove the project from the UI, but not delete its data/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /proceed/i })).toBeInTheDocument();
+  });
+
+  it("shows Delete modal when clicking Delete in dropdown", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+    const user = userEvent.setup();
+
+    renderHomeScreen();
+
+    await screen.findByText("My Project");
+    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByRole("menuitem", { name: /delete/i }));
+
+    expect(screen.getByRole("heading", { name: /delete project/i })).toBeInTheDocument();
+    expect(
+      screen.getByText(/delete all OpenSprint-related data from the project folder/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /proceed/i })).toBeInTheDocument();
+  });
+
+  it("Cancel closes modal with no side effects", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+    const user = userEvent.setup();
+
+    renderHomeScreen();
+
+    await screen.findByText("My Project");
+    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByRole("menuitem", { name: /archive/i }));
+
+    expect(screen.getByRole("heading", { name: /archive project/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(screen.queryByRole("heading", { name: /archive project/i })).not.toBeInTheDocument();
+    expect(mockArchive).not.toHaveBeenCalled();
+  });
+
+  it("Proceed on Archive calls archive API and refreshes list", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+    mockArchive.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    renderHomeScreen();
+
+    await screen.findByText("My Project");
+    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByRole("menuitem", { name: /archive/i }));
+    await user.click(screen.getByRole("button", { name: /proceed/i }));
+
+    await screen.findByTestId("projects-table");
+    expect(mockArchive).toHaveBeenCalledWith("proj-1");
+    expect(mockProjectsList).toHaveBeenCalledTimes(2); // initial load + refresh
+  });
+
+  it("Proceed on Delete calls delete API and refreshes list", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+    mockDelete.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    renderHomeScreen();
+
+    await screen.findByText("My Project");
+    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByRole("menuitem", { name: /delete/i }));
+    await user.click(screen.getByRole("button", { name: /proceed/i }));
+
+    await screen.findByTestId("projects-table");
+    expect(mockDelete).toHaveBeenCalledWith("proj-1");
+    expect(mockProjectsList).toHaveBeenCalledTimes(2); // initial load + refresh
+  });
+
+  it("dispatches error notification when archive fails", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+    mockArchive.mockRejectedValue(new Error("Folder not found"));
+    const user = userEvent.setup();
+
+    const store = configureStore({ reducer: { notification: notificationReducer } });
+    render(
+      <Provider store={store}>
+        <MemoryRouter>
+          <HomeScreen />
+        </MemoryRouter>
+      </Provider>
+    );
+
+    await screen.findByText("My Project");
+    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByRole("menuitem", { name: /archive/i }));
+    await user.click(screen.getByRole("button", { name: /proceed/i }));
+
+    expect(store.getState().notification.items).toHaveLength(1);
+    expect(store.getState().notification.items[0].message).toBe("Folder not found");
+    expect(store.getState().notification.items[0].severity).toBe("error");
+  });
+
+  it("dispatches error notification when delete fails", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+    mockDelete.mockRejectedValue(new Error("Permission denied"));
+    const user = userEvent.setup();
+
+    const store = configureStore({ reducer: { notification: notificationReducer } });
+    render(
+      <Provider store={store}>
+        <MemoryRouter>
+          <HomeScreen />
+        </MemoryRouter>
+      </Provider>
+    );
+
+    await screen.findByText("My Project");
+    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByRole("menuitem", { name: /delete/i }));
+    await user.click(screen.getByRole("button", { name: /proceed/i }));
+
+    expect(store.getState().notification.items).toHaveLength(1);
+    expect(store.getState().notification.items[0].message).toBe("Permission denied");
+    expect(store.getState().notification.items[0].severity).toBe("error");
+  });
+
+  it("clicking outside dropdown closes it", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+    const user = userEvent.setup();
+
+    renderHomeScreen();
+
+    await screen.findByText("My Project");
+    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    expect(screen.getByTestId("project-row-dropdown-proj-1")).toBeInTheDocument();
+
+    await user.click(document.body);
+    expect(screen.queryByTestId("project-row-dropdown-proj-1")).not.toBeInTheDocument();
   });
 });

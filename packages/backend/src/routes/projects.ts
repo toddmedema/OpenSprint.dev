@@ -93,10 +93,24 @@ projectsRouter.put("/:id", async (req, res, next) => {
   }
 });
 
-// DELETE /projects/:id — Delete a project
-projectsRouter.delete("/:id", async (req, res, next) => {
+// POST /projects/:id/archive — Archive project (remove from UI only, keep data)
+projectsRouter.post("/:id/archive", async (req: Request<ProjectParams>, res, next) => {
   try {
-    await projectService.deleteProject(req.params.id);
+    const projectId = req.params.id;
+    orchestratorService.stopProject(projectId);
+    await projectService.archiveProject(projectId);
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /projects/:id — Delete project (remove from UI and delete .opensprint directory)
+projectsRouter.delete("/:id", async (req: Request<ProjectParams>, res, next) => {
+  try {
+    const projectId = req.params.id;
+    orchestratorService.stopProject(projectId);
+    await projectService.deleteProject(projectId);
     res.status(204).send();
   } catch (err) {
     next(err);

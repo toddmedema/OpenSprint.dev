@@ -99,6 +99,7 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(data),
       }),
+    archive: (id: string) => request<void>(`/projects/${id}/archive`, { method: "POST" }),
     delete: (id: string) => request<void>(`/projects/${id}`, { method: "DELETE" }),
   },
 

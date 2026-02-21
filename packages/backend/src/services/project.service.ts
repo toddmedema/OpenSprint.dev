@@ -436,8 +436,26 @@ export class ProjectService {
     return updated;
   }
 
-  /** Delete a project from the index (does not delete repo) */
+  /** Archive a project: remove from index only. Data in project folder remains. */
+  async archiveProject(id: string): Promise<void> {
+    await this.getProject(id); // validate exists, throws 404 if not
+    await projectIndex.removeProject(id);
+    this.invalidateListCache();
+  }
+
+  /** Delete a project: remove from index and delete .opensprint directory. Leaves .beads and other files intact. */
   async deleteProject(id: string): Promise<void> {
+    const project = await this.getProject(id);
+    const opensprintPath = path.join(project.repoPath, OPENSPRINT_DIR);
+    try {
+      await fs.rm(opensprintPath, { recursive: true, force: true });
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      throw new AppError(500, ErrorCodes.INTERNAL_ERROR, `Failed to delete project data: ${msg}`, {
+        projectId: id,
+        repoPath: project.repoPath,
+      });
+    }
     await projectIndex.removeProject(id);
     this.invalidateListCache();
   }

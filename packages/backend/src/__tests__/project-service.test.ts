@@ -156,7 +156,10 @@ describe("ProjectService", () => {
   it("should append bd instruction to existing AGENTS.md that lacks it", async () => {
     const repoPath = path.join(tempDir, "existing-agents-md");
     await fs.mkdir(repoPath, { recursive: true });
-    await fs.writeFile(path.join(repoPath, "AGENTS.md"), "# My Project\n\nCustom instructions here.\n");
+    await fs.writeFile(
+      path.join(repoPath, "AGENTS.md"),
+      "# My Project\n\nCustom instructions here.\n"
+    );
 
     await projectService.createProject({
       name: "Existing AGENTS.md",
@@ -363,7 +366,7 @@ describe("ProjectService", () => {
     await expect(
       projectService.createProject({
         name: "Test",
-  
+
         repoPath,
         planningAgent: { type: "claude", model: null, cliCommand: null },
         codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -379,7 +382,7 @@ describe("ProjectService", () => {
     await expect(
       projectService.createProject({
         name: "Test",
-  
+
         repoPath,
         planningAgent: { type: "invalid" as "claude", model: null, cliCommand: null },
         codingAgent: { type: "claude", model: null, cliCommand: null },
@@ -395,7 +398,7 @@ describe("ProjectService", () => {
     await expect(
       projectService.createProject({
         name: "Test",
-  
+
         repoPath,
         planningAgent: { type: "claude", model: null, cliCommand: null },
         codingAgent: { type: "cursor", model: 123 as unknown as string, cliCommand: null },
@@ -560,5 +563,76 @@ describe("ProjectService", () => {
         planningAgent: { type: "invalid" as "claude", model: null, cliCommand: null },
       })
     ).rejects.toMatchObject({ code: "INVALID_AGENT_CONFIG" });
+  });
+
+  it("archiveProject removes from index only, leaves .opensprint intact", async () => {
+    const repoPath = path.join(tempDir, "archive-project");
+    const project = await projectService.createProject({
+      name: "Archive Me",
+      repoPath,
+      planningAgent: { type: "claude", model: null, cliCommand: null },
+      codingAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    await projectService.archiveProject(project.id);
+
+    const projects = await projectService.listProjects();
+    expect(projects).toHaveLength(0);
+
+    const opensprintDir = path.join(repoPath, ".opensprint");
+    const stat = await fs.stat(opensprintDir);
+    expect(stat.isDirectory()).toBe(true);
+  });
+
+  it("archiveProject throws 404 for non-existent project", async () => {
+    await expect(projectService.archiveProject("non-existent")).rejects.toMatchObject({
+      statusCode: 404,
+    });
+  });
+
+  it("deleteProject removes from index and deletes .opensprint directory", async () => {
+    const repoPath = path.join(tempDir, "delete-project");
+    const project = await projectService.createProject({
+      name: "Delete Me",
+      repoPath,
+      planningAgent: { type: "claude", model: null, cliCommand: null },
+      codingAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    await projectService.deleteProject(project.id);
+
+    const projects = await projectService.listProjects();
+    expect(projects).toHaveLength(0);
+
+    await expect(fs.stat(path.join(repoPath, ".opensprint"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("deleteProject leaves .beads and other files intact", async () => {
+    const repoPath = path.join(tempDir, "delete-keeps-beads");
+    const project = await projectService.createProject({
+      name: "Delete Keeps Beads",
+      repoPath,
+      planningAgent: { type: "claude", model: null, cliCommand: null },
+      codingAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    const beadsPath = path.join(repoPath, ".beads");
+    const otherFile = path.join(repoPath, "README.md");
+    await fs.writeFile(otherFile, "Hello");
+
+    await projectService.deleteProject(project.id);
+
+    const beadsStat = await fs.stat(beadsPath);
+    expect(beadsStat.isDirectory()).toBe(true);
+    const readme = await fs.readFile(otherFile, "utf-8");
+    expect(readme).toBe("Hello");
   });
 });
