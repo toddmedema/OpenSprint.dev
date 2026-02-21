@@ -13,6 +13,11 @@ export interface PlanDetailContentProps {
   saving?: boolean;
   /** Optional actions to render in the header row next to the title (e.g. archive, close buttons) */
   headerActions?: React.ReactNode;
+  /**
+   * When provided, renders header and body separately so the parent can place the header
+   * outside the scroll area (sticky layout). Receives { header, body } and returns the layout.
+   */
+  children?: (slots: { header: React.ReactNode; body: React.ReactNode }) => React.ReactNode;
 }
 
 /**
@@ -25,6 +30,7 @@ export function PlanDetailContent({
   onContentSave,
   saving = false,
   headerActions,
+  children: renderSlots,
 }: PlanDetailContentProps) {
   const { title, body } = parsePlanContent(plan.content ?? "");
   const displayTitle = title || formatPlanIdAsTitle(plan.metadata.planId);
@@ -122,43 +128,53 @@ export function PlanDetailContent({
   // Trim body to remove leading/trailing whitespace that causes spurious blank space at top
   const bodyMarkdown = (body ?? "").trim() || "_No content yet_";
 
+  const header = (
+    <div className="flex items-start justify-between gap-4 p-4">
+      <div className="min-w-0 flex-1 space-y-1">
+        <input
+          type="text"
+          value={titleValue}
+          onChange={handleTitleChange}
+          onBlur={handleTitleBlur}
+          onKeyDown={handleTitleKeyDown}
+          className="w-full font-semibold text-theme-text bg-transparent border border-transparent rounded px-2 py-1 -ml-2 hover:border-theme-border focus:border-theme-info-border focus:ring-2 focus:ring-theme-info-border/30 outline-none transition-colors"
+          placeholder="Title"
+          aria-label="Title"
+        />
+        {(saving || savedRecently) && (
+          <span className="text-xs text-theme-muted" aria-live="polite">
+            {saving ? "Saving..." : "Saved"}
+          </span>
+        )}
+      </div>
+      {headerActions && <div className="shrink-0 flex items-center gap-2">{headerActions}</div>}
+    </div>
+  );
+
+  const bodySlot = (
+    <div className="px-4 pb-4">
+      <div
+        data-testid="plan-markdown-editor"
+        className="prose prose-sm max-w-none bg-theme-surface px-4 pt-0 pb-4 rounded-lg border border-theme-border text-theme-text text-xs [&>div>:first-child]:!mt-0"
+      >
+        <PrdSectionEditor
+          sectionKey="plan-body"
+          markdown={bodyMarkdown}
+          onSave={handleBodySave}
+          lightMode
+        />
+      </div>
+    </div>
+  );
+
+  if (typeof renderSlots === "function") {
+    return <>{renderSlots({ header, body: bodySlot })}</>;
+  }
+
   return (
     <div className="shrink-0">
-      {/* Header row: title aligned to top, dark font, no HR */}
-      <div className="flex items-start justify-between gap-4 p-4">
-        <div className="min-w-0 flex-1 space-y-1">
-          <input
-            type="text"
-            value={titleValue}
-            onChange={handleTitleChange}
-            onBlur={handleTitleBlur}
-            onKeyDown={handleTitleKeyDown}
-            className="w-full font-semibold text-theme-text bg-transparent border border-transparent rounded px-2 py-1 -ml-2 hover:border-theme-border focus:border-theme-info-border focus:ring-2 focus:ring-theme-info-border/30 outline-none transition-colors"
-            placeholder="Title"
-            aria-label="Title"
-          />
-          {(saving || savedRecently) && (
-            <span className="text-xs text-theme-muted" aria-live="polite">
-              {saving ? "Saving..." : "Saved"}
-            </span>
-          )}
-        </div>
-        {headerActions && <div className="shrink-0 flex items-center gap-2">{headerActions}</div>}
-      </div>
-      {/* Inline editable markdown body — light mode styles only */}
-      <div className="px-4 pb-4">
-        <div
-          data-testid="plan-markdown-editor"
-          className="prose prose-sm max-w-none bg-theme-surface px-4 pt-0 pb-4 rounded-lg border border-theme-border text-theme-text text-xs [&>div>:first-child]:!mt-0"
-        >
-          <PrdSectionEditor
-            sectionKey="plan-body"
-            markdown={bodyMarkdown}
-            onSave={handleBodySave}
-            lightMode
-          />
-        </div>
-      </div>
+      {header}
+      {bodySlot}
     </div>
   );
 }
