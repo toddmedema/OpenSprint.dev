@@ -4,7 +4,6 @@ import { resolveTestCommand } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { BeadsService } from "./beads.service.js";
 import { beadsCache } from "./beads-cache.js";
-import { listTasksCache } from "./list-tasks-cache.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { SessionManager } from "./session-manager.js";
@@ -15,6 +14,7 @@ import { ContextAssembler } from "./context-assembler.js";
 import { BranchManager } from "./branch-manager.js";
 import { FeedbackService } from "./feedback.service.js";
 import type { BeadsIssue } from "./beads.service.js";
+import { readAllIssuesFromJsonl } from "./jsonl-reader.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("task");
@@ -28,18 +28,13 @@ export class TaskService {
   private branchManager = new BranchManager();
 
   /** List all tasks for a project with computed kanban columns and test results.
-   * Uses short-TTL cache (7s) so rapid page loads and duplicate requests return instantly.
-   * Invalidated on task mutations (create, update, close).
+   * Reads directly from .beads/issues.jsonl (mtime-cached, ~1ms) instead of
+   * spawning bd CLI processes through the per-repo mutex.
    */
   async listTasks(projectId: string): Promise<Task[]> {
     const project = await this.projectService.getProject(projectId);
-    const cached = listTasksCache.get(project.repoPath);
-    if (cached) return cached;
 
-    const allIssues =
-      beadsCache.getListAll<BeadsIssue[]>(project.repoPath) ??
-      (await this.beads.listAll(project.repoPath));
-    beadsCache.setListAll(project.repoPath, allIssues);
+    const allIssues = await readAllIssuesFromJsonl(project.repoPath);
     const readyIds = this.computeReadyIdsFromListAll(allIssues);
     const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
 
@@ -57,37 +52,43 @@ export class TaskService {
       }
     }
 
-    listTasksCache.set(project.repoPath, tasks);
     return tasks;
   }
 
-  /** Get ready tasks. Computes ready from listAll (excludes epics — they are containers, not work items). */
+  /** Get ready tasks. Computes ready from JSONL (excludes epics — they are containers, not work items). */
   async getReadyTasks(projectId: string): Promise<Task[]> {
     const project = await this.projectService.getProject(projectId);
-    const allIssues = await this.beads.listAll(project.repoPath);
+    const allIssues = await readAllIssuesFromJsonl(project.repoPath);
     const readyIds = this.computeReadyIdsFromListAll(allIssues);
     const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
     const readyIssues = allIssues.filter((i) => readyIds.has(i.id ?? ""));
     return readyIssues.map((issue) => this.beadsIssueToTask(issue, readyIds, idToIssue));
   }
 
-  /** Get a single task with full details (wraps bd show --json).
-   * Optimized: avoids beads.ready() (which does N bd show calls) by computing ready for this task only.
-   * Uses short-TTL cache for show/listAll to reduce redundant bd invocations.
+  /** Get a single task with full details.
+   * Reads directly from .beads/issues.jsonl (mtime-cached, ~1ms) instead of
+   * spawning bd CLI processes through the per-repo mutex (~200-10000ms under contention).
+   * Falls back to bd show when the task exists in the DB but hasn't been synced to JSONL yet
+   * (e.g. orchestrator created/updated it between syncs).
    */
   async getTask(projectId: string, taskId: string): Promise<Task> {
     const project = await this.projectService.getProject(projectId);
     const repoPath = project.repoPath;
 
-    const [issue, allIssues] = await Promise.all([
-      beadsCache.getShow<BeadsIssue>(repoPath, taskId) ?? this.beads.show(repoPath, taskId),
-      beadsCache.getListAll<BeadsIssue[]>(repoPath) ?? this.beads.listAll(repoPath),
-    ]);
-
-    beadsCache.setShow(repoPath, taskId, issue);
-    beadsCache.setListAll(repoPath, allIssues);
-
+    const allIssues = await readAllIssuesFromJsonl(repoPath);
     const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
+    let issue = idToIssue.get(taskId);
+
+    if (!issue) {
+      // Task not in JSONL — likely created/updated since last sync. Fall back to CLI.
+      try {
+        issue = await this.beads.show(repoPath, taskId);
+        idToIssue.set(taskId, issue);
+      } catch {
+        throw new AppError(404, ErrorCodes.ISSUE_NOT_FOUND, `Issue ${taskId} not found`, { issueId: taskId });
+      }
+    }
+
     const readyIds = this.computeReadyForSingleTask(issue, idToIssue);
     return this.beadsIssueToTask(issue, readyIds, idToIssue);
   }
@@ -288,7 +289,6 @@ export class TaskService {
     }
 
     await this.beads.sync(project.repoPath);
-    listTasksCache.invalidate(project.repoPath);
     beadsCache.invalidateListAll(project.repoPath);
     broadcastToProject(projectId, {
       type: "task.updated",
@@ -307,6 +307,7 @@ export class TaskService {
     }
     const project = await this.projectService.getProject(projectId);
     await this.beads.update(project.repoPath, taskId, { priority });
+    await this.beads.sync(project.repoPath);
     beadsCache.invalidateForTask(project.repoPath, taskId);
     const task = await this.getTask(projectId, taskId);
     broadcastToProject(projectId, {
@@ -331,7 +332,6 @@ export class TaskService {
 
     await this.beads.close(project.repoPath, taskId, "Manually marked done", true);
     await this.beads.sync(project.repoPath);
-    listTasksCache.invalidate(project.repoPath);
     beadsCache.invalidateListAll(project.repoPath);
     broadcastToProject(projectId, {
       type: "task.updated",
@@ -349,7 +349,7 @@ export class TaskService {
     let epicClosed = false;
 
     if (epicId) {
-      const allIssues = await this.beads.listAll(project.repoPath);
+      const allIssues = await readAllIssuesFromJsonl(project.repoPath);
       const implTasks = allIssues.filter(
         (i) => i.id.startsWith(epicId + ".") && !i.id.endsWith(".0") && (i.issue_type ?? i.type) !== "epic",
       );
@@ -360,7 +360,6 @@ export class TaskService {
         if (epicIssue && (epicIssue.status as string) !== "closed") {
           await this.beads.close(project.repoPath, epicId, "All tasks done", true);
           await this.beads.sync(project.repoPath);
-          listTasksCache.invalidate(project.repoPath);
           beadsCache.invalidateListAll(project.repoPath);
           broadcastToProject(projectId, {
             type: "task.updated",

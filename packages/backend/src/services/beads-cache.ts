@@ -3,7 +3,7 @@
  * Used by task detail loading to avoid repeated listAll/show calls when switching tasks.
  */
 
-const TTL_MS = 2000; // 2 seconds
+const TTL_MS = 30_000; // 30 seconds — safe because writes invalidate via invalidateForTask/invalidateListAll
 
 interface CacheEntry<T> {
   value: T;

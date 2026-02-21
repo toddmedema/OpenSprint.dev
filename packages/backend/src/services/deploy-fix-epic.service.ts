@@ -13,7 +13,6 @@ import { AgentClient } from "./agent-client.js";
 import { ProjectService } from "./project.service.js";
 import { gitCommitQueue } from "./git-commit-queue.service.js";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
-import { listTasksCache } from "./list-tasks-cache.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -204,7 +203,7 @@ ${testOutput.slice(0, 15000)}
 
   // Close gate so fix tasks appear in bd ready
   await beads.close(repoPath, gateTaskId, "Fix epic approved for execution");
-  listTasksCache.invalidate(repoPath);
+  await beads.sync(repoPath);
 
   // Persist beads and commit
   await gitCommitQueue.enqueue({

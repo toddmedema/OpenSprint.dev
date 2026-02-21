@@ -17,6 +17,7 @@ import { BranchManager } from "./branch-manager.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { orphanRecoveryService } from "./orphan-recovery.service.js";
 import { activeAgentsService } from "./active-agents.service.js";
+import { orchestratorService } from "./orchestrator.service.js";
 import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -96,14 +97,18 @@ export class WatchdogService {
   /**
    * Periodic orphan recovery (not just on startup).
    * Catches tasks that slip through crash recovery.
-   * Excludes tasks with actively running agents to avoid sabotaging in-flight work.
+   * Excludes tasks with actively running agents AND tasks with active
+   * orchestrator slots (covers the gap between coding agent exit and
+   * review agent spawn when tests/context assembly are running).
    */
   private async checkOrphanedTasks(target: WatchdogTarget): Promise<void> {
     const activeAgents = activeAgentsService.list(target.projectId);
     const activeTaskIds = activeAgents.map((a) => a.id);
+    const slottedTaskIds = orchestratorService.getSlottedTaskIds(target.projectId);
+    const excludeIds = [...new Set([...activeTaskIds, ...slottedTaskIds])];
     const { recovered } = await orphanRecoveryService.recoverOrphanedTasks(
       target.repoPath,
-      activeTaskIds
+      excludeIds
     );
     if (recovered.length > 0) {
       log.warn("Recovered orphaned tasks", { count: recovered.length, recovered });

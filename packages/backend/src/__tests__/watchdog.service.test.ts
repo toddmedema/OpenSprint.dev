@@ -22,6 +22,12 @@ vi.mock("../services/active-agents.service.js", () => ({
   },
 }));
 
+vi.mock("../services/orchestrator.service.js", () => ({
+  orchestratorService: {
+    getSlottedTaskIds: vi.fn().mockReturnValue([]),
+  },
+}));
+
 vi.mock("../services/event-log.service.js", () => ({
   eventLogService: {
     append: vi.fn().mockResolvedValue(undefined),
@@ -37,6 +43,7 @@ vi.mock("../services/branch-manager.js", () => ({
 import { heartbeatService } from "../services/heartbeat.service.js";
 import { orphanRecoveryService } from "../services/orphan-recovery.service.js";
 import { activeAgentsService } from "../services/active-agents.service.js";
+import { orchestratorService } from "../services/orchestrator.service.js";
 import { eventLogService } from "../services/event-log.service.js";
 
 describe("WatchdogService", () => {
@@ -134,6 +141,21 @@ describe("WatchdogService", () => {
     expect(activeAgentsService.list).toHaveBeenCalledWith("proj-1");
     expect(orphanRecoveryService.recoverOrphanedTasks).toHaveBeenCalledWith(tmpDir, [
       "task-active",
+    ]);
+  });
+
+  it("should exclude orchestrator-slotted tasks from orphan recovery", async () => {
+    vi.mocked(activeAgentsService.list).mockReturnValue([]);
+    vi.mocked(orchestratorService.getSlottedTaskIds).mockReturnValue(["task-slotted"]);
+    vi.mocked(orphanRecoveryService.recoverOrphanedTasks).mockResolvedValue({ recovered: [] });
+
+    watchdog.start([{ projectId: "proj-1", repoPath: tmpDir }]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accessing private method for testing
+    await (watchdog as any).runChecks();
+
+    expect(orchestratorService.getSlottedTaskIds).toHaveBeenCalledWith("proj-1");
+    expect(orphanRecoveryService.recoverOrphanedTasks).toHaveBeenCalledWith(tmpDir, [
+      "task-slotted",
     ]);
   });
 

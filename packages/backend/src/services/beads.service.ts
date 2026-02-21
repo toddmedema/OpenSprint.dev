@@ -1,4 +1,5 @@
 import fs from "fs";
+import fsPromises from "fs/promises";
 import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -109,12 +110,13 @@ export class BeadsService {
    * invocations per repo to avoid beads 0.55+ Dolt SIGSEGV on concurrent access.
    */
   private async withBeadsMutex<T>(repoPath: string, fn: () => Promise<T>): Promise<T> {
-    const prev = execMutexMap.get(repoPath) ?? Promise.resolve();
+    const key = this.repoKey(repoPath);
+    const prev = execMutexMap.get(key) ?? Promise.resolve();
     const work = prev.then(
       () => fn(),
       () => fn()
     );
-    execMutexMap.set(repoPath, work);
+    execMutexMap.set(key, work);
     return work as Promise<T>;
   }
 
@@ -225,13 +227,18 @@ export class BeadsService {
     );
   }
 
+  /** Canonical key for per-repo maps so trailing slash / resolution doesn't fragment state. */
+  private repoKey(repoPath: string): string {
+    return path.resolve(repoPath);
+  }
+
   /**
    * Returns the mtime of .beads/issues.jsonl in ms, or 0 if missing/unreadable.
    */
-  private getJsonlMtime(repoPath: string): number {
+  private async getJsonlMtime(repoPath: string): Promise<number> {
     try {
       const p = path.join(repoPath, ".beads/issues.jsonl");
-      const stat = fs.statSync(p);
+      const stat = await fsPromises.stat(p);
       return stat.mtimeMs;
     } catch {
       return 0;
@@ -243,16 +250,15 @@ export class BeadsService {
    * Syncs when: (a) never synced for this repo, or (b) JSONL mtime > when we last synced.
    */
   private async ensureSyncBeforeExec(repoPath: string): Promise<void> {
-    const jsonlMtime = this.getJsonlMtime(repoPath);
-    const state = syncStateMap.get(repoPath);
-
+    const key = this.repoKey(repoPath);
+    const jsonlMtime = await this.getJsonlMtime(repoPath);
+    const state = syncStateMap.get(key);
     const needsSync = !state || jsonlMtime > state.jsonlMtime;
-
     if (needsSync) {
       await this.syncImport(repoPath);
-      syncStateMap.set(repoPath, {
+      syncStateMap.set(key, {
         lastSyncMs: Date.now(),
-        jsonlMtime: jsonlMtime || this.getJsonlMtime(repoPath),
+        jsonlMtime: jsonlMtime || (await this.getJsonlMtime(repoPath)),
       });
     }
   }
@@ -262,7 +268,7 @@ export class BeadsService {
    * Call when we've hit a stale error and want to force a fresh sync.
    */
   private invalidateSyncState(repoPath: string): void {
-    syncStateMap.delete(repoPath);
+    syncStateMap.delete(this.repoKey(repoPath));
   }
 
   private isStaleDbError(stderr: string): boolean {
@@ -306,10 +312,7 @@ export class BeadsService {
         timeout,
         maxBuffer: MAX_BUFFER_BYTES,
       });
-      // Invalidate sync state and task cache after write commands so the next read triggers a fresh import.
-      // This prevents stale-DB errors when list follows rapid create/update/close ops.
       if (/^(create|update|close|dep |sync)/.test(command)) {
-        this.invalidateSyncState(repoPath);
         beadsCache.invalidateListAll(repoPath);
       }
       return stdout;

@@ -44,7 +44,6 @@ import { eventLogService } from "./event-log.service.js";
 import { agentIdentityService, type AttemptOutcome } from "./agent-identity.service.js";
 import { createLogger } from "../utils/logger.js";
 import { PhaseExecutorService, type PhaseExecutorHost } from "./phase-executor.service.js";
-import { listTasksCache } from "./list-tasks-cache.js";
 
 const log = createLogger("orchestrator");
 
@@ -535,6 +534,7 @@ export class OrchestratorService {
           taskId,
           "Agent crashed (backend restart). Task requeued for next attempt."
         );
+        await this.beads.sync(repoPath);
       } catch (err) {
         log.warn("Recovery: failed to requeue task", { taskId, err });
       }
@@ -711,6 +711,17 @@ export class OrchestratorService {
     };
   }
 
+  /**
+   * Return all task IDs that currently have an active orchestrator slot.
+   * Used by the watchdog to avoid treating in-flight tasks as orphans during
+   * the gap between coding agent exit and review agent spawn.
+   */
+  getSlottedTaskIds(projectId: string): string[] {
+    const state = this.state.get(projectId);
+    if (!state) return [];
+    return [...state.slots.keys()];
+  }
+
   async getLiveOutput(projectId: string, taskId: string): Promise<string> {
     await this.projectService.getProject(projectId);
     const state = this.getState(projectId);
@@ -815,7 +826,7 @@ export class OrchestratorService {
         status: "in_progress",
         assignee: "agent-1",
       });
-      listTasksCache.invalidate(repoPath);
+      await this.beads.sync(repoPath);
 
       gitCommitQueue.enqueue({
         type: "beads_export",
@@ -1192,7 +1203,6 @@ export class OrchestratorService {
       // Clean up worktree and branch after merge
       await this.branchManager.removeTaskWorktree(repoPath, task.id);
       await this.branchManager.deleteBranch(repoPath, branchName);
-      listTasksCache.invalidate(repoPath);
     } catch (mergeErr) {
       log.warn("Merge to main failed", { mergeErr });
 
@@ -1214,7 +1224,7 @@ export class OrchestratorService {
                 task.id,
                 slotPhaseResult.codingSummary || "Implemented and tested"
               );
-              listTasksCache.invalidate(repoPath);
+              await this.beads.sync(repoPath);
               gitCommitQueue.enqueue({
                 type: "beads_export",
                 repoPath,
@@ -1637,14 +1647,14 @@ export class OrchestratorService {
           `Demoting ${task.id} priority ${currentPriority} → ${newPriority} after ${cumulativeAttempts} failures`
         );
 
-        try {
-          await this.beads.update(repoPath, task.id, {
-            status: "open",
-            assignee: "",
-            priority: newPriority,
-          });
-          listTasksCache.invalidate(repoPath);
-        } catch {
+      try {
+        await this.beads.update(repoPath, task.id, {
+          status: "open",
+          assignee: "",
+          priority: newPriority,
+        });
+        await this.beads.sync(repoPath);
+      } catch {
           // Task may already be in the right state
         }
 
@@ -1756,7 +1766,7 @@ export class OrchestratorService {
         status: "blocked",
         assignee: "",
       });
-      listTasksCache.invalidate(repoPath);
+      await this.beads.sync(repoPath);
     } catch (err) {
       log.warn("Failed to block task", { err });
     }

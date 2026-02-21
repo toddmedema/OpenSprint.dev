@@ -17,7 +17,6 @@ import { PlanService } from "./plan.service.js";
 import { PrdService } from "./prd.service.js";
 import type { HarmonizerPrdUpdate } from "./harmonizer.service.js";
 import { BeadsService } from "./beads.service.js";
-import { listTasksCache } from "./list-tasks-cache.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { generateShortFeedbackId } from "../utils/feedback-id.js";
@@ -707,7 +706,6 @@ export class FeedbackService {
       }
     }
 
-    listTasksCache.invalidate(repoPath);
     return createdIds;
   }
 

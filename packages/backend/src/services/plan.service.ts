@@ -28,7 +28,6 @@ import { buildAuditorPrompt, parseAuditorResult } from "./auditor.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { broadcastToProject } from "../websocket/index.js";
-import { listTasksCache } from "./list-tasks-cache.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
@@ -609,14 +608,15 @@ export class PlanService {
 
     await writeJsonAtomic(path.join(plansDir, `${planId}.meta.json`), metadata);
 
+    // Sync DB→JSONL so the JSONL reader sees the new issues immediately
+    await this.beads.sync(repoPath);
+
     // PRD §5.9: Beads export at checkpoint after plan creation
     gitCommitQueue.enqueue({
       type: "beads_export",
       repoPath,
       summary: `plan ${planId} created`,
     });
-
-    listTasksCache.invalidate(repoPath);
 
     const plan: Plan & { _createdTaskIds?: string[]; _createdTaskTitles?: string[] } = {
       metadata,
@@ -747,8 +747,6 @@ export class PlanService {
 
     log.info("Generated tasks for plan", { count: tasks.length, planId: plan.metadata.planId });
 
-    listTasksCache.invalidate(repoPath);
-
     // Broadcast task creation events
     for (const [, taskId] of taskIdMap) {
       broadcastToProject(projectId, {
@@ -792,7 +790,6 @@ export class PlanService {
 
     // Close the gating task
     await this.beads.close(repoPath, gateToClose, "Plan approved for build");
-    listTasksCache.invalidate(repoPath);
 
     // Clear re-execute gate after closing (next re-execute will create a new one)
     if (plan.metadata.reExecuteGateTaskId) {
@@ -814,6 +811,9 @@ export class PlanService {
       log.error("PRD sync on build approval failed", { err });
       // Build approval succeeds even if PRD sync fails; user can manually update PRD
     }
+
+    // Sync DB→JSONL so task reads are fresh
+    await this.beads.sync(repoPath);
 
     // Re-fetch plan to include updated task counts when tasks were generated
     if (tasksGenerated > 0) {
@@ -1014,8 +1014,6 @@ ${planNew}`;
         assignee: null,
       });
     }
-
-    listTasksCache.invalidate(repoPath);
 
     return this.getPlan(projectId, planId);
   }
@@ -1335,8 +1333,6 @@ ${planNew}`;
       // in_progress tasks are left unchanged
     }
 
-    listTasksCache.invalidate(repoPath);
-
     return this.getPlan(projectId, planId);
   }
 
@@ -1497,7 +1493,6 @@ ${planNew}`;
 
       if (toClose.length > 0) {
         log.info("Auto-review marked tasks as done", { count: toClose.length, taskIds: toClose });
-        listTasksCache.invalidate(repoPath);
       }
     } catch (err) {
       log.error("Auto-review against repo failed", { err });
