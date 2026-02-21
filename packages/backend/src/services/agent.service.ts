@@ -1,3 +1,6 @@
+import fs from "fs/promises";
+import os from "os";
+import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import type { AgentConfig, AgentRole } from "@opensprint/shared";
 import { AgentClient } from "./agent-client.js";
@@ -32,7 +35,7 @@ export interface InvokePlanningAgentOptions {
   messages: PlanningMessage[];
   /** Optional system prompt */
   systemPrompt?: string;
-  /** Optional image attachments (base64 or data URLs). Passed to Claude when config.type is 'claude'. */
+  /** Optional image attachments (base64 or data URLs). Claude: inline in message. Cursor/custom: written to temp files and paths appended to prompt. */
   images?: string[];
   /** Working directory for CLI agents (cursor/custom) */
   cwd?: string;
@@ -121,30 +124,39 @@ export class AgentService {
   private async _invokePlanningAgentInner(
     options: InvokePlanningAgentOptions
   ): Promise<PlanningAgentResponse> {
-    const { config, messages, systemPrompt, cwd, onChunk } = options;
+    const { config, messages, systemPrompt, cwd, onChunk, images } = options;
 
     if (config.type === "claude") {
       return this.invokeClaudePlanningAgent(options);
     }
 
-    // Cursor and custom: use AgentClient (CLI-based)
+    // Cursor and custom: use AgentClient (CLI-based). Images are written to temp files
+    // and paths appended to the prompt so the agent can read them via tool calling.
     const lastUser = messages.filter((m) => m.role === "user").pop();
-    const prompt = lastUser?.content ?? "";
-    const conversationHistory = messages.slice(0, -1).map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
-
-    const response = await this.agentClient.invoke({
-      config,
-      prompt,
-      systemPrompt,
-      cwd,
-      conversationHistory,
-      onChunk,
-    });
-
-    return { content: response?.content ?? "" };
+    let prompt = lastUser?.content ?? "";
+    let cleanup: (() => Promise<void>) | null = null;
+    if (images && images.length > 0) {
+      const { promptSuffix, cleanup: doCleanup } = await this.writeImagesForCli(cwd, images);
+      cleanup = doCleanup;
+      prompt = prompt + promptSuffix;
+    }
+    try {
+      const conversationHistory = messages.slice(0, -1).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      const response = await this.agentClient.invoke({
+        config,
+        prompt,
+        systemPrompt,
+        cwd,
+        conversationHistory,
+        onChunk,
+      });
+      return { content: response?.content ?? "" };
+    } finally {
+      if (cleanup) await cleanup();
+    }
   }
 
   /**
@@ -242,6 +254,55 @@ export class AgentService {
       }
     }
     return { media_type: "image/png", data: img };
+  }
+
+  /** Extension from MIME type for writing CLI image files */
+  private static readonly MIME_TO_EXT: Record<string, string> = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+  };
+
+  /**
+   * Decode image (data URL or base64) to buffer and file extension for CLI temp files.
+   */
+  private parseImageToBuffer(img: string): { buffer: Buffer; ext: string } {
+    const { media_type, data } = this.parseImageForClaude(img);
+    const buffer = Buffer.from(data, "base64");
+    const ext = AgentService.MIME_TO_EXT[media_type] ?? ".png";
+    return { buffer, ext };
+  }
+
+  /**
+   * Write image attachments to temp files and return prompt suffix + cleanup.
+   * Used for Cursor/custom CLI: agent reads images via file paths in the prompt.
+   * cwd: when set, files are under cwd/.opensprint/agent-images; otherwise under os.tmpdir().
+   */
+  private async writeImagesForCli(
+    cwd: string | undefined,
+    images: string[]
+  ): Promise<{ promptSuffix: string; cleanup: () => Promise<void> }> {
+    const baseDir = cwd ?? os.tmpdir();
+    const imageDirName = `.opensprint/agent-images/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const imageDir = path.join(baseDir, imageDirName);
+    await fs.mkdir(imageDir, { recursive: true });
+    const pathsForPrompt: string[] = [];
+    for (let i = 0; i < images.length; i++) {
+      const { buffer, ext } = this.parseImageToBuffer(images[i]);
+      const name = `${i}${ext}`;
+      const filePath = path.join(imageDir, name);
+      await fs.writeFile(filePath, buffer);
+      // Use paths relative to cwd when available so CLI can read from project; otherwise absolute
+      pathsForPrompt.push(cwd ? path.join(imageDirName, name) : filePath);
+    }
+    const promptSuffix =
+      "\n\nAttached images (read these file paths for context):\n" +
+      pathsForPrompt.join("\n");
+    const cleanup = async () => {
+      await fs.rm(imageDir, { recursive: true }).catch(() => {});
+    };
+    return { promptSuffix, cleanup };
   }
 
   /**
