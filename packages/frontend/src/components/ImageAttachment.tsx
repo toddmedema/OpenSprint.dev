@@ -1,6 +1,8 @@
-import { useRef } from "react";
+import { useState, useRef, useCallback, useEffect, useId } from "react";
 import type { UseImageAttachmentReturn } from "../hooks/useImageAttachment";
 import { MAX_IMAGES } from "../hooks/useImageAttachment";
+
+const HOVER_DELAY_MS = 300;
 
 export interface ImageAttachmentThumbnailsProps {
   attachment: UseImageAttachmentReturn;
@@ -79,6 +81,57 @@ export function ImageAttachmentButton({
   const atLimit = images.length >= MAX_IMAGES;
 
   const buttonLabel = variant === "text" ? "Attach image(s)" : "Attach image";
+  const tooltipText = "Attach image(s)";
+
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tooltipId = useId();
+
+  const clearTimer = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  }, []);
+
+  const hideTooltip = useCallback(() => {
+    clearTimer();
+    setTooltipVisible(false);
+  }, [clearTimer]);
+
+  useEffect(() => {
+    return () => clearTimer();
+  }, [clearTimer]);
+
+  const handleMouseEnter = useCallback(() => {
+    hoverTimerRef.current = setTimeout(() => setTooltipVisible(true), HOVER_DELAY_MS);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    hideTooltip();
+  }, [hideTooltip]);
+
+  const showTooltip = variant === "icon";
+
+  const button = (
+    <button
+      type="button"
+      onClick={() => fileInputRef.current?.click()}
+      disabled={disabled || atLimit}
+      className={
+        variant === "icon"
+          ? "btn-secondary h-10 w-10 shrink-0 p-0 flex items-center justify-center disabled:opacity-50"
+          : "btn-secondary h-10 shrink-0 px-3 flex items-center justify-center gap-1.5 disabled:opacity-50 text-sm"
+      }
+      title={showTooltip ? undefined : buttonLabel}
+      aria-label={buttonLabel}
+      aria-describedby={showTooltip && tooltipVisible ? tooltipId : undefined}
+      data-testid={dataTestId}
+    >
+      <ImageIcon className={variant === "icon" ? "w-5 h-5" : "w-4 h-4"} />
+      {variant === "text" && <span>{buttonLabel}</span>}
+    </button>
+  );
 
   return (
     <>
@@ -91,22 +144,29 @@ export function ImageAttachmentButton({
         onChange={handleFileInputChange}
         data-testid={dataTestId ? `${dataTestId}-input` : undefined}
       />
-      <button
-        type="button"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={disabled || atLimit}
-        className={
-          variant === "icon"
-            ? "btn-secondary h-10 w-10 shrink-0 p-0 flex items-center justify-center disabled:opacity-50"
-            : "btn-secondary h-10 shrink-0 px-3 flex items-center justify-center gap-1.5 disabled:opacity-50 text-sm"
-        }
-        title={buttonLabel}
-        aria-label={buttonLabel}
-        data-testid={dataTestId}
-      >
-        <ImageIcon className={variant === "icon" ? "w-5 h-5" : "w-4 h-4"} />
-        {variant === "text" && <span>{buttonLabel}</span>}
-      </button>
+      {showTooltip ? (
+        <span
+          className="relative inline-flex"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          {button}
+          {tooltipVisible && (
+            <div
+              id={tooltipId}
+              role="tooltip"
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1.5 text-xs font-normal
+                bg-theme-bg-elevated text-theme-text rounded-lg shadow-lg ring-1 ring-theme-border
+                whitespace-nowrap z-50 pointer-events-none
+                animate-fade-in"
+            >
+              {tooltipText}
+            </div>
+          )}
+        </span>
+      ) : (
+        button
+      )}
     </>
   );
 }
