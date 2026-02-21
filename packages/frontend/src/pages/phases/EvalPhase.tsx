@@ -662,13 +662,13 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
               disabled={submitting}
             />
             <ImageAttachmentThumbnails attachment={imageAttachment} className="mb-3" />
-            <div className="flex justify-end items-center gap-2 flex-wrap">
-              <div ref={feedbackPriorityDropdownRef} className="relative shrink-0">
+            <div className="flex justify-end items-stretch gap-2 flex-wrap">
+              <div ref={feedbackPriorityDropdownRef} className="relative shrink-0 flex">
                 <button
                   type="button"
                   onClick={() => !submitting && setFeedbackPriorityDropdownOpen((o) => !o)}
                   disabled={submitting}
-                  className="input text-sm h-10 py-2 px-3 w-auto min-w-[10rem] flex items-center gap-2 bg-theme-input-bg text-theme-input-text ring-theme-ring"
+                  className="input text-sm h-10 min-h-10 py-2.5 px-3 w-auto min-w-[10rem] inline-flex items-center gap-2 bg-theme-input-bg text-theme-input-text ring-theme-ring"
                   aria-label="Priority (optional)"
                   aria-haspopup="listbox"
                   aria-expanded={feedbackPriorityDropdownOpen}

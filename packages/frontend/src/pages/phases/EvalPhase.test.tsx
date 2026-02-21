@@ -357,8 +357,28 @@ describe("EvalPhase feedback form", () => {
       const submitButton = screen.getByRole("button", { name: /Submit Feedback/i });
 
       expect(prioritySelect).toHaveClass("h-10");
+      expect(prioritySelect).toHaveClass("min-h-10");
       expect(attachButton).toHaveClass("h-10");
       expect(submitButton).toHaveClass("h-10");
+    });
+
+    it("actions row uses items-stretch so all controls share the same height", async () => {
+      const store = createStore();
+      const { container } = render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-priority-select")).toBeInTheDocument();
+      });
+
+      const actionsRow =
+        container.querySelector('[data-testid="feedback-priority-select"]')?.parentElement
+          ?.parentElement;
+      expect(actionsRow).toBeTruthy();
+      expect(actionsRow).toHaveClass("items-stretch");
     });
 
     it("actions row has flex-wrap to prevent overflow at narrow viewports", async () => {
