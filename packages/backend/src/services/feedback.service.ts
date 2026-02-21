@@ -16,12 +16,11 @@ import { ChatService } from "./chat.service.js";
 import { PlanService } from "./plan.service.js";
 import { PrdService } from "./prd.service.js";
 import type { HarmonizerPrdUpdate } from "./harmonizer.service.js";
-import { BeadsService, type BeadsIssue } from "./beads.service.js";
+import { BeadsService } from "./beads.service.js";
 import { listTasksCache } from "./list-tasks-cache.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { generateShortFeedbackId } from "../utils/feedback-id.js";
-import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { JSON_OUTPUT_PREAMBLE } from "../utils/agent-prompts.js";
 import { triggerDeploy } from "./deploy-trigger.service.js";
@@ -624,12 +623,17 @@ export class FeedbackService {
         try {
           const priority =
             userPriorityOverride ?? task.priority ?? (item.category === "bug" ? 0 : 2);
-          const issue = await this.createBeadTaskWithRetry(repoPath, task.title, {
-            type: beadType,
-            priority,
-            description: task.description || undefined,
-            parentId: parentEpicId,
-          });
+          const issue = await this.beadsService.createWithRetry(
+            repoPath,
+            task.title,
+            {
+              type: beadType,
+              priority,
+              description: task.description || undefined,
+              parentId: parentEpicId,
+            },
+            { fallbackToStandalone: true }
+          );
           if (issue) {
             createdIds.push(issue.id);
             taskIdMap.set(task.index, issue.id);
@@ -674,11 +678,12 @@ export class FeedbackService {
       for (const title of taskTitles) {
         try {
           const priority = userPriorityOverride ?? (item.category === "bug" ? 0 : 2);
-          const issue = await this.createBeadTaskWithRetry(repoPath, title, {
-            type: beadType,
-            priority,
-            parentId: parentEpicId,
-          });
+          const issue = await this.beadsService.createWithRetry(
+            repoPath,
+            title,
+            { type: beadType, priority, parentId: parentEpicId },
+            { fallbackToStandalone: true }
+          );
           if (issue) {
             createdIds.push(issue.id);
             if (feedbackSourceBeadId) {
@@ -702,71 +707,6 @@ export class FeedbackService {
 
     listTasksCache.invalidate(repoPath);
     return createdIds;
-  }
-
-  /**
-   * Create a beads task with retry logic for duplicate-ID failures.
-   * The beads CLI (or backend) can generate child IDs that collide with existing tasks
-   * (stale counter). Errors may be SQLite "UNIQUE constraint failed" or MySQL "Error 1062: duplicate primary key".
-   * Retries give the counter a chance to advance; if all retries fail, falls back to creating
-   * the task without a parent so the feedback flow is not broken.
-   */
-  private async createBeadTaskWithRetry(
-    repoPath: string,
-    title: string,
-    options: { type: string; priority: number; description?: string; parentId?: string }
-  ): Promise<BeadsIssue | null> {
-    const MAX_RETRIES = 3;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        return await this.beadsService.create(repoPath, title, options);
-      } catch (err) {
-        const msg = getErrorMessage(err);
-        const details = (err as { details?: { stderr?: string } })?.details?.stderr ?? "";
-        const fullMsg = msg + details;
-        const isDuplicateKey =
-          fullMsg.includes("UNIQUE constraint failed") ||
-          fullMsg.includes("duplicate primary key") ||
-          fullMsg.includes("Error 1062");
-
-        if (!isDuplicateKey) {
-          throw err;
-        }
-
-        if (attempt < MAX_RETRIES) {
-          log.warn("Duplicate task ID, retrying", {
-            attempt: attempt + 1,
-            maxRetries: MAX_RETRIES + 1,
-            title,
-          });
-          await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
-          continue;
-        }
-
-        // All retries with parent exhausted; try without parent as fallback
-        if (options.parentId) {
-          log.warn("Duplicate ID persists under parent, creating standalone task", {
-            parentId: options.parentId,
-            title,
-          });
-          try {
-            return await this.beadsService.create(repoPath, title, {
-              ...options,
-              parentId: undefined,
-            });
-          } catch (fallbackErr) {
-            log.error("Standalone fallback also failed", { title, err: fallbackErr });
-            return null;
-          }
-        }
-
-        log.error("Duplicate task ID with no parent fallback", { title });
-        return null;
-      }
-    }
-
-    return null;
   }
 
   private async saveFeedback(projectId: string, item: FeedbackItem): Promise<void> {
