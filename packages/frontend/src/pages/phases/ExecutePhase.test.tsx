@@ -69,6 +69,7 @@ function createStore(
     awaitingApproval: boolean;
     agentOutput: Record<string, string[]>;
     taskDetailError: string | null;
+    activeTasks: { taskId: string; phase: string; startedAt: string }[];
   }>,
   websocketOverrides?: Partial<{ connected: boolean }>
 ) {
@@ -1738,7 +1739,9 @@ describe("ExecutePhase Redux integration", () => {
     const descHeader = await screen.findByRole("button", { name: /description/i });
     expect(descHeader).toBeInTheDocument();
     expect(screen.getByTestId("task-description-markdown")).toBeInTheDocument();
-    expect(screen.getByTestId("task-description-markdown")).toHaveTextContent("Implement the feature");
+    expect(screen.getByTestId("task-description-markdown")).toHaveTextContent(
+      "Implement the feature"
+    );
   });
 
   it("collapses and expands Description section when header is clicked", async () => {
@@ -1871,10 +1874,16 @@ describe("ExecutePhase Redux integration", () => {
 
     const sourceFeedbackBtn = screen.getByRole("button", { name: /source feedback/i });
     const descriptionBtn = screen.getByRole("button", { name: /description/i });
-    const sourceFeedbackIdx = Array.from(document.body.querySelectorAll("button")).indexOf(sourceFeedbackBtn);
-    const descriptionIdx = Array.from(document.body.querySelectorAll("button")).indexOf(descriptionBtn);
+    const sourceFeedbackIdx = Array.from(document.body.querySelectorAll("button")).indexOf(
+      sourceFeedbackBtn
+    );
+    const descriptionIdx = Array.from(document.body.querySelectorAll("button")).indexOf(
+      descriptionBtn
+    );
     expect(sourceFeedbackIdx).toBeLessThan(descriptionIdx);
-    expect(screen.getByTestId("task-description-markdown")).toHaveTextContent("Implement from feedback");
+    expect(screen.getByTestId("task-description-markdown")).toHaveTextContent(
+      "Implement from feedback"
+    );
   });
 
   it("omits Description section when task has no description content", async () => {
@@ -2547,10 +2556,10 @@ describe("ExecutePhase task detail cached state", () => {
     expect(header).toHaveTextContent("Task A");
     expect(screen.queryByTestId("task-detail-metadata")).not.toBeInTheDocument();
 
-    // Status and assignee appear in consolidated section below divider
-    const statusSection = screen.getByTestId("task-detail-status-section");
-    expect(statusSection).toHaveTextContent("In Review");
-    expect(statusSection).toHaveTextContent("agent-1");
+    // Priority and state appear in first row below divider; assignee in same row
+    const priorityStateRow = screen.getByTestId("task-detail-priority-state-row");
+    expect(priorityStateRow).toHaveTextContent("In Review");
+    expect(priorityStateRow).toHaveTextContent("agent-1");
   });
 
   it("shows status with color indicator and icon in detail section below divider", () => {
@@ -2572,10 +2581,10 @@ describe("ExecutePhase task detail cached state", () => {
       </Provider>
     );
 
-    const statusSection = screen.getByTestId("task-detail-status-section");
-    expect(statusSection).toHaveTextContent("Done");
+    const priorityStateRow = screen.getByTestId("task-detail-priority-state-row");
+    expect(priorityStateRow).toHaveTextContent("Done");
     // TaskStatusBadge renders with title attribute for accessibility
-    const badge = statusSection.querySelector('[title="Done"]');
+    const badge = priorityStateRow.querySelector('[title="Done"]');
     expect(badge).toBeInTheDocument();
   });
 
@@ -2595,18 +2604,22 @@ describe("ExecutePhase task detail cached state", () => {
         assignee: "agent-1",
       },
     ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    const store = createStore(tasks, {
+      selectedTaskId: "epic-1.1",
+      activeTasks: [{ taskId: "epic-1.1", phase: "coding", startedAt }],
+    });
     render(
       <Provider store={store}>
         <ExecutePhase projectId="proj-1" />
       </Provider>
     );
 
-    const statusSection = screen.getByTestId("task-detail-status-section");
-    expect(statusSection).toHaveTextContent("agent-1");
-    // Wait for async agents fetch to populate running time (formatUptime produces "2m 5s" or similar)
+    const priorityStateRow = screen.getByTestId("task-detail-priority-state-row");
+    expect(priorityStateRow).toHaveTextContent("agent-1");
+    // Wait for async agents fetch to populate running time in Active callout (formatUptime produces "2m 5s" or similar)
     await vi.waitFor(() => {
-      expect(statusSection.textContent).toMatch(/\d+m\s+\d+s/);
+      const callout = screen.getByTestId("task-detail-active-callout");
+      expect(callout.textContent).toMatch(/\d+m\s+\d+s/);
     });
   });
 
