@@ -362,9 +362,8 @@ describe("FeedbackService", () => {
 
     const invalidateSpy = vi.spyOn(listTasksCache, "invalidate");
 
-    await feedbackService.submitFeedback(projectId, { text: "Login broken" });
-
-    await new Promise((r) => setTimeout(r, 200));
+    const item = await feedbackService.submitFeedback(projectId, { text: "Login broken" });
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
 
     const repoPath = path.join(tempDir, "my-project");
     expect(invalidateSpy).toHaveBeenCalledWith(repoPath);
