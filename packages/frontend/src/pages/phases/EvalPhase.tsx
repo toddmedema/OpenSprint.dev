@@ -781,7 +781,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                         className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-theme-border-subtle/50 transition-colors text-theme-muted"
                         data-testid="feedback-priority-option-clear"
                       >
-                        Priority (optional)
+                        No priority
                       </button>
                     </li>
                     {([0, 1, 2, 3, 4] as const).map((p) => (

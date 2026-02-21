@@ -149,7 +149,7 @@ describe("EvalPhase feedback form", () => {
 
     // Placeholder / clear option
     expect(screen.getByTestId("feedback-priority-option-clear")).toHaveTextContent(
-      "Priority (optional)"
+      "No priority"
     );
     // Priority options with icons
     expect(screen.getByTestId("feedback-priority-option-0")).toBeInTheDocument();
