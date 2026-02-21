@@ -207,4 +207,23 @@ describe("PlanDetailContent", () => {
     expect(headerRow).toBeInTheDocument();
     expect(headerRow).not.toHaveClass("border-b");
   });
+
+  it("renders header and body separately when children render slot is provided", () => {
+    render(
+      <PlanDetailContent plan={mockPlan} onContentSave={onContentSave}>
+        {({ header, body }) => (
+          <div data-testid="custom-layout">
+            <div data-testid="header-slot">{header}</div>
+            <div data-testid="body-slot">{body}</div>
+          </div>
+        )}
+      </PlanDetailContent>,
+    );
+    const customLayout = screen.getByTestId("custom-layout");
+    expect(customLayout).toBeInTheDocument();
+    const headerSlot = screen.getByTestId("header-slot");
+    const bodySlot = screen.getByTestId("body-slot");
+    expect(headerSlot).toContainElement(screen.getByRole("textbox", { name: /title/i }));
+    expect(bodySlot).toContainElement(screen.getByTestId("plan-body-editor"));
+  });
 });
