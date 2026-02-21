@@ -309,6 +309,74 @@ describe("BeadsService", () => {
       );
       expect(result).toBeNull();
     });
+
+    it("should return null when duplicate persists and no fallback option", async () => {
+      mockExecImpl = allowSyncAndCreate(async () => {
+        throw duplicateError;
+      }) as (cmd: string) => Promise<{ stdout: string; stderr: string }>;
+      const result = await beads.createWithRetry("/repo", "Task", {
+        type: "task",
+        parentId: "epic-1",
+      });
+      expect(result).toBeNull();
+    });
+
+    it("should rethrow non-duplicate errors (non-duplicate propagates)", async () => {
+      const appError = Object.assign(
+        new Error("Beads command failed: bd create"),
+        { details: { stderr: "Some other database error" } }
+      );
+      mockExecImpl = allowSyncAndCreate(async () => {
+        throw appError;
+      }) as (cmd: string) => Promise<{ stdout: string; stderr: string }>;
+      await expect(
+        beads.createWithRetry("/repo", "Task", { parentId: "epic-1" })
+      ).rejects.toThrow("Beads command failed");
+    });
+
+    it("should detect duplicate via UNIQUE constraint failed in stderr (retry then succeed)", async () => {
+      const uniqueConstraintError = Object.assign(new Error("create failed"), {
+        stderr: "UNIQUE constraint failed: issues.id",
+      });
+      let createCallCount = 0;
+      mockExecImpl = allowSyncAndCreate(async () => {
+        createCallCount++;
+        if (createCallCount <= 2) throw uniqueConstraintError;
+        return {
+          stdout: JSON.stringify({ id: "task-3", title: "Task", status: "open" }),
+          stderr: "",
+        };
+      }) as (cmd: string) => Promise<{ stdout: string; stderr: string }>;
+      const result = await beads.createWithRetry("/repo", "Task", {
+        type: "task",
+        parentId: "epic-1",
+      });
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe("task-3");
+      expect(createCallCount).toBe(3);
+    });
+
+    it("should detect duplicate via duplicate primary key in stderr (retry then succeed)", async () => {
+      const duplicatePkError = Object.assign(new Error("create failed"), {
+        stderr: "duplicate primary key for id opensprint.dev-xyz.1",
+      });
+      let createCallCount = 0;
+      mockExecImpl = allowSyncAndCreate(async () => {
+        createCallCount++;
+        if (createCallCount <= 1) throw duplicatePkError;
+        return {
+          stdout: JSON.stringify({ id: "task-2", title: "Task", status: "open" }),
+          stderr: "",
+        };
+      }) as (cmd: string) => Promise<{ stdout: string; stderr: string }>;
+      const result = await beads.createWithRetry("/repo", "Task", {
+        type: "task",
+        parentId: "epic-1",
+      });
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe("task-2");
+      expect(createCallCount).toBe(2);
+    });
   });
 
   describe("ready", () => {
