@@ -10,6 +10,7 @@ import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 const {
   mockInvoke,
   mockBeadsCreate,
+  mockBeadsCreateWithRetry,
   mockBeadsUpdate,
   mockBeadsAddDependency,
   mockBeadsClose,
@@ -40,6 +41,7 @@ const {
     }),
   });
   const mockBeadsCreate = vi.fn();
+  const mockBeadsCreateWithRetry = vi.fn();
   const mockBeadsUpdate = vi.fn();
   const mockBeadsAddDependency = vi.fn();
   const mockBeadsClose = vi.fn();
@@ -50,6 +52,7 @@ const {
   return {
     mockInvoke,
     mockBeadsCreate,
+    mockBeadsCreateWithRetry,
     mockBeadsUpdate,
     mockBeadsAddDependency,
     mockBeadsClose,
@@ -70,6 +73,7 @@ vi.mock("../services/beads.service.js", () => ({
     configSet: mockBeadsConfigSet,
     listAll: mockBeadsListAll,
     create: mockBeadsCreate,
+    createWithRetry: mockBeadsCreateWithRetry,
     update: mockBeadsUpdate,
     addDependency: mockBeadsAddDependency,
     close: mockBeadsClose,
@@ -89,7 +93,17 @@ describe("deploy-fix-epic service", () => {
   });
 
   beforeEach(async () => {
+    mockBeadsCreate.mockClear();
+    mockBeadsCreateWithRetry.mockClear();
     mockBeadsCreate.mockImplementation(
+      (_repo: string, _title: string, opts?: { type?: string; parentId?: string }) => {
+        const id = opts?.parentId
+          ? `${opts.parentId}.${Math.floor(Math.random() * 1000)}`
+          : `epic-${Date.now()}`;
+        return Promise.resolve({ id });
+      }
+    );
+    mockBeadsCreateWithRetry.mockImplementation(
       (_repo: string, _title: string, opts?: { type?: string; parentId?: string }) => {
         const id = opts?.parentId
           ? `${opts.parentId}.${Math.floor(Math.random() * 1000)}`
@@ -161,6 +175,35 @@ describe("deploy-fix-epic service", () => {
     expect(result).toBeNull();
   });
 
+  it("returns null when createWithRetry fails for gate task", async () => {
+    mockBeadsCreateWithRetry.mockResolvedValueOnce(null);
+
+    const project = await projectService.getProject(projectId);
+    const result = await createFixEpicFromTestOutput(
+      projectId,
+      project.repoPath,
+      "FAIL  src/auth.test.ts"
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null when createWithRetry fails for a fix task", async () => {
+    mockBeadsCreateWithRetry
+      .mockResolvedValueOnce({ id: "gate-1" })
+      .mockResolvedValueOnce({ id: "task-1" })
+      .mockResolvedValueOnce(null);
+
+    const project = await projectService.getProject(projectId);
+    const result = await createFixEpicFromTestOutput(
+      projectId,
+      project.repoPath,
+      "FAIL  src/auth.test.ts"
+    );
+
+    expect(result).toBeNull();
+  });
+
   it("creates fix epic and tasks when agent returns valid tasks", async () => {
     const project = await projectService.getProject(projectId);
     const result = await createFixEpicFromTestOutput(
@@ -174,7 +217,18 @@ describe("deploy-fix-epic service", () => {
     expect(result!.taskCount).toBe(2);
     expect(result!.gateTaskId).toBeDefined();
 
-    expect(mockBeadsCreate).toHaveBeenCalled();
+    expect(mockBeadsCreate).toHaveBeenCalledTimes(1);
+    expect(mockBeadsCreate).toHaveBeenCalledWith(
+      project.repoPath,
+      "Fix: pre-deploy test failures",
+      expect.objectContaining({ type: "epic" })
+    );
+    expect(mockBeadsCreateWithRetry).toHaveBeenCalledTimes(3);
+    const createWithRetryCalls = mockBeadsCreateWithRetry.mock.calls;
+    expect(createWithRetryCalls[0][1]).toBe("Plan approval gate");
+    expect(createWithRetryCalls[0][2]).toMatchObject({ type: "task", parentId: expect.any(String) });
+    expect(createWithRetryCalls[1][1]).toBe("Fix auth test");
+    expect(createWithRetryCalls[2][1]).toBe("Fix API test");
     expect(mockBeadsClose).toHaveBeenCalled();
     const beads = new BeadsService();
     const ready = await beads.ready(project.repoPath);

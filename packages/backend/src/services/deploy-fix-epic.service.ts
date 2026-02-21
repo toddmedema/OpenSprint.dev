@@ -156,25 +156,33 @@ ${testOutput.slice(0, 15000)}
   await fs.writeFile(path.join(repoPath, fixPlanPath), planContent);
   await beads.update(repoPath, epicId, { description: fixPlanPath });
 
-  // Create gating task
-  const gateResult = await beads.create(repoPath, "Plan approval gate", {
+  // Create gating task (createWithRetry for duplicate-key protection)
+  const gateResult = await beads.createWithRetry(repoPath, "Plan approval gate", {
     type: "task",
     parentId: epicId,
   });
+  if (!gateResult) {
+    log.error("Failed to create gate task after retries");
+    return null;
+  }
   const gateTaskId = gateResult.id;
 
-  // Create child tasks
+  // Create child tasks (createWithRetry for duplicate-key protection)
   const taskIdMap = new Map<number, string>();
 
   for (const task of tasks) {
     const idx = task.index ?? tasks.indexOf(task);
     const priority = Math.min(4, Math.max(0, task.priority ?? 2));
-    const taskResult = await beads.create(repoPath, task.title, {
+    const taskResult = await beads.createWithRetry(repoPath, task.title, {
       type: "task",
       description: task.description ?? "",
       priority,
       parentId: epicId,
     });
+    if (!taskResult) {
+      log.error("Failed to create fix task after retries", { title: task.title });
+      return null;
+    }
     taskIdMap.set(idx, taskResult.id);
     await beads.addDependency(repoPath, taskResult.id, gateTaskId);
   }
