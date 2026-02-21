@@ -1,0 +1,23 @@
+{
+  "id": "j3rznd",
+  "text": "Please add a \"Attach image(s)\" button in the evaluate reply inputs, just to the left of \"Submit Reply\" (and re-use/modularize as much of the code as possible from the Attach Images button in the main evaluate feedback input",
+  "category": "feature",
+  "mappedPlanId": "replying-to-feedback",
+  "createdTaskIds": ["opensprint.dev-7p4.1"],
+  "status": "mapped",
+  "createdAt": "2026-02-21T08:07:26.791Z",
+  "parent_id": null,
+  "depth": 0,
+  "mappedEpicId": "opensprint.dev-7p4",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Add image attachment support to Evaluate reply inputs",
+      "description": "Add an 'Attach image(s)' button to the reply input in the Evaluate phase, positioned immediately to the left of the 'Submit Reply' button. Reuse and modularize the existing image-attachment logic from the main Evaluate feedback input (file picker, preview thumbnails, removal, upload handling) into a shared component or hook so both the top-level feedback form and the reply form use the same code path. Acceptance criteria:\n- A shared ImageAttachment component (or hook) is extracted from the existing main feedback input implementation.\n- The reply input renders an 'Attach image(s)' button to the left of 'Submit Reply'.\n- Clicking the button opens a file picker filtered to image types.\n- Selected images display as removable thumbnail previews within the reply composer.\n- Submitted replies persist attached images in the FeedbackItem reply data.\n- The main feedback input is refactored to use the same shared component/hook with no regression.\n- Works in both light and dark themes.",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Add image attachment support to Evaluate reply inputs"]
+}

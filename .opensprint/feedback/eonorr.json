@@ -1,0 +1,25 @@
+{
+  "id": "eonorr",
+  "text": "Marking a parent feedback item as \"Resolved\" on the evaluate page should also mark all of its children/replies as done too",
+  "category": "feature",
+  "mappedPlanId": "replying-to-feedback",
+  "createdTaskIds": ["opensprint.dev-7p4.5"],
+  "status": "mapped",
+  "createdAt": "2026-02-21T08:27:03.160Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-7p4",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Cascade resolve status from parent feedback to child replies",
+      "description": "When a user marks a parent feedback item as 'Resolved' on the Evaluate page, automatically mark all of its child/reply feedback items as resolved too. Acceptance criteria:\n1. When a parent FeedbackItem status is set to 'resolved', the backend iterates all FeedbackItems whose parent_id matches the resolved item's id and transitions their status to 'resolved' as well.\n2. Cascading is recursive — if a reply itself has replies, those are also resolved.\n3. The frontend Evaluate page reflects the cascaded resolution in real-time (via existing WebSocket relay).\n4. If a child was already resolved, it remains resolved (no-op).\n5. Resolving a child independently does NOT resolve the parent or siblings.\n6. Add unit tests covering: single-level cascade, multi-level recursive cascade, already-resolved children, and independent child resolution.",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Cascade resolve status from parent feedback to child replies"],
+  "feedbackSourceBeadId": "opensprint.dev-3o13"
+}

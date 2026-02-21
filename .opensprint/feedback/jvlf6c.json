@@ -1,0 +1,24 @@
+{
+  "id": "jvlf6c",
+  "text": "The description header should use the same element structure and styling as the \"Live Output\" and \"Source Feedback\" - right now it seems to be a different type of input with different spacing and styles",
+  "category": "ux",
+  "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
+  "createdTaskIds": [],
+  "status": "mapped",
+  "createdAt": "2026-02-21T08:03:58.237Z",
+  "parent_id": "7sbvao",
+  "depth": 1,
+  "mappedEpicId": "opensprint.dev-srl",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Unify Description header with Live Output and Source Feedback header components",
+      "description": "The Description collapsible header in the feedback detail view uses a different element structure and styling (spacing, typography, collapse affordance) than the Live Output and Source Feedback headers. Refactor the Description header to reuse the same shared collapsible-header component and CSS classes used by Live Output and Source Feedback so all three sections are visually identical.\n\nAcceptance criteria:\n- Description header renders using the exact same component (or shared abstraction) as Live Output and Source Feedback headers\n- Padding, margin, font size, font weight, icon placement, and collapse/expand behavior match across all three headers\n- No visual regression to Live Output or Source Feedback headers",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Unify Description header with Live Output and Source Feedback header components"],
+  "feedbackSourceBeadId": "opensprint.dev-1yg6"
+}

@@ -1,11 +1,11 @@
 {
-  "id": "5glcmo",
+  "id": "4ydd9i",
   "text": "Hovering over the \"upload image\" button in the evaluate feedback form should show the tooltip \"Attach image(s)\"",
   "category": "ux",
   "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
   "createdTaskIds": [],
   "status": "resolved",
-  "createdAt": "2026-02-21T07:53:43.481Z",
+  "createdAt": "2026-02-21T08:12:17.094Z",
   "parent_id": null,
   "depth": 0,
   "mappedEpicId": "opensprint.dev-srl",
@@ -14,11 +14,11 @@
     {
       "index": 0,
       "title": "Add tooltip to image upload button in Evaluate feedback form",
-      "description": "When the user hovers over the 'upload image' button in the Evaluate phase feedback submission form, display a tooltip reading 'Attach image(s)'. Use the existing tooltip component/pattern from the design system. Acceptance criteria: (1) Hovering over the upload-image button shows a tooltip with text 'Attach image(s)'. (2) Tooltip appears after standard hover delay and dismisses on mouse-out. (3) Tooltip is accessible (aria-label or title attribute equivalent).",
+      "description": "In the Evaluate phase feedback submission form, the image-upload button currently has no tooltip on hover. Add a tooltip reading \"Attach image(s)\" that appears on mouseenter/focus and disappears on mouseleave/blur. Acceptance criteria: (1) Hovering over the upload-image button displays a tooltip with the text \"Attach image(s)\". (2) Tooltip is accessible (aria-label or title attribute). (3) Tooltip dismisses on mouse leave and on Escape key.",
       "priority": 3,
       "depends_on": []
     }
   ],
   "taskTitles": ["Add tooltip to image upload button in Evaluate feedback form"],
-  "feedbackSourceBeadId": "opensprint.dev-8wzv"
+  "feedbackSourceBeadId": "opensprint.dev-3llj"
 }

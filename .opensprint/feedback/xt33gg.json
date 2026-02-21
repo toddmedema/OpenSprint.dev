@@ -1,0 +1,42 @@
+{
+  "id": "xt33gg",
+  "text": "Right now clicking \"Execute\" on a plan throws this error: \"Plan has no gating task to close\" - BUT, when a plan has no tasks assigned to it (or only 1, the planning gating task), the \"Execute\" button should instead say \"Plan Tasks\" and kick off an AI that generates individual beads for that task - all blocked by the gating task. THEN, the button should say \"Execute\", which marks the gating planning task as done so that the rest of the epic becomes ready for work.",
+  "category": "feature",
+  "mappedPlanId": "plan-phase-feature-decomposition",
+  "createdTaskIds": ["opensprint.dev-ko5h", "opensprint.dev-359r", "opensprint.dev-y61h"],
+  "status": "mapped",
+  "createdAt": "2026-02-21T08:30:45.949Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 0,
+  "mappedEpicId": "opensprint.dev-vwf",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Fix Execute button error when plan has no gating task",
+      "description": "Handle the case where clicking Execute on a plan that has no gating task throws 'Plan has no gating task to close'. Instead of throwing, gracefully detect the missing gate and prevent the action. Acceptance criteria: (1) Clicking Execute on a plan without a gating task does not throw an unhandled error. (2) The UI shows an appropriate state guiding the user to generate tasks first.",
+      "priority": 1,
+      "depends_on": []
+    },
+    {
+      "index": 1,
+      "title": "Implement 'Plan Tasks' AI generation flow",
+      "description": "When a plan has no child implementation tasks (or only the gating task), provide a 'Plan Tasks' action that invokes the Planner agent to decompose the plan markdown into individual beads tasks, all blocked by the plan's gating task. Acceptance criteria: (1) Planner agent is invoked with the plan markdown as context. (2) Generated tasks are created as beads child issues under the plan's epic. (3) Each generated task has a 'blocks' dependency on the gating task. (4) Task generation results are reflected in the UI in real time via WebSocket updates.",
+      "priority": 1,
+      "depends_on": [0]
+    },
+    {
+      "index": 2,
+      "title": "Dynamic Plan button label: 'Plan Tasks' vs 'Execute'",
+      "description": "Update the plan action button to dynamically reflect the plan's readiness state. Show 'Plan Tasks' when the plan has no child implementation tasks (or only the gating task). Show 'Execute' when child tasks exist and the gating task is still open. Hide or disable the button when the gating task is already closed (plan is executing). Acceptance criteria: (1) Button reads 'Plan Tasks' for plans with zero non-gate child tasks. (2) Button reads 'Execute' for plans with generated child tasks and an open gate. (3) After Execute is clicked, the gating task is closed and child tasks become eligible for bd ready. (4) Button state updates reactively when tasks are added or the gate is closed.",
+      "priority": 1,
+      "depends_on": [1]
+    }
+  ],
+  "taskTitles": [
+    "Fix Execute button error when plan has no gating task",
+    "Implement 'Plan Tasks' AI generation flow",
+    "Dynamic Plan button label: 'Plan Tasks' vs 'Execute'"
+  ]
+}

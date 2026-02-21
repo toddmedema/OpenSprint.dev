@@ -1,0 +1,25 @@
+{
+  "id": "empj2m",
+  "text": "There is not enough padding at the top of the markdown in the planning details sidebar. The top (and bottom) padding should be the same as the side padding.",
+  "category": "ux",
+  "mappedPlanId": "plan-phase-feature-decomposition",
+  "createdTaskIds": ["opensprint.dev-rs3w"],
+  "status": "mapped",
+  "createdAt": "2026-02-21T08:24:39.933Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-vwf",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Fix markdown padding in planning details sidebar",
+      "description": "Adjust the top and bottom padding of the markdown content area in the planning details sidebar to match the existing left/right (side) padding. Acceptance criteria: (1) Top padding of the rendered markdown block equals the side padding. (2) Bottom padding of the rendered markdown block equals the side padding. (3) Side padding remains unchanged.",
+      "priority": 3,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Fix markdown padding in planning details sidebar"],
+  "feedbackSourceBeadId": "opensprint.dev-9ta9"
+}

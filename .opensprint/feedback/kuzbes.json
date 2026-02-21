@@ -1,0 +1,24 @@
+{
+  "id": "kuzbes",
+  "text": "When scrolling down in the plan details sidebar, the header (which has the title and close button) should remain fixed at the top and always visible to the user, just like the Execute sidebar",
+  "category": "ux",
+  "mappedPlanId": "plan-phase-feature-decomposition",
+  "createdTaskIds": ["opensprint.dev-ac1g"],
+  "status": "mapped",
+  "createdAt": "2026-02-21T08:23:37.436Z",
+  "parent_id": null,
+  "depth": 0,
+  "mappedEpicId": "opensprint.dev-vwf",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Make plan details sidebar header sticky on scroll",
+      "description": "Update the Plan details sidebar so that the header (containing the plan title and close button) remains fixed at the top of the sidebar when the user scrolls down through the content, matching the existing behavior of the Execute sidebar.\n\nAcceptance criteria:\n- The sidebar header (title + close button) stays pinned to the top of the sidebar viewport when scrolling.\n- The scrollable content area begins below the fixed header and does not overlap or clip behind it.\n- Behavior matches the Execute sidebar's sticky header implementation.\n- Works correctly in both light and dark themes.\n- No layout shift or visual glitch when sidebar content is shorter than the viewport (no unnecessary scroll).",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Make plan details sidebar header sticky on scroll"],
+  "feedbackSourceBeadId": "opensprint.dev-dgjf"
+}
