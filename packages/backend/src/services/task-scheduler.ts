@@ -1,25 +1,29 @@
 import type { BeadsService, BeadsIssue } from "./beads.service.js";
 import type { AgentSlot } from "./orchestrator.service.js";
+import { FileScopeAnalyzer, type FileScope } from "./file-scope-analyzer.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("task-scheduler");
 
 export interface SchedulerResult {
   task: BeadsIssue;
+  fileScope: FileScope;
 }
 
 /**
- * Selects tasks for parallel execution based on priority and (in Phase 3) file-overlap.
- * Phase 1: picks top-priority tasks from the ready queue.
- * Phase 3: adds FileScopeAnalyzer overlap detection.
+ * Selects tasks for parallel execution based on priority and file-overlap detection.
+ * When maxConcurrentCoders > 1, uses FileScopeAnalyzer to avoid dispatching
+ * tasks that modify overlapping files.
  */
 export class TaskScheduler {
+  private analyzer = new FileScopeAnalyzer();
+
   constructor(private beads: BeadsService) {}
 
   /**
    * Select up to (maxSlots - activeSlots.size) tasks from readyTasks.
    * Filters out plan approval gates, epics, blocked tasks, and tasks already in a slot.
-   * Performs blocker pre-flight check for each candidate.
+   * Performs blocker pre-flight check and file-overlap detection.
    */
   async selectTasks(
     repoPath: string,
@@ -38,6 +42,14 @@ export class TaskScheduler {
 
     const statusMap = await this.beads.getStatusMap(repoPath);
 
+    // Collect active slot scopes for overlap detection
+    const activeScopes: FileScope[] = [];
+    for (const slot of activeSlots.values()) {
+      if ((slot as any).fileScope) {
+        activeScopes.push((slot as any).fileScope);
+      }
+    }
+
     const results: SchedulerResult[] = [];
     for (const task of candidates) {
       if (results.length >= slotsAvailable) break;
@@ -51,7 +63,29 @@ export class TaskScheduler {
         continue;
       }
 
-      results.push({ task });
+      // File-overlap detection (only when parallel dispatch is active)
+      if (maxSlots > 1 && (activeScopes.length > 0 || results.length > 0)) {
+        const scope = await this.analyzer.predict(repoPath, task, this.beads);
+
+        const overlapping = [...activeScopes, ...results.map((r) => r.fileScope)].some((s) =>
+          this.analyzer.overlaps(scope, s)
+        );
+
+        if (overlapping) {
+          log.info("Skipping task (file scope overlaps with active/selected)", {
+            taskId: task.id,
+            confidence: scope.confidence,
+          });
+          continue;
+        }
+
+        results.push({ task, fileScope: scope });
+        continue;
+      }
+
+      // Single-dispatch or first task: no overlap check needed
+      const scope = await this.analyzer.predict(repoPath, task, this.beads);
+      results.push({ task, fileScope: scope });
     }
 
     return results;

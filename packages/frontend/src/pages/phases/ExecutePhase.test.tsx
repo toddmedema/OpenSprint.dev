@@ -67,7 +67,7 @@ function createStore(
     orchestratorRunning: boolean;
     selectedTaskId: string | null;
     awaitingApproval: boolean;
-    agentOutput: string[];
+    agentOutput: Record<string, string[]>;
     taskDetailError: string | null;
   }>,
   websocketOverrides?: Partial<{ connected: boolean }>
@@ -104,13 +104,12 @@ function createStore(
         plans: [],
         awaitingApproval: false,
         orchestratorRunning: false,
-        currentTaskId: null,
-        currentPhase: null,
+        activeTasks: [],
         selectedTaskId: null,
         taskDetail: null,
         taskDetailLoading: false,
         taskDetailError: null,
-        agentOutput: [],
+        agentOutput: {},
         completionState: null,
         archivedSessions: [],
         archivedLoading: false,
@@ -1087,13 +1086,12 @@ describe("ExecutePhase expandable search bar", () => {
           plans: [],
           awaitingApproval: false,
           orchestratorRunning: false,
-          currentTaskId: null,
-          currentPhase: null,
+          activeTasks: [],
           selectedTaskId: null,
           taskDetail: null,
           taskDetailLoading: false,
           taskDetailError: null,
-          agentOutput: [],
+          agentOutput: {},
           completionState: null,
           archivedSessions: [],
           archivedLoading: false,
@@ -1452,7 +1450,7 @@ describe("ExecutePhase Redux integration", () => {
       tasks,
       {
         selectedTaskId: "epic-1.1",
-        agentOutput: ["Line 1\n", "Line 2\n", "Line 3\n"],
+        agentOutput: { "epic-1.1": ["Line 1\n", "Line 2\n", "Line 3\n"] },
       },
       { connected: true }
     );

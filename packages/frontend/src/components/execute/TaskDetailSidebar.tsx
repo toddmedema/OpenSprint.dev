@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AgentSession, Plan, Task } from "@opensprint/shared";
 import { PRIORITY_LABELS, AGENT_ROLE_LABELS } from "@opensprint/shared";
+import type { ActiveTaskInfo } from "../../store/slices/executeSlice";
 import { useAppDispatch } from "../../store";
 import { updateTaskPriority } from "../../store/slices/executeSlice";
 import { wsConnect } from "../../store/middleware/websocketMiddleware";
@@ -32,8 +33,7 @@ export interface TaskDetailSidebarProps {
   taskIdToStartedAt: Record<string, string>;
   plans: Plan[];
   tasks: Task[];
-  currentTaskId: string | null;
-  currentPhase: "coding" | "review" | null;
+  activeTasks: ActiveTaskInfo[];
   wsConnected: boolean;
   isDoneTask: boolean;
   isBlockedTask: boolean;
@@ -52,12 +52,13 @@ export interface TaskDetailSidebarProps {
 
 const activeRoleLabel = (
   selectedTask: string,
-  currentTaskId: string | null,
-  currentPhase: "coding" | "review" | null
-) =>
-  selectedTask === currentTaskId && currentPhase
-    ? AGENT_ROLE_LABELS[currentPhase === "coding" ? "coder" : "reviewer"]
-    : null;
+  activeTasks: ActiveTaskInfo[],
+) => {
+  const active = activeTasks.find((a) => a.taskId === selectedTask);
+  if (!active) return null;
+  const phase = active.phase as "coding" | "review";
+  return AGENT_ROLE_LABELS[phase === "coding" ? "coder" : "reviewer"] ?? null;
+};
 
 export function TaskDetailSidebar({
   projectId,
@@ -75,8 +76,7 @@ export function TaskDetailSidebar({
   taskIdToStartedAt,
   plans,
   tasks,
-  currentTaskId,
-  currentPhase,
+  activeTasks,
   wsConnected,
   isDoneTask,
   isBlockedTask,
@@ -93,7 +93,7 @@ export function TaskDetailSidebar({
   onSelectTask,
 }: TaskDetailSidebarProps) {
   const dispatch = useAppDispatch();
-  const roleLabel = activeRoleLabel(selectedTask, currentTaskId, currentPhase);
+  const roleLabel = activeRoleLabel(selectedTask, activeTasks);
   const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
 

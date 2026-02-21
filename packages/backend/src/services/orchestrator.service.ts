@@ -42,6 +42,7 @@ import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { TimerRegistry } from "./timer-registry.js";
 import { AgentLifecycleManager, type AgentRunState } from "./agent-lifecycle.js";
 import { CrashRecoveryService } from "./crash-recovery.service.js";
+import { FileScopeAnalyzer, type FileScope } from "./file-scope-analyzer.js";
 import { normalizeCodingStatus, normalizeReviewStatus } from "./result-normalizers.js";
 import { getPlanComplexityForTask } from "./plan-complexity.js";
 import { eventLogService } from "./event-log.service.js";
@@ -159,6 +160,7 @@ export interface AgentSlot {
   phaseResult: PhaseResult;
   infraRetries: number;
   timers: TimerRegistry;
+  fileScope?: FileScope;
 }
 
 interface OrchestratorState {
@@ -206,6 +208,7 @@ export class OrchestratorService {
   private feedbackService = new FeedbackService();
   private lifecycleManager = new AgentLifecycleManager();
   private crashRecovery = new CrashRecoveryService();
+  private fileScopeAnalyzer = new FileScopeAnalyzer();
   /** Cached repoPath per project (avoids async lookup in synchronous transition()) */
   private repoPathCache = new Map<string, string>();
   /** Cached maxConcurrentCoders per project (avoids async lookup in synchronous nudge()) */
@@ -1217,6 +1220,14 @@ export class OrchestratorService {
       startedAt: slot.agent.startedAt,
     });
     await this.sessionManager.archiveSession(repoPath, task.id, slot.attempt, session, wtPath);
+
+    // Record actual files for future file-scope inference
+    try {
+      const changedFiles = await this.branchManager.getChangedFiles(repoPath, branchName);
+      await this.fileScopeAnalyzer.recordActual(repoPath, task.id, changedFiles, this.beads);
+    } catch {
+      // best-effort
+    }
 
     // Capture slot data before removing it
     const slotPhaseResult = { ...slot.phaseResult };

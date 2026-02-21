@@ -450,6 +450,11 @@ describe("OrchestratorService (slot-based model)", () => {
 
       await orchestrator.ensureRunning(projectId);
 
+      // nudge() fires runLoop() without awaiting — flush microtask queue
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
       // Should broadcast execute.status with activeTasks
       expect(mockBroadcastToProject).toHaveBeenCalledWith(
         projectId,

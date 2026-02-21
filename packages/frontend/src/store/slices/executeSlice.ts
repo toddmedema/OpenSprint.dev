@@ -10,21 +10,26 @@ export type TaskCard = Pick<
   "id" | "title" | "kanbanColumn" | "priority" | "assignee" | "epicId" | "testResults"
 >;
 
+/** Active task entry from orchestrator status (v2 multi-slot model) */
+export interface ActiveTaskInfo {
+  taskId: string;
+  phase: string;
+  startedAt: string;
+}
+
 export interface ExecuteState {
   tasks: Task[];
   plans: Plan[];
   orchestratorRunning: boolean;
   awaitingApproval: boolean;
-  /** Task ID currently being worked on by orchestrator */
-  currentTaskId: string | null;
-  /** Sub-phase: coding or review */
-  currentPhase: "coding" | "review" | null;
+  /** Active tasks being worked on by orchestrator agents (v2 multi-slot) */
+  activeTasks: ActiveTaskInfo[];
   selectedTaskId: string | null;
   taskDetail: Task | null;
   taskDetailLoading: boolean;
   /** Error message when task detail fetch fails (kept so we can show it below header) */
   taskDetailError: string | null;
-  agentOutput: string[];
+  agentOutput: Record<string, string[]>;
   completionState: {
     status: string;
     testResults: { passed: number; failed: number; skipped: number; total: number } | null;
@@ -43,13 +48,12 @@ const initialState: ExecuteState = {
   plans: [],
   orchestratorRunning: false,
   awaitingApproval: false,
-  currentTaskId: null,
-  currentPhase: null,
+  activeTasks: [],
   selectedTaskId: null,
   taskDetail: null,
   taskDetailLoading: false,
   taskDetailError: null,
-  agentOutput: [],
+  agentOutput: {},
   completionState: null,
   archivedSessions: [],
   archivedLoading: false,
@@ -168,18 +172,20 @@ const executeSlice = createSlice({
       state.archivedSessions = [];
       state.taskDetail = null;
       state.taskDetailError = null;
-      state.agentOutput = [];
     },
     appendAgentOutput(state, action: PayloadAction<{ taskId: string; chunk: string }>) {
-      if (action.payload.taskId === state.selectedTaskId) {
-        state.completionState = null;
-        const chunk = action.payload.chunk;
-        if (chunk) {
-          state.agentOutput.push(chunk);
-          if (state.agentOutput.length > MAX_AGENT_OUTPUT) {
-            state.agentOutput = state.agentOutput.slice(-MAX_AGENT_OUTPUT);
-          }
+      const { taskId, chunk } = action.payload;
+      if (chunk) {
+        if (!state.agentOutput[taskId]) {
+          state.agentOutput[taskId] = [];
         }
+        state.agentOutput[taskId].push(chunk);
+        if (state.agentOutput[taskId].length > MAX_AGENT_OUTPUT) {
+          state.agentOutput[taskId] = state.agentOutput[taskId].slice(-MAX_AGENT_OUTPUT);
+        }
+      }
+      if (taskId === state.selectedTaskId) {
+        state.completionState = null;
       }
     },
     setOrchestratorRunning(state, action: PayloadAction<boolean>) {
@@ -231,15 +237,8 @@ const executeSlice = createSlice({
     setExecuteError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
     },
-    setCurrentTaskAndPhase(
-      state,
-      action: PayloadAction<{
-        currentTaskId: string | null;
-        currentPhase: "coding" | "review" | null;
-      }>
-    ) {
-      state.currentTaskId = action.payload.currentTaskId;
-      state.currentPhase = action.payload.currentPhase;
+    setActiveTasks(state, action: PayloadAction<ActiveTaskInfo[]>) {
+      state.activeTasks = action.payload;
     },
     resetExecute() {
       return initialState;
@@ -279,11 +278,10 @@ const executeSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchExecuteStatus.fulfilled, (state, action) => {
-        state.orchestratorRunning =
-          action.payload.currentTask !== null || action.payload.queueDepth > 0;
+        const activeTasks = action.payload.activeTasks ?? [];
+        state.activeTasks = activeTasks;
+        state.orchestratorRunning = activeTasks.length > 0 || action.payload.queueDepth > 0;
         state.awaitingApproval = action.payload.awaitingApproval ?? false;
-        state.currentTaskId = action.payload.currentTask ?? null;
-        state.currentPhase = action.payload.currentPhase ?? null;
         state.statusLoading = false;
       })
       .addCase(fetchExecuteStatus.rejected, (state, action) => {
@@ -319,8 +317,8 @@ const executeSlice = createSlice({
       })
       // fetchLiveOutputBackfill
       .addCase(fetchLiveOutputBackfill.fulfilled, (state, action) => {
-        if (action.payload.taskId === state.selectedTaskId && action.payload.output) {
-          state.agentOutput = [action.payload.output];
+        if (action.payload.output) {
+          state.agentOutput[action.payload.taskId] = [action.payload.output];
         }
       })
       // markTaskDone
@@ -398,7 +396,7 @@ export const {
   appendAgentOutput,
   setOrchestratorRunning,
   setAwaitingApproval,
-  setCurrentTaskAndPhase,
+  setActiveTasks,
   setCompletionState,
   taskUpdated,
   setTasks,

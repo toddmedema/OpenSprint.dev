@@ -24,17 +24,19 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
   const [currentTask, setCurrentTask] = useState<string | null>(null);
   const [stats, setStats] = useState({ totalDone: 0, totalFailed: 0, queueDepth: 0 });
 
-  const agentOutput = useAppSelector((s) => s.execute.agentOutput);
+  const agentOutputMap = useAppSelector((s) => s.execute.agentOutput);
+  const agentOutput = selectedAgent ? (agentOutputMap[selectedAgent] ?? []) : [];
 
   const loadStatus = useCallback(() => {
     api.execute.status(projectId).then((data: unknown) => {
       const status = data as {
-        currentTask: string | null;
+        activeTasks?: Array<{ taskId: string; phase: string }>;
         totalDone: number;
         totalFailed: number;
         queueDepth: number;
       };
-      setCurrentTask(status?.currentTask ?? null);
+      const first = status?.activeTasks?.[0] ?? null;
+      setCurrentTask(first?.taskId ?? null);
       setStats({
         totalDone: status?.totalDone ?? 0,
         totalFailed: status?.totalFailed ?? 0,

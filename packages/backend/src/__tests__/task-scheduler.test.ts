@@ -3,7 +3,7 @@ import { TaskScheduler } from "../services/task-scheduler.js";
 import type { AgentSlot } from "../services/orchestrator.service.js";
 import { TimerRegistry } from "../services/timer-registry.js";
 
-function makeTask(id: string, priority = 2) {
+function makeTask(id: string, priority = 2, labels: string[] = []) {
   return {
     id,
     title: `Task ${id}`,
@@ -11,7 +11,7 @@ function makeTask(id: string, priority = 2) {
     priority,
     issue_type: "task",
     type: "task",
-    labels: [],
+    labels,
     assignee: null,
     description: "",
     created: new Date().toISOString(),
@@ -19,7 +19,7 @@ function makeTask(id: string, priority = 2) {
   };
 }
 
-function makeSlot(taskId: string): AgentSlot {
+function makeSlot(taskId: string, fileScope?: any): AgentSlot {
   return {
     taskId,
     taskTitle: `Task ${taskId}`,
@@ -39,6 +39,7 @@ function makeSlot(taskId: string): AgentSlot {
     phaseResult: { codingDiff: "", codingSummary: "", testResults: null, testOutput: "" },
     infraRetries: 0,
     timers: new TimerRegistry(),
+    fileScope,
   };
 }
 
@@ -47,80 +48,122 @@ describe("TaskScheduler", () => {
   let mockBeads: {
     getStatusMap: ReturnType<typeof vi.fn>;
     areAllBlockersClosed: ReturnType<typeof vi.fn>;
+    show: ReturnType<typeof vi.fn>;
+    getBlockers: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
     mockBeads = {
       getStatusMap: vi.fn().mockResolvedValue(new Map()),
       areAllBlockersClosed: vi.fn().mockResolvedValue(true),
+      show: vi.fn().mockResolvedValue(makeTask("dep")),
+      getBlockers: vi.fn().mockResolvedValue([]),
     };
     scheduler = new TaskScheduler(mockBeads as any);
   });
 
-  it("selects top-priority task when one slot available", async () => {
-    const tasks = [makeTask("a", 1), makeTask("b", 2)];
-    const result = await scheduler.selectTasks("/repo", tasks, new Map(), 1);
-    expect(result).toHaveLength(1);
-    expect(result[0].task.id).toBe("a");
+  describe("basic selection", () => {
+    it("selects top-priority task when one slot available", async () => {
+      const tasks = [makeTask("a", 1), makeTask("b", 2)];
+      const result = await scheduler.selectTasks("/repo", tasks, new Map(), 1);
+      expect(result).toHaveLength(1);
+      expect(result[0].task.id).toBe("a");
+    });
+
+    it("returns empty when no slots available", async () => {
+      const slots = new Map([["a", makeSlot("a")]]);
+      const result = await scheduler.selectTasks("/repo", [makeTask("b")], slots, 1);
+      expect(result).toHaveLength(0);
+    });
+
+    it("excludes tasks already in a slot", async () => {
+      const slots = new Map([["a", makeSlot("a")]]);
+      const tasks = [makeTask("a"), makeTask("b")];
+      const result = await scheduler.selectTasks("/repo", tasks, slots, 2);
+      expect(result).toHaveLength(1);
+      expect(result[0].task.id).toBe("b");
+    });
+
+    it("skips plan approval gate tasks", async () => {
+      const gate = { ...makeTask("gate"), title: "Plan approval gate" };
+      const tasks = [gate, makeTask("real")];
+      const result = await scheduler.selectTasks("/repo", tasks, new Map(), 1);
+      expect(result).toHaveLength(1);
+      expect(result[0].task.id).toBe("real");
+    });
+
+    it("skips epic-type tasks", async () => {
+      const epic = { ...makeTask("epic"), issue_type: "epic", type: "epic" };
+      const tasks = [epic, makeTask("real")];
+      const result = await scheduler.selectTasks("/repo", tasks, new Map(), 1);
+      expect(result).toHaveLength(1);
+      expect(result[0].task.id).toBe("real");
+    });
+
+    it("skips blocked tasks", async () => {
+      const blocked = { ...makeTask("blocked"), status: "blocked" };
+      const tasks = [blocked, makeTask("open")];
+      const result = await scheduler.selectTasks("/repo", tasks, new Map(), 1);
+      expect(result).toHaveLength(1);
+      expect(result[0].task.id).toBe("open");
+    });
+
+    it("skips tasks with unclosed blockers", async () => {
+      mockBeads.areAllBlockersClosed
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true);
+      const tasks = [makeTask("a"), makeTask("b")];
+      const result = await scheduler.selectTasks("/repo", tasks, new Map(), 1);
+      expect(result).toHaveLength(1);
+      expect(result[0].task.id).toBe("b");
+    });
   });
 
-  it("returns empty when no slots available", async () => {
-    const slots = new Map([["a", makeSlot("a")]]);
-    const result = await scheduler.selectTasks("/repo", [makeTask("b")], slots, 1);
-    expect(result).toHaveLength(0);
-  });
+  describe("parallel dispatch with file-scope overlap detection", () => {
+    it("dispatches two non-overlapping tasks in parallel", async () => {
+      const taskA = makeTask("a", 2, ['files:{"modify":["src/frontend/A.tsx"]}']);
+      const taskB = makeTask("b", 2, ['files:{"modify":["src/backend/B.ts"]}']);
+      const result = await scheduler.selectTasks("/repo", [taskA, taskB], new Map(), 2);
+      expect(result).toHaveLength(2);
+    });
 
-  it("selects multiple tasks when multiple slots available", async () => {
-    const tasks = [makeTask("a"), makeTask("b"), makeTask("c")];
-    const result = await scheduler.selectTasks("/repo", tasks, new Map(), 3);
-    expect(result).toHaveLength(3);
-  });
+    it("serializes overlapping tasks (same file)", async () => {
+      const taskA = makeTask("a", 2, ['files:{"modify":["src/shared/config.ts"]}']);
+      const taskB = makeTask("b", 2, ['files:{"modify":["src/shared/config.ts"]}']);
+      const result = await scheduler.selectTasks("/repo", [taskA, taskB], new Map(), 2);
+      expect(result).toHaveLength(1);
+      expect(result[0].task.id).toBe("a");
+    });
 
-  it("excludes tasks already in a slot", async () => {
-    const slots = new Map([["a", makeSlot("a")]]);
-    const tasks = [makeTask("a"), makeTask("b")];
-    const result = await scheduler.selectTasks("/repo", tasks, slots, 2);
-    expect(result).toHaveLength(1);
-    expect(result[0].task.id).toBe("b");
-  });
+    it("checks overlap against active slots", async () => {
+      const activeScope = {
+        taskId: "active",
+        files: new Set(["src/shared/config.ts"]),
+        directories: new Set(["src/shared"]),
+        confidence: "explicit" as const,
+      };
+      const slots = new Map([["active", makeSlot("active", activeScope)]]);
+      const taskB = makeTask("b", 2, ['files:{"modify":["src/shared/config.ts"]}']);
+      const taskC = makeTask("c", 2, ['files:{"modify":["src/other/file.ts"]}']);
 
-  it("skips plan approval gate tasks", async () => {
-    const gate = { ...makeTask("gate"), title: "Plan approval gate" };
-    const tasks = [gate, makeTask("real")];
-    const result = await scheduler.selectTasks("/repo", tasks, new Map(), 1);
-    expect(result).toHaveLength(1);
-    expect(result[0].task.id).toBe("real");
-  });
+      const result = await scheduler.selectTasks("/repo", [taskB, taskC], slots, 3);
+      expect(result).toHaveLength(1);
+      expect(result[0].task.id).toBe("c");
+    });
 
-  it("skips epic-type tasks", async () => {
-    const epic = { ...makeTask("epic"), issue_type: "epic", type: "epic" };
-    const tasks = [epic, makeTask("real")];
-    const result = await scheduler.selectTasks("/repo", tasks, new Map(), 1);
-    expect(result).toHaveLength(1);
-    expect(result[0].task.id).toBe("real");
-  });
+    it("maxConcurrentCoders: 1 dispatches one at a time", async () => {
+      const tasks = [makeTask("a"), makeTask("b")];
+      const result = await scheduler.selectTasks("/repo", tasks, new Map(), 1);
+      expect(result).toHaveLength(1);
+    });
 
-  it("skips blocked tasks", async () => {
-    const blocked = { ...makeTask("blocked"), status: "blocked" };
-    const tasks = [blocked, makeTask("open")];
-    const result = await scheduler.selectTasks("/repo", tasks, new Map(), 1);
-    expect(result).toHaveLength(1);
-    expect(result[0].task.id).toBe("open");
-  });
-
-  it("skips tasks with unclosed blockers", async () => {
-    mockBeads.areAllBlockersClosed
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
-    const tasks = [makeTask("a"), makeTask("b")];
-    const result = await scheduler.selectTasks("/repo", tasks, new Map(), 1);
-    expect(result).toHaveLength(1);
-    expect(result[0].task.id).toBe("b");
-  });
-
-  it("returns empty when all candidates have unclosed blockers", async () => {
-    mockBeads.areAllBlockersClosed.mockResolvedValue(false);
-    const result = await scheduler.selectTasks("/repo", [makeTask("a")], new Map(), 1);
-    expect(result).toHaveLength(0);
+    it("returns fileScope with each result", async () => {
+      const task = makeTask("a", 2, ['files:{"modify":["src/a.ts"],"create":["src/b.ts"]}']);
+      const result = await scheduler.selectTasks("/repo", [task], new Map(), 1);
+      expect(result).toHaveLength(1);
+      expect(result[0].fileScope).toBeDefined();
+      expect(result[0].fileScope.confidence).toBe("explicit");
+      expect(result[0].fileScope.files.has("src/a.ts")).toBe(true);
+    });
   });
 });

@@ -15,8 +15,7 @@ while true; do
 
   echo "[$TIMESTAMP] Starting agent run..." | tee "$LOGFILE"
 
-  agent -p --yolo --model sonnet-4-thinking "$PROMPT" \
-    >> "$LOGFILE" 2>&1 || true
+  agent -p --yolo --model sonnet-4-thinking "$PROMPT" 2>&1 | tee -a "$LOGFILE" || true
 
   echo "[$(date +%Y%m%d-%H%M%S)] Agent run finished. Log: $LOGFILE"
   echo "Sleeping ${INTERVAL}s until next run..."

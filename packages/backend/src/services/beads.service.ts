@@ -755,6 +755,31 @@ export class BeadsService {
     return Array.isArray(issue.labels) && issue.labels.includes(label);
   }
 
+  /** Get file scope labels (files: prefix) from an issue */
+  getFileScopeLabels(issue: BeadsIssue): { modify?: string[]; create?: string[] } | null {
+    const labels = (issue.labels ?? []) as string[];
+    const label = labels.find((l) => l.startsWith("files:"));
+    if (!label) return null;
+    try {
+      return JSON.parse(label.slice("files:".length));
+    } catch {
+      return null;
+    }
+  }
+
+  /** Store actual changed files on a completed task */
+  async setActualFiles(repoPath: string, id: string, files: string[]): Promise<void> {
+    const issue = await this.show(repoPath, id);
+    const labels = (issue.labels ?? []) as string[];
+    const existing = labels.find((l) => l.startsWith("actual_files:"));
+    if (existing) {
+      await this.removeLabel(repoPath, id, existing);
+    }
+    if (files.length > 0) {
+      await this.addLabel(repoPath, id, `actual_files:${JSON.stringify(files)}`);
+    }
+  }
+
   /**
    * Force a fresh import from JSONL into the database.
    * Call after operations that modify the JSONL outside of beads (e.g. worktree merges,

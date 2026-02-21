@@ -83,8 +83,7 @@ const mockGraph: PlanDependencyGraph = {
 };
 
 const mockOrchestratorStatus = {
-  currentTask: "task-1",
-  currentPhase: "coding" as const,
+  activeTasks: [{ taskId: "task-1", phase: "coding", startedAt: "2025-01-01T00:00:00Z" }],
   queueDepth: 2,
   totalDone: 5,
   totalFailed: 0,
@@ -122,7 +121,7 @@ describe("executeSlice", () => {
       expect(state.awaitingApproval).toBe(false);
       expect(state.selectedTaskId).toBeNull();
       expect(state.taskDetail).toBeNull();
-      expect(state.agentOutput).toEqual([]);
+      expect(state.agentOutput).toEqual({});
       expect(state.completionState).toBeNull();
       expect(state.archivedSessions).toEqual([]);
       expect(state.loading).toBe(false);
@@ -140,7 +139,6 @@ describe("executeSlice", () => {
       store.dispatch(setCompletionState({ taskId: "task-1", status: "done", testResults: null }));
       store.dispatch(setSelectedTaskId(null));
       expect(store.getState().execute.selectedTaskId).toBeNull();
-      expect(store.getState().execute.agentOutput).toEqual([]);
       expect(store.getState().execute.completionState).toBeNull();
     });
 
@@ -155,38 +153,36 @@ describe("executeSlice", () => {
       expect(store.getState().execute.taskDetailError).toBeNull();
     });
 
-    it("appendAgentOutput appends filtered chunk for selected task only", () => {
+    it("appendAgentOutput appends filtered chunk keyed by taskId", () => {
       const store = createStore();
       store.dispatch(setSelectedTaskId("task-1"));
-      // Plain text with newlines passes through; JSON metadata is filtered
       store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: "Hello \n" }));
       store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: "world\n" }));
-      expect(store.getState().execute.agentOutput).toEqual(["Hello \n", "world\n"]);
-      store.dispatch(appendAgentOutput({ taskId: "task-2", chunk: "ignored" }));
-      expect(store.getState().execute.agentOutput).toEqual(["Hello \n", "world\n"]);
+      expect(store.getState().execute.agentOutput["task-1"]).toEqual(["Hello \n", "world\n"]);
+      store.dispatch(appendAgentOutput({ taskId: "task-2", chunk: "other\n" }));
+      expect(store.getState().execute.agentOutput["task-2"]).toEqual(["other\n"]);
     });
 
     it("appendAgentOutput filters JSON metadata and shows only message content", () => {
       const store = createStore();
       store.dispatch(setSelectedTaskId("task-1"));
-      // Cursor stream-json: metadata events are hidden, text events are shown
       store.dispatch(
         appendAgentOutput({
           taskId: "task-1",
           chunk: '{"type":"tool_use","name":"edit","input":{}}\n',
         })
       );
-      expect(store.getState().execute.agentOutput).toEqual([]);
+      expect(store.getState().execute.agentOutput["task-1"]).toBeUndefined();
       store.dispatch(
         appendAgentOutput({
           taskId: "task-1",
           chunk: '{"type":"text","text":"Creating file..."}\n',
         })
       );
-      expect(store.getState().execute.agentOutput).toEqual(["Creating file..."]);
+      expect(store.getState().execute.agentOutput["task-1"]).toEqual(["Creating file..."]);
     });
 
-    it("fetchLiveOutputBackfill.fulfilled sets agentOutput when task matches selectedTaskId", async () => {
+    it("fetchLiveOutputBackfill.fulfilled sets agentOutput keyed by taskId", async () => {
       vi.mocked(api.execute.liveOutput).mockResolvedValue({
         output: "Existing output from server\n",
       });
@@ -195,12 +191,12 @@ describe("executeSlice", () => {
       await store.dispatch(
         fetchLiveOutputBackfill({ projectId: "proj-1", taskId: "task-1" })
       );
-      expect(store.getState().execute.agentOutput).toEqual([
+      expect(store.getState().execute.agentOutput["task-1"]).toEqual([
         "Existing output from server\n",
       ]);
     });
 
-    it("fetchLiveOutputBackfill.fulfilled does not set agentOutput when task differs from selectedTaskId", async () => {
+    it("fetchLiveOutputBackfill.fulfilled stores output for non-selected task too", async () => {
       vi.mocked(api.execute.liveOutput).mockResolvedValue({
         output: "Output for task-2\n",
       });
@@ -209,7 +205,8 @@ describe("executeSlice", () => {
       await store.dispatch(
         fetchLiveOutputBackfill({ projectId: "proj-1", taskId: "task-2" })
       );
-      expect(store.getState().execute.agentOutput).toEqual([]);
+      expect(store.getState().execute.agentOutput["task-2"]).toEqual(["Output for task-2\n"]);
+      expect(store.getState().execute.agentOutput["task-1"]).toBeUndefined();
     });
 
     it("setOrchestratorRunning sets orchestrator state", () => {
@@ -337,8 +334,7 @@ describe("executeSlice", () => {
 
     it("sets orchestratorRunning false when idle", async () => {
       vi.mocked(api.execute.status).mockResolvedValue({
-        currentTask: null,
-        currentPhase: null,
+        activeTasks: [],
         queueDepth: 0,
         totalDone: 0,
         totalFailed: 0,

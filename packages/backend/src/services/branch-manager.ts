@@ -647,6 +647,20 @@ export class BranchManager {
     await this.git(repoPath, `merge --no-commit --no-ff ${branchName}`);
   }
 
+  /**
+   * Rebase a branch onto current main within a worktree.
+   * Used before merge to ensure fast-forward merge is possible.
+   * Throws RebaseConflictError if conflicts are found.
+   */
+  async rebaseOntoMain(wtPath: string): Promise<void> {
+    try {
+      await this.git(wtPath, "rebase main");
+    } catch (err) {
+      const conflicted = await this.getConflictedFiles(wtPath);
+      throw new RebaseConflictError(conflicted);
+    }
+  }
+
   private async git(
     repoPath: string,
     command: string

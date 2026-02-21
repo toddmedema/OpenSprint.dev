@@ -336,6 +336,7 @@ export class ContextAssembler {
     conflictedFiles: string[];
     conflictDiff: string;
     mode?: "rebase" | "merge";
+    recentMerges?: Array<{ taskId: string; summary: string }>;
   }): string {
     const mode = opts.mode ?? "rebase";
     const isMerge = mode === "merge";
@@ -352,6 +353,15 @@ export class ContextAssembler {
       prompt += `to incorporate remote changes before pushing. The rebase hit conflicts that need manual resolution.\n\n`;
       prompt += `The repository is currently in a **rebase-in-progress** state. Your job is to resolve all conflicts `;
       prompt += `and allow the rebase to complete.\n\n`;
+    }
+
+    if (opts.recentMerges && opts.recentMerges.length > 0) {
+      prompt += `## Recently Merged Tasks\n\n`;
+      prompt += `These tasks were merged to main recently and may explain why conflicts arose:\n\n`;
+      for (const m of opts.recentMerges) {
+        prompt += `- **${m.taskId}**: ${m.summary}\n`;
+      }
+      prompt += `\n`;
     }
 
     prompt += `## Conflicted Files\n\n`;

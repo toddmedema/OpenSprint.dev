@@ -59,8 +59,7 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
   const loading = useAppSelector((s) => s.execute.loading);
   const selectedTaskData = selectedTask ? tasks.find((t) => t.id === selectedTask) : null;
   const isDoneTask = selectedTaskData?.kanbanColumn === "done";
-  const currentTaskId = useAppSelector((s) => s.execute.currentTaskId);
-  const currentPhase = useAppSelector((s) => s.execute.currentPhase);
+  const activeTasks = useAppSelector((s) => s.execute.activeTasks);
   const wsConnected = useAppSelector((s) => s.websocket?.connected ?? false);
   const isBlockedTask = selectedTaskData?.kanbanColumn === "blocked";
 
@@ -101,12 +100,14 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
     }
   }, [projectId, selectedTask, isDoneTask, dispatch]);
 
+  const selectedAgentOutput = selectedTask ? (agentOutput[selectedTask] ?? []) : [];
+
   useEffect(() => {
     if (
       selectedTask &&
       !isDoneTask &&
       completionState &&
-      agentOutput.length === 0 &&
+      selectedAgentOutput.length === 0 &&
       !archivedLoading
     ) {
       dispatch(fetchArchivedSessions({ projectId, taskId: selectedTask }));
@@ -116,7 +117,7 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
     selectedTask,
     isDoneTask,
     completionState,
-    agentOutput.length,
+    selectedAgentOutput.length,
     archivedLoading,
     dispatch,
   ]);
@@ -225,7 +226,7 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
               taskDetail={taskDetail}
               taskDetailLoading={taskDetailLoading}
               taskDetailError={taskDetailError}
-              agentOutput={agentOutput}
+              agentOutput={selectedAgentOutput}
               completionState={completionState}
               archivedSessions={archivedSessions}
               archivedLoading={archivedLoading}
@@ -234,8 +235,7 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
               taskIdToStartedAt={taskIdToStartedAt}
               plans={plans}
               tasks={tasks}
-              currentTaskId={currentTaskId}
-              currentPhase={currentPhase}
+              activeTasks={activeTasks}
               wsConnected={wsConnected}
               isDoneTask={isDoneTask}
               isBlockedTask={isBlockedTask}
