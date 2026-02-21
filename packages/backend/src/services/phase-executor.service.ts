@@ -48,6 +48,8 @@ export interface PhaseExecutorHost {
     taskId: string,
     context: TaskContext
   ): Promise<TaskContext>;
+  getCachedSummarizerContext(projectId: string, taskId: string): TaskContext | undefined;
+  setCachedSummarizerContext(projectId: string, taskId: string, context: TaskContext): void;
   buildReviewHistory(repoPath: string, taskId: string): Promise<string>;
 }
 
@@ -77,11 +79,19 @@ export class PhaseExecutorService {
         repoPath,
         task.id,
         this.host.beads,
-        this.host.branchManager
+        this.host.branchManager,
+        { task }
       );
 
       if (shouldInvokeSummarizer(context)) {
-        context = await this.host.runSummarizer(projectId, settings, task.id, context);
+        const cached = retryContext && this.host.getCachedSummarizerContext(projectId, task.id);
+        if (cached) {
+          context = cached;
+          log.info("Using cached Summarizer context for retry", { taskId: task.id });
+        } else {
+          context = await this.host.runSummarizer(projectId, settings, task.id, context);
+          this.host.setCachedSummarizerContext(projectId, task.id, context);
+        }
       }
 
       const config: ActiveTaskConfig = {
@@ -213,7 +223,8 @@ export class PhaseExecutorService {
         repoPath,
         task.id,
         this.host.beads,
-        this.host.branchManager
+        this.host.branchManager,
+        { task }
       );
 
       context.reviewHistory = await this.host.buildReviewHistory(repoPath, task.id);

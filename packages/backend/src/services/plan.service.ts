@@ -195,11 +195,12 @@ export class PlanService {
   /** Count tasks under an epic from beads (implementation tasks only, excludes gating .0) */
   private async countTasks(
     repoPath: string,
-    epicId: string
+    epicId: string,
+    allIssues?: BeadsIssue[]
   ): Promise<{ total: number; done: number }> {
     try {
-      const allIssues = await this.beads.listAll(repoPath);
-      const children = allIssues.filter(
+      const issues = allIssues ?? (await this.beads.listAll(repoPath));
+      const children = issues.filter(
         (issue: BeadsIssue) =>
           issue.id.startsWith(epicId + ".") &&
           !issue.id.endsWith(".0") &&
@@ -218,10 +219,12 @@ export class PlanService {
   /**
    * Core: build dependency edges from plan infos (beads + markdown).
    * Shared by buildDependencyEdges and buildDependencyEdgesFromProject.
+   * When allIssues is provided (e.g. from listPlansWithEdges), avoids a separate listAll call.
    */
   private async buildDependencyEdgesCore(
     planInfos: Array<{ planId: string; beadEpicId: string; content: string }>,
-    repoPath: string
+    repoPath: string,
+    allIssuesParam?: BeadsIssue[]
   ): Promise<PlanDependencyEdge[]> {
     const edges: PlanDependencyEdge[] = [];
     const seenEdges = new Set<string>();
@@ -239,7 +242,7 @@ export class PlanService {
 
     // 1. Build edges from beads
     try {
-      const allIssues = await this.beads.listAll(repoPath);
+      const allIssues = allIssuesParam ?? (await this.beads.listAll(repoPath));
       for (const issue of allIssues) {
         const deps = (issue.dependencies as Array<{ depends_on_id: string; type: string }>) ?? [];
         const blockers = deps.filter((d) => d.type === "blocks").map((d) => d.depends_on_id);
@@ -293,32 +296,51 @@ export class PlanService {
     return this.listPlansWithEdges(projectId);
   }
 
-  /** Internal: list plans and build edges once */
+  /** Internal: list plans and build edges once. Uses a single listAll for the whole operation. */
   private async listPlansWithEdges(projectId: string): Promise<PlanDependencyGraph> {
     const plansDir = await this.getPlansDir(projectId);
     const repoPath = await this.getRepoPath(projectId);
-    const plans: Plan[] = [];
 
+    const planInfos: Array<{ planId: string; beadEpicId: string; content: string }> = [];
     try {
       const files = await fs.readdir(plansDir);
       for (const file of files) {
-        if (file.endsWith(".md")) {
-          const planId = file.replace(".md", "");
-          try {
-            const plan = await this.getPlan(projectId, planId);
-            plans.push(plan);
-          } catch (err) {
-            log.warn("Skipping broken plan", { planId, err: getErrorMessage(err) });
-          }
+        if (!file.endsWith(".md")) continue;
+        const planId = file.replace(".md", "");
+        const mdPath = path.join(plansDir, file);
+        const metaPath = path.join(plansDir, `${planId}.meta.json`);
+        let beadEpicId = "";
+        try {
+          const metaData = await fs.readFile(metaPath, "utf-8");
+          const meta = JSON.parse(metaData) as PlanMetadata;
+          beadEpicId = meta.beadEpicId ?? "";
+        } catch {
+          // No metadata
         }
+        let content = "";
+        try {
+          content = await fs.readFile(mdPath, "utf-8");
+        } catch {
+          // Skip broken plans
+        }
+        planInfos.push({ planId, beadEpicId, content });
       }
     } catch (err) {
       log.warn("No plans directory or read failed", { err: getErrorMessage(err) });
+      return { plans: [], edges: [] };
     }
 
-    const edges = await this.buildDependencyEdges(plans, repoPath);
-    for (const plan of plans) {
-      plan.dependencyCount = edges.filter((e) => e.to === plan.metadata.planId).length;
+    const allIssues = await this.beads.listAll(repoPath);
+    const edges = await this.buildDependencyEdgesCore(planInfos, repoPath, allIssues);
+
+    const plans: Plan[] = [];
+    for (const { planId } of planInfos) {
+      try {
+        const plan = await this.getPlan(projectId, planId, { allIssues, edges });
+        plans.push(plan);
+      } catch (err) {
+        log.warn("Skipping broken plan", { planId, err: getErrorMessage(err) });
+      }
     }
 
     return { plans, edges };
@@ -366,8 +388,12 @@ export class PlanService {
     return this.buildDependencyEdgesCore(planInfos, repoPath);
   }
 
-  /** Get a single Plan by ID */
-  async getPlan(projectId: string, planId: string): Promise<Plan> {
+  /** Get a single Plan by ID. Optionally pass allIssues/edges to avoid redundant beads calls (e.g. from listPlansWithEdges). */
+  async getPlan(
+    projectId: string,
+    planId: string,
+    opts?: { allIssues?: BeadsIssue[]; edges?: PlanDependencyEdge[] }
+  ): Promise<Plan> {
     const plansDir = await this.getPlansDir(projectId);
     const repoPath = await this.getRepoPath(projectId);
     const mdPath = path.join(plansDir, `${planId}.md`);
@@ -404,8 +430,9 @@ export class PlanService {
 
     // Derive status from beads state
     let status: Plan["status"] = "planning";
+    const countTasksOpts = opts?.allIssues ? [repoPath, metadata.beadEpicId, opts.allIssues] as const : [repoPath, metadata.beadEpicId] as const;
     const { total, done } = metadata.beadEpicId
-      ? await this.countTasks(repoPath, metadata.beadEpicId)
+      ? await this.countTasks(...countTasksOpts)
       : { total: 0, done: 0 };
 
     if (metadata.shippedAt) {
@@ -413,18 +440,27 @@ export class PlanService {
     }
     // Re-execute gate open → planning (user must click Execute! to unblock delta tasks)
     if (metadata.reExecuteGateTaskId) {
-      try {
-        const gateIssue = await this.beads.show(repoPath, metadata.reExecuteGateTaskId);
-        if ((gateIssue.status as string) !== "closed") {
+      if (opts?.allIssues) {
+        const gateIssue = opts.allIssues.find((i) => i.id === metadata.reExecuteGateTaskId);
+        if (gateIssue && (gateIssue.status as string) !== "closed") {
           status = "planning";
         }
-      } catch {
-        // Gate may have been deleted; keep computed status
+      } else {
+        try {
+          const gateIssue = await this.beads.show(repoPath, metadata.reExecuteGateTaskId);
+          if ((gateIssue.status as string) !== "closed") {
+            status = "planning";
+          }
+        } catch {
+          // Gate may have been deleted; keep computed status
+        }
       }
     }
 
-    const edges = await this.buildDependencyEdgesFromProject(projectId);
-    const dependencyCount = edges.filter((e) => e.to === planId).length;
+    const dependencyCount = opts?.edges
+      ? opts.edges.filter((e) => e.to === planId).length
+      : (await this.buildDependencyEdgesFromProject(projectId)).filter((e) => e.to === planId)
+          .length;
 
     return {
       metadata,

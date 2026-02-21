@@ -172,6 +172,8 @@ interface OrchestratorState {
   loopActive: boolean;
   globalTimers: TimerRegistry;
   slots: Map<string, AgentSlot>;
+  /** Cached Summarizer output per taskId; reused on retries, cleared when slot is removed */
+  summarizerCache: Map<string, TaskContext>;
   pendingFeedbackCategorizations: PendingFeedbackCategorization[];
 }
 
@@ -236,6 +238,7 @@ export class OrchestratorService {
         loopActive: false,
         globalTimers: new TimerRegistry(),
         slots: new Map(),
+        summarizerCache: new Map(),
         pendingFeedbackCategorizations: [],
       });
     }
@@ -364,12 +367,13 @@ export class OrchestratorService {
     }
   }
 
-  /** Remove a slot and clean up its per-slot timers */
+  /** Remove a slot and clean up its per-slot timers and summarizer cache */
   private removeSlot(state: OrchestratorState, taskId: string): void {
     const slot = state.slots.get(taskId);
     if (slot) {
       slot.timers.clearAll();
       state.slots.delete(taskId);
+      state.summarizerCache.delete(taskId);
     }
     state.status.activeTasks = this.buildActiveTasks(state);
   }
@@ -424,6 +428,8 @@ export class OrchestratorService {
     if (orphaned.length === 0) return;
 
     const state = this.getState(projectId);
+    const allIssues = await this.beads.listAll(repoPath);
+    const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
 
     for (const { taskId, assignment } of orphaned) {
       log.info("Recovery: found orphaned assignment", {
@@ -431,10 +437,8 @@ export class OrchestratorService {
         phase: assignment.phase,
       });
 
-      let task: BeadsIssue;
-      try {
-        task = await this.beads.show(repoPath, taskId);
-      } catch {
+      const task = idToIssue.get(taskId);
+      if (!task) {
         log.warn("Recovery: task not found, cleaning up assignment", { taskId });
         await this.deleteAssignment(repoPath, taskId);
         continue;
@@ -569,20 +573,6 @@ export class OrchestratorService {
     }
 
     if (!state.loopActive) {
-      // #region agent log
-      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
-        body: JSON.stringify({
-          sessionId: "10a8b0",
-          location: "orchestrator.service.ts:ensureRunning",
-          message: "ensureRunning calling nudge",
-          data: { projectId },
-          timestamp: Date.now(),
-          hypothesisId: "H5",
-        }),
-      }).catch(() => {});
-      // #endregion
       this.nudge(projectId);
     }
 
@@ -595,20 +585,6 @@ export class OrchestratorService {
     const maxSlots = this.maxSlotsCache.get(projectId) ?? 1;
 
     if (state.loopActive || state.globalTimers.has("loop") || state.slots.size >= maxSlots) {
-      // #region agent log
-      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
-        body: JSON.stringify({
-          sessionId: "10a8b0",
-          location: "orchestrator.service.ts:nudge",
-          message: "nudge returned early",
-          data: { projectId, loopActive: state.loopActive, hasLoopTimer: state.globalTimers.has("loop"), slotsSize: state.slots.size, maxSlots },
-          timestamp: Date.now(),
-          hypothesisId: "H4",
-        }),
-      }).catch(() => {});
-      // #endregion
       return;
     }
 
@@ -619,13 +595,17 @@ export class OrchestratorService {
   async getStatus(projectId: string): Promise<OrchestratorStatus> {
     await this.projectService.getProject(projectId);
     const state = this.getState(projectId);
+    const pendingIds = await this.feedbackService.listPendingFeedbackIds(projectId);
+    const pendingFeedbackCategorizations: PendingFeedbackCategorization[] = pendingIds.map(
+      (feedbackId) => ({ feedbackId })
+    );
     return {
       ...state.status,
       activeTasks: this.buildActiveTasks(state),
       worktreePath: state.slots.size === 1
         ? [...state.slots.values()][0]?.worktreePath ?? null
         : null,
-      pendingFeedbackCategorizations: state.pendingFeedbackCategorizations ?? [],
+      pendingFeedbackCategorizations,
     };
   }
 
@@ -663,74 +643,47 @@ export class OrchestratorService {
 
   private async runLoop(projectId: string): Promise<void> {
     const state = this.getState(projectId);
-    // #region agent log
-    fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
-      body: JSON.stringify({
-        sessionId: "10a8b0",
-        location: "orchestrator.service.ts:runLoop",
-        message: "runLoop entered",
-        data: { projectId },
-        timestamp: Date.now(),
-        hypothesisId: "H4",
-      }),
-    }).catch(() => {});
-    // #endregion
 
     state.loopActive = true;
     state.globalTimers.clear("loop");
 
     try {
+      // Gastown-style mailbox: process one queued feedback (Analyst) before coding work
+      const nextFeedbackId = await this.feedbackService.getNextPendingFeedbackId(projectId);
+      if (nextFeedbackId) {
+        log.info("Processing queued feedback with Analyst", { projectId, feedbackId: nextFeedbackId });
+        try {
+          await this.feedbackService.processFeedbackWithAnalyst(projectId, nextFeedbackId);
+          await this.feedbackService.removeFromInbox(projectId, nextFeedbackId);
+        } catch (err) {
+          log.error("Analyst failed for queued feedback; leaving in inbox for retry", {
+            projectId,
+            feedbackId: nextFeedbackId,
+            err,
+          });
+        }
+        state.loopActive = false;
+        this.nudge(projectId);
+        return;
+      }
+
       const repoPath = await this.projectService.getRepoPath(projectId);
       const settings = await this.projectService.getSettings(projectId);
       const maxSlots = settings.maxConcurrentCoders ?? 1;
       this.maxSlotsCache.set(projectId, maxSlots);
 
-      let readyTasks = await this.beads.ready(repoPath);
-      // #region agent log
-      const rawCount = readyTasks.length;
-      // #endregion
+      const { tasks: readyTasksRaw } = await this.beads.readyWithStatusMap(repoPath);
 
-      readyTasks = readyTasks.filter((t) => (t.title ?? "") !== "Plan approval gate");
+      let readyTasks = readyTasksRaw.filter((t) => (t.title ?? "") !== "Plan approval gate");
       readyTasks = readyTasks.filter((t) => (t.issue_type ?? t.type) !== "epic");
       readyTasks = readyTasks.filter((t) => (t.status as string) !== "blocked");
       // Exclude tasks that already have an active slot
       readyTasks = readyTasks.filter((t) => !state.slots.has(t.id));
 
-      // #region agent log
-      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
-        body: JSON.stringify({
-          sessionId: "10a8b0",
-          location: "orchestrator.service.ts:runLoop",
-          message: "beads.ready + filters",
-          data: { projectId, rawFromBeads: rawCount, afterFilters: readyTasks.length, taskIds: readyTasks.map((t) => t.id) },
-          timestamp: Date.now(),
-          hypothesisId: "H1-H2",
-        }),
-      }).catch(() => {});
-      // #endregion
-
       state.status.queueDepth = readyTasks.length;
 
       const slotsAvailable = maxSlots - state.slots.size;
       if (readyTasks.length === 0 || slotsAvailable <= 0) {
-        // #region agent log
-        fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
-          body: JSON.stringify({
-            sessionId: "10a8b0",
-            location: "orchestrator.service.ts:runLoop",
-            message: "no ready tasks or no slots, going idle",
-            data: { projectId, readyTasksCount: readyTasks.length, slotsAvailable },
-            timestamp: Date.now(),
-            hypothesisId: "H2",
-          }),
-        }).catch(() => {});
-        // #endregion
         log.info("No ready tasks or no slots available, going idle", {
           projectId,
           readyTasks: readyTasks.length,
@@ -745,62 +698,9 @@ export class OrchestratorService {
         return;
       }
 
-      // Pick the highest-priority task with all blockers closed
-      const statusMap = await this.beads.getStatusMap(repoPath);
-      let task: BeadsIssue | null = null;
-      const blockerFailures: string[] = [];
-      for (const t of readyTasks) {
-        const allClosed = await this.beads.areAllBlockersClosed(repoPath, t.id, statusMap);
-        if (allClosed) {
-          task = t;
-          break;
-        }
-        blockerFailures.push(t.id);
-        log.info("Skipping task (blockers not all closed)", {
-          projectId,
-          taskId: t.id,
-          title: t.title,
-        });
-      }
-      if (!task) {
-        // #region agent log
-        fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
-          body: JSON.stringify({
-            sessionId: "10a8b0",
-            location: "orchestrator.service.ts:runLoop",
-            message: "no task with all blockers closed",
-            data: { projectId, blockerFailures },
-            timestamp: Date.now(),
-            hypothesisId: "H3",
-          }),
-        }).catch(() => {});
-        // #endregion
-        log.info("No task with all blockers closed, going idle", { projectId });
-        state.loopActive = false;
-        broadcastToProject(projectId, {
-          type: "execute.status",
-          activeTasks: this.buildActiveTasks(state),
-          queueDepth: 0,
-        });
-        return;
-      }
+      // readyWithStatusMap already filtered to tasks with all blockers closed; pick first by priority
+      const task = readyTasks[0]!;
       log.info("Picking task", { projectId, taskId: task.id, title: task.title });
-      // #region agent log
-      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
-        body: JSON.stringify({
-          sessionId: "10a8b0",
-          location: "orchestrator.service.ts:runLoop",
-          message: "task picked, spawning coding agent",
-          data: { projectId, taskId: task.id, title: task.title },
-          timestamp: Date.now(),
-          hypothesisId: "OK",
-        }),
-      }).catch(() => {});
-      // #endregion
 
       // Assign the task
       await this.beads.update(repoPath, task.id, {
@@ -814,7 +714,7 @@ export class OrchestratorService {
         summary: `claimed ${task.id}`,
       });
 
-      const cumulativeAttempts = await this.beads.getCumulativeAttempts(repoPath, task.id);
+      const cumulativeAttempts = this.beads.getCumulativeAttemptsFromIssue(task);
       const branchName = `opensprint/${task.id}`;
 
       // Create a slot for this task
@@ -1582,7 +1482,9 @@ export class OrchestratorService {
       slot.infraRetries = 0;
     }
 
-    await this.beads.setCumulativeAttempts(repoPath, task.id, cumulativeAttempts);
+    await this.beads.setCumulativeAttempts(repoPath, task.id, cumulativeAttempts, {
+      currentLabels: (task.labels ?? []) as string[],
+    });
 
     const isDemotionPoint = cumulativeAttempts % BACKOFF_FAILURE_THRESHOLD === 0;
 
@@ -1657,6 +1559,14 @@ export class OrchestratorService {
   }
 
   // ─── Helpers ───
+
+  getCachedSummarizerContext(projectId: string, taskId: string): TaskContext | undefined {
+    return this.getState(projectId).summarizerCache.get(taskId);
+  }
+
+  setCachedSummarizerContext(projectId: string, taskId: string, context: TaskContext): void {
+    this.getState(projectId).summarizerCache.set(taskId, context);
+  }
 
   private async runSummarizer(
     projectId: string,

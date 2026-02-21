@@ -22,8 +22,14 @@ export class FileScopeAnalyzer {
   /**
    * Predict file scope for a task using available metadata.
    * Returns a FileScope with confidence level indicating the source.
+   * When idToIssue is provided (e.g. from listAll), avoids extra beads show() calls for blockers.
    */
-  async predict(repoPath: string, task: BeadsIssue, beads: BeadsService): Promise<FileScope> {
+  async predict(
+    repoPath: string,
+    task: BeadsIssue,
+    beads: BeadsService,
+    options?: { idToIssue?: Map<string, BeadsIssue> }
+  ): Promise<FileScope> {
     const scope: FileScope = {
       taskId: task.id,
       files: new Set(),
@@ -51,7 +57,12 @@ export class FileScopeAnalyzer {
     }
 
     // Layer 2: Inferred from dependency tasks' actual files
-    const depFiles = await this.inferFromDependencies(repoPath, task, beads);
+    const depFiles = await this.inferFromDependencies(
+      repoPath,
+      task,
+      beads,
+      options?.idToIssue
+    );
     if (depFiles.size > 0) {
       scope.files = depFiles;
       for (const f of depFiles) {
@@ -117,19 +128,22 @@ export class FileScopeAnalyzer {
     return label ? label.slice(prefix.length) : null;
   }
 
-  /** Look at completed dependency tasks for actual_files labels */
+  /** Look at completed dependency tasks for actual_files labels. When idToIssue is provided, avoids beads show() calls. */
   private async inferFromDependencies(
     repoPath: string,
     task: BeadsIssue,
-    beads: BeadsService
+    beads: BeadsService,
+    idToIssue?: Map<string, BeadsIssue>
   ): Promise<Set<string>> {
     const files = new Set<string>();
 
     try {
-      const blockers = await beads.getBlockers(repoPath, task.id);
+      const blockers = idToIssue
+        ? beads.getBlockersFromIssue(task)
+        : await beads.getBlockers(repoPath, task.id);
       for (const blockerId of blockers) {
         try {
-          const blocker = await beads.show(repoPath, blockerId);
+          const blocker = idToIssue?.get(blockerId) ?? (await beads.show(repoPath, blockerId));
           const actualLabel = ((blocker.labels ?? []) as string[]).find((l: string) =>
             l.startsWith("actual_files:")
           );

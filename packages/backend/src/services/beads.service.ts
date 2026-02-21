@@ -100,6 +100,7 @@ export class BeadsService {
   static resetForTesting(): void {
     syncStateMap.clear();
     execMutexMap.clear();
+    beadsCache.clear();
   }
 
   /**
@@ -495,11 +496,19 @@ export class BeadsService {
   async export(repoPath: string, outputPath: string): Promise<void> {
     return this.withBeadsMutex(repoPath, async () => {
       // Pre-import: ingest any issues added externally (worktrees, git merges).
+      // Use sync --import-only instead of bd import: import can fail with duplicate primary key
+      // (Error 1062) when DB already has the issue; sync --import-only merges correctly.
       try {
-        await this.execImpl(repoPath, `import -i "${outputPath}" --orphan-handling allow`);
+        await this.execImpl(repoPath, "sync --import-only");
       } catch (err: unknown) {
         const e = err as { stderr?: string; message?: string };
-        log.warn("pre-export import failed", { err: e.stderr ?? e.message });
+        log.warn("pre-export sync failed, trying import", { err: e.stderr ?? e.message });
+        try {
+          await this.execImpl(repoPath, `import -i "${outputPath}" --orphan-handling allow`);
+        } catch (importErr: unknown) {
+          const ie = importErr as { stderr?: string; message?: string };
+          log.warn("pre-export import failed", { err: ie.stderr ?? ie.message });
+        }
       }
 
       try {
@@ -509,8 +518,7 @@ export class BeadsService {
           err: (err as { message?: string }).message,
         });
         try {
-          const jsonlPath = path.join(repoPath, ".beads/issues.jsonl");
-          await this.execImpl(repoPath, `import -i "${jsonlPath}" --orphan-handling allow`);
+          await this.execImpl(repoPath, "sync --import-only");
           await this.execImpl(repoPath, `export -o ${outputPath}`);
         } catch {
           log.warn("export still failed after re-import, forcing to unblock commit queue");
@@ -601,9 +609,9 @@ export class BeadsService {
 
   /**
    * Extract blocker IDs from an issue's dependencies (no bd show). Used by ready()
-   * to avoid O(N) getBlockers calls. listAll returns issues with dependencies.
+   * and by callers that already have the issue (e.g. context-assembler) to avoid redundant show.
    */
-  private getBlockersFromIssue(issue: BeadsIssue): string[] {
+  getBlockersFromIssue(issue: BeadsIssue): string[] {
     const deps =
       (issue.dependencies as Array<{
         id?: string;
@@ -619,12 +627,12 @@ export class BeadsService {
   }
 
   /**
-   * Get ready tasks (priority-sorted, all blocks deps resolved).
-   * Uses listAll + in-memory filtering to avoid O(N) bd show calls (previously
-   * caused 60+ second stalls with 69 tasks). bd ready returns tasks whose blockers
-   * may be in_progress; we only consider a blocks dependency resolved when closed.
+   * Get ready tasks and status map in one listAll call.
+   * Use this when the caller also needs the status map (e.g. orchestrator) to avoid a second listAll.
    */
-  async ready(repoPath: string): Promise<BeadsIssue[]> {
+  async readyWithStatusMap(
+    repoPath: string
+  ): Promise<{ tasks: BeadsIssue[]; statusMap: Map<string, string> }> {
     const allIssues = await this.listAll(repoPath);
     const statusMap = new Map(allIssues.map((i) => [i.id, i.status]));
 
@@ -643,7 +651,18 @@ export class BeadsService {
     }
 
     filtered.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
-    return filtered;
+    return { tasks: filtered, statusMap };
+  }
+
+  /**
+   * Get ready tasks (priority-sorted, all blocks deps resolved).
+   * Uses listAll + in-memory filtering to avoid O(N) bd show calls (previously
+   * caused 60+ second stalls with 69 tasks). bd ready returns tasks whose blockers
+   * may be in_progress; we only consider a blocks dependency resolved when closed.
+   */
+  async ready(repoPath: string): Promise<BeadsIssue[]> {
+    const { tasks } = await this.readyWithStatusMap(repoPath);
+    return tasks;
   }
 
   /** List all issues (open + in_progress by default) */
@@ -652,10 +671,14 @@ export class BeadsService {
     return this.parseJsonArray(stdout);
   }
 
-  /** List all issues including closed (for kanban column computation) */
+  /** List all issues including closed (for kanban column computation). Uses short-TTL cache. */
   async listAll(repoPath: string): Promise<BeadsIssue[]> {
+    const cached = beadsCache.getListAll<BeadsIssue[]>(repoPath);
+    if (cached) return cached;
     const stdout = await this.exec(repoPath, "list --all --json --limit 0");
-    return this.parseJsonArray(stdout);
+    const result = this.parseJsonArray(stdout);
+    beadsCache.setListAll(repoPath, result);
+    return result;
   }
 
   /**
@@ -672,12 +695,17 @@ export class BeadsService {
     );
   }
 
-  /** Show full details of an issue (bd show returns a JSON array) */
+  /** Show full details of an issue (bd show returns a JSON array). Uses short-TTL cache. */
   async show(repoPath: string, id: string): Promise<BeadsIssue> {
+    const cached = beadsCache.getShow<BeadsIssue>(repoPath, id);
+    if (cached) return cached;
     const stdout = await this.exec(repoPath, `show ${id} --json`);
     const arr = this.parseJsonArray(stdout);
     const first = arr[0];
-    if (first) return first;
+    if (first) {
+      beadsCache.setShow(repoPath, id, first);
+      return first;
+    }
     throw new AppError(404, ErrorCodes.ISSUE_NOT_FOUND, `Issue ${id} not found`, { issueId: id });
   }
 
@@ -774,11 +802,10 @@ export class BeadsService {
   }
 
   /**
-   * Get cumulative attempt count from beads labels (PRDv2 §9.1).
-   * Looks for label "attempts:N"; returns 0 if none found.
+   * Get cumulative attempt count from an issue's labels (PRDv2 §9.1).
+   * Use when the caller already has the issue to avoid a show() call.
    */
-  async getCumulativeAttempts(repoPath: string, id: string): Promise<number> {
-    const issue = await this.show(repoPath, id);
+  getCumulativeAttemptsFromIssue(issue: BeadsIssue): number {
     const labels = (issue.labels ?? []) as string[];
     const attemptsLabel = labels.find((l) => /^attempts:\d+$/.test(l));
     if (!attemptsLabel) return 0;
@@ -787,12 +814,27 @@ export class BeadsService {
   }
 
   /**
+   * Get cumulative attempt count from beads labels (PRDv2 §9.1).
+   * Looks for label "attempts:N"; returns 0 if none found.
+   */
+  async getCumulativeAttempts(repoPath: string, id: string): Promise<number> {
+    const issue = await this.show(repoPath, id);
+    return this.getCumulativeAttemptsFromIssue(issue);
+  }
+
+  /**
    * Set cumulative attempt count via beads labels (PRDv2 §9.1).
    * Removes any existing attempts:X label, adds attempts:count.
+   * When currentLabels is provided, skips show() to avoid an extra bd call.
    */
-  async setCumulativeAttempts(repoPath: string, id: string, count: number): Promise<void> {
-    const issue = await this.show(repoPath, id);
-    const labels = (issue.labels ?? []) as string[];
+  async setCumulativeAttempts(
+    repoPath: string,
+    id: string,
+    count: number,
+    options?: { currentLabels?: string[] }
+  ): Promise<void> {
+    const labels =
+      options?.currentLabels ?? ((await this.show(repoPath, id)).labels ?? []) as string[];
     const existingAttempts = labels.find((l) => /^attempts:\d+$/.test(l));
     if (existingAttempts) {
       await this.removeLabel(repoPath, id, existingAttempts);

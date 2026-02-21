@@ -601,30 +601,27 @@ describe("BeadsService", () => {
   });
 
   describe("export", () => {
-    it("runs bd import before export to prevent stale DB errors", async () => {
+    it("runs sync --import-only (or import fallback) before export to prevent stale DB errors", async () => {
       const execCalls: string[] = [];
       mockExecImpl = async (cmd: string) => {
         execCalls.push(cmd);
         return { stdout: "", stderr: "" };
       };
       await beads.export("/repo", ".beads/issues.jsonl");
-      const importIdx = execCalls.findIndex(
-        (c) =>
-          c.includes("import -i") &&
-          c.includes(".beads/issues.jsonl") &&
-          c.includes("--orphan-handling allow")
+      const preImportIdx = execCalls.findIndex(
+        (c) => c.includes("sync --import-only") || (c.includes("import -i") && c.includes("--orphan-handling allow"))
       );
       const exportIdx = execCalls.findIndex((c) => c.includes("export -o"));
-      expect(importIdx).toBeGreaterThanOrEqual(0);
-      expect(exportIdx).toBeGreaterThan(importIdx);
+      expect(preImportIdx).toBeGreaterThanOrEqual(0);
+      expect(exportIdx).toBeGreaterThan(preImportIdx);
     });
 
-    it("falls back to --force when export fails after import", async () => {
+    it("falls back to --force when export fails after sync/import", async () => {
       let exportAttempt = 0;
       const execCalls: string[] = [];
       mockExecImpl = async (cmd: string) => {
         execCalls.push(cmd);
-        if (cmd.includes("import -i")) {
+        if (cmd.includes("sync --import-only") || cmd.includes("import -i")) {
           return { stdout: "", stderr: "" };
         }
         if (cmd.includes("export -o") && !cmd.includes("--force")) {

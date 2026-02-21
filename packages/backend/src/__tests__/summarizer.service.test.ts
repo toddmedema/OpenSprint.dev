@@ -28,37 +28,34 @@ describe("summarizer.service", () => {
       expect(shouldInvokeSummarizer(baseContext)).toBe(false);
     });
 
-    it("returns true when >2 dependencies", () => {
+    it("returns true when >5 dependencies", () => {
       const ctx: TaskContext = {
         ...baseContext,
-        dependencyOutputs: [
-          { taskId: "a", diff: "", summary: "" },
-          { taskId: "b", diff: "", summary: "" },
-          { taskId: "c", diff: "", summary: "" },
-        ],
+        dependencyOutputs: Array(6)
+          .fill(null)
+          .map((_, i) => ({ taskId: `dep-${i}`, diff: "", summary: "" })),
       };
       expect(shouldInvokeSummarizer(ctx)).toBe(true);
     });
 
-    it("returns false when exactly 2 dependencies", () => {
+    it("returns false when exactly 5 dependencies", () => {
       const ctx: TaskContext = {
         ...baseContext,
-        dependencyOutputs: [
-          { taskId: "a", diff: "", summary: "" },
-          { taskId: "b", diff: "", summary: "" },
-        ],
+        dependencyOutputs: Array(5)
+          .fill(null)
+          .map((_, i) => ({ taskId: `dep-${i}`, diff: "", summary: "" })),
       };
       expect(shouldInvokeSummarizer(ctx)).toBe(false);
     });
 
-    it("returns true when >2000 word plan", () => {
-      const longPlan = Array(2001).fill("word").join(" ");
+    it("returns true when >5000 word plan", () => {
+      const longPlan = Array(5001).fill("word").join(" ");
       const ctx: TaskContext = { ...baseContext, planContent: longPlan };
       expect(shouldInvokeSummarizer(ctx)).toBe(true);
     });
 
-    it("returns false when exactly 2000 words", () => {
-      const plan = Array(2000).fill("word").join(" ");
+    it("returns false when exactly 5000 words", () => {
+      const plan = Array(5000).fill("word").join(" ");
       const ctx: TaskContext = { ...baseContext, planContent: plan };
       expect(shouldInvokeSummarizer(ctx)).toBe(false);
     });

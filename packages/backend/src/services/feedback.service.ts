@@ -98,6 +98,88 @@ export class FeedbackService {
     return path.join(project.repoPath, OPENSPRINT_PATHS.feedback);
   }
 
+  /** Path to Gastown-style feedback inbox (queue of feedback IDs awaiting Analyst). Returns null if project has no repoPath. */
+  private async getFeedbackInboxPath(projectId: string): Promise<string | null> {
+    const project = await this.projectService.getProject(projectId);
+    if (!project?.repoPath) return null;
+    return path.join(project.repoPath, OPENSPRINT_PATHS.feedbackInbox);
+  }
+
+  private async readInbox(projectId: string): Promise<{ feedbackId: string; enqueuedAt: string }[]> {
+    const inboxPath = await this.getFeedbackInboxPath(projectId);
+    if (!inboxPath) return [];
+    try {
+      const data = await fs.readFile(inboxPath, "utf-8");
+      const parsed = JSON.parse(data);
+      const arr = Array.isArray(parsed) ? parsed : parsed?.entries ?? [];
+      return arr.filter(
+        (e: unknown): e is { feedbackId: string; enqueuedAt: string } =>
+          e != null &&
+          typeof e === "object" &&
+          typeof (e as { feedbackId?: unknown }).feedbackId === "string"
+      );
+    } catch (err) {
+      const nodeErr = err as NodeJS.ErrnoException;
+      if (nodeErr?.code === "ENOENT") return [];
+      throw err;
+    }
+  }
+
+  private async writeInbox(
+    projectId: string,
+    entries: { feedbackId: string; enqueuedAt: string }[]
+  ): Promise<void> {
+    const inboxPath = await this.getFeedbackInboxPath(projectId);
+    if (!inboxPath) throw new Error("Project has no repoPath; cannot write feedback inbox");
+    const dir = path.dirname(inboxPath);
+    await fs.mkdir(dir, { recursive: true });
+    await writeJsonAtomic(inboxPath, entries);
+  }
+
+  /**
+   * Enqueue a feedback item for Analyst processing (Gastown-style mailbox).
+   * Does not run the Analyst; the orchestrator will process the queue.
+   */
+  async enqueueForCategorization(projectId: string, feedbackId: string): Promise<void> {
+    const entries = await this.readInbox(projectId);
+    if (entries.some((e) => e.feedbackId === feedbackId)) return;
+    entries.push({ feedbackId, enqueuedAt: new Date().toISOString() });
+    await this.writeInbox(projectId, entries);
+    log.info("Enqueued feedback for Analyst", { projectId, feedbackId });
+  }
+
+  /** Get the next feedback ID in the inbox (FIFO). Does not remove it. */
+  async getNextPendingFeedbackId(projectId: string): Promise<string | null> {
+    const entries = await this.readInbox(projectId);
+    return entries.length > 0 ? entries[0].feedbackId : null;
+  }
+
+  /**
+   * Remove a feedback ID from the inbox (ack). Call only after successful processing.
+   */
+  async removeFromInbox(projectId: string, feedbackId: string): Promise<void> {
+    const entries = await this.readInbox(projectId);
+    const next = entries.filter((e) => e.feedbackId !== feedbackId);
+    if (next.length === entries.length) return;
+    await this.writeInbox(projectId, next);
+    log.info("Removed feedback from inbox (processed)", { projectId, feedbackId });
+  }
+
+  /** List feedback IDs currently in the inbox (for status/UI). */
+  async listPendingFeedbackIds(projectId: string): Promise<string[]> {
+    const entries = await this.readInbox(projectId);
+    return entries.map((e) => e.feedbackId);
+  }
+
+  /**
+   * Run the Analyst on one feedback item. Used by the orchestrator.
+   * Throws on failure; caller should only remove from inbox on success.
+   */
+  async processFeedbackWithAnalyst(projectId: string, feedbackId: string): Promise<void> {
+    const item = await this.getFeedback(projectId, feedbackId);
+    await this.categorizeFeedbackImpl(projectId, item);
+  }
+
   async listFeedback(projectId: string): Promise<FeedbackItem[]> {
     const feedbackDir = await this.getFeedbackDir(projectId);
     const items: FeedbackItem[] = [];
@@ -185,10 +267,8 @@ export class FeedbackService {
     // Save immediately
     await writeJsonAtomic(path.join(feedbackDir, `${id}.json`), item);
 
-    // Invoke planning agent for categorization (async)
-    this.categorizeFeedback(projectId, item).catch((err) => {
-      log.error("Failed to categorize feedback", { id, err });
-    });
+    // Gastown-style mailbox: enqueue for orchestrator to run Analyst (no direct invocation)
+    await this.enqueueForCategorization(projectId, id);
 
     return item;
   }
@@ -237,11 +317,6 @@ export class FeedbackService {
     } catch {
       return "No plans available. Use mapped_plan_id: null, mapped_epic_id: null.";
     }
-  }
-
-  /** AI categorization, mapping, and bead task creation */
-  private async categorizeFeedback(projectId: string, item: FeedbackItem): Promise<void> {
-    await this.categorizeFeedbackImpl(projectId, item);
   }
 
   private async categorizeFeedbackImpl(projectId: string, item: FeedbackItem): Promise<void> {
@@ -683,27 +758,33 @@ export class FeedbackService {
   }
 
   /**
-   * Retry categorization for all feedback items still in 'pending' status.
+   * Enqueue all feedback items still in 'pending' status for the orchestrator to process.
    * Called on server startup to recover from failed/interrupted categorizations.
-   * Returns the number of items retried.
+   * Returns the number of items enqueued.
    */
   async retryPendingCategorizations(projectId: string): Promise<number> {
     const items = await this.listFeedback(projectId);
     const pending = items.filter((item) => item.status === "pending");
     if (pending.length === 0) return 0;
 
-    log.info("Retrying categorization for pending feedback", { count: pending.length });
+    const existing = new Set(await this.listPendingFeedbackIds(projectId));
+    let enqueued = 0;
     for (const item of pending) {
-      this.categorizeFeedback(projectId, item).catch((err) => {
-        log.error("Retry failed for feedback", { feedbackId: item.id, err });
-      });
+      if (!existing.has(item.id)) {
+        await this.enqueueForCategorization(projectId, item.id);
+        existing.add(item.id);
+        enqueued++;
+      }
     }
-    return pending.length;
+    if (enqueued > 0) {
+      log.info("Enqueued pending feedback for Analyst", { count: enqueued });
+    }
+    return enqueued;
   }
 
   /**
-   * Re-categorize a single feedback item (resets to pending first).
-   * Used for manual retry from the UI.
+   * Re-categorize a single feedback item (resets to pending, enqueues for Analyst).
+   * Used for manual retry from the UI. Orchestrator will process from inbox.
    */
   async recategorizeFeedback(projectId: string, feedbackId: string): Promise<FeedbackItem> {
     const item = await this.getFeedback(projectId, feedbackId);
@@ -717,9 +798,7 @@ export class FeedbackService {
     item.proposedTasks = undefined;
     await this.saveFeedback(projectId, item);
 
-    this.categorizeFeedback(projectId, item).catch((err) => {
-      log.error("Recategorize failed for feedback", { feedbackId: item.id, err });
-    });
+    await this.enqueueForCategorization(projectId, feedbackId);
 
     return item;
   }
