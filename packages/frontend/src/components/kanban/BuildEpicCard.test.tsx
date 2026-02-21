@@ -356,6 +356,26 @@ describe("BuildEpicCard", () => {
     expect(screen.queryByTestId("epic-completed-checkmark")).not.toBeInTheDocument();
   });
 
+  it("renders priority icon with correct priority in each task row", () => {
+    const tasks = [
+      createMockTask({ id: "epic-1.1", title: "Critical task", priority: 0, kanbanColumn: "in_progress" }),
+      createMockTask({ id: "epic-1.2", title: "High task", priority: 1, kanbanColumn: "in_progress" }),
+      createMockTask({ id: "epic-1.3", title: "Medium task", priority: 2, kanbanColumn: "in_progress" }),
+    ];
+    render(
+      <BuildEpicCard
+        epicId="epic-1"
+        epicTitle="Priorities"
+        tasks={tasks}
+        onTaskSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Critical" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "High" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Medium" })).toBeInTheDocument();
+  });
+
   it("renders all task states correctly in left-side position", async () => {
     const user = userEvent.setup();
     const states: Array<"planning" | "backlog" | "ready" | "in_progress" | "in_review" | "done" | "blocked"> = [

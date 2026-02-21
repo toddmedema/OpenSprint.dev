@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Task } from "@opensprint/shared";
+import { PriorityIcon } from "../PriorityIcon";
 import { TaskStatusBadge, COLUMN_LABELS } from "./TaskStatusBadge";
 import { formatUptime } from "../../lib/formatting";
 
@@ -28,6 +29,7 @@ function EpicTaskRow({
         >
           {/* Status: exclusively on the left */}
           <TaskStatusBadge column={task.kanbanColumn} size="xs" title={COLUMN_LABELS[task.kanbanColumn]} />
+          <PriorityIcon priority={task.priority ?? 1} size="xs" />
           <span className="flex-1 min-w-0 truncate font-medium text-theme-text" title={task.title}>
             {task.title}
           </span>
