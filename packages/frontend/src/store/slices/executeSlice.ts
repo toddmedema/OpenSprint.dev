@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import type { AgentSession, Task, KanbanColumn, Plan } from "@opensprint/shared";
+import { mapStatusToKanban } from "@opensprint/shared";
 import { api } from "../../api/client";
 import { setPlansAndGraph } from "./planSlice";
 import { setDeliverToast } from "./websocketSlice";
@@ -375,21 +376,6 @@ const executeSlice = createSlice({
       });
   },
 });
-
-function mapStatusToKanban(status: string): KanbanColumn {
-  switch (status) {
-    case "open":
-      return "backlog";
-    case "in_progress":
-      return "in_progress";
-    case "closed":
-      return "done";
-    case "blocked":
-      return "blocked";
-    default:
-      return "backlog";
-  }
-}
 
 export const {
   setSelectedTaskId,

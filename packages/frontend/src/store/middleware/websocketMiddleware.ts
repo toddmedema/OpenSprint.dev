@@ -19,6 +19,7 @@ import {
   setCompletionState,
   taskUpdated,
 } from "../slices/executeSlice";
+import { mergeTaskUpdate } from "../slices/taskRegistrySlice";
 import { fetchFeedback } from "../slices/evalSlice";
 import {
   appendDeliverOutput,
@@ -140,6 +141,15 @@ export const websocketMiddleware: Middleware = (storeApi) => {
 
       case "task.updated":
         d(taskUpdated({ taskId: event.taskId, status: event.status, assignee: event.assignee }));
+        d(
+          mergeTaskUpdate({
+            projectId,
+            taskId: event.taskId,
+            status: event.status,
+            assignee: event.assignee,
+            priority: event.priority,
+          })
+        );
         d(fetchTasks(projectId));
         break;
 

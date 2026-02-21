@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
+import { useAppDispatch, useAppSelector } from "../store";
 import { api } from "../api/client";
+import { mergeTask, selectTaskTitle } from "../store/slices/taskRegistrySlice";
 
 const TITLE_MAX_LENGTH = 30;
 
@@ -24,19 +26,26 @@ export function TaskLinkDisplay({
   taskId,
   cachedTitle,
 }: TaskLinkDisplayProps) {
+  const dispatch = useAppDispatch();
+  const titleFromRegistry = useAppSelector((state) =>
+    selectTaskTitle(state, projectId, taskId)
+  );
   const [fetchedTitle, setFetchedTitle] = useState<string | null>(null);
   const [fetchFailed, setFetchFailed] = useState(false);
 
-  const effectiveTitle = cachedTitle ?? fetchedTitle ?? null;
+  const effectiveTitle = titleFromRegistry ?? cachedTitle ?? fetchedTitle ?? null;
   const displayText = effectiveTitle != null ? truncateTitle(effectiveTitle) : taskId;
 
   useEffect(() => {
-    if (cachedTitle != null || fetchFailed) return;
+    if (titleFromRegistry != null || cachedTitle != null || fetchFailed) return;
     let cancelled = false;
     api.tasks
       .get(projectId, taskId)
       .then((task) => {
-        if (!cancelled) setFetchedTitle(task.title ?? taskId);
+        if (!cancelled) {
+          setFetchedTitle(task.title ?? taskId);
+          dispatch(mergeTask({ projectId, task }));
+        }
       })
       .catch(() => {
         if (!cancelled) setFetchFailed(true);
@@ -44,7 +53,7 @@ export function TaskLinkDisplay({
     return () => {
       cancelled = true;
     };
-  }, [projectId, taskId, cachedTitle, fetchFailed]);
+  }, [projectId, taskId, titleFromRegistry, cachedTitle, fetchFailed, dispatch]);
 
   return <>{displayText}</>;
 }

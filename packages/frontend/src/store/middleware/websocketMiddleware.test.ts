@@ -6,6 +6,7 @@ import websocketReducer from "../slices/websocketSlice";
 import sketchReducer from "../slices/sketchSlice";
 import planReducer from "../slices/planSlice";
 import executeReducer from "../slices/executeSlice";
+import taskRegistryReducer from "../slices/taskRegistrySlice";
 import evalReducer from "../slices/evalSlice";
 import deliverReducer from "../slices/deliverSlice";
 
@@ -110,6 +111,7 @@ describe("websocketMiddleware", () => {
         sketch: sketchReducer,
         plan: planReducer,
         execute: executeReducer,
+        taskRegistry: taskRegistryReducer,
         eval: evalReducer,
         deliver: deliverReducer,
       },
@@ -291,8 +293,29 @@ describe("websocketMiddleware", () => {
       expect(store.getState().plan.loading).toBe(false);
     });
 
-    it("dispatches fetchTasks on task.updated", async () => {
+    it("dispatches fetchTasks and mergeTaskUpdate on task.updated", async () => {
       const store = createStore();
+      const { mergeTask } = await import("../slices/taskRegistrySlice");
+      store.dispatch(
+        mergeTask({
+          projectId: "proj-1",
+          task: {
+            id: "task-1",
+            title: "Task 1",
+            description: "",
+            type: "task",
+            status: "open",
+            priority: 1,
+            assignee: null,
+            labels: [],
+            dependencies: [],
+            epicId: null,
+            kanbanColumn: "backlog",
+            createdAt: "",
+            updatedAt: "",
+          },
+        })
+      );
       store.dispatch(wsConnect({ projectId: "proj-1" }));
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
@@ -308,6 +331,10 @@ describe("websocketMiddleware", () => {
       await vi.waitFor(() => {
         expect(api.tasks.list).toHaveBeenCalledWith("proj-1");
       });
+
+      expect(store.getState().taskRegistry.byProject["proj-1"]?.["task-1"]?.kanbanColumn).toBe(
+        "in_progress"
+      );
     });
 
     it("dispatches appendAgentOutput on agent.output", async () => {

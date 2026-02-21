@@ -10,6 +10,7 @@ import websocketReducer, { setDeliverToast } from "../store/slices/websocketSlic
 import sketchReducer from "../store/slices/sketchSlice";
 import planReducer, { fetchPlans } from "../store/slices/planSlice";
 import executeReducer from "../store/slices/executeSlice";
+import taskRegistryReducer from "../store/slices/taskRegistrySlice";
 import evalReducer from "../store/slices/evalSlice";
 import deliverReducer from "../store/slices/deliverSlice";
 import notificationReducer from "../store/slices/notificationSlice";
@@ -66,6 +67,7 @@ function createStore() {
       sketch: sketchReducer,
       plan: planReducer,
       execute: executeReducer,
+      taskRegistry: taskRegistryReducer,
       eval: evalReducer,
       deliver: deliverReducer,
       notification: notificationReducer,
@@ -262,6 +264,7 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
         sketch: sketchReducer,
         plan: planReducer,
         execute: executeReducer,
+        taskRegistry: taskRegistryReducer,
         eval: evalReducer,
         deliver: deliverReducer,
         notification: notificationReducer,
@@ -336,6 +339,7 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
         sketch: sketchReducer,
         plan: planReducer,
         execute: executeReducer,
+        taskRegistry: taskRegistryReducer,
         eval: evalReducer,
         deliver: deliverReducer,
         notification: notificationReducer,
@@ -404,6 +408,7 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
         sketch: sketchReducer,
         plan: planReducer,
         execute: executeReducer,
+        taskRegistry: taskRegistryReducer,
         eval: evalReducer,
         deliver: deliverReducer,
         notification: notificationReducer,

@@ -6,6 +6,7 @@ import sketchReducer from "./slices/sketchSlice";
 import designReducer from "./slices/designSlice";
 import planReducer from "./slices/planSlice";
 import executeReducer from "./slices/executeSlice";
+import taskRegistryReducer from "./slices/taskRegistrySlice";
 import evalReducer from "./slices/evalSlice";
 import deliverReducer from "./slices/deliverSlice";
 import notificationReducer from "./slices/notificationSlice";
@@ -21,6 +22,7 @@ export const store = configureStore({
     design: designReducer,
     plan: planReducer,
     execute: executeReducer,
+    taskRegistry: taskRegistryReducer,
     eval: evalReducer,
     deliver: deliverReducer,
     notification: notificationReducer,

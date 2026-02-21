@@ -3,6 +3,7 @@ import type { FeedbackItem, KanbanColumn } from "@opensprint/shared";
 import { PRIORITY_LABELS } from "@opensprint/shared";
 import { useAppDispatch, useAppSelector } from "../../store";
 import { submitFeedback, resolveFeedback, removeFeedbackItem } from "../../store/slices/evalSlice";
+import { selectTaskSummariesByProject } from "../../store/slices/taskRegistrySlice";
 import { TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
 import { TaskLinkDisplay } from "../../components/TaskLinkDisplay";
 import { KeyboardShortcutTooltip } from "../../components/KeyboardShortcutTooltip";
@@ -503,32 +504,29 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
 
   /* ── Redux state ── */
   const feedback = useAppSelector((s) => s.eval.feedback);
-  const executeTasks = useAppSelector((s) => s.execute.tasks);
+  const taskSummaries = useAppSelector((s) => selectTaskSummariesByProject(s, projectId));
   const loading = useAppSelector((s) => s.eval.loading);
   const submitting = useAppSelector((s) => s.eval.submitting);
 
   const getTaskColumn = useCallback(
     (taskId: string): KanbanColumn => {
-      const task = executeTasks.find((t) => t.id === taskId);
-      return task?.kanbanColumn ?? "backlog";
+      return taskSummaries[taskId]?.kanbanColumn ?? "backlog";
     },
-    [executeTasks]
+    [taskSummaries]
   );
 
   const getTaskTitle = useCallback(
     (taskId: string): string | undefined => {
-      const task = executeTasks.find((t) => t.id === taskId);
-      return task?.title;
+      return taskSummaries[taskId]?.title;
     },
-    [executeTasks]
+    [taskSummaries]
   );
 
   const getTaskPriority = useCallback(
     (taskId: string): number => {
-      const task = executeTasks.find((t) => t.id === taskId);
-      return task?.priority ?? 1;
+      return taskSummaries[taskId]?.priority ?? 1;
     },
-    [executeTasks]
+    [taskSummaries]
   );
 
   /* ── Local UI state (preserved by mount-all) ── */

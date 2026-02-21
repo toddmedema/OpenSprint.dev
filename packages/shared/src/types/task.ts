@@ -17,6 +17,29 @@ export type KanbanColumn =
 /** Beads priority (0 = highest, 4 = lowest) */
 export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
+/** Minimal task fields stored in the global task registry (cross-phase cache). */
+export interface TaskSummary {
+  title: string;
+  kanbanColumn: KanbanColumn;
+  priority: TaskPriority;
+}
+
+/** Map beads status string to kanban column. Shared so execute and taskRegistry stay in sync. */
+export function mapStatusToKanban(status: string): KanbanColumn {
+  switch (status) {
+    case "open":
+      return "backlog";
+    case "in_progress":
+      return "in_progress";
+    case "closed":
+      return "done";
+    case "blocked":
+      return "blocked";
+    default:
+      return "backlog";
+  }
+}
+
 /** Task entity — maps to a beads issue */
 export interface Task {
   id: string;
