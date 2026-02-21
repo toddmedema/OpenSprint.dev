@@ -3,49 +3,54 @@ import { render, screen } from "@testing-library/react";
 import { PriorityIcon } from "./PriorityIcon";
 
 describe("PriorityIcon", () => {
-  it("renders correct SVG for Critical (0) with gradient", () => {
+  it("renders correct SVG for Critical (0) with two upward chevrons", () => {
     const { container } = render(<PriorityIcon priority={0} />);
 
     const svg = screen.getByRole("img", { name: "Critical" });
     expect(svg).toBeInTheDocument();
-    expect(container.querySelector("linearGradient")).toBeTruthy();
+    expect(svg).toHaveAttribute("viewBox", "0 0 24 24");
+    const paths = container.querySelectorAll("path");
+    expect(paths).toHaveLength(2);
+    paths.forEach((p) => {
+      expect(p).toHaveAttribute("stroke", "currentColor");
+      expect(p).toHaveAttribute("fill", "none");
+    });
   });
 
-  it("renders correct SVG for High (1)", () => {
+  it("renders correct SVG for High (1) with single upward chevron", () => {
     const { container } = render(<PriorityIcon priority={1} />);
 
     expect(screen.getByRole("img", { name: "High" })).toBeInTheDocument();
-    const path = container.querySelector("path");
-    expect(path).toBeTruthy();
-    expect(path!.getAttribute("fill")).toBe("#ff5630");
+    const paths = container.querySelectorAll("path");
+    expect(paths).toHaveLength(1);
+    expect(paths[0]).toHaveAttribute("stroke", "currentColor");
   });
 
-  it("renders correct SVG for Medium (2)", () => {
+  it("renders correct SVG for Medium (2) with horizontal line", () => {
     const { container } = render(<PriorityIcon priority={2} />);
 
     expect(screen.getByRole("img", { name: "Medium" })).toBeInTheDocument();
     const path = container.querySelector("path");
     expect(path).toBeTruthy();
-    expect(path!.getAttribute("fill")).toBe("#FFAB00");
+    expect(path).toHaveAttribute("d", "M6 12h12");
   });
 
-  it("renders correct SVG for Low (3)", () => {
+  it("renders correct SVG for Low (3) with single downward chevron", () => {
     const { container } = render(<PriorityIcon priority={3} />);
 
     expect(screen.getByRole("img", { name: "Low" })).toBeInTheDocument();
-    const path = container.querySelector("path");
-    expect(path).toBeTruthy();
-    expect(path!.getAttribute("fill")).toBe("#0065ff");
+    const paths = container.querySelectorAll("path");
+    expect(paths).toHaveLength(1);
+    expect(paths[0]).toHaveAttribute("stroke", "currentColor");
   });
 
-  it("renders correct SVG for Lowest (4) with two paths (duo-tone)", () => {
+  it("renders correct SVG for Lowest (4) with two downward chevrons", () => {
     const { container } = render(<PriorityIcon priority={4} />);
 
     expect(screen.getByRole("img", { name: "Lowest" })).toBeInTheDocument();
     const paths = container.querySelectorAll("path");
     expect(paths).toHaveLength(2);
-    expect(paths[0]!.getAttribute("fill")).toBe("#0065ff");
-    expect(paths[1]!.getAttribute("fill")).toBe("#2684ff");
+    paths.forEach((p) => expect(p).toHaveAttribute("fill", "none"));
   });
 
   it("applies sm size classes by default", () => {
@@ -75,7 +80,7 @@ describe("PriorityIcon", () => {
     expect(screen.getByRole("img", { name: "Medium" })).toBeInTheDocument();
     const path = container.querySelector("path");
     expect(path).toBeTruthy();
-    expect(path!.getAttribute("fill")).toBe("#FFAB00");
+    expect(path).toHaveAttribute("d", "M6 12h12");
   });
 
   it("falls back to Medium icon for negative priority", () => {
@@ -105,18 +110,5 @@ describe("PriorityIcon", () => {
 
     const svg = screen.getByRole("img", { name: "Medium" });
     expect(svg).toHaveClass("shrink-0");
-  });
-
-  it("multiple Critical icons have unique gradient IDs", () => {
-    const { container } = render(
-      <div>
-        <PriorityIcon priority={0} />
-        <PriorityIcon priority={0} />
-      </div>
-    );
-
-    const gradients = container.querySelectorAll("linearGradient");
-    expect(gradients).toHaveLength(2);
-    expect(gradients[0]!.id).not.toBe(gradients[1]!.id);
   });
 });
