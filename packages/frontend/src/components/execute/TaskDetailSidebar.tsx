@@ -184,59 +184,20 @@ export function TaskDetailSidebar({
       <div className="flex-1 overflow-y-auto min-h-0">
         <div className="p-4 border-b border-theme-border">
           {(selectedTaskData ?? taskDetail) && (
-            <div
-              className="flex flex-wrap items-center gap-2 mb-3 text-xs text-theme-muted"
-              data-testid="task-detail-status-section"
-            >
-              <TaskStatusBadge
-                column={(taskDetail ?? selectedTaskData)!.kanbanColumn}
-                size="xs"
-                title={COLUMN_LABELS[(taskDetail ?? selectedTaskData)!.kanbanColumn]}
-              />
-              <span>{COLUMN_LABELS[(taskDetail ?? selectedTaskData)!.kanbanColumn]}</span>
-              {((taskDetail ?? selectedTaskData)!.assignee) && (
-                <>
-                  <span>·</span>
-                  <span className="text-brand-600">{((taskDetail ?? selectedTaskData)!).assignee}</span>
-                </>
-              )}
-              {selectedTask && taskIdToStartedAt[selectedTask] && (
-                <>
-                  <span>·</span>
-                  <span className="tabular-nums">{formatUptime(taskIdToStartedAt[selectedTask])}</span>
-                </>
-              )}
-            </div>
-          )}
-          {roleLabel && (
-            <div className="mb-3 px-3 py-1.5 rounded-md bg-theme-warning-bg border border-theme-warning-border text-xs font-medium text-theme-warning-text">
-              Active: {roleLabel}
-            </div>
-          )}
-          {taskDetailError ? (
-            <div
-              className="rounded-lg border border-theme-error-border bg-theme-error-bg p-4 text-sm text-theme-error-text"
-              data-testid="task-detail-error"
-            >
-              {taskDetailError}
-            </div>
-          ) : taskDetailLoading ? (
-            <div className="space-y-3" data-testid="task-detail-loading">
-              <div className="h-4 w-3/4 bg-theme-surface-muted rounded animate-pulse" />
-              <div className="h-3 w-full bg-theme-surface-muted rounded animate-pulse" />
-              <div className="h-3 w-2/3 bg-theme-surface-muted rounded animate-pulse" />
-              <div className="h-24 w-full bg-theme-surface-muted rounded animate-pulse" />
-            </div>
-          ) : taskDetail ? (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-theme-muted">
-                {(selectedTaskData ?? taskDetail)?.status === "closed" ? (
+            <>
+              {/* Row 1: Priority + State inline directly below header */}
+              <div
+                className="flex flex-wrap items-center gap-2 mb-3 text-xs text-theme-muted"
+                data-testid="task-detail-priority-state-row"
+              >
+                {((selectedTaskData ?? taskDetail)?.status === "closed" || !taskDetail) ? (
                   <span
-                    className="text-theme-muted/80 cursor-default"
+                    className="inline-flex items-center gap-1.5 text-theme-muted/80 cursor-default"
                     data-testid="priority-read-only"
-                    aria-label={`Priority: ${PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}`}
+                    aria-label={`Priority: ${PRIORITY_LABELS[(taskDetail ?? selectedTaskData)!.priority ?? 1] ?? "Medium"}`}
                   >
-                    {PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}
+                    <PriorityIcon priority={(taskDetail ?? selectedTaskData)!.priority ?? 1} size="sm" />
+                    {PRIORITY_LABELS[(taskDetail ?? selectedTaskData)!.priority ?? 1] ?? "Medium"}
                   </span>
                 ) : (
                   <div ref={priorityDropdownRef} className="relative inline-block">
@@ -246,11 +207,11 @@ export function TaskDetailSidebar({
                       className="inline-flex items-center gap-2 rounded px-2 py-1 text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors cursor-pointer"
                       aria-haspopup="listbox"
                       aria-expanded={priorityDropdownOpen}
-                      aria-label={`Priority: ${PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}. Click to change`}
+                      aria-label={`Priority: ${PRIORITY_LABELS[(taskDetail ?? selectedTaskData)!.priority ?? 1] ?? "Medium"}. Click to change`}
                       data-testid="priority-dropdown-trigger"
                     >
-                      <PriorityIcon priority={taskDetail.priority ?? 1} size="sm" />
-                      <span>{PRIORITY_LABELS[taskDetail.priority ?? 1] ?? "Medium"}</span>
+                      <PriorityIcon priority={(taskDetail ?? selectedTaskData)!.priority ?? 1} size="sm" />
+                      <span>{PRIORITY_LABELS[(taskDetail ?? selectedTaskData)!.priority ?? 1] ?? "Medium"}</span>
                       <span className="text-[10px] opacity-70">{priorityDropdownOpen ? "▲" : "▼"}</span>
                     </button>
                     {priorityDropdownOpen && (
@@ -280,8 +241,49 @@ export function TaskDetailSidebar({
                     )}
                   </div>
                 )}
+                <TaskStatusBadge
+                  column={(taskDetail ?? selectedTaskData)!.kanbanColumn}
+                  size="xs"
+                  title={COLUMN_LABELS[(taskDetail ?? selectedTaskData)!.kanbanColumn]}
+                />
+                <span>{COLUMN_LABELS[(taskDetail ?? selectedTaskData)!.kanbanColumn]}</span>
+                {((taskDetail ?? selectedTaskData)!.assignee) && (
+                  <>
+                    <span>·</span>
+                    <span className="text-brand-600">{((taskDetail ?? selectedTaskData)!).assignee}</span>
+                  </>
+                )}
               </div>
+              {/* Row 2: Active callout - agent left, elapsed time right */}
+              {roleLabel && (
+                <div
+                  className="mb-3 px-3 py-1.5 rounded-md bg-theme-warning-bg border border-theme-warning-border text-xs font-medium text-theme-warning-text flex items-center justify-between gap-3 min-w-0"
+                  data-testid="task-detail-active-callout"
+                >
+                  <span className="truncate">Active: {roleLabel}</span>
+                  {selectedTask && taskIdToStartedAt[selectedTask] ? (
+                    <span className="tabular-nums shrink-0">{formatUptime(taskIdToStartedAt[selectedTask])}</span>
+                  ) : null}
+                </div>
+              )}
+            </>
+          )}
+          {taskDetailError ? (
+            <div
+              className="rounded-lg border border-theme-error-border bg-theme-error-bg p-4 text-sm text-theme-error-text"
+              data-testid="task-detail-error"
+            >
+              {taskDetailError}
             </div>
+          ) : taskDetailLoading ? (
+            <div className="space-y-3" data-testid="task-detail-loading">
+              <div className="h-4 w-3/4 bg-theme-surface-muted rounded animate-pulse" />
+              <div className="h-3 w-full bg-theme-surface-muted rounded animate-pulse" />
+              <div className="h-3 w-2/3 bg-theme-surface-muted rounded animate-pulse" />
+              <div className="h-24 w-full bg-theme-surface-muted rounded animate-pulse" />
+            </div>
+          ) : taskDetail ? (
+            null
           ) : (
             <div className="text-sm text-theme-muted" data-testid="task-detail-empty">
               Could not load task details.

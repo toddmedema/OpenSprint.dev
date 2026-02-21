@@ -613,6 +613,140 @@ describe("TaskDetailSidebar", () => {
     });
   });
 
+  describe("Layout: priority/state row and active-agent/time row", () => {
+    const taskDetailWithPriority = (priority: number) => ({
+      id: "epic-1.1",
+      title: "Task A",
+      epicId: "epic-1",
+      kanbanColumn: "in_progress" as const,
+      priority,
+      assignee: null,
+      type: "task" as const,
+      status: "in_progress" as const,
+      labels: [],
+      dependencies: [],
+      description: "",
+      createdAt: "",
+      updatedAt: "",
+    });
+
+    it("renders priority and state badge inline on first row below header", () => {
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(1),
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      const row = screen.getByTestId("task-detail-priority-state-row");
+      expect(row).toBeInTheDocument();
+      expect(within(row).getByTestId("priority-dropdown-trigger")).toHaveTextContent("High");
+      expect(within(row).getByText("In Progress")).toBeInTheDocument();
+    });
+
+    it("renders all priority levels inline with state", () => {
+      const labels = ["Critical", "High", "Medium", "Low", "Lowest"] as const;
+      for (let p = 0; p <= 4; p++) {
+        const props = createMinimalProps({
+          taskDetail: taskDetailWithPriority(p),
+        });
+        const { unmount } = render(
+          <Provider store={createStore()}>
+            <TaskDetailSidebar {...props} />
+          </Provider>,
+        );
+        const row = screen.getByTestId("task-detail-priority-state-row");
+        expect(row).toBeInTheDocument();
+        expect(within(row).getByText(labels[p])).toBeInTheDocument();
+        unmount();
+      }
+    });
+
+    it("Active callout displays agent left-aligned and elapsed time right-aligned on one row", () => {
+      const startedAt = new Date(Date.now() - 4 * 60 * 1000 - 4 * 1000).toISOString();
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(1),
+        activeTasks: [
+          {
+            taskId: "epic-1.1",
+            phase: "coding",
+            startedAt,
+          },
+        ],
+        taskIdToStartedAt: { "epic-1.1": startedAt },
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      const callout = screen.getByTestId("task-detail-active-callout");
+      expect(callout).toBeInTheDocument();
+      expect(callout).toHaveTextContent("Active: Coder");
+      expect(callout).toHaveTextContent("4m");
+      expect(callout).toHaveTextContent("4s");
+    });
+
+    it("Active callout shows Reviewer when phase is review", () => {
+      const startedAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(2),
+        activeTasks: [
+          {
+            taskId: "epic-1.1",
+            phase: "review",
+            startedAt,
+          },
+        ],
+        taskIdToStartedAt: { "epic-1.1": startedAt },
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      const callout = screen.getByTestId("task-detail-active-callout");
+      expect(callout).toHaveTextContent("Active: Reviewer");
+      expect(callout).toHaveTextContent("2m");
+    });
+
+    it("Active callout shows agent without time when taskIdToStartedAt is missing", () => {
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(1),
+        activeTasks: [
+          {
+            taskId: "epic-1.1",
+            phase: "coding",
+            startedAt: new Date().toISOString(),
+          },
+        ],
+        taskIdToStartedAt: {},
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      const callout = screen.getByTestId("task-detail-active-callout");
+      expect(callout).toHaveTextContent("Active: Coder");
+    });
+
+    it("priority-state row uses flex-wrap for responsive layout at narrow widths", () => {
+      const props = createMinimalProps({
+        taskDetail: taskDetailWithPriority(1),
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>,
+      );
+      const row = screen.getByTestId("task-detail-priority-state-row");
+      expect(row).toHaveClass("flex");
+      expect(row).toHaveClass("flex-wrap");
+    });
+  });
+
   it("Source Feedback and Live Output use matching content wrapper (p-4 pt-0)", async () => {
     mockGet.mockResolvedValue({
       id: "fb-1",
