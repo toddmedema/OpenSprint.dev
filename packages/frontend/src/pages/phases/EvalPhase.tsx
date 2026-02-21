@@ -7,6 +7,8 @@ import { TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
 import { TaskLinkTooltip } from "../../components/TaskLinkTooltip";
 import { KeyboardShortcutTooltip } from "../../components/KeyboardShortcutTooltip";
 import { PriorityIcon } from "../../components/PriorityIcon";
+import { ImageAttachmentThumbnails, ImageAttachmentButton } from "../../components/ImageAttachment";
+import { useImageAttachment } from "../../hooks/useImageAttachment";
 import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
 
 /** Reply icon (message turn / corner up-right) */
@@ -28,10 +30,6 @@ function ReplyIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-
-const MAX_IMAGES = 5;
-const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
-const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
 
 export const FEEDBACK_COLLAPSED_KEY_PREFIX = "opensprint-eval-feedback-collapsed";
 export const EVALUATE_FEEDBACK_FILTER_KEY = "opensprint.evaluateFeedbackFilter";
@@ -60,19 +58,6 @@ function saveFeedbackCollapsedIds(projectId: string, ids: Set<string>): void {
   } catch {
     // ignore
   }
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function isImageFile(file: File): boolean {
-  return ACCEPTED_IMAGE_TYPES.includes(file.type);
 }
 
 interface EvalPhaseProps {
@@ -176,7 +161,7 @@ interface FeedbackCardProps {
   replyingToId: string | null;
   onStartReply: (id: string) => void;
   onCancelReply: () => void;
-  onSubmitReply: (parentId: string, text: string) => void;
+  onSubmitReply: (parentId: string, text: string, images?: string[]) => void;
   onResolve: (feedbackId: string) => void;
   onRemoveAfterAnimation: (feedbackId: string) => void;
   collapsedIds: Set<string>;
@@ -207,6 +192,7 @@ function FeedbackCard({
 }: FeedbackCardProps) {
   const { item, children } = node;
   const [replyText, setReplyText] = useState("");
+  const replyImages = useImageAttachment();
   const isReplying = replyingToId === item.id;
   const isCollapsed = collapsedIds.has(item.id);
   const hasChildren = children.length > 0;
@@ -256,8 +242,10 @@ function FeedbackCard({
 
   const handleSubmitReply = () => {
     if (!replyText.trim() || submitting) return;
-    onSubmitReply(item.id, replyText.trim());
+    const imagePayload = replyImages.images.length > 0 ? replyImages.images : undefined;
+    onSubmitReply(item.id, replyText.trim(), imagePayload);
     setReplyText("");
+    replyImages.reset();
     onCancelReply();
   };
 
@@ -438,6 +426,7 @@ function FeedbackCard({
             className="input min-h-[60px] mb-2 text-sm"
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
+            onPaste={replyImages.handlePaste}
             onKeyDown={(e) => {
               onKeyDownReply(e);
               if (e.key === "Escape") {
@@ -449,7 +438,8 @@ function FeedbackCard({
             disabled={submitting}
             autoFocus
           />
-          <div className="flex justify-end gap-2">
+          <ImageAttachmentThumbnails attachment={replyImages} className="mb-2" />
+          <div className="flex justify-end items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={onCancelReply}
@@ -457,6 +447,12 @@ function FeedbackCard({
             >
               Cancel
             </button>
+            <ImageAttachmentButton
+              attachment={replyImages}
+              variant="text"
+              disabled={submitting}
+              data-testid="reply-attach-images"
+            />
             <button
               type="button"
               onClick={handleSubmitReply}
@@ -531,11 +527,10 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
 
   /* ── Local UI state (preserved by mount-all) ── */
   const [input, setInput] = useState("");
-  const [images, setImages] = useState<string[]>([]);
+  const imageAttachment = useImageAttachment();
   const [priority, setPriority] = useState<number | null>(null);
   const [feedbackPriorityDropdownOpen, setFeedbackPriorityDropdownOpen] = useState(false);
   const feedbackPriorityDropdownRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() =>
     loadFeedbackCollapsedIds(projectId)
@@ -544,77 +539,13 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
     loadFeedbackStatusFilter()
   );
 
-  const addImagesFromFiles = useCallback(async (files: FileList | File[]) => {
-    const fileArray = Array.from(files).filter(isImageFile);
-    const toAdd: string[] = [];
-    for (const file of fileArray) {
-      if (toAdd.length >= MAX_IMAGES) break;
-      if (file.size > MAX_IMAGE_SIZE_BYTES) continue;
-      try {
-        const base64 = await fileToBase64(file);
-        toAdd.push(base64);
-      } catch {
-        // Skip invalid files
-      }
-    }
-    if (toAdd.length > 0) {
-      setImages((prev) => [...prev, ...toAdd].slice(0, MAX_IMAGES));
-    }
-  }, []);
-
-  const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handlePaste = useCallback(
-    async (e: React.ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      const files: File[] = [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.kind === "file" && item.type.startsWith("image/")) {
-          const file = item.getAsFile();
-          if (file) files.push(file);
-        }
-      }
-      if (files.length > 0) {
-        e.preventDefault();
-        await addImagesFromFiles(files);
-      }
-    },
-    [addImagesFromFiles]
-  );
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "copy";
-  };
-
-  const handleDrop = useCallback(
-    async (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const files = e.dataTransfer?.files;
-      if (files?.length) await addImagesFromFiles(files);
-    },
-    [addImagesFromFiles]
-  );
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files?.length) addImagesFromFiles(files);
-    e.target.value = "";
-  };
-
   const handleSubmit = async () => {
     if (!input.trim() || submitting) return;
     const text = input.trim();
-    const imagePayload = images.length > 0 ? images : undefined;
+    const imagePayload = imageAttachment.images.length > 0 ? imageAttachment.images : undefined;
     const priorityPayload = priority != null ? priority : undefined;
     setInput("");
-    setImages([]);
+    imageAttachment.reset();
     setPriority(null);
     await dispatch(
       submitFeedback({ projectId, text, images: imagePayload, priority: priorityPayload })
@@ -627,9 +558,9 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
   });
 
   const handleSubmitReply = useCallback(
-    async (parentId: string, text: string) => {
+    async (parentId: string, text: string, images?: string[]) => {
       if (!text.trim() || submitting) return;
-      await dispatch(submitFeedback({ projectId, text, parentId }));
+      await dispatch(submitFeedback({ projectId, text, images, parentId }));
     },
     [dispatch, projectId, submitting]
   );
@@ -707,7 +638,11 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
       >
         <div className="max-w-3xl mx-auto px-6 py-8">
           {/* Feedback Input */}
-          <div className="card p-5 mb-8" onDragOver={handleDragOver} onDrop={handleDrop}>
+          <div
+            className="card p-5 mb-8"
+            onDragOver={imageAttachment.handleDragOver}
+            onDrop={imageAttachment.handleDrop}
+          >
             <label className="block text-sm font-medium text-theme-text mb-2">
               What did you find?
             </label>
@@ -715,32 +650,12 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
               className="input min-h-[100px] mb-3"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onPaste={handlePaste}
+              onPaste={imageAttachment.handlePaste}
               onKeyDown={onKeyDownFeedback}
               placeholder="Describe a bug, suggest a feature, or report a UX issue..."
               disabled={submitting}
             />
-            {images.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {images.map((dataUrl, i) => (
-                  <div key={i} className="relative group">
-                    <img
-                      src={dataUrl}
-                      alt={`Attachment ${i + 1}`}
-                      className="h-16 w-16 object-cover rounded border border-theme-border"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(i)}
-                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-theme-error-solid text-white text-xs flex items-center justify-center hover:bg-theme-error-solid-hover transition-colors shadow"
-                      aria-label="Remove image"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <ImageAttachmentThumbnails attachment={imageAttachment} className="mb-3" />
             <div className="flex justify-end items-center gap-2 flex-wrap">
               <div ref={feedbackPriorityDropdownRef} className="relative shrink-0">
                 <button
