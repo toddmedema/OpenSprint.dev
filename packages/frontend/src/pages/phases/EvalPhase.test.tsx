@@ -12,7 +12,7 @@ import executeReducer from "../../store/slices/executeSlice";
 import evalReducer from "../../store/slices/evalSlice";
 import deliverReducer from "../../store/slices/deliverSlice";
 import notificationReducer from "../../store/slices/notificationSlice";
-import type { FeedbackItem } from "@opensprint/shared";
+import type { FeedbackItem, Task } from "@opensprint/shared";
 
 vi.mock("../../api/client", () => ({
   api: {
@@ -31,7 +31,29 @@ vi.mock("../../api/client", () => ({
   },
 }));
 
-function createStore(overrides?: { evalFeedback?: FeedbackItem[] }) {
+function createMockTask(overrides: Partial<Task> = {}): Task {
+  return {
+    id: "task-1",
+    title: "Fix login bug",
+    description: "",
+    type: "task",
+    status: "open",
+    priority: 0,
+    assignee: null,
+    labels: [],
+    dependencies: [],
+    epicId: null,
+    kanbanColumn: "in_progress",
+    createdAt: "2024-01-01T00:00:00Z",
+    updatedAt: "2024-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function createStore(overrides?: {
+  evalFeedback?: FeedbackItem[];
+  executeTasks?: Task[];
+}) {
   const preloadedState: Record<string, unknown> = {
     project: {
       data: {
@@ -51,6 +73,28 @@ function createStore(overrides?: { evalFeedback?: FeedbackItem[] }) {
       feedback: overrides.evalFeedback,
       loading: false,
       submitting: false,
+      error: null,
+    };
+  }
+  if (overrides?.executeTasks !== undefined) {
+    preloadedState.execute = {
+      tasks: overrides.executeTasks,
+      plans: [],
+      orchestratorRunning: false,
+      awaitingApproval: false,
+      activeTasks: [],
+      selectedTaskId: null,
+      taskDetail: null,
+      taskDetailLoading: false,
+      taskDetailError: null,
+      agentOutput: {},
+      completionState: null,
+      archivedSessions: [],
+      archivedLoading: false,
+      markDoneLoading: false,
+      unblockLoading: false,
+      statusLoading: false,
+      loading: false,
       error: null,
     };
   }
@@ -629,6 +673,75 @@ describe("EvalPhase feedback form", () => {
       expect(screen.getByText("Bug 4")).toBeInTheDocument();
       expect(screen.getByText("Bug 5")).toBeInTheDocument();
       expect(screen.getByText("Bug 6")).toBeInTheDocument();
+    });
+  });
+
+  describe("feedback card task chips", () => {
+    it("shows priority icon in each created-task chip", async () => {
+      const feedbackWithTasks: FeedbackItem[] = [
+        {
+          id: "fb-mapped",
+          text: "Auth bug",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: ["task-1", "task-2"],
+          status: "mapped",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+      ];
+      const executeTasks: Task[] = [
+        createMockTask({ id: "task-1", priority: 0 }),
+        createMockTask({ id: "task-2", priority: 2 }),
+      ];
+      const store = createStore({
+        evalFeedback: feedbackWithTasks,
+        executeTasks,
+      });
+
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
+      });
+
+      // PriorityIcon uses role="img" and aria-label for each priority level
+      expect(screen.getByRole("img", { name: "Critical" })).toBeInTheDocument();
+      expect(screen.getByRole("img", { name: "Medium" })).toBeInTheDocument();
+    });
+
+    it("defaults to High icon when task not found in state", async () => {
+      const feedbackWithTasks: FeedbackItem[] = [
+        {
+          id: "fb-mapped",
+          text: "Orphan task",
+          category: "feature",
+          mappedPlanId: null,
+          createdTaskIds: ["unknown-task-id"],
+          status: "mapped",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+      ];
+      const store = createStore({
+        evalFeedback: feedbackWithTasks,
+        executeTasks: [],
+      });
+
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
+      });
+
+      // Unknown task defaults to priority 1 (High)
+      expect(screen.getByRole("img", { name: "High" })).toBeInTheDocument();
     });
   });
 });

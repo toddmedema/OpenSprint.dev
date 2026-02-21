@@ -169,6 +169,7 @@ interface FeedbackCardProps {
   depth: number;
   projectId: string;
   getTaskColumn: (taskId: string) => KanbanColumn;
+  getTaskPriority: (taskId: string) => number;
   getTaskTitle?: (taskId: string) => string | undefined;
   onNavigateToBuildTask?: (taskId: string) => void;
   replyingToId: string | null;
@@ -190,6 +191,7 @@ function FeedbackCard({
   depth,
   projectId,
   getTaskColumn,
+  getTaskPriority,
   getTaskTitle,
   onNavigateToBuildTask,
   replyingToId,
@@ -337,6 +339,7 @@ function FeedbackCard({
               {item.createdTaskIds.map((taskId) => {
                 const column = getTaskColumn(taskId);
                 const statusLabel = COLUMN_LABELS[column];
+                const taskPriority = getTaskPriority(taskId);
                 const linkContent = onNavigateToBuildTask ? (
                   <button
                     type="button"
@@ -344,6 +347,7 @@ function FeedbackCard({
                     className="inline-flex items-center gap-1.5 rounded bg-theme-border-subtle px-1.5 py-0.5 text-xs font-mono text-brand-600 hover:bg-theme-info-bg hover:text-theme-info-text underline transition-colors"
                     title={`Go to ${taskId} on Execute tab (${statusLabel})`}
                   >
+                    <PriorityIcon priority={taskPriority} size="xs" />
                     <TaskStatusBadge column={column} size="xs" />
                     <span
                       className="text-theme-muted font-sans font-normal no-underline"
@@ -355,6 +359,7 @@ function FeedbackCard({
                   </button>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 rounded bg-theme-border-subtle px-1.5 py-0.5 text-xs font-mono text-theme-muted">
+                    <PriorityIcon priority={taskPriority} size="xs" />
                     <TaskStatusBadge column={column} size="xs" />
                     <span
                       className="text-theme-muted font-sans font-normal"
@@ -470,6 +475,7 @@ function FeedbackCard({
             depth={depth + 1}
             projectId={projectId}
             getTaskColumn={getTaskColumn}
+            getTaskPriority={getTaskPriority}
             getTaskTitle={getTaskTitle}
             onNavigateToBuildTask={onNavigateToBuildTask}
             replyingToId={replyingToId}
@@ -508,6 +514,14 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
     (taskId: string): string | undefined => {
       const task = executeTasks.find((t) => t.id === taskId);
       return task?.title;
+    },
+    [executeTasks]
+  );
+
+  const getTaskPriority = useCallback(
+    (taskId: string): number => {
+      const task = executeTasks.find((t) => t.id === taskId);
+      return task?.priority ?? 1;
     },
     [executeTasks]
   );
@@ -876,6 +890,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                   depth={0}
                   projectId={projectId}
                   getTaskColumn={getTaskColumn}
+                  getTaskPriority={getTaskPriority}
                   getTaskTitle={getTaskTitle}
                   onNavigateToBuildTask={onNavigateToBuildTask}
                   replyingToId={replyingToId}
