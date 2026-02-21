@@ -144,7 +144,14 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         break;
 
       case "task.updated":
-        d(taskUpdated({ taskId: event.taskId, status: event.status, assignee: event.assignee }));
+        d(
+          taskUpdated({
+            taskId: event.taskId,
+            status: event.status,
+            assignee: event.assignee,
+            priority: event.priority,
+          })
+        );
         d(
           mergeTaskUpdate({
             projectId,

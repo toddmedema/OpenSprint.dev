@@ -7,6 +7,8 @@ export interface TaskUpdatedEvent {
   taskId: string;
   status: string;
   assignee: string | null;
+  /** Optional; when present, syncs task priority into task registry and execute state */
+  priority?: number;
 }
 
 export interface AgentOutputEvent {
