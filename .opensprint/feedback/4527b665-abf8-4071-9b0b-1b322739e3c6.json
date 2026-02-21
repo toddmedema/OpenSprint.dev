@@ -4,9 +4,7 @@
   "category": "bug",
   "mappedPlanId": "agent-invocation-service",
   "createdTaskIds": [],
-  "status": "mapped",
+  "status": "resolved",
   "createdAt": "2026-02-16T01:42:13.175Z",
-  "taskTitles": [
-    "Change the name of \"Validate\" and all references to it to \"Verify\""
-  ]
+  "taskTitles": ["Change the name of \"Validate\" and all references to it to \"Verify\""]
 }

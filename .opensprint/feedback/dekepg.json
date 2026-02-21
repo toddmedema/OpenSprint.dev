@@ -1,0 +1,25 @@
+{
+  "id": "dekepg",
+  "text": "In the evaluate page, the card showing the information for a specific piece of feedback... rather than showing the task ID as the link, and the task name as a hover tooltip, just show the task name as the link itself (truncated to the first 30 characters), and remove the hover tooltip",
+  "category": "ux",
+  "mappedPlanId": "verify-phase-feedback-submission-and-mapping",
+  "createdTaskIds": ["opensprint.dev-rls3"],
+  "status": "mapped",
+  "createdAt": "2026-02-21T08:35:45.569Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-srl",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Show task name instead of task ID in feedback card links",
+      "description": "In the Evaluate phase feedback detail card, change the linked-task display so the link text is the task title truncated to 30 characters instead of the task ID. Remove the hover tooltip entirely. Acceptance criteria: (1) Each task link in a feedback card renders the task title as the clickable text, truncated to 30 characters with an ellipsis if longer. (2) No tooltip appears on hover. (3) The link still navigates to the correct task. (4) Truncation uses a CSS/JS approach that appends '…' when the title exceeds 30 characters.",
+      "priority": 3,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Show task name instead of task ID in feedback card links"],
+  "feedbackSourceBeadId": "opensprint.dev-1b47"
+}

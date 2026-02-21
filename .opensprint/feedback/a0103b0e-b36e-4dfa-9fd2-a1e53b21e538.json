@@ -4,7 +4,7 @@
   "category": "ux",
   "mappedPlanId": "agent-invocation-service",
   "createdTaskIds": ["opensprint.dev-z0v.5", "opensprint.dev-z0v.6"],
-  "status": "mapped",
+  "status": "resolved",
   "createdAt": "2026-02-16T09:18:04.148Z",
   "taskTitles": [
     "Replace Close buttons with X icon across UI",
