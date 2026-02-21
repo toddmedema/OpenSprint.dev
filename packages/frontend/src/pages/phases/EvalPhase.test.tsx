@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
@@ -500,6 +500,65 @@ describe("EvalPhase feedback form", () => {
       await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument(), {
         timeout: 200,
       });
+    });
+  });
+
+  describe("Attach image button tooltip", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("shows Attach image(s) tooltip on main feedback form after hover delay", async () => {
+      const store = createStore();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-attach-image")).toBeInTheDocument();
+      });
+
+      const attachButton = screen.getByRole("button", { name: /Attach image/i });
+      await userEvent.hover(attachButton);
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+
+      await waitFor(() => {
+        const tooltip = screen.getByRole("tooltip");
+        expect(tooltip).toHaveTextContent("Attach image(s)");
+      });
+    });
+
+    it("dismisses attach image tooltip when cursor leaves button", async () => {
+      const store = createStore();
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-attach-image")).toBeInTheDocument();
+      });
+
+      const attachButton = screen.getByRole("button", { name: /Attach image/i });
+      await userEvent.hover(attachButton);
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+
+      await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
+
+      await userEvent.unhover(attachButton);
+
+      await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
     });
   });
 
