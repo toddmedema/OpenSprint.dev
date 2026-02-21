@@ -20,12 +20,12 @@ function ProjectCard({ project }: { project: Project }) {
   return (
     <Link
       to={getProjectPhasePath(project.id, project.currentPhase)}
-      className="card p-8 hover:shadow-md transition-shadow group block"
+      className="card p-8 hover:shadow-md transition-shadow group flex flex-col h-full min-h-[12rem]"
     >
-      <h3 className="font-semibold text-theme-text group-hover:text-brand-600 transition-colors">
+      <h3 className="font-semibold text-theme-text group-hover:text-brand-600 transition-colors line-clamp-2">
         {project.name}
       </h3>
-      <div className="mt-3 flex items-center justify-between">
+      <div className="mt-3 flex items-center justify-between flex-shrink-0">
         <span className="inline-flex items-center rounded-full bg-theme-info-bg px-2.5 py-1 text-xs font-medium text-theme-info-text">
           {phaseLabel}
         </span>
@@ -34,7 +34,7 @@ function ProjectCard({ project }: { project: Project }) {
         </span>
       </div>
       {progress > 0 && (
-        <div className="mt-3">
+        <div className="mt-3 mt-auto">
           <div className="flex justify-between text-xs text-theme-muted mb-1">
             <span>Progress</span>
             <span>{progress}%</span>

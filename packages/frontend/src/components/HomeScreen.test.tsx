@@ -106,6 +106,40 @@ describe("HomeScreen", () => {
     expect(card).toHaveClass("p-8");
   });
 
+  it("project cards have uniform height classes (h-full min-h)", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+
+    renderHomeScreen();
+
+    await screen.findByText("My Project");
+    const card = screen.getByRole("link", { name: /my project/i });
+    expect(card).toHaveClass("h-full");
+    expect(card).toHaveClass("min-h-[12rem]");
+  });
+
+  it("cards with short and long names render in same-height grid", async () => {
+    const shortName = { ...mockProject, id: "p1", name: "A" };
+    const longName = {
+      ...mockProject,
+      id: "p2",
+      name: "A Very Long Project Name That Wraps To Multiple Lines",
+    };
+    mockProjectsList.mockResolvedValue([shortName, longName]);
+
+    renderHomeScreen();
+
+    await screen.findByText("A");
+    await screen.findByText("A Very Long Project Name That Wraps To Multiple Lines");
+    const grid = screen.getByText("A").closest(".grid");
+    expect(grid).toBeInTheDocument();
+    const cards = grid!.querySelectorAll("a[href*='/projects/']");
+    expect(cards.length).toBe(2);
+    cards.forEach((card) => {
+      expect(card).toHaveClass("h-full");
+      expect(card).toHaveClass("min-h-[12rem]");
+    });
+  });
+
   it("project card links to correct phase path", async () => {
     mockProjectsList.mockResolvedValue([mockProject]);
 
