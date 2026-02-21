@@ -33,6 +33,7 @@ describe("BeadsService", () => {
   it("should have all expected methods", () => {
     expect(typeof beads.init).toBe("function");
     expect(typeof beads.create).toBe("function");
+    expect(typeof beads.createWithRetry).toBe("function");
     expect(typeof beads.update).toBe("function");
     expect(typeof beads.close).toBe("function");
     expect(typeof beads.ready).toBe("function");
@@ -209,6 +210,104 @@ describe("BeadsService", () => {
       mockStdout = JSON.stringify([{ id: "task-1", title: "Task", status: "open" }]);
       const result = await beads.show("/repo", "task-1");
       expect(result.id).toBe("task-1");
+    });
+  });
+
+  describe("createWithRetry", () => {
+    // execImpl uses err.stderr || err.stdout || err.message for AppError; isDuplicateKeyError needs Error 1062
+    const duplicateError = Object.assign(new Error("duplicate key"), {
+      stderr: "Error 1062: Duplicate entry",
+    });
+
+    const allowSyncAndCreate = (
+      createBehavior: (cmd: string) => Promise<{ stdout: string; stderr: string }>
+    ) =>
+    async (cmd: string) => {
+      if (!cmd.includes("create ")) {
+        return { stdout: "", stderr: "" };
+      }
+      return createBehavior(cmd);
+    };
+
+    it("should return issue on first-try success", async () => {
+      mockExecImpl = allowSyncAndCreate(() =>
+        Promise.resolve({
+          stdout: JSON.stringify({ id: "task-1", title: "Task", status: "open" }),
+          stderr: "",
+        })
+      ) as (cmd: string) => Promise<{ stdout: string; stderr: string }>;
+      const result = await beads.createWithRetry("/repo", "Task", {
+        type: "task",
+        priority: 1,
+        parentId: "epic-1",
+      });
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe("task-1");
+    });
+
+    it("should retry on duplicate key then succeed", async () => {
+      let createCallCount = 0;
+      mockExecImpl = allowSyncAndCreate(async () => {
+        createCallCount++;
+        if (createCallCount <= 2) {
+          throw duplicateError;
+        }
+        return {
+          stdout: JSON.stringify({ id: "task-2", title: "Task", status: "open" }),
+          stderr: "",
+        };
+      }) as (cmd: string) => Promise<{ stdout: string; stderr: string }>;
+      const result = await beads.createWithRetry("/repo", "Task", {
+        type: "task",
+        priority: 1,
+        parentId: "epic-1",
+      });
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe("task-2");
+      expect(createCallCount).toBe(3);
+    });
+
+    it("should fallback to standalone when fallbackToStandalone and all retries fail", async () => {
+      mockExecImpl = allowSyncAndCreate(async (cmd: string) => {
+        if (cmd.includes("--parent")) {
+          throw duplicateError;
+        }
+        return {
+          stdout: JSON.stringify({ id: "task-standalone", title: "Task", status: "open" }),
+          stderr: "",
+        };
+      }) as (cmd: string) => Promise<{ stdout: string; stderr: string }>;
+      const result = await beads.createWithRetry(
+        "/repo",
+        "Task",
+        { type: "task", priority: 1, parentId: "epic-1" },
+        { fallbackToStandalone: true }
+      );
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe("task-standalone");
+    });
+
+    it("should rethrow non-duplicate errors", async () => {
+      const otherError = new Error("Permission denied");
+      mockExecImpl = allowSyncAndCreate(async () => {
+        throw otherError;
+      }) as (cmd: string) => Promise<{ stdout: string; stderr: string }>;
+      await expect(
+        beads.createWithRetry("/repo", "Task", { parentId: "epic-1" })
+      ).rejects.toThrow("Permission denied");
+    });
+
+    it("should return null when fallback also fails", async () => {
+      mockExecImpl = allowSyncAndCreate(async () => {
+        throw duplicateError;
+      }) as (cmd: string) => Promise<{ stdout: string; stderr: string }>;
+      const result = await beads.createWithRetry(
+        "/repo",
+        "Task",
+        { type: "task", parentId: "epic-1" },
+        { fallbackToStandalone: true }
+      );
+      expect(result).toBeNull();
     });
   });
 

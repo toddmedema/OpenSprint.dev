@@ -91,6 +91,10 @@ const mockBeadsCreate = vi.fn().mockImplementation(() => {
     beadsCreateCallCount === 1 ? "mock-feedback-source-1" : `mock-task-${beadsCreateCallCount - 1}`;
   return Promise.resolve({ id, title: "Mock", status: "open" });
 });
+const mockBeadsCreateWithRetry = vi.fn().mockImplementation(
+  (repoPath: string, title: string, options: unknown, opts?: { fallbackToStandalone?: boolean }) =>
+    mockBeadsCreate(repoPath, title, options)
+);
 const mockBeadsAddDependency = vi.fn().mockResolvedValue(undefined);
 
 let feedbackIdSequence: string[] = [];
@@ -104,6 +108,7 @@ vi.mock("../services/beads.service.js", () => ({
     init: vi.fn().mockResolvedValue(undefined),
     configSet: vi.fn().mockResolvedValue(undefined),
     create: (...args: unknown[]) => mockBeadsCreate(...args),
+    createWithRetry: (...args: unknown[]) => mockBeadsCreateWithRetry(...args),
     addDependency: (...args: unknown[]) => mockBeadsAddDependency(...args),
     listAll: (...args: unknown[]) => mockBeadsListAll(...args),
     list: vi.fn().mockResolvedValue([]),
