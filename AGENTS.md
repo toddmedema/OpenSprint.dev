@@ -8,6 +8,15 @@ OpenSprint is a web application that guides users through the full software deve
 
 **Tech stack:** Node.js + TypeScript (backend), React + TypeScript (frontend).
 
+## Orchestrator Recovery (GUPP-style)
+
+Work state is persisted before agent spawn via `assignment.json` in `.opensprint/active/<task-id>/`. If the backend crashes, recovery reads the assignment and re-spawns the agent — no work is lost. **Always write assignment before spawn; never spawn then write.**
+
+## Loop Kicker vs Watchdog
+
+- **Loop kicker** (60s): Restarts the orchestrator loop when idle. Runs inside the orchestrator.
+- **Watchdog** (5 min): Witness-style health patrol — stale heartbeats, orphaned tasks, stale `.git/index.lock`. Runs in a separate `WatchdogService`.
+
 ## Beads Quick Reference
 
 Beads removed the daemon subsystem (no `--no-daemon` flag).

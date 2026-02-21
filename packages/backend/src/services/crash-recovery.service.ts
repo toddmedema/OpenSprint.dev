@@ -7,9 +7,18 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("crash-recovery");
 
 /**
- * GUPP-style crash recovery: scans .opensprint/active/ for assignment.json files.
- * Each active task writes an assignment.json before spawning its agent. On crash,
- * we scan for these files and requeue the orphaned tasks.
+ * Crash recovery for the orchestrator (PRD §5.8).
+ *
+ * GUPP-style: work state is persisted in assignment.json before agent spawn.
+ * On backend crash, recovery reads assignment.json and can re-spawn the agent.
+ *
+ * Recovery scenarios (handled at orchestrator startup):
+ * 1. No active task — clear state, normal start
+ * 2. Active task, PID alive — resume monitoring (output streaming, timeout), handle exit
+ * 3. Active task, PID dead — revert/cleanup, comment bead, requeue task
+ *
+ * This service provides: findOrphanedAssignments (scan .opensprint/active/),
+ * readOutputLogTail, readOutputLogFrom for output streaming during recovery.
  */
 export class CrashRecoveryService {
   /**

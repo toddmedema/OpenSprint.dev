@@ -399,6 +399,19 @@ The Execute phase is where AI agents autonomously implement the planned features
 | Blocked → Ready         | User sets status back to `open` (optionally resets `attempts:<N>` label)                                                |
 | Done → (terminal)       | Tasks cannot be reopened; new tasks are created instead                                                                 |
 
+**Orchestrator state machine** (per-task execution flow):
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> coding: start_task
+    coding --> review: enter_review (tests pass)
+    coding --> idle: fail (revert, requeue)
+    review --> idle: complete (merge)
+    review --> coding: fail (rejection retry)
+    review --> idle: fail (crash/timeout)
+```
+
 #### 7.3.4 User Interface
 
 The Execute tab presents a list of epic cards, one per Plan feature. Each epic card displays the feature title, an inline progress summary (e.g., "3/8 tasks done"), and a collapsible table of its child tasks showing task title, status badge, assigned agent, and elapsed time. Clicking a task row opens a detail sidebar with the full task specification, live agent output stream (for in-progress or in-review tasks), or completed work artifacts (for done tasks). A top-level progress bar shows overall project completion. Blocked tasks are highlighted with a distinct badge and an "Unblock" action.

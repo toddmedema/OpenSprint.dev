@@ -1,7 +1,8 @@
 /**
- * Serialized git commit queue (PRD §5.9).
+ * Serialized git commit queue (Refinery-like, PRD §5.9).
  * Async FIFO queue with single worker for all main-branch git operations.
- * Prevents .git/index.lock contention when multiple agents trigger commits.
+ * Prevents .git/index.lock contention when multiple agents/processes trigger
+ * commits (beads export, PRD update, worktree merge).
  *
  * Conflict-aware: when the repo has unmerged files, beads/PRD exports are
  * written and staged but the commit is deferred until the repo is clean.

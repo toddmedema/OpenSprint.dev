@@ -48,6 +48,10 @@ import { getPlanComplexityForTask } from "./plan-complexity.js";
 import { eventLogService } from "./event-log.service.js";
 import { agentIdentityService, type AttemptOutcome } from "./agent-identity.service.js";
 import { createLogger } from "../utils/logger.js";
+import {
+  PhaseExecutorService,
+  type PhaseExecutorHost,
+} from "./phase-executor.service.js";
 
 const log = createLogger("orchestrator");
 
@@ -79,8 +83,8 @@ interface RetryContext {
   failureType?: FailureType;
 }
 
-/** Watchdog interval: 60 seconds */
-const WATCHDOG_INTERVAL_MS = 60 * 1000;
+/** Loop kicker interval: 60s — restarts idle orchestrator loop (distinct from 5-min WatchdogService health patrol). */
+const LOOP_KICKER_INTERVAL_MS = 60 * 1000;
 
 /**
  * GUPP-style assignment file: everything an agent needs to self-start.
@@ -217,6 +221,13 @@ export class OrchestratorService {
   private pushInProgress = new Set<string>();
   /** Promise per project that resolves when the current push completes */
   private pushCompletion = new Map<string, { promise: Promise<void>; resolve: () => void }>();
+
+  private phaseExecutor = new PhaseExecutorService(this as unknown as PhaseExecutorHost, {
+    handleCodingDone: (a, b, c, d, e) => this.handleCodingDone(a, b, c, d, e),
+    handleReviewDone: (a, b, c, d, e) => this.handleReviewDone(a, b, c, d, e),
+    handleTaskFailure: (a, b, c, d, e, f, g, h) =>
+      this.handleTaskFailure(a, b, c, d, e, f, g as FailureType | undefined, h),
+  });
 
   private getState(projectId: string): OrchestratorState {
     if (!this.state.has(projectId)) {
@@ -545,16 +556,16 @@ export class OrchestratorService {
       state.status.totalFailed = counters.totalFailed;
     }
 
-    // Start watchdog timer if not already running
-    if (!state.globalTimers.has("watchdog")) {
+    // Start loop kicker timer if not already running (nudges when idle; distinct from WatchdogService)
+    if (!state.globalTimers.has("loopKicker")) {
       state.globalTimers.setInterval(
-        "watchdog",
+        "loopKicker",
         () => {
           this.nudge(projectId);
         },
-        WATCHDOG_INTERVAL_MS
+        LOOP_KICKER_INTERVAL_MS
       );
-      log.info("Watchdog started (60s interval) for project", { projectId });
+      log.info("Loop kicker started (60s interval) for project", { projectId });
     }
 
     if (!state.loopActive) {
@@ -737,117 +748,7 @@ export class OrchestratorService {
     slot: AgentSlot,
     retryContext?: RetryContext
   ): Promise<void> {
-    const settings = await this.projectService.getSettings(projectId);
-    const branchName = slot.branchName;
-
-    try {
-      const wtPath = await this.branchManager.createTaskWorktree(repoPath, task.id);
-      slot.worktreePath = wtPath;
-
-      await this.preflightCheck(repoPath, wtPath, task.id);
-
-      let context: TaskContext = await this.contextAssembler.buildContext(
-        repoPath,
-        task.id,
-        this.beads,
-        this.branchManager
-      );
-
-      if (shouldInvokeSummarizer(context)) {
-        context = await this.runSummarizer(projectId, settings, task.id, context);
-      }
-
-      const config: ActiveTaskConfig = {
-        invocation_id: task.id,
-        agent_role: "coder",
-        taskId: task.id,
-        repoPath: wtPath,
-        branch: branchName,
-        testCommand: resolveTestCommand(settings) || 'echo "No test command configured"',
-        attempt: slot.attempt,
-        phase: "coding",
-        previousFailure: retryContext?.previousFailure ?? null,
-        reviewFeedback: retryContext?.reviewFeedback ?? null,
-        previousTestOutput: retryContext?.previousTestOutput ?? null,
-        previousDiff: retryContext?.previousDiff ?? null,
-        useExistingBranch: retryContext?.useExistingBranch ?? false,
-      };
-
-      await this.contextAssembler.assembleTaskDirectory(wtPath, task.id, config, context);
-
-      const taskDir = this.sessionManager.getActiveDir(wtPath, task.id);
-      const promptPath = path.join(taskDir, "prompt.md");
-
-      const complexity = await getPlanComplexityForTask(repoPath, task);
-      let agentConfig = getCodingAgentForComplexity(settings, complexity);
-
-      if (retryContext?.failureType && slot.attempt > 1) {
-        const recentAttempts = await agentIdentityService.getRecentAttempts(repoPath, task.id);
-        agentConfig = agentIdentityService.selectAgentForRetry(
-          settings,
-          task.id,
-          slot.attempt,
-          retryContext.failureType,
-          complexity,
-          recentAttempts
-        );
-      }
-
-      // Write assignment.json before spawn (GUPP recovery)
-      const assignment: TaskAssignment = {
-        taskId: task.id,
-        projectId,
-        phase: "coding",
-        branchName,
-        worktreePath: wtPath,
-        promptPath,
-        agentConfig,
-        attempt: slot.attempt,
-        retryContext,
-        createdAt: new Date().toISOString(),
-      };
-      await writeJsonAtomic(path.join(taskDir, OPENSPRINT_PATHS.assignment), assignment);
-
-      this.lifecycleManager.run(
-        {
-          projectId,
-          taskId: task.id,
-          phase: "coding",
-          wtPath,
-          branchName,
-          promptPath,
-          agentConfig,
-          agentLabel: slot.taskTitle ?? task.id,
-          role: "coder",
-          onDone: (code) => this.handleCodingDone(projectId, repoPath, task, branchName, code),
-        },
-        slot.agent,
-        slot.timers
-      );
-
-      eventLogService
-        .append(repoPath, {
-          timestamp: new Date().toISOString(),
-          projectId,
-          taskId: task.id,
-          event: "agent.spawned",
-          data: { phase: "coding", model: agentConfig.model, attempt: slot.attempt },
-        })
-        .catch(() => {});
-
-      await this.persistCounters(projectId, repoPath);
-    } catch (error) {
-      log.error(`Coding phase failed for task ${task.id}`, { error });
-      await this.handleTaskFailure(
-        projectId,
-        repoPath,
-        task,
-        branchName,
-        String(error),
-        null,
-        "agent_crash"
-      );
-    }
+    return this.phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot, retryContext);
   }
 
   private async handleCodingDone(
@@ -961,103 +862,7 @@ export class OrchestratorService {
     task: BeadsIssue,
     branchName: string
   ): Promise<void> {
-    const state = this.getState(projectId);
-    const slot = state.slots.get(task.id);
-    if (!slot) {
-      log.warn("executeReviewPhase: no slot found for task", { taskId: task.id });
-      return;
-    }
-    const settings = await this.projectService.getSettings(projectId);
-    const wtPath = slot.worktreePath ?? repoPath;
-
-    try {
-      const config: ActiveTaskConfig = {
-        invocation_id: task.id,
-        agent_role: "reviewer",
-        taskId: task.id,
-        repoPath: wtPath,
-        branch: branchName,
-        testCommand: resolveTestCommand(settings) || 'echo "No test command configured"',
-        attempt: slot.attempt,
-        phase: "review",
-        previousFailure: null,
-        reviewFeedback: null,
-      };
-
-      const taskDir = this.sessionManager.getActiveDir(wtPath, task.id);
-      await fs.mkdir(taskDir, { recursive: true });
-      await fs.writeFile(path.join(taskDir, "config.json"), JSON.stringify(config, null, 2));
-
-      const context = await this.contextAssembler.buildContext(
-        repoPath,
-        task.id,
-        this.beads,
-        this.branchManager
-      );
-
-      context.reviewHistory = await this.buildReviewHistory(repoPath, task.id);
-
-      await this.contextAssembler.assembleTaskDirectory(wtPath, task.id, config, context);
-
-      const promptPath = path.join(taskDir, "prompt.md");
-
-      const complexity = await getPlanComplexityForTask(repoPath, task);
-      const agentConfig = getCodingAgentForComplexity(settings, complexity);
-
-      // Write assignment.json before spawn (GUPP recovery)
-      const assignment: TaskAssignment = {
-        taskId: task.id,
-        projectId,
-        phase: "review",
-        branchName,
-        worktreePath: wtPath,
-        promptPath,
-        agentConfig,
-        attempt: slot.attempt,
-        createdAt: new Date().toISOString(),
-      };
-      await writeJsonAtomic(path.join(taskDir, OPENSPRINT_PATHS.assignment), assignment);
-
-      this.lifecycleManager.run(
-        {
-          projectId,
-          taskId: task.id,
-          phase: "review",
-          wtPath,
-          branchName,
-          promptPath,
-          agentConfig,
-          agentLabel: slot.taskTitle ?? task.id,
-          role: "reviewer",
-          onDone: (code) => this.handleReviewDone(projectId, repoPath, task, branchName, code),
-        },
-        slot.agent,
-        slot.timers
-      );
-
-      eventLogService
-        .append(repoPath, {
-          timestamp: new Date().toISOString(),
-          projectId,
-          taskId: task.id,
-          event: "agent.spawned",
-          data: { phase: "review", model: agentConfig.model, attempt: slot.attempt },
-        })
-        .catch(() => {});
-
-      await this.persistCounters(projectId, repoPath);
-    } catch (error) {
-      log.error(`Review phase failed for task ${task.id}`, { error });
-      await this.handleTaskFailure(
-        projectId,
-        repoPath,
-        task,
-        branchName,
-        String(error),
-        null,
-        "agent_crash"
-      );
-    }
+    return this.phaseExecutor.executeReviewPhase(projectId, repoPath, task, branchName);
   }
 
   private async handleReviewDone(
