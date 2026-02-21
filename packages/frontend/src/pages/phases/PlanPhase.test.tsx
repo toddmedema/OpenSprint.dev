@@ -327,26 +327,6 @@ describe("PlanPhase archive", () => {
     expect(screen.getByRole("separator", { name: "Resize sidebar" })).toBeInTheDocument();
   });
 
-  it("has plan details sidebar header sticky at top (shrink-0) with scrollable content below", () => {
-    const store = createStore();
-    render(
-      <Provider store={store}>
-        <PlanPhase projectId="proj-1" />
-      </Provider>
-    );
-    const header = screen.getByTestId("plan-detail-sidebar-header");
-    expect(header).toBeInTheDocument();
-    expect(header).toHaveClass("shrink-0");
-    expect(header).toHaveClass("sticky");
-    expect(header).toHaveClass("top-0");
-    expect(header).toHaveClass("border-b");
-    expect(header).toHaveClass("bg-theme-bg");
-    // Scrollable content area should be a sibling
-    const scrollArea = header.nextElementSibling;
-    expect(scrollArea).toHaveClass("overflow-y-auto");
-    expect(scrollArea).toHaveClass("flex-1");
-  });
-
   it("calls archive API when archive button is clicked", async () => {
     const store = createStore();
     const user = userEvent.setup();

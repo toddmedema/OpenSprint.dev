@@ -429,58 +429,49 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         />
       )}
 
-      {/* Sidebar: Plan Detail + Chat — header sticky at top, content scrollable (matches Execute) */}
+      {/* Sidebar: Plan Detail + Chat */}
       {selectedPlan && (
         <ResizableSidebar storageKey="plan" defaultWidth={420}>
-          <PlanDetailContent
-            key={selectedPlan.metadata.planId}
-            plan={selectedPlan}
-            onContentSave={handlePlanContentSave}
-            saving={savingPlanContentId === selectedPlan.metadata.planId}
-            headerActions={
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleArchive(selectedPlan.metadata.planId)}
-                  disabled={!!archivingPlanId}
-                  className="p-1.5 text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Archive plan (mark all ready/open tasks as done)"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden
+          {/* Scrollable content area: plan + mockups + chat messages */}
+          <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+            {/* Plan markdown — inline editable, title in header with actions */}
+            <PlanDetailContent
+              key={selectedPlan.metadata.planId}
+              plan={selectedPlan}
+              onContentSave={handlePlanContentSave}
+              saving={savingPlanContentId === selectedPlan.metadata.planId}
+              headerActions={
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleArchive(selectedPlan.metadata.planId)}
+                    disabled={!!archivingPlanId}
+                    className="p-1.5 text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Archive plan (mark all ready/open tasks as done)"
                   >
-                    <path d="M21 8v13H3V8" />
-                    <path d="M1 3h22v5H1z" />
-                    <path d="M10 12h4" />
-                  </svg>
-                </button>
-                <CloseButton onClick={handleClosePlan} ariaLabel="Close plan panel" />
-              </>
-            }
-          >
-            {({ header, body }) => (
-              <>
-                {/* Sticky header: title + close (shrink-0, matches Execute sidebar) */}
-                <div
-                  className="flex items-center justify-between border-b border-theme-border shrink-0 bg-theme-bg sticky top-0 z-10"
-                  data-testid="plan-detail-sidebar-header"
-                >
-                  {header}
-                </div>
-                {/* Scrollable content area: plan body + mockups + tasks + chat */}
-                <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
-                  {body}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <path d="M21 8v13H3V8" />
+                      <path d="M1 3h22v5H1z" />
+                      <path d="M10 12h4" />
+                    </svg>
+                  </button>
+                  <CloseButton onClick={handleClosePlan} ariaLabel="Close plan panel" />
+                </>
+              }
+            />
 
-                  {/* Mockups */}
+            {/* Mockups */}
             {selectedPlan.metadata.mockups && selectedPlan.metadata.mockups.length > 0 && (
               <div className="p-4 border-b border-theme-border">
                 <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide mb-2">
@@ -590,10 +581,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                 <div ref={messagesEndRef} />
               </div>
             </div>
-                </div>
-              </>
-            )}
-          </PlanDetailContent>
+          </div>
 
           {/* Pinned chat input at bottom */}
           <div className="shrink-0 border-t border-theme-border p-4 bg-theme-bg">
