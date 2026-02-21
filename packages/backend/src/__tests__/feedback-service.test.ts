@@ -693,6 +693,51 @@ describe("FeedbackService", () => {
     expect(taskCreateCall![2]).toMatchObject({ type: "feature" });
   });
 
+  it("should handle null from createWithRetry (exclude from createdIds)", async () => {
+    feedbackIdSequence = ["xyz123"];
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "bug",
+        mappedPlanId: null,
+        task_titles: ["Task A", "Task B"],
+      }),
+    });
+    let callCount = 0;
+    mockBeadsCreateWithRetry.mockImplementation((...args: unknown[]) => {
+      callCount++;
+      if (callCount === 2) return Promise.resolve(null);
+      return mockBeadsCreate(...(args as [string, string, unknown]));
+    });
+
+    const item = await feedbackService.submitFeedback(projectId, { text: "Bug report" });
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
+
+    const updated = await feedbackService.getFeedback(projectId, item.id);
+    expect(updated.createdTaskIds).toHaveLength(1);
+  });
+
+  it("should call createWithRetry with fallbackToStandalone: true for task creation", async () => {
+    feedbackIdSequence = ["xyz123"];
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "feature",
+        mappedPlanId: null,
+        task_titles: ["Task A"],
+      }),
+    });
+
+    const item = await feedbackService.submitFeedback(projectId, { text: "Add feature" });
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
+
+    const createWithRetryCalls = mockBeadsCreateWithRetry.mock.calls;
+    expect(createWithRetryCalls.length).toBeGreaterThanOrEqual(1);
+    const taskCreateCall = createWithRetryCalls.find(
+      (c) => c[1] === "Task A" && (c[2] as { type?: string })?.type === "feature"
+    );
+    expect(taskCreateCall).toBeDefined();
+    expect(taskCreateCall![3]).toEqual({ fallbackToStandalone: true });
+  });
+
   it("should add discovered-from dependency from each task to feedback source bead", async () => {
     feedbackIdSequence = ["xyz123"];
     mockInvoke.mockResolvedValue({
