@@ -1,0 +1,25 @@
+{
+  "id": "jumh4d",
+  "text": "In the homepage projects list, please add a three dot hamburger menu on the right side of each project's row. Opening it should give two options: Archive and Delete. Archive should display a modal saying \"This will remove the project from the UI, but not delete its data.\" (aka just remove it from projects.json) Delete's modal should say \"This will remove the project from the UI AND delete all OpenSprint-related data from the project folder (not including beads).\" (aka remove it from projects.json AND delete .opensprint in the project repo folder) Both modals should have Cancel (Primary) and Proceed (Secondary) buttons, and clicking Proceed should call a backend route that makes those changes.",
+  "category": "feature",
+  "mappedPlanId": "home-screen-and-project-switcher",
+  "createdTaskIds": ["opensprint.dev-ftks"],
+  "status": "mapped",
+  "createdAt": "2026-02-21T18:15:11.776Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 0,
+  "mappedEpicId": "opensprint.dev-6el",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Add project row context menu with Archive and Delete options",
+      "description": "Add a three-dot (kebab/hamburger) menu button to the right side of each project row on the homepage. Clicking it opens a dropdown with two options: Archive and Delete. Each option opens a confirmation modal:\n\n- **Archive modal:** Text reads \"This will remove the project from the UI, but not delete its data.\" Buttons: Cancel (primary) and Proceed (secondary).\n- **Delete modal:** Text reads \"This will remove the project from the UI AND delete all OpenSprint-related data from the project folder (not including beads).\" Buttons: Cancel (primary) and Proceed (secondary).\n\nAcceptance criteria:\n- Three-dot icon appears on the right side of each project row, visually aligned and themed (light/dark).\n- Clicking outside the dropdown closes it.\n- Cancel closes the modal with no side effects.\n- Proceed on Archive calls `DELETE /api/projects/:id?mode=archive` which removes the entry from `~/.opensprint/projects.json` only.\n- Proceed on Delete calls `DELETE /api/projects/:id?mode=delete` which removes the entry from `~/.opensprint/projects.json` AND deletes the `.opensprint/` directory from the project repo folder, leaving `.beads/` and all other project files intact.\n- After either action, the project list refreshes and the removed project no longer appears.\n- Error states (e.g., folder not found, permission denied) display a toast notification.",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Add project row context menu with Archive and Delete options"],
+  "feedbackSourceBeadId": "opensprint.dev-gisl"
+}
