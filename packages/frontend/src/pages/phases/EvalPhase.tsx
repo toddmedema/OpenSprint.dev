@@ -6,6 +6,7 @@ import { submitFeedback, resolveFeedback, removeFeedbackItem } from "../../store
 import { TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
 import { TaskLinkTooltip } from "../../components/TaskLinkTooltip";
 import { KeyboardShortcutTooltip } from "../../components/KeyboardShortcutTooltip";
+import { PriorityIcon } from "../../components/PriorityIcon";
 
 /** Reply icon (message turn / corner up-right) */
 function ReplyIcon({ className }: { className?: string }) {
@@ -515,6 +516,8 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [priority, setPriority] = useState<number | null>(null);
+  const [feedbackPriorityDropdownOpen, setFeedbackPriorityDropdownOpen] = useState(false);
+  const feedbackPriorityDropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() =>
@@ -609,6 +612,27 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
     [dispatch, projectId, submitting]
   );
 
+  useEffect(() => {
+    if (!feedbackPriorityDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        feedbackPriorityDropdownRef.current &&
+        !feedbackPriorityDropdownRef.current.contains(e.target as Node)
+      ) {
+        setFeedbackPriorityDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFeedbackPriorityDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [feedbackPriorityDropdownOpen]);
+
   const feedbackFeedRef = useRef<HTMLDivElement>(null);
 
   const handleResolve = useCallback(
@@ -701,24 +725,69 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
               </div>
             )}
             <div className="flex justify-end items-center gap-2 flex-wrap">
-              <select
-                value={priority ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setPriority(v === "" ? null : Number(v));
-                }}
-                disabled={submitting}
-                className="input text-sm h-10 py-2 px-3 w-auto min-w-[10rem] shrink-0 bg-theme-input-bg text-theme-input-text ring-theme-ring"
-                aria-label="Priority (optional)"
-                data-testid="feedback-priority-select"
-              >
-                <option value="">Priority (optional)</option>
-                {[0, 1, 2, 3, 4].map((p) => (
-                  <option key={p} value={p}>
-                    {PRIORITY_LABELS[p]}
-                  </option>
-                ))}
-              </select>
+              <div ref={feedbackPriorityDropdownRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => !submitting && setFeedbackPriorityDropdownOpen((o) => !o)}
+                  disabled={submitting}
+                  className="input text-sm h-10 py-2 px-3 w-auto min-w-[10rem] flex items-center gap-2 bg-theme-input-bg text-theme-input-text ring-theme-ring"
+                  aria-label="Priority (optional)"
+                  aria-haspopup="listbox"
+                  aria-expanded={feedbackPriorityDropdownOpen}
+                  data-testid="feedback-priority-select"
+                >
+                  {priority != null ? (
+                    <>
+                      <PriorityIcon priority={priority} size="sm" />
+                      <span className="flex-1 text-left">{PRIORITY_LABELS[priority]}</span>
+                    </>
+                  ) : (
+                    <span className="flex-1 text-left text-theme-muted">Priority (optional)</span>
+                  )}
+                  <span className="text-[10px] opacity-70 shrink-0">
+                    {feedbackPriorityDropdownOpen ? "▲" : "▼"}
+                  </span>
+                </button>
+                {feedbackPriorityDropdownOpen && (
+                  <ul
+                    role="listbox"
+                    className="absolute left-0 top-full mt-1 z-50 min-w-[10rem] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1"
+                    data-testid="feedback-priority-dropdown"
+                  >
+                    <li role="option">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPriority(null);
+                          setFeedbackPriorityDropdownOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-theme-border-subtle/50 transition-colors text-theme-muted"
+                        data-testid="feedback-priority-option-clear"
+                      >
+                        Priority (optional)
+                      </button>
+                    </li>
+                    {([0, 1, 2, 3, 4] as const).map((p) => (
+                      <li key={p} role="option">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPriority(p);
+                            setFeedbackPriorityDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-theme-border-subtle/50 transition-colors ${
+                            priority === p ? "text-brand-600 font-medium" : "text-theme-text"
+                          }`}
+                          data-testid={`feedback-priority-option-${p}`}
+                        >
+                          <PriorityIcon priority={p} size="sm" />
+                          {PRIORITY_LABELS[p]}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <input
                 ref={fileInputRef}
                 type="file"

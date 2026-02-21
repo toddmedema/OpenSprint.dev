@@ -85,6 +85,7 @@ describe("EvalPhase feedback form", () => {
 
   it("renders priority dropdown with placeholder and options", async () => {
     const store = createStore();
+    const user = userEvent.setup();
     render(
       <Provider store={store}>
         <EvalPhase projectId="proj-1" />
@@ -95,19 +96,23 @@ describe("EvalPhase feedback form", () => {
       expect(screen.getByTestId("feedback-priority-select")).toBeInTheDocument();
     });
 
-    const select = screen.getByTestId("feedback-priority-select");
-    expect(select).toHaveAttribute("aria-label", "Priority (optional)");
-    expect(select).toHaveClass("input");
-    expect(select).toHaveClass("h-10");
+    const trigger = screen.getByTestId("feedback-priority-select");
+    expect(trigger).toHaveAttribute("aria-label", "Priority (optional)");
+    expect(trigger).toHaveClass("input");
+    expect(trigger).toHaveClass("h-10");
 
-    // Placeholder option
-    expect(screen.getByRole("option", { name: "Priority (optional)" })).toBeInTheDocument();
-    // Priority options
-    expect(screen.getByRole("option", { name: "Critical" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "High" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Medium" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Low" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Lowest" })).toBeInTheDocument();
+    await user.click(trigger);
+
+    // Placeholder / clear option
+    expect(screen.getByTestId("feedback-priority-option-clear")).toHaveTextContent(
+      "Priority (optional)"
+    );
+    // Priority options with icons
+    expect(screen.getByTestId("feedback-priority-option-0")).toBeInTheDocument();
+    expect(screen.getByTestId("feedback-priority-option-1")).toBeInTheDocument();
+    expect(screen.getByTestId("feedback-priority-option-2")).toBeInTheDocument();
+    expect(screen.getByTestId("feedback-priority-option-3")).toBeInTheDocument();
+    expect(screen.getByTestId("feedback-priority-option-4")).toBeInTheDocument();
   });
 
   it("passes selected priority when submitting feedback", async () => {
@@ -125,7 +130,8 @@ describe("EvalPhase feedback form", () => {
 
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText(/Describe a bug/), "Critical auth bug");
-    await user.selectOptions(screen.getByTestId("feedback-priority-select"), "0");
+    await user.click(screen.getByTestId("feedback-priority-select"));
+    await user.click(screen.getByTestId("feedback-priority-option-0"));
     await user.click(screen.getByRole("button", { name: /Submit Feedback/i }));
 
     await waitFor(() => {
@@ -164,7 +170,8 @@ describe("EvalPhase feedback form", () => {
 
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText(/Describe a bug/), "Some feedback");
-    await user.selectOptions(screen.getByTestId("feedback-priority-select"), "2");
+    await user.click(screen.getByTestId("feedback-priority-select"));
+    await user.click(screen.getByTestId("feedback-priority-option-2"));
     await user.click(screen.getByRole("button", { name: /Submit Feedback/i }));
 
     await waitFor(() => {
@@ -172,8 +179,8 @@ describe("EvalPhase feedback form", () => {
     });
 
     // After submission, input and priority should be cleared
-    const select = screen.getByTestId("feedback-priority-select") as HTMLSelectElement;
-    expect(select.value).toBe("");
+    const trigger = screen.getByTestId("feedback-priority-select");
+    expect(trigger).toHaveTextContent("Priority (optional)");
     expect(screen.getByPlaceholderText(/Describe a bug/)).toHaveValue("");
   });
 
@@ -283,7 +290,9 @@ describe("EvalPhase feedback form", () => {
         expect(screen.getByTestId("feedback-priority-select")).toBeInTheDocument();
       });
 
-      const actionsRow = container.querySelector('[data-testid="feedback-priority-select"]')?.parentElement;
+      const actionsRow =
+        container.querySelector('[data-testid="feedback-priority-select"]')?.parentElement
+          ?.parentElement;
       expect(actionsRow).toBeTruthy();
       expect(actionsRow).toHaveClass("flex-wrap");
     });
