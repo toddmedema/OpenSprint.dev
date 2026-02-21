@@ -176,7 +176,7 @@ describe("SourceFeedbackSection", () => {
     expect(card).toHaveClass("bg-theme-code-bg", "rounded-lg", "border", "border-theme-border", "overflow-hidden", "p-4");
   });
 
-  it("does not render feedback category chip or Mapped plan in Execute sidebar", async () => {
+  it("renders feedback category chip and Mapped plan when mappedPlanId and plans provided", async () => {
     mockFeedbackGet.mockResolvedValue({
       id: "fb-1",
       text: "Add dark mode support",
@@ -210,9 +210,9 @@ describe("SourceFeedbackSection", () => {
     );
 
     await screen.findByText("Add dark mode support");
-    expect(screen.queryByText("Feature")).not.toBeInTheDocument();
-    expect(screen.queryByText("Mapped plan:")).not.toBeInTheDocument();
-    expect(screen.queryByText("Dark Mode")).not.toBeInTheDocument();
+    expect(screen.getByText("Feature")).toBeInTheDocument();
+    expect(screen.getByText(/mapped plan:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dark Mode/)).toBeInTheDocument();
   });
 
   it("shows loading state with matching container styling", () => {

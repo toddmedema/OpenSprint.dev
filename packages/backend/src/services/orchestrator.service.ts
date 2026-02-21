@@ -569,6 +569,20 @@ export class OrchestratorService {
     }
 
     if (!state.loopActive) {
+      // #region agent log
+      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
+        body: JSON.stringify({
+          sessionId: "10a8b0",
+          location: "orchestrator.service.ts:ensureRunning",
+          message: "ensureRunning calling nudge",
+          data: { projectId },
+          timestamp: Date.now(),
+          hypothesisId: "H5",
+        }),
+      }).catch(() => {});
+      // #endregion
       this.nudge(projectId);
     }
 
@@ -581,6 +595,20 @@ export class OrchestratorService {
     const maxSlots = this.maxSlotsCache.get(projectId) ?? 1;
 
     if (state.loopActive || state.globalTimers.has("loop") || state.slots.size >= maxSlots) {
+      // #region agent log
+      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
+        body: JSON.stringify({
+          sessionId: "10a8b0",
+          location: "orchestrator.service.ts:nudge",
+          message: "nudge returned early",
+          data: { projectId, loopActive: state.loopActive, hasLoopTimer: state.globalTimers.has("loop"), slotsSize: state.slots.size, maxSlots },
+          timestamp: Date.now(),
+          hypothesisId: "H4",
+        }),
+      }).catch(() => {});
+      // #endregion
       return;
     }
 
@@ -635,6 +663,20 @@ export class OrchestratorService {
 
   private async runLoop(projectId: string): Promise<void> {
     const state = this.getState(projectId);
+    // #region agent log
+    fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
+      body: JSON.stringify({
+        sessionId: "10a8b0",
+        location: "orchestrator.service.ts:runLoop",
+        message: "runLoop entered",
+        data: { projectId },
+        timestamp: Date.now(),
+        hypothesisId: "H4",
+      }),
+    }).catch(() => {});
+    // #endregion
 
     state.loopActive = true;
     state.globalTimers.clear("loop");
@@ -646,6 +688,9 @@ export class OrchestratorService {
       this.maxSlotsCache.set(projectId, maxSlots);
 
       let readyTasks = await this.beads.ready(repoPath);
+      // #region agent log
+      const rawCount = readyTasks.length;
+      // #endregion
 
       readyTasks = readyTasks.filter((t) => (t.title ?? "") !== "Plan approval gate");
       readyTasks = readyTasks.filter((t) => (t.issue_type ?? t.type) !== "epic");
@@ -653,10 +698,39 @@ export class OrchestratorService {
       // Exclude tasks that already have an active slot
       readyTasks = readyTasks.filter((t) => !state.slots.has(t.id));
 
+      // #region agent log
+      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
+        body: JSON.stringify({
+          sessionId: "10a8b0",
+          location: "orchestrator.service.ts:runLoop",
+          message: "beads.ready + filters",
+          data: { projectId, rawFromBeads: rawCount, afterFilters: readyTasks.length, taskIds: readyTasks.map((t) => t.id) },
+          timestamp: Date.now(),
+          hypothesisId: "H1-H2",
+        }),
+      }).catch(() => {});
+      // #endregion
+
       state.status.queueDepth = readyTasks.length;
 
       const slotsAvailable = maxSlots - state.slots.size;
       if (readyTasks.length === 0 || slotsAvailable <= 0) {
+        // #region agent log
+        fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
+          body: JSON.stringify({
+            sessionId: "10a8b0",
+            location: "orchestrator.service.ts:runLoop",
+            message: "no ready tasks or no slots, going idle",
+            data: { projectId, readyTasksCount: readyTasks.length, slotsAvailable },
+            timestamp: Date.now(),
+            hypothesisId: "H2",
+          }),
+        }).catch(() => {});
+        // #endregion
         log.info("No ready tasks or no slots available, going idle", {
           projectId,
           readyTasks: readyTasks.length,
@@ -674,12 +748,14 @@ export class OrchestratorService {
       // Pick the highest-priority task with all blockers closed
       const statusMap = await this.beads.getStatusMap(repoPath);
       let task: BeadsIssue | null = null;
+      const blockerFailures: string[] = [];
       for (const t of readyTasks) {
         const allClosed = await this.beads.areAllBlockersClosed(repoPath, t.id, statusMap);
         if (allClosed) {
           task = t;
           break;
         }
+        blockerFailures.push(t.id);
         log.info("Skipping task (blockers not all closed)", {
           projectId,
           taskId: t.id,
@@ -687,6 +763,20 @@ export class OrchestratorService {
         });
       }
       if (!task) {
+        // #region agent log
+        fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
+          body: JSON.stringify({
+            sessionId: "10a8b0",
+            location: "orchestrator.service.ts:runLoop",
+            message: "no task with all blockers closed",
+            data: { projectId, blockerFailures },
+            timestamp: Date.now(),
+            hypothesisId: "H3",
+          }),
+        }).catch(() => {});
+        // #endregion
         log.info("No task with all blockers closed, going idle", { projectId });
         state.loopActive = false;
         broadcastToProject(projectId, {
@@ -697,6 +787,20 @@ export class OrchestratorService {
         return;
       }
       log.info("Picking task", { projectId, taskId: task.id, title: task.title });
+      // #region agent log
+      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "10a8b0" },
+        body: JSON.stringify({
+          sessionId: "10a8b0",
+          location: "orchestrator.service.ts:runLoop",
+          message: "task picked, spawning coding agent",
+          data: { projectId, taskId: task.id, title: task.title },
+          timestamp: Date.now(),
+          hypothesisId: "OK",
+        }),
+      }).catch(() => {});
+      // #endregion
 
       // Assign the task
       await this.beads.update(repoPath, task.id, {

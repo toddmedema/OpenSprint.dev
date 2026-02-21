@@ -214,53 +214,47 @@ describe("BeadsService", () => {
 
   describe("ready", () => {
     it("should return ready tasks (priority-sorted, deps resolved)", async () => {
-      mockStdout = JSON.stringify([
-        { id: "task-1", title: "High priority", priority: 0 },
-        { id: "task-2", title: "Next", priority: 1 },
-      ]);
+      mockExecImpl = async (cmd: string) => {
+        if (cmd.includes("list --all")) {
+          return {
+            stdout: JSON.stringify([
+              { id: "task-1", title: "High priority", priority: 0, status: "open", issue_type: "task", dependencies: [] },
+              { id: "task-2", title: "Next", priority: 1, status: "open", issue_type: "task", dependencies: [] },
+            ]),
+            stderr: "",
+          };
+        }
+        return { stdout: "{}", stderr: "" };
+      };
       const result = await beads.ready("/repo");
       expect(result).toHaveLength(2);
       expect(result[0].priority).toBe(0);
     });
 
     it("should return empty array when no ready tasks", async () => {
-      mockStdout = "[]";
+      mockExecImpl = async (cmd: string) => {
+        if (cmd.includes("list --all")) return { stdout: "[]", stderr: "" };
+        return { stdout: "{}", stderr: "" };
+      };
       const result = await beads.ready("/repo");
       expect(result).toEqual([]);
     });
 
     it("should filter out tasks whose blockers are not closed", async () => {
       mockExecImpl = async (cmd: string) => {
-        if (cmd.includes("ready")) {
-          return {
-            stdout: JSON.stringify([
-              { id: "task-1", title: "Blocker", priority: 0 },
-              { id: "task-2", title: "Blocked", priority: 1 },
-            ]),
-            stderr: "",
-          };
-        }
         if (cmd.includes("list --all")) {
           return {
             stdout: JSON.stringify([
-              { id: "task-1", status: "in_progress" },
-              { id: "task-2", status: "open" },
+              { id: "task-1", title: "Blocker", priority: 0, status: "open", issue_type: "task", dependencies: [] },
+              {
+                id: "task-2",
+                title: "Blocked",
+                priority: 1,
+                status: "open",
+                issue_type: "task",
+                dependencies: [{ type: "blocks", depends_on_id: "task-1" }],
+              },
             ]),
-            stderr: "",
-          };
-        }
-        if (cmd.includes("show task-1")) {
-          return {
-            stdout: JSON.stringify({ id: "task-1", dependencies: [] }),
-            stderr: "",
-          };
-        }
-        if (cmd.includes("show task-2")) {
-          return {
-            stdout: JSON.stringify({
-              id: "task-2",
-              dependencies: [{ type: "blocks", depends_on_id: "task-1" }],
-            }),
             stderr: "",
           };
         }

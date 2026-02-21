@@ -326,7 +326,8 @@ describe("websocketMiddleware", () => {
       });
 
       await vi.waitFor(() => {
-        expect(store.getState().execute.agentOutput.join("")).toContain("Hello world");
+        const output = (store.getState().execute.agentOutput["task-1"] ?? []).join("");
+        expect(output).toContain("Hello world");
       });
     });
 
@@ -364,6 +365,7 @@ describe("websocketMiddleware", () => {
         currentTask: "task-1",
         queueDepth: 0,
         awaitingApproval: true,
+        activeTasks: [{ taskId: "task-1", phase: "execute", startedAt: new Date().toISOString() }],
       });
 
       await vi.waitFor(() => {
