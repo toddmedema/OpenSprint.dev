@@ -11,6 +11,7 @@ import {
 } from "../../store/slices/sketchSlice";
 import { decomposePlans, fetchPlanStatus } from "../../store/slices/planSlice";
 import { PrdViewer, PrdChatPanel, PrdUploadButton, PrdChangeLog } from "../../components/prd";
+import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
 import { SendIcon, SparklesIcon, CommentIcon } from "../../components/icons/PrdIcons";
 
 /* ── Types ──────────────────────────────────────────────── */
@@ -306,6 +307,11 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
     }
   }, [initialInput, sending, projectId, dispatch]);
 
+  const onKeyDownInitial = useSubmitShortcut(handleInitialSubmit, {
+    multiline: false,
+    disabled: sending || !initialInput.trim(),
+  });
+
   const handleFileUpload = useCallback(
     async (file: File) => {
       dispatch(
@@ -435,12 +441,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
               ref={textareaRef}
               value={initialInput}
               onChange={(e) => setInitialInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleInitialSubmit();
-                }
-              }}
+              onKeyDown={onKeyDownInitial}
               disabled={sending}
               rows={4}
               className="w-full rounded-2xl border-0 py-5 px-6 text-lg text-theme-input-text bg-theme-input-bg shadow-lg ring-1 ring-inset ring-theme-ring placeholder:text-theme-input-placeholder focus:ring-2 focus:ring-inset focus:ring-brand-500 resize-none transition-shadow hover:shadow-xl disabled:opacity-60"
@@ -463,6 +464,10 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
               Press{" "}
               <kbd className="px-1.5 py-0.5 rounded bg-theme-border-subtle text-theme-muted font-mono text-[10px]">
                 Enter
+              </kbd>{" "}
+              or{" "}
+              <kbd className="px-1.5 py-0.5 rounded bg-theme-border-subtle text-theme-muted font-mono text-[10px]">
+                Cmd/Ctrl+↵
               </kbd>{" "}
               to submit
             </span>

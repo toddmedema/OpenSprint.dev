@@ -26,6 +26,7 @@ import { PlanDetailContent } from "../../components/plan/PlanDetailContent";
 import { EpicCard } from "../../components/EpicCard";
 import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
 import { fetchTasks } from "../../store/slices/executeSlice";
+import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
 
 export const DEPENDENCY_GRAPH_EXPANDED_KEY = "opensprint-plan-dependencyGraphExpanded";
 
@@ -256,6 +257,16 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     setChatSending(false);
   };
 
+  const onKeyDownFeatureDescription = useSubmitShortcut(handleGeneratePlan, {
+    multiline: true,
+    disabled: !featureDescription.trim() || generating,
+  });
+
+  const onKeyDownPlanChat = useSubmitShortcut(handleSendChat, {
+    multiline: false,
+    disabled: !chatInput.trim() || chatSending,
+  });
+
   return (
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
       {/* Main content */}
@@ -332,6 +343,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
             className="input w-full text-sm min-h-[100px] resize-y"
             value={featureDescription}
             onChange={(e) => setFeatureDescription(e.target.value)}
+            onKeyDown={onKeyDownFeatureDescription}
             placeholder="Describe your feature idea…"
             disabled={generating}
             data-testid="feature-description-input"
@@ -579,7 +591,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                 className="input flex-1 text-sm"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendChat()}
+                onKeyDown={onKeyDownPlanChat}
                 placeholder="Refine this plan..."
                 disabled={chatSending}
               />

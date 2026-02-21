@@ -7,6 +7,7 @@ import { TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
 import { TaskLinkTooltip } from "../../components/TaskLinkTooltip";
 import { KeyboardShortcutTooltip } from "../../components/KeyboardShortcutTooltip";
 import { PriorityIcon } from "../../components/PriorityIcon";
+import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
 
 /** Reply icon (message turn / corner up-right) */
 function ReplyIcon({ className }: { className?: string }) {
@@ -260,6 +261,11 @@ function FeedbackCard({
     onCancelReply();
   };
 
+  const onKeyDownReply = useSubmitShortcut(handleSubmitReply, {
+    multiline: true,
+    disabled: !replyText.trim() || submitting,
+  });
+
   const isResolvedAndAnimating = item.status === "resolved" && collapseHeight !== null;
 
   const wrapperStyle: React.CSSProperties = isResolvedAndAnimating
@@ -433,10 +439,7 @@ function FeedbackCard({
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                e.preventDefault();
-                handleSubmitReply();
-              }
+              onKeyDownReply(e);
               if (e.key === "Escape") {
                 e.preventDefault();
                 onCancelReply();
@@ -618,6 +621,11 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
     );
   };
 
+  const onKeyDownFeedback = useSubmitShortcut(handleSubmit, {
+    multiline: true,
+    disabled: !input.trim() || submitting,
+  });
+
   const handleSubmitReply = useCallback(
     async (parentId: string, text: string) => {
       if (!text.trim() || submitting) return;
@@ -708,12 +716,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onPaste={handlePaste}
-              onKeyDown={(e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
+              onKeyDown={onKeyDownFeedback}
               placeholder="Describe a bug, suggest a feature, or report a UX issue..."
               disabled={submitting}
             />

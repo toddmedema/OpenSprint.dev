@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
 import { ChatIcon, ChevronLeftIcon, ChevronRightIcon, SendIcon, SparklesIcon } from "../icons/PrdIcons";
 import { CloseButton } from "../CloseButton";
 import { formatSectionKey } from "../../lib/formatting";
@@ -65,6 +66,11 @@ export function PrdChatPanel({
     setChatInput("");
     onSend(text);
   };
+
+  const onKeyDownChat = useSubmitShortcut(handleSend, {
+    multiline: false,
+    disabled: !chatInput.trim() || sending,
+  });
 
   // In inline mode: single container with smooth width transition when opening/closing
   if (isInline) {
@@ -175,12 +181,7 @@ export function PrdChatPanel({
                   className="flex-1 rounded-xl border-0 py-2.5 px-3.5 text-sm text-theme-input-text bg-theme-input-bg shadow-sm ring-1 ring-inset ring-theme-ring placeholder:text-theme-input-placeholder focus:ring-2 focus:ring-inset focus:ring-brand-500"
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
+                  onKeyDown={onKeyDownChat}
                   placeholder={
                     selectionContext
                       ? "Comment on this selection..."
@@ -313,12 +314,7 @@ export function PrdChatPanel({
             className="flex-1 rounded-xl border-0 py-2.5 px-3.5 text-sm text-theme-input-text bg-theme-input-bg shadow-sm ring-1 ring-inset ring-theme-ring placeholder:text-theme-input-placeholder focus:ring-2 focus:ring-inset focus:ring-brand-500"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
+            onKeyDown={onKeyDownChat}
             placeholder={
               selectionContext
                 ? "Comment on this selection..."
