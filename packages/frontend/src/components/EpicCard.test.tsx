@@ -462,4 +462,76 @@ describe("EpicCard", () => {
     const btn = screen.getByTestId("execute-button");
     expect(btn).not.toBeDisabled();
   });
+
+  it("shows guidance instead of Execute! when plan has no gating task", () => {
+    const plan: Plan = {
+      ...basePlan,
+      status: "planning",
+      metadata: { ...basePlan.metadata, gateTaskId: "", beadEpicId: "" },
+    };
+    const onShip = vi.fn();
+    render(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        onSelect={vi.fn()}
+        onShip={onShip}
+        onReship={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("execute-no-gate-guidance")).toBeInTheDocument();
+    expect(screen.getByText(/Generate tasks first/)).toBeInTheDocument();
+    expect(screen.queryByTestId("execute-button")).not.toBeInTheDocument();
+  });
+
+  it("does not call onShip when plan has no gate (no button to click)", () => {
+    const plan: Plan = {
+      ...basePlan,
+      status: "planning",
+      metadata: { ...basePlan.metadata, gateTaskId: "" },
+    };
+    const onShip = vi.fn();
+    render(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        onSelect={vi.fn()}
+        onShip={onShip}
+        onReship={vi.fn()}
+      />
+    );
+
+    expect(onShip).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("execute-button")).not.toBeInTheDocument();
+  });
+
+  it("shows friendly message when executeError contains no gating task", () => {
+    const plan: Plan = { ...basePlan, status: "planning" };
+    render(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        executeError={{
+          planId: "auth-feature",
+          message: "Plan has no gating task to close",
+        }}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("execute-error-inline")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Generate tasks first. Use the AI chat to refine this plan and add tasks/)
+    ).toBeInTheDocument();
+  });
 });

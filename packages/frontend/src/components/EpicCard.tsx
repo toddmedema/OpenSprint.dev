@@ -2,6 +2,12 @@ import type { Plan, Task } from "@opensprint/shared";
 import { formatPlanIdAsTitle } from "../lib/formatting";
 import { COLUMN_LABELS } from "./kanban/TaskStatusBadge";
 
+/** Plan has a gating task that can be closed for Execute! */
+function planHasGate(plan: Plan): boolean {
+  const gateToClose = plan.metadata.reExecuteGateTaskId ?? plan.metadata.gateTaskId;
+  return !!(gateToClose && gateToClose.trim());
+}
+
 export interface EpicCardProps {
   plan: Plan;
   tasks: Task[];
@@ -162,35 +168,48 @@ export function EpicCard({
         {/* Action buttons */}
         {plan.status === "planning" && (
           <>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onShip();
-              }}
-              disabled={!!executingPlanId}
-              className="btn-primary text-xs w-full py-2 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg font-medium inline-flex items-center justify-center"
-              data-testid="execute-button"
-            >
-              {executingPlanId === plan.metadata.planId ? (
-                <>
-                  <svg className="animate-spin -ml-0.5 mr-1.5 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" aria-hidden="true" data-testid="execute-spinner">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Executing…
-                </>
-              ) : (
-                "Execute!"
-              )}
-            </button>
+            {!planHasGate(plan) ? (
+              <div
+                className="text-xs text-theme-muted bg-theme-surface-muted rounded-lg p-3 border border-theme-border"
+                data-testid="execute-no-gate-guidance"
+              >
+                Generate tasks first. Use the AI chat to refine this plan and add tasks, or decompose from the PRD.
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShip();
+                }}
+                disabled={!!executingPlanId}
+                className="btn-primary text-xs w-full py-2 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg font-medium inline-flex items-center justify-center"
+                data-testid="execute-button"
+              >
+                {executingPlanId === plan.metadata.planId ? (
+                  <>
+                    <svg className="animate-spin -ml-0.5 mr-1.5 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" aria-hidden="true" data-testid="execute-spinner">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Executing…
+                  </>
+                ) : (
+                  "Execute!"
+                )}
+              </button>
+            )}
             {executeError?.planId === plan.metadata.planId && (
               <div
                 className="mt-2 text-xs text-theme-error-text bg-theme-error-bg border border-theme-error-border rounded-lg p-2 flex items-start gap-2"
                 data-testid="execute-error-inline"
                 role="alert"
               >
-                <span className="flex-1 min-w-0">{executeError.message}</span>
+                <span className="flex-1 min-w-0">
+                  {executeError.message.includes("no gating task") || executeError.message.includes("no gate")
+                    ? "Generate tasks first. Use the AI chat to refine this plan and add tasks, or decompose from the PRD."
+                    : executeError.message}
+                </span>
                 <button
                   type="button"
                   onClick={(e) => {
