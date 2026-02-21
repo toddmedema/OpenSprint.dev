@@ -159,6 +159,26 @@ describe("EvalPhase feedback form", () => {
     expect(screen.getByTestId("feedback-priority-option-4")).toBeInTheDocument();
   });
 
+  it("closes priority dropdown on Escape key", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <EvalPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("feedback-priority-select")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId("feedback-priority-select"));
+    expect(screen.getByTestId("feedback-priority-dropdown")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByTestId("feedback-priority-dropdown")).not.toBeInTheDocument();
+  });
+
   it("passes selected priority when submitting feedback", async () => {
     const { api } = await import("../../api/client");
     const store = createStore();
