@@ -10,7 +10,7 @@ export interface PrdChatMessage {
   timestamp: string;
 }
 
-/** State shape shared by spec/design/sketch PRD chat slices */
+/** State shape shared by Sketch (and other PRD chat) slices */
 export interface PrdChatState {
   messages: PrdChatMessage[];
   prdContent: Record<string, string>;
@@ -54,7 +54,7 @@ export interface PrdChatSliceResult {
 
 /**
  * Factory that creates a PRD chat slice with the given name.
- * Produces slice, reducers, and async thunks. Use for spec, design, sketch, etc.
+ * Produces slice, reducers, and async thunks. Used for Sketch and other PRD chat contexts.
  */
 export function createPrdChatSlice(sliceName: string): PrdChatSliceResult {
   const prefix = `${sliceName}/`;

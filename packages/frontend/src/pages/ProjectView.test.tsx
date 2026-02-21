@@ -179,14 +179,17 @@ describe("ProjectView upfront loading and mount-all", () => {
     });
 
     const { api: mockedApi } = await import("../api/client");
-    expect(mockedApi.projects.get).toHaveBeenCalledWith("proj-1");
-    expect(mockedApi.prd.get).toHaveBeenCalledWith("proj-1");
-    expect(mockedApi.prd.getHistory).toHaveBeenCalledWith("proj-1");
-    expect(mockedApi.plans.list).toHaveBeenCalledWith("proj-1");
-    expect(mockedApi.tasks.list).toHaveBeenCalledWith("proj-1");
-    expect(mockedApi.execute.status).toHaveBeenCalledWith("proj-1");
-    expect(mockedApi.feedback.list).toHaveBeenCalledWith("proj-1");
-    expect(mockedApi.chat.history).toHaveBeenCalledWith("proj-1", "sketch");
+    // Thunks are async; wait for their API calls to complete
+    await waitFor(() => {
+      expect(mockedApi.projects.get).toHaveBeenCalledWith("proj-1");
+      expect(mockedApi.prd.get).toHaveBeenCalledWith("proj-1");
+      expect(mockedApi.prd.getHistory).toHaveBeenCalledWith("proj-1");
+      expect(mockedApi.plans.list).toHaveBeenCalledWith("proj-1");
+      expect(mockedApi.tasks.list).toHaveBeenCalledWith("proj-1");
+      expect(mockedApi.execute.status).toHaveBeenCalledWith("proj-1");
+      expect(mockedApi.feedback.list).toHaveBeenCalledWith("proj-1");
+      expect(mockedApi.chat.history).toHaveBeenCalledWith("proj-1", "sketch");
+    });
   });
 
   it("dispatches wsDisconnect on unmount", async () => {

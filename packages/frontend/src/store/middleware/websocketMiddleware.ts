@@ -1,6 +1,10 @@
 import type { Middleware, ThunkDispatch, UnknownAction } from "@reduxjs/toolkit";
 import { createAction } from "@reduxjs/toolkit";
-import type { ServerEvent, ClientEvent } from "@opensprint/shared";
+import type {
+  ServerEvent,
+  ClientEvent,
+  ExecuteStatusEvent,
+} from "@opensprint/shared";
 import {
   setConnected,
   setHilRequest,
@@ -150,7 +154,6 @@ export const websocketMiddleware: Middleware = (storeApi) => {
             priority: event.priority,
           })
         );
-        d(fetchTasks(projectId));
         break;
 
       case "agent.started":
@@ -173,11 +176,12 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         break;
 
       case "execute.status": {
-        const activeTasks = (event as any).activeTasks ?? [];
-        const running = activeTasks.length > 0 || event.queueDepth > 0;
+        const statusEv = event as ExecuteStatusEvent;
+        const activeTasks = statusEv.activeTasks ?? [];
+        const running = activeTasks.length > 0 || statusEv.queueDepth > 0;
         d(setOrchestratorRunning(running));
-        if ("awaitingApproval" in event) {
-          d(setAwaitingApproval(Boolean(event.awaitingApproval)));
+        if (statusEv.awaitingApproval !== undefined) {
+          d(setAwaitingApproval(Boolean(statusEv.awaitingApproval)));
         }
         d(setActiveTasks(activeTasks));
         break;

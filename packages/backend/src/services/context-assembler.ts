@@ -15,6 +15,8 @@ export interface TaskContext {
   dependencyOutputs: Array<{ taskId: string; diff: string; summary: string }>;
   /** Past review rejection history (populated by orchestrator for review phase) */
   reviewHistory?: string;
+  /** Branch diff (main...branch) from main repo; written to context/implementation.diff for review so Reviewer does not run git from worktree */
+  branchDiff?: string;
 }
 
 /**
@@ -54,6 +56,10 @@ export class ContextAssembler {
     for (const dep of context.dependencyOutputs) {
       await fs.writeFile(path.join(depsDir, `${dep.taskId}.diff`), dep.diff);
       await fs.writeFile(path.join(depsDir, `${dep.taskId}.summary.md`), dep.summary);
+    }
+
+    if (context.branchDiff != null && context.branchDiff !== "") {
+      await fs.writeFile(path.join(contextDir, "implementation.diff"), context.branchDiff);
     }
 
     // Generate prompt.md
@@ -464,9 +470,14 @@ export class ContextAssembler {
       prompt += `${context.reviewHistory}\n\n`;
     }
 
+    const hasProvidedDiff = Boolean(context.branchDiff && context.branchDiff.trim().length > 0);
     prompt += `## Implementation\n\n`;
     prompt += `The coding agent has produced changes on branch \`${config.branch}\`. The orchestrator has already committed them before invoking you.\n`;
-    prompt += `Run \`git diff main...${config.branch}\` to review the committed changes.\n\n`;
+    if (hasProvidedDiff) {
+      prompt += `Review the committed changes in \`context/implementation.diff\` (do not run \`git diff\` — the diff is provided from the main repo).\n\n`;
+    } else {
+      prompt += `Run \`git diff main...${config.branch}\` to review the committed changes.\n\n`;
+    }
 
     prompt += `## Review Checklist\n\n`;
     prompt += `### Part 1: Scope Compliance\n\n`;
@@ -489,7 +500,11 @@ export class ContextAssembler {
 
     prompt += `## Instructions\n\n`;
     prompt += `1. Read the original ticket, acceptance criteria, and context files above to fully understand the scope.\n`;
-    prompt += `2. Review the diff: \`git diff main...${config.branch}\`\n`;
+    if (hasProvidedDiff) {
+      prompt += `2. Review the diff in \`context/implementation.diff\`.\n`;
+    } else {
+      prompt += `2. Review the diff: \`git diff main...${config.branch}\`\n`;
+    }
     prompt += `3. Walk through the checklist above, checking each item.\n`;
     prompt += `4. Run the full test suite: \`${config.testCommand}\` — confirm ALL tests pass (not just the new ones). Regressions in other tests are grounds for rejection.\n`;
     prompt += `5. If prior reviews rejected this task, verify each previously cited issue was resolved. If not, reject and list which issues remain.\n`;

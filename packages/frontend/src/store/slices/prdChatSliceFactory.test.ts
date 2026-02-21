@@ -8,11 +8,6 @@ describe("createPrdChatSlice", () => {
     expect(slice.name).toBe("sketch");
   });
 
-  it("produces slice with correct name for design", () => {
-    const { slice } = createPrdChatSlice("design");
-    expect(slice.name).toBe("design");
-  });
-
   it("produces thunks with correct action type prefixes", () => {
     const { thunks } = createPrdChatSlice("spec");
     expect(thunks.fetchChat.typePrefix).toBe("spec/fetchChat");
@@ -23,16 +18,16 @@ describe("createPrdChatSlice", () => {
 
   it("produces independent slices per name", () => {
     const sketch = createPrdChatSlice("sketch");
-    const design = createPrdChatSlice("design");
+    const spec = createPrdChatSlice("spec");
 
     const store = configureStore({
       reducer: {
         sketch: sketch.slice.reducer,
-        design: design.slice.reducer,
+        spec: spec.slice.reducer,
       },
     });
 
     expect(store.getState().sketch).toBeDefined();
-    expect(store.getState().design).toBeDefined();
+    expect(store.getState().spec).toBeDefined();
   });
 });

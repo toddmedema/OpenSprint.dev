@@ -276,6 +276,7 @@ export class PhaseExecutorService {
       );
 
       context.reviewHistory = await this.host.buildReviewHistory(repoPath, task.id);
+      context.branchDiff = await this.host.branchManager.captureBranchDiff(repoPath, branchName);
 
       await this.host.contextAssembler.assembleTaskDirectory(wtPath, task.id, config, context);
 

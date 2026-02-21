@@ -7,8 +7,6 @@ import { useAppDispatch, useAppSelector } from "../../store";
 import {
   triggerDeliver,
   rollbackDeliver,
-  fetchDeliverHistory,
-  fetchDeliverStatus,
   setSelectedDeployId,
 } from "../../store/slices/deliverSlice";
 import { api } from "../../api/client";
@@ -80,11 +78,6 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
   useEffect(() => {
     setSelectedTarget(defaultTarget);
   }, [defaultTarget]);
-
-  useEffect(() => {
-    dispatch(fetchDeliverStatus(projectId));
-    dispatch(fetchDeliverHistory(projectId));
-  }, [projectId, dispatch]);
 
   const selectedRecord = selectedDeployId
     ? (history.find((r) => r.id === selectedDeployId) ?? null)

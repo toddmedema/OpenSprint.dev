@@ -1,11 +1,15 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import type { DeploymentRecord, DeploymentConfig } from "@opensprint/shared";
 import { api } from "../../api/client";
+import { DEDUP_SKIP } from "../dedup";
 
 export interface DeliverStatusResponse {
   activeDeployId: string | null;
   currentDeploy: DeploymentRecord | null;
 }
+
+const STATUS_IN_FLIGHT_KEY = "statusInFlightCount" as const;
+const HISTORY_IN_FLIGHT_KEY = "historyInFlightCount" as const;
 
 export interface DeliverState {
   history: DeploymentRecord[];
@@ -16,6 +20,8 @@ export interface DeliverState {
   deliverLoading: boolean;
   statusLoading: boolean;
   historyLoading: boolean;
+  [STATUS_IN_FLIGHT_KEY]: number;
+  [HISTORY_IN_FLIGHT_KEY]: number;
   rollbackLoading: boolean;
   settingsLoading: boolean;
   error: string | null;
@@ -30,6 +36,8 @@ const initialState: DeliverState = {
   deliverLoading: false,
   statusLoading: false,
   historyLoading: false,
+  [STATUS_IN_FLIGHT_KEY]: 0,
+  [HISTORY_IN_FLIGHT_KEY]: 0,
   rollbackLoading: false,
   settingsLoading: false,
   error: null,
@@ -39,14 +47,22 @@ const MAX_LIVE_LOG = 10000;
 
 export const fetchDeliverStatus = createAsyncThunk(
   "deliver/fetchStatus",
-  async (projectId: string) => {
+  async (projectId: string, { getState, rejectWithValue }) => {
+    const inFlight = (getState().deliver as DeliverState)[STATUS_IN_FLIGHT_KEY] ?? 0;
+    if (inFlight > 1) {
+      return rejectWithValue(DEDUP_SKIP);
+    }
     return api.deliver.status(projectId);
   }
 );
 
 export const fetchDeliverHistory = createAsyncThunk(
   "deliver/fetchHistory",
-  async (projectId: string) => {
+  async (projectId: string, { getState, rejectWithValue }) => {
+    const inFlight = (getState().deliver as DeliverState)[HISTORY_IN_FLIGHT_KEY] ?? 0;
+    if (inFlight > 1) {
+      return rejectWithValue(DEDUP_SKIP);
+    }
     return api.deliver.history(projectId);
   }
 );
@@ -127,6 +143,7 @@ const deliverSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchDeliverStatus.pending, (state) => {
+        state[STATUS_IN_FLIGHT_KEY] = (state[STATUS_IN_FLIGHT_KEY] ?? 0) + 1;
         state.statusLoading = true;
         state.error = null;
       })
@@ -134,20 +151,27 @@ const deliverSlice = createSlice({
         state.currentDeploy = action.payload.currentDeploy;
         state.activeDeployId = action.payload.activeDeployId;
         state.statusLoading = false;
+        state[STATUS_IN_FLIGHT_KEY] = Math.max(0, (state[STATUS_IN_FLIGHT_KEY] ?? 1) - 1);
       })
       .addCase(fetchDeliverStatus.rejected, (state, action) => {
+        state[STATUS_IN_FLIGHT_KEY] = Math.max(0, (state[STATUS_IN_FLIGHT_KEY] ?? 1) - 1);
+        if (action.payload === DEDUP_SKIP) return;
         state.statusLoading = false;
         state.error = action.error.message ?? "Failed to load deliver status";
       })
       .addCase(fetchDeliverHistory.pending, (state) => {
+        state[HISTORY_IN_FLIGHT_KEY] = (state[HISTORY_IN_FLIGHT_KEY] ?? 0) + 1;
         state.historyLoading = true;
         state.error = null;
       })
       .addCase(fetchDeliverHistory.fulfilled, (state, action) => {
         state.history = action.payload;
         state.historyLoading = false;
+        state[HISTORY_IN_FLIGHT_KEY] = Math.max(0, (state[HISTORY_IN_FLIGHT_KEY] ?? 1) - 1);
       })
       .addCase(fetchDeliverHistory.rejected, (state, action) => {
+        state[HISTORY_IN_FLIGHT_KEY] = Math.max(0, (state[HISTORY_IN_FLIGHT_KEY] ?? 1) - 1);
+        if (action.payload === DEDUP_SKIP) return;
         state.historyLoading = false;
         state.error = action.error.message ?? "Failed to load deliver history";
       })

@@ -3,7 +3,6 @@ import { useDispatch, useSelector } from "react-redux";
 import projectReducer from "./slices/projectSlice";
 import websocketReducer from "./slices/websocketSlice";
 import sketchReducer from "./slices/sketchSlice";
-import designReducer from "./slices/designSlice";
 import planReducer from "./slices/planSlice";
 import executeReducer from "./slices/executeSlice";
 import taskRegistryReducer from "./slices/taskRegistrySlice";
@@ -19,7 +18,6 @@ export const store = configureStore({
     project: projectReducer,
     websocket: websocketReducer,
     sketch: sketchReducer,
-    design: designReducer,
     plan: planReducer,
     execute: executeReducer,
     taskRegistry: taskRegistryReducer,

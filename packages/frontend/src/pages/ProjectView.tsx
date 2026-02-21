@@ -78,13 +78,21 @@ export function ProjectView() {
   const deliverToast = useAppSelector((s) => s.websocket.deliverToast);
   const planBackgroundError = useAppSelector((s) => s.plan.backgroundError);
 
-  // Upfront data loading for ALL phases on mount
+  // UI state is only for the current project: when projectId changes, clear everything then reload from server
   useEffect(() => {
     if (!projectId || redirectTo) return;
 
-    // Only reset sketch when switching projects (not on Strict Mode remount with same projectId)
-    if (prevProjectIdRef.current != null && prevProjectIdRef.current !== projectId) {
+    const switchingProject =
+      prevProjectIdRef.current != null && prevProjectIdRef.current !== projectId;
+    if (switchingProject) {
       dispatch(resetSketch());
+      dispatch(resetPlan());
+      dispatch(resetExecute());
+      dispatch(resetEval());
+      dispatch(resetDeliver());
+      dispatch(resetProject());
+      dispatch(resetWebsocket());
+      // taskRegistry is cleared by executeSlice's resetExecute (extraReducer in taskRegistrySlice)
     }
     prevProjectIdRef.current = projectId;
 
@@ -104,9 +112,7 @@ export function ProjectView() {
       dispatch(wsDisconnect());
       dispatch(resetProject());
       dispatch(resetWebsocket());
-      // Do NOT reset sketch in cleanup: React Strict Mode double-mounts in dev; resetSketch
-      // would clear prdContent before remount's fetchPrd completes. Reset only when
-      // projectId changes (handled at effect start).
+      dispatch(resetSketch());
       dispatch(resetPlan());
       dispatch(resetExecute());
       dispatch(resetEval());

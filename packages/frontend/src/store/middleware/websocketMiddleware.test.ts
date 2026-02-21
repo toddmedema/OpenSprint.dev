@@ -293,7 +293,7 @@ describe("websocketMiddleware", () => {
       expect(store.getState().plan.loading).toBe(false);
     });
 
-    it("dispatches fetchTasks and mergeTaskUpdate on task.updated", async () => {
+    it("dispatches taskUpdated and mergeTaskUpdate on task.updated (no fetchTasks)", async () => {
       const store = createStore();
       const { mergeTask } = await import("../slices/taskRegistrySlice");
       store.dispatch(
@@ -320,7 +320,6 @@ describe("websocketMiddleware", () => {
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
-      const { api } = await import("../../api/client");
       wsInstance!.simulateMessage({
         type: "task.updated",
         taskId: "task-1",
@@ -328,13 +327,12 @@ describe("websocketMiddleware", () => {
         assignee: "agent-1",
       });
 
+      // task.updated only applies incremental update (taskUpdated + mergeTaskUpdate), no fetchTasks
       await vi.waitFor(() => {
-        expect(api.tasks.list).toHaveBeenCalledWith("proj-1");
+        expect(store.getState().taskRegistry.byProject["proj-1"]?.["task-1"]?.kanbanColumn).toBe(
+          "in_progress"
+        );
       });
-
-      expect(store.getState().taskRegistry.byProject["proj-1"]?.["task-1"]?.kanbanColumn).toBe(
-        "in_progress"
-      );
     });
 
     it("dispatches appendAgentOutput on agent.output", async () => {
@@ -418,7 +416,7 @@ describe("websocketMiddleware", () => {
       });
     });
 
-    it("dispatches taskUpdated on task.updated for optimistic update, then fetchTasks", async () => {
+    it("dispatches taskUpdated on task.updated for incremental update", async () => {
       const store = createStore();
       const { setTasks } = await import("../slices/executeSlice");
       store.dispatch(

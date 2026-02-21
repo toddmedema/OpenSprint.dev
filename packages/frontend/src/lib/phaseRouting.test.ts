@@ -31,7 +31,7 @@ describe("phaseRouting", () => {
     it("returns sketch for invalid slugs", () => {
       expect(phaseFromSlug("invalid")).toBe("sketch");
       expect(phaseFromSlug("spec")).toBe("sketch");
-      expect(phaseFromSlug("design")).toBe("sketch");
+      expect(phaseFromSlug("other")).toBe("sketch");
       expect(phaseFromSlug("validate")).toBe("sketch");
     });
   });

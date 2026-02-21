@@ -1,7 +1,8 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import type { AgentSession, Task, KanbanColumn, Plan } from "@opensprint/shared";
+import type { AgentSession, Task } from "@opensprint/shared";
 import { mapStatusToKanban } from "@opensprint/shared";
 import { api } from "../../api/client";
+import { DEDUP_SKIP } from "../dedup";
 import { setPlansAndGraph } from "./planSlice";
 import { setDeliverToast } from "./websocketSlice";
 
@@ -18,9 +19,11 @@ export interface ActiveTaskInfo {
   startedAt: string;
 }
 
+const TASKS_IN_FLIGHT_KEY = "tasksInFlightCount" as const;
+
 export interface ExecuteState {
   tasks: Task[];
-  plans: Plan[];
+  [TASKS_IN_FLIGHT_KEY]: number;
   orchestratorRunning: boolean;
   awaitingApproval: boolean;
   /** Active tasks being worked on by orchestrator agents (v2 multi-slot) */
@@ -46,7 +49,7 @@ export interface ExecuteState {
 
 const initialState: ExecuteState = {
   tasks: [],
-  plans: [],
+  [TASKS_IN_FLIGHT_KEY]: 0,
   orchestratorRunning: false,
   awaitingApproval: false,
   activeTasks: [],
@@ -65,9 +68,16 @@ const initialState: ExecuteState = {
   error: null,
 };
 
-export const fetchTasks = createAsyncThunk("execute/fetchTasks", async (projectId: string) => {
-  return api.tasks.list(projectId);
-});
+export const fetchTasks = createAsyncThunk(
+  "execute/fetchTasks",
+  async (projectId: string, { getState, rejectWithValue }) => {
+    const inFlight = (getState().execute as ExecuteState)[TASKS_IN_FLIGHT_KEY] ?? 0;
+    if (inFlight > 1) {
+      return rejectWithValue(DEDUP_SKIP);
+    }
+    return api.tasks.list(projectId);
+  }
+);
 
 export const fetchExecutePlans = createAsyncThunk(
   "execute/fetchExecutePlans",
@@ -134,7 +144,7 @@ export const updateTaskPriority = createAsyncThunk(
     try {
       const task = await api.tasks.updatePriority(projectId, taskId, priority);
       return { task, taskId };
-    } catch (err) {
+    } catch (_err) {
       dispatch(setDeliverToast({ message: "Failed to update priority", variant: "failed" }));
       return rejectWithValue({ previousPriority });
     }
@@ -249,29 +259,20 @@ const executeSlice = createSlice({
     builder
       // fetchTasks
       .addCase(fetchTasks.pending, (state) => {
+        state[TASKS_IN_FLIGHT_KEY] = (state[TASKS_IN_FLIGHT_KEY] ?? 0) + 1;
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchTasks.fulfilled, (state, action) => {
         state.tasks = action.payload;
         state.loading = false;
+        state[TASKS_IN_FLIGHT_KEY] = Math.max(0, (state[TASKS_IN_FLIGHT_KEY] ?? 1) - 1);
       })
       .addCase(fetchTasks.rejected, (state, action) => {
+        state[TASKS_IN_FLIGHT_KEY] = Math.max(0, (state[TASKS_IN_FLIGHT_KEY] ?? 1) - 1);
+        if (action.payload === DEDUP_SKIP) return;
         state.loading = false;
         state.error = action.error.message ?? "Failed to load tasks";
-      })
-      // fetchExecutePlans
-      .addCase(fetchExecutePlans.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchExecutePlans.fulfilled, (state, action) => {
-        state.plans = action.payload;
-        state.loading = false;
-      })
-      .addCase(fetchExecutePlans.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.error.message ?? "Failed to load plans";
       })
       // fetchExecuteStatus
       .addCase(fetchExecuteStatus.pending, (state) => {

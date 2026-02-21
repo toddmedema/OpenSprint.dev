@@ -15,6 +15,17 @@ const log = createLogger("agent-client");
 
 const OUTPUT_POLL_MS = 500;
 
+/** ANSI codes for colorizing agent role in logs (only when stdout is a TTY) */
+const ANSI_BOLD_CYAN = "\x1b[1;96m";
+const ANSI_RESET = "\x1b[0m";
+
+function colorizeRole(role: string): string {
+  if (typeof process.stdout?.isTTY === "boolean" && process.stdout.isTTY) {
+    return `${ANSI_BOLD_CYAN}${role}${ANSI_RESET}`;
+  }
+  return role;
+}
+
 /** Format raw agent errors into user-friendly messages with remediation hints */
 function formatAgentError(agentType: "claude" | "cursor" | "custom", raw: string): string {
   const lower = raw.toLowerCase();
@@ -207,9 +218,10 @@ export class AgentClient {
     const stdio: ["ignore", "pipe" | number, "pipe" | number] =
       outputFd !== undefined ? ["ignore", outputFd, outputFd] : ["ignore", "pipe", "pipe"];
 
-    log.info("Spawning agent subprocess", {
+    const role = agentRole ?? "coder";
+    log.info(`Spawning agent subprocess — role: ${colorizeRole(role)}`, {
       type: config.type,
-      agentRole: agentRole ?? "coder",
+      agentRole: role,
       command,
       taskFilePath,
       cwd,

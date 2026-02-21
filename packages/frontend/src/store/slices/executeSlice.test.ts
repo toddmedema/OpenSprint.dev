@@ -116,7 +116,6 @@ describe("executeSlice", () => {
       const store = createStore();
       const state = store.getState().execute as ExecuteState;
       expect(state.tasks).toEqual([]);
-      expect(state.plans).toEqual([]);
       expect(state.orchestratorRunning).toBe(false);
       expect(state.awaitingApproval).toBe(false);
       expect(state.selectedTaskId).toBeNull();
@@ -313,11 +312,10 @@ describe("executeSlice", () => {
   });
 
   describe("fetchExecutePlans thunk", () => {
-    it("stores plans and dispatches setPlansAndGraph on fulfilled", async () => {
+    it("dispatches setPlansAndGraph so plan slice has plans on fulfilled", async () => {
       vi.mocked(api.plans.list).mockResolvedValue(mockGraph as never);
       const store = createStore();
       await store.dispatch(fetchExecutePlans("proj-1"));
-      expect(store.getState().execute.plans).toEqual([mockPlan]);
       expect(store.getState().plan.plans).toEqual([mockPlan]);
       expect(api.plans.list).toHaveBeenCalledWith("proj-1");
     });

@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import type { Plan, PlanDependencyGraph, PlanStatusResponse } from "@opensprint/shared";
 import { api } from "../../api/client";
+import { DEDUP_SKIP } from "../dedup";
 
 interface Message {
   role: "user" | "assistant";
@@ -10,12 +11,16 @@ interface Message {
 
 export type FetchPlansArg = string | { projectId: string; background?: boolean };
 
+/** Number of in-flight fetchPlans requests; used to skip duplicate calls (skip when > 1). */
+const PLANS_IN_FLIGHT_KEY = "plansInFlightCount" as const;
+
 export interface PlanState {
   plans: Plan[];
   dependencyGraph: PlanDependencyGraph | null;
   selectedPlanId: string | null;
   chatMessages: Record<string, Message[]>;
   loading: boolean;
+  [PLANS_IN_FLIGHT_KEY]: number;
   decomposing: boolean;
   /** Whether a plan is currently being generated from a feature description */
   generating: boolean;
@@ -40,6 +45,7 @@ const initialState: PlanState = {
   selectedPlanId: null,
   chatMessages: {},
   loading: false,
+  [PLANS_IN_FLIGHT_KEY]: 0,
   decomposing: false,
   generating: false,
   planStatus: null,
@@ -58,15 +64,21 @@ export const fetchPlanStatus = createAsyncThunk(
   }
 );
 
-export const fetchPlans = createAsyncThunk("plan/fetchPlans", async (arg: FetchPlansArg) => {
-  const projectId = typeof arg === "string" ? arg : arg.projectId;
-  const graph = await api.plans.list(projectId);
-  return {
-    plans: graph.plans,
-    dependencyGraph: graph,
-    background: typeof arg === "string" ? false : (arg.background ?? false),
-  };
-});
+export const fetchPlans = createAsyncThunk(
+  "plan/fetchPlans",
+  async (arg: FetchPlansArg, { getState, rejectWithValue }) => {
+    if ((getState().plan as PlanState)[PLANS_IN_FLIGHT_KEY] > 1) {
+      return rejectWithValue(DEDUP_SKIP);
+    }
+    const projectId = typeof arg === "string" ? arg : arg.projectId;
+    const graph = await api.plans.list(projectId);
+    return {
+      plans: graph.plans,
+      dependencyGraph: graph,
+      background: typeof arg === "string" ? false : (arg.background ?? false),
+    };
+  }
+);
 
 export const decomposePlans = createAsyncThunk("plan/decompose", async (projectId: string) => {
   await api.plans.decompose(projectId);
@@ -198,6 +210,7 @@ const planSlice = createSlice({
       })
       // fetchPlans
       .addCase(fetchPlans.pending, (state, action) => {
+        state[PLANS_IN_FLIGHT_KEY] = (state[PLANS_IN_FLIGHT_KEY] ?? 0) + 1;
         const background = typeof action.meta.arg !== "string" && action.meta.arg.background;
         if (!background) {
           state.loading = true;
@@ -209,8 +222,11 @@ const planSlice = createSlice({
         state.dependencyGraph = action.payload.dependencyGraph;
         state.loading = false;
         state.backgroundError = null;
+        state[PLANS_IN_FLIGHT_KEY] = Math.max(0, (state[PLANS_IN_FLIGHT_KEY] ?? 1) - 1);
       })
       .addCase(fetchPlans.rejected, (state, action) => {
+        state[PLANS_IN_FLIGHT_KEY] = Math.max(0, (state[PLANS_IN_FLIGHT_KEY] ?? 1) - 1);
+        if (action.payload === DEDUP_SKIP) return;
         const background = typeof action.meta.arg !== "string" && action.meta.arg.background;
         state.loading = false;
         const msg = action.error.message || "Failed to load plans";

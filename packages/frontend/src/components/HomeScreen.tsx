@@ -1,53 +1,26 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Layout } from "./layout/Layout";
 import { api } from "../api/client";
 import { getProjectPhasePath } from "../lib/phaseRouting";
 import type { Project } from "@opensprint/shared";
 
-const PHASE_LABELS: Record<string, string> = {
-  spec: "Sketch",
-  plan: "Plan",
-  execute: "Execute",
-  eval: "Evaluate",
-  deliver: "Deliver",
-};
-
-function ProjectCard({ project }: { project: Project }) {
-  const phaseLabel = PHASE_LABELS[project.currentPhase] ?? project.currentPhase;
-  const progress = project.progressPercent ?? 0;
-
+function OpenIcon({ className }: { className?: string }) {
   return (
-    <Link
-      to={getProjectPhasePath(project.id, project.currentPhase)}
-      className="card p-8 hover:shadow-md transition-shadow group flex flex-col h-full min-h-[12rem]"
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={1.5}
+      stroke="currentColor"
+      aria-hidden
     >
-      <h3 className="font-semibold text-theme-text group-hover:text-brand-600 transition-colors line-clamp-2">
-        {project.name}
-      </h3>
-      <div className="mt-3 flex items-center justify-between flex-shrink-0">
-        <span className="inline-flex items-center rounded-full bg-theme-info-bg px-2.5 py-1 text-xs font-medium text-theme-info-text">
-          {phaseLabel}
-        </span>
-        <span className="text-xs text-theme-muted">
-          {new Date(project.updatedAt).toLocaleDateString()}
-        </span>
-      </div>
-      {progress > 0 && (
-        <div className="mt-3 mt-auto">
-          <div className="flex justify-between text-xs text-theme-muted mb-1">
-            <span>Progress</span>
-            <span>{progress}%</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-theme-border-subtle overflow-hidden">
-            <div
-              className="h-full bg-brand-600 rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-      )}
-    </Link>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+      />
+    </svg>
   );
 }
 
@@ -64,6 +37,10 @@ export function HomeScreen() {
       .finally(() => setLoading(false));
   }, []);
 
+  const openProject = (project: Project) => {
+    navigate(getProjectPhasePath(project.id, "sketch"));
+  };
+
   return (
     <Layout>
       <div className="max-w-6xl mx-auto px-6 py-10">
@@ -73,22 +50,68 @@ export function HomeScreen() {
           <p className="mt-1 text-theme-muted">Manage your AI-powered development projects</p>
         </div>
 
-        {/* Project Grid */}
         {loading ? (
           <div className="text-center py-20 text-theme-muted">Loading projects...</div>
-        ) : projects.length === 0 ? (
-          <div className="text-center py-20">
-            <h3 className="text-lg font-medium text-theme-text mb-1">No projects yet</h3>
-            <p className="text-theme-muted mb-6">Get started by creating your first project</p>
-            <button onClick={() => navigate("/projects/new")} className="btn-primary">
-              Create New Project
-            </button>
-          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12">
-            {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
+          <div className="card overflow-hidden">
+            <table className="w-full" data-testid="projects-table">
+              <thead>
+                <tr className="border-b border-theme-border bg-theme-bg-elevated">
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-theme-text">
+                    Name
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-theme-text">
+                    Folder path
+                  </th>
+                  <th className="w-12 py-3 px-4" aria-label="Open" />
+                </tr>
+              </thead>
+              <tbody>
+                {projects.map((project) => (
+                  <tr
+                    key={project.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openProject(project)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openProject(project);
+                      }
+                    }}
+                    className="group border-b border-theme-border last:border-b-0 hover:bg-theme-bg-elevated cursor-pointer transition-colors"
+                    data-testid={`project-row-${project.id}`}
+                  >
+                    <td className="py-3 px-4 text-theme-text font-medium">{project.name}</td>
+                    <td className="py-3 px-4 text-sm text-theme-muted truncate max-w-md">
+                      {project.repoPath}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="inline-flex text-theme-muted group-hover:text-brand-600 transition-colors">
+                        <OpenIcon className="w-5 h-5" />
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                <tr
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate("/projects/new")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      navigate("/projects/new");
+                    }
+                  }}
+                  className="bg-theme-bg-elevated/50 hover:bg-theme-bg-elevated cursor-pointer transition-colors"
+                  data-testid="create-project-row"
+                >
+                  <td colSpan={3} className="py-3 px-4 text-sm font-medium text-theme-muted">
+                    + Create project
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         )}
       </div>

@@ -159,7 +159,7 @@ describe("DeliverPhase", () => {
 
     const selector = await screen.findByTestId("deploy-target-select");
     expect(selector).toBeInTheDocument();
-    expect(selector).toHaveValue("staging");
+    await waitFor(() => expect(selector).toHaveValue("staging"));
     expect(selector).toHaveTextContent("staging (default)");
     expect(selector).toHaveTextContent("production");
   });

@@ -17,6 +17,9 @@ const DROPDOWN_Z_INDEX = 9999;
 /** Icon size matching two lines of text-sm (line-height 1.25rem * 2 + mt-0.5 gap) */
 const DROPDOWN_AGENT_ICON_SIZE = "2.625rem";
 
+/** Base URL for public assets (Vite BASE_URL so icons load when app is served from a subpath) */
+const ASSET_BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/*$/, "/");
+
 interface ActiveAgentsListProps {
   projectId: string;
 }
@@ -119,10 +122,10 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
     const role = agent.role;
     if (role && role in AGENT_ROLE_LABELS) {
       const iconName = role.replace(/_/g, "-");
-      return `/agent-icons/${iconName}.svg`;
+      return `${ASSET_BASE}agent-icons/${iconName}.svg`;
     }
-    if (agent.phase === "review") return "/agent-icons/reviewer.svg";
-    return "/agent-icons/coder.svg";
+    if (agent.phase === "review") return `${ASSET_BASE}agent-icons/reviewer.svg`;
+    return `${ASSET_BASE}agent-icons/coder.svg`;
   };
 
   const dropdownContent =

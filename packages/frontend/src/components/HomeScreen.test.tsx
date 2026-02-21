@@ -29,8 +29,9 @@ function renderHomeScreen() {
 const mockProject = {
   id: "proj-1",
   name: "My Project",
-  currentPhase: "sketch",
-  progressPercent: 25,
+  repoPath: "/path/to/repo",
+  currentPhase: "sketch" as const,
+  createdAt: "2026-02-15T12:00:00Z",
   updatedAt: "2026-02-15T12:00:00Z",
 };
 
@@ -43,27 +44,26 @@ describe("HomeScreen", () => {
     expect(screen.getByText("Loading projects...")).toBeInTheDocument();
   });
 
-  it("shows empty state when no projects", async () => {
+  it("shows table with create row when no projects", async () => {
     mockProjectsList.mockResolvedValue([]);
 
     renderHomeScreen();
 
-    await screen.findByText("No projects yet");
-    expect(screen.getByText("Get started by creating your first project")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /create new project/i })).toBeInTheDocument();
+    await screen.findByTestId("projects-table");
+    expect(screen.getByTestId("create-project-row")).toHaveTextContent("+ Create project");
   });
 
-  it("renders project cards when projects exist", async () => {
+  it("renders project rows when projects exist", async () => {
     mockProjectsList.mockResolvedValue([mockProject]);
 
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    expect(screen.getByText("sketch")).toBeInTheDocument();
-    expect(screen.getByText("25%")).toBeInTheDocument();
+    expect(screen.getByTestId("project-row-proj-1")).toBeInTheDocument();
+    expect(screen.getByText("/path/to/repo")).toBeInTheDocument();
   });
 
-  it("Create New Project button navigates to /projects/new", async () => {
+  it("Create project row navigates to /projects/new", async () => {
     mockProjectsList.mockResolvedValue([]);
     const user = userEvent.setup();
 
@@ -78,75 +78,42 @@ describe("HomeScreen", () => {
       </MemoryRouter>
     );
 
-    await screen.findByText("No projects yet");
-    const createButton = screen.getByRole("button", { name: /create new project/i });
-    await user.click(createButton);
+    await screen.findByTestId("create-project-row");
+    const createRow = screen.getByRole("button", { name: /\+ Create project/i });
+    await user.click(createRow);
 
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/new");
   });
 
-  it("project grid has improved spacing (gap-8 lg:gap-12)", async () => {
+  it("clicking project row navigates to project sketch", async () => {
+    mockProjectsList.mockResolvedValue([mockProject]);
+    const user = userEvent.setup();
+
+    function LocationDisplay() {
+      return <div data-testid="location">{useLocation().pathname}</div>;
+    }
+
+    render(
+      <MemoryRouter>
+        <HomeScreen />
+        <LocationDisplay />
+      </MemoryRouter>
+    );
+
+    await screen.findByText("My Project");
+    const row = screen.getByTestId("project-row-proj-1");
+    await user.click(row);
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/projects/proj-1/sketch");
+  });
+
+  it("table has Name and Folder path columns", async () => {
     mockProjectsList.mockResolvedValue([mockProject]);
 
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    const grid = screen.getByText("My Project").closest(".grid");
-    expect(grid).toHaveClass("gap-8");
-    expect(grid).toHaveClass("lg:gap-12");
-  });
-
-  it("project cards have increased padding (p-8)", async () => {
-    mockProjectsList.mockResolvedValue([mockProject]);
-
-    renderHomeScreen();
-
-    await screen.findByText("My Project");
-    const card = screen.getByRole("link", { name: /my project/i });
-    expect(card).toHaveClass("p-8");
-  });
-
-  it("project cards have uniform height classes (h-full min-h)", async () => {
-    mockProjectsList.mockResolvedValue([mockProject]);
-
-    renderHomeScreen();
-
-    await screen.findByText("My Project");
-    const card = screen.getByRole("link", { name: /my project/i });
-    expect(card).toHaveClass("h-full");
-    expect(card).toHaveClass("min-h-[12rem]");
-  });
-
-  it("cards with short and long names render in same-height grid", async () => {
-    const shortName = { ...mockProject, id: "p1", name: "A" };
-    const longName = {
-      ...mockProject,
-      id: "p2",
-      name: "A Very Long Project Name That Wraps To Multiple Lines",
-    };
-    mockProjectsList.mockResolvedValue([shortName, longName]);
-
-    renderHomeScreen();
-
-    await screen.findByText("A");
-    await screen.findByText("A Very Long Project Name That Wraps To Multiple Lines");
-    const grid = screen.getByText("A").closest(".grid");
-    expect(grid).toBeInTheDocument();
-    const cards = grid!.querySelectorAll("a[href*='/projects/']");
-    expect(cards.length).toBe(2);
-    cards.forEach((card) => {
-      expect(card).toHaveClass("h-full");
-      expect(card).toHaveClass("min-h-[12rem]");
-    });
-  });
-
-  it("project card links to correct phase path", async () => {
-    mockProjectsList.mockResolvedValue([mockProject]);
-
-    renderHomeScreen();
-
-    await screen.findByText("My Project");
-    const link = screen.getByRole("link", { name: /my project/i });
-    expect(link).toHaveAttribute("href", "/projects/proj-1/sketch");
+    expect(screen.getByRole("columnheader", { name: /name/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /folder path/i })).toBeInTheDocument();
   });
 });
