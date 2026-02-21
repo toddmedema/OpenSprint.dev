@@ -528,11 +528,19 @@ export class PlanService {
     const planPath = `${OPENSPRINT_PATHS.plans}/${planId}.md`;
     await this.beads.update(repoPath, epicId, { description: planPath });
 
-    // Create gating task
-    const gateResult = await this.beads.create(repoPath, "Plan approval gate", {
+    // Create gating task (createWithRetry for duplicate-key protection)
+    const gateResult = await this.beads.createWithRetry(repoPath, "Plan approval gate", {
       type: "task",
       parentId: epicId,
     });
+    if (!gateResult) {
+      throw new AppError(
+        500,
+        ErrorCodes.BEADS_CREATE_FAILED,
+        "Failed to create plan approval gate after retries",
+        { planId }
+      );
+    }
     const gateTaskId = gateResult.id;
 
     // Create child tasks if provided
@@ -543,12 +551,21 @@ export class PlanService {
 
       for (const task of body.tasks) {
         const priority = Math.min(4, Math.max(0, task.priority ?? 2));
-        const taskResult = await this.beads.create(repoPath, task.title, {
-          type: "task",
-          description: task.description,
-          priority,
-          parentId: epicId,
-        });
+        const taskResult = await this.beads.createWithRetry(
+          repoPath,
+          task.title,
+          {
+            type: "task",
+            description: task.description,
+            priority,
+            parentId: epicId,
+          },
+          { fallbackToStandalone: true }
+        );
+        if (!taskResult) {
+          log.warn("Failed to create task after retries, skipping", { title: task.title, planId });
+          continue;
+        }
         taskIdMap.set(task.title, taskResult.id);
         createdTaskIds.push(taskResult.id);
         createdTaskTitles.push(task.title);
@@ -687,16 +704,28 @@ export class PlanService {
       return 0;
     }
 
-    // Create tasks under the existing epic
+    // Create tasks under the existing epic (createWithRetry for duplicate-key protection)
     const taskIdMap = new Map<string, string>();
     for (const task of tasks) {
       const priority = Math.min(4, Math.max(0, task.priority ?? 2));
-      const taskResult = await this.beads.create(repoPath, task.title, {
-        type: "task",
-        description: task.description || "",
-        priority,
-        parentId: epicId,
-      });
+      const taskResult = await this.beads.createWithRetry(
+        repoPath,
+        task.title,
+        {
+          type: "task",
+          description: task.description || "",
+          priority,
+          parentId: epicId,
+        },
+        { fallbackToStandalone: true }
+      );
+      if (!taskResult) {
+        log.warn("Failed to create generated task after retries, skipping", {
+          title: task.title,
+          planId: plan.metadata.planId,
+        });
+        continue;
+      }
       taskIdMap.set(task.title, taskResult.id);
       await this.beads.addDependency(repoPath, taskResult.id, gateTaskId);
     }
@@ -914,22 +943,42 @@ ${planNew}`;
       return this.getPlan(projectId, planId);
     }
 
-    // Create new approval gate and delta tasks (PRD §7.2.2)
-    const newGateResult = await this.beads.create(repoPath, "Re-execute approval gate", {
+    // Create new approval gate and delta tasks (PRD §7.2.2, createWithRetry for duplicate-key protection)
+    const newGateResult = await this.beads.createWithRetry(repoPath, "Re-execute approval gate", {
       type: "task",
       parentId: epicId,
     });
+    if (!newGateResult) {
+      throw new AppError(
+        500,
+        ErrorCodes.BEADS_CREATE_FAILED,
+        "Failed to create re-execute approval gate after retries",
+        { planId }
+      );
+    }
     const newGateTaskId = newGateResult.id;
 
     const taskIdMap = new Map<number, string>();
     for (const task of auditorResult.tasks) {
       const priority = Math.min(4, Math.max(0, task.priority ?? 2));
-      const taskResult = await this.beads.create(repoPath, task.title, {
-        type: "task",
-        description: task.description || "",
-        priority,
-        parentId: epicId,
-      });
+      const taskResult = await this.beads.createWithRetry(
+        repoPath,
+        task.title,
+        {
+          type: "task",
+          description: task.description || "",
+          priority,
+          parentId: epicId,
+        },
+        { fallbackToStandalone: true }
+      );
+      if (!taskResult) {
+        log.warn("Failed to create delta task after retries, skipping", {
+          title: task.title,
+          planId,
+        });
+        continue;
+      }
       taskIdMap.set(task.index, taskResult.id);
       await this.beads.addDependency(repoPath, taskResult.id, newGateTaskId);
     }
