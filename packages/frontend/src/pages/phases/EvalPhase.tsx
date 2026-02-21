@@ -4,7 +4,7 @@ import { PRIORITY_LABELS } from "@opensprint/shared";
 import { useAppDispatch, useAppSelector } from "../../store";
 import { submitFeedback, resolveFeedback, removeFeedbackItem } from "../../store/slices/evalSlice";
 import { TaskStatusBadge, COLUMN_LABELS } from "../../components/kanban";
-import { TaskLinkTooltip } from "../../components/TaskLinkTooltip";
+import { TaskLinkDisplay } from "../../components/TaskLinkDisplay";
 import { KeyboardShortcutTooltip } from "../../components/KeyboardShortcutTooltip";
 import { PriorityIcon } from "../../components/PriorityIcon";
 import { ImageAttachmentThumbnails, ImageAttachmentButton } from "../../components/ImageAttachment";
@@ -336,10 +336,10 @@ function FeedbackCard({
                 const taskPriority = getTaskPriority(taskId);
                 const linkContent = onNavigateToBuildTask ? (
                   <button
+                    key={taskId}
                     type="button"
                     onClick={() => onNavigateToBuildTask(taskId)}
                     className="inline-flex items-center gap-1.5 rounded bg-theme-border-subtle px-1.5 py-0.5 text-xs font-mono text-brand-600 hover:bg-theme-info-bg hover:text-theme-info-text underline transition-colors"
-                    title={`Go to ${taskId} on Execute tab (${statusLabel})`}
                   >
                     <PriorityIcon priority={taskPriority} size="xs" />
                     <TaskStatusBadge column={column} size="xs" />
@@ -349,10 +349,17 @@ function FeedbackCard({
                     >
                       {statusLabel}
                     </span>
-                    {taskId}
+                    <TaskLinkDisplay
+                      projectId={projectId}
+                      taskId={taskId}
+                      cachedTitle={getTaskTitle?.(taskId)}
+                    />
                   </button>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded bg-theme-border-subtle px-1.5 py-0.5 text-xs font-mono text-theme-muted">
+                  <span
+                    key={taskId}
+                    className="inline-flex items-center gap-1.5 rounded bg-theme-border-subtle px-1.5 py-0.5 text-xs font-mono text-theme-muted"
+                  >
                     <PriorityIcon priority={taskPriority} size="xs" />
                     <TaskStatusBadge column={column} size="xs" />
                     <span
@@ -361,19 +368,14 @@ function FeedbackCard({
                     >
                       {statusLabel}
                     </span>
-                    {taskId}
+                    <TaskLinkDisplay
+                      projectId={projectId}
+                      taskId={taskId}
+                      cachedTitle={getTaskTitle?.(taskId)}
+                    />
                   </span>
                 );
-                return (
-                  <TaskLinkTooltip
-                    key={taskId}
-                    projectId={projectId}
-                    taskId={taskId}
-                    cachedTitle={getTaskTitle?.(taskId)}
-                  >
-                    {linkContent}
-                  </TaskLinkTooltip>
-                );
+                return linkContent;
               })}
             </div>
           )}

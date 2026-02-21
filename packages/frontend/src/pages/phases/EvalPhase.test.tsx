@@ -28,6 +28,25 @@ vi.mock("../../api/client", () => ({
         createdAt: new Date().toISOString(),
       }),
     },
+    tasks: {
+      get: vi.fn().mockImplementation((_projectId: string, taskId: string) =>
+        Promise.resolve({
+          id: taskId,
+          title: `Task title for ${taskId}`,
+          description: "",
+          type: "task",
+          status: "open",
+          priority: 1,
+          assignee: null,
+          labels: [],
+          dependencies: [],
+          epicId: null,
+          kanbanColumn: "backlog",
+          createdAt: "",
+          updatedAt: "",
+        })
+      ),
+    },
   },
 }));
 
@@ -762,6 +781,145 @@ describe("EvalPhase feedback form", () => {
 
       // Unknown task defaults to priority 1 (High)
       expect(screen.getByRole("img", { name: "High" })).toBeInTheDocument();
+    });
+
+    it("shows task title as link text instead of task ID when task is in execute state", async () => {
+      const feedbackWithTasks: FeedbackItem[] = [
+        {
+          id: "fb-mapped",
+          text: "Auth bug",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: ["task-1"],
+          status: "mapped",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+      ];
+      const executeTasks: Task[] = [
+        createMockTask({ id: "task-1", title: "Fix login button styling" }),
+      ];
+      const store = createStore({
+        evalFeedback: feedbackWithTasks,
+        executeTasks,
+      });
+
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("Fix login button styling")).toBeInTheDocument();
+      expect(screen.queryByText("task-1")).not.toBeInTheDocument();
+    });
+
+    it("truncates task title to 30 characters with ellipsis when longer", async () => {
+      const longTitle = "This is a very long task title that exceeds thirty characters";
+      const feedbackWithTasks: FeedbackItem[] = [
+        {
+          id: "fb-mapped",
+          text: "Feature request",
+          category: "feature",
+          mappedPlanId: null,
+          createdTaskIds: ["task-long"],
+          status: "mapped",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+      ];
+      const executeTasks: Task[] = [
+        createMockTask({ id: "task-long", title: longTitle }),
+      ];
+      const store = createStore({
+        evalFeedback: feedbackWithTasks,
+        executeTasks,
+      });
+
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("This is a very long task title…")).toBeInTheDocument();
+      expect(screen.queryByText(longTitle)).not.toBeInTheDocument();
+    });
+
+    it("does not show tooltip on hover", async () => {
+      const feedbackWithTasks: FeedbackItem[] = [
+        {
+          id: "fb-mapped",
+          text: "Auth bug",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: ["task-1"],
+          status: "mapped",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+      ];
+      const executeTasks: Task[] = [createMockTask({ id: "task-1" })];
+      const store = createStore({
+        evalFeedback: feedbackWithTasks,
+        executeTasks,
+      });
+
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
+      });
+
+      const link = screen.getByText("Fix login bug");
+      const user = userEvent.setup();
+      await user.hover(link);
+
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    });
+
+    it("navigates to correct task when link is clicked", async () => {
+      const onNavigateToBuildTask = vi.fn();
+      const feedbackWithTasks: FeedbackItem[] = [
+        {
+          id: "fb-mapped",
+          text: "Auth bug",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: ["task-1"],
+          status: "mapped",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+      ];
+      const executeTasks: Task[] = [createMockTask({ id: "task-1" })];
+      const store = createStore({
+        evalFeedback: feedbackWithTasks,
+        executeTasks,
+      });
+
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" onNavigateToBuildTask={onNavigateToBuildTask} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
+      });
+
+      const user = userEvent.setup();
+      await user.click(screen.getByText("Fix login bug"));
+
+      expect(onNavigateToBuildTask).toHaveBeenCalledWith("task-1");
     });
   });
 
