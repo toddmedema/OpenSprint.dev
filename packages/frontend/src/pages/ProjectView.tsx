@@ -42,7 +42,6 @@ import {
   resetDeliver,
 } from "../store/slices/deliverSlice";
 import { wsConnect, wsDisconnect, wsSend } from "../store/middleware/websocketMiddleware";
-import { useTheme } from "../contexts/ThemeContext";
 import { Layout } from "../components/layout/Layout";
 import { HilApprovalModal } from "../components/HilApprovalModal";
 import { SketchPhase } from "./phases/SketchPhase";
@@ -67,13 +66,6 @@ export function ProjectView() {
 
   const currentPhase = phaseFromSlug(phaseSlug);
   const selectedPlanId = useAppSelector((s) => s.plan.selectedPlanId);
-  const { setForceLightMode } = useTheme();
-
-  /* Sketch phase always uses light mode per feedback h2ayj0 — set data-theme="light" via ThemeContext */
-  useEffect(() => {
-    setForceLightMode(currentPhase === "sketch");
-    return () => setForceLightMode(false);
-  }, [currentPhase, setForceLightMode]);
   const selectedTaskId = useAppSelector((s) => s.execute.selectedTaskId);
 
   const [settingsOpen, setSettingsOpen] = useState(false);

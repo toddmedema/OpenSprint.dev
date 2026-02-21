@@ -140,7 +140,8 @@ describe("ProjectView URL behavior", () => {
     });
   });
 
-  it("sets data-theme=light on document when on sketch phase (Sketch phase always light mode)", async () => {
+  it("respects dark theme on sketch phase when user preference is dark", async () => {
+    localStorage.setItem("opensprint.theme", "dark");
     document.documentElement.removeAttribute("data-theme");
     renderWithRouter("/projects/proj-1/sketch");
 
@@ -148,10 +149,10 @@ describe("ProjectView URL behavior", () => {
       expect(screen.getByText("Test Project")).toBeInTheDocument();
     });
 
-    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
   });
 
-  it("does not force light mode when on plan phase", async () => {
+  it("respects user theme preference on plan phase", async () => {
     localStorage.setItem("opensprint.theme", "dark");
     renderWithRouter("/projects/proj-1/plan");
 
