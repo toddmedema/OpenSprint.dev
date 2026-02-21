@@ -288,6 +288,35 @@ describe("Plan REST endpoints - task decomposition", () => {
     expect(typeof plan.lastModified).toBe("string");
   });
 
+  it("POST /projects/:id/plans/:planId/execute returns 400 when plan has no gating task", async () => {
+    const app = createApp();
+    const planBody = {
+      title: "No Gate Feature",
+      content: "# No Gate\n\nContent.",
+      complexity: "low",
+    };
+
+    const createRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send(planBody);
+    expect(createRes.status).toBe(201);
+    const createdPlanId = createRes.body.data.metadata.planId;
+
+    const project = await projectService.getProject(projectId);
+    const plansDir = path.join(project.repoPath, OPENSPRINT_PATHS.plans);
+    const metaPath = path.join(plansDir, `${createdPlanId}.meta.json`);
+    const meta = JSON.parse(await fs.readFile(metaPath, "utf-8"));
+    meta.gateTaskId = "";
+    await fs.writeFile(metaPath, JSON.stringify(meta));
+
+    const executeRes = await request(app).post(
+      `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/execute`
+    );
+    expect(executeRes.status).toBe(400);
+    expect(executeRes.body.error?.code).toBe("NO_GATE_TASK");
+    expect(executeRes.body.error?.message).toContain("no gating task");
+  });
+
   it(
     "POST /projects/:id/plans/:planId/archive closes all ready/open tasks, leaves in_progress unchanged",
     {
