@@ -289,6 +289,7 @@ export class TaskService {
 
     await this.beads.sync(project.repoPath);
     listTasksCache.invalidate(project.repoPath);
+    beadsCache.invalidateListAll(project.repoPath);
     broadcastToProject(projectId, {
       type: "task.updated",
       taskId,
@@ -323,6 +324,7 @@ export class TaskService {
     await this.beads.close(project.repoPath, taskId, "Manually marked done", true);
     await this.beads.sync(project.repoPath);
     listTasksCache.invalidate(project.repoPath);
+    beadsCache.invalidateListAll(project.repoPath);
     broadcastToProject(projectId, {
       type: "task.updated",
       taskId,
@@ -351,6 +353,7 @@ export class TaskService {
           await this.beads.close(project.repoPath, epicId, "All tasks done", true);
           await this.beads.sync(project.repoPath);
           listTasksCache.invalidate(project.repoPath);
+          beadsCache.invalidateListAll(project.repoPath);
           broadcastToProject(projectId, {
             type: "task.updated",
             taskId: epicId,
@@ -399,7 +402,7 @@ export class TaskService {
     const planContent =
       (await this.contextAssembler.getPlanContentForTask(repoPath, issue, this.beads)) ||
       '# Plan\n\nNo plan content available.';
-    const blockerIds = await this.beads.getBlockers(repoPath, taskId);
+    const blockerIds = this.beads.getBlockersFromIssue(issue);
     const dependencyOutputs = await this.contextAssembler.collectDependencyOutputs(repoPath, blockerIds);
 
     const config = {

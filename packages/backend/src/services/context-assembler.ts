@@ -227,29 +227,49 @@ export class ContextAssembler {
    * Collect diffs/summaries from completed dependency tasks for context assembly (PRD §7.3.2).
    * Only uses approved sessions (tasks that reached Done); skips gating tasks and failed attempts.
    * Sessions are stored at .opensprint/sessions/<task-id>-<attempt>/session.json
+   * Uses a single readdir and groups by taskId to avoid N readdirs for N deps.
    */
   async collectDependencyOutputs(
     repoPath: string,
     dependencyTaskIds: string[]
   ): Promise<Array<{ taskId: string; diff: string; summary: string }>> {
+    const sessionsDir = path.join(repoPath, OPENSPRINT_PATHS.sessions);
+    const depIdSet = new Set(dependencyTaskIds);
+    const byTaskId = new Map<string, Array<{ attempt: number; entry: string }>>();
+
+    try {
+      const entries = await fs.readdir(sessionsDir, { withFileTypes: true });
+      for (const e of entries) {
+        if (!e.isDirectory()) continue;
+        const lastHyphen = e.name.lastIndexOf("-");
+        if (lastHyphen <= 0) continue;
+        const taskId = e.name.slice(0, lastHyphen);
+        const attemptStr = e.name.slice(lastHyphen + 1);
+        const attempt = parseInt(attemptStr, 10);
+        if (attemptStr !== String(attempt)) continue;
+        if (!depIdSet.has(taskId)) continue;
+        let arr = byTaskId.get(taskId);
+        if (!arr) {
+          arr = [];
+          byTaskId.set(taskId, arr);
+        }
+        arr.push({ attempt, entry: e.name });
+      }
+    } catch {
+      return [];
+    }
+
+    for (const arr of byTaskId.values()) {
+      arr.sort((a, b) => b.attempt - a.attempt);
+    }
+
     const outputs: Array<{ taskId: string; diff: string; summary: string }> = [];
-
     for (const depId of dependencyTaskIds) {
+      const arr = byTaskId.get(depId);
+      if (!arr) continue;
       try {
-        const sessionsDir = path.join(repoPath, OPENSPRINT_PATHS.sessions);
-        const entries = await fs.readdir(sessionsDir, { withFileTypes: true });
-        const sessionDirs = entries
-          .filter((e) => e.isDirectory() && e.name.startsWith(depId + "-"))
-          .map((e) => e.name)
-          .sort((a, b) => {
-            const attemptA = parseInt(a.slice((depId + "-").length) || "0", 10);
-            const attemptB = parseInt(b.slice((depId + "-").length) || "0", 10);
-            return attemptB - attemptA;
-          });
-
-        // Find the latest approved session (completed task output)
-        for (const dir of sessionDirs) {
-          const sessionPath = path.join(sessionsDir, dir, "session.json");
+        for (const { entry } of arr) {
+          const sessionPath = path.join(sessionsDir, entry, "session.json");
           const raw = await fs.readFile(sessionPath, "utf-8");
           const session = JSON.parse(raw) as {
             gitDiff?: string;

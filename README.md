@@ -279,6 +279,7 @@ curl -X PUT http://localhost:3100/api/v1/projects/<PROJECT_ID> \
 - The orchestrator creates git worktrees from the **dev clone** and runs agents there
 - Run `bd` commands from `~/opensprint-dev` (that's where `.beads/` lives)
 - After agents push changes, `git pull` in the control clone to pick them up
+- If you build a plan in another tool like the Cursor IDE, you can instruct your agent to file it into OpenSprint with a prompt like `Pleas file this plan as an epic and beads in the project at [PROJECT_FOLDER]`
 
 ## Contributing
 

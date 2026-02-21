@@ -209,6 +209,46 @@ export class PhaseExecutorService {
     const settings = await this.host.projectService.getSettings(projectId);
     const wtPath = slot.worktreePath ?? repoPath;
 
+    // #region agent log
+    const commitsAheadAtReviewStart = await this.host.branchManager.getCommitCountAhead(
+      repoPath,
+      branchName
+    );
+    const commitsAheadFromWorktree =
+      wtPath && wtPath !== repoPath
+        ? await this.host.branchManager.getCommitCountAhead(wtPath, branchName)
+        : null;
+    let diffLengthFromWorktree: number | null = null;
+    if (wtPath && wtPath !== repoPath) {
+      try {
+        const diffFromWt = await this.host.branchManager.getDiff(wtPath, branchName);
+        diffLengthFromWorktree = diffFromWt?.length ?? 0;
+      } catch {
+        diffLengthFromWorktree = -1;
+      }
+    }
+    fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "17a2a1" },
+      body: JSON.stringify({
+        sessionId: "17a2a1",
+        location: "phase-executor.service.ts:executeReviewPhase",
+        message: "Commit count at review phase start (repoPath vs worktree)",
+        data: {
+          taskId: task.id,
+          branchName,
+          commitsAheadFromRepo: commitsAheadAtReviewStart,
+          commitsAheadFromWorktree,
+          diffLengthFromWorktree,
+          wtPath: wtPath ?? "(none)",
+        },
+        timestamp: Date.now(),
+        hypothesisId: "F",
+        runId: "review-start",
+      }),
+    }).catch(() => {});
+    // #endregion
+
     try {
       const config: ActiveTaskConfig = {
         invocation_id: task.id,
