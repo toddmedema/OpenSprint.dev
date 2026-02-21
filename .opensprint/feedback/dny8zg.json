@@ -1,0 +1,24 @@
+{
+  "id": "dny8zg",
+  "text": "It looks like this is still an issue - please remove all references to \"PRD\" in the settings menu",
+  "category": "ux",
+  "mappedPlanId": "project-setup-wizard",
+  "createdTaskIds": [],
+  "status": "mapped",
+  "createdAt": "2026-02-21T07:03:12.405Z",
+  "parent_id": "yqdjcd",
+  "depth": 1,
+  "mappedEpicId": "opensprint.dev-9q3",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Remove all PRD references from settings menus",
+      "description": "Audit every label, heading, tooltip, and placeholder in the project settings UI and remove or reword any mention of \"PRD\" (e.g., \"(PRD 6.5)\", \"See PRD §6.3\"). Replace with user-friendly descriptions that convey the same information without exposing internal document references. Acceptance criteria: 1) No string in the settings UI contains the substring \"PRD\". 2) All affected labels remain clear and informative after rewording. 3) Covers both the project-setup wizard screens and the in-project settings panel.",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Remove all PRD references from settings menus"],
+  "feedbackSourceBeadId": "opensprint.dev-ixps"
+}

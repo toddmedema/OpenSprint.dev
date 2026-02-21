@@ -1,0 +1,25 @@
+{
+  "id": "0pvtws",
+  "text": "Please fix all broken BACKEND tests by actually improving the code, not deleting tests",
+  "category": "bug",
+  "mappedPlanId": "backend-api-foundation",
+  "createdTaskIds": ["opensprint.dev-7un.1"],
+  "status": "mapped",
+  "createdAt": "2026-02-21T07:32:53.341Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-7un",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Fix broken backend tests by correcting implementation code",
+      "description": "Audit all failing backend test suites, identify root causes of failures, and fix the underlying application code (not the tests) to make them pass. Acceptance criteria: (1) All previously failing backend tests pass. (2) No tests are deleted or skipped to achieve a green suite. (3) Code changes are limited to fixing the actual defects the tests expose. (4) Any tests that were previously deleted to hide failures are restored if identifiable from git history.",
+      "priority": 1,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Fix broken backend tests by correcting implementation code"],
+  "feedbackSourceBeadId": "opensprint.dev-k0ca"
+}
