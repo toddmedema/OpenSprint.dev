@@ -104,12 +104,8 @@ describe("deploy-fix-epic service", () => {
       }
     );
     mockBeadsCreateWithRetry.mockImplementation(
-      (_repo: string, _title: string, opts?: { type?: string; parentId?: string }) => {
-        const id = opts?.parentId
-          ? `${opts.parentId}.${Math.floor(Math.random() * 1000)}`
-          : `epic-${Date.now()}`;
-        return Promise.resolve({ id });
-      }
+      (repo: string, title: string, opts?: { type?: string; parentId?: string }) =>
+        mockBeadsCreate(repo, title, opts)
     );
     mockBeadsUpdate.mockResolvedValue(undefined);
     mockBeadsAddDependency.mockResolvedValue(undefined);
