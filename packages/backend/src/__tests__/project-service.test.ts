@@ -352,7 +352,7 @@ describe("ProjectService", () => {
     const settingsRaw = await fs.readFile(settingsPath, "utf-8");
     const settings = JSON.parse(settingsRaw);
     expect(settings.hilConfig.scopeChanges).toBe("automated");
-    expect(settings.hilConfig.architectureDecisions).toBe("requires_approval");
+    expect(settings.hilConfig.architectureDecisions).toBe("automated");
     expect(settings.hilConfig.dependencyModifications).toBe("automated");
   });
 
@@ -492,7 +492,7 @@ describe("ProjectService", () => {
     });
 
     expect(updated.hilConfig).not.toHaveProperty("testFailuresAndRetries");
-    expect(updated.hilConfig.scopeChanges).toBe("requires_approval");
+    expect(updated.hilConfig.scopeChanges).toBe("automated");
 
     const reloaded = await projectService.getSettings(project.id);
     expect(reloaded.hilConfig).not.toHaveProperty("testFailuresAndRetries");
@@ -519,7 +519,7 @@ describe("ProjectService", () => {
 
     const fetched = await projectService.getSettings(project.id);
     expect(fetched.hilConfig).not.toHaveProperty("testFailuresAndRetries");
-    expect(fetched.hilConfig.scopeChanges).toBe("requires_approval");
+    expect(fetched.hilConfig.scopeChanges).toBe("automated");
   });
 
   it("should reject invalid agent config in codingAgentByComplexity", async () => {

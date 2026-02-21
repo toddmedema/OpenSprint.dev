@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  DEFAULT_HIL_CONFIG,
   getCodingAgentForComplexity,
   getDefaultDeploymentTarget,
   getDeploymentTargetConfig,
@@ -15,11 +16,7 @@ function makeSettings(overrides?: Partial<ProjectSettings>): ProjectSettings {
     planningAgent: defaultAgent,
     codingAgent: defaultAgent,
     deployment: { mode: "custom" },
-    hilConfig: {
-      scopeChanges: "requires_approval",
-      architectureDecisions: "requires_approval",
-      dependencyModifications: "automated",
-    },
+    hilConfig: DEFAULT_HIL_CONFIG,
     testFramework: null,
     ...overrides,
   };

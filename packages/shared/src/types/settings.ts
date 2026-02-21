@@ -141,9 +141,9 @@ export function getCodingAgentForComplexity(
   return settings.codingAgent;
 }
 
-/** Default HIL configuration */
+/** Default HIL configuration (all categories default to automated for new projects) */
 export const DEFAULT_HIL_CONFIG: HilConfig = {
-  scopeChanges: "requires_approval",
-  architectureDecisions: "requires_approval",
+  scopeChanges: "automated",
+  architectureDecisions: "automated",
   dependencyModifications: "automated",
 };
