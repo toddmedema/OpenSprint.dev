@@ -4,6 +4,7 @@ import { useAppDispatch } from "../../store";
 import { api } from "../../api/client";
 import { addNotification } from "../../store/slices/notificationSlice";
 import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
+import { CollapsibleSection } from "./CollapsibleSection";
 
 export function SourceFeedbackSection({
   projectId,
@@ -36,29 +37,16 @@ export function SourceFeedbackSection({
   }, [projectId, feedbackId, expanded, dispatch]);
 
   return (
-    <div className="border-b border-theme-border">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
-        aria-expanded={expanded}
-        aria-controls="source-feedback-content"
-        aria-label={expanded ? "Collapse Source Feedback" : "Expand Source Feedback"}
-        id="source-feedback-header"
-      >
-        <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">
-          Source Feedback
-        </h4>
-        <span className="text-theme-muted text-xs">{expanded ? "▼" : "▶"}</span>
-      </button>
-      {expanded && (
-        <div
-          id="source-feedback-content"
-          role="region"
-          aria-labelledby="source-feedback-header"
-          className="p-4 pt-0"
-        >
-          {loading ? (
+    <CollapsibleSection
+      title="Source Feedback"
+      expanded={expanded}
+      onToggle={onToggle}
+      expandAriaLabel="Expand Source Feedback"
+      collapseAriaLabel="Collapse Source Feedback"
+      contentId="source-feedback-content"
+      headerId="source-feedback-header"
+    >
+      {loading ? (
             <div className="bg-theme-code-bg rounded-lg border border-theme-border overflow-hidden">
               <div className="p-4 text-xs text-theme-muted" data-testid="source-feedback-loading">
                 Loading feedback…
@@ -110,8 +98,6 @@ export function SourceFeedbackSection({
               )}
             </div>
           ) : null}
-        </div>
-      )}
-    </div>
+    </CollapsibleSection>
   );
 }

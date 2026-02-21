@@ -13,6 +13,7 @@ import { TaskStatusBadge, COLUMN_LABELS } from "../kanban";
 import { formatUptime } from "../../lib/formatting";
 import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
 import { ArchivedSessionView } from "./ArchivedSessionView";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { SourceFeedbackSection } from "./SourceFeedbackSection";
 
 export interface TaskDetailSidebarProps {
@@ -324,47 +325,29 @@ export function TaskDetailSidebar({
                 (d) => d.targetId && d.type !== "discovered-from"
               ).length > 0;
             if (!displayDesc && !hasDeps) return null;
+
             return (
-              <div className="p-4 border-b border-theme-border">
-                {displayDesc ? (
-                  <div className="border-b border-theme-border">
-                    <button
-                      type="button"
-                      onClick={() => setDescriptionSectionExpanded((prev) => !prev)}
-                      className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
-                      aria-expanded={descriptionSectionExpanded}
-                      aria-controls="description-content"
-                      aria-label={
-                        descriptionSectionExpanded ? "Collapse Description" : "Expand Description"
-                      }
-                      id="description-header"
+              <>
+                {displayDesc && (
+                  <CollapsibleSection
+                    title="Description"
+                    expanded={descriptionSectionExpanded}
+                    onToggle={() => setDescriptionSectionExpanded((prev) => !prev)}
+                    expandAriaLabel="Expand Description"
+                    collapseAriaLabel="Collapse Description"
+                    contentId="description-content"
+                    headerId="description-header"
+                  >
+                    <div
+                      className="prose-task-description prose-execute-task"
+                      data-testid="task-description-markdown"
                     >
-                      <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">
-                        Description
-                      </h4>
-                      <span className="text-theme-muted text-xs">
-                        {descriptionSectionExpanded ? "▼" : "▶"}
-                      </span>
-                    </button>
-                    {descriptionSectionExpanded && (
-                      <div
-                        id="description-content"
-                        role="region"
-                        aria-labelledby="description-header"
-                        className="px-4 pb-4"
-                      >
-                        <div
-                          className="prose-task-description prose-execute-task"
-                          data-testid="task-description-markdown"
-                        >
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayDesc}</ReactMarkdown>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : null}
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayDesc}</ReactMarkdown>
+                    </div>
+                  </CollapsibleSection>
+                )}
                 {hasDeps && (
-                  <div className={displayDesc ? "pt-0" : ""}>
+                  <div className="p-4 border-b border-theme-border">
                     <div className="text-xs">
                       <span className="text-theme-muted">Depends on:</span>
                       <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-1.5">
@@ -396,36 +379,19 @@ export function TaskDetailSidebar({
                     </div>
                   </div>
                 )}
-              </div>
+              </>
             );
           })()}
 
-        <div className="border-b border-theme-border">
-          <button
-            type="button"
-            onClick={() => setArtifactsSectionExpanded(!artifactsSectionExpanded)}
-            className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
-            aria-expanded={artifactsSectionExpanded}
-            aria-controls="artifacts-content"
-            aria-label={
-              artifactsSectionExpanded
-                ? `Collapse ${isDoneTask ? "Done Work Artifacts" : "Live agent output"}`
-                : `Expand ${isDoneTask ? "Done Work Artifacts" : "Live agent output"}`
-            }
-            id="artifacts-header"
-          >
-            <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">
-              {isDoneTask ? "Done Work Artifacts" : "Live agent output"}
-            </h4>
-            <span className="text-theme-muted text-xs">{artifactsSectionExpanded ? "▼" : "▶"}</span>
-          </button>
-          {artifactsSectionExpanded && (
-            <div
-              id="artifacts-content"
-              role="region"
-              aria-labelledby="artifacts-header"
-              className="p-4 pt-0"
-            >
+        <CollapsibleSection
+          title={isDoneTask ? "Done Work Artifacts" : "Live agent output"}
+          expanded={artifactsSectionExpanded}
+          onToggle={() => setArtifactsSectionExpanded(!artifactsSectionExpanded)}
+          expandAriaLabel={`Expand ${isDoneTask ? "Done Work Artifacts" : "Live agent output"}`}
+          collapseAriaLabel={`Collapse ${isDoneTask ? "Done Work Artifacts" : "Live agent output"}`}
+          contentId="artifacts-content"
+          headerId="artifacts-header"
+        >
               <div className="bg-theme-code-bg rounded-lg border border-theme-border overflow-hidden min-h-[200px] max-h-[400px] flex flex-col">
                 {taskDetailLoading ? (
                   <div className="p-4 space-y-2" data-testid="artifacts-loading">
@@ -505,9 +471,7 @@ export function TaskDetailSidebar({
                   </div>
                 )}
               </div>
-            </div>
-          )}
-        </div>
+            </CollapsibleSection>
       </div>
     </>
   );

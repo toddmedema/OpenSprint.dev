@@ -792,4 +792,39 @@ describe("TaskDetailSidebar", () => {
     expect(sourceFeedbackContent).toHaveClass("p-4", "pt-0");
     expect(artifactsContent).toHaveClass("p-4", "pt-0");
   });
+
+  it("Description uses same content wrapper (p-4 pt-0) as Source Feedback and Live Output", () => {
+    const props = createMinimalProps({
+      taskDetail: {
+        id: "epic-1.1",
+        title: "Task with description",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [],
+        description: "Implement the feature",
+        createdAt: "",
+        updatedAt: "",
+      },
+      descriptionSectionExpanded: true,
+      artifactsSectionExpanded: true,
+    });
+
+    const { container } = render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    const descriptionContent = container.querySelector("#description-content");
+    const artifactsContent = container.querySelector("#artifacts-content");
+    expect(descriptionContent).toBeInTheDocument();
+    expect(artifactsContent).toBeInTheDocument();
+    expect(descriptionContent).toHaveClass("p-4", "pt-0");
+    expect(artifactsContent).toHaveClass("p-4", "pt-0");
+  });
 });
