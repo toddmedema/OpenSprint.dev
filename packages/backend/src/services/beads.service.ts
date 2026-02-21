@@ -6,6 +6,7 @@ import type { TaskType, TaskPriority } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { createLogger } from "../utils/logger.js";
+import { getErrorMessage } from "../utils/error-utils.js";
 import { beadsCache } from "./beads-cache.js";
 
 const execAsync = promisify(exec);
@@ -541,6 +542,77 @@ export class BeadsService {
     if (options.parentId) cmd += ` --parent ${options.parentId}`;
     const stdout = await this.exec(repoPath, cmd);
     return this.parseJson(stdout);
+  }
+
+  private isDuplicateKeyError(err: unknown): boolean {
+    const msg = getErrorMessage(err);
+    const details = (err as { details?: { stderr?: string } })?.details?.stderr ?? "";
+    const fullMsg = msg + details;
+    return (
+      fullMsg.includes("UNIQUE constraint failed") ||
+      fullMsg.includes("duplicate primary key") ||
+      fullMsg.includes("Error 1062")
+    );
+  }
+
+  /**
+   * Create an issue with retry on duplicate-key errors.
+   * When fallbackToStandalone is true and all retries with parentId fail,
+   * tries creating without parent and returns null if that also fails.
+   */
+  async createWithRetry(
+    repoPath: string,
+    title: string,
+    options: {
+      type?: TaskType | string;
+      priority?: TaskPriority | number;
+      description?: string;
+      parentId?: string;
+    } = {},
+    opts?: { fallbackToStandalone?: boolean }
+  ): Promise<BeadsIssue | null> {
+    const MAX_RETRIES = 3;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await this.create(repoPath, title, options);
+      } catch (err) {
+        if (!this.isDuplicateKeyError(err)) {
+          throw err;
+        }
+
+        if (attempt < MAX_RETRIES) {
+          log.warn("Duplicate task ID, retrying", {
+            attempt: attempt + 1,
+            maxRetries: MAX_RETRIES + 1,
+            title,
+          });
+          await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+          continue;
+        }
+
+        if (opts?.fallbackToStandalone && options.parentId) {
+          log.warn("Duplicate ID persists under parent, creating standalone task", {
+            parentId: options.parentId,
+            title,
+          });
+          try {
+            return await this.create(repoPath, title, {
+              ...options,
+              parentId: undefined,
+            });
+          } catch (fallbackErr) {
+            log.error("Standalone fallback also failed", { title, err: fallbackErr });
+            return null;
+          }
+        }
+
+        log.error("Duplicate task ID with no parent fallback", { title });
+        return null;
+      }
+    }
+
+    return null;
   }
 
   /** Update an issue */
