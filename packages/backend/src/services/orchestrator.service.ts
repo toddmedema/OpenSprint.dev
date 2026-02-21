@@ -830,21 +830,6 @@ export class OrchestratorService {
       } catch {
         // Fall back to full suite
       }
-      // #region agent log
-      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "17a2a1" },
-        body: JSON.stringify({
-          sessionId: "17a2a1",
-          location: "orchestrator.service.ts:handleCodingDone(changedFiles)",
-          message: "Changed files before tests",
-          data: { taskId: task.id, branchName, changedFilesCount: changedFiles.length },
-          timestamp: Date.now(),
-          hypothesisId: "D",
-          runId: "coding-done",
-        }),
-      }).catch(() => {});
-      // #endregion
       const scopedResult = await this.testRunner.runScopedTests(wtPath, changedFiles, testCommand);
       slot.phaseResult.testOutput = scopedResult.rawOutput;
 
@@ -863,44 +848,7 @@ export class OrchestratorService {
 
       slot.phaseResult.testResults = scopedResult;
 
-      // #region agent log
-      const commitsBeforeWip = await this.branchManager.getCommitCountAhead(repoPath, branchName);
-      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "17a2a1" },
-        body: JSON.stringify({
-          sessionId: "17a2a1",
-          location: "orchestrator.service.ts:handleCodingDone(pre-commitWip)",
-          message: "Commit count before commitWip",
-          data: { taskId: task.id, branchName, commitsAhead: commitsBeforeWip },
-          timestamp: Date.now(),
-          hypothesisId: "A",
-          runId: "coding-done",
-        }),
-      }).catch(() => {});
-      // #endregion
-      const didCommitWip = await this.branchManager.commitWip(wtPath, task.id);
-      // #region agent log
-      const commitsAfterWip = await this.branchManager.getCommitCountAhead(repoPath, branchName);
-      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "17a2a1" },
-        body: JSON.stringify({
-          sessionId: "17a2a1",
-          location: "orchestrator.service.ts:handleCodingDone(post-commitWip)",
-          message: "After commitWip",
-          data: {
-            taskId: task.id,
-            branchName,
-            didCommitWip,
-            commitsAhead: commitsAfterWip,
-          },
-          timestamp: Date.now(),
-          hypothesisId: "B",
-          runId: "coding-done",
-        }),
-      }).catch(() => {});
-      // #endregion
+      await this.branchManager.commitWip(wtPath, task.id);
 
       const reviewMode = settings.reviewMode ?? DEFAULT_REVIEW_MODE;
 
@@ -964,29 +912,6 @@ export class OrchestratorService {
     if (result && result.status === "approved") {
       await this.performMergeAndDone(projectId, repoPath, task, branchName);
     } else if (result && result.status === "rejected") {
-      // #region agent log
-      const commitsAheadOnRejection = await this.branchManager.getCommitCountAhead(
-        repoPath,
-        branchName
-      );
-      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "17a2a1" },
-        body: JSON.stringify({
-          sessionId: "17a2a1",
-          location: "orchestrator.service.ts:handleReviewDone(rejected)",
-          message: "Commit count when review rejected",
-          data: {
-            taskId: task.id,
-            branchName,
-            commitsAhead: commitsAheadOnRejection,
-          },
-          timestamp: Date.now(),
-          hypothesisId: "E",
-          runId: "review-rejected",
-        }),
-      }).catch(() => {});
-      // #endregion
       const reason = `Review rejected: ${result.issues?.join("; ") || result.summary || "No details provided"}`;
       const reviewFeedback = formatReviewFeedback(result);
 
