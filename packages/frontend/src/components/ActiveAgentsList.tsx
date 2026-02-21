@@ -48,7 +48,22 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
   const fetchAgents = useCallback(async () => {
     try {
       const data = await api.agents.active(projectId);
-      setAgents(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      // #region agent log
+      fetch("http://127.0.0.1:7744/ingest/56f23476-d7a0-4ff0-8a30-e7cbc32405d2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f564be" },
+        body: JSON.stringify({
+          sessionId: "f564be",
+          location: "ActiveAgentsList.tsx:fetchAgents",
+          message: "UI received agents",
+          data: { count: list.length, roles: list.map((a) => a.role) },
+          timestamp: Date.now(),
+          hypothesisId: "H4",
+        }),
+      }).catch(() => {});
+      // #endregion
+      setAgents(list);
     } catch {
       setAgents([]);
     } finally {

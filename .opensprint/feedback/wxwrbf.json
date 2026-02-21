@@ -1,0 +1,12 @@
+{
+  "id": "wxwrbf",
+  "text": "When scrolling down in the plan details sidebar, the header (which has the title and close button) should remain fixed at the top and always visible to the user, just like the Execute sidebar",
+  "category": "bug",
+  "mappedPlanId": null,
+  "createdTaskIds": [],
+  "status": "pending",
+  "createdAt": "2026-02-21T07:52:58.096Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4
+}

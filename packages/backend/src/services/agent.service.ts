@@ -104,6 +104,20 @@ export class AgentService {
   async invokePlanningAgent(options: InvokePlanningAgentOptions): Promise<PlanningAgentResponse> {
     const { tracking } = options;
     if (tracking) {
+      // #region agent log
+      fetch("http://127.0.0.1:7744/ingest/56f23476-d7a0-4ff0-8a30-e7cbc32405d2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f564be" },
+        body: JSON.stringify({
+          sessionId: "f564be",
+          location: "agent.service.ts:invokePlanningAgent",
+          message: "register planning agent",
+          data: { id: tracking.id, role: tracking.role, phase: tracking.phase },
+          timestamp: Date.now(),
+          hypothesisId: "H5",
+        }),
+      }).catch(() => {});
+      // #endregion
       activeAgentsService.register(
         tracking.id,
         tracking.projectId,
