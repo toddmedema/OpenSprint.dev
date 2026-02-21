@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Project, ProjectPhase } from "@opensprint/shared";
-import { useAppSelector } from "../../store";
+import { useAppSelector, useAppDispatch } from "../../store";
+import { wsConnectHome } from "../../store/middleware/websocketMiddleware";
 import { getProjectPhasePath } from "../../lib/phaseRouting";
 import { api } from "../../api/client";
 import { ActiveAgentsList } from "../ActiveAgentsList";
+import { GlobalActiveAgentsList } from "../GlobalActiveAgentsList";
 import { ConnectionIndicator } from "../ConnectionIndicator";
 import { ProjectSettingsModal } from "../ProjectSettingsModal";
 
@@ -42,6 +44,7 @@ export function Navbar({
   const setSettingsOpen = onSettingsOpenChange ?? setInternalSettingsOpen;
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const dispatch = useAppDispatch();
   const executeBlockedCount = useAppSelector((s) => {
     const implTasks = s.execute.tasks.filter((t) => {
       const isEpic = t.type === "epic";
@@ -60,6 +63,20 @@ export function Navbar({
       })),
     [executeBlockedCount]
   );
+
+  // Load projects when on home (no project) so we can show GlobalActiveAgentsList when at least one exists
+  useEffect(() => {
+    if (!project) {
+      api.projects.list().then(setProjects).catch(console.error);
+    }
+  }, [project]);
+
+  // Open a lightweight WS to /ws when on homepage so backend sees a client and does not open a duplicate tab
+  useEffect(() => {
+    if (!project && projects.length >= 1) {
+      dispatch(wsConnectHome());
+    }
+  }, [project, projects.length, dispatch]);
 
   useEffect(() => {
     if (dropdownOpen) {
@@ -183,7 +200,7 @@ export function Navbar({
 
         {/* Right: Active agents + Status + Settings */}
         <div className="flex items-center gap-3">
-          {project && (
+          {project ? (
             <>
               <ActiveAgentsList projectId={project.id} />
               <ConnectionIndicator />
@@ -214,7 +231,9 @@ export function Navbar({
                 </svg>
               </button>
             </>
-          )}
+          ) : projects.length >= 1 ? (
+            <GlobalActiveAgentsList />
+          ) : null}
         </div>
       </div>
 

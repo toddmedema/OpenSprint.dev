@@ -92,7 +92,7 @@ const mockBeadsCreate = vi.fn().mockImplementation(() => {
   return Promise.resolve({ id, title: "Mock", status: "open" });
 });
 const mockBeadsCreateWithRetry = vi.fn().mockImplementation(
-  (repoPath: string, title: string, options: unknown, opts?: { fallbackToStandalone?: boolean }) =>
+  (repoPath: string, title: string, options: unknown, _opts?: { fallbackToStandalone?: boolean }) =>
     mockBeadsCreate(repoPath, title, options)
 );
 const mockBeadsAddDependency = vi.fn().mockResolvedValue(undefined);
@@ -493,6 +493,20 @@ describe("FeedbackService", () => {
     expect(prompt).toContain("# PRD");
     expect(prompt).toContain("# Plans");
     expect(prompt).toContain("Users want dark mode");
+
+    const { broadcastToProject } = await import("../websocket/index.js");
+    expect(broadcastToProject).toHaveBeenCalledWith(
+      projectId,
+      expect.objectContaining({
+        type: "feedback.mapped",
+        feedbackId: updated.id,
+        item: expect.objectContaining({
+          id: updated.id,
+          status: "mapped",
+          category: "feature",
+        }),
+      })
+    );
   });
 
   it("should parse full PRD 12.3.4 format: proposed_tasks, mapped_epic_id, is_scope_change", async () => {
@@ -1136,6 +1150,8 @@ describe("FeedbackService", () => {
         "utf-8"
       );
 
+      const { broadcastToProject } = await import("../websocket/index.js");
+
       const result = await feedbackService.resolveFeedback(projectId, "fb-parent-1");
 
       expect(result.status).toBe("resolved");
@@ -1143,6 +1159,27 @@ describe("FeedbackService", () => {
       const storedChild = await feedbackService.getFeedback(projectId, "fb-child-1");
       expect(storedParent.status).toBe("resolved");
       expect(storedChild.status).toBe("resolved");
+
+      // Broadcasts include full item so frontend can update in place without refetch
+      expect(broadcastToProject).toHaveBeenCalledWith(
+        projectId,
+        expect.objectContaining({
+          type: "feedback.resolved",
+          feedbackId: "fb-parent-1",
+          item: expect.objectContaining({
+            id: "fb-parent-1",
+            status: "resolved",
+          }),
+        })
+      );
+      const childCalls = (broadcastToProject as ReturnType<typeof vi.fn>).mock.calls.filter(
+        (call: unknown[]) => (call[1] as { feedbackId?: string }).feedbackId === "fb-child-1"
+      );
+      expect(childCalls.length).toBe(1);
+      expect((childCalls[0][1] as { item: { id: string; status: string } }).item).toMatchObject({
+        id: "fb-child-1",
+        status: "resolved",
+      });
     });
 
     it("should cascade resolve recursively (grandchildren)", async () => {

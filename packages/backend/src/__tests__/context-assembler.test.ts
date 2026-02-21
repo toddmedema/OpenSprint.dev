@@ -110,7 +110,7 @@ User authentication.
     expect(prompt).toContain("context/plan.md");
     expect(prompt).toContain("context/prd_excerpt.md");
     expect(prompt).toContain("context/deps/");
-    expect(prompt).toContain("Commit after each meaningful change");
+    expect(prompt).toContain("Commit after each logical unit");
     expect(prompt).toContain("Do not wait until the end to commit");
     // Terminology: use "done" and "finish" instead of "complete" (feedback consistency)
     expect(prompt).toContain("when the task is done");

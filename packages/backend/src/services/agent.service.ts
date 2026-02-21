@@ -71,6 +71,21 @@ export interface CodingAgentHandle {
   kill: () => void;
   pid: number | null;
 }
+
+/** Create a handle for an existing process by PID (used when re-attaching after backend restart). */
+export function createPidHandle(pid: number): CodingAgentHandle {
+  return {
+    pid,
+    kill() {
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {
+        // Process may already be dead
+      }
+    },
+  };
+}
+
 /**
  * AgentService — unified interface for planning and coding agents.
  * invokePlanningAgent uses Claude API when config.type is 'claude';

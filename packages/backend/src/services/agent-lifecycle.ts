@@ -147,6 +147,27 @@ export class AgentLifecycleManager {
     this.startInactivityMonitor(runState, wtPath, taskId, branchName, timers, onDone);
   }
 
+  /**
+   * Re-attach to an existing agent process after backend restart (GUPP recovery).
+   * Does not spawn; sets runState.activeProcess to the handle and starts heartbeat + inactivity monitoring.
+   * When the process exits (detected via isPidAlive), onDone is invoked.
+   */
+  resumeMonitoring(
+    handle: CodingAgentHandle,
+    params: AgentRunParams,
+    runState: AgentRunState,
+    timers: TimerRegistry
+  ): void {
+    const { wtPath, taskId, branchName, onDone } = params;
+    runState.activeProcess = handle;
+    runState.lastOutputTime = Date.now();
+    runState.exitHandled = false;
+    runState.killedDueToTimeout = false;
+
+    this.startHeartbeat(runState, wtPath, taskId, timers);
+    this.startInactivityMonitor(runState, wtPath, taskId, branchName, timers, onDone);
+  }
+
   private startHeartbeat(
     runState: AgentRunState,
     wtPath: string,

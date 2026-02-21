@@ -655,7 +655,7 @@ export class BranchManager {
   async rebaseOntoMain(wtPath: string): Promise<void> {
     try {
       await this.git(wtPath, "rebase main");
-    } catch (err) {
+    } catch (_err) {
       const conflicted = await this.getConflictedFiles(wtPath);
       throw new RebaseConflictError(conflicted);
     }

@@ -248,7 +248,7 @@ server.listen(port, () => {
     logOrchestrator.error("Always-on init failed", { err });
   });
 
-  // Auto-open frontend if no browser reconnects within 10s
+  // Auto-open frontend if no browser reconnects within 15s
   setTimeout(() => {
     if (hasClientConnected()) return;
     const url = `http://localhost:${FRONTEND_PORT}`;
@@ -258,7 +258,7 @@ server.listen(port, () => {
     exec(`${cmd} ${url}`, (err) => {
       if (err) logStartup.warn("Could not open browser", { err: err.message });
     });
-  }, 10_000);
+  }, 15_000);
 });
 
 process.on("SIGINT", shutdown);

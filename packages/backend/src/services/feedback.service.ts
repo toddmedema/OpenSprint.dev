@@ -490,6 +490,7 @@ export class FeedbackService {
               feedbackId: item.id,
               planId: item.mappedPlanId || "",
               taskIds: item.createdTaskIds,
+              item,
             });
             return;
           }
@@ -537,6 +538,7 @@ export class FeedbackService {
       feedbackId: item.id,
       planId: item.mappedPlanId || "",
       taskIds: item.createdTaskIds,
+      item,
     });
   }
 
@@ -806,6 +808,7 @@ export class FeedbackService {
         broadcastToProject(projectId, {
           type: "feedback.resolved",
           feedbackId: child.id,
+          item: child,
         });
       }
       await this.cascadeResolveChildren(projectId, child.id);
@@ -829,6 +832,7 @@ export class FeedbackService {
     broadcastToProject(projectId, {
       type: "feedback.resolved",
       feedbackId: item.id,
+      item,
     });
 
     await this.cascadeResolveChildren(projectId, item.id);

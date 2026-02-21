@@ -75,9 +75,18 @@ function normalizeHilConfig(
 
 export class ProjectService {
   private beads = new BeadsService();
+  /** In-memory cache for listProjects() so GET /projects returns instantly when the event loop is busy (e.g. beads/orchestrator). Invalidated on create/update/delete. */
+  private listCache: Project[] | null = null;
 
-  /** List all projects */
+  private invalidateListCache(): void {
+    this.listCache = null;
+  }
+
+  /** List all projects (cached; invalidated on create/update/delete). */
   async listProjects(): Promise<Project[]> {
+    if (this.listCache !== null) {
+      return this.listCache;
+    }
     const entries = await projectIndex.getProjects();
     const projects: Project[] = [];
 
@@ -98,6 +107,7 @@ export class ProjectService {
       }
     }
 
+    this.listCache = projects;
     return projects;
   }
 
@@ -267,6 +277,7 @@ export class ProjectService {
       createdAt: now,
     });
 
+    this.invalidateListCache();
     return {
       id,
       name,
@@ -341,6 +352,7 @@ export class ProjectService {
       await projectIndex.updateProject(id, indexUpdates);
     }
 
+    this.invalidateListCache();
     return { project: updated, repoPathChanged };
   }
 
@@ -435,5 +447,6 @@ export class ProjectService {
   /** Delete a project from the index (does not delete repo) */
   async deleteProject(id: string): Promise<void> {
     await projectIndex.removeProject(id);
+    this.invalidateListCache();
   }
 }

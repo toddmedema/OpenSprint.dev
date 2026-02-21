@@ -18,7 +18,7 @@ import {
 } from "@opensprint/shared";
 import { BeadsService, type BeadsIssue } from "./beads.service.js";
 import { ProjectService } from "./project.service.js";
-import { agentService } from "./agent.service.js";
+import { agentService, createPidHandle } from "./agent.service.js";
 import { triggerDeploy } from "./deploy-trigger.service.js";
 import { BranchManager, RebaseConflictError } from "./branch-manager.js";
 import { gitCommitQueue, RepoConflictError } from "./git-commit-queue.service.js";
@@ -37,6 +37,7 @@ import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { TimerRegistry } from "./timer-registry.js";
 import { AgentLifecycleManager, type AgentRunState } from "./agent-lifecycle.js";
 import { CrashRecoveryService } from "./crash-recovery.service.js";
+import { heartbeatService } from "./heartbeat.service.js";
 import { FileScopeAnalyzer, type FileScope } from "./file-scope-analyzer.js";
 import { normalizeCodingStatus, normalizeReviewStatus } from "./result-normalizers.js";
 import { eventLogService } from "./event-log.service.js";
@@ -418,38 +419,115 @@ export class OrchestratorService {
 
   // ─── Crash Recovery (GUPP-style: scan assignment.json files) ───
 
-  private async recoverActiveSlots(projectId: string, repoPath: string): Promise<void> {
-    const orphaned = await this.crashRecovery.findOrphanedAssignments(repoPath);
-    if (orphaned.length === 0) return;
+  /**
+   * Find assignments from worktrees and main repo; re-attach when PID is alive, else requeue.
+   * Returns task IDs that were re-attached so orphan recovery can exclude them.
+   */
+  private async recoverActiveSlots(projectId: string, repoPath: string): Promise<string[]> {
+    const worktreeBase = this.branchManager.getWorktreeBasePath();
+    const fromWorktrees = await this.crashRecovery.findOrphanedAssignmentsFromWorktrees(worktreeBase);
+    const fromMainRepo = await this.crashRecovery.findOrphanedAssignments(repoPath);
+    const byTaskId = new Map<string, { taskId: string; assignment: TaskAssignment }>();
+    for (const o of fromMainRepo) byTaskId.set(o.taskId, o);
+    for (const o of fromWorktrees) byTaskId.set(o.taskId, o);
+    const orphaned = [...byTaskId.values()];
+
+    if (orphaned.length === 0) return [];
 
     const state = this.getState(projectId);
     const allIssues = await this.beads.listAll(repoPath);
     const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
+    const reattachedIds: string[] = [];
 
     for (const { taskId, assignment } of orphaned) {
-      log.info("Recovery: found orphaned assignment", {
-        taskId,
-        phase: assignment.phase,
-      });
-
       const task = idToIssue.get(taskId);
       if (!task) {
         log.warn("Recovery: task not found, cleaning up assignment", { taskId });
-        await this.deleteAssignment(repoPath, taskId);
+        await this.deleteAssignmentOrAt(repoPath, taskId, assignment.worktreePath);
         continue;
       }
 
-      // Check if task is still in_progress — if not, clean up stale assignment
       if ((task.status as string) !== "in_progress") {
         log.info("Recovery: task no longer in_progress, removing stale assignment", {
           taskId,
           status: task.status,
         });
-        await this.deleteAssignment(repoPath, taskId);
+        await this.deleteAssignmentOrAt(repoPath, taskId, assignment.worktreePath);
         continue;
       }
 
-      // Requeue the task: reset to open and let the loop pick it up
+      const wtPath = assignment.worktreePath;
+      const heartbeat = wtPath
+        ? await heartbeatService.readHeartbeat(wtPath, taskId)
+        : null;
+      const pidAlive =
+        heartbeat != null &&
+        typeof heartbeat.pid === "number" &&
+        heartbeat.pid > 0 &&
+        _isPidAlive(heartbeat.pid);
+
+      if (pidAlive && assignment.phase === "coding") {
+        log.info("Recovery: re-attaching to running agent", { taskId, pid: heartbeat!.pid });
+        const slot = this.createSlot(
+          task.id,
+          task.title ?? null,
+          assignment.branchName,
+          assignment.attempt
+        );
+        (slot as { worktreePath: string | null }).worktreePath = wtPath;
+        slot.agent.startedAt = assignment.createdAt;
+        state.slots.set(taskId, slot);
+
+        activeAgentsService.register(
+          taskId,
+          projectId,
+          assignment.phase,
+          "coder",
+          slot.taskTitle ?? taskId,
+          assignment.createdAt,
+          assignment.branchName
+        );
+
+        broadcastToProject(projectId, {
+          type: "agent.started",
+          taskId,
+          phase: assignment.phase,
+          branchName: assignment.branchName,
+          startedAt: assignment.createdAt,
+        });
+        this.transition(projectId, {
+          to: "start_task",
+          taskId,
+          taskTitle: slot.taskTitle,
+          branchName: assignment.branchName,
+          attempt: assignment.attempt,
+          queueDepth: state.status.queueDepth,
+        });
+
+        const handle = createPidHandle(heartbeat!.pid);
+        this.lifecycleManager.resumeMonitoring(
+          handle,
+          {
+            projectId,
+            taskId,
+            phase: "coding",
+            wtPath,
+            branchName: assignment.branchName,
+            promptPath: assignment.promptPath,
+            agentConfig: assignment.agentConfig,
+            agentLabel: slot.taskTitle ?? taskId,
+            role: "coder",
+            onDone: (code) =>
+              this.handleCodingDone(projectId, repoPath, task, assignment.branchName, code),
+          },
+          slot.agent,
+          slot.timers
+        );
+        reattachedIds.push(taskId);
+        continue;
+      }
+
+      log.info("Recovery: PID dead or missing, requeuing task", { taskId });
       try {
         await this.beads.update(repoPath, taskId, { status: "open", assignee: "" });
         await this.beads.comment(
@@ -460,10 +538,8 @@ export class OrchestratorService {
       } catch (err) {
         log.warn("Recovery: failed to requeue task", { taskId, err });
       }
-
-      await this.deleteAssignment(repoPath, taskId);
+      await this.deleteAssignmentOrAt(repoPath, taskId, assignment.worktreePath);
       state.status.totalFailed += 1;
-
       broadcastToProject(projectId, {
         type: "task.updated",
         taskId,
@@ -471,6 +547,19 @@ export class OrchestratorService {
         assignee: null,
       });
     }
+
+    return reattachedIds;
+  }
+
+  private async deleteAssignmentOrAt(
+    repoPath: string,
+    taskId: string,
+    worktreePath?: string
+  ): Promise<void> {
+    if (worktreePath) {
+      await this.crashRecovery.deleteAssignmentAt(worktreePath, taskId);
+    }
+    await this.deleteAssignment(repoPath, taskId);
   }
 
   // ─── Lifecycle ───
@@ -517,9 +606,15 @@ export class OrchestratorService {
     const repoPath = await this.projectService.getRepoPath(projectId);
     this.repoPathCache.set(projectId, repoPath);
 
-    // Orphan recovery: reset in_progress tasks with agent assignee but no active process
+    // GUPP-style crash recovery first: find assignments (worktrees + main repo), re-attach if PID alive
+    const reattachedIds = await this.recoverActiveSlots(projectId, repoPath);
+    if (reattachedIds.length > 0) {
+      log.info("Re-attached to running agent(s) after restart", { projectId, taskIds: reattachedIds });
+    }
+
+    // Orphan recovery: reset in_progress tasks with no active process; exclude re-attached tasks
     try {
-      const orphanResult = await orphanRecoveryService.recoverOrphanedTasks(repoPath);
+      const orphanResult = await orphanRecoveryService.recoverOrphanedTasks(repoPath, reattachedIds);
       if (orphanResult.recovered.length > 0) {
         log.warn(`Recovered ${orphanResult.recovered.length} orphaned task(s) on startup`);
       }
@@ -536,9 +631,6 @@ export class OrchestratorService {
     } catch (err) {
       log.error("Stale heartbeat recovery failed", { err });
     }
-
-    // GUPP-style crash recovery: scan assignment.json files
-    await this.recoverActiveSlots(projectId, repoPath);
 
     // Cache maxConcurrentCoders for synchronous nudge()
     try {

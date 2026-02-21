@@ -1,10 +1,10 @@
 import path from "path";
-import { open as fsOpen, stat as fsStat, readdir, readFile } from "fs/promises";
+import { open as fsOpen, stat as fsStat, readdir, readFile, unlink as fsUnlink } from "fs/promises";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import type { TaskAssignment } from "./orchestrator.service.js";
 import { createLogger } from "../utils/logger.js";
 
-const log = createLogger("crash-recovery");
+const _log = createLogger("crash-recovery");
 
 /**
  * Crash recovery for the orchestrator (PRD §5.8).
@@ -17,13 +17,49 @@ const log = createLogger("crash-recovery");
  * 2. Active task, PID alive — resume monitoring (output streaming, timeout), handle exit
  * 3. Active task, PID dead — revert/cleanup, comment bead, requeue task
  *
- * This service provides: findOrphanedAssignments (scan .opensprint/active/),
- * readOutputLogTail, readOutputLogFrom for output streaming during recovery.
+ * Assignments for Execute phase are written under the worktree path, not the main repo.
+ * Use findOrphanedAssignmentsFromWorktrees(worktreeBasePath) to find those.
  */
 export class CrashRecoveryService {
   /**
-   * Scan `.opensprint/active/` for assignment.json files.
+   * Scan worktree base directory for assignment.json files (e.g. opensprint-worktrees/<taskId>/).
+   * Each worktree has .opensprint/active/<taskId>/assignment.json.
+   * Returns all assignments found so the orchestrator can re-attach (PID alive) or requeue.
+   */
+  async findOrphanedAssignmentsFromWorktrees(
+    worktreeBasePath: string
+  ): Promise<Array<{ taskId: string; assignment: TaskAssignment }>> {
+    const result: Array<{ taskId: string; assignment: TaskAssignment }> = [];
+    try {
+      const entries = await readdir(worktreeBasePath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith("_")) continue;
+        const taskId = entry.name;
+        const assignmentPath = path.join(
+          worktreeBasePath,
+          taskId,
+          OPENSPRINT_PATHS.active,
+          taskId,
+          OPENSPRINT_PATHS.assignment
+        );
+        try {
+          const raw = await readFile(assignmentPath, "utf-8");
+          const assignment = JSON.parse(raw) as TaskAssignment;
+          result.push({ taskId, assignment });
+        } catch {
+          // No assignment.json or invalid — skip
+        }
+      }
+    } catch {
+      // Worktree base may not exist
+    }
+    return result;
+  }
+
+  /**
+   * Scan main repo `.opensprint/active/` for assignment.json files.
    * Returns all assignments found (caller decides what to do with them).
+   * Note: Execute-phase assignments live in worktrees; use findOrphanedAssignmentsFromWorktrees for those.
    */
   async findOrphanedAssignments(
     repoPath: string
@@ -49,6 +85,24 @@ export class CrashRecoveryService {
     }
 
     return orphaned;
+  }
+
+  /**
+   * Delete assignment.json at a given base path (main repo or worktree).
+   * Use this when requeuing so the assignment is removed from the worktree.
+   */
+  async deleteAssignmentAt(basePath: string, taskId: string): Promise<void> {
+    const assignmentPath = path.join(
+      basePath,
+      OPENSPRINT_PATHS.active,
+      taskId,
+      OPENSPRINT_PATHS.assignment
+    );
+    try {
+      await fsUnlink(assignmentPath);
+    } catch {
+      // File may not exist
+    }
   }
 
   /**

@@ -79,7 +79,8 @@ export const api = {
       }),
   },
   projects: {
-    list: () => request<Project[]>("/projects"),
+    list: (signal?: AbortSignal) =>
+      request<Project[]>("/projects", signal ? { signal } : {}),
     get: (id: string) => request<Project>(`/projects/${id}`),
     getPlanStatus: (id: string) => request<PlanStatusResponse>(`/projects/${id}/plan-status`),
     create: (data: CreateProjectRequest) =>

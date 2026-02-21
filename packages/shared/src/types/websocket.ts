@@ -1,4 +1,5 @@
 import type { AgentPhase, TestResults } from "./agent.js";
+import type { FeedbackItem } from "./feedback.js";
 
 // ─── Server → Client Events ───
 
@@ -82,15 +83,24 @@ export interface FeedbackMappedEvent {
   feedbackId: string;
   planId: string;
   taskIds: string[];
+  /** Full updated item so the frontend can update in place without refetching the list */
+  item: FeedbackItem;
 }
 
 export interface FeedbackResolvedEvent {
   type: "feedback.resolved";
   feedbackId: string;
+  /** Full updated item so the frontend can update in place without refetching the list */
+  item: FeedbackItem;
 }
 
 export interface PlanUpdatedEvent {
   type: "plan.updated";
+  planId: string;
+}
+
+export interface PlanGeneratedEvent {
+  type: "plan.generated";
   planId: string;
 }
 
@@ -137,7 +147,8 @@ export type ServerEvent =
   | HilRequestEvent
   | FeedbackMappedEvent
   | FeedbackResolvedEvent
-  | PlanUpdatedEvent;
+  | PlanUpdatedEvent
+  | PlanGeneratedEvent;
 
 // ─── Client → Server Events ───
 

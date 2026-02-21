@@ -7,7 +7,7 @@ import sketchReducer from "../slices/sketchSlice";
 import planReducer from "../slices/planSlice";
 import executeReducer from "../slices/executeSlice";
 import taskRegistryReducer from "../slices/taskRegistrySlice";
-import evalReducer from "../slices/evalSlice";
+import evalReducer, { setFeedback } from "../slices/evalSlice";
 import deliverReducer from "../slices/deliverSlice";
 
 /** Mock WebSocket that allows controlling open/close/message events */
@@ -503,7 +503,97 @@ describe("websocketMiddleware", () => {
       });
     });
 
-    it("dispatches fetchFeedback on feedback.mapped", async () => {
+    it("dispatches updateFeedbackItem on feedback.mapped when event includes item (no refetch)", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      store.dispatch(
+        setFeedback([
+          {
+            id: "fb-1",
+            text: "Bug",
+            category: "bug",
+            mappedPlanId: null,
+            createdTaskIds: [],
+            status: "pending",
+            createdAt: "2024-01-01T00:00:00Z",
+          },
+        ])
+      );
+
+      const { api } = await import("../../api/client");
+      vi.mocked(api.feedback.list).mockClear();
+
+      const updatedItem = {
+        id: "fb-1",
+        text: "Bug report",
+        category: "feature",
+        mappedPlanId: "plan-1",
+        createdTaskIds: ["task-1"],
+        status: "mapped",
+        createdAt: "2024-01-01T00:00:00Z",
+      };
+      wsInstance!.simulateMessage({
+        type: "feedback.mapped",
+        feedbackId: "fb-1",
+        planId: "plan-1",
+        taskIds: ["task-1"],
+        item: updatedItem,
+      });
+
+      await vi.waitFor(() => {
+        expect(store.getState().eval.feedback[0]).toEqual(updatedItem);
+      });
+      expect(api.feedback.list).not.toHaveBeenCalled();
+    });
+
+    it("dispatches updateFeedbackItem on feedback.resolved when event includes item (no refetch)", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      store.dispatch(
+        setFeedback([
+          {
+            id: "fb-2",
+            text: "Resolved bug",
+            category: "bug",
+            mappedPlanId: null,
+            createdTaskIds: [],
+            status: "mapped",
+            createdAt: "2024-01-01T00:00:00Z",
+          },
+        ])
+      );
+
+      const { api } = await import("../../api/client");
+      vi.mocked(api.feedback.list).mockClear();
+
+      const resolvedItem = {
+        id: "fb-2",
+        text: "Resolved bug",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "resolved",
+        createdAt: "2024-01-01T00:00:00Z",
+      };
+      wsInstance!.simulateMessage({
+        type: "feedback.resolved",
+        feedbackId: "fb-2",
+        item: resolvedItem,
+      });
+
+      await vi.waitFor(() => {
+        expect(store.getState().eval.feedback[0]).toEqual(resolvedItem);
+      });
+      expect(api.feedback.list).not.toHaveBeenCalled();
+    });
+
+    it("dispatches fetchFeedback on feedback.mapped when event has no item (legacy fallback)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
       wsInstance!.simulateOpen();

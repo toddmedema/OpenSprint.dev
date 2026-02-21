@@ -63,6 +63,14 @@ const evalSlice = createSlice({
     setFeedback(state, action: PayloadAction<FeedbackItem[]>) {
       state.feedback = action.payload;
     },
+    /** Update a single feedback item in place (e.g. from WebSocket feedback.mapped/feedback.resolved). Preserves list order and other items. */
+    updateFeedbackItem(state, action: PayloadAction<FeedbackItem>) {
+      const item = action.payload;
+      const idx = state.feedback.findIndex((f) => f.id === item.id);
+      if (idx !== -1) {
+        state.feedback[idx] = item;
+      }
+    },
     /** Remove feedback item and all descendants from list (e.g. after collapse animation completes) */
     removeFeedbackItem(state, action: PayloadAction<string>) {
       const removeId = action.payload;
@@ -172,5 +180,11 @@ const evalSlice = createSlice({
   },
 });
 
-export const { setFeedback, setEvalError, resetEval, removeFeedbackItem } = evalSlice.actions;
+export const {
+  setFeedback,
+  setEvalError,
+  resetEval,
+  removeFeedbackItem,
+  updateFeedbackItem,
+} = evalSlice.actions;
 export default evalSlice.reducer;

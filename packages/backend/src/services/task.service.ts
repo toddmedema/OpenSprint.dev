@@ -303,12 +303,20 @@ export class TaskService {
   /** Update a task's priority (0–4). Runs bd update <id> -p <priority>. */
   async updatePriority(projectId: string, taskId: string, priority: number): Promise<Task> {
     if (priority < 0 || priority > 4) {
-      throw AppError.badRequest("Priority must be 0–4");
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Priority must be 0–4");
     }
     const project = await this.projectService.getProject(projectId);
     await this.beads.update(project.repoPath, taskId, { priority });
     beadsCache.invalidateForTask(project.repoPath, taskId);
-    return this.getTask(projectId, taskId);
+    const task = await this.getTask(projectId, taskId);
+    broadcastToProject(projectId, {
+      type: "task.updated",
+      taskId,
+      status: task.status,
+      assignee: task.assignee,
+      priority: task.priority,
+    });
+    return task;
   }
 
   /** Manually mark a task as done. If it was the last task in its epic, closes the epic too. */

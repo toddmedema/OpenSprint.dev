@@ -780,6 +780,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
             </div>
           ) : (
             <div className="space-y-3">
+              {/* key=node.item.id preserves DOM identity when a single item is updated via WebSocket */}
               {feedbackTree.map((node) => (
                 <FeedbackCard
                   key={node.item.id}

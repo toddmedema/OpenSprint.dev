@@ -58,6 +58,8 @@ const {
   mockGitQueueEnqueueAndWait,
   mockGetPlanComplexityForTask,
   mockFindOrphanedAssignments,
+  mockFindOrphanedAssignmentsFromWorktrees,
+  mockDeleteAssignmentAt,
   mockListSessions,
 } = vi.hoisted(() => ({
   mockBroadcastToProject: vi.fn(),
@@ -110,6 +112,8 @@ const {
   mockGitQueueEnqueueAndWait: vi.fn().mockResolvedValue(undefined),
   mockGetPlanComplexityForTask: vi.fn().mockResolvedValue(undefined),
   mockFindOrphanedAssignments: vi.fn(),
+  mockFindOrphanedAssignmentsFromWorktrees: vi.fn().mockResolvedValue([]),
+  mockDeleteAssignmentAt: vi.fn().mockResolvedValue(undefined),
   mockListSessions: vi.fn(),
 }));
 
@@ -188,6 +192,10 @@ vi.mock("../services/branch-manager.js", () => {
       mergeAbort: vi.fn().mockResolvedValue(undefined),
       isRebaseInProgress: vi.fn().mockResolvedValue(false),
       commitWip: mockCommitWip,
+      getWorktreeBasePath: vi.fn().mockReturnValue(path.join(os.tmpdir(), "opensprint-worktrees")),
+      getWorktreePath: vi.fn().mockImplementation((taskId: string) =>
+        path.join(os.tmpdir(), "opensprint-worktrees", taskId)
+      ),
     })),
   };
 });
@@ -240,6 +248,7 @@ vi.mock("../services/heartbeat.service.js", () => ({
   heartbeatService: {
     writeHeartbeat: vi.fn().mockResolvedValue(undefined),
     deleteHeartbeat: vi.fn().mockResolvedValue(undefined),
+    readHeartbeat: vi.fn().mockResolvedValue(null),
   },
 }));
 
@@ -266,6 +275,8 @@ vi.mock("../services/plan-complexity.js", () => ({
 vi.mock("../services/crash-recovery.service.js", () => ({
   CrashRecoveryService: vi.fn().mockImplementation(() => ({
     findOrphanedAssignments: mockFindOrphanedAssignments,
+    findOrphanedAssignmentsFromWorktrees: mockFindOrphanedAssignmentsFromWorktrees,
+    deleteAssignmentAt: mockDeleteAssignmentAt,
   })),
 }));
 

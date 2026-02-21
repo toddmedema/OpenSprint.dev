@@ -431,11 +431,10 @@ export class PlanService {
 
     // Derive status from beads state
     let status: Plan["status"] = "planning";
-    const countTasksOpts = opts?.allIssues
-      ? ([repoPath, metadata.beadEpicId, opts.allIssues] as const)
-      : ([repoPath, metadata.beadEpicId] as const);
     const { total, done } = metadata.beadEpicId
-      ? await this.countTasks(...countTasksOpts)
+      ? opts?.allIssues
+        ? await this.countTasks(repoPath, metadata.beadEpicId, opts.allIssues)
+        : await this.countTasks(repoPath, metadata.beadEpicId)
       : { total: 0, done: 0 };
 
     if (metadata.shippedAt) {

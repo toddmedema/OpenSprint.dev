@@ -4,6 +4,8 @@ import type {
   ServerEvent,
   ClientEvent,
   ExecuteStatusEvent,
+  FeedbackMappedEvent,
+  FeedbackResolvedEvent,
 } from "@opensprint/shared";
 import {
   setConnected,
@@ -24,7 +26,7 @@ import {
   taskUpdated,
 } from "../slices/executeSlice";
 import { mergeTaskUpdate } from "../slices/taskRegistrySlice";
-import { fetchFeedback } from "../slices/evalSlice";
+import { fetchFeedback, updateFeedbackItem } from "../slices/evalSlice";
 import {
   appendDeliverOutput,
   deliverStarted,
@@ -36,8 +38,12 @@ import {
 type StoreDispatch = ThunkDispatch<unknown, unknown, UnknownAction>;
 
 export const wsConnect = createAction<{ projectId: string }>("ws/connect");
+export const wsConnectHome = createAction("ws/connectHome");
 export const wsDisconnect = createAction("ws/disconnect");
 export const wsSend = createAction<ClientEvent>("ws/send");
+
+/** Sentinel for "connected to /ws with no project" (so backend sees a client and does not open a duplicate tab on homepage) */
+const HOME_SENTINEL = "__home__";
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
@@ -118,6 +124,50 @@ export const websocketMiddleware: Middleware = (storeApi) => {
     }, delay);
   }
 
+  function connectHome() {
+    if (currentProjectId === HOME_SENTINEL && ws?.readyState === WebSocket.OPEN) return;
+    cleanup();
+    intentionalClose = false;
+    currentProjectId = HOME_SENTINEL;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const url = `${protocol}//${window.location.host}/ws`;
+    const socket = new WebSocket(url);
+    ws = socket;
+    socket.onopen = () => {
+      reconnectAttempt = 0;
+      dispatch(setConnected(true));
+    };
+    socket.onmessage = () => {
+      // No project scope — backend does not send project events to /ws-only clients
+    };
+    socket.onclose = () => {
+      if (socket !== ws) return;
+      dispatch(setConnected(false));
+      if (!intentionalClose && currentProjectId === HOME_SENTINEL) {
+        const delay = Math.min(
+          RECONNECT_BASE_MS * Math.pow(2, reconnectAttempt),
+          RECONNECT_MAX_MS
+        );
+        reconnectAttempt++;
+        reconnectTimer = setTimeout(() => {
+          if (currentProjectId === HOME_SENTINEL) connectHome();
+        }, delay);
+      }
+    };
+    socket.onerror = () => {};
+  }
+
+  // Reconnect immediately when tab becomes visible (helps after server restart; avoids throttled timers in background)
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible" || intentionalClose) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        if (currentProjectId === HOME_SENTINEL) connectHome();
+        else if (currentProjectId) connect(currentProjectId);
+      }
+    });
+  }
+
   function handleServerEvent(d: StoreDispatch, projectId: string, event: ServerEvent) {
     switch (event.type) {
       case "hil.request":
@@ -195,9 +245,15 @@ export const websocketMiddleware: Middleware = (storeApi) => {
       }
 
       case "feedback.mapped":
-      case "feedback.resolved":
-        d(fetchFeedback(projectId));
+      case "feedback.resolved": {
+        const ev = event as FeedbackMappedEvent | FeedbackResolvedEvent;
+        if (ev.item) {
+          d(updateFeedbackItem(ev.item));
+        } else {
+          d(fetchFeedback(projectId));
+        }
         break;
+      }
 
       case "deliver.started":
         d(deliverStarted({ deployId: event.deployId }));
@@ -231,10 +287,16 @@ export const websocketMiddleware: Middleware = (storeApi) => {
   return (next) => (action) => {
     if (wsConnect.match(action)) {
       connect(action.payload.projectId);
+    } else if (wsConnectHome.match(action)) {
+      connectHome();
     } else if (wsDisconnect.match(action)) {
       cleanup();
     } else if (wsSend.match(action)) {
-      if (ws?.readyState === WebSocket.OPEN) {
+      if (
+        ws?.readyState === WebSocket.OPEN &&
+        currentProjectId &&
+        currentProjectId !== HOME_SENTINEL
+      ) {
         ws.send(JSON.stringify(action.payload));
       }
     }

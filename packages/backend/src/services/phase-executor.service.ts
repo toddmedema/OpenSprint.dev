@@ -150,6 +150,10 @@ export class PhaseExecutorService {
         createdAt: new Date().toISOString(),
       };
       await writeJsonAtomic(path.join(taskDir, OPENSPRINT_PATHS.assignment), assignment);
+      // Also write to main repo so crash recovery finds it (worktree base can differ after restart via os.tmpdir())
+      const mainRepoActiveDir = this.host.sessionManager.getActiveDir(repoPath, task.id);
+      await fs.mkdir(mainRepoActiveDir, { recursive: true });
+      await writeJsonAtomic(path.join(mainRepoActiveDir, OPENSPRINT_PATHS.assignment), assignment);
 
       this.host.lifecycleManager.run(
         {
@@ -257,6 +261,9 @@ export class PhaseExecutorService {
         createdAt: new Date().toISOString(),
       };
       await writeJsonAtomic(path.join(taskDir, OPENSPRINT_PATHS.assignment), assignment);
+      const mainRepoActiveDirReview = this.host.sessionManager.getActiveDir(repoPath, task.id);
+      await fs.mkdir(mainRepoActiveDirReview, { recursive: true });
+      await writeJsonAtomic(path.join(mainRepoActiveDirReview, OPENSPRINT_PATHS.assignment), assignment);
 
       this.host.lifecycleManager.run(
         {

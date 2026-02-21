@@ -30,11 +30,24 @@ export function HomeScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const ac = new AbortController();
+    let cancelled = false;
+    setLoading(true);
     api.projects
-      .list()
-      .then(setProjects)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .list(ac.signal)
+      .then((data) => {
+        if (!cancelled) setProjects(data);
+      })
+      .catch((err) => {
+        if (!cancelled && err?.name !== "AbortError") console.error(err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
   }, []);
 
   const openProject = (project: Project) => {

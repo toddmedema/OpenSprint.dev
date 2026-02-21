@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { BeadsIssue, BeadsService } from "../services/beads.service.js";
 import { FileScopeAnalyzer, type FileScope } from "../services/file-scope-analyzer.js";
 
 function makeIssue(id: string, labels: string[] = [], title = "", description = "") {
@@ -41,7 +42,7 @@ describe("FileScopeAnalyzer", () => {
       const task = makeIssue("t1", [
         'files:{"modify":["src/api/user.ts"],"create":["src/api/auth.ts"]}',
       ]);
-      const scope = await analyzer.predict("/repo", task as any, mockBeads as any);
+      const scope = await analyzer.predict("/repo", task as BeadsIssue, mockBeads as BeadsService);
 
       expect(scope.confidence).toBe("explicit");
       expect(scope.files).toEqual(new Set(["src/api/user.ts", "src/api/auth.ts"]));
@@ -55,7 +56,7 @@ describe("FileScopeAnalyzer", () => {
         makeIssue("dep-1", ['actual_files:["src/models/user.ts","src/models/index.ts"]'])
       );
 
-      const scope = await analyzer.predict("/repo", task as any, mockBeads as any);
+      const scope = await analyzer.predict("/repo", task as BeadsIssue, mockBeads as BeadsService);
 
       expect(scope.confidence).toBe("inferred");
       expect(scope.files.has("src/models/user.ts")).toBe(true);
@@ -65,7 +66,7 @@ describe("FileScopeAnalyzer", () => {
     it("falls back to heuristic from task title", async () => {
       const task = makeIssue("t3", [], "Add user service in src/services directory");
 
-      const scope = await analyzer.predict("/repo", task as any, mockBeads as any);
+      const scope = await analyzer.predict("/repo", task as BeadsIssue, mockBeads as BeadsService);
 
       expect(scope.confidence).toBe("heuristic");
       expect(scope.directories.has("src/services")).toBe(true);
@@ -74,7 +75,7 @@ describe("FileScopeAnalyzer", () => {
     it("returns heuristic with empty sets when no info available", async () => {
       const task = makeIssue("t4", [], "Fix the bug");
 
-      const scope = await analyzer.predict("/repo", task as any, mockBeads as any);
+      const scope = await analyzer.predict("/repo", task as BeadsIssue, mockBeads as BeadsService);
 
       expect(scope.confidence).toBe("heuristic");
       expect(scope.files.size).toBe(0);
@@ -83,7 +84,7 @@ describe("FileScopeAnalyzer", () => {
 
   describe("recordActual", () => {
     it("stores actual files as label", async () => {
-      await analyzer.recordActual("/repo", "t1", ["src/a.ts", "src/b.ts"], mockBeads as any);
+      await analyzer.recordActual("/repo", "t1", ["src/a.ts", "src/b.ts"], mockBeads as BeadsService);
 
       expect(mockBeads.addLabel).toHaveBeenCalledWith(
         "/repo",
@@ -93,7 +94,7 @@ describe("FileScopeAnalyzer", () => {
     });
 
     it("does nothing for empty file list", async () => {
-      await analyzer.recordActual("/repo", "t1", [], mockBeads as any);
+      await analyzer.recordActual("/repo", "t1", [], mockBeads as BeadsService);
 
       expect(mockBeads.addLabel).not.toHaveBeenCalled();
     });

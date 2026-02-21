@@ -147,4 +147,50 @@ describe("CrashRecoveryService — GUPP pattern", () => {
       expect(reviewAssignment?.assignment.attempt).toBe(2);
     });
   });
+
+  describe("findOrphanedAssignmentsFromWorktrees", () => {
+    it("should find assignment.json in worktree directories", async () => {
+      const worktreeBase = path.join(tmpDir, "worktrees");
+      const taskId = "task-1";
+      const taskActiveDir = path.join(worktreeBase, taskId, ".opensprint", "active", taskId);
+      await fs.mkdir(taskActiveDir, { recursive: true });
+      const assignment: TaskAssignment = {
+        taskId,
+        projectId: "proj-1",
+        phase: "coding",
+        branchName: "opensprint/task-1",
+        worktreePath: path.join(worktreeBase, taskId),
+        promptPath: path.join(taskActiveDir, "prompt.md"),
+        agentConfig: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+        attempt: 1,
+        createdAt: new Date().toISOString(),
+      };
+      await fs.writeFile(path.join(taskActiveDir, "assignment.json"), JSON.stringify(assignment));
+
+      const orphaned = await service.findOrphanedAssignmentsFromWorktrees(worktreeBase);
+      expect(orphaned).toHaveLength(1);
+      expect(orphaned[0].taskId).toBe(taskId);
+      expect(orphaned[0].assignment.worktreePath).toBe(path.join(worktreeBase, taskId));
+    });
+
+    it("should return empty when worktree base does not exist", async () => {
+      const orphaned = await service.findOrphanedAssignmentsFromWorktrees(
+        path.join(tmpDir, "nonexistent")
+      );
+      expect(orphaned).toEqual([]);
+    });
+  });
+
+  describe("deleteAssignmentAt", () => {
+    it("should remove assignment.json at given base path", async () => {
+      const taskDir = path.join(tmpDir, ".opensprint", "active", "task-1");
+      await fs.mkdir(taskDir, { recursive: true });
+      await fs.writeFile(
+        path.join(taskDir, "assignment.json"),
+        JSON.stringify({ taskId: "task-1" })
+      );
+      await service.deleteAssignmentAt(tmpDir, "task-1");
+      await expect(fs.readFile(path.join(taskDir, "assignment.json"))).rejects.toThrow();
+    });
+  });
 });

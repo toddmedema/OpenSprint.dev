@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { BeadsService } from "../services/beads.service.js";
 import { TaskScheduler } from "../services/task-scheduler.js";
 import type { AgentSlot } from "../services/orchestrator.service.js";
+import type { FileScope } from "../services/file-scope-analyzer.js";
 import { TimerRegistry } from "../services/timer-registry.js";
 
 function makeTask(id: string, priority = 2, labels: string[] = []) {
@@ -19,7 +21,7 @@ function makeTask(id: string, priority = 2, labels: string[] = []) {
   };
 }
 
-function makeSlot(taskId: string, fileScope?: any): AgentSlot {
+function makeSlot(taskId: string, fileScope?: FileScope): AgentSlot {
   return {
     taskId,
     taskTitle: `Task ${taskId}`,
@@ -59,7 +61,7 @@ describe("TaskScheduler", () => {
       show: vi.fn().mockResolvedValue(makeTask("dep")),
       getBlockers: vi.fn().mockResolvedValue([]),
     };
-    scheduler = new TaskScheduler(mockBeads as any);
+    scheduler = new TaskScheduler(mockBeads as BeadsService);
   });
 
   describe("basic selection", () => {
