@@ -1,0 +1,24 @@
+{
+  "id": "4vlv2b",
+  "text": "Ability to attach images to plan \"Add a Feature\" input (and make sure that the image is properly plumbed all the way to the planning agent) - using the same styles as the attach image button in evaluate (aka icon button with no extra text, and making sure all the buttons next to it are all the same height)",
+  "category": "feature",
+  "mappedPlanId": "plan-phase-feature-decomposition",
+  "createdTaskIds": ["opensprint.dev-vwf.25"],
+  "status": "mapped",
+  "createdAt": "2026-02-21T23:40:03.429Z",
+  "parent_id": null,
+  "depth": 0,
+  "mappedEpicId": "opensprint.dev-vwf",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Add image attachment support to Plan phase 'Add a Feature' input",
+      "description": "Add an image-attach icon button to the 'Add a Feature' input in the Plan phase, matching the existing Evaluate-phase attach-image button styles (icon-only, no extra text). Ensure all adjacent buttons share the same height. Store the attached image reference alongside the feature text so it can be forwarded to the planning agent. Acceptance criteria: (1) Icon button appears next to the input, visually consistent with Evaluate attach-image button; (2) All sibling buttons have equal height; (3) User can attach one or more images; (4) Attached images are included in the payload sent to the planning agent invocation; (5) Planning agent prompt receives the image data/reference for context.",
+      "priority": 2,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Add image attachment support to Plan phase 'Add a Feature' input"],
+  "feedbackSourceBeadId": "opensprint.dev-rqil"
+}

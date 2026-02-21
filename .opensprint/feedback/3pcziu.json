@@ -1,0 +1,25 @@
+{
+  "id": "3pcziu",
+  "text": "When loading the sketch tab, the \"Discuss\" sidebar should just start scrolled to the bottom - no scrolling animation",
+  "category": "ux",
+  "mappedPlanId": "design-phase-chat-and-living-prd",
+  "createdTaskIds": ["opensprint.dev-6bk.11"],
+  "status": "mapped",
+  "createdAt": "2026-02-21T23:37:12.992Z",
+  "parent_id": null,
+  "depth": 0,
+  "userPriority": 4,
+  "mappedEpicId": "opensprint.dev-6bk",
+  "isScopeChange": false,
+  "proposedTasks": [
+    {
+      "index": 0,
+      "title": "Disable scroll animation on Discuss sidebar initial load",
+      "description": "When the Sketch tab mounts and the Discuss sidebar renders, the chat message list should initialize with scrollTop at the bottom instantly (no smooth-scroll animation). Use `scrollTo({ top: el.scrollHeight, behavior: 'instant' })` or set `scrollTop` directly on mount. Smooth scrolling should still apply for new incoming messages after the initial render. Acceptance criteria: (1) On navigating to the Sketch tab, the Discuss sidebar appears with the most recent message visible and no visible scrolling motion. (2) Subsequent new messages still auto-scroll smoothly.",
+      "priority": 3,
+      "depends_on": []
+    }
+  ],
+  "taskTitles": ["Disable scroll animation on Discuss sidebar initial load"],
+  "feedbackSourceBeadId": "opensprint.dev-mres"
+}
