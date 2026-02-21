@@ -567,7 +567,7 @@ describe("EvalPhase feedback form", () => {
       localStorage.removeItem(EVALUATE_FEEDBACK_FILTER_KEY);
     });
 
-    it("defaults to Pending when no localStorage key exists", async () => {
+    it("defaults to All when no localStorage key exists", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       render(
         <Provider store={store}>
@@ -580,7 +580,7 @@ describe("EvalPhase feedback form", () => {
       });
 
       const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      expect(filterSelect.value).toBe("pending");
+      expect(filterSelect.value).toBe("all");
     });
 
     it("title does not display a count", async () => {
@@ -713,7 +713,7 @@ describe("EvalPhase feedback form", () => {
       expect(filterSelect.value).toBe("pending");
     });
 
-    it("falls back to Pending when localStorage has invalid value", async () => {
+    it("falls back to All when localStorage has invalid value", async () => {
       localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "invalid");
 
       const store = createStore({ evalFeedback: mockFeedbackItems });
@@ -728,11 +728,11 @@ describe("EvalPhase feedback form", () => {
       });
 
       const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      expect(filterSelect.value).toBe("pending");
+      expect(filterSelect.value).toBe("all");
     });
 
     it("Pending filter shows both pending and mapped items", async () => {
-      localStorage.removeItem(EVALUATE_FEEDBACK_FILTER_KEY);
+      localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "pending");
       const store = createStore({ evalFeedback: mockFeedbackItems });
       render(
         <Provider store={store}>
@@ -745,7 +745,7 @@ describe("EvalPhase feedback form", () => {
       const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
       expect(filterSelect.value).toBe("pending");
 
-      // Pending filter (default) shows 5 items: 2 pending + 3 mapped
+      // Pending filter shows 5 items: 2 pending + 3 mapped
       expect(screen.getByText("Bug 1")).toBeInTheDocument();
       expect(screen.getByText("Bug 2")).toBeInTheDocument();
       expect(screen.getByText("Bug 3")).toBeInTheDocument();

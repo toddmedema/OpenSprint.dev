@@ -82,10 +82,10 @@ function countByStatus(feedback: FeedbackItem[], filter: FeedbackStatusFilter): 
 const VALID_FILTER_VALUES: FeedbackStatusFilter[] = ["all", "pending", "resolved"];
 
 function loadFeedbackStatusFilter(): FeedbackStatusFilter {
-  if (typeof window === "undefined") return "pending";
+  if (typeof window === "undefined") return "all";
   try {
     const stored = localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY);
-    if (!stored) return "pending";
+    if (!stored) return "all";
     if (VALID_FILTER_VALUES.includes(stored as FeedbackStatusFilter)) {
       return stored as FeedbackStatusFilter;
     }
@@ -94,7 +94,7 @@ function loadFeedbackStatusFilter(): FeedbackStatusFilter {
   } catch {
     // ignore
   }
-  return "pending";
+  return "all";
 }
 
 function saveFeedbackStatusFilter(value: FeedbackStatusFilter): void {
