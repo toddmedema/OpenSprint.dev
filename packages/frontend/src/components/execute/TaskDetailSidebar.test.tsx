@@ -914,5 +914,14 @@ describe("TaskDetailSidebar", () => {
       const chevron = header?.querySelector("span.text-theme-muted.text-xs");
       expect(chevron).toBeInTheDocument();
     }
+
+    // Verify section containers have identical outer classes for spacing consistency
+    const sectionClassNames = [
+      sourceFeedbackSection?.className ?? "",
+      descriptionSection?.className ?? "",
+      artifactsSection?.className ?? "",
+    ];
+    expect(sectionClassNames[0]).toBe(sectionClassNames[1]);
+    expect(sectionClassNames[1]).toBe(sectionClassNames[2]);
   });
 });
