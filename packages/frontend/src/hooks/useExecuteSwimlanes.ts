@@ -11,6 +11,7 @@ import type { Plan } from "@opensprint/shared";
 export interface Swimlane {
   epicId: string;
   epicTitle: string;
+  planId: string | null;
   tasks: Task[];
 }
 
@@ -37,8 +38,10 @@ export function useExecuteSwimlanes(
 
   const swimlanes = useMemo((): Swimlane[] => {
     const epicIdToTitle = new Map<string, string>();
+    const epicIdToPlanId = new Map<string, string>();
     plans.forEach((p) => {
       epicIdToTitle.set(p.metadata.beadEpicId, getEpicTitleFromPlan(p));
+      epicIdToPlanId.set(p.metadata.beadEpicId, p.metadata.planId);
     });
 
     const byEpic = new Map<string | null, Task[]>();
@@ -64,6 +67,7 @@ export function useExecuteSwimlanes(
         result.push({
           epicId,
           epicTitle: epicIdToTitle.get(epicId) ?? epicId,
+          planId: epicIdToPlanId.get(epicId) ?? null,
           tasks: sortEpicTasksByStatus(laneTasks),
         });
       }
@@ -74,6 +78,7 @@ export function useExecuteSwimlanes(
         result.push({
           epicId,
           epicTitle: epicId,
+          planId: epicIdToPlanId.get(epicId) ?? null,
           tasks: sortEpicTasksByStatus(laneTasks),
         });
         seenEpics.add(epicId);
@@ -81,7 +86,7 @@ export function useExecuteSwimlanes(
     }
     const unassigned = byEpic.get(null) ?? [];
     if (includeLane(unassigned)) {
-      result.push({ epicId: "", epicTitle: "Other", tasks: sortEpicTasksByStatus(unassigned) });
+      result.push({ epicId: "", epicTitle: "Other", planId: null, tasks: sortEpicTasksByStatus(unassigned) });
     }
     return result;
   }, [filteredTasks, plans, statusFilter]);

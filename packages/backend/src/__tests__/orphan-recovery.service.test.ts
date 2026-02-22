@@ -31,6 +31,7 @@ vi.mock("../services/beads.service.js", () => {
             return { id, status: opts.status ?? "open", assignee: opts.assignee ?? "" };
           }
         );
+      sync = vi.fn().mockResolvedValue(undefined);
     },
   };
 });

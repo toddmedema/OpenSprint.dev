@@ -120,6 +120,17 @@ describe("Chat REST API", () => {
     expect(typeof res.body.data.message).toBe("string");
   });
 
+  it("POST /projects/:id/chat passes body.images to invokePlanningAgent when present", async () => {
+    const images = ["data:image/png;base64,abc123"];
+    await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/chat`)
+      .send({ message: "Describe this screenshot", context: "sketch", images });
+
+    expect(mockInvokePlanningAgent).toHaveBeenCalledTimes(1);
+    const options = mockInvokePlanningAgent.mock.calls[0][0];
+    expect(options.images).toEqual(images);
+  });
+
   it("POST /chat should parse PRD_UPDATE blocks from agent response and apply to PRD", async () => {
     const agentResponseWithPrdUpdate = `Here's my suggested executive summary for your product.
 

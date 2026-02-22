@@ -3,7 +3,6 @@ import type { Task, AgentSession, KanbanColumn, TaskDependency } from "@openspri
 import { resolveTestCommand } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { BeadsService } from "./beads.service.js";
-import { beadsCache } from "./beads-cache.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { SessionManager } from "./session-manager.js";
@@ -289,7 +288,6 @@ export class TaskService {
     }
 
     await this.beads.sync(project.repoPath);
-    beadsCache.invalidateListAll(project.repoPath);
     broadcastToProject(projectId, {
       type: "task.updated",
       taskId,
@@ -300,7 +298,7 @@ export class TaskService {
     return { taskUnblocked: true };
   }
 
-  /** Update a task's priority (0–4). Runs bd update <id> -p <priority>. */
+  /** Update a task's priority (0–4). */
   async updatePriority(projectId: string, taskId: string, priority: number): Promise<Task> {
     if (priority < 0 || priority > 4) {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "Priority must be 0–4");
@@ -308,7 +306,6 @@ export class TaskService {
     const project = await this.projectService.getProject(projectId);
     await this.beads.update(project.repoPath, taskId, { priority });
     await this.beads.sync(project.repoPath);
-    beadsCache.invalidateForTask(project.repoPath, taskId);
     const task = await this.getTask(projectId, taskId);
     broadcastToProject(projectId, {
       type: "task.updated",
@@ -332,7 +329,6 @@ export class TaskService {
 
     await this.beads.close(project.repoPath, taskId, "Manually marked done", true);
     await this.beads.sync(project.repoPath);
-    beadsCache.invalidateListAll(project.repoPath);
     broadcastToProject(projectId, {
       type: "task.updated",
       taskId,
@@ -360,7 +356,6 @@ export class TaskService {
         if (epicIssue && (epicIssue.status as string) !== "closed") {
           await this.beads.close(project.repoPath, epicId, "All tasks done", true);
           await this.beads.sync(project.repoPath);
-          beadsCache.invalidateListAll(project.repoPath);
           broadcastToProject(projectId, {
             type: "task.updated",
             taskId: epicId,

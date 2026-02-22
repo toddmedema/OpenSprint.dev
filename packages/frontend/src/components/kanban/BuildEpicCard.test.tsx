@@ -376,6 +376,46 @@ describe("BuildEpicCard", () => {
     expect(screen.getByRole("img", { name: "Medium" })).toBeInTheDocument();
   });
 
+  it("makes epic title clickable when onViewPlan is provided", async () => {
+    const user = userEvent.setup();
+    const onViewPlan = vi.fn();
+    const tasks = [
+      createMockTask({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" }),
+    ];
+    render(
+      <BuildEpicCard
+        epicId="epic-1"
+        epicTitle="Auth Feature"
+        tasks={tasks}
+        onTaskSelect={vi.fn()}
+        onViewPlan={onViewPlan}
+      />,
+    );
+
+    const titleButton = screen.getByRole("button", { name: "Auth Feature" });
+    expect(titleButton).toBeInTheDocument();
+    expect(titleButton).toHaveAttribute("title", "View plan: Auth Feature");
+    await user.click(titleButton);
+    expect(onViewPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders epic title as plain text when onViewPlan is not provided", () => {
+    const tasks = [
+      createMockTask({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" }),
+    ];
+    render(
+      <BuildEpicCard
+        epicId="epic-1"
+        epicTitle="Auth Feature"
+        tasks={tasks}
+        onTaskSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Auth Feature")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Auth Feature" })).not.toBeInTheDocument();
+  });
+
   it("renders all task states correctly in left-side position", async () => {
     const user = userEvent.setup();
     const states: Array<"planning" | "backlog" | "ready" | "in_progress" | "in_review" | "done" | "blocked"> = [

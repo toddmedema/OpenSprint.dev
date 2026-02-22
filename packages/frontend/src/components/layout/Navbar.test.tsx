@@ -20,7 +20,7 @@ vi.mock("../../api/client", () => ({
       getSettings: (...args: unknown[]) => mockGetSettings(...args),
     },
     agents: { active: vi.fn().mockResolvedValue([]) },
-    env: { getKeys: vi.fn().mockResolvedValue({ anthropic: true, cursor: true }) },
+    env: { getKeys: vi.fn().mockResolvedValue({ anthropic: true, cursor: true, claudeCli: true }) },
   },
 }));
 

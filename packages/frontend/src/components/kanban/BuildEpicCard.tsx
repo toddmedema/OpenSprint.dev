@@ -65,6 +65,8 @@ export interface BuildEpicCardProps {
   filteringActive?: boolean;
   onTaskSelect: (taskId: string) => void;
   onUnblock?: (taskId: string) => void;
+  /** Navigate to the plan associated with this epic */
+  onViewPlan?: () => void;
   /** Map of task ID to startedAt for active tasks (elapsed time display) */
   taskIdToStartedAt?: Record<string, string>;
 }
@@ -76,6 +78,7 @@ export function BuildEpicCard({
   filteringActive = false,
   onTaskSelect,
   onUnblock,
+  onViewPlan,
   taskIdToStartedAt = {},
 }: BuildEpicCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -112,7 +115,18 @@ export function BuildEpicCard({
               </svg>
             </span>
           )}
-          <span className="truncate">{epicTitle}</span>
+          {onViewPlan ? (
+            <button
+              type="button"
+              onClick={onViewPlan}
+              className="truncate hover:text-brand-600 transition-colors text-left"
+              title={`View plan: ${epicTitle}`}
+            >
+              {epicTitle}
+            </button>
+          ) : (
+            <span className="truncate">{epicTitle}</span>
+          )}
         </h3>
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-xs font-medium text-theme-muted">Progress</span>

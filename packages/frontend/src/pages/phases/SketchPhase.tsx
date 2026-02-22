@@ -8,11 +8,14 @@ import {
   fetchPrd,
   fetchPrdHistory,
   fetchSketchChat,
+  setSketchError,
 } from "../../store/slices/sketchSlice";
 import { decomposePlans, fetchPlanStatus } from "../../store/slices/planSlice";
 import { PrdViewer, PrdChatPanel, PrdUploadButton, PrdChangeLog } from "../../components/prd";
 import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
-import { SendIcon, SparklesIcon, CommentIcon } from "../../components/icons/PrdIcons";
+import { useImageAttachment } from "../../hooks/useImageAttachment";
+import { ImageAttachmentThumbnails, ImageAttachmentButton } from "../../components/ImageAttachment";
+import { SparklesIcon, CommentIcon } from "../../components/icons/PrdIcons";
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -89,12 +92,14 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   const prdContent = useAppSelector((s) => s.sketch.prdContent);
   const prdHistory = useAppSelector((s) => s.sketch.prdHistory);
   const sending = useAppSelector((s) => s.sketch.sendingChat);
+  const sketchError = useAppSelector((s) => s.sketch.error);
   const savingSections = useAppSelector((s) => s.sketch.savingSections);
   const planStatus = useAppSelector((s) => s.plan.planStatus);
   const decomposing = useAppSelector((s) => s.plan.decomposing);
 
   /* ── Local UI state (preserved by mount-all) ── */
   const [initialInput, setInitialInput] = useState("");
+  const imageAttachment = useImageAttachment();
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [selectionContext, setSelectionContext] = useState<{
     text: string;
@@ -116,7 +121,10 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* ── Derived ── */
-  const hasPrdContent = Object.keys(prdContent).length > 0;
+  // Show empty-state prompt when no section has substantive content (new projects get prd.json with all sections empty)
+  const hasPrdContent = Object.values(prdContent).some(
+    (c) => String(c ?? "").trim().length > 0
+  );
 
   /* ── Fetch plan-status on Sketch load and after PRD saves (PRD §7.1.5) ── */
   useEffect(() => {
@@ -287,8 +295,8 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   /* ── Handlers ── */
 
   const handleInitialSubmit = useCallback(async () => {
-    if (!initialInput.trim() || sending) return;
     const text = initialInput.trim();
+    if (text.length < 10 || sending) return;
     setInitialInput("");
 
     dispatch(
@@ -299,17 +307,24 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
       })
     );
 
-    const result = await dispatch(sendSketchMessage({ projectId, message: text }));
-    if (sendSketchMessage.fulfilled.match(result) && result.payload.prdChanges?.length) {
-      dispatch(fetchPrd(projectId));
-      dispatch(fetchPrdHistory(projectId));
-      dispatch(fetchPlanStatus(projectId));
+    const images =
+      imageAttachment.images.length > 0 ? imageAttachment.images : undefined;
+    const result = await dispatch(
+      sendSketchMessage({ projectId, message: text, images })
+    );
+    if (sendSketchMessage.fulfilled.match(result)) {
+      imageAttachment.reset();
+      if (result.payload.prdChanges?.length) {
+        dispatch(fetchPrd(projectId));
+        dispatch(fetchPrdHistory(projectId));
+        dispatch(fetchPlanStatus(projectId));
+      }
     }
-  }, [initialInput, sending, projectId, dispatch]);
+  }, [initialInput, sending, projectId, dispatch, imageAttachment]);
 
   const onKeyDownInitial = useSubmitShortcut(handleInitialSubmit, {
     multiline: false,
-    disabled: sending || !initialInput.trim(),
+    disabled: sending || initialInput.trim().length < 10,
   });
 
   const handleFileUpload = useCallback(
@@ -422,6 +437,26 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
           </div>
         )}
 
+        {/* Agent/API error — e.g. credit balance, connection failed */}
+        {sketchError && (
+          <div
+            className="w-full max-w-2xl mb-4 rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 flex items-start gap-3"
+            role="alert"
+          >
+            <p className="text-sm text-red-600 dark:text-red-400 flex-1 whitespace-pre-wrap">
+              {sketchError}
+            </p>
+            <button
+              type="button"
+              onClick={() => dispatch(setSketchError(null))}
+              className="shrink-0 text-red-600 dark:text-red-400 hover:underline text-sm font-medium"
+              aria-label="Dismiss error"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* Branding / Sparkle */}
         <div className="mb-8 text-center">
           <SparklesIcon className="w-10 h-10 text-brand-500 mx-auto mb-4" />
@@ -434,28 +469,53 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
           </p>
         </div>
 
-        {/* Big textarea with typewriter placeholder */}
+        {/* Big textarea with typewriter placeholder and image attachment */}
         <div className="w-full max-w-2xl">
-          <div className="relative">
+          <div
+            className="relative"
+            onDragOver={imageAttachment.handleDragOver}
+            onDrop={imageAttachment.handleDrop}
+          >
+            <ImageAttachmentThumbnails attachment={imageAttachment} className="mb-3" />
             <textarea
               ref={textareaRef}
               value={initialInput}
               onChange={(e) => setInitialInput(e.target.value)}
               onKeyDown={onKeyDownInitial}
+              onPaste={imageAttachment.handlePaste}
               disabled={sending}
               rows={4}
               className="w-full rounded-2xl border-0 py-5 px-6 text-lg text-theme-input-text bg-theme-input-bg shadow-lg ring-1 ring-inset ring-theme-ring placeholder:text-theme-input-placeholder focus:ring-2 focus:ring-inset focus:ring-brand-500 resize-none transition-shadow hover:shadow-xl disabled:opacity-60"
             />
-            <button
-              type="button"
-              onClick={handleInitialSubmit}
-              disabled={sending || !initialInput.trim()}
-              className="absolute bottom-4 right-4 w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-md"
-              title="Sketch it"
-              aria-label="Sketch it"
-            >
-              <SendIcon className="w-4 h-4" />
-            </button>
+            <div className="absolute bottom-4 right-4 flex items-center gap-2">
+              <ImageAttachmentButton
+                attachment={imageAttachment}
+                disabled={sending}
+                data-testid="sketch-attach-images"
+              />
+              <button
+                type="button"
+                onClick={handleInitialSubmit}
+                disabled={sending || initialInput.trim().length < 10}
+                className="h-10 px-4 rounded-full bg-brand-600 text-white flex items-center justify-center gap-2 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-md text-sm font-medium"
+                title="Sketch it"
+                aria-label="Sketch it"
+                data-testid="sketch-it-button"
+              >
+                {sending ? (
+                  <>
+                    <div
+                      className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
+                      data-testid="sketch-it-spinner"
+                      aria-hidden
+                    />
+                    <span>Sketch it</span>
+                  </>
+                ) : (
+                  <span>Sketch it</span>
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center justify-between mt-4">

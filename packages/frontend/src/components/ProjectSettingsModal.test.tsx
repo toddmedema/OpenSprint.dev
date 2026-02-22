@@ -57,7 +57,7 @@ describe("ProjectSettingsModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSettings.mockResolvedValue(mockSettings);
-    mockGetKeys.mockResolvedValue({ anthropic: true, cursor: true });
+    mockGetKeys.mockResolvedValue({ anthropic: true, cursor: true, claudeCli: true });
     mockModelsList.mockResolvedValue([]);
     vi.stubGlobal("localStorage", {
       getItem: (key: string) => storage[key] ?? null,
@@ -146,7 +146,7 @@ describe("ProjectSettingsModal", () => {
   });
 
   it("hides API key banner when all keys for selected providers are configured", async () => {
-    mockGetKeys.mockResolvedValue({ anthropic: true, cursor: true });
+    mockGetKeys.mockResolvedValue({ anthropic: true, cursor: true, claudeCli: true });
 
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Project Settings");
@@ -162,7 +162,7 @@ describe("ProjectSettingsModal", () => {
   });
 
   it("shows anthropic key input when claude is selected and key is missing", async () => {
-    mockGetKeys.mockResolvedValue({ anthropic: false, cursor: true });
+    mockGetKeys.mockResolvedValue({ anthropic: false, cursor: true, claudeCli: true });
 
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Project Settings");
@@ -330,5 +330,42 @@ describe("ProjectSettingsModal", () => {
     await userEvent.click(displayTab);
 
     expect(screen.getByTestId("theme-option-system")).toHaveClass("bg-brand-600");
+  });
+
+  it("Agent Config tab shows parallelism slider defaulting to 1", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await screen.findByText("Project Settings");
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Parallelism");
+    const slider = screen.getByTestId("max-concurrent-coders-slider");
+    expect(slider).toBeInTheDocument();
+    expect(slider).toHaveValue("1");
+    expect(screen.queryByTestId("unknown-scope-strategy-select")).not.toBeInTheDocument();
+  });
+
+  it("saves maxConcurrentCoders and unknownScopeStrategy when changed", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, maxConcurrentCoders: 3, unknownScopeStrategy: "conservative" });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
+    await screen.findByText("Project Settings");
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Parallelism");
+
+    const saveButton = screen.getByRole("button", { name: "Save Changes" });
+    await userEvent.click(saveButton);
+
+    expect(mockUpdateSettings).toHaveBeenCalledWith(
+      "proj-1",
+      expect.objectContaining({
+        maxConcurrentCoders: 3,
+        unknownScopeStrategy: "conservative",
+      })
+    );
   });
 });

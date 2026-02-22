@@ -71,7 +71,7 @@ export const api = {
       request<ModelOption[]>(`/models?provider=${encodeURIComponent(provider)}`),
   },
   env: {
-    getKeys: () => request<{ anthropic: boolean; cursor: boolean }>("/env/keys"),
+    getKeys: () => request<{ anthropic: boolean; cursor: boolean; claudeCli: boolean }>("/env/keys"),
     saveKey: (key: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY", value: string) =>
       request<{ saved: boolean }>("/env/keys", {
         method: "POST",
@@ -302,10 +302,21 @@ export const api = {
 
   // ─── Chat ───
   chat: {
-    send: (projectId: string, message: string, context?: string, prdSectionFocus?: string) =>
+    send: (
+      projectId: string,
+      message: string,
+      context?: string,
+      prdSectionFocus?: string,
+      images?: string[]
+    ) =>
       request<ChatResponse>(`/projects/${projectId}/chat`, {
         method: "POST",
-        body: JSON.stringify({ message, context, prdSectionFocus } satisfies Partial<ChatRequest>),
+        body: JSON.stringify({
+          message,
+          context,
+          prdSectionFocus,
+          ...(images?.length ? { images } : {}),
+        } satisfies Partial<ChatRequest>),
       }),
     history: (projectId: string, context?: string) =>
       request<Conversation>(

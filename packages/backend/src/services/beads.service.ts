@@ -7,8 +7,9 @@ import type { TaskType, TaskPriority } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { createLogger } from "../utils/logger.js";
-import { getErrorMessage } from "../utils/error-utils.js";
 import { beadsCache } from "./beads-cache.js";
+import * as jsonlStore from "./jsonl-store.js";
+import { invalidateJsonlCache } from "./jsonl-reader.js";
 
 const execAsync = promisify(exec);
 const log = createLogger("beads");
@@ -103,6 +104,7 @@ export class BeadsService {
     syncStateMap.clear();
     execMutexMap.clear();
     beadsCache.clear();
+    jsonlStore.clearStoreCache();
   }
 
   /**
@@ -494,9 +496,8 @@ export class BeadsService {
    */
   async export(repoPath: string, outputPath: string): Promise<void> {
     return this.withBeadsMutex(repoPath, async () => {
-      // Pre-import: ingest any issues added externally (worktrees, git merges).
-      // Use sync --import-only instead of bd import: import can fail with duplicate primary key
-      // (Error 1062) when DB already has the issue; sync --import-only merges correctly.
+      // Pre-import: ingest any issues added externally (worktrees, git merges, or
+      // web app JSONL writes) so the Dolt DB has everything before we export.
       try {
         await this.execImpl(repoPath, "sync --import-only");
       } catch (err: unknown) {
@@ -524,10 +525,14 @@ export class BeadsService {
           await this.execImpl(repoPath, `export -o ${outputPath} --force`);
         }
       }
+
+      // Export overwrites the JSONL — invalidate in-memory caches
+      jsonlStore.invalidateStoreCache(repoPath);
+      invalidateJsonlCache(repoPath);
     });
   }
 
-  /** Create a new issue */
+  /** Create a new issue (direct JSONL write, no CLI spawn) */
   async create(
     repoPath: string,
     title: string,
@@ -538,30 +543,18 @@ export class BeadsService {
       parentId?: string;
     } = {}
   ): Promise<BeadsIssue> {
-    let cmd = `create "${title}" --json`;
-    if (options.type) cmd += ` -t ${options.type}`;
-    if (options.priority !== undefined) cmd += ` -p ${options.priority}`;
-    if (options.description) cmd += ` -d "${options.description.replace(/"/g, '\\"')}"`;
-    if (options.parentId) cmd += ` --parent ${options.parentId}`;
-    const stdout = await this.exec(repoPath, cmd);
-    return this.parseJson(stdout);
-  }
-
-  private isDuplicateKeyError(err: unknown): boolean {
-    const msg = getErrorMessage(err);
-    const details = (err as { details?: { stderr?: string } })?.details?.stderr ?? "";
-    const fullMsg = msg + details;
-    return (
-      fullMsg.includes("UNIQUE constraint failed") ||
-      fullMsg.includes("duplicate primary key") ||
-      fullMsg.includes("Error 1062")
-    );
+    return jsonlStore.createIssue(repoPath, title, {
+      type: options.type as string | undefined,
+      priority: options.priority as number | undefined,
+      description: options.description,
+      parentId: options.parentId,
+    });
   }
 
   /**
-   * Create an issue with retry on duplicate-key errors.
-   * When fallbackToStandalone is true and all retries with parentId fail,
-   * tries creating without parent and returns null if that also fails.
+   * Create an issue with guaranteed unique ID (no retry needed with direct JSONL writes).
+   * Kept for API compatibility; the fallbackToStandalone option is no longer needed
+   * since ID collisions are checked in-memory before writing.
    */
   async createWithRetry(
     repoPath: string,
@@ -572,53 +565,12 @@ export class BeadsService {
       description?: string;
       parentId?: string;
     } = {},
-    opts?: { fallbackToStandalone?: boolean }
+    _opts?: { fallbackToStandalone?: boolean }
   ): Promise<BeadsIssue | null> {
-    const MAX_RETRIES = 3;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        return await this.create(repoPath, title, options);
-      } catch (err) {
-        if (!this.isDuplicateKeyError(err)) {
-          throw err;
-        }
-
-        if (attempt < MAX_RETRIES) {
-          log.warn("Duplicate task ID, retrying", {
-            attempt: attempt + 1,
-            maxRetries: MAX_RETRIES + 1,
-            title,
-          });
-          await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
-          continue;
-        }
-
-        if (opts?.fallbackToStandalone && options.parentId) {
-          log.warn("Duplicate ID persists under parent, creating standalone task", {
-            parentId: options.parentId,
-            title,
-          });
-          try {
-            return await this.create(repoPath, title, {
-              ...options,
-              parentId: undefined,
-            });
-          } catch (fallbackErr) {
-            log.error("Standalone fallback also failed", { title, err: fallbackErr });
-            return null;
-          }
-        }
-
-        log.error("Duplicate task ID with no parent fallback", { title });
-        return null;
-      }
-    }
-
-    return null;
+    return this.create(repoPath, title, options);
   }
 
-  /** Update an issue */
+  /** Update an issue (direct JSONL write, no CLI spawn) */
   async update(
     repoPath: string,
     id: string,
@@ -630,51 +582,15 @@ export class BeadsService {
       claim?: boolean;
     } = {}
   ): Promise<BeadsIssue> {
-    let cmd = `update ${id} --json`;
-    if (options.status) cmd += ` --status ${options.status}`;
-    if (options.assignee !== undefined) cmd += ` --assignee "${options.assignee}"`;
-    if (options.description) cmd += ` -d "${options.description.replace(/"/g, '\\"')}"`;
-    if (options.priority !== undefined) cmd += ` -p ${options.priority}`;
-    if (options.claim) cmd += ` --claim`;
-    const stdout = await this.exec(repoPath, cmd);
-    return this.parseJson(stdout);
+    return jsonlStore.updateIssue(repoPath, id, options);
   }
 
-  /** Close an issue (bd close returns a JSON array of closed issues, or sometimes empty output).
-   * @param force - If true, use --force to close even when blocked by open issues (e.g. manual mark done).
+  /**
+   * Close an issue (direct JSONL write, no CLI spawn).
+   * @param force - Accepted for API compatibility but no longer needed (no blocker enforcement in JSONL mode).
    */
-  async close(repoPath: string, id: string, reason: string, force = false): Promise<BeadsIssue> {
-    let cmd = `close ${id} --reason "${reason.replace(/"/g, '\\"')}" --json`;
-    if (force) cmd += " --force";
-    const stdout = await this.exec(repoPath, cmd);
-    const arr = this.parseJsonArray(stdout);
-    let result = arr[0];
-    if (!result) {
-      this.invalidateSyncState(repoPath);
-      result = await this.show(repoPath, id);
-    }
-    // bd close succeeded (exec didn't throw), so the write was applied.
-    // Verification reads may return stale data due to JSONL/DB sync lag.
-    // Retry with sync state invalidation before failing.
-    if ((result.status as string) !== "closed") {
-      this.invalidateSyncState(repoPath);
-      await new Promise((r) => setTimeout(r, 200));
-      try {
-        result = await this.show(repoPath, id);
-      } catch {
-        // If show fails, trust the close command since exec succeeded
-        result = { ...result, status: "closed" } as BeadsIssue;
-      }
-    }
-    if ((result.status as string) !== "closed") {
-      // bd close succeeded but verification still shows old status — trust the write
-      log.warn("Close verification stale, trusting bd close success", {
-        id,
-        status: result.status,
-      });
-      result = { ...result, status: "closed" } as BeadsIssue;
-    }
-    return result;
+  async close(repoPath: string, id: string, reason: string, _force = false): Promise<BeadsIssue> {
+    return jsonlStore.closeIssue(repoPath, id, reason);
   }
 
   /**
@@ -735,20 +651,16 @@ export class BeadsService {
     return tasks;
   }
 
-  /** List all issues (open + in_progress by default) */
+  /** List open + in_progress issues (direct JSONL read) */
   async list(repoPath: string): Promise<BeadsIssue[]> {
-    const stdout = await this.exec(repoPath, "list --json");
-    return this.parseJsonArray(stdout);
+    const all = await this.listAll(repoPath);
+    return all.filter((i) => i.status === "open" || i.status === "in_progress");
   }
 
-  /** List all issues including closed (for kanban column computation). Uses short-TTL cache. */
+  /** List all issues including closed (direct JSONL read, in-memory cached) */
   async listAll(repoPath: string): Promise<BeadsIssue[]> {
-    const cached = beadsCache.getListAll<BeadsIssue[]>(repoPath);
-    if (cached) return cached;
-    const stdout = await this.exec(repoPath, "list --all --json --limit 0");
-    const result = this.parseJsonArray(stdout);
-    beadsCache.setListAll(repoPath, result);
-    return result;
+    const { readAllIssuesFromJsonl } = await import("./jsonl-reader.js");
+    return readAllIssuesFromJsonl(repoPath);
   }
 
   /**
@@ -765,17 +677,11 @@ export class BeadsService {
     );
   }
 
-  /** Show full details of an issue (bd show returns a JSON array). Uses short-TTL cache. */
+  /** Show full details of an issue (direct JSONL read) */
   async show(repoPath: string, id: string): Promise<BeadsIssue> {
-    const cached = beadsCache.getShow<BeadsIssue>(repoPath, id);
-    if (cached) return cached;
-    const stdout = await this.exec(repoPath, `show ${id} --json`);
-    const arr = this.parseJsonArray(stdout);
-    const first = arr[0];
-    if (first) {
-      beadsCache.setShow(repoPath, id, first);
-      return first;
-    }
+    const { readIssueFromJsonl } = await import("./jsonl-reader.js");
+    const issue = await readIssueFromJsonl(repoPath, id);
+    if (issue) return issue;
     throw new AppError(404, ErrorCodes.ISSUE_NOT_FOUND, `Issue ${id} not found`, { issueId: id });
   }
 
@@ -833,42 +739,40 @@ export class BeadsService {
     return taskId.slice(0, lastDot);
   }
 
-  /** Add a dependency between issues */
+  /** Add a dependency between issues (direct JSONL write) */
   async addDependency(
     repoPath: string,
     childId: string,
     parentId: string,
     type?: string
   ): Promise<void> {
-    let cmd = `dep add ${childId} ${parentId} --json`;
-    if (type) cmd += ` --type ${type}`;
-    await this.exec(repoPath, cmd);
+    await jsonlStore.addDependency(repoPath, childId, parentId, type);
   }
 
-  /** Get the dependency tree */
+  /** Get the dependency tree (still uses CLI — rarely called) */
   async depTree(repoPath: string, id: string): Promise<string> {
     return this.exec(repoPath, `dep tree ${id}`);
   }
 
-  /** Delete an issue */
+  /** Delete an issue (direct JSONL write) */
   async delete(repoPath: string, id: string): Promise<void> {
-    await this.exec(repoPath, `delete ${id} --force --json`);
+    await jsonlStore.deleteIssue(repoPath, id);
   }
 
-  /** Add a comment to an issue */
+  /** Add a comment to an issue (still uses CLI — called rarely) */
   async comment(repoPath: string, id: string, message: string): Promise<void> {
     const escaped = message.replace(/"/g, '\\"');
     await this.exec(repoPath, `comment ${id} "${escaped}"`);
   }
 
-  /** Add a label to an issue */
+  /** Add a label to an issue (direct JSONL write) */
   async addLabel(repoPath: string, id: string, label: string): Promise<void> {
-    await this.exec(repoPath, `update ${id} --add-label ${label}`);
+    await jsonlStore.addLabel(repoPath, id, label);
   }
 
-  /** Remove a label from an issue */
+  /** Remove a label from an issue (direct JSONL write) */
   async removeLabel(repoPath: string, id: string, label: string): Promise<void> {
-    await this.exec(repoPath, `update ${id} --remove-label ${label}`);
+    await jsonlStore.removeLabel(repoPath, id, label);
   }
 
   /**
@@ -954,8 +858,15 @@ export class BeadsService {
     });
   }
 
-  /** Sync beads with git */
+  /**
+   * Notify that JSONL was written (lightweight replacement for bd sync).
+   * Invalidates in-memory caches so subsequent reads see fresh data.
+   * For web app writes this is a no-op since JsonlStore already invalidates,
+   * but callers that previously relied on sync() should call this for clarity.
+   */
   async sync(repoPath: string): Promise<void> {
-    await this.exec(repoPath, "sync");
+    jsonlStore.invalidateStoreCache(repoPath);
+    invalidateJsonlCache(repoPath);
+    beadsCache.invalidateListAll(repoPath);
   }
 }

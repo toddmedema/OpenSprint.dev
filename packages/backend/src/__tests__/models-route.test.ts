@@ -136,6 +136,29 @@ describe("Models API", () => {
       expect(res.body.data).toEqual([]);
     });
 
+    it("returns hardcoded defaults for claude-cli when no API key is set", async () => {
+      delete process.env.ANTHROPIC_API_KEY;
+      const res = await request(app).get(`${API_PREFIX}/models?provider=claude-cli`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(res.body.data[0]).toHaveProperty("id");
+      expect(res.body.data[0]).toHaveProperty("displayName");
+    });
+
+    it("returns API model list for claude-cli when API key is available", async () => {
+      process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+      async function* gen() {
+        yield { id: "claude-sonnet-4", display_name: "Claude Sonnet 4" };
+      }
+      mockModelsList.mockReturnValue(gen());
+
+      const res = await request(app).get(`${API_PREFIX}/models?provider=claude-cli`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([
+        { id: "claude-sonnet-4", displayName: "Claude Sonnet 4" },
+      ]);
+    });
+
     it("coalesces concurrent Cursor requests to avoid rate limits", async () => {
       process.env.CURSOR_API_KEY = "cursor-test-key";
       const fetchPromise = new Promise<{ ok: boolean; json: () => Promise<{ models: string[] }> }>((resolve) => {

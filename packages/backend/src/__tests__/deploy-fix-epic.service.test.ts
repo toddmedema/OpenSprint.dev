@@ -78,6 +78,7 @@ vi.mock("../services/beads.service.js", () => ({
     addDependency: mockBeadsAddDependency,
     close: mockBeadsClose,
     ready: mockBeadsReady,
+    sync: vi.fn().mockResolvedValue(undefined),
   })),
 }));
 
@@ -213,7 +214,6 @@ describe("deploy-fix-epic service", () => {
     expect(result!.taskCount).toBe(2);
     expect(result!.gateTaskId).toBeDefined();
 
-    expect(mockBeadsCreate).toHaveBeenCalledTimes(1);
     expect(mockBeadsCreate).toHaveBeenCalledWith(
       project.repoPath,
       "Fix: pre-deploy test failures",

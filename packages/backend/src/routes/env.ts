@@ -2,21 +2,35 @@ import { Router, Request } from "express";
 import path from "path";
 import { readFile, writeFile, access } from "node:fs/promises";
 import { constants } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type { ApiResponse } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { getErrorMessage } from "../utils/error-utils.js";
+import { createLogger } from "../utils/logger.js";
+
+const execFileAsync = promisify(execFile);
+const log = createLogger("env");
 
 const ALLOWED_KEYS = ["ANTHROPIC_API_KEY", "CURSOR_API_KEY"] as const;
 
+/** Override for tests when process.chdir is not available (e.g. Vitest workers). Set to null in production. */
+let envPathForTesting: string | null = null;
+export function setEnvPathForTesting(path: string | null): void {
+  envPathForTesting = path;
+}
+
 async function getEnvPath(): Promise<string> {
+  if (envPathForTesting !== null) return envPathForTesting;
   const cwd = process.cwd();
   const candidates = [path.resolve(cwd, ".env"), path.resolve(cwd, "../.env"), path.resolve(cwd, "../../.env")];
   for (const p of candidates) {
     try {
       await access(p, constants.R_OK);
       return p;
-    } catch {
+    } catch (_err) {
+      log.debug("Env path not readable, skipping", { path: p });
       continue;
     }
   }
@@ -51,14 +65,26 @@ function serializeEnv(map: Map<string, string>): string {
 
 export const envRouter = Router();
 
-// GET /env/keys — Check which API keys are configured (never returns key values)
+/** Check whether the `claude` CLI binary is on $PATH */
+async function isClaudeCliAvailable(): Promise<boolean> {
+  try {
+    const cmd = process.platform === "win32" ? "where" : "which";
+    await execFileAsync(cmd, ["claude"], { timeout: 3000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// GET /env/keys — Check which API keys / CLIs are configured (never returns key values)
 envRouter.get("/keys", async (_req, res, next) => {
   try {
     const anthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
     const cursor = Boolean(process.env.CURSOR_API_KEY?.trim());
+    const claudeCli = await isClaudeCliAvailable();
     res.json({
-      data: { anthropic, cursor },
-    } as ApiResponse<{ anthropic: boolean; cursor: boolean }>);
+      data: { anthropic, cursor, claudeCli },
+    } as ApiResponse<{ anthropic: boolean; cursor: boolean; claudeCli: boolean }>);
   } catch (err) {
     next(err);
   }
@@ -84,6 +110,7 @@ envRouter.post("/keys", async (req: Request, res, next) => {
     try {
       content = await readFile(envPath, "utf-8");
     } catch {
+      log.debug("No existing .env, will create or overwrite", { envPath });
       content = "";
     }
 

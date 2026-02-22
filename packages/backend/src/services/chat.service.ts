@@ -30,6 +30,33 @@ import {
 const log = createLogger("chat");
 const ARCHITECTURE_SECTIONS = ["technical_architecture", "data_model", "api_contracts"] as const;
 
+/** Known error phrases the Claude/Cursor CLI may print to stdout instead of throwing. */
+const KNOWN_AGENT_ERROR_PHRASES = [
+  "credit balance is too low",
+  "insufficient credits",
+  "rate limit",
+  "quota exceeded",
+  "authentication required",
+  "api key",
+  "invalid api key",
+];
+
+/**
+ * If the agent returned a short message that matches a known error phrase, return a
+ * user-friendly message that includes the original so the UI can show actionable guidance.
+ */
+function normalizeAgentErrorResponse(content: string): string {
+  if (!content || content.length > 200) return content;
+  const lower = content.trim().toLowerCase();
+  const isKnownError = KNOWN_AGENT_ERROR_PHRASES.some((phrase) => lower.includes(phrase));
+  if (!isKnownError) return content;
+  return (
+    "The planning agent could not complete your request.\n\n" +
+    `**Message:** ${content.trim()}\n\n` +
+    "**What to try:** Add credits at https://console.anthropic.com (for Claude), or check Project Settings → Agent Config (API key, model, and CLI)."
+  );
+}
+
 const SECTION_DISPLAY_NAMES: Record<string, string> = {
   technical_architecture: "Technical Architecture",
   data_model: "Data Model",
@@ -315,11 +342,12 @@ export class ChatService {
         config: agentConfig,
         messages,
         systemPrompt,
+        ...(body.images?.length ? { images: body.images } : {}),
         tracking: { id: agentId, projectId, phase, role: "dreamer", label },
       });
 
       log.info("Planning agent returned", { contentLen: response.content?.length ?? 0 });
-      responseContent = response.content;
+      responseContent = normalizeAgentErrorResponse(response.content ?? "");
     } catch (error) {
       const msg = getErrorMessage(error);
       log.error("Agent invocation failed", { error });

@@ -2106,6 +2106,60 @@ describe("ExecutePhase task detail plan link", () => {
   });
 });
 
+describe("ExecutePhase epic card plan navigation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("clicking epic card title navigates to plan", async () => {
+    const user = userEvent.setup();
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
+    ];
+    const onNavigateToPlan = vi.fn();
+    const store = createStore(tasks);
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
+      </Provider>
+    );
+
+    const epicTitleButton = await screen.findByRole("button", { name: "Build Test" });
+    await user.click(epicTitleButton);
+
+    expect(onNavigateToPlan).toHaveBeenCalledWith("build-test-feature");
+  });
+
+  it("epic card title is not clickable when onNavigateToPlan is not provided", async () => {
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: "agent",
+      },
+    ];
+    const store = createStore(tasks);
+    render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await screen.findByText("Build Test");
+    expect(screen.queryByRole("button", { name: "Build Test" })).not.toBeInTheDocument();
+  });
+});
+
 describe("ExecutePhase Source feedback section", () => {
   beforeEach(() => {
     vi.clearAllMocks();

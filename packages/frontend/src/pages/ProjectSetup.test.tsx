@@ -8,7 +8,7 @@ import { ProjectSetup } from "./ProjectSetup";
 vi.mock("../api/client", () => ({
   api: {
     projects: { create: vi.fn() },
-    env: { getKeys: vi.fn().mockResolvedValue({ anthropic: true, cursor: true }) },
+    env: { getKeys: vi.fn().mockResolvedValue({ anthropic: true, cursor: true, claudeCli: true }) },
     filesystem: { detectTestFramework: vi.fn().mockResolvedValue(null) },
   },
 }));
@@ -34,17 +34,27 @@ function renderProjectSetup() {
 }
 
 describe("ProjectSetup - Step 1 validation", () => {
-  it("shows project metadata step (name) on first load", () => {
+  it("shows project info step (name and repository) on first load", () => {
     renderProjectSetup();
 
     expect(screen.getByTestId("project-metadata-step")).toBeInTheDocument();
     expect(screen.getByLabelText(/project name/i)).toBeInTheDocument();
+    expect(screen.getByTestId("repository-step")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("/Users/you/projects/my-app")).toBeInTheDocument();
+  });
+
+  it("disables Next when repo path is empty", () => {
+    renderProjectSetup();
+
+    const nextButton = screen.getByRole("button", { name: /next/i });
+    expect(nextButton).toBeDisabled();
   });
 
   it("blocks Next when name is empty and shows error on click", async () => {
     const user = userEvent.setup();
     renderProjectSetup();
 
+    await user.type(screen.getByPlaceholderText("/Users/you/projects/my-app"), "/path/to/repo");
     const nextButton = screen.getByRole("button", { name: /next/i });
     expect(nextButton).toBeEnabled();
 
@@ -54,15 +64,17 @@ describe("ProjectSetup - Step 1 validation", () => {
     expect(screen.getByTestId("project-metadata-step")).toBeInTheDocument();
   });
 
-  it("advances to repository step when name is non-empty", async () => {
+  it("advances to agent config when name and repo path are filled", async () => {
     const user = userEvent.setup();
     renderProjectSetup();
 
     await user.type(screen.getByLabelText(/project name/i), "My Project");
+    await user.type(screen.getByPlaceholderText("/Users/you/projects/my-app"), "/path/to/repo");
     await user.click(screen.getByRole("button", { name: /next/i }));
 
     expect(screen.queryByTestId("project-metadata-step")).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText("/Users/you/projects/my-app")).toBeInTheDocument();
+    expect(screen.queryByTestId("repository-step")).not.toBeInTheDocument();
+    expect(screen.getByTestId("agents-step")).toBeInTheDocument();
   });
 });
 
@@ -84,12 +96,12 @@ describe("ProjectSetup - Navigation step list overflow handling", () => {
     expect(list.tagName).toBe("OL");
   });
 
-  it("renders all 7 wizard steps as list items", () => {
+  it("renders all 6 wizard steps as list items", () => {
     renderProjectSetup();
 
     const nav = screen.getByRole("navigation", { name: /setup wizard steps/i });
     const items = within(nav).getAllByRole("listitem");
-    expect(items).toHaveLength(7);
+    expect(items).toHaveLength(6);
   });
 
   it("displays correct step labels in order", () => {
@@ -97,7 +109,6 @@ describe("ProjectSetup - Navigation step list overflow handling", () => {
 
     const expectedLabels = [
       "Project Info",
-      "Repository",
       "Agent Config",
       "Deliver",
       "Testing",
@@ -146,26 +157,26 @@ describe("ProjectSetup - Navigation step list overflow handling", () => {
     const firstCircle = items[0].querySelector("div");
     expect(firstCircle!.className).toContain("bg-brand-600");
 
-    const lastCircle = items[6].querySelector("div");
+    const lastCircle = items[5].querySelector("div");
     expect(lastCircle!.className).toContain("bg-theme-surface-muted");
   });
 
-  it("renders step numbers 1 through 7", () => {
+  it("renders step numbers 1 through 6", () => {
     renderProjectSetup();
 
     const nav = screen.getByRole("navigation", { name: /setup wizard steps/i });
 
-    for (let i = 1; i <= 7; i++) {
+    for (let i = 1; i <= 6; i++) {
       expect(within(nav).getByText(String(i))).toBeInTheDocument();
     }
   });
 
-  it("renders connector lines between steps (6 connectors for 7 steps)", () => {
+  it("renders connector lines between steps (5 connectors for 6 steps)", () => {
     renderProjectSetup();
 
     const nav = screen.getByRole("navigation", { name: /setup wizard steps/i });
     const connectors = nav.querySelectorAll(".w-8.h-0\\.5");
-    expect(connectors).toHaveLength(6);
+    expect(connectors).toHaveLength(5);
   });
 
   it("inner list has min-w-0 to enable flex overflow", () => {

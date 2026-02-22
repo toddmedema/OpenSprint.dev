@@ -20,6 +20,15 @@ export interface PrdChatState {
   error: string | null;
 }
 
+/** Backend sends this when the agent returned a known error (e.g. credit balance, rate limit). */
+function isKnownAgentErrorMessage(message: string): boolean {
+  if (!message || typeof message !== "string") return false;
+  return (
+    message.includes("The planning agent could not complete your request") ||
+    message.includes("**What to try:**")
+  );
+}
+
 /** Read file as text; uses FileReader when file.text() is not available (e.g. jsdom) */
 async function readFileAsText(file: File): Promise<string> {
   if (typeof file.text === "function") return file.text();
@@ -83,12 +92,14 @@ export function createPrdChatSlice(sliceName: string): PrdChatSliceResult {
       projectId,
       message,
       prdSectionFocus,
+      images,
     }: {
       projectId: string;
       message: string;
       prdSectionFocus?: string;
+      images?: string[];
     }) => {
-      return api.chat.send(projectId, message, sliceName, prdSectionFocus);
+      return api.chat.send(projectId, message, sliceName, prdSectionFocus, images);
     }
   );
 
@@ -171,11 +182,15 @@ export function createPrdChatSlice(sliceName: string): PrdChatSliceResult {
         })
         .addCase(sendMessage.fulfilled, (state, action) => {
           state.sendingChat = false;
+          const msg = action.payload?.message ?? "";
           state.messages.push({
             role: "assistant",
-            content: action.payload.message,
+            content: msg,
             timestamp: new Date().toISOString(),
           });
+          if (isKnownAgentErrorMessage(msg)) {
+            state.error = msg;
+          }
         })
         .addCase(sendMessage.rejected, (state, action) => {
           state.sendingChat = false;

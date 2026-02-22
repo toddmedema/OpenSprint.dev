@@ -197,6 +197,7 @@ export function ExecutePhase({ projectId, onNavigateToPlan }: ExecutePhaseProps)
                   filteringActive={isSearchActive}
                   onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
                   onUnblock={(taskId) => dispatch(unblockTask({ projectId, taskId }))}
+                  onViewPlan={lane.planId && onNavigateToPlan ? () => onNavigateToPlan(lane.planId!) : undefined}
                   taskIdToStartedAt={taskIdToStartedAt}
                 />
               ))}

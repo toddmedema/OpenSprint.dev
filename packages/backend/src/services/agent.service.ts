@@ -103,7 +103,7 @@ export class AgentService {
         throw new AppError(
           400,
           ErrorCodes.ANTHROPIC_API_KEY_MISSING,
-          "ANTHROPIC_API_KEY is not set. Add it to your .env file or Project Settings. Get a key from https://console.anthropic.com/"
+          "ANTHROPIC_API_KEY is not set. Add it to your .env file or Project Settings → Agent Config. Get a key from https://console.anthropic.com/. Alternatively, switch to Claude (CLI) in Agent Config to use the locally-installed claude CLI instead."
         );
       }
       this.anthropic = new Anthropic({ apiKey });
@@ -168,7 +168,8 @@ export class AgentService {
         conversationHistory,
         onChunk,
       });
-      return { content: response?.content ?? "" };
+      const content = response?.content ?? "";
+      return { content };
     } finally {
       if (cleanup) await cleanup();
     }

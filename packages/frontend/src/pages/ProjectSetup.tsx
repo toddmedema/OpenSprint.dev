@@ -14,15 +14,14 @@ import {
   ConfirmStep,
 } from "../components/ProjectSetupWizard";
 import type { ProjectMetadataState } from "../components/ProjectSetupWizard";
-import type { AgentType, DeploymentMode, HilConfig } from "@opensprint/shared";
+import type { AgentType, DeploymentMode, HilConfig, UnknownScopeStrategy } from "@opensprint/shared";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 import { api } from "../api/client";
 
-type Step = "basics" | "repository" | "agents" | "deployment" | "testing" | "hil" | "confirm";
+type Step = "basics" | "agents" | "deployment" | "testing" | "hil" | "confirm";
 
 const STEPS: { key: Step; label: string }[] = [
   { key: "basics", label: "Project Info" },
-  { key: "repository", label: "Repository" },
   { key: "agents", label: "Agent Config" },
   { key: "deployment", label: "Deliver" },
   { key: "testing", label: "Testing" },
@@ -53,12 +52,14 @@ export function ProjectSetup() {
   const [customDeployWebhook, setCustomDeployWebhook] = useState("");
   const [testFramework, setTestFramework] = useState<string>("none");
   const [hilConfig, setHilConfig] = useState<HilConfig>(DEFAULT_HIL_CONFIG);
+  const [maxConcurrentCoders, setMaxConcurrentCoders] = useState(1);
+  const [unknownScopeStrategy, setUnknownScopeStrategy] = useState<UnknownScopeStrategy>("optimistic");
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
 
   const [detectedFramework, setDetectedFramework] = useState<string | null>(null);
   const [detectingFramework, setDetectingFramework] = useState(false);
 
-  const [envKeys, setEnvKeys] = useState<{ anthropic: boolean; cursor: boolean } | null>(null);
+  const [envKeys, setEnvKeys] = useState<{ anthropic: boolean; cursor: boolean; claudeCli: boolean } | null>(null);
   const [savingKey, setSavingKey] = useState<"ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | null>(null);
   const [keyInput, setKeyInput] = useState<{ anthropic: string; cursor: string }>({ anthropic: "", cursor: "" });
   const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
@@ -137,6 +138,8 @@ export function ProjectSetup() {
         },
         hilConfig,
         testFramework: testFramework === "none" ? null : testFramework,
+        maxConcurrentCoders,
+        unknownScopeStrategy,
       });
       navigate(getProjectPhasePath((project as { id: string }).id, "sketch"));
     } catch (err) {
@@ -149,6 +152,7 @@ export function ProjectSetup() {
 
   return (
     <Layout>
+      <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-10">
         <h1 className="text-2xl font-bold text-theme-text mb-8">Create New Project</h1>
 
@@ -178,22 +182,21 @@ export function ProjectSetup() {
 
         <div className="card p-6">
           {step === "basics" && (
-            <ProjectMetadataStep
-              value={metadata}
-              onChange={(v) => {
-                setMetadata(v);
-                setMetadataError(null);
-              }}
-              error={metadataError}
-            />
-          )}
-
-          {step === "repository" && (
-            <RepositoryStep
-              value={repoPath}
-              onChange={setRepoPath}
-              onBrowse={() => setShowFolderBrowser(true)}
-            />
+            <>
+              <ProjectMetadataStep
+                value={metadata}
+                onChange={(v) => {
+                  setMetadata(v);
+                  setMetadataError(null);
+                }}
+                error={metadataError}
+              />
+              <RepositoryStep
+                value={repoPath}
+                onChange={setRepoPath}
+                onBrowse={() => setShowFolderBrowser(true)}
+              />
+            </>
           )}
 
           {step === "agents" && (
@@ -210,6 +213,10 @@ export function ProjectSetup() {
               savingKey={savingKey}
               onSaveKey={handleSaveKey}
               modelRefreshTrigger={modelRefreshTrigger}
+              maxConcurrentCoders={maxConcurrentCoders}
+              onMaxConcurrentCodersChange={setMaxConcurrentCoders}
+              unknownScopeStrategy={unknownScopeStrategy}
+              onUnknownScopeStrategyChange={setUnknownScopeStrategy}
             />
           )}
 
@@ -247,6 +254,8 @@ export function ProjectSetup() {
               customDeployCommand={customDeployCommand}
               customDeployWebhook={customDeployWebhook}
               testFramework={testFramework}
+              maxConcurrentCoders={maxConcurrentCoders}
+              unknownScopeStrategy={unknownScopeStrategy}
             />
           )}
         </div>
@@ -291,12 +300,13 @@ export function ProjectSetup() {
               onClick={() => {
                 if (isValidProjectMetadata(metadata)) {
                   setMetadataError(null);
-                  setStep("repository");
+                  setStep("agents");
                 } else {
                   setMetadataError("Project name is required");
                 }
               }}
-              className="btn-primary"
+              disabled={!repoPath.trim()}
+              className="btn-primary disabled:opacity-50"
             >
               Next
             </button>
@@ -304,7 +314,6 @@ export function ProjectSetup() {
             <button
               onClick={() => setStep(STEPS[currentStepIndex + 1]?.key ?? "confirm")}
               disabled={
-                (step === "repository" && !repoPath.trim()) ||
                 (step === "agents" &&
                   ((planningAgent.type === "custom" && !planningAgent.cliCommand.trim()) ||
                     (codingAgent.type === "custom" && !codingAgent.cliCommand.trim())))
@@ -327,6 +336,7 @@ export function ProjectSetup() {
           onCancel={() => setShowFolderBrowser(false)}
         />
       )}
+      </div>
     </Layout>
   );
 }

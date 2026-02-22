@@ -121,6 +121,79 @@ describe("api client", () => {
       expect(body.context).toBe("sketch");
       expect(body.prdSectionFocus).toBe("overview");
     });
+
+    it("send includes images in body when provided", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { message: "Hi" } }),
+      } as Response);
+
+      const images = ["data:image/png;base64,abc"];
+      await api.chat.send("proj-1", "Describe this", "sketch", undefined, images);
+      const call = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(call[1]?.body as string);
+      expect(body.message).toBe("Describe this");
+      expect(body.images).toEqual(images);
+    });
+  });
+
+  describe("models", () => {
+    it("list calls correct endpoint with provider", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          data: [
+            { id: "claude-3-5-sonnet", displayName: "Claude 3.5 Sonnet" },
+          ],
+        }),
+      } as Response);
+
+      const result = await api.models.list("claude");
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ id: "claude-3-5-sonnet", displayName: "Claude 3.5 Sonnet" });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/models?provider=claude"),
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe("env", () => {
+    it("getKeys returns anthropic, cursor, claudeCli", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          data: { anthropic: true, cursor: false, claudeCli: true },
+        }),
+      } as Response);
+
+      const result = await api.env.getKeys();
+      expect(result).toEqual({ anthropic: true, cursor: false, claudeCli: true });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/env/keys"),
+        expect.any(Object),
+      );
+    });
+
+    it("saveKey sends POST with key and value", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { saved: true } }),
+      } as Response);
+
+      await api.env.saveKey("ANTHROPIC_API_KEY", "sk-secret");
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/env/keys"),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ key: "ANTHROPIC_API_KEY", value: "sk-secret" }),
+        }),
+      );
+    });
   });
 
   describe("feedback", () => {

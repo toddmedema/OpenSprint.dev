@@ -93,7 +93,13 @@ async function getModelsWithCoalescing(
   return promise;
 }
 
-// GET /models?provider=claude|cursor — List available models for the given provider
+const CLAUDE_CLI_DEFAULT_MODELS: ModelOption[] = [
+  { id: "claude-sonnet-4-20250514", displayName: "Claude Sonnet 4" },
+  { id: "claude-opus-4-20250514", displayName: "Claude Opus 4" },
+  { id: "claude-haiku-35-20241022", displayName: "Claude 3.5 Haiku" },
+];
+
+// GET /models?provider=claude|claude-cli|cursor — List available models for the given provider
 modelsRouter.get("/", async (req: Request, res, next) => {
   try {
     const provider = (req.query.provider as string) || "claude";
@@ -107,6 +113,17 @@ modelsRouter.get("/", async (req: Request, res, next) => {
 
       const models = await getModelsWithCoalescing("claude", () => fetchClaudeModels(apiKey));
       res.json({ data: models } as ApiResponse<ModelOption[]>);
+      return;
+    }
+
+    if (provider === "claude-cli") {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (apiKey) {
+        const models = await getModelsWithCoalescing("claude", () => fetchClaudeModels(apiKey));
+        res.json({ data: models } as ApiResponse<ModelOption[]>);
+      } else {
+        res.json({ data: CLAUDE_CLI_DEFAULT_MODELS } as ApiResponse<ModelOption[]>);
+      }
       return;
     }
 

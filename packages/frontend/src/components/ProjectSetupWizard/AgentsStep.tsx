@@ -1,5 +1,5 @@
 import { ModelSelect } from "../ModelSelect";
-import type { AgentType } from "@opensprint/shared";
+import type { AgentType, UnknownScopeStrategy } from "@opensprint/shared";
 
 export interface AgentConfig {
   type: AgentType;
@@ -10,6 +10,7 @@ export interface AgentConfig {
 export interface EnvKeys {
   anthropic: boolean;
   cursor: boolean;
+  claudeCli: boolean;
 }
 
 export interface AgentsStepProps {
@@ -23,6 +24,10 @@ export interface AgentsStepProps {
   savingKey: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | null;
   onSaveKey: (key: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY") => void;
   modelRefreshTrigger: number;
+  maxConcurrentCoders: number;
+  onMaxConcurrentCodersChange: (value: number) => void;
+  unknownScopeStrategy: UnknownScopeStrategy;
+  onUnknownScopeStrategyChange: (value: UnknownScopeStrategy) => void;
 }
 
 export function AgentsStep({
@@ -36,6 +41,10 @@ export function AgentsStep({
   savingKey,
   onSaveKey,
   modelRefreshTrigger,
+  maxConcurrentCoders,
+  onMaxConcurrentCodersChange,
+  unknownScopeStrategy,
+  onUnknownScopeStrategyChange,
 }: AgentsStepProps) {
   const needsAnthropic =
     envKeys &&
@@ -45,6 +54,9 @@ export function AgentsStep({
     envKeys &&
     !envKeys.cursor &&
     (planningAgent.type === "cursor" || codingAgent.type === "cursor");
+  const usesClaudeCli =
+    planningAgent.type === "claude-cli" || codingAgent.type === "claude-cli";
+  const claudeCliMissing = envKeys && !envKeys.claudeCli && usesClaudeCli;
 
   return (
     <div className="space-y-6" data-testid="agents-step">
@@ -56,7 +68,7 @@ export function AgentsStep({
               {needsAnthropic && needsCursor
                 ? <>Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and <code className="font-mono text-xs">CURSOR_API_KEY</code> to continue.</>
                 : needsAnthropic
-                  ? <>Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> to use Claude. Get one from{" "}
+                  ? <>Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> to use Claude (API). Get one from{" "}
                     <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">Anthropic Console</a>.</>
                   : <>Add your <code className="font-mono text-xs">CURSOR_API_KEY</code> to use Cursor. Get one from{" "}
                     <a href="https://cursor.com/settings" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">Cursor → Integrations → User API Keys</a>.</>
@@ -68,7 +80,7 @@ export function AgentsStep({
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-theme-muted mb-1">
-                    ANTHROPIC_API_KEY (Claude)
+                    ANTHROPIC_API_KEY (Claude API)
                   </label>
                   <input
                     type="password"
@@ -117,6 +129,23 @@ export function AgentsStep({
           </div>
         </>
       )}
+      {claudeCliMissing && (
+        <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
+          <p className="text-sm text-theme-warning-text">
+            <strong>Claude CLI not found.</strong>{" "}
+            Install it from{" "}
+            <a href="https://docs.anthropic.com/en/docs/claude-code/overview" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">docs.anthropic.com</a>{" "}
+            and run <code className="font-mono text-xs">claude login</code> to authenticate.
+          </p>
+        </div>
+      )}
+      {usesClaudeCli && !claudeCliMissing && (
+        <div className="p-3 rounded-lg bg-theme-info-bg border border-theme-info-border">
+          <p className="text-sm text-theme-info-text">
+            Using locally-installed Claude CLI. Make sure you have authenticated with <code className="font-mono text-xs">claude login</code>.
+          </p>
+        </div>
+      )}
       <div>
         <h3 className="text-sm font-semibold text-theme-text mb-3">Planning Agent Slot</h3>
         <p className="text-xs text-theme-muted mb-3">
@@ -133,7 +162,8 @@ export function AgentsStep({
                   onPlanningAgentChange({ ...planningAgent, type: e.target.value as AgentType })
                 }
               >
-                <option value="claude">Claude</option>
+                <option value="claude">Claude (API)</option>
+                <option value="claude-cli">Claude (CLI)</option>
                 <option value="cursor">Cursor</option>
                 <option value="custom">Custom CLI</option>
               </select>
@@ -184,7 +214,8 @@ export function AgentsStep({
                   onCodingAgentChange({ ...codingAgent, type: e.target.value as AgentType })
                 }
               >
-                <option value="claude">Claude</option>
+                <option value="claude">Claude (API)</option>
+                <option value="claude-cli">Claude (CLI)</option>
                 <option value="cursor">Cursor</option>
                 <option value="custom">Custom CLI</option>
               </select>
@@ -216,6 +247,53 @@ export function AgentsStep({
               <p className="mt-1 text-xs text-theme-muted">
                 Command invoked with prompt as argument. Must accept input and produce output.
               </p>
+            </div>
+          )}
+        </div>
+      </div>
+      <hr />
+      <div>
+        <h3 className="text-sm font-semibold text-theme-text mb-1">Parallelism</h3>
+        <p className="text-xs text-theme-muted mb-3">
+          Run multiple coding agents simultaneously on independent tasks. Higher values speed up builds but use more resources.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-theme-text mb-2">
+              Max Concurrent Coders: <span className="font-bold">{maxConcurrentCoders}</span>
+            </label>
+            <input
+              type="range"
+              min={1}
+              max={10}
+              step={1}
+              value={maxConcurrentCoders}
+              onChange={(e) => onMaxConcurrentCodersChange(Number(e.target.value))}
+              className="w-full accent-brand-600"
+              data-testid="max-concurrent-coders-slider"
+            />
+            <div className="flex justify-between text-xs text-theme-muted mt-1">
+              <span>1 (sequential)</span>
+              <span>10</span>
+            </div>
+          </div>
+          {maxConcurrentCoders > 1 && (
+            <div>
+              <label className="block text-sm font-medium text-theme-text mb-1">
+                Unknown Scope Strategy
+              </label>
+              <p className="text-xs text-theme-muted mb-2">
+                When file scope can&apos;t be predicted for a task, should the scheduler serialize it or run it in parallel?
+              </p>
+              <select
+                className="input"
+                value={unknownScopeStrategy}
+                onChange={(e) => onUnknownScopeStrategyChange(e.target.value as UnknownScopeStrategy)}
+                data-testid="unknown-scope-strategy-select"
+              >
+                <option value="optimistic">Optimistic (parallelize, rely on merger)</option>
+                <option value="conservative">Conservative (serialize)</option>
+              </select>
             </div>
           )}
         </div>
