@@ -166,6 +166,19 @@ export const updatePlan = createAsyncThunk(
   }
 );
 
+export const createPlan = createAsyncThunk(
+  "plan/create",
+  async ({
+    projectId,
+    data,
+  }: {
+    projectId: string;
+    data: { title: string; content: string };
+  }) => {
+    return api.plans.create(projectId, data);
+  }
+);
+
 const planSlice = createSlice({
   name: "plan",
   initialState,
@@ -332,6 +345,10 @@ const planSlice = createSlice({
         if (idx >= 0) {
           state.plans[idx] = action.payload;
         }
+      })
+      // createPlan
+      .addCase(createPlan.fulfilled, (state, action) => {
+        state.plans.push(action.payload);
       });
   },
 });
