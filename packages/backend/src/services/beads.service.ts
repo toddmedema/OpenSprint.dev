@@ -6,6 +6,7 @@ import { promisify } from "util";
 import type { TaskType, TaskPriority } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
+import { getErrorMessage, getExecErrorShape } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
 import { beadsCache } from "./beads-cache.js";
 import * as jsonlStore from "./jsonl-store.js";
@@ -283,6 +284,24 @@ export class BeadsService {
   }
 
   /**
+   * Detect duplicate primary key / UNIQUE constraint errors from create failures.
+   * Uses getErrorMessage and details.stderr for detection (exec-style and AppError).
+   */
+  private isDuplicateKeyError(err: unknown): boolean {
+    const msg = getErrorMessage(err);
+    const shape = getExecErrorShape(err);
+    const stderr = shape.stderr ?? (err as { details?: { stderr?: string } }).details?.stderr ?? "";
+    const combined = `${msg} ${stderr}`.toLowerCase();
+    return (
+      combined.includes("duplicate") ||
+      combined.includes("unique constraint") ||
+      combined.includes("already exists") ||
+      combined.includes("error 1062") ||
+      combined.includes("duplicate entry")
+    );
+  }
+
+  /**
    * Execute a bd command in the context of a project directory.
    * Ensures beads is ready, then runs the command.
    * Auto-recovers from stale-database errors by running sync import and retrying once.
@@ -552,9 +571,10 @@ export class BeadsService {
   }
 
   /**
-   * Create an issue with guaranteed unique ID (no retry needed with direct JSONL writes).
-   * Kept for API compatibility; the fallbackToStandalone option is no longer needed
-   * since ID collisions are checked in-memory before writing.
+   * Create an issue with retry on duplicate-key errors and optional fallback to standalone.
+   * On duplicate key: retries up to 3 times; if fallbackToStandalone and parentId, tries
+   * create without parentId. Returns BeadsIssue | null when fallback is used (caller must
+   * handle null, e.g. exclude from createdIds).
    */
   async createWithRetry(
     repoPath: string,
@@ -565,9 +585,43 @@ export class BeadsService {
       description?: string;
       parentId?: string;
     } = {},
-    _opts?: { fallbackToStandalone?: boolean }
+    opts?: { fallbackToStandalone?: boolean }
   ): Promise<BeadsIssue | null> {
-    return this.create(repoPath, title, options);
+    const MAX_RETRIES = 3;
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const issue = await this.create(repoPath, title, options);
+        return issue;
+      } catch (err: unknown) {
+        lastError = err;
+        if (!this.isDuplicateKeyError(err)) throw err;
+        log.warn("Duplicate key on create, retrying", {
+          repoPath,
+          title,
+          attempt: attempt + 1,
+          err: getErrorMessage(err),
+        });
+      }
+    }
+
+    if (opts?.fallbackToStandalone && options.parentId) {
+      try {
+        const { parentId: _p, ...rest } = options;
+        await this.create(repoPath, title, rest);
+        return null;
+      } catch (fallbackErr: unknown) {
+        log.warn("Fallback to standalone create failed", {
+          repoPath,
+          title,
+          err: getErrorMessage(fallbackErr),
+        });
+        return null;
+      }
+    }
+
+    throw lastError;
   }
 
   /** Update an issue (direct JSONL write, no CLI spawn) */

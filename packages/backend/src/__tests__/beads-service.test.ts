@@ -3,6 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { BeadsService } from "../services/beads.service.js";
+import * as jsonlStore from "../services/jsonl-store.js";
 import { clearStoreCache } from "../services/jsonl-store.js";
 import { clearJsonlCache } from "../services/jsonl-reader.js";
 
@@ -156,6 +157,91 @@ describe("BeadsService", () => {
       );
       expect(result).not.toBeNull();
       expect(result!.id).toBe(`${epic.id}.1`);
+    });
+
+    it("should retry on duplicate key error and succeed on later attempt", async () => {
+      const epic = await beads.create(repoPath, "Epic", { type: "epic" });
+      const actualCreate = jsonlStore.createIssue;
+      const createSpy = vi.spyOn(jsonlStore, "createIssue");
+      createSpy
+        .mockRejectedValueOnce(
+          Object.assign(new Error("UNIQUE constraint failed"), { stderr: "duplicate key" })
+        )
+        .mockRejectedValueOnce(
+          Object.assign(new Error("Duplicate entry"), { stderr: "Error 1062" })
+        )
+        .mockImplementation((p, t, o) => actualCreate(p, t, o));
+      const result = await beads.createWithRetry(repoPath, "Task", {
+        type: "task",
+        parentId: epic.id,
+      });
+      expect(result).not.toBeNull();
+      expect(result!.title).toBe("Task");
+      expect(createSpy).toHaveBeenCalledTimes(3);
+      createSpy.mockRestore();
+    });
+
+    it("should return null when fallbackToStandalone used and fallback succeeds", async () => {
+      const epic = await beads.create(repoPath, "Epic", { type: "epic" });
+      const actualCreate = jsonlStore.createIssue;
+      const createSpy = vi.spyOn(jsonlStore, "createIssue");
+      createSpy.mockImplementation(async (p, t, o) => {
+        if ((o as { parentId?: string })?.parentId) {
+          throw Object.assign(new Error("duplicate key"), { stderr: "UNIQUE constraint" });
+        }
+        return actualCreate(p, t, o);
+      });
+      const result = await beads.createWithRetry(
+        repoPath,
+        "Task",
+        { type: "task", parentId: epic.id },
+        { fallbackToStandalone: true }
+      );
+      expect(result).toBeNull();
+      expect(createSpy).toHaveBeenCalledTimes(4);
+      createSpy.mockRestore();
+    });
+
+    it("should return null when fallbackToStandalone used and fallback fails", async () => {
+      const epic = await beads.create(repoPath, "Epic", { type: "epic" });
+      const createSpy = vi.spyOn(jsonlStore, "createIssue");
+      createSpy.mockRejectedValue(
+        Object.assign(new Error("duplicate"), { stderr: "already exists" })
+      );
+      const result = await beads.createWithRetry(
+        repoPath,
+        "Task",
+        { type: "task", parentId: epic.id },
+        { fallbackToStandalone: true }
+      );
+      expect(result).toBeNull();
+      createSpy.mockRestore();
+    });
+
+    it("should throw when non-duplicate error (no retry)", async () => {
+      const createSpy = vi.spyOn(jsonlStore, "createIssue");
+      createSpy.mockRejectedValueOnce(new Error("ENOENT: file not found"));
+      await expect(
+        beads.createWithRetry(repoPath, "Task", { type: "task" })
+      ).rejects.toThrow(/ENOENT|file not found/);
+      expect(createSpy).toHaveBeenCalledTimes(1);
+      createSpy.mockRestore();
+    });
+
+    it("should throw when all retries exhausted and no fallbackToStandalone", async () => {
+      const epic = await beads.create(repoPath, "Epic", { type: "epic" });
+      const createSpy = vi.spyOn(jsonlStore, "createIssue");
+      createSpy.mockRejectedValue(
+        Object.assign(new Error("duplicate key"), { stderr: "UNIQUE constraint" })
+      );
+      await expect(
+        beads.createWithRetry(repoPath, "Task", {
+          type: "task",
+          parentId: epic.id,
+        })
+      ).rejects.toThrow(/duplicate/);
+      expect(createSpy).toHaveBeenCalledTimes(3);
+      createSpy.mockRestore();
     });
   });
 
