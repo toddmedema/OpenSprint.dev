@@ -243,6 +243,27 @@ describe("BeadsService", () => {
       expect(createSpy).toHaveBeenCalledTimes(3);
       createSpy.mockRestore();
     });
+
+    it("should detect duplicate via details.stderr (AppError-style) and retry", async () => {
+      const epic = await beads.create(repoPath, "Epic", { type: "epic" });
+      const actualCreate = jsonlStore.createIssue;
+      const createSpy = vi.spyOn(jsonlStore, "createIssue");
+      createSpy
+        .mockRejectedValueOnce(
+          Object.assign(new Error("Beads failed"), {
+            details: { stderr: "UNIQUE constraint failed: duplicate entry" },
+          })
+        )
+        .mockImplementation((p, t, o) => actualCreate(p, t, o));
+      const result = await beads.createWithRetry(repoPath, "Task", {
+        type: "task",
+        parentId: epic.id,
+      });
+      expect(result).not.toBeNull();
+      expect(result!.title).toBe("Task");
+      expect(createSpy).toHaveBeenCalledTimes(2);
+      createSpy.mockRestore();
+    });
   });
 
   describe("update", () => {
