@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import type { AgentSession, Task } from "@opensprint/shared";
+import type { AgentSession, Task, TaskPriority } from "@opensprint/shared";
 import { mapStatusToKanban } from "@opensprint/shared";
 import { api } from "../../api/client";
 import { DEDUP_SKIP } from "../dedup";
@@ -68,10 +68,11 @@ const initialState: ExecuteState = {
   error: null,
 };
 
-export const fetchTasks = createAsyncThunk(
+export const fetchTasks = createAsyncThunk<Task[], string>(
   "execute/fetchTasks",
   async (projectId: string, { getState, rejectWithValue }) => {
-    const inFlight = (getState().execute as ExecuteState)[TASKS_IN_FLIGHT_KEY] ?? 0;
+    const root = getState() as { execute: ExecuteState };
+    const inFlight = root.execute[TASKS_IN_FLIGHT_KEY] ?? 0;
     if (inFlight > 1) {
       return rejectWithValue(DEDUP_SKIP);
     }
@@ -178,11 +179,15 @@ const executeSlice = createSlice({
   initialState,
   reducers: {
     setSelectedTaskId(state, action: PayloadAction<string | null>) {
-      state.selectedTaskId = action.payload;
+      const next = action.payload;
+      const changed = state.selectedTaskId !== next;
+      state.selectedTaskId = next;
       state.completionState = null;
       state.archivedSessions = [];
-      state.taskDetail = null;
-      state.taskDetailError = null;
+      if (changed) {
+        state.taskDetail = null;
+        state.taskDetailError = null;
+      }
     },
     appendAgentOutput(state, action: PayloadAction<{ taskId: string; chunk: string }>) {
       const { taskId, chunk } = action.payload;
@@ -226,7 +231,7 @@ const executeSlice = createSlice({
         taskId: string;
         status?: string;
         assignee?: string | null;
-        priority?: number;
+        priority?: TaskPriority;
       }>
     ) {
       const { taskId, status, assignee, priority } = action.payload;
@@ -264,9 +269,16 @@ const executeSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchTasks.fulfilled, (state, action) => {
-        state.tasks = action.payload;
+        state.tasks = (action.payload ?? []) as Task[];
         state.loading = false;
         state[TASKS_IN_FLIGHT_KEY] = Math.max(0, (state[TASKS_IN_FLIGHT_KEY] ?? 1) - 1);
+        // Clear selection if the selected task is no longer in the list (e.g. archived)
+        const taskIds = new Set((action.payload ?? []).map((t: Task) => t.id));
+        if (state.selectedTaskId && !taskIds.has(state.selectedTaskId)) {
+          state.selectedTaskId = null;
+          state.taskDetail = null;
+          state.taskDetailError = null;
+        }
       })
       .addCase(fetchTasks.rejected, (state, action) => {
         state[TASKS_IN_FLIGHT_KEY] = Math.max(0, (state[TASKS_IN_FLIGHT_KEY] ?? 1) - 1);
@@ -304,6 +316,11 @@ const executeSlice = createSlice({
         state.taskDetail = null;
         state.taskDetailLoading = false;
         state.taskDetailError = action.error.message ?? "Failed to load task details";
+        // Clear selection when task no longer exists (404) so we don't keep retrying
+        const msg = action.error.message ?? "";
+        if (msg.includes("not found")) {
+          state.selectedTaskId = null;
+        }
       })
       // fetchArchivedSessions
       .addCase(fetchArchivedSessions.pending, (state) => {
@@ -356,9 +373,10 @@ const executeSlice = createSlice({
       // updateTaskPriority — optimistic update, revert on error
       .addCase(updateTaskPriority.pending, (state, action) => {
         const { taskId, priority } = action.meta.arg;
+        const p = priority as TaskPriority;
         const task = state.tasks.find((t) => t.id === taskId);
-        if (task) task.priority = priority;
-        if (state.taskDetail?.id === taskId) state.taskDetail.priority = priority;
+        if (task) task.priority = p;
+        if (state.taskDetail?.id === taskId) state.taskDetail.priority = p;
       })
       .addCase(updateTaskPriority.fulfilled, (state, action) => {
         const { task } = action.payload;
@@ -367,7 +385,7 @@ const executeSlice = createSlice({
         if (t) t.priority = task.priority;
       })
       .addCase(updateTaskPriority.rejected, (state, action) => {
-        const payload = action.payload as { previousPriority: number } | undefined;
+        const payload = action.payload as { previousPriority: TaskPriority } | undefined;
         if (!payload) return;
         const { taskId } = action.meta.arg;
         const previousPriority = payload.previousPriority;

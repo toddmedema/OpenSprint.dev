@@ -309,7 +309,8 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
     const result = await dispatch(sendSketchMessage({ projectId, message: text, images }));
     if (sendSketchMessage.fulfilled.match(result)) {
       imageAttachment.reset();
-      if (result.payload.prdChanges?.length) {
+      const payload = result.payload as { prdChanges?: unknown[] };
+      if (payload.prdChanges?.length) {
         dispatch(fetchPrd(projectId));
         dispatch(fetchPrdHistory(projectId));
         dispatch(fetchPlanStatus(projectId));
@@ -362,7 +363,8 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
       const result = await dispatch(
         sendSketchMessage({ projectId, message: fullMessage, prdSectionFocus: prdFocus })
       );
-      if (sendSketchMessage.fulfilled.match(result) && result.payload.prdChanges?.length) {
+      const payload = sendSketchMessage.fulfilled.match(result) ? (result.payload as { prdChanges?: unknown[] }) : null;
+      if (payload?.prdChanges?.length) {
         dispatch(fetchPrd(projectId));
         dispatch(fetchPrdHistory(projectId));
         dispatch(fetchPlanStatus(projectId));

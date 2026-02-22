@@ -64,11 +64,15 @@ export const fetchPlanStatus = createAsyncThunk(
   }
 );
 
-export const fetchPlans = createAsyncThunk(
+export const fetchPlans = createAsyncThunk<
+  { plans: Plan[]; dependencyGraph: PlanDependencyGraph; background: boolean },
+  FetchPlansArg
+>(
   "plan/fetchPlans",
   async (arg: FetchPlansArg, { getState, rejectWithValue }) => {
-    if ((getState().plan as PlanState)[PLANS_IN_FLIGHT_KEY] > 1) {
-      return rejectWithValue(DEDUP_SKIP);
+    const root = getState() as { plan: PlanState };
+    if (root.plan[PLANS_IN_FLIGHT_KEY] > 1) {
+      return rejectWithValue(DEDUP_SKIP) as never;
     }
     const projectId = typeof arg === "string" ? arg : arg.projectId;
     const graph = await api.plans.list(projectId);
@@ -220,6 +224,10 @@ const planSlice = createSlice({
       // fetchPlanStatus
       .addCase(fetchPlanStatus.fulfilled, (state, action) => {
         state.planStatus = action.payload;
+      })
+      // createPlan
+      .addCase(createPlan.fulfilled, (state, action) => {
+        state.plans.push(action.payload);
       })
       // fetchPlans
       .addCase(fetchPlans.pending, (state, action) => {

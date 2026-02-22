@@ -204,6 +204,20 @@ export class PhaseExecutorService {
     task: BeadsIssue,
     branchName: string
   ): Promise<void> {
+    // #region agent log
+    fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "391add" },
+      body: JSON.stringify({
+        sessionId: "391add",
+        location: "phase-executor.service.ts:executeReviewPhase:entry",
+        message: "executeReviewPhase started",
+        data: { taskId: task.id },
+        timestamp: Date.now(),
+        hypothesisId: "coding-review",
+      }),
+    }).catch(() => {});
+    // #endregion
     const state = this.host.getState(projectId);
     const slot = state.slots.get(task.id);
     if (!slot) {
@@ -265,6 +279,20 @@ export class PhaseExecutorService {
       await fs.mkdir(mainRepoActiveDirReview, { recursive: true });
       await writeJsonAtomic(path.join(mainRepoActiveDirReview, OPENSPRINT_PATHS.assignment), assignment);
 
+      // #region agent log
+      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "391add" },
+        body: JSON.stringify({
+          sessionId: "391add",
+          location: "phase-executor.service.ts:executeReviewPhase:spawnReviewer",
+          message: "spawning reviewer agent",
+          data: { taskId: task.id },
+          timestamp: Date.now(),
+          hypothesisId: "coding-review",
+        }),
+      }).catch(() => {});
+      // #endregion
       this.host.lifecycleManager.run(
         {
           projectId,

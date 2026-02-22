@@ -1,5 +1,11 @@
-import { createSlice, createAsyncThunk, type PayloadAction, type Slice } from "@reduxjs/toolkit";
-import type { PrdChangeLogEntry } from "@opensprint/shared";
+import {
+  createSlice,
+  createAsyncThunk,
+  type PayloadAction,
+  type Slice,
+  type SliceCaseReducers,
+} from "@reduxjs/toolkit";
+import type { ChatResponse, PrdChangeLogEntry } from "@opensprint/shared";
 import { api } from "../../api/client";
 import { parsePrdSections } from "../../lib/prdUtils";
 
@@ -50,14 +56,29 @@ const createInitialState = (): PrdChatState => ({
 });
 
 export interface PrdChatSliceResult {
-  slice: Slice<PrdChatState, Record<string, unknown>, string>;
+  slice: Slice<PrdChatState, SliceCaseReducers<PrdChatState>, string>;
   thunks: {
-    fetchChat: ReturnType<typeof createAsyncThunk>;
-    fetchPrd: ReturnType<typeof createAsyncThunk>;
-    fetchPrdHistory: ReturnType<typeof createAsyncThunk>;
-    sendMessage: ReturnType<typeof createAsyncThunk>;
-    savePrdSection: ReturnType<typeof createAsyncThunk>;
-    uploadPrdFile: ReturnType<typeof createAsyncThunk>;
+    fetchChat: ReturnType<typeof createAsyncThunk<PrdChatMessage[], string>>;
+    fetchPrd: ReturnType<typeof createAsyncThunk<Record<string, string>, string>>;
+    fetchPrdHistory: ReturnType<typeof createAsyncThunk<PrdChangeLogEntry[], string>>;
+    sendMessage: ReturnType<
+      typeof createAsyncThunk<
+        ChatResponse,
+        { projectId: string; message: string; prdSectionFocus?: string; images?: string[] }
+      >
+    >;
+    savePrdSection: ReturnType<
+      typeof createAsyncThunk<
+        { section: string; content: string },
+        { projectId: string; section: string; content: string }
+      >
+    >;
+    uploadPrdFile: ReturnType<
+      typeof createAsyncThunk<
+        { response: ChatResponse | null; fileName: string },
+        { projectId: string; file: File }
+      >
+    >;
   };
 }
 

@@ -1,4 +1,10 @@
-import type { ActionReducerMapBuilder, AsyncThunk } from "@reduxjs/toolkit";
+import type {
+  ActionReducerMapBuilder,
+  AsyncThunk,
+  AsyncThunkConfig,
+  SerializedError,
+} from "@reduxjs/toolkit";
+import type { Draft } from "immer";
 
 /** Standard shape for a single async operation's loading/error state */
 export type AsyncState = { loading: boolean; error: string | null };
@@ -12,20 +18,25 @@ export function createInitialAsyncStates<K extends string>(keys: readonly K[]): 
   return Object.fromEntries(keys.map((k) => [k, { ...initial }])) as AsyncStates<K>;
 }
 
-type GetAsyncState<State> = (state: State) => AsyncState;
+type GetAsyncState<State> = (state: Draft<State>) => AsyncState;
 
 export interface AddAsyncHandlersOptions<State, Returned, ThunkArg = unknown> {
   defaultErrorMessage?: string;
-  onPending?: (state: State, action: { meta: { arg: ThunkArg } }) => void;
-  onFulfilled?: (state: State, action: { payload: Returned }) => void;
-  onRejected?: (state: State, action: { meta: { arg: ThunkArg } }) => void;
+  onPending?: (state: Draft<State>, action: { meta: { arg: ThunkArg } }) => void;
+  onFulfilled?: (state: Draft<State>, action: { payload: Returned }) => void;
+  onRejected?: (state: Draft<State>, action: { meta: { arg: ThunkArg } }) => void;
 }
 
 /**
  * Adds standard pending/fulfilled/rejected handlers for loading and error state.
  * Optionally accepts onFulfilled for custom state updates when the thunk succeeds.
  */
-export function addAsyncHandlers<State, Returned, ThunkArg, ThunkConfig>(
+export function addAsyncHandlers<
+  State,
+  Returned,
+  ThunkArg,
+  ThunkConfig extends AsyncThunkConfig,
+>(
   builder: ActionReducerMapBuilder<State>,
   thunk: AsyncThunk<Returned, ThunkArg, ThunkConfig>,
   getAsyncState: GetAsyncState<State>,
@@ -48,7 +59,8 @@ export function addAsyncHandlers<State, Returned, ThunkArg, ThunkConfig>(
     .addCase(thunk.rejected, (state, action) => {
       const s = getAsyncState(state);
       s.loading = false;
-      s.error = action.error.message || defaultErrorMessage;
+      const err = (action as { error?: SerializedError }).error;
+      s.error = err?.message || defaultErrorMessage;
       opts.onRejected?.(state, action as { meta: { arg: ThunkArg } });
     });
 }

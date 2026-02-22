@@ -1,6 +1,12 @@
-import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, type PayloadAction, type AnyAction } from "@reduxjs/toolkit";
 import type { Task, TaskSummary } from "@opensprint/shared";
 import { mapStatusToKanban } from "@opensprint/shared";
+
+/** Fulfilled action shape for execute thunks (task list/detail/updates) */
+interface ExecuteFulfilledAction {
+  meta: { arg: string | { projectId: string; taskId?: string } };
+  payload: Task[] | Task | { tasks: Task[] } | { task: Task };
+}
 
 export interface TaskRegistryState {
   byProject: Record<string, Record<string, TaskSummary>>;
@@ -80,29 +86,34 @@ const taskRegistrySlice = createSlice({
   },
   extraReducers(builder) {
     builder
-      .addCase("execute/fetchTasks.fulfilled", (state, action) => {
-        const projectId = action.meta.arg as string;
-        const tasks = action.payload as Task[];
+      .addCase("execute/fetchTasks.fulfilled", (state, action: AnyAction) => {
+        const a = action as unknown as ExecuteFulfilledAction;
+        const projectId = a.meta.arg as string;
+        const tasks = a.payload as Task[];
         mergeTasksIntoState(state, projectId, tasks);
       })
-      .addCase("execute/fetchTaskDetail.fulfilled", (state, action) => {
-        const projectId = action.meta.arg.projectId as string;
-        const task = action.payload as Task;
+      .addCase("execute/fetchTaskDetail.fulfilled", (state, action: AnyAction) => {
+        const a = action as unknown as ExecuteFulfilledAction;
+        const projectId = (a.meta.arg as { projectId: string }).projectId;
+        const task = a.payload as Task;
         mergeTaskIntoState(state, projectId, task);
       })
-      .addCase("execute/markTaskDone.fulfilled", (state, action) => {
-        const projectId = action.meta.arg.projectId as string;
-        const tasks = action.payload.tasks as Task[];
+      .addCase("execute/markTaskDone.fulfilled", (state, action: AnyAction) => {
+        const a = action as unknown as ExecuteFulfilledAction;
+        const projectId = (a.meta.arg as { projectId: string }).projectId;
+        const tasks = (a.payload as { tasks: Task[] }).tasks;
         mergeTasksIntoState(state, projectId, tasks);
       })
-      .addCase("execute/unblockTask.fulfilled", (state, action) => {
-        const projectId = action.meta.arg.projectId as string;
-        const tasks = action.payload.tasks as Task[];
+      .addCase("execute/unblockTask.fulfilled", (state, action: AnyAction) => {
+        const a = action as unknown as ExecuteFulfilledAction;
+        const projectId = (a.meta.arg as { projectId: string }).projectId;
+        const tasks = (a.payload as { tasks: Task[] }).tasks;
         mergeTasksIntoState(state, projectId, tasks);
       })
-      .addCase("execute/updateTaskPriority.fulfilled", (state, action) => {
-        const projectId = action.meta.arg.projectId as string;
-        const task = action.payload.task as Task;
+      .addCase("execute/updateTaskPriority.fulfilled", (state, action: AnyAction) => {
+        const a = action as unknown as ExecuteFulfilledAction;
+        const projectId = (a.meta.arg as { projectId: string }).projectId;
+        const task = (a.payload as { task: Task }).task;
         mergeTaskIntoState(state, projectId, task);
       })
       .addCase("execute/resetExecute", (state) => {

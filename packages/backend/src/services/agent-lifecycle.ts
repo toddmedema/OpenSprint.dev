@@ -130,6 +130,20 @@ export class AgentLifecycleManager {
         sendAgentOutputToProject(projectId, taskId, chunk);
       },
       onExit: async (code: number | null) => {
+        // #region agent log
+        fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "391add" },
+          body: JSON.stringify({
+            sessionId: "391add",
+            location: "agent-lifecycle.ts:onExit:entry",
+            message: "lifecycle onExit received",
+            data: { taskId, phase, code, exitHandled: runState.exitHandled },
+            timestamp: Date.now(),
+            hypothesisId: "coding-review",
+          }),
+        }).catch(() => {});
+        // #endregion
         if (runState.exitHandled) return;
         runState.exitHandled = true;
         runState.activeProcess = null;
@@ -137,6 +151,20 @@ export class AgentLifecycleManager {
         await heartbeatService.deleteHeartbeat(wtPath, taskId);
         try {
           await onDone(code);
+          // #region agent log
+          fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "391add" },
+            body: JSON.stringify({
+              sessionId: "391add",
+              location: "agent-lifecycle.ts:onExit:onDoneReturned",
+              message: "onDone callback returned",
+              data: { taskId },
+              timestamp: Date.now(),
+              hypothesisId: "coding-review",
+            }),
+          }).catch(() => {});
+          // #endregion
         } catch (err) {
           log.error("onDone failed", { taskId, exitCode: code, err });
         }

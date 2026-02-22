@@ -332,6 +332,20 @@ export class AgentClient {
     }
 
     child.on("close", (code) => {
+      // #region agent log
+      fetch("http://127.0.0.1:7244/ingest/7b4dbb83-aede-4af0-b5cc-f2f84134fedd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "391add" },
+        body: JSON.stringify({
+          sessionId: "391add",
+          location: "agent-client.ts:child.close",
+          message: "agent subprocess closed",
+          data: { code, cwd, agentRole: role },
+          timestamp: Date.now(),
+          hypothesisId: "coding-review",
+        }),
+      }).catch(() => {});
+      // #endregion
       stopPoll();
       // Final drain to capture any remaining output written before exit
       drainOutputFile()

@@ -17,9 +17,13 @@ export class AppError extends Error {
 }
 
 export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction): void {
-  log.error("Request error", { message: err.message, stack: err.stack });
-
   if (err instanceof AppError) {
+    // 4xx are expected client errors (e.g. not found); log at debug to avoid noise
+    if (err.statusCode < 500) {
+      log.debug("Request client error", { statusCode: err.statusCode, code: err.code, message: err.message });
+    } else {
+      log.error("Request error", { message: err.message, stack: err.stack });
+    }
     const body: ApiErrorResponse = {
       error: {
         code: err.code,
@@ -31,7 +35,8 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
     return;
   }
 
-  // Unexpected errors — in development, include message and stack for debugging
+  // Unexpected errors
+  log.error("Request error", { message: err.message, stack: err.stack });
   const isDev = process.env.NODE_ENV !== "production";
   const body: ApiErrorResponse = {
     error: {

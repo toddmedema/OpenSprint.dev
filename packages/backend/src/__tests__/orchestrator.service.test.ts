@@ -549,4 +549,28 @@ describe("OrchestratorService (slot-based model)", () => {
       expect(agents).toEqual([]);
     });
   });
+
+  describe("stuck-loop guard", () => {
+    const LOOP_STUCK_GUARD_MS = 5 * 60 * 1000;
+
+    it("forces recovery when runLoop is blocked in an await so nudge can start a fresh loop", async () => {
+      vi.useFakeTimers();
+      mockBeadsReady.mockResolvedValue([]);
+      // Block runLoop in the first await (getNextPendingFeedbackId) so it never completes
+      mockGetNextPendingFeedbackId.mockImplementation(() => new Promise(() => {}));
+
+      const nudgeSpy = vi.spyOn(orchestrator, "nudge");
+
+      await orchestrator.ensureRunning(projectId);
+      // ensureRunning calls nudge once at the end; runLoop started and is stuck awaiting getNextPendingFeedbackId
+      expect(nudgeSpy).toHaveBeenCalledWith(projectId);
+
+      nudgeSpy.mockClear();
+      vi.advanceTimersByTime(LOOP_STUCK_GUARD_MS + 100);
+      // Guard should have fired: clear loopActive and call nudge so a fresh runLoop can start
+      expect(nudgeSpy).toHaveBeenCalledWith(projectId);
+
+      vi.useRealTimers();
+    });
+  });
 });

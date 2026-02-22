@@ -233,12 +233,8 @@ class GitCommitQueueImpl implements GitCommitQueueService {
       } catch (err) {
         log.warn("Job failed", { attempt: attempt + 1, maxRetries, err });
         if (attempt === maxRetries - 1) {
-          if (err instanceof RepoConflictError) {
-            item.reject?.(err);
-          } else {
-            log.error("Job failed after retries, proceeding to next", { maxRetries, job });
-          }
-          item.resolve?.();
+          // Reject so caller (performMergeAndDone) can re-open task and retry; never resolve on failure
+          item.reject?.(err instanceof Error ? err : new Error(String(err)));
         }
       }
     }
@@ -276,7 +272,10 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           await this.branchManager.mergeToMainNoCommit(repoPath, job.branchName);
           await this.beads.syncFromJsonl(repoPath);
           await this.beads.close(repoPath, job.beadsClose.taskId, job.beadsClose.reason);
-          await this.beads.export(repoPath, ".beads/issues.jsonl");
+          // Commit the JSONL that close() wrote. Do NOT call beads.export() here — export
+          // overwrites the file from the beads Dolt DB, which does not yet contain the close
+          // (close() writes via jsonlStore only), so the task would appear open again and get
+          // re-picked repeatedly.
           const msg = `merge: ${job.branchName} — ${job.taskTitle} (closes ${job.beadsClose.taskId})`;
           await this.addAndCommit(repoPath, [".beads/issues.jsonl"], msg);
         } else {

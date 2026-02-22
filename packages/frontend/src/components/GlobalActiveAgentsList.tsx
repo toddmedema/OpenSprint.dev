@@ -184,7 +184,7 @@ export function GlobalActiveAgentsList() {
                   className="w-full px-4 py-2.5 text-sm text-left hover:bg-theme-border-subtle transition-colors flex items-start gap-3"
                   onClick={() => {
                     dispatch(setSelectedTaskId(agent.id));
-                    navigate(getProjectPhasePath(project.id, "execute"));
+                    navigate(getProjectPhasePath(project.id, "execute", { task: agent.id }));
                     setOpen(false);
                   }}
                 >

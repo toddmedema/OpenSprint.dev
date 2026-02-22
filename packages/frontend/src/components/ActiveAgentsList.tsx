@@ -159,7 +159,7 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
                   className="w-full px-4 py-2.5 text-sm text-left hover:bg-theme-border-subtle transition-colors flex items-start gap-3"
                   onClick={() => {
                     dispatch(setSelectedTaskId(agent.id));
-                    navigate(getProjectPhasePath(projectId, "execute"));
+                    navigate(getProjectPhasePath(projectId, "execute", { task: agent.id }));
                     setOpen(false);
                   }}
                 >

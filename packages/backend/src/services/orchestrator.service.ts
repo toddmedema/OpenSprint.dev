@@ -78,6 +78,9 @@ interface RetryContext {
 /** Loop kicker interval: 60s — restarts idle orchestrator loop (distinct from 5-min WatchdogService health patrol). */
 const LOOP_KICKER_INTERVAL_MS = 60 * 1000;
 
+/** If runLoop is blocked in an await longer than this, force recovery so nudge can start a fresh loop (avoids agents "hanging" for hours). */
+const LOOP_STUCK_GUARD_MS = 5 * 60 * 1000;
+
 /**
  * GUPP-style assignment file: everything an agent needs to self-start.
  * Written before agent spawn so crash recovery can simply re-read and re-spawn.
@@ -162,6 +165,8 @@ export interface AgentSlot {
 interface OrchestratorState {
   status: OrchestratorStatus;
   loopActive: boolean;
+  /** Incremented each runLoop start; used so a stale (stuck) run doesn't clear loopActive when a recovered run is active */
+  loopRunId: number;
   globalTimers: TimerRegistry;
   slots: Map<string, AgentSlot>;
   /** Cached Summarizer output per taskId; reused on retries, cleared when slot is removed */
@@ -228,6 +233,7 @@ export class OrchestratorService {
       this.state.set(projectId, {
         status: this.defaultStatus(),
         loopActive: false,
+        loopRunId: 0,
         globalTimers: new TimerRegistry(),
         slots: new Map(),
         summarizerCache: new Map(),
@@ -337,11 +343,21 @@ export class OrchestratorService {
           status: "closed",
           assignee: null,
         });
+        broadcastToProject(projectId, {
+          type: "execute.status",
+          activeTasks: this.buildActiveTasks(state),
+          queueDepth: state.status.queueDepth,
+        });
         break;
 
       case "fail":
         state.status.totalFailed += 1;
         this.removeSlot(state, t.taskId);
+        broadcastToProject(projectId, {
+          type: "execute.status",
+          activeTasks: this.buildActiveTasks(state),
+          queueDepth: state.status.queueDepth,
+        });
         break;
     }
 
@@ -765,8 +781,24 @@ export class OrchestratorService {
   private async runLoop(projectId: string): Promise<void> {
     const state = this.getState(projectId);
 
+    const myRunId = (state.loopRunId ?? 0) + 1;
+    state.loopRunId = myRunId;
     state.loopActive = true;
     state.globalTimers.clear("loop");
+
+    // If runLoop blocks in an await (e.g. context assembly, beads, network), the 60s loop kicker
+    // keeps calling nudge() but nudge returns early because loopActive is true. This guard forces
+    // recovery after LOOP_STUCK_GUARD_MS so a fresh runLoop can start and agents can make progress.
+    state.globalTimers.setTimeout("loopStuckGuard", () => {
+      if (state.loopRunId !== myRunId) return;
+      log.warn("Orchestrator loop stuck (timeout), recovering so work can resume", {
+        projectId,
+        stuckRunId: myRunId,
+      });
+      state.loopRunId = myRunId + 1;
+      state.loopActive = false;
+      this.nudge(projectId);
+    }, LOOP_STUCK_GUARD_MS);
 
     try {
       // Gastown-style mailbox: process one queued feedback (Analyst) before coding work
@@ -786,7 +818,7 @@ export class OrchestratorService {
             err,
           });
         }
-        state.loopActive = false;
+        if (state.loopRunId === myRunId) state.loopActive = false;
         this.nudge(projectId);
         return;
       }
@@ -813,7 +845,7 @@ export class OrchestratorService {
           readyTasks: readyTasks.length,
           slotsAvailable,
         });
-        state.loopActive = false;
+        if (state.loopRunId === myRunId) state.loopActive = false;
         broadcastToProject(projectId, {
           type: "execute.status",
           activeTasks: this.buildActiveTasks(state),
@@ -862,11 +894,15 @@ export class OrchestratorService {
       await this.executeCodingPhase(projectId, repoPath, task, slot, undefined);
 
       // Mark loop as idle so nudge can fire again for additional slots
-      state.loopActive = false;
+      if (state.loopRunId === myRunId) state.loopActive = false;
     } catch (error) {
       log.error(`Orchestrator loop error for project ${projectId}`, { error });
-      state.loopActive = false;
-      state.globalTimers.setTimeout("loop", () => this.runLoop(projectId), 10000);
+      if (state.loopRunId === myRunId) {
+        state.loopActive = false;
+        state.globalTimers.setTimeout("loop", () => this.runLoop(projectId), 10000);
+      }
+    } finally {
+      state.globalTimers.clear("loopStuckGuard");
     }
   }
 
@@ -895,10 +931,20 @@ export class OrchestratorService {
     }
     const wtPath = slot.worktreePath ?? repoPath;
 
-    const result = (await this.sessionManager.readResult(
-      wtPath,
-      task.id
-    )) as CodingAgentResult | null;
+    const readResultWithTimeout = async (): Promise<CodingAgentResult | null> => {
+      const timeoutMs = 15_000;
+      return (await Promise.race([
+        this.sessionManager.readResult(wtPath, task.id),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("readResult timeout")), timeoutMs)
+        ),
+      ]).catch((err) => {
+        log.warn("readResult failed or timed out", { taskId: task.id, err });
+        return null;
+      })) as CodingAgentResult | null;
+    };
+
+    const result = await readResultWithTimeout();
 
     if (result && result.status) {
       normalizeCodingStatus(result);
@@ -1210,10 +1256,56 @@ export class OrchestratorService {
       await this.branchManager.deleteBranch(repoPath, branchName);
     } catch (mergeErr) {
       log.warn("Merge to main failed", { mergeErr });
+      let shouldCleanup = true;
 
-      if (mergeErr instanceof RepoConflictError) {
+      const reopenTask = async (comment: string, eventName: string): Promise<void> => {
+        try {
+          await this.beads.update(repoPath, task.id, { status: "open", assignee: "" });
+          await this.beads.comment(repoPath, task.id, comment);
+          await this.beads.sync(repoPath);
+          eventLogService
+            .append(repoPath, {
+              timestamp: new Date().toISOString(),
+              projectId,
+              taskId: task.id,
+              event: eventName,
+              data: { reason: (mergeErr as Error)?.message?.slice(0, 500) },
+            })
+            .catch(() => {});
+          broadcastToProject(projectId, {
+            type: "task.updated",
+            taskId: task.id,
+            status: "open",
+            assignee: null,
+          });
+          this.nudge(projectId);
+        } catch (err) {
+          log.warn("Failed to re-open task after merge failure", { taskId: task.id, err });
+        }
+      };
+
+      if (!(mergeErr instanceof RepoConflictError)) {
+        // Non-conflict failure (e.g. git merge threw, timeout): re-open so task can be retried
+        await reopenTask(
+          `Merge failed: ${(mergeErr as Error)?.message ?? "unknown error"}. Task requeued.`,
+          "merge.failed"
+        );
+        shouldCleanup = false;
+      } else {
         const mergeActive = await this.branchManager.isMergeInProgress(repoPath);
-        if (mergeActive) {
+        if (!mergeActive) {
+          // Repo has unmerged files but no merge in progress (e.g. corrupted index)
+          try {
+            await this.branchManager.mergeAbort(repoPath);
+          } catch {
+            // best-effort
+          }
+          await reopenTask(
+            "Merge failed: repo had unmerged files but no merge in progress. Task requeued.",
+            "merge.failed"
+          );
+          shouldCleanup = false;
+        } else {
           log.info("Merge conflicts detected, spawning merger agent to resolve");
           try {
             const resolved = await this.spawnMergerAgent(
@@ -1238,25 +1330,31 @@ export class OrchestratorService {
             } else {
               await this.branchManager.mergeAbort(repoPath);
               log.error("Merger agent failed for completed task", { taskId: task.id });
+              await reopenTask(
+                "Merge conflicts could not be resolved by merger agent; task requeued.",
+                "merger.failed"
+              );
+              shouldCleanup = false;
             }
           } catch (mergerErr) {
             log.warn("Merger agent error during merge resolution", { mergerErr });
             await this.branchManager.mergeAbort(repoPath);
+            await reopenTask(
+              "Merge resolution threw; task requeued.",
+              "merger.failed"
+            );
+            shouldCleanup = false;
           }
-        }
-      } else {
-        const merged = await this.branchManager.verifyMerge(repoPath, branchName);
-        if (!merged) {
-          log.error("Merge failed for completed task (non-conflict)", { taskId: task.id });
         }
       }
 
-      // Clean up regardless
-      try {
-        await this.branchManager.removeTaskWorktree(repoPath, task.id);
-        await this.branchManager.deleteBranch(repoPath, branchName);
-      } catch {
-        // best-effort cleanup
+      if (shouldCleanup) {
+        try {
+          await this.branchManager.removeTaskWorktree(repoPath, task.id);
+          await this.branchManager.deleteBranch(repoPath, branchName);
+        } catch {
+          // best-effort cleanup
+        }
       }
     }
 

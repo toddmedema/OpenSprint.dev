@@ -36,6 +36,10 @@ export interface CreateProjectRequest {
   hilConfig: HilConfigInput;
   /** Detected or user-selected test framework (PRD §10.2) */
   testFramework?: string | null;
+  /** Max concurrent coder agents (default 1). Stored in project settings. */
+  maxConcurrentCoders?: number;
+  /** How to handle tasks with unknown file scope when maxConcurrentCoders > 1. Stored in project settings. */
+  unknownScopeStrategy?: "conservative" | "optimistic";
 }
 
 /** Project update request (partial fields) */

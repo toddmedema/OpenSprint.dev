@@ -48,7 +48,8 @@ const MAX_LIVE_LOG = 10000;
 export const fetchDeliverStatus = createAsyncThunk(
   "deliver/fetchStatus",
   async (projectId: string, { getState, rejectWithValue }) => {
-    const inFlight = (getState().deliver as DeliverState)[STATUS_IN_FLIGHT_KEY] ?? 0;
+    const root = getState() as { deliver: DeliverState };
+    const inFlight = root.deliver[STATUS_IN_FLIGHT_KEY] ?? 0;
     if (inFlight > 1) {
       return rejectWithValue(DEDUP_SKIP);
     }
@@ -59,7 +60,8 @@ export const fetchDeliverStatus = createAsyncThunk(
 export const fetchDeliverHistory = createAsyncThunk(
   "deliver/fetchHistory",
   async (projectId: string, { getState, rejectWithValue }) => {
-    const inFlight = (getState().deliver as DeliverState)[HISTORY_IN_FLIGHT_KEY] ?? 0;
+    const root = getState() as { deliver: DeliverState };
+    const inFlight = root.deliver[HISTORY_IN_FLIGHT_KEY] ?? 0;
     if (inFlight > 1) {
       return rejectWithValue(DEDUP_SKIP);
     }

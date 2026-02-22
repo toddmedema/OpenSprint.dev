@@ -85,9 +85,9 @@ export function ProjectView() {
     const switchingProject =
       prevProjectIdRef.current != null && prevProjectIdRef.current !== projectId;
     if (switchingProject) {
-      dispatch(resetSketch());
-      dispatch(resetPlan());
-      dispatch(resetExecute());
+      dispatch(resetSketch(undefined as never));
+      dispatch(resetPlan(undefined as never));
+      dispatch(resetExecute(undefined as never));
       dispatch(resetEval());
       dispatch(resetDeliver());
       dispatch(resetProject());
@@ -112,9 +112,9 @@ export function ProjectView() {
       dispatch(wsDisconnect());
       dispatch(resetProject());
       dispatch(resetWebsocket());
-      dispatch(resetSketch());
-      dispatch(resetPlan());
-      dispatch(resetExecute());
+      dispatch(resetSketch(undefined as never));
+      dispatch(resetPlan(undefined as never));
+      dispatch(resetExecute(undefined as never));
       dispatch(resetEval());
       dispatch(resetDeliver());
     };

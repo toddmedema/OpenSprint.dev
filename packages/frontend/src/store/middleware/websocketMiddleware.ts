@@ -6,6 +6,7 @@ import type {
   ExecuteStatusEvent,
   FeedbackMappedEvent,
   FeedbackResolvedEvent,
+  TaskPriority,
 } from "@opensprint/shared";
 import {
   setConnected,
@@ -199,7 +200,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
             taskId: event.taskId,
             status: event.status,
             assignee: event.assignee,
-            priority: event.priority,
+            priority: event.priority as TaskPriority | undefined,
           })
         );
         d(
@@ -208,7 +209,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
             taskId: event.taskId,
             status: event.status,
             assignee: event.assignee,
-            priority: event.priority,
+            priority: event.priority as TaskPriority | undefined,
           })
         );
         break;
