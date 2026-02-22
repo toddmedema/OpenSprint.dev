@@ -258,6 +258,40 @@ describe("HomeScreen", () => {
     expect(mockProjectsList).toHaveBeenCalledTimes(2); // initial load + refresh
   });
 
+  it("removed project no longer appears after Archive", async () => {
+    mockProjectsList.mockResolvedValueOnce([mockProject]).mockResolvedValueOnce([]);
+    mockArchive.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    renderHomeScreen();
+
+    await screen.findByText("My Project");
+    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByRole("menuitem", { name: /archive/i }));
+    await user.click(screen.getByRole("button", { name: /proceed/i }));
+
+    await screen.findByTestId("projects-table");
+    expect(screen.queryByText("My Project")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("project-row-proj-1")).not.toBeInTheDocument();
+  });
+
+  it("removed project no longer appears after Delete", async () => {
+    mockProjectsList.mockResolvedValueOnce([mockProject]).mockResolvedValueOnce([]);
+    mockDelete.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    renderHomeScreen();
+
+    await screen.findByText("My Project");
+    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByRole("menuitem", { name: /delete/i }));
+    await user.click(screen.getByRole("button", { name: /proceed/i }));
+
+    await screen.findByTestId("projects-table");
+    expect(screen.queryByText("My Project")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("project-row-proj-1")).not.toBeInTheDocument();
+  });
+
   it("dispatches error notification when archive fails", async () => {
     mockProjectsList.mockResolvedValue([mockProject]);
     mockArchive.mockRejectedValue(new Error("Folder not found"));
