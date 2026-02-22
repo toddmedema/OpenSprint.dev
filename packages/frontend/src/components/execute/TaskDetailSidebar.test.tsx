@@ -827,4 +827,78 @@ describe("TaskDetailSidebar", () => {
     expect(descriptionContent).toHaveClass("p-4", "pt-0");
     expect(artifactsContent).toHaveClass("p-4", "pt-0");
   });
+
+  it("Description, Source Feedback, and Live Output headers use identical component structure and classes", async () => {
+    mockGet.mockResolvedValue({
+      id: "fb-1",
+      text: "Add feature",
+      category: "feature",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "mapped",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+    const props = createMinimalProps({
+      taskDetail: {
+        id: "epic-1.1",
+        title: "Task with both",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [],
+        description: "Task description content",
+        sourceFeedbackId: "fb-1",
+        createdAt: "",
+        updatedAt: "",
+      },
+      sourceFeedbackExpanded: { "fb-1": true },
+      descriptionSectionExpanded: true,
+      artifactsSectionExpanded: true,
+    });
+
+    const { container } = render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    await screen.findByText("Add feature");
+
+    const sourceFeedbackHeader = container.querySelector("#source-feedback-header");
+    const descriptionHeader = container.querySelector("#description-header");
+    const artifactsHeader = container.querySelector("#artifacts-header");
+
+    expect(sourceFeedbackHeader).toBeInTheDocument();
+    expect(descriptionHeader).toBeInTheDocument();
+    expect(artifactsHeader).toBeInTheDocument();
+
+    const sharedHeaderClasses = [
+      "w-full",
+      "flex",
+      "items-center",
+      "justify-between",
+      "p-4",
+      "text-left",
+      "hover:bg-theme-border-subtle/50",
+      "transition-colors",
+    ];
+    for (const header of [sourceFeedbackHeader, descriptionHeader, artifactsHeader]) {
+      for (const cls of sharedHeaderClasses) {
+        expect(header).toHaveClass(cls);
+      }
+    }
+
+    const sharedH4Classes = ["text-xs", "font-medium", "text-theme-muted", "uppercase", "tracking-wide"];
+    for (const header of [sourceFeedbackHeader, descriptionHeader, artifactsHeader]) {
+      const h4 = header?.querySelector("h4");
+      expect(h4).toBeInTheDocument();
+      for (const cls of sharedH4Classes) {
+        expect(h4).toHaveClass(cls);
+      }
+    }
+  });
 });
