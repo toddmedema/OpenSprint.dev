@@ -924,4 +924,67 @@ describe("TaskDetailSidebar", () => {
     expect(sectionClassNames[0]).toBe(sectionClassNames[1]);
     expect(sectionClassNames[1]).toBe(sectionClassNames[2]);
   });
+
+  it("collapse/expand interaction is identical for Description, Source Feedback, and Live Output", async () => {
+    const user = userEvent.setup();
+    mockGet.mockResolvedValue({
+      id: "fb-1",
+      text: "Add feature",
+      category: "feature",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "mapped",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+    const setSourceFeedbackExpanded = vi.fn();
+    const setDescriptionSectionExpanded = vi.fn();
+    const setArtifactsSectionExpanded = vi.fn();
+    const props = createMinimalProps({
+      taskDetail: {
+        id: "epic-1.1",
+        title: "Task with both",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [],
+        description: "Task description content",
+        sourceFeedbackId: "fb-1",
+        createdAt: "",
+        updatedAt: "",
+      },
+      sourceFeedbackExpanded: { "fb-1": true },
+      setSourceFeedbackExpanded,
+      descriptionSectionExpanded: true,
+      setDescriptionSectionExpanded,
+      artifactsSectionExpanded: true,
+      setArtifactsSectionExpanded,
+    });
+
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    await screen.findByText("Add feature");
+
+    const descBtn = screen.getByRole("button", { name: /collapse description/i });
+    const sourceBtn = screen.getByRole("button", { name: /collapse source feedback/i });
+    const artifactsBtn = screen.getByRole("button", {
+      name: /collapse live agent output/i,
+    });
+
+    await user.click(descBtn);
+    expect(setDescriptionSectionExpanded).toHaveBeenCalledTimes(1);
+
+    await user.click(sourceBtn);
+    expect(setSourceFeedbackExpanded).toHaveBeenCalledTimes(1);
+
+    await user.click(artifactsBtn);
+    expect(setArtifactsSectionExpanded).toHaveBeenCalledTimes(1);
+  });
 });
