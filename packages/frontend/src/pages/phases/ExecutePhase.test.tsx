@@ -1886,6 +1886,93 @@ describe("ExecutePhase Redux integration", () => {
     );
   });
 
+  it("Description, Source Feedback, and Live Output headers use identical structure when all three visible", async () => {
+    mockGet.mockResolvedValue({
+      id: "epic-1.1",
+      title: "Task with both",
+      kanbanColumn: "in_progress",
+      description: "Implement from feedback",
+      type: "task",
+      status: "in_progress",
+      labels: [],
+      dependencies: [],
+      priority: 0,
+      assignee: null,
+      epicId: "epic-1",
+      createdAt: "",
+      updatedAt: "",
+      sourceFeedbackId: "fb-xyz",
+    });
+    mockFeedbackGet.mockResolvedValue({
+      id: "fb-xyz",
+      text: "Add dark mode",
+      category: "feature",
+      mappedPlanId: "plan-1",
+      createdTaskIds: ["epic-1.1"],
+      status: "mapped",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task with both",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    const { container } = render(
+      <Provider store={store}>
+        <ExecutePhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await vi.waitFor(() => {
+      expect(mockFeedbackGet).toHaveBeenCalledWith("proj-1", "fb-xyz");
+    });
+
+    const sourceFeedbackHeader = container.querySelector("#source-feedback-header");
+    const descriptionHeader = container.querySelector("#description-header");
+    const artifactsHeader = container.querySelector("#artifacts-header");
+
+    expect(sourceFeedbackHeader).toBeInTheDocument();
+    expect(descriptionHeader).toBeInTheDocument();
+    expect(artifactsHeader).toBeInTheDocument();
+
+    const sharedHeaderClasses = [
+      "w-full",
+      "flex",
+      "items-center",
+      "justify-between",
+      "p-4",
+      "text-left",
+      "hover:bg-theme-border-subtle/50",
+      "transition-colors",
+    ];
+    for (const header of [sourceFeedbackHeader, descriptionHeader, artifactsHeader]) {
+      for (const cls of sharedHeaderClasses) {
+        expect(header).toHaveClass(cls);
+      }
+    }
+
+    const sharedH4Classes = [
+      "text-xs",
+      "font-medium",
+      "text-theme-muted",
+      "uppercase",
+      "tracking-wide",
+    ];
+    for (const header of [sourceFeedbackHeader, descriptionHeader, artifactsHeader]) {
+      const h4 = header?.querySelector("h4");
+      expect(h4).toBeInTheDocument();
+      for (const cls of sharedH4Classes) {
+        expect(h4).toHaveClass(cls);
+      }
+    }
+  });
+
   it("omits Description section when task has no description content", async () => {
     mockGet.mockResolvedValue({
       id: "epic-1.1",
