@@ -82,7 +82,7 @@ describe("theme-aware components", () => {
         </Provider>
       </ThemeProvider>
     );
-    await screen.findByText("No projects yet");
+    await screen.findByTestId("projects-table");
     // HomeScreen should use theme tokens; phase badges use theme-info-bg/text
     // (replaced from brand-50/brand-700 for dark mode compatibility)
     const html = document.body.innerHTML;
