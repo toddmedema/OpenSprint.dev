@@ -33,7 +33,7 @@
       "cliCommand": null
     }
   },
-  "reviewMode": "never",
+  "reviewMode": "always",
   "maxConcurrentCoders": 1,
   "unknownScopeStrategy": "optimistic"
 }
