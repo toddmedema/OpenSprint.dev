@@ -353,10 +353,6 @@ const planSlice = createSlice({
         if (idx >= 0) {
           state.plans[idx] = action.payload;
         }
-      })
-      // createPlan
-      .addCase(createPlan.fulfilled, (state, action) => {
-        state.plans.push(action.payload);
       });
   },
 });
