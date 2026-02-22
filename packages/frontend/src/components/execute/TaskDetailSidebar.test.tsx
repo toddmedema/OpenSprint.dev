@@ -900,5 +900,19 @@ describe("TaskDetailSidebar", () => {
         expect(h4).toHaveClass(cls);
       }
     }
+
+    // Verify outer wrapper (section container) has identical structure for spacing consistency
+    const sourceFeedbackSection = sourceFeedbackHeader?.closest(".border-b");
+    const descriptionSection = descriptionHeader?.closest(".border-b");
+    const artifactsSection = artifactsHeader?.closest(".border-b");
+    expect(sourceFeedbackSection).toHaveClass("border-theme-border");
+    expect(descriptionSection).toHaveClass("border-theme-border");
+    expect(artifactsSection).toHaveClass("border-theme-border");
+
+    // Verify chevron icon placement is identical (same span with text-xs)
+    for (const header of [sourceFeedbackHeader, descriptionHeader, artifactsHeader]) {
+      const chevron = header?.querySelector("span.text-theme-muted.text-xs");
+      expect(chevron).toBeInTheDocument();
+    }
   });
 });
