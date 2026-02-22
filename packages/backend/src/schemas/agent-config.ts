@@ -3,7 +3,7 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 
 /** Agent type: claude, cursor, or custom CLI (PRD §6.3) */
-const agentTypeSchema = z.enum(["claude", "cursor", "custom"]);
+const agentTypeSchema = z.enum(["claude", "claude-cli", "cursor", "custom"]);
 
 /**
  * Agent configuration schema (PRD §6.3, §10.2).
@@ -22,16 +22,21 @@ export type AgentConfigInput = z.infer<typeof agentConfigSchema>;
 /** Validate and parse agent config from request body */
 export function parseAgentConfig(
   value: unknown,
-  field: "planningAgent" | "codingAgent",
+  field: "planningAgent" | "codingAgent"
 ): AgentConfigInput {
   const result = agentConfigSchema.safeParse(value);
   if (!result.success) {
     const first = result.error.issues[0];
     const pathStr = first.path.length ? `${field}.${first.path.join(".")}` : field;
-    throw new AppError(400, ErrorCodes.INVALID_AGENT_CONFIG, `Invalid ${pathStr}: ${first.message}`, {
-      field,
-      validationError: first.message,
-    });
+    throw new AppError(
+      400,
+      ErrorCodes.INVALID_AGENT_CONFIG,
+      `Invalid ${pathStr}: ${first.message}`,
+      {
+        field,
+        validationError: first.message,
+      }
+    );
   }
   return result.data;
 }

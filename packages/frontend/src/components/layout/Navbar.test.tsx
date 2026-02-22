@@ -20,7 +20,7 @@ vi.mock("../../api/client", () => ({
       getSettings: (...args: unknown[]) => mockGetSettings(...args),
     },
     agents: { active: vi.fn().mockResolvedValue([]) },
-    env: { getKeys: vi.fn().mockResolvedValue({ anthropic: true, cursor: true }) },
+    env: { getKeys: vi.fn().mockResolvedValue({ anthropic: true, cursor: true, claudeCli: true }) },
   },
 }));
 
@@ -40,11 +40,14 @@ beforeEach(() => {
     length: 0,
     key: () => null,
   });
-  vi.stubGlobal("matchMedia", vi.fn(() => ({
-    matches: false,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  })));
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+  );
   Object.keys(storage).forEach((k) => delete storage[k]);
 });
 
@@ -54,7 +57,7 @@ function renderNavbar(ui: ReactElement, store = createStore()) {
       <Provider store={store}>
         <MemoryRouter>{ui}</MemoryRouter>
       </Provider>
-    </ThemeProvider>,
+    </ThemeProvider>
   );
 }
 
@@ -86,7 +89,18 @@ function createStore(executeTasks: Task[] = []) {
         loading: false,
         error: null,
       },
-      plan: { plans: [], dependencyGraph: null, selectedPlanId: null, chatMessages: {}, loading: false, decomposing: false, executingPlanId: null, reExecutingPlanId: null, archivingPlanId: null, error: null },
+      plan: {
+        plans: [],
+        dependencyGraph: null,
+        selectedPlanId: null,
+        chatMessages: {},
+        loading: false,
+        decomposing: false,
+        executingPlanId: null,
+        reExecutingPlanId: null,
+        archivingPlanId: null,
+        error: null,
+      },
       websocket: { connected: false, hilRequest: null, hilNotification: null, deliverToast: null },
     },
   });
@@ -131,17 +145,11 @@ describe("Navbar", () => {
       createdAt: "2025-01-01T00:00:00Z",
       updatedAt: "2025-01-01T00:00:00Z",
     };
-    const store = createStore([
-      { ...baseTask, id: "epic-1.1", kanbanColumn: "ready" } as Task,
-    ]);
+    const store = createStore([{ ...baseTask, id: "epic-1.1", kanbanColumn: "ready" } as Task]);
     const onPhaseChange = vi.fn();
     renderNavbar(
-      <Navbar
-        project={mockProject}
-        currentPhase="sketch"
-        onPhaseChange={onPhaseChange}
-      />,
-      store,
+      <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={onPhaseChange} />,
+      store
     );
 
     expect(screen.getByRole("button", { name: "Execute" })).toBeInTheDocument();
@@ -157,17 +165,11 @@ describe("Navbar", () => {
       createdAt: "2025-01-01T00:00:00Z",
       updatedAt: "2025-01-01T00:00:00Z",
     };
-    const store = createStore([
-      { ...baseTask, id: "epic-1.1", kanbanColumn: "blocked" } as Task,
-    ]);
+    const store = createStore([{ ...baseTask, id: "epic-1.1", kanbanColumn: "blocked" } as Task]);
     const onPhaseChange = vi.fn();
     renderNavbar(
-      <Navbar
-        project={mockProject}
-        currentPhase="sketch"
-        onPhaseChange={onPhaseChange}
-      />,
-      store,
+      <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={onPhaseChange} />,
+      store
     );
 
     expect(screen.getByRole("button", { name: "⚠️ Execute" })).toBeInTheDocument();
@@ -183,17 +185,11 @@ describe("Navbar", () => {
       createdAt: "2025-01-01T00:00:00Z",
       updatedAt: "2025-01-01T00:00:00Z",
     };
-    const store = createStore([
-      { ...baseTask, id: "epic-1.1", kanbanColumn: "ready" } as Task,
-    ]);
+    const store = createStore([{ ...baseTask, id: "epic-1.1", kanbanColumn: "ready" } as Task]);
     const onPhaseChange = vi.fn();
     renderNavbar(
-      <Navbar
-        project={mockProject}
-        currentPhase="execute"
-        onPhaseChange={onPhaseChange}
-      />,
-      store,
+      <Navbar project={mockProject} currentPhase="execute" onPhaseChange={onPhaseChange} />,
+      store
     );
 
     expect(screen.getByRole("button", { name: "Execute" })).toBeInTheDocument();
@@ -227,7 +223,7 @@ describe("Navbar", () => {
         project={mockProject}
         settingsOpen={true}
         onSettingsOpenChange={onSettingsOpenChange}
-      />,
+      />
     );
 
     await screen.findByText("Project Settings");

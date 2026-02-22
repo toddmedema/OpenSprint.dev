@@ -17,7 +17,6 @@ import { PlanService } from "./plan.service.js";
 import { PrdService } from "./prd.service.js";
 import type { HarmonizerPrdUpdate } from "./harmonizer.service.js";
 import { BeadsService } from "./beads.service.js";
-import { listTasksCache } from "./list-tasks-cache.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { generateShortFeedbackId } from "../utils/feedback-id.js";
@@ -440,8 +439,7 @@ export class FeedbackService {
               ? [String(parsed.suggestedTitle)]
               : [item.text.slice(0, 80)];
           // Never leave taskTitles empty when we have feedback text (AI may return task_titles: [])
-          item.taskTitles =
-            fromTaskTitles.length > 0 ? fromTaskTitles : [item.text.slice(0, 80)];
+          item.taskTitles = fromTaskTitles.length > 0 ? fromTaskTitles : [item.text.slice(0, 80)];
         }
 
         // Handle scope changes with HIL (PRD §7.4.2, §15.1) — category=scope OR is_scope_change=true
@@ -707,7 +705,6 @@ export class FeedbackService {
       }
     }
 
-    listTasksCache.invalidate(repoPath);
     return createdIds;
   }
 

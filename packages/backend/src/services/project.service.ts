@@ -24,7 +24,7 @@ import { ensureEasConfig } from "./eas-config.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import * as projectIndex from "./project-index.js";
-import { parseAgentConfig } from "../schemas/agent-config.js";
+import { parseAgentConfig, type AgentConfigInput } from "../schemas/agent-config.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 
@@ -124,16 +124,8 @@ export class ProjectService {
     }
 
     // Validate agent config schema
-    let planningAgent: {
-      type: "claude" | "cursor" | "custom";
-      model: string | null;
-      cliCommand: string | null;
-    };
-    let codingAgent: {
-      type: "claude" | "cursor" | "custom";
-      model: string | null;
-      cliCommand: string | null;
-    };
+    let planningAgent: AgentConfigInput;
+    let codingAgent: AgentConfigInput;
     try {
       planningAgent = parseAgentConfig(input.planningAgent, "planningAgent");
       codingAgent = parseAgentConfig(input.codingAgent, "codingAgent");

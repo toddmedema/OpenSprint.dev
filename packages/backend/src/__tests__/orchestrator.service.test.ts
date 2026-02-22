@@ -126,6 +126,7 @@ vi.mock("../services/beads.service.js", () => ({
   BeadsService: vi.fn().mockImplementation(() => ({
     ready: mockBeadsReady,
     readyWithStatusMap: vi.fn().mockImplementation(async () => ({ tasks: await mockBeadsReady() })),
+    sync: vi.fn().mockResolvedValue(undefined),
     getCumulativeAttemptsFromIssue: vi.fn().mockImplementation((issue: { labels?: string[] }) => {
       const labels = (issue?.labels ?? []) as string[];
       const attemptsLabel = labels.find((l: string) => /^attempts:\d+$/.test(l));
@@ -193,9 +194,11 @@ vi.mock("../services/branch-manager.js", () => {
       isRebaseInProgress: vi.fn().mockResolvedValue(false),
       commitWip: mockCommitWip,
       getWorktreeBasePath: vi.fn().mockReturnValue(path.join(os.tmpdir(), "opensprint-worktrees")),
-      getWorktreePath: vi.fn().mockImplementation((taskId: string) =>
-        path.join(os.tmpdir(), "opensprint-worktrees", taskId)
-      ),
+      getWorktreePath: vi
+        .fn()
+        .mockImplementation((taskId: string) =>
+          path.join(os.tmpdir(), "opensprint-worktrees", taskId)
+        ),
     })),
   };
 });

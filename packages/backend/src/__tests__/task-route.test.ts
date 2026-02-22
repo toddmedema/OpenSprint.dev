@@ -81,6 +81,7 @@ describe("Tasks REST - task-to-kanban-column mapping", () => {
       // Ship the plan: close gate directly (avoids PRD sync which invokes AI)
       const project = await projectService.getProject(projectId);
       await beads.close(project.repoPath, gateTaskId, "Plan approved for build");
+      await beads.sync(project.repoPath);
       // Update plan metadata so status is correct
       const plansDir = path.join(project.repoPath, ".opensprint", "plans");
       const metaPath = path.join(plansDir, `${plan.metadata.planId}.meta.json`);
@@ -100,6 +101,7 @@ describe("Tasks REST - task-to-kanban-column mapping", () => {
 
       // Close Task A -> done
       await beads.close(project.repoPath, taskAAfter.id, "Done");
+      await beads.sync(project.repoPath);
 
       // Task B should now be ready (only blocker is done)
       const tasksFinalRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
@@ -145,6 +147,7 @@ Test task directory creation.
       const gateTaskId = plan.metadata.gateTaskId;
       const project = await projectService.getProject(projectId);
       await beads.close(project.repoPath, gateTaskId, "Plan approved for build");
+      await beads.sync(project.repoPath);
 
       const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       const tasks = tasksRes.body.data ?? [];
@@ -215,6 +218,7 @@ Test review prompt generation.
       const gateTaskId = plan.metadata.gateTaskId;
       const project = await projectService.getProject(projectId);
       await beads.close(project.repoPath, gateTaskId, "Plan shipped");
+      await beads.sync(project.repoPath);
 
       const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       const tasks = tasksRes.body.data ?? [];
@@ -261,6 +265,7 @@ Test review prompt generation.
     const gateTaskId = plan.metadata.gateTaskId;
     const project = await projectService.getProject(projectId);
     await beads.close(project.repoPath, gateTaskId, "Plan approved");
+    await beads.sync(project.repoPath);
 
     const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
     const tasks = tasksRes.body.data ?? [];
@@ -308,6 +313,7 @@ Test review prompt generation.
     const gateTaskId = plan.metadata.gateTaskId;
     const project = await projectService.getProject(projectId);
     await beads.close(project.repoPath, gateTaskId, "Plan approved");
+    await beads.sync(project.repoPath);
 
     const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
     const tasks = tasksRes.body.data ?? [];
@@ -354,6 +360,7 @@ Test review prompt generation.
 
       // Add discovered-from dependency: child -> feedback source
       await beads.addDependency(repoPath, childBead.id, sourceBead.id, "discovered-from");
+      await beads.sync(repoPath);
 
       const res = await request(app).get(
         `${API_PREFIX}/projects/${projectId}/tasks/${childBead.id}`
@@ -379,6 +386,7 @@ Test review prompt generation.
         priority: 4,
         description: "Feedback ID: fb-direct-source",
       });
+      await beads.sync(repoPath);
 
       const res = await request(app).get(
         `${API_PREFIX}/projects/${projectId}/tasks/${sourceBead.id}`
@@ -403,6 +411,7 @@ Test review prompt generation.
         priority: 1,
         description: "Test task for Server-Timing header",
       });
+      await beads.sync(repoPath);
 
       const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${bead.id}`);
       expect(res.status).toBe(200);
@@ -422,6 +431,7 @@ Test review prompt generation.
       priority: 2,
       description: "Task to test priority update",
     });
+    await beads.sync(repoPath);
 
     const res = await request(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${bead.id}`)
@@ -446,6 +456,7 @@ Test review prompt generation.
       type: "task",
       priority: 2,
     });
+    await beads.sync(repoPath);
 
     const res = await request(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${bead.id}`)

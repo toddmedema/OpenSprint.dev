@@ -6,7 +6,7 @@ import { promisify } from "util";
 import type { AgentConfig } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
-import { getErrorMessage } from "../utils/error-utils.js";
+import { getErrorMessage, getExecErrorShape } from "../utils/error-utils.js";
 import { registerAgentProcess, unregisterAgentProcess } from "./agent-process-registry.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -26,8 +26,30 @@ function colorizeRole(role: string): string {
   return role;
 }
 
+/** Build full prompt from system prompt, conversation history, and final user message (Human/Assistant format). */
+function buildFullPrompt(options: {
+  systemPrompt?: string;
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
+  prompt: string;
+}): string {
+  let full = "";
+  if (options.systemPrompt) {
+    full += options.systemPrompt + "\n\n";
+  }
+  if (options.conversationHistory) {
+    for (const msg of options.conversationHistory) {
+      full += `${msg.role === "user" ? "Human" : "Assistant"}: ${msg.content}\n\n`;
+    }
+  }
+  full += `Human: ${options.prompt}\n\nAssistant:`;
+  return full;
+}
+
 /** Format raw agent errors into user-friendly messages with remediation hints */
-function formatAgentError(agentType: "claude" | "cursor" | "custom", raw: string): string {
+function formatAgentError(
+  agentType: "claude" | "claude-cli" | "cursor" | "custom",
+  raw: string
+): string {
   const lower = raw.toLowerCase();
 
   // Cursor: authentication
@@ -47,7 +69,7 @@ function formatAgentError(agentType: "claude" | "cursor" | "custom", raw: string
     if (agentType === "cursor") {
       return "Cursor agent CLI was not found. Install: curl https://cursor.com/install -fsS | bash. Then restart your terminal.";
     }
-    if (agentType === "claude") {
+    if (agentType === "claude" || agentType === "claude-cli") {
       return "claude CLI was not found. Install it from https://docs.anthropic.com/cli or via npm: npm install -g @anthropic-ai/cli";
     }
   }
@@ -104,6 +126,7 @@ export class AgentClient {
   async invoke(options: AgentInvokeOptions): Promise<AgentResponse> {
     switch (options.config.type) {
       case "claude":
+      case "claude-cli":
         return this.invokeClaudeCli(options);
       case "cursor":
         return this.invokeCursorCli(options);
@@ -144,6 +167,7 @@ export class AgentClient {
 
     switch (config.type) {
       case "claude":
+      case "claude-cli":
         command = "claude";
         args = ["--task-file", taskFilePath];
         if (config.model) {
@@ -324,7 +348,7 @@ export class AgentClient {
       const friendly =
         err.code === "ENOENT" && config.type === "cursor"
           ? "Cursor agent not found. Install: curl https://cursor.com/install -fsS | bash"
-          : err.code === "ENOENT" && config.type === "claude"
+          : err.code === "ENOENT" && (config.type === "claude" || config.type === "claude-cli")
             ? "claude CLI not found. Install from https://docs.anthropic.com/cli"
             : err.message;
       onOutput(`[Agent error: ${friendly}]\n`);
@@ -362,17 +386,7 @@ export class AgentClient {
 
   private async invokeClaudeCli(options: AgentInvokeOptions): Promise<AgentResponse> {
     const { config, prompt, systemPrompt, conversationHistory } = options;
-
-    let fullPrompt = "";
-    if (systemPrompt) {
-      fullPrompt += systemPrompt + "\n\n";
-    }
-    if (conversationHistory) {
-      for (const msg of conversationHistory) {
-        fullPrompt += `${msg.role === "user" ? "Human" : "Assistant"}: ${msg.content}\n\n`;
-      }
-    }
-    fullPrompt += `Human: ${prompt}\n\nAssistant:`;
+    const fullPrompt = buildFullPrompt({ systemPrompt, conversationHistory, prompt });
 
     const args = ["--print", fullPrompt];
     if (config.model) {
@@ -399,8 +413,9 @@ export class AgentClient {
       }
       return { content };
     } catch (error: unknown) {
-      const err = error as { message: string; stderr?: string };
-      const raw = err.stderr || err.message;
+      const shape = getExecErrorShape(error);
+      const raw =
+        shape.stderr || shape.message || (error instanceof Error ? error.message : String(error));
       throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, formatAgentError("claude", raw), {
         agentType: "claude",
         raw,
@@ -423,34 +438,22 @@ export class AgentClient {
       let stdout = "";
       let stderr = "";
 
-      const killChild = () => {
+      const killChild = (signal: "SIGTERM" | "SIGKILL") => {
         if (child.killed) return;
         try {
           if (options?.processGroup && child.pid) {
-            process.kill(-child.pid, "SIGTERM");
+            process.kill(-child.pid, signal);
           } else {
-            child.kill("SIGTERM");
+            child.kill(signal);
           }
         } catch {
-          child.kill("SIGTERM");
-        }
-      };
-      const killChildForce = () => {
-        if (child.killed) return;
-        try {
-          if (options?.processGroup && child.pid) {
-            process.kill(-child.pid, "SIGKILL");
-          } else {
-            child.kill("SIGKILL");
-          }
-        } catch {
-          child.kill("SIGKILL");
+          child.kill(signal);
         }
       };
       const timeout = setTimeout(() => {
         if (child.killed) return;
-        killChild();
-        setTimeout(killChildForce, 3000);
+        killChild("SIGTERM");
+        setTimeout(() => killChild("SIGKILL"), 3000);
         if (stdout.trim()) {
           resolve(stdout.trim());
         } else {
@@ -496,18 +499,7 @@ export class AgentClient {
 
   private async invokeCursorCli(options: AgentInvokeOptions): Promise<AgentResponse> {
     const { config, prompt, systemPrompt, conversationHistory } = options;
-
-    // Build full prompt (Cursor agent uses --print with positional prompt, not --input)
-    let fullPrompt = "";
-    if (systemPrompt) {
-      fullPrompt += systemPrompt + "\n\n";
-    }
-    if (conversationHistory) {
-      for (const msg of conversationHistory) {
-        fullPrompt += `${msg.role === "user" ? "Human" : "Assistant"}: ${msg.content}\n\n`;
-      }
-    }
-    fullPrompt += `Human: ${prompt}\n\nAssistant:`;
+    const fullPrompt = buildFullPrompt({ systemPrompt, conversationHistory, prompt });
 
     // Use spawn (not exec) to avoid shell interpretation of PRD content—backticks,
     // $, quotes in the prompt can crash or hang the shell. Spawn passes the prompt
@@ -540,18 +532,18 @@ export class AgentClient {
       const appDetails = isAppErr
         ? (error.details as Record<string, unknown> | undefined)
         : undefined;
+      const execShape = getExecErrorShape(error);
       const isTimeout = isAppErr
         ? Boolean(appDetails?.isTimeout)
-        : Boolean(
-            (error as { killed?: boolean }).killed &&
-            (error as { signal?: string }).signal === "SIGTERM"
-          );
+        : Boolean(execShape.killed && execShape.signal === "SIGTERM");
 
       const raw = isTimeout
         ? `The Cursor agent timed out after 5 minutes. Try a faster model (e.g. sonnet-4.6-thinking) in Project Settings, or use Claude instead.`
         : isAppErr
           ? error.message
-          : (error as { stderr?: string }).stderr || (error as Error).message;
+          : execShape.stderr ||
+            execShape.message ||
+            (error instanceof Error ? error.message : String(error));
 
       log.error("Cursor CLI failed", { raw, isTimeout });
       throw new AppError(

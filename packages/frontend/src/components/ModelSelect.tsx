@@ -25,7 +25,7 @@ export function ModelSelect({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (provider !== "claude" && provider !== "cursor") {
+    if (provider !== "claude" && provider !== "claude-cli" && provider !== "cursor") {
       setModels([]);
       setError(null);
       return;
@@ -52,13 +52,14 @@ export function ModelSelect({
         onChange={(e) => onChange(e.target.value || null)}
         placeholder="CLI command handles model"
         disabled={disabled}
+        aria-label="Custom CLI command"
       />
     );
   }
 
   if (loading) {
     return (
-      <select className={className} disabled>
+      <select className={className} disabled aria-label="Model selection" aria-busy="true">
         <option>Loading models…</option>
       </select>
     );
@@ -68,22 +69,26 @@ export function ModelSelect({
     const hint =
       provider === "claude"
         ? "Check ANTHROPIC_API_KEY in .env"
-        : provider === "cursor"
-          ? "Check CURSOR_API_KEY in .env"
-          : "";
+        : provider === "claude-cli"
+          ? "Ensure claude CLI is installed"
+          : provider === "cursor"
+            ? "Check CURSOR_API_KEY in .env"
+            : "";
     return (
-      <div className="space-y-1">
-        <select className={className} disabled>
+      <div className="space-y-1" role="group" aria-label="Model selection">
+        <select className={className} disabled aria-label="Model selection" aria-invalid="true">
           <option value="">No models ({hint})</option>
         </select>
-        <p className="text-xs text-theme-warning-text">{error}</p>
+        <p className="text-xs text-theme-warning-text" role="alert" aria-live="polite">
+          {error}
+        </p>
       </div>
     );
   }
 
   if (models.length === 0) {
     return (
-      <select className={className} disabled>
+      <select className={className} disabled aria-label="Model selection">
         <option value="">No models available</option>
       </select>
     );
@@ -98,6 +103,7 @@ export function ModelSelect({
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value || null)}
       disabled={disabled}
+      aria-label="Model selection"
     >
       <option value="">Select model</option>
       {hasValue && !valueInList && <option value={value!}>{value}</option>}

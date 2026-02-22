@@ -13,6 +13,7 @@ import type {
   AgentConfig,
   PlanComplexity,
   ReviewMode,
+  UnknownScopeStrategy,
 } from "@opensprint/shared";
 import { DEFAULT_HIL_CONFIG, DEFAULT_REVIEW_MODE } from "@opensprint/shared";
 
@@ -54,7 +55,11 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
   const [settings, setSettings] = useState<ProjectSettings | null>(null);
 
   // API key status (for agents tab)
-  const [envKeys, setEnvKeys] = useState<{ anthropic: boolean; cursor: boolean } | null>(null);
+  const [envKeys, setEnvKeys] = useState<{
+    anthropic: boolean;
+    cursor: boolean;
+    claudeCli: boolean;
+  } | null>(null);
   const [savingKey, setSavingKey] = useState<"ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | null>(null);
   const [keyInput, setKeyInput] = useState<{ anthropic: string; cursor: string }>({
     anthropic: "",
@@ -149,6 +154,8 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
           hilConfig,
           testCommand: settings?.testCommand ?? undefined,
           reviewMode: settings?.reviewMode ?? DEFAULT_REVIEW_MODE,
+          maxConcurrentCoders: settings?.maxConcurrentCoders ?? 1,
+          unknownScopeStrategy: settings?.unknownScopeStrategy ?? "optimistic",
         }),
       ]);
       onSaved?.();
@@ -343,81 +350,133 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                     ]);
                     const needsAnthropic =
                       envKeys && !envKeys.anthropic && selectedTypes.has("claude");
-                    const needsCursor =
-                      envKeys && !envKeys.cursor && selectedTypes.has("cursor");
-                    return (needsAnthropic || needsCursor) ? (
+                    const needsCursor = envKeys && !envKeys.cursor && selectedTypes.has("cursor");
+                    const claudeCliMissing =
+                      envKeys && !envKeys.claudeCli && selectedTypes.has("claude-cli");
+                    return (
                       <>
-                        <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
-                          <p className="text-sm text-theme-warning-text">
-                            <strong>API key required:</strong>{" "}
-                            {needsAnthropic && needsCursor
-                              ? <>Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and <code className="font-mono text-xs">CURSOR_API_KEY</code> to continue.</>
-                              : needsAnthropic
-                                ? <>Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> to use Claude. Get one from{" "}
-                                  <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">Anthropic Console</a>.</>
-                                : <>Add your <code className="font-mono text-xs">CURSOR_API_KEY</code> to use Cursor. Get one from{" "}
-                                  <a href="https://cursor.com/settings" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">Cursor → Integrations → User API Keys</a>.</>
-                            }
-                          </p>
-                        </div>
-                        <div className="space-y-3">
-                          {needsAnthropic && (
-                            <div className="flex gap-2 items-end">
-                              <div className="flex-1">
-                                <label className="block text-xs font-medium text-theme-muted mb-1">
-                                  ANTHROPIC_API_KEY (Claude)
-                                </label>
-                                <input
-                                  type="password"
-                                  className="input font-mono text-sm"
-                                  placeholder="sk-ant-..."
-                                  value={keyInput.anthropic}
-                                  onChange={(e) =>
-                                    setKeyInput((p) => ({ ...p, anthropic: e.target.value }))
-                                  }
-                                  autoComplete="off"
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleSaveKey("ANTHROPIC_API_KEY")}
-                                disabled={!keyInput.anthropic.trim() || savingKey !== null}
-                                className="btn-primary text-sm disabled:opacity-50"
-                              >
-                                {savingKey === "ANTHROPIC_API_KEY" ? "Saving…" : "Save"}
-                              </button>
+                        {(needsAnthropic || needsCursor) && (
+                          <>
+                            <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
+                              <p className="text-sm text-theme-warning-text">
+                                <strong>API key required:</strong>{" "}
+                                {needsAnthropic && needsCursor ? (
+                                  <>
+                                    Add your{" "}
+                                    <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and{" "}
+                                    <code className="font-mono text-xs">CURSOR_API_KEY</code> to
+                                    continue.
+                                  </>
+                                ) : needsAnthropic ? (
+                                  <>
+                                    Add your{" "}
+                                    <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> to
+                                    use Claude (API). Get one from{" "}
+                                    <a
+                                      href="https://console.anthropic.com/"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="underline hover:opacity-80"
+                                    >
+                                      Anthropic Console
+                                    </a>
+                                    .
+                                  </>
+                                ) : (
+                                  <>
+                                    Add your{" "}
+                                    <code className="font-mono text-xs">CURSOR_API_KEY</code> to use
+                                    Cursor. Get one from{" "}
+                                    <a
+                                      href="https://cursor.com/settings"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="underline hover:opacity-80"
+                                    >
+                                      Cursor → Integrations → User API Keys
+                                    </a>
+                                    .
+                                  </>
+                                )}
+                              </p>
                             </div>
-                          )}
-                          {needsCursor && (
-                            <div className="flex gap-2 items-end">
-                              <div className="flex-1">
-                                <label className="block text-xs font-medium text-theme-muted mb-1">
-                                  CURSOR_API_KEY
-                                </label>
-                                <input
-                                  type="password"
-                                  className="input font-mono text-sm"
-                                  placeholder="key_..."
-                                  value={keyInput.cursor}
-                                  onChange={(e) =>
-                                    setKeyInput((p) => ({ ...p, cursor: e.target.value }))
-                                  }
-                                  autoComplete="off"
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleSaveKey("CURSOR_API_KEY")}
-                                disabled={!keyInput.cursor.trim() || savingKey !== null}
-                                className="btn-primary text-sm disabled:opacity-50"
-                              >
-                                {savingKey === "CURSOR_API_KEY" ? "Saving…" : "Save"}
-                              </button>
+                            <div className="space-y-3">
+                              {needsAnthropic && (
+                                <div className="flex gap-2 items-end">
+                                  <div className="flex-1">
+                                    <label className="block text-xs font-medium text-theme-muted mb-1">
+                                      ANTHROPIC_API_KEY (Claude API)
+                                    </label>
+                                    <input
+                                      type="password"
+                                      className="input font-mono text-sm"
+                                      placeholder="sk-ant-..."
+                                      value={keyInput.anthropic}
+                                      onChange={(e) =>
+                                        setKeyInput((p) => ({ ...p, anthropic: e.target.value }))
+                                      }
+                                      autoComplete="off"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveKey("ANTHROPIC_API_KEY")}
+                                    disabled={!keyInput.anthropic.trim() || savingKey !== null}
+                                    className="btn-primary text-sm disabled:opacity-50"
+                                  >
+                                    {savingKey === "ANTHROPIC_API_KEY" ? "Saving…" : "Save"}
+                                  </button>
+                                </div>
+                              )}
+                              {needsCursor && (
+                                <div className="flex gap-2 items-end">
+                                  <div className="flex-1">
+                                    <label className="block text-xs font-medium text-theme-muted mb-1">
+                                      CURSOR_API_KEY
+                                    </label>
+                                    <input
+                                      type="password"
+                                      className="input font-mono text-sm"
+                                      placeholder="key_..."
+                                      value={keyInput.cursor}
+                                      onChange={(e) =>
+                                        setKeyInput((p) => ({ ...p, cursor: e.target.value }))
+                                      }
+                                      autoComplete="off"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveKey("CURSOR_API_KEY")}
+                                    disabled={!keyInput.cursor.trim() || savingKey !== null}
+                                    className="btn-primary text-sm disabled:opacity-50"
+                                  >
+                                    {savingKey === "CURSOR_API_KEY" ? "Saving…" : "Save"}
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
+                          </>
+                        )}
+                        {claudeCliMissing && (
+                          <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
+                            <p className="text-sm text-theme-warning-text">
+                              <strong>Claude CLI not found.</strong> Install it from{" "}
+                              <a
+                                href="https://docs.anthropic.com/en/docs/claude-code/overview"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline hover:opacity-80"
+                              >
+                                docs.anthropic.com
+                              </a>{" "}
+                              and run <code className="font-mono text-xs">claude login</code> to
+                              authenticate.
+                            </p>
+                          </div>
+                        )}
                       </>
-                    ) : null;
+                    );
                   })()}
                   <div>
                     <h3 className="text-sm font-semibold text-theme-text mb-3">
@@ -441,7 +500,8 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                               })
                             }
                           >
-                            <option value="claude">Claude</option>
+                            <option value="claude">Claude (API)</option>
+                            <option value="claude-cli">Claude (CLI)</option>
                             <option value="cursor">Cursor</option>
                             <option value="custom">Custom CLI</option>
                           </select>
@@ -501,7 +561,8 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                               updateCodingAgent({ type: e.target.value as AgentType })
                             }
                           >
-                            <option value="claude">Claude</option>
+                            <option value="claude">Claude (API)</option>
+                            <option value="claude-cli">Claude (CLI)</option>
                             <option value="cursor">Cursor</option>
                             <option value="custom">Custom CLI</option>
                           </select>
@@ -675,7 +736,8 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                                       })
                                     }
                                   >
-                                    <option value="claude">Claude</option>
+                                    <option value="claude">Claude (API)</option>
+                                    <option value="claude-cli">Claude (CLI)</option>
                                     <option value="cursor">Cursor</option>
                                     <option value="custom">Custom CLI</option>
                                   </select>
@@ -721,6 +783,71 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+                  <hr />
+                  <div>
+                    <h3 className="text-sm font-semibold text-theme-text mb-1">Parallelism</h3>
+                    <p className="text-xs text-theme-muted mb-3">
+                      Run multiple coding agents simultaneously on independent tasks. Higher values
+                      speed up builds but use more resources.
+                    </p>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-2">
+                          Max Concurrent Coders:{" "}
+                          <span className="font-bold">{settings?.maxConcurrentCoders ?? 1}</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={1}
+                          max={10}
+                          step={1}
+                          value={settings?.maxConcurrentCoders ?? 1}
+                          onChange={(e) =>
+                            setSettings((s) =>
+                              s ? { ...s, maxConcurrentCoders: Number(e.target.value) } : null
+                            )
+                          }
+                          className="w-full accent-brand-600"
+                          data-testid="max-concurrent-coders-slider"
+                        />
+                        <div className="flex justify-between text-xs text-theme-muted mt-1">
+                          <span>1 (sequential)</span>
+                          <span>10</span>
+                        </div>
+                      </div>
+                      {(settings?.maxConcurrentCoders ?? 1) > 1 && (
+                        <div>
+                          <label className="block text-sm font-medium text-theme-text mb-1">
+                            Unknown Scope Strategy
+                          </label>
+                          <p className="text-xs text-theme-muted mb-2">
+                            When file scope can&apos;t be predicted for a task, should the scheduler
+                            serialize it or run it in parallel?
+                          </p>
+                          <select
+                            className="input"
+                            value={settings?.unknownScopeStrategy ?? "optimistic"}
+                            onChange={(e) =>
+                              setSettings((s) =>
+                                s
+                                  ? {
+                                      ...s,
+                                      unknownScopeStrategy: e.target.value as UnknownScopeStrategy,
+                                    }
+                                  : null
+                              )
+                            }
+                            data-testid="unknown-scope-strategy-select"
+                          >
+                            <option value="optimistic">
+                              Optimistic (parallelize, rely on merger)
+                            </option>
+                            <option value="conservative">Conservative (serialize)</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

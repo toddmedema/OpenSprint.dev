@@ -1,6 +1,5 @@
 import fs from "fs/promises";
 import { BeadsService, type BeadsIssue } from "./beads.service.js";
-import { listTasksCache } from "./list-tasks-cache.js";
 import { BranchManager } from "./branch-manager.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { createLogger } from "../utils/logger.js";
@@ -121,7 +120,7 @@ export class OrphanRecoveryService {
       status: "open",
       assignee: "",
     });
-    listTasksCache.invalidate(repoPath);
+    await this.beads.sync(repoPath);
   }
 }
 

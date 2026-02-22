@@ -163,11 +163,56 @@ describe("SketchPhase with sketchSlice", () => {
 
       const textarea = screen.getByRole("textbox");
       await user.type(textarea, "A todo app");
-      await user.click(screen.getByTitle("Sketch it"));
+      await user.click(screen.getByTestId("sketch-it-button"));
 
       await waitFor(() => {
-        expect(mockChatSend).toHaveBeenCalledWith("proj-1", "A todo app", "sketch", undefined);
+        expect(mockChatSend).toHaveBeenCalledWith(
+          "proj-1",
+          "A todo app",
+          "sketch",
+          undefined,
+          undefined
+        );
       });
+    });
+
+    it("disables Sketch it button when input has fewer than 10 characters", async () => {
+      const user = userEvent.setup();
+      renderSketchPhase();
+      const textarea = screen.getByRole("textbox");
+      await user.type(textarea, "short");
+      expect(screen.getByTestId("sketch-it-button")).toBeDisabled();
+      await user.type(textarea, " more"); // "short more" = 10 chars
+      await waitFor(() => {
+        expect(screen.getByTestId("sketch-it-button")).not.toBeDisabled();
+      });
+    });
+
+    it("shows loading spinner in Sketch it button when sending", async () => {
+      let resolveSend: (value: { message: string; prdChanges?: unknown[] }) => void;
+      mockChatSend.mockImplementation(
+        () =>
+          new Promise((r) => {
+            resolveSend = r;
+          })
+      );
+
+      const user = userEvent.setup();
+      renderSketchPhase();
+      const textarea = screen.getByRole("textbox");
+      await user.type(textarea, "A todo app with many features");
+      await user.click(screen.getByTestId("sketch-it-button"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("sketch-it-spinner")).toBeInTheDocument();
+      });
+
+      resolveSend!({ message: "Here is your PRD" });
+    });
+
+    it("empty state shows image attach button", () => {
+      renderSketchPhase();
+      expect(screen.getByTestId("sketch-attach-images")).toBeInTheDocument();
     });
 
     it("submits on Enter key (without Shift)", async () => {
@@ -178,7 +223,13 @@ describe("SketchPhase with sketchSlice", () => {
       await user.keyboard("{Enter}");
 
       await waitFor(() => {
-        expect(mockChatSend).toHaveBeenCalledWith("proj-1", "A fitness app", "sketch", undefined);
+        expect(mockChatSend).toHaveBeenCalledWith(
+          "proj-1",
+          "A fitness app",
+          "sketch",
+          undefined,
+          undefined
+        );
       });
     });
 
@@ -195,7 +246,7 @@ describe("SketchPhase with sketchSlice", () => {
       renderSketchPhase();
       const textarea = screen.getByRole("textbox");
       await user.type(textarea, "A todo app");
-      await user.click(screen.getByTitle("Sketch it"));
+      await user.click(screen.getByTestId("sketch-it-button"));
 
       await waitFor(() => {
         expect(screen.getByText("Generating your PRD...")).toBeInTheDocument();
@@ -245,10 +296,10 @@ describe("SketchPhase with sketchSlice", () => {
       renderSketchPhase();
       const textarea = screen.getByRole("textbox");
       await user.type(textarea, "A todo app");
-      await user.click(screen.getByTitle("Sketch it"));
+      await user.click(screen.getByTestId("sketch-it-button"));
 
       await waitFor(() => {
-        expect(screen.getByTitle("Sketch it")).toBeDisabled();
+        expect(screen.getByTestId("sketch-it-button")).toBeDisabled();
         expect(screen.getByText("Upload existing PRD").closest("button")).toBeDisabled();
       });
 
@@ -263,7 +314,7 @@ describe("SketchPhase with sketchSlice", () => {
       renderSketchPhase(store);
       const textarea = screen.getByRole("textbox");
       await user.type(textarea, "A todo app");
-      await user.click(screen.getByTitle("Sketch it"));
+      await user.click(screen.getByTestId("sketch-it-button"));
 
       await waitFor(() => {
         const state = store.getState();

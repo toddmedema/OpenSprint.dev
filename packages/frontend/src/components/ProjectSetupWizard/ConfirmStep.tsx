@@ -1,15 +1,18 @@
-import { TEST_FRAMEWORKS } from "@opensprint/shared";
+import { TEST_FRAMEWORKS, type AgentConfig, type UnknownScopeStrategy } from "@opensprint/shared";
 import type { ProjectMetadataState } from "./ProjectMetadataStep";
 
 export interface ConfirmStepProps {
   metadata: ProjectMetadataState;
   repoPath: string;
-  planningAgent: { type: string; model: string; cliCommand: string };
-  codingAgent: { type: string; model: string; cliCommand: string };
+  planningAgent: AgentConfig;
+  codingAgent: AgentConfig;
   deploymentMode: string;
   customDeployCommand: string;
   customDeployWebhook: string;
   testFramework: string;
+  maxConcurrentCoders: number;
+  /** Shown in summary when maxConcurrentCoders > 1 */
+  unknownScopeStrategy?: UnknownScopeStrategy;
 }
 
 export function ConfirmStep({
@@ -21,20 +24,35 @@ export function ConfirmStep({
   customDeployCommand,
   customDeployWebhook,
   testFramework,
+  maxConcurrentCoders,
+  unknownScopeStrategy,
 }: ConfirmStepProps) {
+  const providerDisplayName = (type: string) => {
+    switch (type) {
+      case "claude":
+        return "Claude (API)";
+      case "claude-cli":
+        return "Claude (CLI)";
+      case "cursor":
+        return "Cursor";
+      default:
+        return type;
+    }
+  };
+
   const planningLabel =
     planningAgent.type === "custom"
-      ? planningAgent.cliCommand.trim()
-        ? `Custom: ${planningAgent.cliCommand.trim()}`
+      ? (planningAgent.cliCommand ?? "").trim()
+        ? `Custom: ${(planningAgent.cliCommand ?? "").trim()}`
         : "Custom (not configured)"
-      : `${planningAgent.type}${planningAgent.model ? ` (${planningAgent.model})` : ""}`;
+      : `${providerDisplayName(planningAgent.type)}${planningAgent.model ? ` — ${planningAgent.model}` : ""}`;
 
   const codingLabel =
     codingAgent.type === "custom"
-      ? codingAgent.cliCommand.trim()
-        ? `Custom: ${codingAgent.cliCommand.trim()}`
+      ? (codingAgent.cliCommand ?? "").trim()
+        ? `Custom: ${(codingAgent.cliCommand ?? "").trim()}`
         : "Custom (not configured)"
-      : `${codingAgent.type}${codingAgent.model ? ` (${codingAgent.model})` : ""}`;
+      : `${providerDisplayName(codingAgent.type)}${codingAgent.model ? ` — ${codingAgent.model}` : ""}`;
 
   const deploymentLabel =
     deploymentMode === "custom"
@@ -78,9 +96,22 @@ export function ConfirmStep({
           <dt className="text-theme-muted">Test Framework</dt>
           <dd className="font-medium">{testLabel}</dd>
         </div>
+        <div className="flex justify-between">
+          <dt className="text-theme-muted">Concurrent Coders</dt>
+          <dd className="font-medium">
+            {maxConcurrentCoders === 1 ? "1 (sequential)" : maxConcurrentCoders}
+          </dd>
+        </div>
+        {maxConcurrentCoders > 1 && unknownScopeStrategy != null && (
+          <div className="flex justify-between">
+            <dt className="text-theme-muted">Unknown scope strategy</dt>
+            <dd className="font-medium capitalize">{unknownScopeStrategy}</dd>
+          </div>
+        )}
       </dl>
       <p className="text-xs text-theme-muted pt-2 border-t border-theme-border">
-        On create: beads will be initialized with auto-flush and auto-commit disabled (orchestrator manages persistence).
+        On create: beads will be initialized with auto-flush and auto-commit disabled (orchestrator
+        manages persistence).
         <code className="font-mono">.opensprint/orchestrator-state.json</code> and{" "}
         <code className="font-mono">.opensprint/worktrees/</code> will be added to .gitignore.
       </p>

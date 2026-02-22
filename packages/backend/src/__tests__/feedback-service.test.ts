@@ -4,7 +4,6 @@ import path from "path";
 import os from "os";
 import { FeedbackService } from "../services/feedback.service.js";
 import { ProjectService } from "../services/project.service.js";
-import { listTasksCache } from "../services/list-tasks-cache.js";
 import { DEFAULT_HIL_CONFIG, OPENSPRINT_PATHS } from "@opensprint/shared";
 
 const mockInvoke = vi.fn();
@@ -91,10 +90,16 @@ const mockBeadsCreate = vi.fn().mockImplementation(() => {
     beadsCreateCallCount === 1 ? "mock-feedback-source-1" : `mock-task-${beadsCreateCallCount - 1}`;
   return Promise.resolve({ id, title: "Mock", status: "open" });
 });
-const mockBeadsCreateWithRetry = vi.fn().mockImplementation(
-  (repoPath: string, title: string, options: unknown, _opts?: { fallbackToStandalone?: boolean }) =>
-    mockBeadsCreate(repoPath, title, options)
-);
+const mockBeadsCreateWithRetry = vi
+  .fn()
+  .mockImplementation(
+    (
+      repoPath: string,
+      title: string,
+      options: unknown,
+      _opts?: { fallbackToStandalone?: boolean }
+    ) => mockBeadsCreate(repoPath, title, options)
+  );
 const mockBeadsAddDependency = vi.fn().mockResolvedValue(undefined);
 
 let feedbackIdSequence: string[] = [];
@@ -353,26 +358,6 @@ describe("FeedbackService", () => {
     expect(taskCreateCalls).toHaveLength(2);
     expect(taskCreateCalls[0][2]).toMatchObject({ type: "feature", priority: 3 });
     expect(taskCreateCalls[1][2]).toMatchObject({ type: "feature", priority: 3 });
-  });
-
-  it("invalidates listTasks cache when creating beads tasks from feedback", async () => {
-    feedbackIdSequence = ["cache1"];
-    mockInvoke.mockResolvedValue({
-      content: JSON.stringify({
-        category: "bug",
-        mappedPlanId: null,
-        task_titles: ["Fix login bug"],
-      }),
-    });
-
-    const invalidateSpy = vi.spyOn(listTasksCache, "invalidate");
-
-    const item = await feedbackService.submitFeedback(projectId, { text: "Login broken" });
-    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
-
-    const repoPath = path.join(tempDir, "my-project");
-    expect(invalidateSpy).toHaveBeenCalledWith(repoPath);
-    invalidateSpy.mockRestore();
   });
 
   it("should use AI-suggested priority when userPriority is null/undefined", async () => {
@@ -1144,11 +1129,7 @@ describe("FeedbackService", () => {
         JSON.stringify(parent),
         "utf-8"
       );
-      await fs.writeFile(
-        path.join(feedbackDir, "fb-child-1.json"),
-        JSON.stringify(child),
-        "utf-8"
-      );
+      await fs.writeFile(path.join(feedbackDir, "fb-child-1.json"), JSON.stringify(child), "utf-8");
 
       const { broadcastToProject } = await import("../websocket/index.js");
 
@@ -1221,11 +1202,7 @@ describe("FeedbackService", () => {
         JSON.stringify(parent),
         "utf-8"
       );
-      await fs.writeFile(
-        path.join(feedbackDir, "fb-child-2.json"),
-        JSON.stringify(child),
-        "utf-8"
-      );
+      await fs.writeFile(path.join(feedbackDir, "fb-child-2.json"), JSON.stringify(child), "utf-8");
       await fs.writeFile(
         path.join(feedbackDir, "fb-grandchild-2.json"),
         JSON.stringify(grandchild),
@@ -1270,11 +1247,7 @@ describe("FeedbackService", () => {
         JSON.stringify(parent),
         "utf-8"
       );
-      await fs.writeFile(
-        path.join(feedbackDir, "fb-child-3.json"),
-        JSON.stringify(child),
-        "utf-8"
-      );
+      await fs.writeFile(path.join(feedbackDir, "fb-child-3.json"), JSON.stringify(child), "utf-8");
 
       await feedbackService.resolveFeedback(projectId, "fb-parent-3");
 

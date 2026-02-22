@@ -213,7 +213,7 @@ describe("sketchSlice", () => {
       expect(state.messages).toHaveLength(1);
       expect(state.messages[0].role).toBe("assistant");
       expect(state.messages[0].content).toBe("Here is my response");
-      expect(api.chat.send).toHaveBeenCalledWith("proj-1", "hello", "sketch", undefined);
+      expect(api.chat.send).toHaveBeenCalledWith("proj-1", "hello", "sketch", undefined, undefined);
     });
 
     it("sets error on rejected", async () => {

@@ -23,6 +23,8 @@ export interface ChatRequest {
   context?: string;
   /** PRD section key to add as context to this message (PRD §7.1.5 click-to-focus) */
   prdSectionFocus?: string;
+  /** Base64-encoded image attachments (data URLs or raw base64) for sketch/Dreamer */
+  images?: string[];
 }
 
 /** Chat message response */

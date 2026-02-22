@@ -78,6 +78,7 @@ vi.mock("../services/beads.service.js", () => ({
     addDependency: mockBeadsAddDependency,
     close: mockBeadsClose,
     ready: mockBeadsReady,
+    sync: vi.fn().mockResolvedValue(undefined),
   })),
 }));
 
@@ -213,7 +214,6 @@ describe("deploy-fix-epic service", () => {
     expect(result!.taskCount).toBe(2);
     expect(result!.gateTaskId).toBeDefined();
 
-    expect(mockBeadsCreate).toHaveBeenCalledTimes(1);
     expect(mockBeadsCreate).toHaveBeenCalledWith(
       project.repoPath,
       "Fix: pre-deploy test failures",
@@ -222,7 +222,10 @@ describe("deploy-fix-epic service", () => {
     expect(mockBeadsCreateWithRetry).toHaveBeenCalledTimes(3);
     const createWithRetryCalls = mockBeadsCreateWithRetry.mock.calls;
     expect(createWithRetryCalls[0][1]).toBe("Plan approval gate");
-    expect(createWithRetryCalls[0][2]).toMatchObject({ type: "task", parentId: expect.any(String) });
+    expect(createWithRetryCalls[0][2]).toMatchObject({
+      type: "task",
+      parentId: expect.any(String),
+    });
     expect(createWithRetryCalls[1][1]).toBe("Fix auth test");
     expect(createWithRetryCalls[2][1]).toBe("Fix API test");
     expect(mockBeadsClose).toHaveBeenCalled();

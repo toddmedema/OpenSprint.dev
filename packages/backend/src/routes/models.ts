@@ -51,10 +51,15 @@ async function fetchCursorModels(apiKey: string): Promise<ModelOption[]> {
           : response.status === 429
             ? " Cursor API rate limit hit. The app caches model lists for 30 minutes; try again shortly."
             : "";
-    throw new AppError(response.status >= 500 ? 502 : response.status, ErrorCodes.CURSOR_API_ERROR, `Cursor API error ${response.status}: ${text}${hint}`, {
-      status: response.status,
-      responsePreview: text.slice(0, 200),
-    });
+    throw new AppError(
+      response.status >= 500 ? 502 : response.status,
+      ErrorCodes.CURSOR_API_ERROR,
+      `Cursor API error ${response.status}: ${text}${hint}`,
+      {
+        status: response.status,
+        responsePreview: text.slice(0, 200),
+      }
+    );
   }
 
   const body = (await response.json()) as { models?: string[] };
@@ -70,7 +75,7 @@ async function fetchCursorModels(apiKey: string): Promise<ModelOption[]> {
  */
 async function getModelsWithCoalescing(
   provider: "claude" | "cursor",
-  fetchFn: () => Promise<ModelOption[]>,
+  fetchFn: () => Promise<ModelOption[]>
 ): Promise<ModelOption[]> {
   const cached = modelListCache.get<ModelOption[]>(provider);
   if (cached !== undefined) return cached;
@@ -86,14 +91,20 @@ async function getModelsWithCoalescing(
       (err) => {
         inFlightFetches.delete(provider);
         throw err;
-      },
+      }
     );
     inFlightFetches.set(provider, promise);
   }
   return promise;
 }
 
-// GET /models?provider=claude|cursor — List available models for the given provider
+const CLAUDE_CLI_DEFAULT_MODELS: ModelOption[] = [
+  { id: "claude-sonnet-4-20250514", displayName: "Claude Sonnet 4" },
+  { id: "claude-opus-4-20250514", displayName: "Claude Opus 4" },
+  { id: "claude-haiku-35-20241022", displayName: "Claude 3.5 Haiku" },
+];
+
+// GET /models?provider=claude|claude-cli|cursor — List available models for the given provider
 modelsRouter.get("/", async (req: Request, res, next) => {
   try {
     const provider = (req.query.provider as string) || "claude";
@@ -107,6 +118,17 @@ modelsRouter.get("/", async (req: Request, res, next) => {
 
       const models = await getModelsWithCoalescing("claude", () => fetchClaudeModels(apiKey));
       res.json({ data: models } as ApiResponse<ModelOption[]>);
+      return;
+    }
+
+    if (provider === "claude-cli") {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (apiKey) {
+        const models = await getModelsWithCoalescing("claude", () => fetchClaudeModels(apiKey));
+        res.json({ data: models } as ApiResponse<ModelOption[]>);
+      } else {
+        res.json({ data: CLAUDE_CLI_DEFAULT_MODELS } as ApiResponse<ModelOption[]>);
+      }
       return;
     }
 

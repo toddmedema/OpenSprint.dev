@@ -44,7 +44,6 @@ import { eventLogService } from "./event-log.service.js";
 import { agentIdentityService, type AttemptOutcome } from "./agent-identity.service.js";
 import { createLogger } from "../utils/logger.js";
 import { PhaseExecutorService, type PhaseExecutorHost } from "./phase-executor.service.js";
-import { listTasksCache } from "./list-tasks-cache.js";
 
 const log = createLogger("orchestrator");
 
@@ -425,7 +424,8 @@ export class OrchestratorService {
    */
   private async recoverActiveSlots(projectId: string, repoPath: string): Promise<string[]> {
     const worktreeBase = this.branchManager.getWorktreeBasePath();
-    const fromWorktrees = await this.crashRecovery.findOrphanedAssignmentsFromWorktrees(worktreeBase);
+    const fromWorktrees =
+      await this.crashRecovery.findOrphanedAssignmentsFromWorktrees(worktreeBase);
     const fromMainRepo = await this.crashRecovery.findOrphanedAssignments(repoPath);
     const byTaskId = new Map<string, { taskId: string; assignment: TaskAssignment }>();
     for (const o of fromMainRepo) byTaskId.set(o.taskId, o);
@@ -457,9 +457,7 @@ export class OrchestratorService {
       }
 
       const wtPath = assignment.worktreePath;
-      const heartbeat = wtPath
-        ? await heartbeatService.readHeartbeat(wtPath, taskId)
-        : null;
+      const heartbeat = wtPath ? await heartbeatService.readHeartbeat(wtPath, taskId) : null;
       const pidAlive =
         heartbeat != null &&
         typeof heartbeat.pid === "number" &&
@@ -535,6 +533,7 @@ export class OrchestratorService {
           taskId,
           "Agent crashed (backend restart). Task requeued for next attempt."
         );
+        await this.beads.sync(repoPath);
       } catch (err) {
         log.warn("Recovery: failed to requeue task", { taskId, err });
       }
@@ -609,12 +608,18 @@ export class OrchestratorService {
     // GUPP-style crash recovery first: find assignments (worktrees + main repo), re-attach if PID alive
     const reattachedIds = await this.recoverActiveSlots(projectId, repoPath);
     if (reattachedIds.length > 0) {
-      log.info("Re-attached to running agent(s) after restart", { projectId, taskIds: reattachedIds });
+      log.info("Re-attached to running agent(s) after restart", {
+        projectId,
+        taskIds: reattachedIds,
+      });
     }
 
     // Orphan recovery: reset in_progress tasks with no active process; exclude re-attached tasks
     try {
-      const orphanResult = await orphanRecoveryService.recoverOrphanedTasks(repoPath, reattachedIds);
+      const orphanResult = await orphanRecoveryService.recoverOrphanedTasks(
+        repoPath,
+        reattachedIds
+      );
       if (orphanResult.recovered.length > 0) {
         log.warn(`Recovered ${orphanResult.recovered.length} orphaned task(s) on startup`);
       }
@@ -709,6 +714,17 @@ export class OrchestratorService {
         state.slots.size === 1 ? ([...state.slots.values()][0]?.worktreePath ?? null) : null,
       pendingFeedbackCategorizations,
     };
+  }
+
+  /**
+   * Return all task IDs that currently have an active orchestrator slot.
+   * Used by the watchdog to avoid treating in-flight tasks as orphans during
+   * the gap between coding agent exit and review agent spawn.
+   */
+  getSlottedTaskIds(projectId: string): string[] {
+    const state = this.state.get(projectId);
+    if (!state) return [];
+    return [...state.slots.keys()];
   }
 
   async getLiveOutput(projectId: string, taskId: string): Promise<string> {
@@ -815,7 +831,7 @@ export class OrchestratorService {
         status: "in_progress",
         assignee: "agent-1",
       });
-      listTasksCache.invalidate(repoPath);
+      await this.beads.sync(repoPath);
 
       gitCommitQueue.enqueue({
         type: "beads_export",
@@ -1192,7 +1208,6 @@ export class OrchestratorService {
       // Clean up worktree and branch after merge
       await this.branchManager.removeTaskWorktree(repoPath, task.id);
       await this.branchManager.deleteBranch(repoPath, branchName);
-      listTasksCache.invalidate(repoPath);
     } catch (mergeErr) {
       log.warn("Merge to main failed", { mergeErr });
 
@@ -1214,7 +1229,7 @@ export class OrchestratorService {
                 task.id,
                 slotPhaseResult.codingSummary || "Implemented and tested"
               );
-              listTasksCache.invalidate(repoPath);
+              await this.beads.sync(repoPath);
               gitCommitQueue.enqueue({
                 type: "beads_export",
                 repoPath,
@@ -1643,7 +1658,7 @@ export class OrchestratorService {
             assignee: "",
             priority: newPriority,
           });
-          listTasksCache.invalidate(repoPath);
+          await this.beads.sync(repoPath);
         } catch {
           // Task may already be in the right state
         }
@@ -1756,7 +1771,7 @@ export class OrchestratorService {
         status: "blocked",
         assignee: "",
       });
-      listTasksCache.invalidate(repoPath);
+      await this.beads.sync(repoPath);
     } catch (err) {
       log.warn("Failed to block task", { err });
     }

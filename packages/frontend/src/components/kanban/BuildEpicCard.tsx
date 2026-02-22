@@ -28,14 +28,21 @@ function EpicTaskRow({
           className="flex-1 flex items-center gap-3 text-left hover:bg-theme-info-bg/50 transition-colors text-sm min-w-0"
         >
           {/* Status: exclusively on the left */}
-          <TaskStatusBadge column={task.kanbanColumn} size="xs" title={COLUMN_LABELS[task.kanbanColumn]} />
+          <TaskStatusBadge
+            column={task.kanbanColumn}
+            size="xs"
+            title={COLUMN_LABELS[task.kanbanColumn]}
+          />
           <PriorityIcon priority={task.priority ?? 1} size="xs" />
           <span className="flex-1 min-w-0 truncate font-medium text-theme-text" title={task.title}>
             {task.title}
           </span>
           {/* Assignee/elapsed: exclusively on the right; nothing when unassigned and no elapsed */}
           {rightContent ? (
-            <span className="text-xs text-theme-muted shrink-0 tabular-nums" data-testid="task-row-right">
+            <span
+              className="text-xs text-theme-muted shrink-0 tabular-nums"
+              data-testid="task-row-right"
+            >
               {rightContent}
             </span>
           ) : null}
@@ -65,6 +72,8 @@ export interface BuildEpicCardProps {
   filteringActive?: boolean;
   onTaskSelect: (taskId: string) => void;
   onUnblock?: (taskId: string) => void;
+  /** Navigate to the plan associated with this epic */
+  onViewPlan?: () => void;
   /** Map of task ID to startedAt for active tasks (elapsed time display) */
   taskIdToStartedAt?: Record<string, string>;
 }
@@ -76,6 +85,7 @@ export function BuildEpicCard({
   filteringActive = false,
   onTaskSelect,
   onUnblock,
+  onViewPlan,
   taskIdToStartedAt = {},
 }: BuildEpicCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -112,7 +122,18 @@ export function BuildEpicCard({
               </svg>
             </span>
           )}
-          <span className="truncate">{epicTitle}</span>
+          {onViewPlan ? (
+            <button
+              type="button"
+              onClick={onViewPlan}
+              className="truncate hover:text-brand-600 transition-colors text-left"
+              title={`View plan: ${epicTitle}`}
+            >
+              {epicTitle}
+            </button>
+          ) : (
+            <span className="truncate">{epicTitle}</span>
+          )}
         </h3>
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-xs font-medium text-theme-muted">Progress</span>
@@ -149,7 +170,9 @@ export function BuildEpicCard({
               <EpicTaskRow
                 key={task.id}
                 task={task}
-                elapsed={taskIdToStartedAt[task.id] ? formatUptime(taskIdToStartedAt[task.id]) : null}
+                elapsed={
+                  taskIdToStartedAt[task.id] ? formatUptime(taskIdToStartedAt[task.id]) : null
+                }
                 onTaskSelect={onTaskSelect}
                 onUnblock={task.kanbanColumn === "blocked" ? onUnblock : undefined}
               />

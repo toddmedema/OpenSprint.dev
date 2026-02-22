@@ -2,21 +2,39 @@ import { Router, Request } from "express";
 import path from "path";
 import { readFile, writeFile, access } from "node:fs/promises";
 import { constants } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type { ApiResponse } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { getErrorMessage } from "../utils/error-utils.js";
+import { createLogger } from "../utils/logger.js";
+
+const execFileAsync = promisify(execFile);
+const log = createLogger("env");
 
 const ALLOWED_KEYS = ["ANTHROPIC_API_KEY", "CURSOR_API_KEY"] as const;
 
+/** Override for tests when process.chdir is not available (e.g. Vitest workers). Set to null in production. */
+let envPathForTesting: string | null = null;
+export function setEnvPathForTesting(path: string | null): void {
+  envPathForTesting = path;
+}
+
 async function getEnvPath(): Promise<string> {
+  if (envPathForTesting !== null) return envPathForTesting;
   const cwd = process.cwd();
-  const candidates = [path.resolve(cwd, ".env"), path.resolve(cwd, "../.env"), path.resolve(cwd, "../../.env")];
+  const candidates = [
+    path.resolve(cwd, ".env"),
+    path.resolve(cwd, "../.env"),
+    path.resolve(cwd, "../../.env"),
+  ];
   for (const p of candidates) {
     try {
       await access(p, constants.R_OK);
       return p;
-    } catch {
+    } catch (_err) {
+      log.debug("Env path not readable, skipping", { path: p });
       continue;
     }
   }
@@ -32,7 +50,10 @@ function parseEnv(content: string): Map<string, string> {
     if (eq === -1) continue;
     const key = trimmed.slice(0, eq).trim();
     let value = trimmed.slice(eq + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     map.set(key, value);
@@ -43,7 +64,8 @@ function parseEnv(content: string): Map<string, string> {
 function serializeEnv(map: Map<string, string>): string {
   const lines: string[] = [];
   for (const [key, value] of map) {
-    const escaped = value.includes(" ") || value.includes("#") ? `"${value.replace(/"/g, '\\"')}"` : value;
+    const escaped =
+      value.includes(" ") || value.includes("#") ? `"${value.replace(/"/g, '\\"')}"` : value;
     lines.push(`${key}=${escaped}`);
   }
   return lines.join("\n") + (lines.length ? "\n" : "");
@@ -51,14 +73,26 @@ function serializeEnv(map: Map<string, string>): string {
 
 export const envRouter = Router();
 
-// GET /env/keys — Check which API keys are configured (never returns key values)
+/** Check whether the `claude` CLI binary is on $PATH */
+async function isClaudeCliAvailable(): Promise<boolean> {
+  try {
+    const cmd = process.platform === "win32" ? "where" : "which";
+    await execFileAsync(cmd, ["claude"], { timeout: 3000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// GET /env/keys — Check which API keys / CLIs are configured (never returns key values)
 envRouter.get("/keys", async (_req, res, next) => {
   try {
     const anthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
     const cursor = Boolean(process.env.CURSOR_API_KEY?.trim());
+    const claudeCli = await isClaudeCliAvailable();
     res.json({
-      data: { anthropic, cursor },
-    } as ApiResponse<{ anthropic: boolean; cursor: boolean }>);
+      data: { anthropic, cursor, claudeCli },
+    } as ApiResponse<{ anthropic: boolean; cursor: boolean; claudeCli: boolean }>);
   } catch (err) {
     next(err);
   }
@@ -72,7 +106,11 @@ envRouter.post("/keys", async (req: Request, res, next) => {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "key and value are required");
     }
     if (!ALLOWED_KEYS.includes(key as (typeof ALLOWED_KEYS)[number])) {
-      throw new AppError(400, ErrorCodes.INVALID_KEY, `Only ${ALLOWED_KEYS.join(", ")} can be set via this endpoint`);
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_KEY,
+        `Only ${ALLOWED_KEYS.join(", ")} can be set via this endpoint`
+      );
     }
     const trimmed = value.trim();
     if (!trimmed) {
@@ -84,6 +122,7 @@ envRouter.post("/keys", async (req: Request, res, next) => {
     try {
       content = await readFile(envPath, "utf-8");
     } catch {
+      log.debug("No existing .env, will create or overwrite", { envPath });
       content = "";
     }
 
@@ -102,7 +141,12 @@ envRouter.post("/keys", async (req: Request, res, next) => {
           : code === "EROFS"
             ? " Read-only filesystem. Cannot write .env."
             : "";
-      throw new AppError(500, ErrorCodes.ENV_WRITE_FAILED, `Failed to save API key to .env: ${msg}${hint}`, { cause: msg });
+      throw new AppError(
+        500,
+        ErrorCodes.ENV_WRITE_FAILED,
+        `Failed to save API key to .env: ${msg}${hint}`,
+        { cause: msg }
+      );
     }
 
     process.env[key] = trimmed;
