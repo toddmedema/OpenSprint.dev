@@ -987,4 +987,67 @@ describe("TaskDetailSidebar", () => {
     await user.click(artifactsBtn);
     expect(setArtifactsSectionExpanded).toHaveBeenCalledTimes(1);
   });
+
+  it("visual regression: Description, Source Feedback, Live Output headers have identical structure (no unintended style differences)", async () => {
+    mockGet.mockResolvedValue({
+      id: "fb-1",
+      text: "Add feature",
+      category: "feature",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "mapped",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+    const props = createMinimalProps({
+      taskDetail: {
+        id: "epic-1.1",
+        title: "Task with both",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [],
+        description: "Task description content",
+        sourceFeedbackId: "fb-1",
+        createdAt: "",
+        updatedAt: "",
+      },
+      sourceFeedbackExpanded: { "fb-1": true },
+      descriptionSectionExpanded: true,
+      artifactsSectionExpanded: true,
+    });
+
+    const { container } = render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    await screen.findByText("Add feature");
+
+    const headers = [
+      container.querySelector("#source-feedback-header"),
+      container.querySelector("#description-header"),
+      container.querySelector("#artifacts-header"),
+    ];
+    expect(headers.every(Boolean)).toBe(true);
+
+    // All three must be <button> elements (same tag)
+    for (const h of headers) {
+      expect(h?.tagName).toBe("BUTTON");
+    }
+
+    // All three must have identical className on the header button
+    const classNames = headers.map((h) => (h as HTMLElement).className);
+    expect(classNames[0]).toBe(classNames[1]);
+    expect(classNames[1]).toBe(classNames[2]);
+
+    // All three must have identical h4 child structure
+    const h4ClassNames = headers.map((h) => h?.querySelector("h4")?.className ?? "");
+    expect(h4ClassNames[0]).toBe(h4ClassNames[1]);
+    expect(h4ClassNames[1]).toBe(h4ClassNames[2]);
+  });
 });
