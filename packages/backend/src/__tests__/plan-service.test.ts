@@ -756,6 +756,55 @@ describe("PlanService createWithRetry usage", () => {
     );
   });
 
+  it("reshipPlan with no_changes_needed does not set epic blocked (Re-execute no delta)", async () => {
+    mockInvokePlanningAgent.mockImplementation((opts: { tracking?: { label?: string } }) => {
+      if (opts.tracking?.label === "Re-execute: audit & delta tasks") {
+        return Promise.resolve({
+          content: JSON.stringify({
+            status: "no_changes_needed",
+            capability_summary: "All features implemented",
+            tasks: [],
+          }),
+        });
+      }
+      return Promise.resolve({ content: JSON.stringify({ complexity: "medium" }) });
+    });
+
+    const plan = await planService.createPlan(projectId, {
+      title: "No Delta Plan",
+      content: "# No Delta\n\n## Overview\n\nContent.",
+      complexity: "low",
+      tasks: [
+        { title: "Task A", description: "First", priority: 0, dependsOn: [] },
+        { title: "Task B", description: "Second", priority: 1, dependsOn: ["Task A"] },
+      ],
+    });
+    const planId = plan.metadata.planId;
+
+    mockTaskStoreListAll.mockResolvedValue([
+      { id: "epic-123", status: "open", type: "epic" },
+      { id: "epic-123.1", status: "closed", type: "task" },
+      { id: "epic-123.2", status: "closed", type: "task" },
+    ]);
+    await planService.shipPlan(projectId, planId);
+
+    mockTaskStoreListAll.mockResolvedValue([
+      { id: "epic-123", status: "open", type: "epic" },
+      { id: "epic-123.1", status: "closed", type: "task" },
+      { id: "epic-123.2", status: "closed", type: "task" },
+    ]);
+    await mockPlanSetShippedContent(projectId, planId, "# No Delta\n\n## Overview\n\nContent.");
+
+    mockTaskStoreUpdate.mockClear();
+    await planService.reshipPlan(projectId, planId);
+
+    // Epic status must not be changed to blocked when no delta tasks
+    const blockedCalls = mockTaskStoreUpdate.mock.calls.filter(
+      (c) => c[1] === "epic-123" && (c[2] as { status?: string })?.status === "blocked"
+    );
+    expect(blockedCalls).toHaveLength(0);
+  });
+
   it("shipPlan routes to planTasks when no tasks (two-phase flow), then unblocks epic", async () => {
     mockInvokePlanningAgent.mockImplementation((opts: { tracking?: { label?: string } }) => {
       if (opts.tracking?.label === "Task generation") {

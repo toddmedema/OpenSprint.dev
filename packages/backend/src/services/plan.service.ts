@@ -1029,11 +1029,6 @@ export class PlanService {
     const repoPath = await this.getRepoPath(projectId);
     const epicId = plan.metadata.epicId;
 
-    // Set epic blocked before delta tasks (second Execute! will unblock)
-    if (epicId) {
-      await this.taskStore.update(projectId, epicId, { status: "blocked" });
-    }
-
     // Verify all existing tasks are Done or none started
     if (epicId) {
       const allIssues = await this.taskStore.listAll(projectId);
@@ -1137,7 +1132,13 @@ ${planNew}`;
       !auditorResult.tasks ||
       auditorResult.tasks.length === 0
     ) {
+      // Re-execute no delta: don't change epic status
       return this.getPlan(projectId, planId);
+    }
+
+    // Set epic blocked before delta tasks (second Execute! will unblock)
+    if (epicId) {
+      await this.taskStore.update(projectId, epicId, { status: "blocked" });
     }
 
     // Create delta tasks without gate (epic blocked; Execute! will unblock)
