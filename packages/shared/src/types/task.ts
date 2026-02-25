@@ -59,7 +59,10 @@ export interface Task {
   /** Latest test results from agent sessions (PRD §8.3) */
   testResults?: { passed: number; failed: number; skipped: number; total: number } | null;
   /** Feedback item ID when task originates from Evaluate feedback (discovered-from provenance) */
+  /** @deprecated Use sourceFeedbackIds instead */
   sourceFeedbackId?: string;
+  /** Feedback item IDs linked to this task (from discovered-from dependencies). Use this for multiple feedback. */
+  sourceFeedbackIds?: string[];
 }
 
 /** Dependency relationship between tasks */

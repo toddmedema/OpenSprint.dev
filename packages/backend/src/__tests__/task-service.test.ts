@@ -439,4 +439,119 @@ describe("TaskService", () => {
     const result = await taskService.unblock("proj-1", "task-1");
     expect(result.taskUnblocked).toBe(true);
   });
+
+  describe("sourceFeedbackIds", () => {
+    it("derives sourceFeedbackIds from discovered-from dep to feedback source task", async () => {
+      mockTaskStoreState.listAll = [
+        {
+          id: "source-chore",
+          title: "Feedback: Add dark mode",
+          description: "Feedback ID: fb-123",
+          status: "open",
+          issue_type: "chore",
+          dependencies: [],
+        },
+        {
+          id: "task-impl",
+          title: "Implement dark mode",
+          description: "Add dark mode",
+          status: "open",
+          issue_type: "task",
+          dependencies: [{ depends_on_id: "source-chore", type: "discovered-from" }],
+        },
+      ] as StoredTask[];
+
+      const task = await taskService.getTask("proj-1", "task-impl");
+      expect(task.sourceFeedbackIds).toEqual(["fb-123"]);
+      expect(task.sourceFeedbackId).toBe("fb-123");
+    });
+
+    it("derives sourceFeedbackIds when task is feedback source itself (own description)", async () => {
+      mockTaskStoreState.listAll = [
+        {
+          id: "source-chore",
+          title: "Feedback: Fix login",
+          description: "Feedback ID: fb-direct",
+          status: "open",
+          issue_type: "chore",
+          dependencies: [],
+        },
+      ] as StoredTask[];
+
+      const task = await taskService.getTask("proj-1", "source-chore");
+      expect(task.sourceFeedbackIds).toEqual(["fb-direct"]);
+      expect(task.sourceFeedbackId).toBe("fb-direct");
+    });
+
+    it("prefers extra.sourceFeedbackIds when present on stored task", async () => {
+      mockTaskStoreState.listAll = [
+        {
+          id: "task-with-extra",
+          title: "Task",
+          description: "Some description",
+          status: "open",
+          issue_type: "task",
+          dependencies: [],
+          sourceFeedbackIds: ["fb-extra-1", "fb-extra-2"],
+        },
+      ] as StoredTask[];
+
+      const task = await taskService.getTask("proj-1", "task-with-extra");
+      expect(task.sourceFeedbackIds).toEqual(["fb-extra-1", "fb-extra-2"]);
+      expect(task.sourceFeedbackId).toBe("fb-extra-1");
+    });
+
+    it("derives multiple sourceFeedbackIds from multiple discovered-from deps", async () => {
+      mockTaskStoreState.listAll = [
+        {
+          id: "source-1",
+          title: "Feedback 1",
+          description: "Feedback ID: fb-one",
+          status: "open",
+          issue_type: "chore",
+          dependencies: [],
+        },
+        {
+          id: "source-2",
+          title: "Feedback 2",
+          description: "Feedback ID: fb-two",
+          status: "open",
+          issue_type: "chore",
+          dependencies: [],
+        },
+        {
+          id: "task-multi",
+          title: "Task with multiple feedback",
+          description: "Implementation",
+          status: "open",
+          issue_type: "task",
+          dependencies: [
+            { depends_on_id: "source-1", type: "discovered-from" },
+            { depends_on_id: "source-2", type: "discovered-from" },
+          ],
+        },
+      ] as StoredTask[];
+
+      const task = await taskService.getTask("proj-1", "task-multi");
+      expect(task.sourceFeedbackIds).toEqual(["fb-one", "fb-two"]);
+      expect(task.sourceFeedbackId).toBe("fb-one");
+    });
+
+    it("legacy task without extra or discovered-from has no sourceFeedbackIds", async () => {
+      mockTaskStoreState.listAll = [
+        {
+          id: "task-1",
+          title: "Test Task",
+          description: "Test description",
+          status: "open",
+          issue_type: "task",
+          dependencies: [],
+        },
+      ] as StoredTask[];
+
+      const task = await taskService.getTask("proj-1", "task-1");
+      expect(task.sourceFeedbackIds).toBeUndefined();
+      expect(task.sourceFeedbackId).toBeUndefined();
+    });
+  });
 });

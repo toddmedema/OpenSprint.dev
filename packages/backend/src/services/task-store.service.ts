@@ -796,6 +796,8 @@ export class TaskStoreService {
       description?: string;
       priority?: number;
       claim?: boolean;
+      /** Merge into extra JSON (e.g. sourceFeedbackIds) */
+      extra?: Record<string, unknown>;
     } = {}
   ): Promise<StoredTask> {
     return this.withWriteLock(async () => {
@@ -834,6 +836,21 @@ export class TaskStoreService {
       if (options.priority != null) {
         sets.push("priority = ?");
         vals.push(options.priority);
+      }
+
+      if (options.extra != null) {
+        const stmt = db.prepare("SELECT extra FROM tasks WHERE id = ? AND project_id = ?");
+        stmt.bind([id, projectId]);
+        if (stmt.step()) {
+          const row = stmt.getAsObject();
+          const existing: Record<string, unknown> = JSON.parse(
+            (row.extra as string) || "{}"
+          ) as Record<string, unknown>;
+          const merged = { ...existing, ...options.extra };
+          sets.push("extra = ?");
+          vals.push(JSON.stringify(merged));
+        }
+        stmt.free();
       }
 
       vals.push(id, projectId);

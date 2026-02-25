@@ -164,20 +164,28 @@ export class TaskService {
       .map(({ targetId, type }) => ({ targetId, type: type as TaskDependency["type"] }));
     const epicId = this.extractEpicId(issue.id, idToIssue);
 
-    // Resolve sourceFeedbackId: task is feedback source task, or has discovered-from dep to one
-    let sourceFeedbackId: string | undefined;
-    const ownDesc = this.extractFeedbackIdFromDescription(issue.description as string);
-    if (ownDesc) {
-      sourceFeedbackId = ownDesc;
+    // Resolve sourceFeedbackIds: prefer extra.sourceFeedbackIds when present (hydrateTask spreads extra);
+    // else derive from description ("Feedback ID: xxx") or discovered-from dependencies; return as array.
+    let sourceFeedbackIds: string[] | undefined;
+    const storedIds = (issue as { sourceFeedbackIds?: string[] }).sourceFeedbackIds;
+    if (Array.isArray(storedIds) && storedIds.length > 0) {
+      sourceFeedbackIds = storedIds;
     } else {
-      const discoveredFrom = dependencies.find((d) => d.type === "discovered-from");
-      if (discoveredFrom) {
-        const targetIssue = idToIssue.get(discoveredFrom.targetId);
-        const targetDesc = this.extractFeedbackIdFromDescription(
-          targetIssue?.description as string
-        );
-        if (targetDesc) sourceFeedbackId = targetDesc;
+      const derived: string[] = [];
+      const ownDesc = this.extractFeedbackIdFromDescription(issue.description as string);
+      if (ownDesc) {
+        derived.push(ownDesc);
+      } else {
+        const discoveredFromDeps = dependencies.filter((d) => d.type === "discovered-from");
+        for (const dep of discoveredFromDeps) {
+          const targetIssue = idToIssue.get(dep.targetId);
+          const targetDesc = this.extractFeedbackIdFromDescription(
+            targetIssue?.description as string
+          );
+          if (targetDesc && !derived.includes(targetDesc)) derived.push(targetDesc);
+        }
       }
+      if (derived.length > 0) sourceFeedbackIds = derived;
     }
 
     return {
@@ -194,7 +202,8 @@ export class TaskService {
       kanbanColumn,
       createdAt: (issue.created_at as string) ?? "",
       updatedAt: (issue.updated_at as string) ?? "",
-      ...(sourceFeedbackId ? { sourceFeedbackId } : {}),
+      ...(sourceFeedbackIds ? { sourceFeedbackIds } : {}),
+      ...(sourceFeedbackIds?.[0] ? { sourceFeedbackId: sourceFeedbackIds[0] } : {}),
     };
   }
 

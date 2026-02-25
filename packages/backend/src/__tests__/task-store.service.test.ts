@@ -145,6 +145,22 @@ describe("TaskStoreService", () => {
       const result = await store.update(TEST_PROJECT_ID, created.id, { status: "in_progress" });
       expect(result.updated_at).not.toBe(before);
     });
+
+    it("should merge extra (e.g. sourceFeedbackIds) into task", async () => {
+      const created = await store.create(TEST_PROJECT_ID, "My Task");
+      const result = await store.update(TEST_PROJECT_ID, created.id, {
+        extra: { sourceFeedbackIds: ["fb-1", "fb-2"] },
+      });
+      expect((result as { sourceFeedbackIds?: string[] }).sourceFeedbackIds).toEqual([
+        "fb-1",
+        "fb-2",
+      ]);
+      const refetched = store.show(TEST_PROJECT_ID, created.id);
+      expect((refetched as { sourceFeedbackIds?: string[] }).sourceFeedbackIds).toEqual([
+        "fb-1",
+        "fb-2",
+      ]);
+    });
   });
 
   describe("close", () => {

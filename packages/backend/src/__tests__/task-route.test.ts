@@ -423,7 +423,7 @@ Test review prompt generation.
   });
 
   it(
-    "GET /tasks/:taskId returns sourceFeedbackId when task has discovered-from dep to feedback source task",
+    "GET /tasks/:taskId returns sourceFeedbackIds when task has discovered-from dep to feedback source task",
     {
       timeout: 20000,
     },
@@ -454,12 +454,13 @@ Test review prompt generation.
         `${API_PREFIX}/projects/${projectId}/tasks/${childTask.id}`
       );
       expect(res.status).toBe(200);
+      expect(res.body.data.sourceFeedbackIds).toEqual(["fb-test-source"]);
       expect(res.body.data.sourceFeedbackId).toBe("fb-test-source");
     }
   );
 
   it(
-    "GET /tasks/:taskId returns sourceFeedbackId when task is the feedback source task itself",
+    "GET /tasks/:taskId returns sourceFeedbackIds when task is the feedback source task itself",
     {
       timeout: 20000,
     },
@@ -478,6 +479,7 @@ Test review prompt generation.
         `${API_PREFIX}/projects/${projectId}/tasks/${sourceTask.id}`
       );
       expect(res.status).toBe(200);
+      expect(res.body.data.sourceFeedbackIds).toEqual(["fb-direct-source"]);
       expect(res.body.data.sourceFeedbackId).toBe("fb-direct-source");
     }
   );
