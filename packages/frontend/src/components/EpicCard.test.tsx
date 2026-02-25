@@ -267,6 +267,27 @@ describe("EpicCard", () => {
     expect(onPlanTasks).toHaveBeenCalledTimes(1);
   });
 
+  it("hides Plan Tasks button and shows only loading spinner during plan generation", () => {
+    const plan: Plan = { ...basePlan, status: "planning", taskCount: 0, doneTaskCount: 0 };
+    renderWithStore(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[plan.metadata.planId]}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
+    expect(screen.queryByText("Plan Tasks")).not.toBeInTheDocument();
+    expect(screen.getByTestId("plan-tasks-loading")).toBeInTheDocument();
+  });
+
   it("hides Plan Tasks and Execute when plan status is building", () => {
     const plan: Plan = { ...basePlan, status: "building", taskCount: 2, doneTaskCount: 0 };
     renderWithStore(

@@ -170,7 +170,11 @@ function createStore(
   plansOverride?: (typeof basePlan)[],
   planError?: string | null,
   executeTasksOverride?: typeof defaultExecuteTasks,
-  planOverrides?: { selectedPlanId?: string; chatMessages?: Record<string, unknown[]> }
+  planOverrides?: {
+    selectedPlanId?: string;
+    chatMessages?: Record<string, unknown[]>;
+    planTasksPlanIds?: string[];
+  }
 ) {
   const plans = plansOverride ?? [basePlan];
   const executeTasks = executeTasksOverride ?? defaultExecuteTasks;
@@ -196,7 +200,7 @@ function createStore(
         reExecutingPlanId: null,
         archivingPlanId: null,
         deletingPlanId: null,
-        planTasksPlanIds: [],
+        planTasksPlanIds: planOverrides?.planTasksPlanIds ?? [],
         optimisticPlans: [],
         error: planError ?? null,
         executeError: null,
@@ -760,6 +764,31 @@ describe("PlanPhase dynamic plan button label", () => {
     expect(await screen.findByText(/Archive Test Feature/i)).toBeInTheDocument();
     expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
     expect(screen.queryByTestId("execute-button")).not.toBeInTheDocument();
+  });
+
+  it("hides Plan Tasks button and shows only loading spinner during plan generation", async () => {
+    const planningPlan = {
+      ...basePlan,
+      status: "planning" as const,
+      taskCount: 0,
+      doneTaskCount: 0,
+      metadata: { ...basePlan.metadata },
+    };
+    mockPlansList.mockResolvedValue({ plans: [planningPlan], edges: [] });
+    const store = createStore([planningPlan], undefined, [], {
+      selectedPlanId: "archive-test-feature",
+      planTasksPlanIds: ["archive-test-feature"],
+    });
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+    expect(await screen.findByText(/Archive Test Feature/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("plan-tasks-button-sidebar")).not.toBeInTheDocument();
+    expect(screen.getByTestId("plan-tasks-loading")).toBeInTheDocument();
+    expect(screen.getByTestId("plan-tasks-loading-sidebar")).toBeInTheDocument();
   });
 
   it("button updates reactively: Plan Tasks when tasks empty, Execute when tasks added", async () => {
