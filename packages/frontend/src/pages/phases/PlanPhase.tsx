@@ -134,6 +134,8 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   const [planAllInProgress, setPlanAllInProgress] = useState(false);
   const [executeAllInProgress, setExecuteAllInProgress] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sidebarScrollRef = useRef<HTMLDivElement>(null);
+  const prevChatMessageCountRef = useRef(0);
 
   const planQueueRef = useRef<string[]>([]);
   const processingQueueRef = useRef(false);
@@ -240,11 +242,27 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     }
   }, [planContext, projectId, dispatch]);
 
-  // Auto-scroll chat messages
+  // When sidebar opens: scroll to top of plan content, no animation
   useEffect(() => {
-    const el = messagesEndRef.current;
-    if (el?.scrollIntoView) {
-      el.scrollIntoView({ behavior: "smooth" });
+    if (planContext) {
+      prevChatMessageCountRef.current = 0;
+      const el = sidebarScrollRef.current;
+      if (el) {
+        el.scrollTop = 0;
+      }
+    }
+  }, [planContext]);
+
+  // Auto-scroll chat to bottom only when new messages arrive (not on initial open)
+  useEffect(() => {
+    const prev = prevChatMessageCountRef.current;
+    const curr = currentChatMessages.length;
+    prevChatMessageCountRef.current = curr;
+    if (prev > 0 && curr > prev) {
+      const el = messagesEndRef.current;
+      if (el?.scrollIntoView) {
+        el.scrollIntoView({ behavior: "auto" });
+      }
     }
   }, [currentChatMessages]);
 
@@ -798,7 +816,10 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
               {({ header, body }) => (
                 <>
                   <div className="shrink-0 bg-theme-bg border-b border-theme-border">{header}</div>
-                  <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+                  <div
+                    ref={sidebarScrollRef}
+                    className="flex-1 overflow-y-auto min-h-0 flex flex-col"
+                  >
                     {body}
                     {/* Mockups */}
                     {selectedPlan.metadata.mockups && selectedPlan.metadata.mockups.length > 0 && (
@@ -976,7 +997,10 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                 </h3>
                 <CloseButton onClick={handleClosePlan} ariaLabel="Close plan panel" />
               </div>
-              <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+              <div
+                ref={sidebarScrollRef}
+                className="flex-1 overflow-y-auto min-h-0 flex flex-col"
+              >
                 <div className="p-4 text-sm text-theme-muted">Loading plan...</div>
                 <div className="p-4" data-testid="plan-chat-messages">
                   <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide mb-3">

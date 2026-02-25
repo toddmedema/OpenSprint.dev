@@ -483,6 +483,40 @@ describe("PlanPhase archive", () => {
     expect(scrollableBody).toHaveClass("flex-1");
   });
 
+  it("opens plan sidebar with scroll position at top of plan content", () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+    const titleInput = screen.getByRole("textbox", { name: /title/i });
+    const scrollableBody = titleInput.closest(".shrink-0")?.nextElementSibling as HTMLDivElement;
+    expect(scrollableBody).toBeInTheDocument();
+    expect(scrollableBody.scrollTop).toBe(0);
+  });
+
+  it("does not scroll to bottom or animate when opening sidebar with chat messages", () => {
+    const scrollIntoViewMock = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+
+    const store = createStore(undefined, undefined, undefined, {
+      chatMessages: {
+        "plan:archive-test-feature": [
+          { role: "user", content: "Hello", timestamp: "2024-01-01T00:00:00Z" },
+          { role: "assistant", content: "Hi there", timestamp: "2024-01-01T00:00:01Z" },
+        ],
+      },
+    });
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+    // On open we scroll to top (scrollTop = 0), not to bottom; no scrollIntoView on initial load
+    expect(scrollIntoViewMock).not.toHaveBeenCalled();
+  });
+
   it("calls archive API when archive button is clicked", async () => {
     const store = createStore();
     const user = userEvent.setup();
