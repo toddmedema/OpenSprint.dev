@@ -59,7 +59,7 @@ const {
   mockWriteJsonAtomic,
   mockGitQueueEnqueue,
   mockGitQueueEnqueueAndWait,
-  mockGetPlanComplexityForTask,
+  mockGetComplexityForAgent,
   mockFindOrphanedAssignments,
   mockFindOrphanedAssignmentsFromWorktrees,
   mockDeleteAssignmentAt,
@@ -117,7 +117,7 @@ const {
   mockWriteJsonAtomic: vi.fn(),
   mockGitQueueEnqueue: vi.fn().mockResolvedValue(undefined),
   mockGitQueueEnqueueAndWait: vi.fn().mockResolvedValue(undefined),
-  mockGetPlanComplexityForTask: vi.fn().mockResolvedValue(undefined),
+  mockGetComplexityForAgent: vi.fn().mockResolvedValue(undefined),
   mockFindOrphanedAssignments: vi.fn(),
   mockFindOrphanedAssignmentsFromWorktrees: vi.fn().mockResolvedValue([]),
   mockDeleteAssignmentAt: vi.fn().mockResolvedValue(undefined),
@@ -309,7 +309,7 @@ vi.mock("../utils/file-utils.js", () => ({
 }));
 
 vi.mock("../services/plan-complexity.js", () => ({
-  getPlanComplexityForTask: (...args: unknown[]) => mockGetPlanComplexityForTask(...args),
+  getComplexityForAgent: (...args: unknown[]) => mockGetComplexityForAgent(...args),
 }));
 
 vi.mock("../services/crash-recovery.service.js", () => ({

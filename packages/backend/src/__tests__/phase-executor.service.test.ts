@@ -55,7 +55,7 @@ vi.mock("../utils/file-utils.js", () => ({
 }));
 
 vi.mock("../services/plan-complexity.js", () => ({
-  getPlanComplexityForTask: vi.fn().mockResolvedValue(undefined),
+  getComplexityForAgent: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../services/summarizer.service.js", () => ({

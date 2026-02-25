@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import initSqlJs, { type Database } from "sql.js";
-import type { TaskType, TaskPriority } from "@opensprint/shared";
+import type { TaskType, TaskPriority, TaskComplexity } from "@opensprint/shared";
 import { isAgentAssignee } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
@@ -204,6 +204,8 @@ export interface CreateOpts {
   priority?: TaskPriority | number;
   description?: string;
   parentId?: string;
+  /** Task-level complexity (low|high). Persisted in extra JSON. */
+  complexity?: TaskComplexity;
 }
 
 export interface CreateInput {
@@ -212,6 +214,8 @@ export interface CreateInput {
   priority?: TaskPriority | number;
   description?: string;
   parentId?: string;
+  /** Task-level complexity (low|high). Persisted in extra JSON. */
+  complexity?: TaskComplexity;
 }
 
 /** Plan row returned from plans table (metadata is JSON string; parse as PlanMetadata). */
@@ -662,11 +666,15 @@ export class TaskStoreService {
       const now = new Date().toISOString();
       const type = (options.type as string) ?? "task";
       const priority = options.priority ?? 2;
+      const extra =
+        options.complexity && (options.complexity === "low" || options.complexity === "high")
+          ? JSON.stringify({ complexity: options.complexity })
+          : "{}";
 
       db.run(
         `INSERT INTO tasks (id, project_id, title, description, issue_type, status, priority, assignee, labels, created_at, updated_at, extra)
-         VALUES (?, ?, ?, ?, ?, 'open', ?, NULL, '[]', ?, ?, '{}')`,
-        [id, projectId, title, options.description ?? null, type, priority, now, now]
+         VALUES (?, ?, ?, ?, ?, 'open', ?, NULL, '[]', ?, ?, ?)`,
+        [id, projectId, title, options.description ?? null, type, priority, now, now, extra]
       );
 
       if (options.parentId) {
@@ -762,11 +770,15 @@ export class TaskStoreService {
           const id = ids[i]!;
           const type = (input.type as string) ?? "task";
           const priority = input.priority ?? 2;
+          const extra =
+            input.complexity && (input.complexity === "low" || input.complexity === "high")
+              ? JSON.stringify({ complexity: input.complexity })
+              : "{}";
 
           db.run(
             `INSERT INTO tasks (id, project_id, title, description, issue_type, status, priority, assignee, labels, created_at, updated_at, extra)
-             VALUES (?, ?, ?, ?, ?, 'open', ?, NULL, '[]', ?, ?, '{}')`,
-            [id, projectId, input.title, input.description ?? null, type, priority, now, now]
+             VALUES (?, ?, ?, ?, ?, 'open', ?, NULL, '[]', ?, ?, ?)`,
+            [id, projectId, input.title, input.description ?? null, type, priority, now, now, extra]
           );
 
           if (input.parentId) {
@@ -796,8 +808,10 @@ export class TaskStoreService {
       description?: string;
       priority?: number;
       claim?: boolean;
-      /** Merge into extra JSON (e.g. sourceFeedbackIds) */
+      /** Merge into extra JSON (e.g. sourceFeedbackIds, complexity) */
       extra?: Record<string, unknown>;
+      /** Task-level complexity (low|high). Stored in extra. */
+      complexity?: TaskComplexity;
     } = {}
   ): Promise<StoredTask> {
     return this.withWriteLock(async () => {
@@ -838,7 +852,7 @@ export class TaskStoreService {
         vals.push(options.priority);
       }
 
-      if (options.extra != null) {
+      if (options.extra != null || options.complexity != null) {
         const stmt = db.prepare("SELECT extra FROM tasks WHERE id = ? AND project_id = ?");
         stmt.bind([id, projectId]);
         if (stmt.step()) {
@@ -846,7 +860,11 @@ export class TaskStoreService {
           const existing: Record<string, unknown> = JSON.parse(
             (row.extra as string) || "{}"
           ) as Record<string, unknown>;
-          const merged = { ...existing, ...options.extra };
+          const merged = {
+            ...existing,
+            ...options.extra,
+            ...(options.complexity != null ? { complexity: options.complexity } : {}),
+          };
           sets.push("extra = ?");
           vals.push(JSON.stringify(merged));
         }

@@ -1,5 +1,5 @@
 import path from "path";
-import type { Task, AgentSession, KanbanColumn, TaskDependency } from "@opensprint/shared";
+import type { Task, AgentSession, KanbanColumn, TaskDependency, TaskComplexity } from "@opensprint/shared";
 import { resolveTestCommand } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
@@ -188,6 +188,10 @@ export class TaskService {
       if (derived.length > 0) sourceFeedbackIds = derived;
     }
 
+    const complexity = (issue as { complexity?: string }).complexity;
+    const taskComplexity: TaskComplexity | undefined =
+      complexity === "low" || complexity === "high" ? complexity : undefined;
+
     return {
       id,
       title: issue.title ?? "",
@@ -204,6 +208,7 @@ export class TaskService {
       updatedAt: (issue.updated_at as string) ?? "",
       ...(sourceFeedbackIds ? { sourceFeedbackIds } : {}),
       ...(sourceFeedbackIds?.[0] ? { sourceFeedbackId: sourceFeedbackIds[0] } : {}),
+      ...(taskComplexity ? { complexity: taskComplexity } : {}),
     };
   }
 

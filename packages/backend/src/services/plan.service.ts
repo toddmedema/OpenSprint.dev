@@ -21,6 +21,7 @@ import {
   parsePlanTasks,
 } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
+import { planComplexityToTask } from "./plan-complexity.js";
 import { taskStore as taskStoreSingleton, type StoredTask } from "./task-store.service.js";
 import { ChatService } from "./chat.service.js";
 import { PrdService } from "./prd.service.js";
@@ -608,12 +609,14 @@ export class PlanService {
       : [];
     if (rawTasks.length > 0) {
       const tasks = rawTasks.map((t) => normalizePlannerTask(t, rawTasks));
+      const taskComplexity = planComplexityToTask(complexity);
       const inputs = tasks.map((task) => ({
         title: task.title,
         type: "task" as const,
         description: task.description,
         priority: Math.min(4, Math.max(0, task.priority)),
         parentId: epicId,
+        complexity: taskComplexity,
       }));
       const created = await this.taskStore.createMany(projectId, inputs);
       const taskIdMap = new Map<string, string>();
@@ -845,12 +848,14 @@ export class PlanService {
     const tasks = rawTasks.map((t) => normalizePlannerTask(t, rawTasks));
 
     // Create tasks under the existing epic (batch create + batch dependencies)
+    const taskComplexity = planComplexityToTask(plan.metadata.complexity);
     const inputs = tasks.map((task) => ({
       title: task.title,
       type: "task" as const,
       description: task.description || "",
       priority: Math.min(4, Math.max(0, task.priority ?? 2)),
       parentId: epicId,
+      complexity: taskComplexity,
     }));
     const created = await this.taskStore.createMany(projectId, inputs);
     const taskIdMap = new Map<string, string>();

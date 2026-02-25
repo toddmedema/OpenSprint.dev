@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
-import { getPlanComplexityForTask } from "../services/plan-complexity.js";
+import {
+  getPlanComplexityForTask,
+  getTaskComplexity,
+  getComplexityForAgent,
+  planComplexityToTask,
+} from "../services/plan-complexity.js";
 import {
   taskStore as taskStoreSingleton,
   type TaskStoreService,
@@ -147,5 +152,111 @@ describe("getPlanComplexityForTask", () => {
     const task = await taskStore.show(TEST_PROJECT_ID, child.id);
     const complexity = await getPlanComplexityForTask(TEST_PROJECT_ID, tempDir, task, taskStore);
     expect(complexity).toBeUndefined();
+  });
+});
+
+describe("planComplexityToTask", () => {
+  it("maps low and medium to low", () => {
+    expect(planComplexityToTask("low")).toBe("low");
+    expect(planComplexityToTask("medium")).toBe("low");
+  });
+  it("maps high and very_high to high", () => {
+    expect(planComplexityToTask("high")).toBe("high");
+    expect(planComplexityToTask("very_high")).toBe("high");
+  });
+});
+
+describe("getTaskComplexity", () => {
+  it("returns task own complexity when set", () => {
+    const task = { complexity: "high" } as { complexity?: string };
+    expect(getTaskComplexity(task, "low")).toBe("high");
+    expect(getTaskComplexity(task, undefined)).toBe("high");
+  });
+  it("infers from plan when task has no complexity", () => {
+    const task = {} as { complexity?: string };
+    expect(getTaskComplexity(task, "low")).toBe("low");
+    expect(getTaskComplexity(task, "medium")).toBe("low");
+    expect(getTaskComplexity(task, "high")).toBe("high");
+    expect(getTaskComplexity(task, "very_high")).toBe("high");
+  });
+  it("returns undefined when neither task nor plan has valid complexity", () => {
+    const task = {} as { complexity?: string };
+    expect(getTaskComplexity(task, undefined)).toBeUndefined();
+  });
+});
+
+describe("getComplexityForAgent", () => {
+  let tempDir: string;
+  let taskStore: TaskStoreService;
+
+  beforeEach(async () => {
+    const mod = (await import("../services/task-store.service.js")) as unknown as {
+      _resetPlanComplexityDb?: () => void;
+    };
+    mod._resetPlanComplexityDb?.();
+
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-complexity-agent-"));
+    taskStore = taskStoreSingleton;
+
+    const { execSync } = await import("child_process");
+    execSync("git init", { cwd: tempDir });
+    execSync("git config user.email test@test.com", { cwd: tempDir });
+    execSync("git config user.name Test", { cwd: tempDir });
+    await taskStore.init();
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("returns task own complexity when set (overrides plan)", async () => {
+    const planId = `plan-${Date.now()}`;
+    const epic = await taskStore.create(TEST_PROJECT_ID, "Epic", {
+      type: "epic",
+      description: planId,
+    });
+    await taskStore.planInsert(TEST_PROJECT_ID, planId, {
+      epic_id: epic.id,
+      content: "# Plan",
+      metadata: JSON.stringify({
+        planId,
+        epicId: epic.id,
+        shippedAt: null,
+        complexity: "high",
+      }),
+    });
+    const child = await taskStore.create(TEST_PROJECT_ID, "Child", {
+      type: "task",
+      parentId: epic.id,
+      complexity: "low",
+    });
+    const task = await taskStore.show(TEST_PROJECT_ID, child.id);
+    const complexity = await getComplexityForAgent(TEST_PROJECT_ID, tempDir, task, taskStore);
+    expect(complexity).toBe("low"); // task owns low, overrides plan high
+  });
+
+  it("falls back to plan complexity when task has none", async () => {
+    const planId = `plan-${Date.now()}`;
+    const epic = await taskStore.create(TEST_PROJECT_ID, "Epic", {
+      type: "epic",
+      description: planId,
+    });
+    await taskStore.planInsert(TEST_PROJECT_ID, planId, {
+      epic_id: epic.id,
+      content: "# Plan",
+      metadata: JSON.stringify({
+        planId,
+        epicId: epic.id,
+        shippedAt: null,
+        complexity: "very_high",
+      }),
+    });
+    const child = await taskStore.create(TEST_PROJECT_ID, "Child", {
+      type: "task",
+      parentId: epic.id,
+    });
+    const task = await taskStore.show(TEST_PROJECT_ID, child.id);
+    const complexity = await getComplexityForAgent(TEST_PROJECT_ID, tempDir, task, taskStore);
+    expect(complexity).toBe("very_high");
   });
 });

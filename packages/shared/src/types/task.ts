@@ -17,6 +17,9 @@ export type KanbanColumn =
 /** Task priority (0 = highest, 4 = lowest) */
 export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
+/** Task-level complexity (low|high). Simpler than plan complexity; used for agent selection. */
+export type TaskComplexity = "low" | "high";
+
 /** Minimal task fields stored in the global task registry (cross-phase cache). */
 export interface TaskSummary {
   title: string;
@@ -63,6 +66,8 @@ export interface Task {
   sourceFeedbackId?: string;
   /** Feedback item IDs linked to this task (from discovered-from dependencies). Use this for multiple feedback. */
   sourceFeedbackIds?: string[];
+  /** Task-level complexity (low|high). When absent, inferred from epic's plan. */
+  complexity?: TaskComplexity;
 }
 
 /** Dependency relationship between tasks */

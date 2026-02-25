@@ -20,7 +20,7 @@ import type { TestRunner } from "./test-runner.js";
 import type { AgentLifecycleManager } from "./agent-lifecycle.js";
 import type { TaskContext } from "./context-assembler.js";
 import { shouldInvokeSummarizer } from "./summarizer.service.js";
-import { getPlanComplexityForTask } from "./plan-complexity.js";
+import { getComplexityForAgent } from "./plan-complexity.js";
 import { agentIdentityService } from "./agent-identity.service.js";
 import { eventLogService } from "./event-log.service.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
@@ -121,7 +121,7 @@ export class PhaseExecutorService {
           context = cached;
           log.info("Using cached Summarizer context for retry", { taskId: task.id });
         } else {
-          const planComplexity = await getPlanComplexityForTask(
+          const planComplexity = await getComplexityForAgent(
             projectId,
             repoPath,
             task,
@@ -160,7 +160,7 @@ export class PhaseExecutorService {
       const taskDir = this.host.sessionManager.getActiveDir(wtPath, task.id);
       const promptPath = path.join(taskDir, "prompt.md");
 
-      const complexity = await getPlanComplexityForTask(
+      const complexity = await getComplexityForAgent(
         projectId,
         repoPath,
         task,
@@ -292,7 +292,7 @@ export class PhaseExecutorService {
 
       const promptPath = path.join(taskDir, "prompt.md");
 
-      const complexity = await getPlanComplexityForTask(
+      const complexity = await getComplexityForAgent(
         projectId,
         repoPath,
         task,

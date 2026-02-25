@@ -1,4 +1,4 @@
-import type { PlanComplexity } from "@opensprint/shared";
+import type { PlanComplexity, TaskComplexity } from "@opensprint/shared";
 import {
   taskStore as taskStoreSingleton,
   type TaskStoreService,
@@ -6,6 +6,27 @@ import {
 } from "./task-store.service.js";
 
 const VALID_COMPLEXITIES: PlanComplexity[] = ["low", "medium", "high", "very_high"];
+
+/** Map plan complexity to task complexity: low/medium -> low, high/very_high -> high */
+export function planComplexityToTask(plan: PlanComplexity): TaskComplexity {
+  return plan === "low" || plan === "medium" ? "low" : "high";
+}
+
+/**
+ * Resolve task-level complexity: task's own value if set, else infer from epic's plan.
+ * Returns undefined if no complexity can be determined.
+ */
+export function getTaskComplexity(
+  task: StoredTask,
+  planComplexity: PlanComplexity | undefined
+): TaskComplexity | undefined {
+  const own = (task as { complexity?: string }).complexity;
+  if (own === "low" || own === "high") return own;
+  if (planComplexity && VALID_COMPLEXITIES.includes(planComplexity)) {
+    return planComplexityToTask(planComplexity);
+  }
+  return undefined;
+}
 
 /**
  * Resolve the plan complexity for a task by looking up its parent epic's plan in the task store.
@@ -33,4 +54,21 @@ export async function getPlanComplexityForTask(
   }
 
   return undefined;
+}
+
+/**
+ * Resolve complexity for agent selection: task's own complexity (mapped to PlanComplexity)
+ * takes precedence; otherwise infer from epic's plan.
+ */
+export async function getComplexityForAgent(
+  projectId: string,
+  repoPath: string,
+  task: StoredTask,
+  taskStore?: TaskStoreService
+): Promise<PlanComplexity | undefined> {
+  const own = (task as { complexity?: string }).complexity;
+  if (own === "low") return "low";
+  if (own === "high") return "high";
+
+  return getPlanComplexityForTask(projectId, repoPath, task, taskStore);
 }

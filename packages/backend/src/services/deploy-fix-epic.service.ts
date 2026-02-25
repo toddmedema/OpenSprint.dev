@@ -172,6 +172,7 @@ ${testOutput.slice(0, 15000)}
       description: task.description ?? "",
       priority,
       parentId: epicId,
+      complexity: "low", // deploy-fix plan is medium -> low
     });
     if (!taskResult) {
       log.error("Failed to create fix task after retries", { title: task.title });
