@@ -97,6 +97,32 @@ describe("auditor.service", () => {
       expect(result?.tasks?.[1].depends_on).toEqual([0]);
     });
 
+    it("parses complexity (low|high) when provided", () => {
+      const content = JSON.stringify({
+        status: "success",
+        capability_summary: "## Features",
+        tasks: [
+          { index: 0, title: "Easy task", description: "...", priority: 1, depends_on: [], complexity: "low" },
+          { index: 1, title: "Hard task", description: "...", priority: 2, depends_on: [0], complexity: "high" },
+        ],
+      });
+      const result = parseAuditorResult(content);
+      expect(result?.tasks?.[0].complexity).toBe("low");
+      expect(result?.tasks?.[1].complexity).toBe("high");
+    });
+
+    it("omits complexity when invalid or absent", () => {
+      const content = JSON.stringify({
+        status: "success",
+        capability_summary: "## Features",
+        tasks: [
+          { index: 0, title: "Task", description: "...", priority: 1, depends_on: [], complexity: "medium" },
+        ],
+      });
+      const result = parseAuditorResult(content);
+      expect(result?.tasks?.[0]).not.toHaveProperty("complexity");
+    });
+
     it("accepts task_list (snake_case) and task_title, task_description, task_priority", () => {
       const content = JSON.stringify({
         status: "success",

@@ -137,6 +137,7 @@ vi.mock("../services/task-store.service.js", async (importOriginal) => {
     update: vi.fn().mockResolvedValue({}),
     close: vi.fn().mockResolvedValue({}),
     syncForPush: vi.fn().mockResolvedValue(undefined),
+    planGetByEpicId: vi.fn().mockResolvedValue(null),
   };
   return {
     TaskStoreService: vi.fn().mockImplementation(() => mockInstance),

@@ -14,6 +14,8 @@ export interface DeltaTask {
   description: string;
   priority?: number;
   depends_on?: number[];
+  /** Task-level complexity (low|high). When absent, inferred from plan. */
+  complexity?: "low" | "high";
 }
 
 /** Auditor result.json format per PRD 12.3.6 */
@@ -71,7 +73,7 @@ For depends_on: use 0-based indices into YOUR tasks array. Ensure no circular de
 ${JSON_OUTPUT_PREAMBLE}
 
 **If delta tasks are needed:**
-{"status":"success","capability_summary":"<markdown>","tasks":[{"index":0,"title":"Task title","description":"Detailed spec","priority":1,"depends_on":[]}]}
+{"status":"success","capability_summary":"<markdown>","tasks":[{"index":0,"title":"Task title","description":"Detailed spec","priority":1,"depends_on":[],"complexity":"low"}]}
 
 - capability_summary: markdown summary of current capabilities (use ## headers for sections)
 - tasks: array of delta tasks
@@ -80,6 +82,7 @@ ${JSON_OUTPUT_PREAMBLE}
   - description: Detailed spec with acceptance criteria
   - priority: 0 (highest) to 4 (lowest)
   - depends_on: array of indices (0-based) this task depends on — use [] if none
+  - complexity: low or high — assign per task based on implementation difficulty (low: routine; high: challenging)
 
 **If no work is needed (plan unchanged or fully satisfied):**
 {"status":"no_changes_needed","capability_summary":"<markdown>"}
@@ -124,16 +127,23 @@ export function parseAuditorResult(content: string): AuditorResult | null {
     };
 
     if (Array.isArray(rawTasks) && rawTasks.length > 0) {
-      result.tasks = rawTasks.map((t) => ({
-        index: typeof t.index === "number" ? t.index : 0,
-        title: String(t.title ?? t.task_title ?? "").trim(),
-        description: String(t.description ?? t.task_description ?? "").trim(),
-        priority:
-          typeof (t.priority ?? t.task_priority) === "number"
-            ? Math.min(4, Math.max(0, (t.priority ?? t.task_priority) as number))
-            : 2,
-        depends_on: normalizeTaskDeps(t),
-      }));
+      result.tasks = rawTasks.map((t) => {
+        const rawComplexity = typeof t.complexity === "string" ? t.complexity : undefined;
+        const complexity =
+          rawComplexity === "low" || rawComplexity === "high" ? rawComplexity : undefined;
+        const task: DeltaTask = {
+          index: typeof t.index === "number" ? t.index : 0,
+          title: String(t.title ?? t.task_title ?? "").trim(),
+          description: String(t.description ?? t.task_description ?? "").trim(),
+          priority:
+            typeof (t.priority ?? t.task_priority) === "number"
+              ? Math.min(4, Math.max(0, (t.priority ?? t.task_priority) as number))
+              : 2,
+          depends_on: normalizeTaskDeps(t),
+        };
+        if (complexity) task.complexity = complexity;
+        return task;
+      });
     }
 
     return result;

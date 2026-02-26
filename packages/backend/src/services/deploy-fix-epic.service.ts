@@ -40,19 +40,21 @@ Respond with ONLY valid JSON in this exact format (you may wrap in a markdown js
       "title": "Fix task title",
       "description": "Detailed spec: what to fix, which files, acceptance criteria",
       "priority": 1,
-      "depends_on": []
+      "depends_on": [],
+      "complexity": "low"
     },
     {
       "index": 1,
       "title": "Another fix task",
       "description": "...",
       "priority": 1,
-      "depends_on": [0]
+      "depends_on": [0],
+      "complexity": "low"
     }
   ]
 }
 
-priority: 0 (highest) to 4 (lowest). depends_on: array of task indices (0-based) this task is blocked by.
+priority: 0 (highest) to 4 (lowest). depends_on: array of task indices (0-based) this task is blocked by. complexity: low or high — assign per task based on fix difficulty (low: routine; high: challenging).
 If you cannot parse meaningful fix tasks from the output, return: {"status": "failed", "tasks": []}`;
 
 export interface CreateFixEpicResult {
@@ -107,6 +109,7 @@ Output your response as JSON with status and tasks array.`;
       description?: string;
       priority?: number;
       depends_on?: number[];
+      complexity?: "low" | "high";
     }>;
   }>(response.content, "tasks");
   if (!parsed) {
@@ -167,12 +170,14 @@ ${testOutput.slice(0, 15000)}
   for (const task of tasks) {
     const idx = task.index ?? tasks.indexOf(task);
     const priority = Math.min(4, Math.max(0, task.priority ?? 2));
+    const taskComplexity =
+      task.complexity === "low" || task.complexity === "high" ? task.complexity : "low";
     const taskResult = await taskStore.createWithRetry(projectId, task.title, {
       type: "task",
       description: task.description ?? "",
       priority,
       parentId: epicId,
-      complexity: "low", // deploy-fix plan is medium -> low
+      complexity: taskComplexity,
     });
     if (!taskResult) {
       log.error("Failed to create fix task after retries", { title: task.title });

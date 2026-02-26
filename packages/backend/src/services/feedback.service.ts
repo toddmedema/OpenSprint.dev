@@ -15,6 +15,7 @@ import { PlanService } from "./plan.service.js";
 import { PrdService } from "./prd.service.js";
 import type { HarmonizerPrdUpdate } from "./harmonizer.service.js";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
+import { planComplexityToTask } from "./plan-complexity.js";
 import { feedbackStore } from "./feedback-store.service.js";
 import { writeFeedbackImages } from "./feedback-store.service.js";
 import { broadcastToProject } from "../websocket/index.js";
@@ -47,7 +48,7 @@ Given the user's feedback (and any attached images), the PRD, available plans, a
 2. Which feature/plan it relates to (if identifiable) — use the planId from the available plans list
 3. The mapped epic ID — use the epicId from the plan you mapped to (or null if no plan)
 4. Whether this is a scope change — true if the feedback fundamentally alters requirements/PRD; false otherwise
-5. Proposed tasks in indexed Planner format — same structure as Planner output: index, title, description, priority, depends_on
+5. Proposed tasks in indexed Planner format — same structure as Planner output: index, title, description, priority, depends_on, complexity (low|high — assign per task based on implementation difficulty)
 
 **Linking to existing tasks:** When feedback is clearly covered by one or more existing OPEN/READY tasks, prefer linking instead of creating new tasks:
 - \`link_to_existing_task_ids\`: string[]. If non-empty, do NOT create new tasks; link feedback to these existing task IDs. All IDs must appear in the Existing OPEN/READY tasks list.
@@ -66,14 +67,14 @@ JSON format:
   "mapped_epic_id": "epicId-from-plan or null",
   "is_scope_change": true | false,
   "proposed_tasks": [
-    { "index": 0, "title": "Task title", "description": "Detailed spec with acceptance criteria", "priority": 1, "depends_on": [] }
+    { "index": 0, "title": "Task title", "description": "Detailed spec with acceptance criteria", "priority": 1, "depends_on": [], "complexity": "low" }
   ],
   "link_to_existing_task_ids": ["task-id-1", "task-id-2"],
   "similar_existing_task_id": "task-id or null",
   "update_existing_tasks": { "task-id": { "title": "...", "description": "..." } }
 }
 
-priority: 0 (highest) to 4 (lowest). depends_on: array of task indices (0-based) this task is blocked by.`;
+priority: 0 (highest) to 4 (lowest). depends_on: array of task indices (0-based) this task is blocked by. complexity: low or high — assign per task based on implementation difficulty.`;
 
 export class FeedbackService {
   private projectService = new ProjectService();
@@ -378,9 +379,13 @@ export class FeedbackService {
                 task_priority?: number;
                 depends_on?: number[];
                 dependsOn?: number[];
+                complexity?: string;
               }) => {
                 const title = String(t.title ?? t.task_title ?? "").trim();
                 const deps = (t.depends_on ?? t.dependsOn ?? []) as unknown[];
+                const rawComplexity = t.complexity;
+                const complexity =
+                  rawComplexity === "low" || rawComplexity === "high" ? rawComplexity : undefined;
                 return {
                   index: typeof t.index === "number" ? t.index : 0,
                   title,
@@ -395,6 +400,7 @@ export class FeedbackService {
                   depends_on: Array.isArray(deps)
                     ? deps.filter((d): d is number => typeof d === "number")
                     : [],
+                  complexity,
                 };
               }
             );
@@ -651,6 +657,19 @@ export class FeedbackService {
     return taskIds;
   }
 
+  /** Resolve plan complexity for an epic (for task complexity fallback). */
+  private async resolvePlanComplexityForEpic(
+    projectId: string,
+    epicId: string
+  ): Promise<"low" | "medium" | "high" | "very_high" | undefined> {
+    const plan = await this.taskStore.planGetByEpicId(projectId, epicId);
+    const c = plan?.metadata?.complexity;
+    return typeof c === "string" &&
+      ["low", "medium", "high", "very_high"].includes(c)
+      ? (c as "low" | "medium" | "high" | "very_high")
+      : undefined;
+  }
+
   /** Create tasks from feedback (PRD §12.3.4). Idempotent: skips if tasks already created. */
   private async createTasksFromFeedback(projectId: string, item: FeedbackItem): Promise<string[]> {
     // Idempotency: fetch fresh from DB to handle concurrent invocation (e.g. before claim-then-process)
@@ -732,6 +751,11 @@ export class FeedbackService {
               : singleProposedTask
                 ? `Feedback ID: ${item.id}`
                 : baseDesc;
+          const planComplexity = parentEpicId
+            ? await this.resolvePlanComplexityForEpic(projectId, parentEpicId)
+            : undefined;
+          const taskComplexity =
+            task.complexity ?? (planComplexity ? planComplexityToTask(planComplexity) : "low");
           const issue = await this.taskStore.createWithRetry(
             project.id,
             task.title,
@@ -740,6 +764,7 @@ export class FeedbackService {
               priority,
               description,
               parentId: parentEpicId,
+              complexity: taskComplexity,
             },
             { fallbackToStandalone: true }
           );
