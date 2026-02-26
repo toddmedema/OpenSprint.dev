@@ -84,11 +84,11 @@ export function ConfirmStep({
           <dd className="font-mono text-xs">{repoPath}</dd>
         </div>
         <div className="flex justify-between">
-          <dt className="text-theme-muted">Simple Complexity Agent</dt>
+          <dt className="text-theme-muted">Task Complexity — Simple</dt>
           <dd className="font-medium capitalize">{simpleComplexityLabel}</dd>
         </div>
         <div className="flex justify-between">
-          <dt className="text-theme-muted">Complex Complexity Agent</dt>
+          <dt className="text-theme-muted">Task Complexity — Complex</dt>
           <dd className="font-medium capitalize">{complexComplexityLabel}</dd>
         </div>
         <div className="flex justify-between">

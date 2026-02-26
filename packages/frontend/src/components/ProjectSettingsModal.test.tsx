@@ -113,7 +113,7 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    await screen.findByText("Simple Complexity");
+    await screen.findByText("Task Complexity");
 
     const contentArea = screen.getByTestId("settings-modal-content");
     expect(contentArea).toHaveClass("min-h-0");
@@ -129,7 +129,7 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    await screen.findByText("Simple Complexity");
+    await screen.findByText("Task Complexity");
 
     const modal = screen.getByTestId("settings-modal");
     expect(modal).toHaveClass("overflow-hidden");
@@ -160,7 +160,7 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    await screen.findByText("Simple Complexity");
+    await screen.findByText("Task Complexity");
 
     expect(screen.queryByText(/API key required/)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("sk-ant-...")).not.toBeInTheDocument();
@@ -345,21 +345,20 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByTestId("theme-option-system")).toHaveClass("bg-brand-600");
   });
 
-  it("Agent Config tab shows exactly two agent sections: Simple Complexity and Complex Complexity", async () => {
+  it("Agent Config tab shows single Task Complexity section with Simple and Complex rows", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Project Settings");
 
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    await screen.findByText("Simple Complexity");
+    await screen.findByText("Task Complexity");
     expect(
-      screen.getByText("Used for routine tasks (low and medium complexity plans)")
+      screen.getByText(/Simple: routine tasks. Complex: challenging tasks/)
     ).toBeInTheDocument();
-    expect(screen.getByText("Complex Complexity")).toBeInTheDocument();
-    expect(
-      screen.getByText("Used for challenging tasks (high and very high complexity plans)")
-    ).toBeInTheDocument();
+    expect(screen.getByText("Simple")).toBeInTheDocument();
+    expect(screen.getByText("Complex")).toBeInTheDocument();
+    expect(screen.getByTestId("task-complexity-section")).toBeInTheDocument();
 
     expect(screen.queryByText(/Planning Agent Slot|Coding Agent Slot/i)).not.toBeInTheDocument();
   });
@@ -371,7 +370,7 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    await screen.findByText("Simple Complexity");
+    await screen.findByText("Task Complexity");
     const saveButton = screen.getByRole("button", { name: "Save Changes" });
     await userEvent.click(saveButton);
 

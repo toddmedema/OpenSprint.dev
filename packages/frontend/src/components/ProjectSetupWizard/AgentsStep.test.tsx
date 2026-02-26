@@ -36,8 +36,8 @@ function renderAgentsStep(overrides: Partial<Parameters<typeof AgentsStep>[0]> =
     <AgentsStep
       simpleComplexityAgent={defaultLowComplexityAgent}
       complexComplexityAgent={defaultHighComplexityAgent}
-      onLowComplexityAgentChange={() => {}}
-      onHighComplexityAgentChange={() => {}}
+      onSimpleComplexityAgentChange={() => {}}
+      onComplexComplexityAgentChange={() => {}}
       envKeys={null}
       keyInput={{ anthropic: "", cursor: "" }}
       onKeyInputChange={() => {}}
@@ -56,12 +56,14 @@ function renderAgentsStep(overrides: Partial<Parameters<typeof AgentsStep>[0]> =
 }
 
 describe("AgentsStep", () => {
-  it("renders agents step with Simple Complexity Agent and Complex Complexity Agent sections", () => {
+  it("renders agents step with Task Complexity section and Simple/Complex rows", () => {
     renderAgentsStep();
 
     expect(screen.getByTestId("agents-step")).toBeInTheDocument();
-    expect(screen.getByText("Simple Complexity Agent")).toBeInTheDocument();
-    expect(screen.getByText("Complex Complexity Agent")).toBeInTheDocument();
+    expect(screen.getByText("Task Complexity")).toBeInTheDocument();
+    expect(screen.getByTestId("task-complexity-section")).toBeInTheDocument();
+    expect(screen.getAllByText("Simple").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Complex").length).toBeGreaterThanOrEqual(1);
   });
 
   it("hides API key banner when all keys for selected providers are configured", () => {

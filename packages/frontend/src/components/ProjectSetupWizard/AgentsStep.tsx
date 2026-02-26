@@ -222,15 +222,19 @@ export function AgentsStep({
           </p>
         </div>
       )}
-      <div>
-        <h3 className="text-sm font-semibold text-theme-text mb-3">Simple Complexity Agent</h3>
-        <p className="text-xs text-theme-muted mb-3">For routine and moderate tasks</p>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+      <div data-testid="task-complexity-section">
+        <h3 className="text-sm font-semibold text-theme-text mb-3">Task Complexity</h3>
+        <p className="text-xs text-theme-muted mb-3">
+          Simple: routine tasks. Complex: challenging tasks. Each row configures provider and agent.
+        </p>
+        <div className="space-y-4">
+          {/* Row 1: Simple */}
+          <div className="flex flex-wrap items-end gap-3">
+            <span className="w-16 text-sm font-medium text-theme-text shrink-0">Simple</span>
+            <div className="flex-1 min-w-[140px]">
               <label className="block text-sm font-medium text-theme-text mb-1">Provider</label>
               <select
-                className="input"
+                className="input w-full"
                 value={simpleComplexityAgent.type}
                 onChange={(e) =>
                   onSimpleComplexityAgentChange({
@@ -245,9 +249,9 @@ export function AgentsStep({
                 <option value="custom">Custom CLI</option>
               </select>
             </div>
-            {simpleComplexityAgent.type !== "custom" && (
-              <div>
-                <label className="block text-sm font-medium text-theme-text mb-1">Model</label>
+            {simpleComplexityAgent.type !== "custom" ? (
+              <div className="flex-1 min-w-[140px]">
+                <label className="block text-sm font-medium text-theme-text mb-1">Agent</label>
                 <ModelSelect
                   provider={simpleComplexityAgent.type}
                   value={simpleComplexityAgent.model || null}
@@ -257,37 +261,31 @@ export function AgentsStep({
                   refreshTrigger={modelRefreshTrigger}
                 />
               </div>
+            ) : (
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-sm font-medium text-theme-text mb-1">CLI command</label>
+                <input
+                  type="text"
+                  className="input w-full font-mono text-sm"
+                  placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
+                  value={simpleComplexityAgent.cliCommand}
+                  onChange={(e) =>
+                    onSimpleComplexityAgentChange({
+                      ...simpleComplexityAgent,
+                      cliCommand: e.target.value,
+                    })
+                  }
+                />
+              </div>
             )}
           </div>
-          {simpleComplexityAgent.type === "custom" && (
-            <div>
-              <label className="block text-sm font-medium text-theme-text mb-1">CLI command</label>
-              <input
-                type="text"
-                className="input w-full font-mono text-sm"
-                placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
-                value={simpleComplexityAgent.cliCommand}
-                onChange={(e) =>
-                  onSimpleComplexityAgentChange({ ...simpleComplexityAgent, cliCommand: e.target.value })
-                }
-              />
-              <p className="mt-1 text-xs text-theme-muted">
-                Command invoked with prompt as argument. Must accept input and produce output.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-      <hr />
-      <div>
-        <h3 className="text-sm font-semibold text-theme-text mb-3">Complex Complexity Agent</h3>
-        <p className="text-xs text-theme-muted mb-3">For complex and cross-cutting tasks</p>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          {/* Row 2: Complex */}
+          <div className="flex flex-wrap items-end gap-3">
+            <span className="w-16 text-sm font-medium text-theme-text shrink-0">Complex</span>
+            <div className="flex-1 min-w-[140px]">
               <label className="block text-sm font-medium text-theme-text mb-1">Provider</label>
               <select
-                className="input"
+                className="input w-full"
                 value={complexComplexityAgent.type}
                 onChange={(e) =>
                   onComplexComplexityAgentChange({
@@ -302,9 +300,9 @@ export function AgentsStep({
                 <option value="custom">Custom CLI</option>
               </select>
             </div>
-            {complexComplexityAgent.type !== "custom" && (
-              <div>
-                <label className="block text-sm font-medium text-theme-text mb-1">Model</label>
+            {complexComplexityAgent.type !== "custom" ? (
+              <div className="flex-1 min-w-[140px]">
+                <label className="block text-sm font-medium text-theme-text mb-1">Agent</label>
                 <ModelSelect
                   provider={complexComplexityAgent.type}
                   value={complexComplexityAgent.model || null}
@@ -314,28 +312,24 @@ export function AgentsStep({
                   refreshTrigger={modelRefreshTrigger}
                 />
               </div>
+            ) : (
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-sm font-medium text-theme-text mb-1">CLI command</label>
+                <input
+                  type="text"
+                  className="input w-full font-mono text-sm"
+                  placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
+                  value={complexComplexityAgent.cliCommand}
+                  onChange={(e) =>
+                    onComplexComplexityAgentChange({
+                      ...complexComplexityAgent,
+                      cliCommand: e.target.value,
+                    })
+                  }
+                />
+              </div>
             )}
           </div>
-          {complexComplexityAgent.type === "custom" && (
-            <div>
-              <label className="block text-sm font-medium text-theme-text mb-1">CLI command</label>
-              <input
-                type="text"
-                className="input w-full font-mono text-sm"
-                placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
-                value={complexComplexityAgent.cliCommand}
-                onChange={(e) =>
-                  onComplexComplexityAgentChange({
-                    ...complexComplexityAgent,
-                    cliCommand: e.target.value,
-                  })
-                }
-              />
-              <p className="mt-1 text-xs text-theme-muted">
-                Command invoked with prompt as argument. Must accept input and produce output.
-              </p>
-            </div>
-          )}
         </div>
       </div>
       <hr />
