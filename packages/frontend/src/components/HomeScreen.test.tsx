@@ -91,7 +91,7 @@ describe("HomeScreen", () => {
     renderHomeScreen();
     await screen.findByTestId("project-card-proj-1");
     const card = screen.getByTestId("project-card-proj-1");
-    expect(card).toHaveClass("hover:bg-theme-info-bg/40");
+    expect(card).toHaveClass("hover:bg-theme-info-bg");
   });
 
   it("Create New button navigates to /projects/create-new", async () => {
@@ -123,7 +123,7 @@ describe("HomeScreen", () => {
     renderHomeScreen();
     await screen.findByTestId("add-existing-button");
     const btn = screen.getByTestId("add-existing-button");
-    expect(btn).toHaveClass("hover:bg-theme-info-bg/50");
+    expect(btn).toHaveClass("hover:bg-theme-info-bg");
   });
 
   it("Add Existing button navigates to /projects/add-existing", async () => {

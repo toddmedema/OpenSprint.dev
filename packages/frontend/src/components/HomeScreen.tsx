@@ -189,7 +189,7 @@ export function HomeScreen() {
             <button
               type="button"
               onClick={() => navigate("/projects/add-existing")}
-              className="btn-secondary hover:bg-theme-info-bg/50"
+              className="btn-secondary hover:bg-theme-info-bg"
               data-testid="add-existing-button"
             >
               Add Existing
@@ -221,7 +221,7 @@ export function HomeScreen() {
                     openProject(project);
                   }
                 }}
-                className="card p-4 group cursor-pointer transition-colors hover:bg-theme-info-bg/40 min-w-0"
+                className="card p-4 group cursor-pointer transition-colors hover:bg-theme-info-bg min-w-0"
                 data-testid={`project-card-${project.id}`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -292,7 +292,7 @@ export function HomeScreen() {
                               setMenuOpenId(null);
                               setMenuAnchorRect(null);
                             }}
-                            className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-bg-elevated"
+                            className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg"
                           >
                             Archive
                           </button>
@@ -304,7 +304,7 @@ export function HomeScreen() {
                               setMenuOpenId(null);
                               setMenuAnchorRect(null);
                             }}
-                            className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-bg-elevated"
+                            className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg"
                           >
                             Delete
                           </button>

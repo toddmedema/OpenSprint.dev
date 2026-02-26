@@ -175,7 +175,7 @@ describe("Navbar", () => {
     await user.click(trigger);
 
     const nonSelectedOption = screen.getByRole("option", { name: "Project B" });
-    expect(nonSelectedOption).toHaveClass("hover:bg-theme-info-bg/50");
+    expect(nonSelectedOption).toHaveClass("hover:bg-theme-info-bg");
   });
 
   it("has z-[60] so dropdowns appear above Build sidebar (z-50)", () => {

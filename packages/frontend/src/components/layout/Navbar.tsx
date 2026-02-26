@@ -160,7 +160,7 @@ export function Navbar({
                     className={`w-full text-left px-4 py-2 text-sm transition-colors ${
                       p.id === project?.id
                         ? "bg-theme-info-bg text-theme-info-text font-medium"
-                        : "text-theme-muted hover:bg-theme-info-bg/50"
+                        : "text-theme-muted hover:bg-theme-info-bg"
                     }`}
                   >
                     {p.name}
