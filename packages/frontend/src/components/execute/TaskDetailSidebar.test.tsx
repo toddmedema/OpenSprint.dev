@@ -835,6 +835,77 @@ describe("TaskDetailSidebar", () => {
     });
   });
 
+  describe("Task complexity", () => {
+    it("shows Low when task has complexity low", () => {
+      const props = createMinimalProps({
+        selectedTaskData: {
+          ...createMinimalProps().selectedTaskData,
+          complexity: "low" as const,
+        },
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>
+      );
+      const complexity = screen.getByTestId("task-complexity");
+      expect(complexity).toHaveTextContent("Low");
+      expect(complexity).toHaveAttribute("aria-label", "Complexity: low");
+    });
+
+    it("shows High when task has complexity high", () => {
+      const props = createMinimalProps({
+        selectedTaskData: {
+          ...createMinimalProps().selectedTaskData,
+          complexity: "high" as const,
+        },
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>
+      );
+      const complexity = screen.getByTestId("task-complexity");
+      expect(complexity).toHaveTextContent("High");
+      expect(complexity).toHaveAttribute("aria-label", "Complexity: high");
+    });
+
+    it("shows em dash when task has no complexity", () => {
+      const props = createMinimalProps({
+        selectedTaskData: {
+          ...createMinimalProps().selectedTaskData,
+          complexity: undefined,
+        },
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>
+      );
+      const complexity = screen.getByTestId("task-complexity");
+      expect(complexity).toHaveTextContent("—");
+      expect(complexity).toHaveAttribute("aria-label", "Complexity: not set");
+    });
+
+    it("displays complexity in same row as priority", () => {
+      const props = createMinimalProps({
+        selectedTaskData: {
+          ...createMinimalProps().selectedTaskData,
+          complexity: "high" as const,
+        },
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>
+      );
+      const row = screen.getByTestId("task-detail-priority-state-row");
+      expect(row).toContainElement(screen.getByTestId("task-complexity"));
+      expect(row).toHaveTextContent("High");
+      expect(row).toHaveTextContent("In Progress");
+    });
+  });
+
   describe("Layout: priority/state row and active-agent/time row", () => {
     const taskDetailWithPriority = (priority: number) => ({
       id: "epic-1.1",

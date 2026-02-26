@@ -271,6 +271,15 @@ export function TaskDetailSidebar({
                     )}
                   </div>
                 )}
+                <span
+                  className="inline-flex items-center gap-1.5 text-theme-muted/80"
+                  data-testid="task-complexity"
+                  aria-label={task.complexity ? `Complexity: ${task.complexity}` : "Complexity: not set"}
+                >
+                  {task.complexity === "low" || task.complexity === "high"
+                    ? task.complexity.charAt(0).toUpperCase() + task.complexity.slice(1)
+                    : "—"}
+                </span>
               </div>
               {/* Row 2: Active agent section (role, name, elapsed time) — only when agent is active */}
               {roleLabel && (
