@@ -6,6 +6,24 @@
  */
 
 /**
+ * Extract text from a content array (message.content or similar).
+ */
+function extractTextFromContentArray(content: unknown[]): string | null {
+  const parts: string[] = [];
+  for (const block of content) {
+    if (
+      block &&
+      typeof block === "object" &&
+      (block as Record<string, unknown>).type === "text"
+    ) {
+      const t = (block as Record<string, unknown>).text;
+      if (typeof t === "string") parts.push(t);
+    }
+  }
+  return parts.length > 0 ? parts.join("") : null;
+}
+
+/**
  * Extract displayable content from a single JSON event.
  * Returns the text to show, or null if the event should be hidden (metadata only).
  */
@@ -41,18 +59,15 @@ function extractContentFromEvent(obj: unknown): string | null {
 
   // message: {"type":"message","content":[{"type":"text","text":"..."}]}
   if (o.type === "message" && Array.isArray(o.content)) {
-    const parts: string[] = [];
-    for (const block of o.content) {
-      if (
-        block &&
-        typeof block === "object" &&
-        (block as Record<string, unknown>).type === "text"
-      ) {
-        const t = (block as Record<string, unknown>).text;
-        if (typeof t === "string") parts.push(t);
-      }
+    return extractTextFromContentArray(o.content);
+  }
+
+  // Cursor Composer: {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"..."}]}}
+  if (o.type === "assistant" && o.message && typeof o.message === "object") {
+    const msg = o.message as Record<string, unknown>;
+    if (Array.isArray(msg.content)) {
+      return extractTextFromContentArray(msg.content);
     }
-    return parts.length > 0 ? parts.join("") : null;
   }
 
   // content_block_start with text: {"type":"content_block_start","content_block":{"type":"text","text":"..."}}
@@ -63,14 +78,16 @@ function extractContentFromEvent(obj: unknown): string | null {
     }
   }
 
-  // thinking: {"type":"thinking","content":"..."} or {"type":"thinking","thinking":"..."} — show actual thinking text
+  // thinking: {"type":"thinking","content":"..."} or {"type":"thinking","thinking":"..."} or {"type":"thinking","subtype":"delta","text":"..."} (Cursor Composer)
   if (o.type === "thinking") {
     const content =
       typeof o.content === "string"
         ? o.content
         : typeof o.thinking === "string"
           ? o.thinking
-          : null;
+          : typeof o.text === "string"
+            ? o.text
+            : null;
     return content ? content + "\n" : null;
   }
 

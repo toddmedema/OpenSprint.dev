@@ -45,6 +45,33 @@ describe("agentOutputFilter", () => {
       expect(f.filter(chunk)).toBe("Full response");
     });
 
+    it("extracts text from Cursor Composer type:assistant with message.content", () => {
+      const f = createAgentOutputFilter();
+      const chunk =
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will implement the fix."}]},"session_id":"abc","timestamp_ms":123}\n';
+      expect(f.filter(chunk)).toBe("I will implement the fix.");
+    });
+
+    it("extracts newlines from Cursor Composer assistant messages", () => {
+      const f = createAgentOutputFilter();
+      const chunk =
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"\\n\\n"}]},"session_id":"abc"}\n';
+      expect(f.filter(chunk)).toBe("\n\n");
+    });
+
+    it("extracts thinking from Cursor Composer type:thinking with text property", () => {
+      const f = createAgentOutputFilter();
+      const chunk =
+        '{"type":"thinking","subtype":"delta","text":"analyzing the codebase","session_id":"abc"}\n';
+      expect(f.filter(chunk)).toBe("analyzing the codebase\n");
+    });
+
+    it("skips Cursor Composer thinking delta with empty text", () => {
+      const f = createAgentOutputFilter();
+      const chunk = '{"type":"thinking","subtype":"delta","text":"","session_id":"abc"}\n';
+      expect(f.filter(chunk)).toBe("");
+    });
+
     it("filters out metadata-only events (tool_use, etc)", () => {
       const f = createAgentOutputFilter();
       const chunk = '{"type":"tool_use","name":"edit","input":{}}\n';
@@ -199,6 +226,13 @@ describe("agentOutputFilter", () => {
 
     it("returns empty string for empty input", () => {
       expect(filterAgentOutput("")).toBe("");
+    });
+
+    it("extracts from Cursor Composer NDJSON (assistant + thinking)", () => {
+      const raw =
+        '{"type":"thinking","subtype":"delta","text":"checking filter"}\n' +
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Here is the fix."}]}}\n';
+      expect(filterAgentOutput(raw)).toBe("checking filter\nHere is the fix.");
     });
   });
 });
