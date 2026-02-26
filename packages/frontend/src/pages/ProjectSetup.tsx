@@ -230,12 +230,23 @@ export function ProjectSetup() {
     <Layout>
       <div className="h-full overflow-y-auto">
         <div className="max-w-2xl mx-auto px-6 py-10">
-          <h1 className="text-2xl font-bold text-theme-text mb-2">
-            {isAddExisting ? "Add Existing Project" : "Create New Project"}
-            <span className="text-theme-muted font-normal text-lg ml-2">
-              — {STEPS[currentStepIndex]?.label ?? step}
-            </span>
-          </h1>
+          <div className="flex justify-between items-start mb-2">
+            <h1 className="text-2xl font-bold text-theme-text">
+              {isAddExisting ? "Add Existing Project" : "Create New Project"}
+              <span className="text-theme-muted font-normal text-lg ml-2">
+                — {STEPS[currentStepIndex]?.label ?? step}
+              </span>
+            </h1>
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="inline-flex items-center rounded px-2 py-1 text-sm text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text transition-colors border-0"
+              aria-label="Cancel"
+              data-testid="cancel-button"
+            >
+              Cancel
+            </button>
+          </div>
 
           <div
             role="progressbar"

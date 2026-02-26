@@ -2,8 +2,12 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { CreateNewProjectPage } from "./CreateNewProjectPage";
+
+function LocationDisplay() {
+  return <div data-testid="location">{useLocation().pathname}</div>;
+}
 
 const mockScaffold = vi.fn();
 const mockGetKeys = vi.fn();
@@ -51,6 +55,19 @@ describe("CreateNewProjectPage", () => {
   it("renders Create New Project title", () => {
     renderCreateNewProjectPage();
     expect(screen.getByRole("heading", { name: /create new project/i })).toBeInTheDocument();
+  });
+
+  it("Cancel button navigates to homepage", async () => {
+    mockGetKeys.mockResolvedValue({ anthropic: true, cursor: true, claudeCli: true });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/projects/create-new"]}>
+        <CreateNewProjectPage />
+        <LocationDisplay />
+      </MemoryRouter>
+    );
+    await user.click(screen.getByTestId("cancel-button"));
+    expect(screen.getByTestId("location")).toHaveTextContent("/");
   });
 
   it("shows progress bar with Step 1 of 3", () => {

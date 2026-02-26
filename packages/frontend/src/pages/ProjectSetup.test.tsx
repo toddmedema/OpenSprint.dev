@@ -1,8 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { ProjectSetup } from "./ProjectSetup";
+
+function LocationDisplay() {
+  return <div data-testid="location">{useLocation().pathname}</div>;
+}
 
 // Mock the API and Layout to avoid network calls and complex layout
 vi.mock("../api/client", () => ({
@@ -120,6 +124,20 @@ describe("ProjectSetup - Progress indicator", () => {
 
     expect(screen.getByRole("progressbar", { name: /step 2 of 6/i })).toBeInTheDocument();
     expect(screen.getByText(/— Agent Config/)).toBeInTheDocument();
+  });
+});
+
+describe("ProjectSetup - Cancel button", () => {
+  it("Cancel button navigates to homepage", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/projects/add-existing"]}>
+        <ProjectSetup />
+        <LocationDisplay />
+      </MemoryRouter>
+    );
+    await user.click(screen.getByTestId("cancel-button"));
+    expect(screen.getByTestId("location")).toHaveTextContent("/");
   });
 });
 
