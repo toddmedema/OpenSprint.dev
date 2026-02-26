@@ -124,6 +124,12 @@ export interface ApiKeyEntry {
 /** API keys per provider: array of entries ordered by preference (first available used) */
 export type ApiKeys = Partial<Record<ApiKeyProvider, ApiKeyEntry[]>>;
 
+/** Global settings stored at ~/.opensprint/global-settings.json */
+export interface GlobalSettings {
+  apiKeys?: ApiKeys;
+  useCustomCli?: boolean;
+}
+
 /** Masked API key entry for API responses (never exposes raw value) */
 export interface MaskedApiKeyEntry {
   id: string;
