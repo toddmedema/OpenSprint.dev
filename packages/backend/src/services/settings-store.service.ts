@@ -103,6 +103,38 @@ export async function setSettingsInStore(
   await saveStore(store);
 }
 
+/** Per-project lock for atomic updates (avoids race conditions on concurrent limitHitAt updates) */
+const updateLocks = new Map<string, Promise<void>>();
+
+/**
+ * Atomically update project settings. Serializes concurrent updates per projectId.
+ * Uses defaults when project has no stored settings.
+ */
+export async function updateSettingsInStore(
+  projectId: string,
+  defaults: ProjectSettings,
+  updater: (settings: ProjectSettings) => ProjectSettings
+): Promise<void> {
+  const prev = updateLocks.get(projectId) ?? Promise.resolve();
+  let resolve: () => void;
+  const next = new Promise<void>((r) => {
+    resolve = r;
+  });
+  updateLocks.set(projectId, prev.then(() => next));
+  await prev;
+  try {
+    const store = await loadStore();
+    const entry = store[projectId];
+    const current = entry?.settings ?? defaults;
+    const updated = updater(current);
+    const now = new Date().toISOString();
+    store[projectId] = { settings: updated, updatedAt: now };
+    await saveStore(store);
+  } finally {
+    resolve!();
+  }
+}
+
 /**
  * Remove settings for a project (e.g. on project delete).
  */
