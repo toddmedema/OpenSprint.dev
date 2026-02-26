@@ -609,37 +609,30 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                     />
                   </div>
                   <hr />
-                  <div>
-                    <h3 className="text-sm font-semibold text-theme-text mb-1">Code Review</h3>
-                    <p className="text-xs text-theme-muted mb-3">
-                      After the coding agent completes a task, a review agent can validate the
-                      implementation against the ticket specification, verify tests pass and cover
-                      the scope, and check code quality. Rejected work is sent back to the coding
-                      agent with feedback for improvement.
-                    </p>
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-theme-bg-elevated">
-                      <div>
-                        <p className="text-sm font-medium text-theme-text">Review Mode</p>
-                        <p className="text-xs text-theme-muted">
-                          Never: merge directly. Always: run review after every success. On Failure
-                          Only: run review only when the task has had previous failures.
-                        </p>
-                      </div>
-                      <select
-                        data-testid="review-mode-select"
-                        className="input w-48"
-                        value={settings?.reviewMode ?? DEFAULT_REVIEW_MODE}
-                        onChange={(e) =>
-                          setSettings((s) =>
-                            s ? { ...s, reviewMode: e.target.value as ReviewMode } : null
-                          )
-                        }
-                      >
-                        <option value="never">Never</option>
-                        <option value="always">Always</option>
-                        <option value="on-failure-only">On Failure Only</option>
-                      </select>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-semibold text-theme-text">Code Review</h3>
+                      <p className="text-xs text-theme-muted">
+                        After the coding agent completes a task, a review agent can validate the
+                        implementation against the ticket specification, verify tests pass and cover
+                        the scope, and check code quality. Rejected work is sent back to the coding
+                        agent with feedback for improvement.
+                      </p>
                     </div>
+                    <select
+                      data-testid="review-mode-select"
+                      className="input w-48 shrink-0"
+                      value={settings?.reviewMode ?? DEFAULT_REVIEW_MODE}
+                      onChange={(e) =>
+                        setSettings((s) =>
+                          s ? { ...s, reviewMode: e.target.value as ReviewMode } : null
+                        )
+                      }
+                    >
+                      <option value="never">Never</option>
+                      <option value="always">Always</option>
+                      <option value="on-failure-only">On Failure Only</option>
+                    </select>
                   </div>
                   <hr />
                   <div className="flex items-center justify-between gap-4">
