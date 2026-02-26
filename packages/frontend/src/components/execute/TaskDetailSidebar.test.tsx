@@ -1083,7 +1083,7 @@ describe("TaskDetailSidebar", () => {
 
     await screen.findByText("Add feature");
 
-    const sourceFeedbackContent = container.querySelector("#source-feedback-content");
+    const sourceFeedbackContent = container.querySelector("#source-feedback-content-fb-1");
     const artifactsContent = container.querySelector("#artifacts-content");
     expect(sourceFeedbackContent).toBeInTheDocument();
     expect(artifactsContent).toBeInTheDocument();
@@ -1166,7 +1166,7 @@ describe("TaskDetailSidebar", () => {
 
     await screen.findByText("Add feature");
 
-    const sourceFeedbackHeader = container.querySelector("#source-feedback-header");
+    const sourceFeedbackHeader = container.querySelector("#source-feedback-header-fb-1");
     const descriptionHeader = container.querySelector("#description-header");
     const artifactsHeader = container.querySelector("#artifacts-header");
 
@@ -1333,7 +1333,7 @@ describe("TaskDetailSidebar", () => {
     await screen.findByText("Add feature");
 
     const headers = [
-      container.querySelector("#source-feedback-header"),
+      container.querySelector("#source-feedback-header-fb-1"),
       container.querySelector("#description-header"),
       container.querySelector("#artifacts-header"),
     ];
@@ -1374,5 +1374,196 @@ describe("TaskDetailSidebar", () => {
     expect(screen.getByTestId("completion-failure-reason")).toHaveTextContent(
       "Cursor agent requires authentication. Run agent login."
     );
+  });
+
+  it("shows multiple linked feedback sections when task has sourceFeedbackIds", async () => {
+    mockGet
+      .mockResolvedValueOnce({
+        id: "fb-1",
+        text: "First feedback",
+        category: "feature",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "pending",
+        createdAt: "2026-02-17T10:00:00Z",
+      })
+      .mockResolvedValueOnce({
+        id: "fb-2",
+        text: "Second feedback",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "pending",
+        createdAt: "2026-02-17T10:00:00Z",
+      });
+    const props = createMinimalProps({
+      selectedTaskData: {
+        id: "epic-1.1",
+        title: "Task with multiple feedback",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [],
+        description: "",
+        sourceFeedbackIds: ["fb-1", "fb-2"],
+        createdAt: "",
+        updatedAt: "",
+      },
+      sourceFeedbackExpanded: { "fb-1": true, "fb-2": false },
+      artifactsSectionExpanded: true,
+    });
+
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    expect(screen.getByRole("button", { name: /source feedback \(1 of 2\)/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /source feedback \(2 of 2\)/i })).toBeInTheDocument();
+    expect(await screen.findByText("First feedback")).toBeInTheDocument();
+    expect(screen.queryByText("Second feedback")).not.toBeInTheDocument();
+  });
+
+  it("first feedback expanded by default, rest collapsed when multiple sourceFeedbackIds", async () => {
+    mockGet.mockResolvedValue({
+      id: "fb-x",
+      text: "Feedback text",
+      category: "feature",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "pending",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+    const props = createMinimalProps({
+      selectedTaskData: {
+        id: "epic-1.1",
+        title: "Task",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [],
+        description: "",
+        sourceFeedbackIds: ["fb-a", "fb-b"],
+        createdAt: "",
+        updatedAt: "",
+      },
+      sourceFeedbackExpanded: {},
+      artifactsSectionExpanded: true,
+    });
+
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    const firstHeader = screen.getByRole("button", { name: /source feedback \(1 of 2\)/i });
+    const secondHeader = screen.getByRole("button", { name: /source feedback \(2 of 2\)/i });
+    expect(firstHeader).toHaveAttribute("aria-expanded", "true");
+    expect(secondHeader).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("each feedback section can be expanded/collapsed independently when multiple", async () => {
+    mockGet.mockResolvedValue({
+      id: "fb-x",
+      text: "Feedback text",
+      category: "feature",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "pending",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+    const setSourceFeedbackExpanded = vi.fn();
+    const props = createMinimalProps({
+      selectedTaskData: {
+        id: "epic-1.1",
+        title: "Task",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [],
+        description: "",
+        sourceFeedbackIds: ["fb-1", "fb-2"],
+        createdAt: "",
+        updatedAt: "",
+      },
+      sourceFeedbackExpanded: { "fb-1": true, "fb-2": false },
+      setSourceFeedbackExpanded,
+      artifactsSectionExpanded: true,
+    });
+
+    const user = userEvent.setup();
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    await user.click(screen.getByRole("button", { name: /collapse source feedback \(1 of 2\)/i }));
+    expect(setSourceFeedbackExpanded).toHaveBeenCalledWith(
+      expect.any(Function)
+    );
+    const updater = setSourceFeedbackExpanded.mock.calls[0][0];
+    expect(updater({ "fb-1": true, "fb-2": false })).toEqual({ "fb-1": false, "fb-2": false });
+
+    setSourceFeedbackExpanded.mockClear();
+    await user.click(screen.getByRole("button", { name: /expand source feedback \(2 of 2\)/i }));
+    expect(setSourceFeedbackExpanded).toHaveBeenCalledWith(expect.any(Function));
+    const updater2 = setSourceFeedbackExpanded.mock.calls[0][0];
+    expect(updater2({ "fb-1": true, "fb-2": false })).toEqual({ "fb-1": true, "fb-2": true });
+  });
+
+  it("uses sourceFeedbackId when sourceFeedbackIds is absent (backward compat)", async () => {
+    mockGet.mockResolvedValue({
+      id: "fb-legacy",
+      text: "Legacy single feedback",
+      category: "feature",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "pending",
+      createdAt: "2026-02-17T10:00:00Z",
+    });
+    const props = createMinimalProps({
+      selectedTaskData: {
+        id: "epic-1.1",
+        title: "Legacy task",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [],
+        description: "",
+        sourceFeedbackId: "fb-legacy",
+        createdAt: "",
+        updatedAt: "",
+      },
+      sourceFeedbackExpanded: { "fb-legacy": true },
+      artifactsSectionExpanded: true,
+    });
+
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    expect(screen.getByRole("button", { name: /source feedback/i })).toBeInTheDocument();
+    expect(await screen.findByText("Legacy single feedback")).toBeInTheDocument();
   });
 });

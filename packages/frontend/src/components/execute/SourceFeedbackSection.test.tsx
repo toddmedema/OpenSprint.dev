@@ -153,7 +153,7 @@ describe("SourceFeedbackSection", () => {
 
     await screen.findByText("Test feedback");
 
-    const contentRegion = container.querySelector("#source-feedback-content");
+    const contentRegion = container.querySelector("#source-feedback-content-fb-1");
     expect(contentRegion).toBeInTheDocument();
     expect(contentRegion).toHaveClass("p-4", "pt-0");
 

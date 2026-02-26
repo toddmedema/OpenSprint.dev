@@ -2253,7 +2253,7 @@ describe("ExecutePhase Redux integration", () => {
       expect(mockFeedbackGet).toHaveBeenCalledWith("proj-1", "fb-xyz");
     });
 
-    const sourceFeedbackHeader = container.querySelector("#source-feedback-header");
+    const sourceFeedbackHeader = container.querySelector("#source-feedback-header-fb-xyz");
     const descriptionHeader = container.querySelector("#description-header");
     const artifactsHeader = container.querySelector("#artifacts-header");
 

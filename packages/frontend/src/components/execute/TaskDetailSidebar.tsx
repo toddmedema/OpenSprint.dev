@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { useAutoScroll } from "../../hooks/useAutoScroll";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -319,25 +319,40 @@ export function TaskDetailSidebar({
           ) : null}
         </div>
 
-        {task?.sourceFeedbackId && (
-          <SourceFeedbackSection
-            projectId={projectId}
-            feedbackId={task.sourceFeedbackId}
-            expanded={sourceFeedbackExpanded[task.sourceFeedbackId] ?? true}
-            onToggle={() =>
-              setSourceFeedbackExpanded((prev) => ({
-                ...prev,
-                [task.sourceFeedbackId!]: !(prev[task.sourceFeedbackId!] ?? true),
-              }))
-            }
-          />
-        )}
+        {((): React.ReactNode => {
+          // Support both sourceFeedbackIds (array) and legacy sourceFeedbackId (single)
+          const feedbackIds =
+            task?.sourceFeedbackIds ?? (task?.sourceFeedbackId ? [task.sourceFeedbackId] : []);
+          if (feedbackIds.length === 0) return null;
+          const count = feedbackIds.length;
+          return feedbackIds.map((feedbackId, index) => (
+            <SourceFeedbackSection
+              key={feedbackId}
+              projectId={projectId}
+              feedbackId={feedbackId}
+              expanded={sourceFeedbackExpanded[feedbackId] ?? index === 0}
+              onToggle={() =>
+                setSourceFeedbackExpanded((prev) => ({
+                  ...prev,
+                  [feedbackId]: !(prev[feedbackId] ?? index === 0),
+                }))
+              }
+              title={
+                count > 1
+                  ? `Source feedback (${index + 1} of ${count})`
+                  : "Source Feedback"
+              }
+            />
+          ));
+        })()}
 
         {task &&
           (() => {
             const desc = task.description ?? "";
             const isOnlyFeedbackId = /^Feedback ID:\s*.+$/.test(desc.trim());
-            const displayDesc = task.sourceFeedbackId && isOnlyFeedbackId ? "" : desc;
+            const hasSourceFeedback =
+              (task.sourceFeedbackIds?.length ?? (task.sourceFeedbackId ? 1 : 0)) > 0;
+            const displayDesc = hasSourceFeedback && isOnlyFeedbackId ? "" : desc;
             const hasDeps =
               (task.dependencies ?? []).filter((d) => d.targetId && d.type !== "discovered-from")
                 .length > 0;

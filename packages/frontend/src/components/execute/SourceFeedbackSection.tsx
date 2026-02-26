@@ -9,11 +9,14 @@ export function SourceFeedbackSection({
   feedbackId,
   expanded,
   onToggle,
+  title = "Source Feedback",
 }: {
   projectId: string;
   feedbackId: string;
   expanded: boolean;
   onToggle: () => void;
+  /** Optional title override (e.g. "Source feedback (1 of 2)" when multiple) */
+  title?: string;
 }) {
   const dispatch = useAppDispatch();
   const feedback = useAppSelector((s) =>
@@ -39,15 +42,18 @@ export function SourceFeedbackSection({
     }
   }, [error, dispatch]);
 
+  const contentId = `source-feedback-content-${feedbackId}`;
+  const headerId = `source-feedback-header-${feedbackId}`;
+
   return (
     <CollapsibleSection
-      title="Source Feedback"
+      title={title}
       expanded={expanded}
       onToggle={onToggle}
-      expandAriaLabel="Expand Source Feedback"
-      collapseAriaLabel="Collapse Source Feedback"
-      contentId="source-feedback-content"
-      headerId="source-feedback-header"
+      expandAriaLabel={`Expand ${title}`}
+      collapseAriaLabel={`Collapse ${title}`}
+      contentId={contentId}
+      headerId={headerId}
     >
       {loading ? (
         <div className="bg-theme-code-bg rounded-lg border border-theme-border overflow-hidden">
