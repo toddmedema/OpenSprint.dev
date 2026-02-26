@@ -109,6 +109,46 @@ describe("DependencyGraph", () => {
     });
   });
 
+  it("runs layout on first load without requiring a click", async () => {
+    // Acceptance: layout runs on mount so plans appear in correct positions (not stacked top-left).
+    // Use ResizeObserver that delivers real dimensions so layout uses proper viewport on first paint.
+    let resizeCallback: ((entries: unknown[]) => void) | null = null;
+    global.ResizeObserver = vi.fn().mockImplementation((cb: (entries: unknown[]) => void) => {
+      resizeCallback = cb;
+      return {
+        observe: vi.fn(),
+        unobserve: vi.fn(),
+        disconnect: vi.fn(),
+      };
+    });
+
+    const graphWithThreePlans: PlanDependencyGraph = {
+      plans: [mockPlan("a"), mockPlan("b"), mockPlan("c")],
+      edges: [
+        { from: "a", to: "b", type: "blocks" },
+        { from: "b", to: "c", type: "blocks" },
+      ],
+    };
+
+    const { container } = render(<DependencyGraph graph={graphWithThreePlans} fillHeight />);
+
+    // Give container real dimensions and trigger ResizeObserver so layout runs on mount
+    const wrapper = container.firstElementChild!;
+    Object.defineProperty(wrapper, "clientWidth", { value: 600, configurable: true });
+    Object.defineProperty(wrapper, "clientHeight", { value: 300, configurable: true });
+    resizeCallback?.([]);
+
+    // Graph renders with layout applied (no click required)
+    await vi.waitFor(() => {
+      expect(screen.getByText("a")).toBeInTheDocument();
+      expect(screen.getByText("b")).toBeInTheDocument();
+      expect(screen.getByText("c")).toBeInTheDocument();
+    });
+
+    const nodes = document.querySelectorAll("svg g.nodes g");
+    expect(nodes.length).toBe(3);
+  });
+
   it("calls onPlanClick when a plan node is clicked", async () => {
     const onPlanClick = vi.fn();
     render(<DependencyGraph graph={mockGraph} onPlanClick={onPlanClick} />);

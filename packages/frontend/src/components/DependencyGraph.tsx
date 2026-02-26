@@ -116,6 +116,10 @@ export function DependencyGraph({ graph, onPlanClick, fillHeight }: DependencyGr
   const readyRef = useRef(false);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [ready, setReady] = useState(false);
+  /** Set when fallback dimensions were used; cleared when we get real dimensions and re-run layout. */
+  const hadFallbackDimensionsRef = useRef(false);
+  /** Bumped once when transitioning from fallback to real dimensions so layout re-runs (fixes initial top-left clustering). */
+  const [layoutKey, setLayoutKey] = useState(0);
 
   // Track container size in a ref. Only signal readiness once for the initial D3 render.
   // Subsequent size changes update SVG attributes directly without rebuilding the graph.
@@ -161,6 +165,12 @@ export function DependencyGraph({ graph, onPlanClick, fillHeight }: DependencyGr
         return;
       }
 
+      // Only re-run layout when we had fallback dimensions and now have real ones (fixes initial top-left clustering)
+      if (hadFallbackDimensionsRef.current) {
+        hadFallbackDimensionsRef.current = false;
+        setLayoutKey((k) => k + 1);
+      }
+
       const svg = svgRef.current;
       if (svg && svg.childNodes.length > 0) {
         d3.select(svg)
@@ -196,6 +206,7 @@ export function DependencyGraph({ graph, onPlanClick, fillHeight }: DependencyGr
           : Math.max(280, Math.min(400, (graph?.plans.length ?? 3) * 50));
         dimensionsRef.current = { width: w, height: h };
         readyRef.current = true;
+        hadFallbackDimensionsRef.current = true;
         setReady(true);
       }
     }, 100);
@@ -205,6 +216,45 @@ export function DependencyGraph({ graph, onPlanClick, fillHeight }: DependencyGr
       clearTimeout(fallbackId);
     };
   }, [graph?.plans.length, fillHeight]);
+
+  // Run layout/re-render once on first load when container has real dimensions.
+  // Fixes: plans stack in top-left until a plan is clicked (click triggers ResizeObserver).
+  // After ready, wait for layout to be computed (2 frames), then re-check dimensions and
+  // bump layoutKey if we used fallback so layout re-runs with correct viewport.
+  useEffect(() => {
+    if (!ready || !graph?.plans.length) return;
+
+    const raf1 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const measuredWidth = el.clientWidth;
+        const measuredHeight = el.clientHeight;
+        const hasValidDimensions =
+          measuredWidth >= MIN_DIMENSION &&
+          (fillHeight ? measuredHeight >= MIN_DIMENSION : true);
+
+        if (!hasValidDimensions) return;
+
+        const width = measuredWidth || 600;
+        const height = fillHeight
+          ? measuredHeight || Math.max(280, (graph?.plans.length ?? 3) * 50)
+          : Math.max(280, Math.min(400, (graph?.plans.length ?? 3) * 50));
+
+        const prev = dimensionsRef.current;
+        if (prev && prev.width === width && prev.height === height && !hadFallbackDimensionsRef.current) return;
+
+        dimensionsRef.current = { width, height };
+        if (hadFallbackDimensionsRef.current) {
+          hadFallbackDimensionsRef.current = false;
+          setLayoutKey((k) => k + 1);
+        }
+      });
+    });
+
+    return () => cancelAnimationFrame(raf1);
+  }, [ready, graph?.plans.length, fillHeight]);
 
   useEffect(() => {
     if (
@@ -428,7 +478,7 @@ export function DependencyGraph({ graph, onPlanClick, fillHeight }: DependencyGr
     return () => {
       simulation.stop();
     };
-  }, [graph, onPlanClick, ready]);
+  }, [graph, onPlanClick, ready, layoutKey]);
 
   if (!graph || graph.plans.length === 0) {
     return (
