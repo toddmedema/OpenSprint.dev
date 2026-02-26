@@ -42,4 +42,6 @@ export interface FeedbackItem {
   depth?: number;
   /** User-specified priority (0=Critical, 1=High, 2=Medium, 3=Low, 4=Lowest) from submission */
   userPriority?: number | null;
+  /** Internal: retry count when link_to_existing_task_ids had invalid IDs (cap at 2, then fall back to create) */
+  linkInvalidRetryCount?: number;
 }

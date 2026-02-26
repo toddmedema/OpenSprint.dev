@@ -523,6 +523,7 @@ export class FeedbackService {
     }
 
     // Link to existing tasks or create new tasks
+    const LINK_INVALID_RETRY_CAP = 2;
     try {
       if (linkIds.length > 0) {
         const readyTasks = await this.taskStore.ready(projectId);
@@ -536,19 +537,36 @@ export class FeedbackService {
         );
         const invalidIds = linkIds.filter((id) => !validIds.has(id));
         if (invalidIds.length > 0) {
+          const fresh = await feedbackStore.getFeedback(projectId, item.id);
+          const retryCount = fresh.linkInvalidRetryCount ?? 0;
           log.warn("Invalid task IDs in link_to_existing_task_ids", {
             feedbackId: item.id,
             invalidIds: [...new Set(invalidIds)],
+            retryCount,
           });
-          await this.enqueueForCategorization(projectId, item.id);
-          return;
+          if (retryCount >= LINK_INVALID_RETRY_CAP) {
+            log.warn("Link invalid retry cap exceeded, falling back to create path", {
+              feedbackId: item.id,
+            });
+            item.createdTaskIds = await this.createTasksFromFeedback(
+              projectId,
+              item,
+              similarExistingTaskId ?? undefined
+            );
+          } else {
+            item.linkInvalidRetryCount = retryCount + 1;
+            await this.saveFeedback(projectId, item);
+            await this.enqueueForCategorization(projectId, item.id);
+            return;
+          }
+        } else {
+          item.createdTaskIds = await this.linkFeedbackToExistingTasks(
+            projectId,
+            item,
+            linkIds,
+            updateExistingTasks
+          );
         }
-        item.createdTaskIds = await this.linkFeedbackToExistingTasks(
-          projectId,
-          item,
-          linkIds,
-          updateExistingTasks
-        );
       } else {
         item.createdTaskIds = await this.createTasksFromFeedback(
           projectId,

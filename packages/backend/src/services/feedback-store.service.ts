@@ -97,7 +97,10 @@ function itemToRow(item: FeedbackItem, projectId: string): Record<string, unknow
     parent_id: item.parent_id ?? null,
     depth: item.depth ?? null,
     user_priority: item.userPriority ?? null,
-    extra: "{}",
+    extra:
+      item.linkInvalidRetryCount != null
+        ? JSON.stringify({ linkInvalidRetryCount: item.linkInvalidRetryCount })
+        : "{}",
   };
 }
 
@@ -232,7 +235,7 @@ export class FeedbackStoreService {
         `UPDATE feedback SET
           text = ?, category = ?, mapped_plan_id = ?, created_task_ids = ?, status = ?,
           task_titles = ?, proposed_tasks = ?, mapped_epic_id = ?, is_scope_change = ?,
-          feedback_source_task_id = ?, parent_id = ?, depth = ?, user_priority = ?
+          feedback_source_task_id = ?, parent_id = ?, depth = ?, user_priority = ?, extra = ?
         WHERE id = ? AND project_id = ?`,
         [
           row.text,
@@ -248,6 +251,7 @@ export class FeedbackStoreService {
           row.parent_id,
           row.depth,
           row.user_priority,
+          row.extra ?? "{}",
           item.id,
           projectId,
         ]
