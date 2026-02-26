@@ -144,6 +144,15 @@ function areFeedbackNodesEqual(a: FeedbackTreeNode, b: FeedbackTreeNode): boolea
   return a.children.every((c, i) => areFeedbackNodesEqual(c, b.children[i]));
 }
 
+/** Count total replies in a feedback subtree (direct + nested). Works for arbitrary nesting depth. */
+function countTotalReplies(node: FeedbackTreeNode): number {
+  let count = node.children.length;
+  for (const child of node.children) {
+    count += countTotalReplies(child);
+  }
+  return count;
+}
+
 /** Build tree from flat feedback list. Top-level first, then children by createdAt desc.
  * Items whose parent is not in the list are shown at top level (e.g. when filtering). */
 function buildFeedbackTree(items: FeedbackItem[]): FeedbackTreeNode[] {
@@ -386,9 +395,10 @@ const FeedbackCard = memo(
                   onClick={() => onToggleCollapse(item.id)}
                   className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text transition-colors"
                   aria-label={isCollapsed ? "Expand replies" : "Collapse replies"}
+                  data-testid={`collapse-replies-${item.id}`}
                 >
-                  {isCollapsed ? "Expand" : "Collapse"} ({children.length}{" "}
-                  {children.length === 1 ? "reply" : "replies"})
+                  {isCollapsed ? "Expand" : "Collapse"} ({countTotalReplies(node)}{" "}
+                  {countTotalReplies(node) === 1 ? "reply" : "replies"})
                 </button>
               )}
             </div>

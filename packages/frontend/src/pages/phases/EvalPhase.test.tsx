@@ -1026,6 +1026,199 @@ describe("EvalPhase feedback form", () => {
     });
   });
 
+  describe("collapse button total reply count", () => {
+    it("shows total count including nested replies for direct children only", async () => {
+      const feedbackWithReplies: FeedbackItem[] = [
+        {
+          id: "fb-parent",
+          text: "Parent feedback",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+        {
+          id: "fb-reply-1",
+          text: "Reply 1",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:02Z",
+          parent_id: "fb-parent",
+        },
+        {
+          id: "fb-reply-2",
+          text: "Reply 2",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:03Z",
+          parent_id: "fb-reply-1",
+        },
+      ];
+      const store = createStore({ evalFeedback: feedbackWithReplies });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => expect(screen.getByText("Parent feedback")).toBeInTheDocument());
+
+      // Parent has 2 total replies (reply-1 + reply-2 nested under reply-1)
+      const collapseBtn = screen.getByTestId("collapse-replies-fb-parent");
+      expect(collapseBtn).toHaveTextContent("Collapse (2 replies)");
+    });
+
+    it("shows total count for arbitrary nesting depth", async () => {
+      const feedbackDeepNesting: FeedbackItem[] = [
+        {
+          id: "fb-root",
+          text: "Root",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+        {
+          id: "fb-a",
+          text: "A",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:02Z",
+          parent_id: "fb-root",
+        },
+        {
+          id: "fb-b",
+          text: "B",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:03Z",
+          parent_id: "fb-a",
+        },
+        {
+          id: "fb-c",
+          text: "C",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:04Z",
+          parent_id: "fb-b",
+        },
+      ];
+      const store = createStore({ evalFeedback: feedbackDeepNesting });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => expect(screen.getByText("Root")).toBeInTheDocument());
+
+      // Root has 3 total replies (A, B, C)
+      const collapseBtn = screen.getByTestId("collapse-replies-fb-root");
+      expect(collapseBtn).toHaveTextContent("Collapse (3 replies)");
+    });
+
+    it("shows singular 'reply' when count is 1", async () => {
+      const feedbackSingleReply: FeedbackItem[] = [
+        {
+          id: "fb-parent",
+          text: "Parent",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+        {
+          id: "fb-reply",
+          text: "Only reply",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:02Z",
+          parent_id: "fb-parent",
+        },
+      ];
+      const store = createStore({ evalFeedback: feedbackSingleReply });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => expect(screen.getByText("Parent")).toBeInTheDocument());
+
+      const collapseBtn = screen.getByTestId("collapse-replies-fb-parent");
+      expect(collapseBtn).toHaveTextContent("Collapse (1 reply)");
+    });
+
+    it("count updates when replies are added via Redux", async () => {
+      const initialFeedback: FeedbackItem[] = [
+        {
+          id: "fb-parent",
+          text: "Parent",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+        {
+          id: "fb-reply-1",
+          text: "Reply 1",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:02Z",
+          parent_id: "fb-parent",
+        },
+      ];
+      const store = createStore({ evalFeedback: initialFeedback });
+      render(
+        <Provider store={store}>
+          <EvalPhase projectId="proj-1" />
+        </Provider>
+      );
+
+      await waitFor(() => expect(screen.getByText("Parent")).toBeInTheDocument());
+      expect(screen.getByTestId("collapse-replies-fb-parent")).toHaveTextContent("Collapse (1 reply)");
+
+      // Add a nested reply via Redux (simulates WebSocket feedback.updated)
+      const newReply: FeedbackItem = {
+        id: "fb-reply-2",
+        text: "Reply 2",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "pending",
+        createdAt: "2024-01-01T00:00:03Z",
+        parent_id: "fb-reply-1",
+      };
+      act(() => {
+        store.dispatch(updateFeedbackItem(newReply));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("collapse-replies-fb-parent")).toHaveTextContent(
+          "Collapse (2 replies)"
+        );
+      });
+    });
+  });
+
   describe("feedback card task chips", () => {
     it("shows priority icon in each created-task chip", async () => {
       const feedbackWithTasks: FeedbackItem[] = [
