@@ -15,6 +15,54 @@ export const modelsRouter = Router();
 
 const CURSOR_MODELS_URL = "https://api.cursor.com/v0/models";
 
+/** Validate an API key via minimal API call. Reused by POST /env/keys/validate. */
+export async function validateApiKey(
+  provider: "claude" | "cursor",
+  value: string
+): Promise<{ valid: boolean; error?: string }> {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return { valid: false, error: "value is required" };
+  }
+
+  if (provider === "claude") {
+    try {
+      const client = new Anthropic({ apiKey: trimmed });
+      for await (const _ of client.models.list({ limit: 1 })) {
+        break; // one iteration is enough to validate
+      }
+      return { valid: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { valid: false, error: msg };
+    }
+  }
+
+  if (provider === "cursor") {
+    try {
+      const response = await fetch(CURSOR_MODELS_URL, {
+        headers: { Authorization: `Bearer ${trimmed}` },
+      });
+      if (response.ok) return { valid: true };
+      const text = await response.text();
+      const hint =
+        response.status === 401
+          ? " Check that the API key is valid. Get a key from Cursor → Settings → Integrations → User API Keys."
+          : response.status === 403
+            ? " Your API key may not have access to models."
+            : response.status === 429
+              ? " Cursor API rate limit hit. Try again shortly."
+              : "";
+      return { valid: false, error: `Cursor API error ${response.status}: ${text}${hint}` };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { valid: false, error: msg };
+    }
+  }
+
+  return { valid: false, error: `Unknown provider: ${provider}` };
+}
+
 /** In-flight fetches per provider to coalesce concurrent requests (avoids rate limits). */
 const inFlightFetches = new Map<string, Promise<ModelOption[]>>();
 

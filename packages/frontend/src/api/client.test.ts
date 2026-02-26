@@ -199,6 +199,37 @@ describe("api client", () => {
       );
     });
 
+    it("validateKey sends POST with provider and value", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { valid: true } }),
+      } as Response);
+
+      const result = await api.env.validateKey("claude", "sk-secret");
+      expect(result).toEqual({ valid: true });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/env/keys/validate"),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ provider: "claude", value: "sk-secret" }),
+        })
+      );
+    });
+
+    it("validateKey returns valid: false with error on failure", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          data: { valid: false, error: "Invalid API key" },
+        }),
+      } as Response);
+
+      const result = await api.env.validateKey("cursor", "bad-key");
+      expect(result).toEqual({ valid: false, error: "Invalid API key" });
+    });
+
     it("saveKey sends POST with key and value", async () => {
       vi.mocked(fetch).mockResolvedValue({
         ok: true,

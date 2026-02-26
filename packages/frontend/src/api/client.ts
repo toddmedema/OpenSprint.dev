@@ -114,6 +114,11 @@ export const api = {
   env: {
     getKeys: () =>
       request<{ anthropic: boolean; cursor: boolean; claudeCli: boolean }>("/env/keys"),
+    validateKey: (provider: "claude" | "cursor", value: string) =>
+      request<{ valid: boolean; error?: string }>("/env/keys/validate", {
+        method: "POST",
+        body: JSON.stringify({ provider, value }),
+      }),
     saveKey: (key: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY", value: string) =>
       request<{ saved: boolean }>("/env/keys", {
         method: "POST",

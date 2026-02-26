@@ -9,6 +9,7 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
+import { validateApiKey } from "./models.js";
 
 const execFileAsync = promisify(execFile);
 const log = createLogger("env");
@@ -95,6 +96,30 @@ envRouter.get("/keys", async (_req, res, next) => {
     res.json({
       data: { anthropic, cursor, claudeCli },
     } as ApiResponse<{ anthropic: boolean; cursor: boolean; claudeCli: boolean }>);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /env/keys/validate — Validate an API key via minimal API call (Claude: list models limit 1; Cursor: GET /v0/models).
+envRouter.post("/keys/validate", async (req: Request, res, next) => {
+  try {
+    const { provider, value } = req.body as { provider?: string; value?: string };
+    if (!provider || typeof value !== "string") {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "provider and value are required");
+    }
+    if (provider !== "claude" && provider !== "cursor") {
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "provider must be 'claude' or 'cursor'"
+      );
+    }
+
+    const result = await validateApiKey(provider, value);
+    res.json({
+      data: result.valid ? { valid: true } : { valid: false, error: result.error },
+    } as ApiResponse<{ valid: boolean; error?: string }>);
   } catch (err) {
     next(err);
   }

@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
-import { createApp } from "../app.js";
+import express from "express";
+import { modelsRouter } from "../routes/models.js";
 import { API_PREFIX } from "@opensprint/shared";
+import { errorHandler } from "../middleware/error-handler.js";
 import * as modelListCache from "../services/model-list-cache.js";
-import { clearInFlightFetches } from "../routes/models.js";
+import { clearInFlightFetches, validateApiKey } from "../routes/models.js";
 
 const mockModelsList = vi.fn();
 const mockGetNextKey = vi.fn();
@@ -22,13 +24,21 @@ vi.mock("@anthropic-ai/sdk", () => ({
 
 const originalFetch = globalThis.fetch;
 
+function createMinimalModelsApp() {
+  const app = express();
+  app.use(express.json());
+  app.use(`${API_PREFIX}/models`, modelsRouter);
+  app.use(errorHandler);
+  return app;
+}
+
 describe("Models API", () => {
-  let app: ReturnType<typeof createApp>;
+  let app: ReturnType<typeof createMinimalModelsApp>;
   let originalAnthropicKey: string | undefined;
   let originalCursorKey: string | undefined;
 
   beforeEach(() => {
-    app = createApp();
+    app = createMinimalModelsApp();
     modelListCache.clear();
     clearInFlightFetches();
     originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
@@ -256,6 +266,69 @@ describe("Models API", () => {
         expect(res.body.data[0].id).toBe("claude-sonnet-4");
       });
       expect(mockModelsList).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("validateApiKey", () => {
+    it("returns valid: true for Claude when API succeeds", async () => {
+      async function* gen() {
+        yield { id: "claude-1", display_name: "Claude 1" };
+      }
+      mockModelsList.mockReturnValue(gen());
+
+      const result = await validateApiKey("claude", "sk-ant-test");
+      expect(result).toEqual({ valid: true });
+      expect(mockModelsList).toHaveBeenCalledWith({ limit: 1 });
+    });
+
+    it("returns valid: false with error for Claude when API fails", async () => {
+      mockModelsList.mockImplementation(async function* () {
+        throw new Error("Invalid API key");
+      });
+
+      const result = await validateApiKey("claude", "bad-key");
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("Invalid API key");
+    });
+
+    it("returns valid: true for Cursor when fetch succeeds", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ models: ["gpt-4"] }),
+      });
+
+      const result = await validateApiKey("cursor", "cursor-key");
+      expect(result).toEqual({ valid: true });
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "https://api.cursor.com/v0/models",
+        expect.objectContaining({
+          headers: { Authorization: "Bearer cursor-key" },
+        })
+      );
+    });
+
+    it("returns valid: false with error for Cursor when fetch fails with 401", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: () => Promise.resolve("Unauthorized"),
+      });
+
+      const result = await validateApiKey("cursor", "bad-key");
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("401");
+      expect(result.error).toContain("API key");
+    });
+
+    it("returns valid: false when value is empty", async () => {
+      const result = await validateApiKey("claude", "");
+      expect(result).toEqual({ valid: false, error: "value is required" });
+      expect(mockModelsList).not.toHaveBeenCalled();
+    });
+
+    it("returns valid: false for unknown provider", async () => {
+      const result = await validateApiKey("unknown" as "claude", "key");
+      expect(result).toEqual({ valid: false, error: "Unknown provider: unknown" });
     });
   });
 });
