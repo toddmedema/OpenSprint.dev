@@ -10,6 +10,10 @@ import { ErrorCodes } from "../middleware/error-codes.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
 import { validateApiKey } from "./models.js";
+import {
+  getGlobalSettings,
+  updateGlobalSettings,
+} from "../services/global-settings.service.js";
 
 const execFileAsync = promisify(execFile);
 const log = createLogger("env");
@@ -84,6 +88,59 @@ async function isClaudeCliAvailable(): Promise<boolean> {
     return false;
   }
 }
+
+/** Check if global store has any API keys configured */
+function globalStoreHasKeys(apiKeys: { [key: string]: unknown[] } | undefined): boolean {
+  if (!apiKeys || typeof apiKeys !== "object") return false;
+  for (const entries of Object.values(apiKeys)) {
+    if (Array.isArray(entries) && entries.length > 0) return true;
+  }
+  return false;
+}
+
+// GET /env/global-status — Returns { hasAnyKey, useCustomCli } for modal flow.
+// hasAnyKey = global store has keys OR process.env has ANTHROPIC/CURSOR OR claudeCli available.
+envRouter.get("/global-status", async (_req, res, next) => {
+  try {
+    const settings = await getGlobalSettings();
+    const fromGlobalStore = globalStoreHasKeys(settings.apiKeys);
+    const fromEnv =
+      Boolean(process.env.ANTHROPIC_API_KEY?.trim()) ||
+      Boolean(process.env.CURSOR_API_KEY?.trim());
+    const claudeCli = await isClaudeCliAvailable();
+    const hasAnyKey = fromGlobalStore || fromEnv || claudeCli;
+    const useCustomCli = settings.useCustomCli ?? false;
+
+    res.json({
+      data: { hasAnyKey, useCustomCli },
+    } as ApiResponse<{ hasAnyKey: boolean; useCustomCli: boolean }>);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /env/global-settings — Update global settings (e.g. useCustomCli).
+envRouter.put("/global-settings", async (req: Request, res, next) => {
+  try {
+    const body = req.body as { useCustomCli?: boolean };
+    const updates: { useCustomCli?: boolean } = {};
+    if (typeof body.useCustomCli === "boolean") {
+      updates.useCustomCli = body.useCustomCli;
+    }
+    if (Object.keys(updates).length === 0) {
+      const current = await getGlobalSettings();
+      return res.json({
+        data: { useCustomCli: current.useCustomCli ?? false },
+      } as ApiResponse<{ useCustomCli: boolean }>);
+    }
+    const updated = await updateGlobalSettings(updates);
+    res.json({
+      data: { useCustomCli: updated.useCustomCli ?? false },
+    } as ApiResponse<{ useCustomCli: boolean }>);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /env/keys — Check which API keys / CLIs are configured (never returns key values).
 // Keys are read from process.env (loaded from .env). Project-level API keys (in Project Settings)

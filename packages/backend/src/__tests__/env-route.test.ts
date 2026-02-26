@@ -8,6 +8,7 @@ import { envRouter } from "../routes/env.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { setEnvPathForTesting } from "../routes/env.js";
 import { errorHandler } from "../middleware/error-handler.js";
+import { setGlobalSettings } from "../services/global-settings.service.js";
 
 const mockValidateApiKey = vi.fn();
 
@@ -18,6 +19,24 @@ vi.mock("../routes/models.js", async (importOriginal) => {
     validateApiKey: (...args: unknown[]) => mockValidateApiKey(...args),
   };
 });
+
+vi.mock("../services/task-store.service.js", () => ({
+  taskStore: {
+    init: vi.fn().mockResolvedValue(undefined),
+    show: vi.fn().mockResolvedValue(null),
+    create: vi.fn().mockResolvedValue(undefined),
+    update: vi.fn().mockResolvedValue(undefined),
+    listAll: vi.fn().mockResolvedValue([]),
+    listInProgressWithAgentAssignee: vi.fn().mockResolvedValue([]),
+    close: vi.fn().mockResolvedValue(undefined),
+    comment: vi.fn().mockResolvedValue(undefined),
+    ready: vi.fn().mockResolvedValue([]),
+    addDependency: vi.fn().mockResolvedValue(undefined),
+    syncForPush: vi.fn().mockResolvedValue(undefined),
+  },
+  TaskStoreService: vi.fn(),
+  SCHEMA_SQL: "",
+}));
 
 function createMinimalEnvApp() {
   const app = express();
@@ -30,6 +49,7 @@ function createMinimalEnvApp() {
 describe("Env API", () => {
   let app: ReturnType<typeof createMinimalEnvApp>;
   let tmpDir: string;
+  let originalHome: string | undefined;
 
   beforeEach(() => {
     app = createMinimalEnvApp();
@@ -42,10 +62,13 @@ describe("Env API", () => {
     const envPath = path.join(tmpDir, ".env");
     fs.writeFileSync(envPath, "", "utf-8");
     setEnvPathForTesting(envPath);
+    originalHome = process.env.HOME;
+    process.env.HOME = tmpDir;
   });
 
   afterEach(() => {
     setEnvPathForTesting(null);
+    process.env.HOME = originalHome;
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch {
@@ -167,6 +190,107 @@ describe("Env API", () => {
       const content = fs.readFileSync(path.join(tmpDir, ".env"), "utf-8");
       expect(content).toMatch(/EXISTING=ok/);
       expect(content).toMatch(/CURSOR_API_KEY=.*cursor-secret/);
+    });
+  });
+
+  describe("GET /env/global-status", () => {
+    it("returns hasAnyKey and useCustomCli", async () => {
+      const res = await request(app).get(`${API_PREFIX}/env/global-status`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toBeDefined();
+      expect(typeof res.body.data.hasAnyKey).toBe("boolean");
+      expect(typeof res.body.data.useCustomCli).toBe("boolean");
+    });
+
+    it("hasAnyKey true when global store has keys", async () => {
+      await setGlobalSettings({
+        apiKeys: {
+          ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-xxx" }],
+        },
+      });
+
+      const res = await request(app).get(`${API_PREFIX}/env/global-status`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.hasAnyKey).toBe(true);
+    });
+
+    it("hasAnyKey true when process.env has ANTHROPIC_API_KEY", async () => {
+      const original = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+
+      try {
+        const res = await request(app).get(`${API_PREFIX}/env/global-status`);
+        expect(res.status).toBe(200);
+        expect(res.body.data.hasAnyKey).toBe(true);
+      } finally {
+        process.env.ANTHROPIC_API_KEY = original;
+      }
+    });
+
+    it("hasAnyKey true when process.env has CURSOR_API_KEY", async () => {
+      const original = process.env.CURSOR_API_KEY;
+      process.env.CURSOR_API_KEY = "cursor-test-key";
+
+      try {
+        const res = await request(app).get(`${API_PREFIX}/env/global-status`);
+        expect(res.status).toBe(200);
+        expect(res.body.data.hasAnyKey).toBe(true);
+      } finally {
+        process.env.CURSOR_API_KEY = original;
+      }
+    });
+
+    it("useCustomCli reflects global settings", async () => {
+      await setGlobalSettings({ useCustomCli: true });
+
+      const res = await request(app).get(`${API_PREFIX}/env/global-status`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.useCustomCli).toBe(true);
+    });
+  });
+
+  describe("PUT /env/global-settings", () => {
+    it("updates useCustomCli and returns it", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/env/global-settings`)
+        .send({ useCustomCli: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.useCustomCli).toBe(true);
+
+      const statusRes = await request(app).get(`${API_PREFIX}/env/global-status`);
+      expect(statusRes.body.data.useCustomCli).toBe(true);
+    });
+
+    it("persists useCustomCli across requests", async () => {
+      await request(app)
+        .put(`${API_PREFIX}/env/global-settings`)
+        .send({ useCustomCli: true });
+
+      const res = await request(app).get(`${API_PREFIX}/env/global-status`);
+      expect(res.body.data.useCustomCli).toBe(true);
+    });
+
+    it("returns current useCustomCli when body has no valid updates", async () => {
+      await setGlobalSettings({ useCustomCli: true });
+
+      const res = await request(app)
+        .put(`${API_PREFIX}/env/global-settings`)
+        .send({});
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.useCustomCli).toBe(true);
+    });
+
+    it("can set useCustomCli to false", async () => {
+      await setGlobalSettings({ useCustomCli: true });
+
+      const res = await request(app)
+        .put(`${API_PREFIX}/env/global-settings`)
+        .send({ useCustomCli: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.useCustomCli).toBe(false);
     });
   });
 });
