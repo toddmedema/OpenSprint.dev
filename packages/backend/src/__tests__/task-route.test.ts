@@ -176,7 +176,7 @@ describe("Tasks REST - task-to-kanban-column mapping", () => {
 
       expect(planRes.status).toBe(201);
       const plan = planRes.body.data;
-      const epicId = plan.metadata.beadEpicId;
+      const epicId = plan.metadata.epicId;
 
       // Epic blocked: GET /tasks/ready should return empty (no tasks ready)
       const readyBeforeRes = await request(app).get(

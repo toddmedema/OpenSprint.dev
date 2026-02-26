@@ -1,0 +1,87 @@
+{
+  "title": "Rotating API Keys",
+  "content": "# Rotating API Keys\n\n## Overview\n\nAdd support for multiple API keys per provider (Anthropic, Cursor) with automatic rotation when rate limits or token quotas are hit. Keys are stored per-project in ProjectSettings, displayed at the bottom of the Agent Config section with password-style masking and an eye icon to reveal. When an API returns a limit-related error (429, \"rate limit\", \"add more tokens\", etc.), the system records a `limitHitAt` timestamp for that key and automatically switches to the next key in the list. Keys with `limitHitAt` older than 24 hours are retried. On successful API use, `limitHitAt` is cleared.\n\n## Acceptance Criteria\n\n1. **API Keys Section**: At the bottom of the Agent Config tab in Project Settings, a new \"API Keys\" section displays keys for each provider (ANTHROPIC_API_KEY, CURSOR_API_KEY) that is selected in either Simple or Complex Task Complexity.\n2. **Password-Style Display**: Each key input shows masked characters by default (type=\"password\") with an eye icon to toggle visibility.\n3. **Multiple Keys**: Users can add multiple keys per provider via an \"Add\" control; each key has its own text input and a remove icon. At least one key must remain per provider when that provider is in use.\n4. **Ordering**: Keys are ordered; the first available key (no `limitHitAt` or `limitHitAt` > 24h ago) is used for API calls.\n5. **Limit Detection**: On any API error matching limit patterns (429, \"rate limit\", \"overloaded\", \"add more tokens\", \"quota exceeded\", etc.), set `limitHitAt` for the key used and retry with the next key.\n6. **Retry After 24h**: Keys with `limitHitAt` older than 24 hours are considered available again.\n7. **Clear on Success**: When an API call succeeds, clear `limitHitAt` for the key that was used.\n8. **Sub-Label**: If a key has `limitHitAt`, show a sub-label under its input (e.g., \"Limit hit at 2025-02-25 12:00 — retry after 24h\").\n9. **Backward Compatibility**: If no project-level keys are configured, fall back to `process.env` (from .env) for the single-key behavior.\n\n## Technical Approach\n\n1. **Data Model**: Add `apiKeys` to `ProjectSettings` as an optional object keyed by provider (`ANTHROPIC_API_KEY`, `CURSOR_API_KEY`). Each value is an array of `{ id, value, limitHitAt? }`.\n2. **ApiKeyResolver Service**: New backend service that, given `projectId` and provider, returns the next available key (first without `limitHitAt` or with `limitHitAt` > 24h ago). Falls back to `process.env` when project has no keys.\n3. **Limit Detection**: Centralize limit-error detection via regex/keyword matching on error messages and HTTP status (429). Anthropic SDK and Cursor CLI stderr both surface these.\n4. **Agent Integration**: Pass `projectId` through orchestrator → AgentService/AgentClient. AgentService uses ApiKeyResolver for Claude API; AgentClient uses it for Cursor CLI env. On limit error, call resolver to mark key and retry with next.\n5. **Settings API**: Extend `PUT /projects/:id/settings` to accept `apiKeys`. Never return raw key values in GET; return masked presence and `limitHitAt` for display.\n6. **Frontend**: New `ApiKeysSection` component with password inputs, eye toggle, add/remove per provider. Integrate into ProjectSettingsModal Agent Config tab below existing content.\n\n## Dependencies\n\n- Project settings store (SettingsStoreService) — already exists\n- AgentService, AgentClient — require projectId propagation\n- Models route — needs projectId for key resolution when fetching models\n- No new external packages\n\n## Data Model Changes\n\n**ProjectSettings** (extend):\n\n```ts\napiKeys?: {\n  ANTHROPIC_API_KEY?: Array<{ id: string; value: string; limitHitAt?: string }>;\n  CURSOR_API_KEY?: Array<{ id: string; value: string; limitHitAt?: string }>;\n};\n```\n\n- `id`: UUID for stable identity when updating `limitHitAt`\n- `value`: The API key (stored plain; same security posture as .env)\n- `limitHitAt`: ISO8601 timestamp when limit was hit; null when key is healthy\n\n**Settings GET response**: Exclude `value` from `apiKeys` in API responses. Return `{ id, masked: \"••••••••\", limitHitAt? }` for display. Frontend sends full `value` only on add/update.\n\n## API Specification\n\n**Existing**: `GET /projects/:id/settings` — extend response to include `apiKeys` with masked values and `limitHitAt`.\n\n**Existing**: `PUT /projects/:id/settings` — accept `apiKeys` in request body. Validate: non-empty arrays when provider is in use; no duplicate ids.\n\n**New internal**: `ApiKeyResolver.getNextKey(projectId, provider)` → `{ key: string, keyId: string } | null`\n\n**New internal**: `ApiKeyResolver.recordLimitHit(projectId, provider, keyId)` — set `limitHitAt` for the key.\n\n**New internal**: `ApiKeyResolver.clearLimitHit(projectId, provider, keyId)` — clear `limitHitAt` on success.\n\n## UI/UX Requirements\n\n1. **Section placement**: Below Task Complexity, Test Command, Code Review, and above any other Agent Config content. Use a horizontal rule for separation.\n2. **Section title**: \"API Keys\" with helper text: \"Add multiple keys per provider for automatic rotation when limits are hit.\"\n3. **Per-provider block**: Only show blocks for providers selected in Simple or Complex (claude, cursor). Omit claude-cli (uses local CLI auth).\n4. **Input styling**: Same as existing Agent Config inputs (`.input`). Password type by default; toggle to text when eye is clicked.\n5. **Eye icon**: Standard show/hide password icon (e.g., Eye / EyeOff). Place inside or adjacent to input (right side).\n6. **Add button**: \"+ Add key\" or icon-only \"+\" per provider. Adds a new empty row.\n7. **Remove button**: Trash or \"×\" icon per key row. Disabled when only one key remains for that provider.\n8. **Sub-label**: When `limitHitAt` is set, show below input: \"Limit hit at <formatted date> — retries after 24h\" in muted text.\n9. **Save**: Keys are saved as part of the existing Settings save flow (Save button at bottom of modal).\n\n## Edge Cases and Error Handling\n\n1. **All keys exhausted**: If every key has `limitHitAt` within 24h, return a clear error to the user (e.g., \"All API keys have hit limits. Add more keys or wait 24 hours.\").\n2. **Empty key value**: Reject save if user adds a row with empty value. Require at least one non-empty key per provider when that provider is selected.\n3. **Migration**: Projects without `apiKeys` continue to use `process.env`. No migration of .env keys into project settings (user can manually add).\n4. **Concurrent updates**: Use atomic read-modify-write when updating `limitHitAt` to avoid races between parallel agent calls.\n5. **Invalid limitHitAt**: If stored value is malformed, treat as null (key is available).\n6. **Provider not in use**: If user removes a provider from both Simple and Complex, allow clearing keys or leave them; no validation required.\n\n## Testing Strategy\n\n1. **Unit tests**: ApiKeyResolver — getNextKey ordering, 24h retry logic, fallback to process.env, recordLimitHit, clearLimitHit.\n2. **Unit tests**: Limit-error detection — regex/keyword matching for Anthropic and Cursor error strings.\n3. **Integration tests**: Settings API — persist and retrieve apiKeys with masking; validation of empty/duplicate.\n4. **Frontend tests**: ApiKeysSection — add/remove keys, eye toggle, sub-label display when limitHitAt set, save flow.\n5. **E2E (optional)**: Add key in settings, verify agent uses it (mock or stub API).\n\n## Estimated Complexity\n\n**Plan-level**: medium\n\n- Data model and API changes: straightforward\n- ApiKeyResolver and limit detection: moderate\n- Agent integration (projectId threading, retry-with-next-key): moderate\n- UI with multiple keys and eye toggle: moderate\n",
+  "complexity": "medium",
+  "mockups": [
+    {
+      "title": "API Keys Section - Agent Config",
+      "content": "+--------------------------------------------------------------------------------------------------+\n| Agent Config                                                                                    |\n+--------------------------------------------------------------------------------------------------+\n| ... Task Complexity (Simple/Complex rows) ...                                                      |\n| ... Test Command ...                                                                              |\n| ... Code Review ...                                                                               |\n|-----------------------------------------------------------------------------------------------|\n| API Keys                                                                                         |\n| Add multiple keys per provider for automatic rotation when limits are hit.                       |\n|                                                                                                  |\n| ANTHROPIC_API_KEY (Claude API)                                                                   |\n| +---------------------------+  [👁]  [+]  [🗑]                                                    |\n| | sk-ant-•••••••••••••••••• |                                                                     |\n| +---------------------------+                                                                     |\n| Limit hit at Feb 25, 2025 12:00 — retries after 24h                                               |\n|                                                                                                  |\n| +---------------------------+  [👁]  [🗑]                                                         |\n| | •••••••••••••••••••••••••• |  (masked)                                                            |\n| +---------------------------+                                                                     |\n|                                                                                                  |\n| CURSOR_API_KEY                                                                                   |\n| +---------------------------+  [👁]  [+]  [🗑]                                                    |\n| | •••••••••••••••••••••••••• |                                                                     |\n| +---------------------------+                                                                     |\n|                                                                                                  |\n+--------------------------------------------------------------------------------------------------+\n|                                                    [Cancel]  [Save]                               |\n+--------------------------------------------------------------------------------------------------+"
+    },
+    {
+      "title": "Single Key - Revealed",
+      "content": "ANTHROPIC_API_KEY (Claude API)\n+------------------------------------------+  [👁]  [+]  [🗑]\n| sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxxxxxx |  (visible when eye clicked)\n+------------------------------------------+"
+    }
+  ],
+  "tasks": [
+    {
+      "title": "Add apiKeys data model and ProjectSettings schema",
+      "description": "Extend ProjectSettings in shared types with optional apiKeys: Record<ANTHROPIC_API_KEY|CURSOR_API_KEY, Array<{id, value, limitHitAt?}>>. Update parseSettings for backward compat. Add validation helpers. Ensure settings store persists/loads apiKeys.",
+      "priority": 0,
+      "dependsOn": [],
+      "complexity": "simple"
+    },
+    {
+      "title": "Implement ApiKeyResolver service",
+      "description": "Create ApiKeyResolver with getNextKey(projectId, provider), recordLimitHit, clearLimitHit. Use first key without limitHitAt or with limitHitAt > 24h ago. Fall back to process.env when project has no keys. Thread-safe limitHitAt updates.",
+      "priority": 1,
+      "dependsOn": ["Add apiKeys data model and ProjectSettings schema"],
+      "complexity": "complex"
+    },
+    {
+      "title": "Add limit-error detection utility",
+      "description": "Create isLimitError(error: unknown): boolean for Anthropic (429, rate limit, overloaded, add more tokens) and Cursor (similar patterns). Use in agent error handling paths.",
+      "priority": 1,
+      "dependsOn": [],
+      "complexity": "simple"
+    },
+    {
+      "title": "Integrate ApiKeyResolver into AgentService (Claude API)",
+      "description": "Pass projectId to AgentService. Use ApiKeyResolver.getNextKey for Claude API key instead of process.env. On Anthropic API error, if isLimitError: recordLimitHit, retry with next key (loop until success or exhausted). On success: clearLimitHit.",
+      "priority": 2,
+      "dependsOn": ["Implement ApiKeyResolver service", "Add limit-error detection utility"],
+      "complexity": "complex"
+    },
+    {
+      "title": "Integrate ApiKeyResolver into AgentClient (Cursor CLI)",
+      "description": "Pass projectId to AgentClient. Use ApiKeyResolver.getNextKey for CURSOR_API_KEY in spawn env. On limit error from stderr: recordLimitHit, retry with next key. On success: clearLimitHit.",
+      "priority": 2,
+      "dependsOn": ["Implement ApiKeyResolver service", "Add limit-error detection utility"],
+      "complexity": "complex"
+    },
+    {
+      "title": "Update settings API to mask apiKeys and accept updates",
+      "description": "GET /projects/:id/settings: exclude apiKeys.value in response; return {id, masked: '••••••••', limitHitAt}. PUT: accept apiKeys, validate non-empty when provider in use. Persist via settings store.",
+      "priority": 1,
+      "dependsOn": ["Add apiKeys data model and ProjectSettings schema"],
+      "complexity": "simple"
+    },
+    {
+      "title": "Create ApiKeysSection component",
+      "description": "React component: password inputs with eye toggle, add/remove per provider. Show only for claude/cursor. Sub-label when limitHitAt set. Integrate into ProjectSettingsModal Agent Config tab below existing content.",
+      "priority": 2,
+      "dependsOn": ["Update settings API to mask apiKeys and accept updates"],
+      "complexity": "complex"
+    },
+    {
+      "title": "Wire projectId through orchestrator to agent invocations",
+      "description": "Ensure projectId is passed to AgentService.invokePlanningAgent, invokeCodingAgent, and AgentClient.invoke. Update models route to accept projectId for key resolution when listing models.",
+      "priority": 2,
+      "dependsOn": [],
+      "complexity": "simple"
+    },
+    {
+      "title": "Add Setup Wizard and env API backward compat",
+      "description": "Extend Setup Wizard AgentsStep to show ApiKeysSection when API keys needed. Keep existing /env/keys for global .env fallback; document that project keys take precedence.",
+      "priority": 3,
+      "dependsOn": ["Create ApiKeysSection component"],
+      "complexity": "simple"
+    },
+    {
+      "title": "Add unit and integration tests for rotating keys",
+      "description": "ApiKeyResolver tests: ordering, 24h retry, fallback. Limit detection tests. Settings API tests for apiKeys. ApiKeysSection component tests.",
+      "priority": 3,
+      "dependsOn": ["Implement ApiKeyResolver service", "Create ApiKeysSection component"],
+      "complexity": "complex"
+    }
+  ]
+}

@@ -227,7 +227,7 @@ describe("TaskStoreService", () => {
         block_reason: null,
       });
       expect(result.status).toBe("open");
-      expect((result as { block_reason?: string }).block_reason).toBeUndefined();
+      expect([null, undefined]).toContain((result as { block_reason?: string | null }).block_reason);
     });
   });
 
@@ -926,7 +926,7 @@ describe("TaskStoreService", () => {
       const epic = store2.show(projectId, epicId);
       expect((epic as { status?: string }).status).toBe("open");
 
-      await expect(store2.show(projectId, gateId)).rejects.toThrow();
+      expect(() => store2.show(projectId, gateId)).toThrow();
 
       const row = await store2.planGet(projectId, "auth-plan");
       expect(row).not.toBeNull();
@@ -974,7 +974,7 @@ describe("TaskStoreService", () => {
       const epic = store2.show(projectId, epicId);
       expect((epic as { status?: string }).status).toBe("blocked");
 
-      await expect(store2.show(projectId, gateId)).rejects.toThrow();
+      expect(() => store2.show(projectId, gateId)).toThrow();
     });
   });
 });

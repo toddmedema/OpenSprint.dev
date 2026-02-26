@@ -161,7 +161,7 @@ describe("Plan REST endpoints - task decomposition", () => {
       expect(plan.metadata.epicId).toBeDefined();
 
       // Epic starts blocked (epic-blocked model)
-      const epic = await taskStore.show(projectId, plan.metadata.beadEpicId);
+      const epic = await taskStore.show(projectId, plan.metadata.epicId);
       expect(epic).toBeDefined();
       expect((epic as { status?: string }).status).toBe("blocked");
 
