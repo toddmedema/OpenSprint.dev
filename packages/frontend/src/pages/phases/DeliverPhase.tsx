@@ -188,35 +188,46 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
                 </button>
               )}
               {settings?.deployment?.mode === "expo" ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleDeployToBeta}
-                    disabled={isDeploying}
-                    className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                    data-testid="deploy-beta-button"
-                  >
-                    {isDeploying ? "Deploying…" : "Deploy to Beta"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeployToProd}
-                    disabled={isDeploying}
-                    className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                    data-testid="deploy-prod-button"
-                  >
-                    {isDeploying ? "Deploying…" : "Deploy to Prod"}
-                  </button>
-                </>
+                isDeploying ? (
+                  <div
+                    className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin"
+                    data-testid="deploy-spinner"
+                    aria-label="Deploying"
+                  />
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleDeployToBeta}
+                      className="btn-secondary"
+                      data-testid="deploy-beta-button"
+                    >
+                      Deploy to Beta
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeployToProd}
+                      className="btn-primary"
+                      data-testid="deploy-prod-button"
+                    >
+                      Deploy to Prod
+                    </button>
+                  </>
+                )
+              ) : isDeploying ? (
+                <div
+                  className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin"
+                  data-testid="deploy-spinner"
+                  aria-label="Delivering"
+                />
               ) : (
                 <button
                   type="button"
                   onClick={handleDeploy}
-                  disabled={isDeploying}
-                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-primary"
                   data-testid="deliver-button"
                 >
-                  {isDeploying ? "Delivering…" : "Deliver!"}
+                  Deliver!
                 </button>
               )}
             </div>

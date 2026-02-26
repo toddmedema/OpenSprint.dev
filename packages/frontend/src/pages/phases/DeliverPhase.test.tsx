@@ -298,7 +298,7 @@ describe("DeliverPhase", () => {
     expect(cancelBtn).toHaveTextContent("Cancel Deployment");
   });
 
-  it("Cancel Deployment is leftmost (before primary deploy button)", async () => {
+  it("Cancel Deployment is leftmost (before deploy spinner)", async () => {
     mockGetSettings.mockResolvedValueOnce({
       deployment: { mode: "custom", customCommand: "echo deploy" },
     });
@@ -318,14 +318,86 @@ describe("DeliverPhase", () => {
     renderWithRouter(store);
     await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
     const cancelBtn = screen.getByTestId("cancel-deployment-button");
-    const deliverBtn = screen.getByTestId("deliver-button");
+    const spinner = screen.getByTestId("deploy-spinner");
     const container = cancelBtn.parentElement!;
-    const buttons = Array.from(container.querySelectorAll("button"));
-    const cancelIdx = buttons.findIndex((b) => b === cancelBtn);
-    const deliverIdx = buttons.findIndex((b) => b === deliverBtn);
-    expect(cancelIdx).toBeGreaterThanOrEqual(0);
-    expect(deliverIdx).toBeGreaterThanOrEqual(0);
-    expect(cancelIdx).toBeLessThan(deliverIdx);
+    const ordered = Array.from(
+      container.querySelectorAll('[data-testid="cancel-deployment-button"], [data-testid="deploy-spinner"]')
+    );
+    expect(ordered[0]).toBe(cancelBtn);
+    expect(ordered[1]).toBe(spinner);
+  });
+
+  it("hides deploy buttons and shows spinner during deployment (Expo mode)", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      deployment: { mode: "expo" },
+    });
+    const store = createStore({
+      activeDeployId: "deploy-1",
+      history: [
+        {
+          id: "deploy-1",
+          projectId: "proj-1",
+          status: "running",
+          startedAt: new Date().toISOString(),
+          completedAt: null,
+          log: [],
+        },
+      ],
+    });
+    renderWithRouter(store);
+    await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
+    expect(screen.queryByTestId("deploy-beta-button")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("deploy-prod-button")).not.toBeInTheDocument();
+    expect(screen.getByTestId("deploy-spinner")).toBeInTheDocument();
+    expect(screen.getByTestId("cancel-deployment-button")).toBeInTheDocument();
+  });
+
+  it("hides Deliver! button and shows spinner during deployment (custom mode)", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      deployment: { mode: "custom", customCommand: "echo deploy" },
+    });
+    const store = createStore({
+      activeDeployId: "deploy-1",
+      history: [
+        {
+          id: "deploy-1",
+          projectId: "proj-1",
+          status: "running",
+          startedAt: new Date().toISOString(),
+          completedAt: null,
+          log: [],
+        },
+      ],
+    });
+    renderWithRouter(store);
+    await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
+    expect(screen.queryByTestId("deliver-button")).not.toBeInTheDocument();
+    expect(screen.getByTestId("deploy-spinner")).toBeInTheDocument();
+    expect(screen.getByTestId("cancel-deployment-button")).toBeInTheDocument();
+  });
+
+  it("shows deploy buttons after deployment completes (Expo mode)", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      deployment: { mode: "expo" },
+    });
+    const store = createStore({
+      activeDeployId: null,
+      history: [
+        {
+          id: "deploy-1",
+          projectId: "proj-1",
+          status: "success",
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          log: [],
+        },
+      ],
+    });
+    renderWithRouter(store);
+    await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
+    expect(screen.getByTestId("deploy-beta-button")).toBeInTheDocument();
+    expect(screen.getByTestId("deploy-prod-button")).toBeInTheDocument();
+    expect(screen.queryByTestId("deploy-spinner")).not.toBeInTheDocument();
   });
 
   it("hides Configure button when onOpenSettings not provided", async () => {
