@@ -273,6 +273,49 @@ export class FeedbackService {
     }
   }
 
+  /**
+   * Walk up the parent chain collecting ALL ancestor feedback items (oldest first).
+   * Provides the Analyst with full conversation context for deeply nested replies.
+   * Caps at 20 ancestors to prevent runaway chains.
+   */
+  private async buildParentChainContext(projectId: string, parentId: string): Promise<string> {
+    const ancestors: FeedbackItem[] = [];
+    let currentId: string | null = parentId;
+    const MAX_ANCESTORS = 20;
+    const visited = new Set<string>();
+
+    while (currentId && ancestors.length < MAX_ANCESTORS) {
+      if (visited.has(currentId)) break;
+      visited.add(currentId);
+      try {
+        const ancestor = await this.getFeedback(projectId, currentId);
+        ancestors.push(ancestor);
+        currentId = ancestor.parent_id ?? null;
+      } catch {
+        break;
+      }
+    }
+
+    if (ancestors.length === 0) return "";
+
+    // Reverse so root ancestor is first, immediate parent is last
+    ancestors.reverse();
+
+    const count = ancestors.length;
+    const lines = ancestors.map((a, i) => {
+      const label = count === 1
+        ? "Parent feedback"
+        : `Feedback ${i + 1} of ${count} (depth ${a.depth ?? i})`;
+      return `${label}:\n  Content: "${a.text}"\n  Category: ${a.category}\n  mappedPlanId: ${a.mappedPlanId ?? "null"}`;
+    });
+
+    const header = count === 1
+      ? "# Parent feedback (this is a reply)"
+      : `# Feedback conversation chain (this is a reply — ${count} ancestors, oldest first)`;
+
+    return `\n\n${header}\n\n${lines.join("\n\n")}\n`;
+  }
+
   private async categorizeFeedbackImpl(projectId: string, item: FeedbackItem): Promise<void> {
     const settings = await this.projectService.getSettings(projectId);
     const project = await this.projectService.getProject(projectId);
@@ -290,15 +333,10 @@ export class FeedbackService {
     }
     const firstPlanId = plans.length > 0 ? plans[0].metadata.planId : null;
 
-    // Build parent context for replies (PRD §7.4.1: agent receives parent content, category, metadata)
+    // Build full parent chain context for replies (PRD §7.4.1: agent receives ALL ancestor feedback)
     let parentContext = "";
     if (item.parent_id) {
-      try {
-        const parentItem = await this.getFeedback(projectId, item.parent_id);
-        parentContext = `\n\n# Parent feedback (this is a reply)\n\nParent content: "${parentItem.text}"\nParent category: ${parentItem.category}\nParent mappedPlanId: ${parentItem.mappedPlanId ?? "null"}\n`;
-      } catch {
-        // Parent not found — proceed without parent context
-      }
+      parentContext = await this.buildParentChainContext(projectId, item.parent_id);
     }
 
     const agentId = `feedback-categorize-${projectId}-${item.id}-${Date.now()}`;

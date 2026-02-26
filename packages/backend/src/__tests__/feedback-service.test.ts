@@ -332,8 +332,91 @@ describe("FeedbackService", () => {
     const replyPrompt = mockInvoke.mock.calls[1][0]?.prompt ?? "";
     expect(replyPrompt).toContain("Parent feedback (this is a reply)");
     expect(replyPrompt).toContain("Login broken on desktop");
-    expect(replyPrompt).toContain("Parent category:");
+    expect(replyPrompt).toContain("Category:");
     expect(replyPrompt).toContain("Same on mobile");
+  });
+
+  it("should send full ancestor chain to Analyst for deeply nested replies", async () => {
+    feedbackIdSequence = ["rootfb", "mid1fb", "mid2fb", "leaffb"];
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "bug",
+        mappedPlanId: null,
+        task_titles: ["Fix the bug"],
+      }),
+    });
+
+    const root = await feedbackService.submitFeedback(projectId, { text: "Root issue: login broken" });
+    const mid1 = await feedbackService.submitFeedback(projectId, {
+      text: "Followup: also on Safari",
+      parent_id: root.id,
+    });
+    const mid2 = await feedbackService.submitFeedback(projectId, {
+      text: "Followup: and Chrome mobile",
+      parent_id: mid1.id,
+    });
+    const leaf = await feedbackService.submitFeedback(projectId, {
+      text: "Followup: verified on all browsers",
+      parent_id: mid2.id,
+    });
+
+    // Process root first, then leaf (intermediate not processed — only matters for context)
+    await feedbackService.processFeedbackWithAnalyst(projectId, root.id);
+    await feedbackService.processFeedbackWithAnalyst(projectId, leaf.id);
+
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
+    const leafPrompt = mockInvoke.mock.calls[1][0]?.prompt ?? "";
+
+    // Should contain ALL ancestors in order (root → mid1 → mid2)
+    expect(leafPrompt).toContain("Feedback conversation chain");
+    expect(leafPrompt).toContain("3 ancestors");
+    expect(leafPrompt).toContain("Root issue: login broken");
+    expect(leafPrompt).toContain("Followup: also on Safari");
+    expect(leafPrompt).toContain("Followup: and Chrome mobile");
+    // And the feedback being categorized itself
+    expect(leafPrompt).toContain("Followup: verified on all browsers");
+
+    // Root should appear before mid1, mid1 before mid2 (oldest first)
+    const rootIdx = leafPrompt.indexOf("Root issue: login broken");
+    const mid1Idx = leafPrompt.indexOf("Followup: also on Safari");
+    const mid2Idx = leafPrompt.indexOf("Followup: and Chrome mobile");
+    expect(rootIdx).toBeLessThan(mid1Idx);
+    expect(mid1Idx).toBeLessThan(mid2Idx);
+  });
+
+  it("should handle missing ancestor gracefully in parent chain", async () => {
+    feedbackIdSequence = ["orphan1"];
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "bug",
+        mappedPlanId: null,
+        task_titles: ["Fix orphan"],
+      }),
+    });
+
+    // Insert feedback directly with a non-existent parent_id
+    await feedbackStore.insertFeedback(
+      projectId,
+      {
+        id: "orphan1",
+        text: "Orphan reply",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "pending",
+        createdAt: new Date().toISOString(),
+        parent_id: "nonexistent-parent",
+        depth: 1,
+      },
+      null
+    );
+
+    await feedbackService.processFeedbackWithAnalyst(projectId, "orphan1");
+
+    // Should not throw; should still categorize the feedback
+    const updated = await feedbackService.getFeedback(projectId, "orphan1");
+    expect(updated.status).toBe("pending");
+    expect(updated.category).toBe("bug");
   });
 
   it("should set complexity to complex for tasks created from reply feedback (proposed_tasks path)", async () => {
