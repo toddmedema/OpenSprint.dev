@@ -6,7 +6,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import { HomeScreen } from "./HomeScreen";
-import { HOMEPAGE_CONTAINER_CLASS } from "../lib/constants";
+import { GITHUB_REPO_URL, HOMEPAGE_CONTAINER_CLASS } from "../lib/constants";
 import notificationReducer from "../store/slices/notificationSlice";
 
 const mockProjectsList = vi.fn();
@@ -74,6 +74,20 @@ describe("HomeScreen", () => {
     await screen.findByTestId("projects-grid");
     expect(screen.getByTestId("create-new-button")).toHaveTextContent("Create New");
     expect(screen.getByTestId("add-existing-button")).toHaveTextContent("Add Existing");
+  });
+
+  it("renders faint GitHub link at bottom-right linking to OpenSprint repo", async () => {
+    mockProjectsList.mockResolvedValue([]);
+    renderHomeScreen();
+    await screen.findByTestId("projects-grid");
+
+    const link = screen.getByTestId("github-link");
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveTextContent("GitHub");
+    expect(link).toHaveAttribute("href", GITHUB_REPO_URL);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(link).toHaveClass("fixed", "bottom-4", "right-4", "text-xs", "text-theme-muted/50");
   });
 
   it("renders project cards when projects exist", async () => {

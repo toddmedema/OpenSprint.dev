@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   CONTENT_CONTAINER_CLASS,
+  GITHUB_REPO_URL,
   HOMEPAGE_CONTAINER_CLASS,
   NAVBAR_HEIGHT,
   PRD_SECTION_ORDER,
@@ -29,6 +30,13 @@ describe("constants", () => {
       expect(HOMEPAGE_CONTAINER_CLASS).toContain("max-w-[86.5rem]");
       expect(HOMEPAGE_CONTAINER_CLASS).toContain("mx-auto");
       expect(HOMEPAGE_CONTAINER_CLASS).toContain("px-6");
+    });
+  });
+
+  describe("GITHUB_REPO_URL", () => {
+    it("points to OpenSprint GitHub repository", () => {
+      expect(GITHUB_REPO_URL).toContain("github.com");
+      expect(GITHUB_REPO_URL).toContain("opensprint");
     });
   });
 

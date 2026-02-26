@@ -7,7 +7,7 @@ import { getProjectPhasePath } from "../lib/phaseRouting";
 import { useAppDispatch } from "../store";
 import { addNotification } from "../store/slices/notificationSlice";
 import { CloseButton } from "./CloseButton";
-import { HOMEPAGE_CONTAINER_CLASS } from "../lib/constants";
+import { GITHUB_REPO_URL, HOMEPAGE_CONTAINER_CLASS } from "../lib/constants";
 import type { Project } from "@opensprint/shared";
 
 const DROPDOWN_MIN_WIDTH = 140;
@@ -338,6 +338,16 @@ export function HomeScreen() {
           confirming={confirming}
         />
       )}
+
+      <a
+        href={GITHUB_REPO_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-4 right-4 text-xs text-theme-muted/50 hover:text-theme-muted transition-colors"
+        data-testid="github-link"
+      >
+        GitHub
+      </a>
     </Layout>
   );
 }

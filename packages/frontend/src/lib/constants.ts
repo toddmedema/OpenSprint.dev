@@ -5,6 +5,9 @@
 /** Navbar height in px — used for fixed positioning (e.g. NotificationBar) and layout consistency. */
 export const NAVBAR_HEIGHT = 56;
 
+/** OpenSprint GitHub repository URL. */
+export const GITHUB_REPO_URL = "https://github.com/toddmedema/opensprint.dev";
+
 /**
  * Tailwind classes for content containers that must share the same width.
  * Used by: evaluate feedback input.
