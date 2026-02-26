@@ -256,6 +256,55 @@ export class AgentService {
   }
 
   /**
+   * Default prompt for the merger agent. Instructs the agent to resolve
+   * merge/rebase conflict markers in the working directory.
+   */
+  private static readonly MERGER_PROMPT = `# Merger Agent: Resolve Git Conflicts
+
+You are the Merger agent. Your job is to resolve merge or rebase conflicts in this repository.
+
+## Context
+
+A git merge or rebase has encountered conflicts. The working directory contains files with conflict markers (\`<<<<<<<\`, \`=======\`, \`>>>>>>>\`).
+
+## Your Task
+
+1. **Identify conflicted files** — Run \`git diff --name-only --diff-filter=U\` or \`git status\` to find unmerged paths.
+2. **Resolve each conflict** — Edit each conflicted file to remove conflict markers and produce a correct merged result. Preserve intended behavior from both sides where appropriate.
+3. **Stage resolved files** — Run \`git add <file>\` for each resolved file.
+4. **Verify** — Ensure no conflict markers remain. Run \`git diff --check\` to confirm.
+
+## Rules
+
+- Do NOT run \`git rebase --continue\` or \`git commit\` — the orchestrator will do that after you exit.
+- Resolve conflicts by editing files; do not delete entire files unless that is clearly correct.
+- Prefer keeping both sides' changes when they are compatible; otherwise choose the most correct resolution.
+- Exit with code 0 when all conflicts are resolved and staged. Exit non-zero if you cannot resolve.
+`;
+
+  /**
+   * Run the merger agent and wait for it to complete.
+   * Returns true if the agent exited with code 0 (success), false otherwise.
+   * Used when merge/rebase fails with conflicts — the agent resolves them;
+   * the caller then runs rebase --continue or merge --continue.
+   */
+  async runMergerAgentAndWait(cwd: string, config: AgentConfig): Promise<boolean> {
+    const promptPath = path.join(os.tmpdir(), `opensprint-merger-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.md`);
+    await fs.writeFile(promptPath, AgentService.MERGER_PROMPT);
+    try {
+      return await new Promise<boolean>((resolve) => {
+        this.invokeMergerAgent(promptPath, config, {
+          cwd,
+          onOutput: () => {},
+          onExit: (code) => resolve(code === 0),
+        });
+      });
+    } finally {
+      await fs.unlink(promptPath).catch(() => {});
+    }
+  }
+
+  /**
    * Parse data URL or base64 string to { media_type, data } for Anthropic image blocks.
    */
   private parseImageForClaude(img: string): {

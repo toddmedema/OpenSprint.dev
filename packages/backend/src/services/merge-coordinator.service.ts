@@ -4,9 +4,9 @@
  *
  * Key design principles:
  * - Merge FIRST, close task AFTER (never close before merge)
- * - On conflict: abort + requeue (no merger agent)
+ * - On conflict: try merger agent once; if resolution fails, abort + requeue
  * - Task close is a separate commit after the merge commit
- * - Push failures retry on next task completion (no merger agent fallback)
+ * - Push failures: try merger agent once; if resolution fails, abort and retry on next completion
  */
 
 import type { TestResults } from "@opensprint/shared";
@@ -74,12 +74,16 @@ export interface MergeCoordinatorHost {
     deleteBranch(repoPath: string, branchName: string): Promise<void>;
     getChangedFiles(repoPath: string, branchName: string): Promise<string[]>;
     pushMain(repoPath: string): Promise<void>;
+    pushMainToOrigin(repoPath: string): Promise<void>;
     isMergeInProgress(repoPath: string): Promise<boolean>;
     mergeAbort(repoPath: string): Promise<void>;
+    mergeContinue(repoPath: string): Promise<void>;
     rebaseAbort(repoPath: string): Promise<void>;
+    rebaseContinue(repoPath: string): Promise<void>;
     updateMainFromOrigin(repoPath: string): Promise<void>;
     rebaseOntoMain(wtPath: string): Promise<void>;
   };
+  runMergerAgentAndWait(projectId: string, cwd: string): Promise<boolean>;
   sessionManager: {
     createSession(repoPath: string, data: Record<string, unknown>): Promise<{ id: string }>;
     archiveSession(
@@ -155,14 +159,58 @@ export class MergeCoordinatorService {
       await this.host.branchManager.updateMainFromOrigin(repoPath);
       await this.host.branchManager.rebaseOntoMain(wtPath);
     } catch (rebaseErr) {
-      log.warn("Rebase onto main failed before merge", { taskId: task.id, branchName, rebaseErr });
-      try {
-        await this.host.branchManager.rebaseAbort(wtPath);
-      } catch {
-        /* best-effort */
+      const isRebaseConflict =
+        rebaseErr instanceof RebaseConflictError ||
+        (rebaseErr as Error)?.name === "RebaseConflictError";
+      if (isRebaseConflict) {
+        log.info("Rebase conflict detected, invoking merger agent", { taskId: task.id, branchName });
+        const resolved = await this.host.runMergerAgentAndWait(projectId, wtPath);
+        if (resolved) {
+          try {
+            await this.host.branchManager.rebaseContinue(wtPath);
+            log.info("Merger resolved rebase conflicts, continuing", { taskId: task.id });
+          } catch (continueErr) {
+            log.warn("rebase --continue failed after merger", {
+              taskId: task.id,
+              continueErr,
+            });
+            try {
+              await this.host.branchManager.rebaseAbort(wtPath);
+            } catch {
+              /* best-effort */
+            }
+            await this.requeueTaskAfterMergeFailure(
+              projectId,
+              repoPath,
+              task,
+              continueErr instanceof Error ? continueErr : new Error(String(continueErr))
+            );
+            return;
+          }
+        } else {
+          log.warn("Merger agent failed to resolve rebase conflicts", { taskId: task.id });
+          try {
+            await this.host.branchManager.rebaseAbort(wtPath);
+          } catch {
+            /* best-effort */
+          }
+          await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, rebaseErr as Error);
+          return;
+        }
+      } else {
+        log.warn("Rebase onto main failed before merge", {
+          taskId: task.id,
+          branchName,
+          rebaseErr,
+        });
+        try {
+          await this.host.branchManager.rebaseAbort(wtPath);
+        } catch {
+          /* best-effort */
+        }
+        await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, rebaseErr as Error);
+        return;
       }
-      await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, rebaseErr as Error);
-      return;
     }
 
     // 3. Attempt merge (the only step that can conflict)
@@ -404,7 +452,7 @@ export class MergeCoordinatorService {
   }
 
   /**
-   * Push main to origin. On conflict: abort rebase and let it retry on next completion.
+   * Push main to origin. On rebase conflict: try merger agent once; if resolution fails, abort and retry on next completion.
    */
   private async pushMainSafe(projectId: string, repoPath: string): Promise<void> {
     await gitCommitQueue.drain();
@@ -423,11 +471,35 @@ export class MergeCoordinatorService {
         .catch(() => {});
     } catch (err) {
       if (err instanceof RebaseConflictError) {
-        log.warn("Push rebase conflict, will retry on next task completion", {
+        log.info("Push rebase conflict, invoking merger agent", {
           projectId,
           files: err.conflictedFiles,
         });
-        await this.host.branchManager.rebaseAbort(repoPath);
+        const resolved = await this.host.runMergerAgentAndWait(projectId, repoPath);
+        if (resolved) {
+          try {
+            await this.host.branchManager.rebaseContinue(repoPath);
+            await this.host.branchManager.pushMainToOrigin(repoPath);
+            log.info("Merger resolved push rebase conflicts, push succeeded", { projectId });
+            eventLogService
+              .append(repoPath, {
+                timestamp: new Date().toISOString(),
+                projectId,
+                taskId: "",
+                event: "push.succeeded",
+              })
+              .catch(() => {});
+          } catch (continueErr) {
+            log.warn("rebase --continue or push failed after merger", {
+              projectId,
+              continueErr,
+            });
+            await this.host.branchManager.rebaseAbort(repoPath);
+          }
+        } else {
+          log.warn("Merger agent failed to resolve push rebase conflicts", { projectId });
+          await this.host.branchManager.rebaseAbort(repoPath);
+        }
       } else {
         log.warn("Push failed, will retry on next task completion", { projectId, err });
       }

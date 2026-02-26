@@ -989,7 +989,8 @@ export class BranchManager {
 
       if (codeConflicts.length > 0) {
         log.warn("Code conflicts remain after infra auto-resolve", { branchName, codeConflicts });
-        await this.mergeAbort(repoPath).catch(() => {});
+        // Do NOT mergeAbort — leave repo in merge state so merger agent can resolve.
+        // Caller is responsible for mergeAbort if merger fails.
         throw new MergeConflictError(codeConflicts);
       }
       log.info("All conflicts auto-resolved", { branchName, resolvedCount: infraFiles.length });

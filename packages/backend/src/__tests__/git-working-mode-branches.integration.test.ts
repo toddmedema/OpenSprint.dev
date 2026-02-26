@@ -151,6 +151,7 @@ describe("Git working mode Branches — full Execute flow integration", () => {
       transition: vi.fn(),
       persistCounters: vi.fn().mockResolvedValue(undefined),
       nudge: vi.fn(),
+      runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
     };
 
     const coordinator = new MergeCoordinatorService(mockHost);

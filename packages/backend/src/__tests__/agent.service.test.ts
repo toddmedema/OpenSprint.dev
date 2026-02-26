@@ -73,4 +73,43 @@ describe("AgentService", () => {
       );
     });
   });
+
+  describe("runMergerAgentAndWait", () => {
+    it("returns true when merger agent exits with code 0", async () => {
+      mockSpawnWithTaskFile.mockImplementation(
+        (_config: unknown, _path: unknown, _cwd: unknown, _onOutput: unknown, onExit: (code: number | null) => void) => {
+          setImmediate(() => onExit(0));
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      const config: AgentConfig = { type: "cursor", model: null, cliCommand: null };
+      const result = await service.runMergerAgentAndWait("/tmp/repo", config);
+
+      expect(result).toBe(true);
+      expect(mockSpawnWithTaskFile).toHaveBeenCalledWith(
+        config,
+        expect.stringContaining("opensprint-merger-"),
+        "/tmp/repo",
+        expect.any(Function),
+        expect.any(Function),
+        "merger",
+        undefined
+      );
+    });
+
+    it("returns false when merger agent exits with non-zero code", async () => {
+      mockSpawnWithTaskFile.mockImplementation(
+        (_config: unknown, _path: unknown, _cwd: unknown, _onOutput: unknown, onExit: (code: number | null) => void) => {
+          setImmediate(() => onExit(1));
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      const config: AgentConfig = { type: "claude", model: "claude-sonnet-4", cliCommand: null };
+      const result = await service.runMergerAgentAndWait("/tmp/repo", config);
+
+      expect(result).toBe(false);
+    });
+  });
 });

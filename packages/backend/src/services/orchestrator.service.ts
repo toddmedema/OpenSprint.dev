@@ -1592,6 +1592,13 @@ export class OrchestratorService {
 
     await this.sessionManager.clearResult(wtPath, taskId);
   }
+
+  /** MergeCoordinatorHost: run merger agent to resolve conflicts; returns true if agent exited 0 */
+  async runMergerAgentAndWait(projectId: string, cwd: string): Promise<boolean> {
+    const settings = await this.projectService.getSettings(projectId);
+    const config = settings.lowComplexityAgent as AgentConfig;
+    return agentService.runMergerAgentAndWait(cwd, config);
+  }
 }
 
 /** Shared orchestrator instance for build routes and task list (kanban phase override) */

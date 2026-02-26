@@ -5,9 +5,11 @@
  * commits (PRD update, worktree merge). Task state lives on the central server only.
  */
 
+import type { AgentConfig } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { BranchManager, MergeConflictError } from "./branch-manager.js";
 import { ProjectService } from "./project.service.js";
+import { agentService } from "./agent.service.js";
 import { createLogger } from "../utils/logger.js";
 import { waitForGitReady } from "../utils/git-lock.js";
 import { shellExec } from "../utils/shell-exec.js";
@@ -229,7 +231,51 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           break;
         }
 
-        await this.branchManager.mergeToMainNoCommit(repoPath, job.branchName);
+        try {
+          await this.branchManager.mergeToMainNoCommit(repoPath, job.branchName);
+        } catch (mergeErr) {
+          if (mergeErr instanceof MergeConflictError) {
+            log.info("Merge conflict detected, invoking merger agent", {
+              branchName: job.branchName,
+              conflictedFiles: mergeErr.conflictedFiles,
+            });
+            const project = await this.projectService.getProjectByRepoPath(repoPath);
+            if (!project) {
+              log.warn("Cannot invoke merger: no project for repo path", { repoPath });
+              await this.branchManager.mergeAbort(repoPath);
+              throw mergeErr;
+            }
+            const settings = await this.projectService.getSettings(project.id);
+            const config = settings.lowComplexityAgent as AgentConfig;
+            const resolved = await agentService.runMergerAgentAndWait(repoPath, config);
+            if (resolved) {
+              try {
+                const msg = formatMergeCommitMessage(job.taskId, taskTitle);
+                await waitForGitReady(repoPath);
+                await shellExec(`git add -A && git -c core.hooksPath=/dev/null commit -m "${msg.replace(/"/g, '\\"')}"`, {
+                  cwd: repoPath,
+                  timeout: 30_000,
+                });
+                log.info("Merger resolved conflicts, merge commit created", {
+                  branchName: job.branchName,
+                });
+              } catch (continueErr) {
+                log.warn("merge commit failed after merger", {
+                  branchName: job.branchName,
+                  continueErr,
+                });
+                await this.branchManager.mergeAbort(repoPath);
+                throw continueErr instanceof Error ? continueErr : new Error(String(continueErr));
+              }
+            } else {
+              log.warn("Merger agent failed to resolve merge conflicts", { branchName: job.branchName });
+              await this.branchManager.mergeAbort(repoPath);
+              throw mergeErr;
+            }
+          } else {
+            throw mergeErr;
+          }
+        }
 
         // If merge was "Already up to date", git does not set MERGE_HEAD — nothing to commit.
         if (!(await this.branchManager.isMergeInProgress(repoPath))) {

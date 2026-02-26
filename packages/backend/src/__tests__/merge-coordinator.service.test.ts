@@ -119,12 +119,16 @@ describe("MergeCoordinatorService", () => {
         deleteBranch: mockDeleteBranch.mockResolvedValue(undefined),
         getChangedFiles: vi.fn().mockResolvedValue([]),
         pushMain: vi.fn().mockResolvedValue(undefined),
+        pushMainToOrigin: vi.fn().mockResolvedValue(undefined),
         isMergeInProgress: vi.fn().mockResolvedValue(false),
         mergeAbort: vi.fn().mockResolvedValue(undefined),
+        mergeContinue: vi.fn().mockResolvedValue(undefined),
         rebaseAbort: vi.fn().mockResolvedValue(undefined),
+        rebaseContinue: vi.fn().mockResolvedValue(undefined),
         updateMainFromOrigin: vi.fn().mockResolvedValue(undefined),
         rebaseOntoMain: vi.fn().mockResolvedValue(undefined),
       },
+      runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
       sessionManager: {
         createSession: vi.fn().mockResolvedValue({ id: "sess-1" }),
         archiveSession: vi.fn().mockResolvedValue(undefined),
@@ -228,7 +232,7 @@ describe("MergeCoordinatorService", () => {
     expect(callOrder[1]).toBeLessThan(callOrder[2]);
   });
 
-  it("requeues task when rebaseOntoMain fails (same as merge failure)", async () => {
+  it("requeues task when rebaseOntoMain fails with non-conflict error", async () => {
     mockHost.branchManager.rebaseOntoMain = vi.fn().mockRejectedValue(new Error("rebase conflict"));
     const rebaseAbort = vi.fn().mockResolvedValue(undefined);
     mockHost.branchManager.rebaseAbort = rebaseAbort;
@@ -242,5 +246,46 @@ describe("MergeCoordinatorService", () => {
       expect.objectContaining({ status: "open" })
     );
     expect(mockGitQueueEnqueueAndWait).not.toHaveBeenCalled();
+    expect(mockHost.runMergerAgentAndWait).not.toHaveBeenCalled();
+  });
+
+  it("invokes merger agent when rebaseOntoMain fails with RebaseConflictError", async () => {
+    const runMergerAgentAndWait = vi.fn().mockResolvedValue(false);
+    mockHost.runMergerAgentAndWait = runMergerAgentAndWait;
+    const { RebaseConflictError } = await import("../services/branch-manager.js");
+    mockHost.branchManager.rebaseOntoMain = vi
+      .fn()
+      .mockRejectedValue(new RebaseConflictError(["src/foo.ts"]));
+    const rebaseAbort = vi.fn().mockResolvedValue(undefined);
+    mockHost.branchManager.rebaseAbort = rebaseAbort;
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(runMergerAgentAndWait).toHaveBeenCalledWith(projectId, "/tmp/worktree");
+    expect(rebaseAbort).toHaveBeenCalledWith("/tmp/worktree");
+    expect(mockHost.taskStore.update).toHaveBeenCalledWith(
+      projectId,
+      taskId,
+      expect.objectContaining({ status: "open" })
+    );
+    expect(mockGitQueueEnqueueAndWait).not.toHaveBeenCalled();
+  });
+
+  it("continues to merge when merger resolves rebase conflicts", async () => {
+    const runMergerAgentAndWait = vi.fn().mockResolvedValue(true);
+    mockHost.runMergerAgentAndWait = runMergerAgentAndWait;
+    const { RebaseConflictError } = await import("../services/branch-manager.js");
+    mockHost.branchManager.rebaseOntoMain = vi
+      .fn()
+      .mockRejectedValue(new RebaseConflictError(["src/foo.ts"]));
+    const rebaseContinue = vi.fn().mockResolvedValue(undefined);
+    mockHost.branchManager.rebaseContinue = rebaseContinue;
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(runMergerAgentAndWait).toHaveBeenCalledWith(projectId, "/tmp/worktree");
+    expect(rebaseContinue).toHaveBeenCalledWith("/tmp/worktree");
+    expect(mockGitQueueEnqueueAndWait).toHaveBeenCalled();
+    expect(mockHost.taskStore.close).toHaveBeenCalledWith(projectId, taskId, expect.any(String));
   });
 });
