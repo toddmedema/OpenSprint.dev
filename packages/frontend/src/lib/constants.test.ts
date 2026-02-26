@@ -25,8 +25,8 @@ describe("constants", () => {
   });
 
   describe("HOMEPAGE_CONTAINER_CLASS", () => {
-    it("includes max-w-6xl mx-auto px-6 for wider homepage header and cards", () => {
-      expect(HOMEPAGE_CONTAINER_CLASS).toContain("max-w-6xl");
+    it("includes max-w-[86.5rem] mx-auto px-6 for wider homepage header and cards", () => {
+      expect(HOMEPAGE_CONTAINER_CLASS).toContain("max-w-[86.5rem]");
       expect(HOMEPAGE_CONTAINER_CLASS).toContain("mx-auto");
       expect(HOMEPAGE_CONTAINER_CLASS).toContain("px-6");
     });

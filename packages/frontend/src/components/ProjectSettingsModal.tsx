@@ -1145,7 +1145,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       setRunningAgentsDisplayMode(e.target.value as RunningAgentsDisplayMode)
                     }
                     data-testid="running-agents-display-mode"
-                    className="rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-text focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                    className="rounded-lg border border-theme-border bg-theme-bg pl-3 pr-10 py-2 text-sm text-theme-text focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                   >
                     {RUNNING_AGENTS_DISPLAY_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>

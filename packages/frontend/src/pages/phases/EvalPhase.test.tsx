@@ -610,7 +610,7 @@ describe("EvalPhase feedback form", () => {
       expect(prioritySelect).toHaveClass("px-3");
     });
 
-    it("status filter select has equal left and right padding", async () => {
+    it("status filter select has chevron right padding (pl-3, pr from select.input)", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       render(
         <Provider store={store}>
@@ -623,7 +623,8 @@ describe("EvalPhase feedback form", () => {
       });
 
       const statusFilter = screen.getByTestId("feedback-status-filter");
-      expect(statusFilter).toHaveClass("px-3");
+      expect(statusFilter).toHaveClass("input");
+      expect(statusFilter).toHaveClass("pl-3");
     });
 
     it("actions row uses items-stretch so all controls share the same height", async () => {

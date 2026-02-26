@@ -234,7 +234,7 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
                     id="deploy-target"
                     value={selectedTarget}
                     onChange={(e) => setSelectedTarget(e.target.value)}
-                    className="input text-sm py-1.5 px-2"
+                    className="input text-sm py-1.5 pl-2"
                     data-testid="deploy-target-select"
                   >
                     {settings.deployment.targets.map((t) => (

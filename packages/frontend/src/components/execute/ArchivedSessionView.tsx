@@ -26,7 +26,7 @@ export function ArchivedSessionView({ sessions }: { sessions: AgentSession[] }) 
           <select
             value={safeIdx}
             onChange={(e) => setSelectedIdx(Number(e.target.value))}
-            className="bg-theme-bg-elevated text-theme-success-muted border border-theme-border rounded px-2 py-1"
+            className="bg-theme-bg-elevated text-theme-success-muted border border-theme-border rounded pl-2 pr-10 py-1"
           >
             {sessions.map((s, i) => (
               <option key={s.attempt} value={i}>

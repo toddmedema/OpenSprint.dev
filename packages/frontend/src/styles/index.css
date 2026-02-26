@@ -238,6 +238,12 @@ html[data-theme="dark"] {
   .dropdown-trigger {
     @apply px-3;
   }
+
+  /* Select chevron right padding — chevron cramped against right edge (feedback udrzqd).
+   * !important ensures it wins over px-* utilities that would otherwise override. */
+  select.input {
+    @apply !pr-10;
+  }
   .dropdown-item {
     @apply px-3 py-2;
   }

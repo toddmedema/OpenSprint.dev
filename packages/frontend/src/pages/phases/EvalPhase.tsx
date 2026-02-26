@@ -868,7 +868,7 @@ export function EvalPhase({
                   ) : (
                     <span className="flex-1 text-left text-theme-muted">Priority (optional)</span>
                   )}
-                  <span className="text-[10px] opacity-70 shrink-0">
+                  <span className="text-[10px] opacity-70 shrink-0 pr-2">
                     {feedbackPriorityDropdownOpen ? "▲" : "▼"}
                   </span>
                 </button>
@@ -941,7 +941,7 @@ export function EvalPhase({
                   setStatusFilter(value);
                   saveFeedbackStatusFilter(value);
                 }}
-                className="input text-sm py-1.5 px-3 w-auto min-w-[7rem] bg-theme-input-bg text-theme-input-text ring-theme-ring"
+                className="input text-sm py-1.5 pl-3 w-auto min-w-[7rem] bg-theme-input-bg text-theme-input-text ring-theme-ring"
                 aria-label="Filter feedback by status"
                 data-testid="feedback-status-filter"
               >

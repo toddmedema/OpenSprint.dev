@@ -274,7 +274,7 @@ export function TaskDetailSidebar({
                     >
                       <PriorityIcon priority={task.priority ?? 1} size="sm" />
                       <span>{PRIORITY_LABELS[task.priority ?? 1] ?? "Medium"}</span>
-                      <span className="text-[10px] opacity-70">
+                      <span className="text-[10px] opacity-70 pr-2">
                         {priorityDropdownOpen ? "▲" : "▼"}
                       </span>
                     </button>
