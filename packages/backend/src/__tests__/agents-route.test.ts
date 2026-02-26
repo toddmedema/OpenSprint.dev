@@ -82,6 +82,36 @@ describe("Agents API", () => {
     });
   });
 
+  describe("POST /projects/:projectId/agents/:agentId/kill", () => {
+    it("should return 404 when agent is not in slots (e.g. planning agent)", async () => {
+      activeAgentsService.register(
+        "plan-agent-1",
+        projectId,
+        "plan",
+        "planner",
+        "Generate tasks",
+        "2026-02-16T10:00:00.000Z"
+      );
+
+      const res = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/agents/plan-agent-1/kill`
+      );
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toContain("not found");
+
+      activeAgentsService.unregister("plan-agent-1");
+    });
+
+    it("should return 404 for non-existent project", async () => {
+      const res = await request(app).post(
+        `${API_PREFIX}/projects/nonexistent-id/agents/task-123/kill`
+      );
+
+      expect(res.status).toBe(404);
+    });
+  });
+
   afterEach(() => {
     activeAgentsService.unregister("task-123");
   });

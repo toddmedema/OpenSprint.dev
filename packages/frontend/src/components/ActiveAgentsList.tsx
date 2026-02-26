@@ -16,6 +16,16 @@ import { getProjectPhasePath } from "../lib/phaseRouting";
 import { setSelectedPlanId } from "../store/slices/planSlice";
 import { useDisplayPreferences } from "../contexts/DisplayPreferencesContext";
 import { UptimeDisplay } from "./UptimeDisplay";
+import { api } from "../api/client";
+
+/** Runtime threshold (ms) beyond which the Kill button is shown */
+const KILL_BUTTON_THRESHOLD_MS = 30 * 60 * 1000;
+
+function isAgentRunningOver30Minutes(agent: ActiveAgent): boolean {
+  if (!agent.startedAt) return false;
+  const elapsed = Date.now() - new Date(agent.startedAt).getTime();
+  return elapsed >= KILL_BUTTON_THRESHOLD_MS;
+}
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -54,21 +64,63 @@ const isPlanningAgent = (agent: ActiveAgent) =>
   agent.phase === "plan" ||
   (agent.role && getSlotForRole(agent.role as Parameters<typeof getSlotForRole>[0]) === "planning");
 
+/** Skull icon for Kill button (outline style) */
+function SkullIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+      <circle cx="9" cy="10" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="10" r="1.5" fill="currentColor" stroke="none" />
+      <path d="M8 15h8" />
+    </svg>
+  );
+}
+
 /** Memoized row — only re-renders when agent or onClick change; UptimeDisplay handles its own tick. */
 const AgentDropdownItem = memo(function AgentDropdownItem({
   agent,
+  projectId,
   onClick,
+  onKillSuccess,
 }: {
   agent: ActiveAgent;
+  projectId: string;
   onClick: (agent: ActiveAgent) => void;
+  onKillSuccess: () => void;
 }) {
+  const [killing, setKilling] = useState(false);
   const roleForDesc = getAgentRoleForDescription(agent);
   const description = roleForDesc ? AGENT_ROLE_DESCRIPTIONS[roleForDesc] : undefined;
+  const showKill = isAgentRunningOver30Minutes(agent);
+
+  const handleKill = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (killing) return;
+      setKilling(true);
+      api.agents
+        .kill(projectId, agent.id)
+        .then(() => onKillSuccess())
+        .finally(() => setKilling(false));
+    },
+    [projectId, agent.id, killing, onKillSuccess]
+  );
+
   return (
-    <li role="option">
+    <li role="option" className="flex items-stretch">
       <button
         type="button"
-        className="w-full px-4 py-2.5 text-sm text-left hover:bg-theme-border-subtle transition-colors flex items-start gap-3"
+        className="flex-1 min-w-0 px-4 py-2.5 text-sm text-left hover:bg-theme-border-subtle transition-colors flex items-start gap-3"
         onClick={() => onClick(agent)}
         title={description}
       >
@@ -90,6 +142,18 @@ const AgentDropdownItem = memo(function AgentDropdownItem({
           </div>
         </div>
       </button>
+      {showKill && (
+        <button
+          type="button"
+          onClick={handleKill}
+          disabled={killing}
+          className="shrink-0 px-2 flex items-center justify-center text-theme-muted hover:text-red-600 hover:bg-theme-border-subtle transition-colors disabled:opacity-50"
+          title="Kill agent (running over 30 minutes)"
+          aria-label="Kill agent"
+        >
+          <SkullIcon className="w-4 h-4" />
+        </button>
+      )}
     </li>
   );
 });
@@ -176,6 +240,10 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
     [dispatch, navigate, projectId]
   );
 
+  const handleKillSuccess = useCallback(() => {
+    dispatch(fetchActiveAgents(projectId));
+  }, [dispatch, projectId]);
+
   /** Sort agents by canonical README/PRD order for consistent icon display. */
   const sortedAgents = sortAgentsByCanonicalOrder(agents);
 
@@ -206,7 +274,13 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
         ) : (
           <ul className="divide-y divide-theme-border-subtle">
             {sortedAgents.map((agent) => (
-              <AgentDropdownItem key={agent.id} agent={agent} onClick={handleAgentClick} />
+              <AgentDropdownItem
+                key={agent.id}
+                agent={agent}
+                projectId={projectId}
+                onClick={handleAgentClick}
+                onKillSuccess={handleKillSuccess}
+              />
             ))}
           </ul>
         )}

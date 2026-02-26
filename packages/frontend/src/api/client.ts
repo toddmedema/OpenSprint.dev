@@ -373,6 +373,10 @@ export const api = {
   // ─── Agents ───
   agents: {
     active: (projectId: string) => request<ActiveAgent[]>(`/projects/${projectId}/agents/active`),
+    kill: (projectId: string, agentId: string) =>
+      request<{ killed: boolean }>(`/projects/${projectId}/agents/${agentId}/kill`, {
+        method: "POST",
+      }),
   },
 
   // ─── Help (Ask a Question — ask-only agent) ───

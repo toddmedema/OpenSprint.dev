@@ -10,11 +10,13 @@ import executeReducer from "../store/slices/executeSlice";
 import planReducer from "../store/slices/planSlice";
 
 const mockAgentsActive = vi.fn().mockResolvedValue([]);
+const mockAgentsKill = vi.fn().mockResolvedValue({ killed: true });
 
 vi.mock("../api/client", () => ({
   api: {
     agents: {
       active: (...args: unknown[]) => mockAgentsActive(...args),
+      kill: (...args: unknown[]) => mockAgentsKill(...args),
     },
   },
 }));
@@ -41,6 +43,7 @@ describe("ActiveAgentsList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAgentsActive.mockResolvedValue([]);
+    mockAgentsKill.mockResolvedValue({ killed: true });
   });
 
   it("shows loading spinner during initial fetch (never No agents running while loading)", () => {
@@ -496,5 +499,78 @@ describe("ActiveAgentsList", () => {
       height: "3.01875rem",
       marginLeft: "2px",
     });
+  });
+
+  it("shows Kill button (skull icon) when agent runtime exceeds 30 minutes", async () => {
+    const startedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+    mockAgentsActive.mockResolvedValue([
+      {
+        id: "task-1",
+        phase: "coding",
+        role: "coder",
+        label: "Task 1",
+        startedAt,
+      },
+    ]);
+
+    renderActiveAgentsList();
+    await waitFor(() => {
+      expect(screen.getByText("1 agent running")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Active agents"));
+
+    const killButton = screen.getByRole("button", { name: "Kill agent" });
+    expect(killButton).toBeInTheDocument();
+  });
+
+  it("does not show Kill button when agent runtime is under 30 minutes", async () => {
+    const startedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    mockAgentsActive.mockResolvedValue([
+      {
+        id: "task-1",
+        phase: "coding",
+        role: "coder",
+        label: "Task 1",
+        startedAt,
+      },
+    ]);
+
+    renderActiveAgentsList();
+    await waitFor(() => {
+      expect(screen.getByText("1 agent running")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Active agents"));
+
+    expect(screen.queryByRole("button", { name: "Kill agent" })).not.toBeInTheDocument();
+  });
+
+  it("calls kill API when Kill button is clicked", async () => {
+    const startedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+    mockAgentsActive.mockResolvedValue([
+      {
+        id: "task-1",
+        phase: "coding",
+        role: "coder",
+        label: "Task 1",
+        startedAt,
+      },
+    ]);
+
+    renderActiveAgentsList();
+    await waitFor(() => {
+      expect(screen.getByText("1 agent running")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Active agents"));
+
+    const killButton = screen.getByRole("button", { name: "Kill agent" });
+    await user.click(killButton);
+
+    expect(mockAgentsKill).toHaveBeenCalledWith("proj-1", "task-1");
   });
 });

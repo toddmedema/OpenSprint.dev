@@ -545,6 +545,19 @@ export class OrchestratorService {
   }
 
   /**
+   * Kill an agent by ID (taskId for Execute agents). Returns true if the agent was
+   * found and terminated, false if not in slots (e.g. planning agent or already gone).
+   * Used by the Kill button in the agents dropdown for agents running >30 minutes.
+   */
+  async killAgent(projectId: string, agentId: string): Promise<boolean> {
+    const state = this.getState(projectId);
+    const slot = state.slots.get(agentId);
+    if (!slot) return false;
+    await this.stopTaskAndFreeSlot(projectId, agentId);
+    return true;
+  }
+
+  /**
    * If the task has an active agent, kill it and free the slot; then nudge the loop.
    * Used when the user marks a task done so the slot is freed for other work.
    */
