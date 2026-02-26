@@ -8,6 +8,7 @@ import {
   VALID_PHASE_SLUGS,
   PLAN_PARAM,
   TASK_PARAM,
+  FEEDBACK_PARAM,
 } from "./phaseRouting";
 
 describe("phaseRouting", () => {
@@ -99,15 +100,16 @@ describe("phaseRouting", () => {
   });
 
   describe("parseDetailParams", () => {
-    it("returns null for both when search is empty", () => {
-      expect(parseDetailParams("")).toEqual({ plan: null, task: null });
-      expect(parseDetailParams("?")).toEqual({ plan: null, task: null });
+    it("returns null for all when search is empty", () => {
+      expect(parseDetailParams("")).toEqual({ plan: null, task: null, feedback: null });
+      expect(parseDetailParams("?")).toEqual({ plan: null, task: null, feedback: null });
     });
 
     it("parses plan param", () => {
       expect(parseDetailParams("?plan=opensprint.dev-xyz")).toEqual({
         plan: "opensprint.dev-xyz",
         task: null,
+        feedback: null,
       });
     });
 
@@ -115,21 +117,40 @@ describe("phaseRouting", () => {
       expect(parseDetailParams("?task=opensprint.dev-xyz.1")).toEqual({
         plan: null,
         task: "opensprint.dev-xyz.1",
+        feedback: null,
       });
     });
 
-    it("parses both params", () => {
+    it("parses feedback param", () => {
+      expect(parseDetailParams("?feedback=fsi69v")).toEqual({
+        plan: null,
+        task: null,
+        feedback: "fsi69v",
+      });
+    });
+
+    it("parses both plan and task params", () => {
       expect(parseDetailParams("?plan=opensprint.dev-abc&task=opensprint.dev-abc.1")).toEqual({
         plan: "opensprint.dev-abc",
         task: "opensprint.dev-abc.1",
+        feedback: null,
       });
     });
   });
 
-  describe("PLAN_PARAM and TASK_PARAM", () => {
+  describe("PLAN_PARAM, TASK_PARAM, and FEEDBACK_PARAM", () => {
     it("exports correct param names", () => {
       expect(PLAN_PARAM).toBe("plan");
       expect(TASK_PARAM).toBe("task");
+      expect(FEEDBACK_PARAM).toBe("feedback");
+    });
+  });
+
+  describe("getProjectPhasePath with feedback", () => {
+    it("appends feedback param for Evaluate phase deep linking", () => {
+      expect(getProjectPhasePath("proj-1", "eval", { feedback: "fsi69v" })).toBe(
+        "/projects/proj-1/eval?feedback=fsi69v"
+      );
     });
   });
 

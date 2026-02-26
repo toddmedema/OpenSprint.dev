@@ -74,6 +74,29 @@ describe("ActiveAgentsService", () => {
       });
     });
 
+    it("includes feedbackId when Analyst is categorizing feedback", () => {
+      activeAgentsService.register(
+        "feedback-categorize-proj-1-fsi69v-123",
+        "proj-1",
+        "eval",
+        "analyst",
+        "Feedback categorization",
+        "2026-02-16T10:00:00.000Z",
+        undefined,
+        undefined,
+        undefined,
+        "fsi69v"
+      );
+
+      const agents = activeAgentsService.list("proj-1");
+      expect(agents[0]).toMatchObject({
+        id: "feedback-categorize-proj-1-fsi69v-123",
+        role: "analyst",
+        feedbackId: "fsi69v",
+      });
+      activeAgentsService.unregister("feedback-categorize-proj-1-fsi69v-123");
+    });
+
     it("overwrites existing agent with same id", () => {
       activeAgentsService.register(
         "task-1",

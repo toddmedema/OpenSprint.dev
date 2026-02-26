@@ -321,6 +321,7 @@ export class FeedbackService {
           phase: "eval",
           role: "analyst",
           label: "Feedback categorization",
+          feedbackId: item.id,
         },
       });
 

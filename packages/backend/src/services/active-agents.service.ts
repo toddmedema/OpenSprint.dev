@@ -15,6 +15,8 @@ export interface ActiveAgentEntry {
   planId?: string;
   /** Optional agent instance name (e.g. "Frodo"); shown in dropdown as "Coder (Frodo)" when present */
   name?: string;
+  /** Feedback ID when Analyst is categorizing a specific feedback item; use for deep link to Evaluate page */
+  feedbackId?: string;
 }
 
 /**
@@ -37,6 +39,7 @@ export class ActiveAgentsService {
    * @param branchName - Optional branch name (Execute phase)
    * @param planId - Optional plan ID when agent is working in plan context (e.g. Planner for a specific plan)
    * @param name - Optional agent instance name (e.g. "Frodo"); shown in dropdown as "Coder (Frodo)" when present
+   * @param feedbackId - Optional feedback ID when Analyst is categorizing a specific feedback item
    */
   register(
     id: string,
@@ -47,7 +50,8 @@ export class ActiveAgentsService {
     startedAt: string,
     branchName?: string,
     planId?: string,
-    name?: string
+    name?: string,
+    feedbackId?: string
   ): void {
     const index = this.nextIndexByRole.get(role) ?? 0;
     this.nextIndexByRole.set(role, index + 1);
@@ -62,6 +66,7 @@ export class ActiveAgentsService {
       branchName,
       planId,
       name: assignedName,
+      feedbackId,
     });
   }
 
@@ -99,6 +104,7 @@ export class ActiveAgentsService {
       ...(e.branchName != null && { branchName: e.branchName }),
       ...(e.planId != null && { planId: e.planId }),
       ...(e.name != null && e.name.trim() !== "" && { name: e.name.trim() }),
+      ...(e.feedbackId != null && { feedbackId: e.feedbackId }),
     }));
   }
 }

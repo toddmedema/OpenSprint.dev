@@ -28,6 +28,8 @@ export interface AgentTrackingInfo {
   branchName?: string;
   /** Plan ID when agent is working in plan context (e.g. task generation for a plan) */
   planId?: string;
+  /** Feedback ID when Analyst is categorizing a specific feedback item */
+  feedbackId?: string;
 }
 
 /** Options for invokePlanningAgent */
@@ -130,7 +132,9 @@ export class AgentService {
         tracking.label,
         new Date().toISOString(),
         tracking.branchName,
-        tracking.planId
+        tracking.planId,
+        undefined,
+        tracking.feedbackId
       );
     }
     try {
@@ -201,7 +205,9 @@ export class AgentService {
         tracking.label,
         new Date().toISOString(),
         tracking.branchName,
-        tracking.planId
+        tracking.planId,
+        undefined,
+        tracking.feedbackId
       );
     }
 

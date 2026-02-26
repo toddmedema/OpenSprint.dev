@@ -76,6 +76,8 @@ function saveFeedbackCollapsedIds(projectId: string, ids: Set<string>): void {
 interface EvalPhaseProps {
   projectId: string;
   onNavigateToBuildTask?: (taskId: string) => void;
+  /** Feedback ID from URL (e.g. ?feedback=fsi69v) for scroll-to when navigating from Analyst dropdown */
+  feedbackIdFromUrl?: string | null;
 }
 
 export type FeedbackStatusFilter = "all" | "pending" | "resolved" | "cancelled";
@@ -327,6 +329,7 @@ const FeedbackCard = memo(
     return (
       <div
         className={depth > 0 ? "ml-4 mt-2 border-l-2 border-theme-border pl-4" : ""}
+        data-feedback-id={item.id}
       >
         <div
           ref={innerRef}
@@ -559,7 +562,11 @@ const FeedbackCard = memo(
   }
 );
 
-export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) {
+export function EvalPhase({
+  projectId,
+  onNavigateToBuildTask,
+  feedbackIdFromUrl: feedbackIdFromUrlProp,
+}: EvalPhaseProps) {
   const dispatch = useAppDispatch();
 
   /* ── Redux state ── */
@@ -679,6 +686,8 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
   }, [feedbackPriorityDropdownOpen]);
 
   const feedbackFeedRef = useRef<HTMLDivElement>(null);
+  const feedbackIdFromUrl = feedbackIdFromUrlProp ?? null;
+  const hasScrolledToFeedbackRef = useRef(false);
 
   const handleResolve = useCallback(
     (feedbackId: string) => {
@@ -752,6 +761,51 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
     },
     [projectId]
   );
+
+  // When navigating with ?feedback=id (e.g. from Analyst dropdown), ensure visibility, expand ancestors, and scroll
+  useEffect(() => {
+    if (!feedbackIdFromUrl || loading || feedback.length === 0) return;
+    const targetItem = feedback.find((f) => f.id === feedbackIdFromUrl);
+    if (!targetItem) return;
+    if (hasScrolledToFeedbackRef.current) return;
+
+    // Ensure filter shows the target (e.g. when coming from Analyst, feedback is usually pending)
+    if (!matchesStatusFilter(targetItem, statusFilter)) {
+      setStatusFilter("all");
+      saveFeedbackStatusFilter("all");
+    }
+
+    // Expand all ancestors so the target is visible (replies may be inside collapsed parents)
+    const ancestorIds: string[] = [];
+    let pid: string | null = targetItem.parent_id ?? null;
+    while (pid) {
+      ancestorIds.push(pid);
+      const parent = feedback.find((f) => f.id === pid);
+      pid = parent?.parent_id ?? null;
+    }
+    if (ancestorIds.length > 0) {
+      setCollapsedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ancestorIds) next.delete(id);
+        if (next.size !== prev.size) {
+          saveFeedbackCollapsedIds(projectId, next);
+          return next;
+        }
+        return prev;
+      });
+    }
+
+    // Scroll after a brief delay to allow layout (especially after expanding)
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`[data-feedback-id="${feedbackIdFromUrl}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        hasScrolledToFeedbackRef.current = true;
+      }
+    }, ancestorIds.length > 0 ? 150 : 0);
+
+    return () => clearTimeout(timer);
+  }, [feedbackIdFromUrl, feedback, loading, projectId, statusFilter]);
 
   const filteredFeedback = useMemo(
     () =>

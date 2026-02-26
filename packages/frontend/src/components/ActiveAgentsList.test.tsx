@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { configureStore } from "@reduxjs/toolkit";
 import { DisplayPreferencesProvider } from "../contexts/DisplayPreferencesContext";
 import { ActiveAgentsList } from "./ActiveAgentsList";
@@ -426,6 +426,47 @@ describe("ActiveAgentsList", () => {
       height: "1.5rem",
       marginLeft: "2px",
     });
+  });
+
+  it("navigates to Evaluate page with feedback param when clicking Analyst agent", async () => {
+    mockAgentsActive.mockResolvedValue([
+      {
+        id: "feedback-categorize-proj-1-fsi69v-123",
+        phase: "eval",
+        role: "analyst",
+        label: "Feedback categorization",
+        startedAt: "2026-02-16T12:00:00.000Z",
+        feedbackId: "fsi69v",
+      },
+    ]);
+
+    function LocationDisplay() {
+      const { pathname, search } = useLocation();
+      return <div data-testid="location">{pathname + search}</div>;
+    }
+
+    render(
+      <Provider store={createStore()}>
+        <DisplayPreferencesProvider>
+          <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
+            <ActiveAgentsList projectId="proj-1" />
+            <LocationDisplay />
+          </MemoryRouter>
+        </DisplayPreferencesProvider>
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("1 agent running")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Active agents"));
+    await user.click(screen.getByRole("button", { name: /Feedback categorization/ }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/projects/proj-1/eval?feedback=fsi69v"
+    );
   });
 
   it("renders agent icons sized to match two lines of text (3.01875rem) with 2px left margin in dropdown", async () => {

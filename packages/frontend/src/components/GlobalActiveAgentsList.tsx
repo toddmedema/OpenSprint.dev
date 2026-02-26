@@ -162,7 +162,9 @@ export function GlobalActiveAgentsList() {
 
   const handleAgentClick = useCallback(
     (projectId: string, agent: ActiveAgent) => {
-      if (agent.planId) {
+      if (agent.role === "analyst" && agent.feedbackId) {
+        navigate(getProjectPhasePath(projectId, "eval", { feedback: agent.feedbackId }));
+      } else if (agent.planId) {
         dispatch(setSelectedPlanId(agent.planId));
         navigate(getProjectPhasePath(projectId, "plan", { plan: agent.planId }));
       } else if (isPlanningAgent(agent)) {

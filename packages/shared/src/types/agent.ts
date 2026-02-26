@@ -244,6 +244,8 @@ export interface ActiveAgent {
   planId?: string;
   /** Optional agent instance name (e.g. "Frodo"); shown in dropdown as "Coder (Frodo)" when present */
   name?: string;
+  /** Feedback ID when Analyst is categorizing a specific feedback item; use for deep link to Evaluate page */
+  feedbackId?: string;
 }
 
 /** Feedback item awaiting categorization (PRDv2 §5.8) */

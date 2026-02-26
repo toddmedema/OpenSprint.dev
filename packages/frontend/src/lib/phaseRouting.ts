@@ -35,15 +35,18 @@ export function isValidPhaseSlug(
   return !!slug && VALID_PHASE_SLUGS.includes(slug as (typeof VALID_PHASE_SLUGS)[number]);
 }
 
-/** Query param keys for deep linking to Plan/Build detail panes */
+/** Query param keys for deep linking to Plan/Build/Evaluate detail panes */
 export const PLAN_PARAM = "plan";
 export const TASK_PARAM = "task";
+export const FEEDBACK_PARAM = "feedback";
 
 export interface PhasePathOptions {
   /** Plan ID to deep link to (Plan phase detail pane) */
   plan?: string | null;
   /** Task ID to deep link to (Build phase detail pane) */
   task?: string | null;
+  /** Feedback ID to deep link to (Evaluate phase — scroll/focus specific feedback item) */
+  feedback?: string | null;
 }
 
 /**
@@ -60,17 +63,23 @@ export function getProjectPhasePath(
   const params = new URLSearchParams();
   if (options?.plan) params.set(PLAN_PARAM, options.plan);
   if (options?.task) params.set(TASK_PARAM, options.task);
+  if (options?.feedback) params.set(FEEDBACK_PARAM, options.feedback);
   const query = params.toString();
   return query ? `${base}?${query}` : base;
 }
 
 /**
- * Parses plan and task IDs from URL search params.
+ * Parses plan, task, and feedback IDs from URL search params.
  */
-export function parseDetailParams(search: string): { plan: string | null; task: string | null } {
+export function parseDetailParams(search: string): {
+  plan: string | null;
+  task: string | null;
+  feedback: string | null;
+} {
   const params = new URLSearchParams(search);
   return {
     plan: params.get(PLAN_PARAM),
     task: params.get(TASK_PARAM),
+    feedback: params.get(FEEDBACK_PARAM),
   };
 }
