@@ -300,9 +300,10 @@ const executeSlice = createSlice({
         status?: string;
         assignee?: string | null;
         priority?: TaskPriority;
+        blockReason?: string | null;
       }>
     ) {
-      const { taskId, status, assignee, priority } = action.payload;
+      const { taskId, status, assignee, priority, blockReason } = action.payload;
       const task = state.tasks.find((t) => t.id === taskId);
       if (task) {
         if (status !== undefined) {
@@ -313,6 +314,7 @@ const executeSlice = createSlice({
         }
         if (assignee !== undefined) task.assignee = assignee;
         if (priority !== undefined) task.priority = priority;
+        if (blockReason !== undefined) task.blockReason = blockReason;
       }
     },
     setTasks(state, action: PayloadAction<Task[]>) {

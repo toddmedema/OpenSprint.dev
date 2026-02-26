@@ -281,6 +281,15 @@ export function TaskDetailSidebar({
                     : "—"}
                 </span>
               </div>
+              {/* Block reason: shown below status/priority row when task is blocked */}
+              {isBlockedTask && task.blockReason && (
+                <div
+                  className="mb-3 text-xs text-theme-error-text"
+                  data-testid="task-block-reason"
+                >
+                  {task.blockReason}
+                </div>
+              )}
               {/* Row 2: Active agent section (role, name, elapsed time) — only when agent is active */}
               {roleLabel && (
                 <div

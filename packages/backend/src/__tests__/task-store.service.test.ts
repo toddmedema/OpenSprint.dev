@@ -202,6 +202,33 @@ describe("TaskStoreService", () => {
         "fb-2",
       ]);
     });
+
+    it("should persist block_reason when status becomes blocked", async () => {
+      const created = await store.create(TEST_PROJECT_ID, "My Task");
+      const result = await store.update(TEST_PROJECT_ID, created.id, {
+        status: "blocked",
+        assignee: "",
+        block_reason: "Merge Failure",
+      });
+      expect(result.status).toBe("blocked");
+      expect((result as { block_reason?: string }).block_reason).toBe("Merge Failure");
+      const refetched = store.show(TEST_PROJECT_ID, created.id);
+      expect((refetched as { block_reason?: string }).block_reason).toBe("Merge Failure");
+    });
+
+    it("should clear block_reason when task is unblocked", async () => {
+      const created = await store.create(TEST_PROJECT_ID, "My Task");
+      await store.update(TEST_PROJECT_ID, created.id, {
+        status: "blocked",
+        block_reason: "Coding Failure",
+      });
+      const result = await store.update(TEST_PROJECT_ID, created.id, {
+        status: "open",
+        block_reason: null,
+      });
+      expect(result.status).toBe("open");
+      expect((result as { block_reason?: string }).block_reason).toBeUndefined();
+    });
   });
 
   describe("close", () => {

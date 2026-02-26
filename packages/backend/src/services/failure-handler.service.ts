@@ -324,6 +324,7 @@ export class FailureHandlerService {
       await this.host.taskStore.update(repoPath, task.id, {
         status: "blocked",
         assignee: "",
+        block_reason: "Coding Failure",
       });
     } catch (err) {
       log.warn("Failed to block task", { err });
@@ -343,6 +344,7 @@ export class FailureHandlerService {
       taskId: task.id,
       status: "blocked",
       assignee: null,
+      blockReason: "Coding Failure",
     });
     broadcastToProject(projectId, {
       type: "agent.completed",

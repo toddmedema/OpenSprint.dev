@@ -216,6 +216,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
             status: event.status,
             assignee: event.assignee,
             priority: event.priority as TaskPriority | undefined,
+            blockReason: event.blockReason,
           })
         );
         break;

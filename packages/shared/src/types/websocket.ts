@@ -10,6 +10,8 @@ export interface TaskUpdatedEvent {
   assignee: string | null;
   /** Optional; when present, syncs task priority into task registry and execute state */
   priority?: number;
+  /** Reason task was blocked. Set when status is blocked; cleared when unblocked. */
+  blockReason?: string | null;
 }
 
 export interface AgentOutputEvent {

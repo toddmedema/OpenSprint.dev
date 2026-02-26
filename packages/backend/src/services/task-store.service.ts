@@ -196,6 +196,8 @@ export interface StoredTask {
   dependency_count?: number;
   dependent_count?: number;
   close_reason?: string;
+  /** Reason task was blocked (e.g. Coding Failure, Merge Failure). Stored in extra when status is blocked. */
+  block_reason?: string | null;
   [key: string]: unknown;
 }
 
@@ -471,8 +473,10 @@ export class TaskStoreService {
     const dependentCount = (depCountStmt.getAsObject().cnt as number) ?? 0;
     depCountStmt.free();
 
+    const blockReason = (extra.block_reason as string) ?? null;
     return {
       ...extra,
+      block_reason: blockReason,
       id: row.id as string,
       project_id: row.project_id as string | undefined,
       title: row.title as string,
@@ -818,6 +822,8 @@ export class TaskStoreService {
       extra?: Record<string, unknown>;
       /** Task-level complexity (low|high). Stored in extra. */
       complexity?: TaskComplexity;
+      /** Reason task was blocked. Persisted when status becomes blocked; cleared when unblocked. */
+      block_reason?: string | null;
     } = {}
   ): Promise<StoredTask> {
     return this.withWriteLock(async () => {
@@ -858,7 +864,11 @@ export class TaskStoreService {
         vals.push(options.priority);
       }
 
-      if (options.extra != null || options.complexity != null) {
+      if (
+        options.extra != null ||
+        options.complexity != null ||
+        options.block_reason !== undefined
+      ) {
         const stmt = db.prepare("SELECT extra FROM tasks WHERE id = ? AND project_id = ?");
         stmt.bind([id, projectId]);
         if (stmt.step()) {
@@ -866,11 +876,18 @@ export class TaskStoreService {
           const existing: Record<string, unknown> = JSON.parse(
             (row.extra as string) || "{}"
           ) as Record<string, unknown>;
-          const merged = {
+          const merged: Record<string, unknown> = {
             ...existing,
             ...options.extra,
             ...(options.complexity != null ? { complexity: options.complexity } : {}),
           };
+          if (options.block_reason !== undefined) {
+            if (options.block_reason == null || options.block_reason === "") {
+              delete merged.block_reason;
+            } else {
+              merged.block_reason = options.block_reason;
+            }
+          }
           sets.push("extra = ?");
           vals.push(JSON.stringify(merged));
         }

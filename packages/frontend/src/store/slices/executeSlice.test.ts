@@ -287,6 +287,17 @@ describe("executeSlice", () => {
       expect(task.kanbanColumn).toBe("blocked");
     });
 
+    it("taskUpdated updates blockReason when provided", () => {
+      const store = createStore();
+      store.dispatch(setTasks([mockTask]));
+      store.dispatch(
+        taskUpdated({ taskId: "task-1", status: "blocked", blockReason: "Merge Failure" })
+      );
+      const task = store.getState().execute.tasks[0];
+      expect(task.kanbanColumn).toBe("blocked");
+      expect(task.blockReason).toBe("Merge Failure");
+    });
+
     it("taskUpdated updates priority in tasks", () => {
       const store = createStore();
       const taskWithDetail = { ...mockTask, id: "task-1" };

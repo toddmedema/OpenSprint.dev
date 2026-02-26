@@ -192,6 +192,9 @@ export class TaskService {
     const taskComplexity: TaskComplexity | undefined =
       complexity === "low" || complexity === "high" ? complexity : undefined;
 
+    const blockReason =
+      (issue as { block_reason?: string | null }).block_reason ?? null;
+
     return {
       id,
       title: issue.title ?? "",
@@ -209,6 +212,7 @@ export class TaskService {
       ...(sourceFeedbackIds ? { sourceFeedbackIds } : {}),
       ...(sourceFeedbackIds?.[0] ? { sourceFeedbackId: sourceFeedbackIds[0] } : {}),
       ...(taskComplexity ? { complexity: taskComplexity } : {}),
+      ...(blockReason ? { blockReason } : {}),
     };
   }
 
@@ -314,7 +318,7 @@ export class TaskService {
       return { taskUnblocked: false };
     }
 
-    await this.taskStore.update(projectId, taskId, { status: "open" });
+    await this.taskStore.update(projectId, taskId, { status: "open", block_reason: null });
 
     if (options?.resetAttempts) {
       const labels = (issue.labels ?? []) as string[];
@@ -329,6 +333,7 @@ export class TaskService {
       taskId,
       status: "open",
       assignee: null,
+      blockReason: null,
     });
 
     return { taskUnblocked: true };

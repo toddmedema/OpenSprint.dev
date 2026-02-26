@@ -262,6 +262,37 @@ describe("TaskDetailSidebar", () => {
     expect(screen.queryByRole("button", { name: /mark done/i })).not.toBeInTheDocument();
   });
 
+  it("shows block reason below status/priority row when task is blocked", () => {
+    const props = createMinimalProps({
+      selectedTaskData: {
+        id: "epic-1.1",
+        title: "Blocked Task",
+        epicId: "epic-1",
+        kanbanColumn: "blocked" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "blocked" as const,
+        labels: [],
+        dependencies: [],
+        description: "",
+        createdAt: "",
+        updatedAt: "",
+        blockReason: "Merge Failure",
+      },
+      isBlockedTask: true,
+    });
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    const blockReason = screen.getByTestId("task-block-reason");
+    expect(blockReason).toBeInTheDocument();
+    expect(blockReason).toHaveTextContent("Merge Failure");
+  });
+
   it("calls onClose when close button is clicked", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

@@ -289,7 +289,11 @@ export class MergeCoordinatorService {
       const maxMergeFailures = BACKOFF_FAILURE_THRESHOLD * 2;
       if (cumulativeAttempts >= maxMergeFailures) {
         log.info(`Blocking ${task.id} after ${cumulativeAttempts} merge failures`);
-        await this.host.taskStore.update(projectId, task.id, { status: "blocked", assignee: "" });
+        await this.host.taskStore.update(projectId, task.id, {
+          status: "blocked",
+          assignee: "",
+          block_reason: "Merge Failure",
+        });
         await this.host.taskStore.comment(
           projectId,
           task.id,
@@ -306,6 +310,7 @@ export class MergeCoordinatorService {
           taskId: task.id,
           status: "blocked",
           assignee: null,
+          blockReason: "Merge Failure",
         });
         return;
       }
