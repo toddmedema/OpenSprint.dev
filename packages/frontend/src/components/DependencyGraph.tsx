@@ -92,16 +92,34 @@ function computeCriticalPathEdges(
   return criticalEdges;
 }
 
+/**
+ * Adjust zoom transform on resize so the previous view center stays centered.
+ * Pan by half the dimension delta: e.g. if width halves, pan by 1/4 so center stays centered.
+ */
+export function adjustTransformForResize(
+  t: d3.ZoomTransform,
+  prevWidth: number,
+  prevHeight: number,
+  newWidth: number,
+  newHeight: number
+): d3.ZoomTransform {
+  const deltaX = (newWidth - prevWidth) / 2;
+  const deltaY = (newHeight - prevHeight) / 2;
+  return d3.zoomIdentity.translate(t.x + deltaX, t.y + deltaY).scale(t.k);
+}
+
 /** D3 force-directed dependency graph with critical path highlighting. PRD §7.2.2 */
 export function DependencyGraph({ graph, onPlanClick, fillHeight }: DependencyGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const dimensionsRef = useRef<Dimensions | null>(null);
   const readyRef = useRef(false);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [ready, setReady] = useState(false);
 
   // Track container size in a ref. Only signal readiness once for the initial D3 render.
   // Subsequent size changes update SVG attributes directly without rebuilding the graph.
+  // On resize, adjust pan so the previous view center stays centered (no jump/drift).
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -128,6 +146,18 @@ export function DependencyGraph({ graph, onPlanClick, fillHeight }: DependencyGr
           .attr("width", width)
           .attr("height", height)
           .attr("viewBox", [0, 0, width, height]);
+
+        // Keep view center stable: pan by half the delta so the focal point stays centered
+        const zoom = zoomRef.current;
+        if (zoom) {
+          try {
+            const t = d3.zoomTransform(svg);
+            const next = adjustTransformForResize(t, prev.width, prev.height, width, height);
+            d3.select(svg).call(zoom.transform, next);
+          } catch {
+            // JSDOM/headless may lack SVG dimensions; skip transform adjustment
+          }
+        }
       }
     };
 
@@ -171,6 +201,7 @@ export function DependencyGraph({ graph, onPlanClick, fillHeight }: DependencyGr
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.3, 3])
       .on("zoom", (event) => g.attr("transform", event.transform));
+    zoomRef.current = zoom;
     svg.call(zoom);
 
     const nodeData = planIds.map((id) => ({
