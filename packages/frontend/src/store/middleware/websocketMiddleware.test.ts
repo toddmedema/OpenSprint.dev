@@ -913,6 +913,71 @@ describe("websocketMiddleware", () => {
       });
     });
 
+    it("live-updates feedback card when task.updated received after feedback.updated (status change)", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      store.dispatch(
+        setFeedback([
+          {
+            id: "fb-1",
+            text: "Auth bug",
+            category: "bug",
+            mappedPlanId: "plan-1",
+            createdTaskIds: [],
+            status: "pending",
+            createdAt: "2024-01-01T00:00:00Z",
+          },
+        ])
+      );
+
+      const { api } = await import("../../api/client");
+      vi.mocked(api.tasks.get).mockResolvedValue({
+        id: "task-auth",
+        title: "Fix auth",
+        kanbanColumn: "backlog",
+        priority: 1,
+      } as never);
+
+      wsInstance!.simulateMessage({
+        type: "feedback.updated",
+        feedbackId: "fb-1",
+        planId: "plan-1",
+        taskIds: ["task-auth"],
+        item: {
+          id: "fb-1",
+          text: "Auth bug",
+          category: "bug",
+          mappedPlanId: "plan-1",
+          createdTaskIds: ["task-auth"],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+      });
+
+      await vi.waitFor(() => {
+        const tasks = store.getState().execute.tasks;
+        expect(tasks.some((t) => t.id === "task-auth")).toBe(true);
+      });
+      expect(store.getState().execute.tasks.find((t) => t.id === "task-auth")?.kanbanColumn).toBe(
+        "backlog"
+      );
+
+      wsInstance!.simulateMessage({
+        type: "task.updated",
+        taskId: "task-auth",
+        status: "closed",
+        assignee: null,
+      });
+
+      await vi.waitFor(() => {
+        const task = store.getState().execute.tasks.find((t) => t.id === "task-auth");
+        expect(task?.kanbanColumn).toBe("done");
+      });
+    });
+
     it("dispatches setDeliverToast on deliver.started", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
