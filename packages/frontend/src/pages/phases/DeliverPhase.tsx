@@ -144,12 +144,6 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <div className="px-6 py-4 border-b border-theme-border bg-theme-surface shrink-0">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-theme-text">Deliver</h2>
-              <p className="text-sm text-theme-muted">
-                Deliver your project to Expo.dev or a custom pipeline
-              </p>
-            </div>
             <div className="flex items-center gap-3 flex-wrap">
               {isDeploying && (
                 <button
