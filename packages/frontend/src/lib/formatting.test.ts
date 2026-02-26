@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { formatPlanIdAsTitle, formatSectionKey, formatTimestamp, formatUptime } from "./formatting";
+import {
+  formatPlanIdAsTitle,
+  formatSectionKey,
+  formatTaskDuration,
+  formatTimestamp,
+  formatUptime,
+} from "./formatting";
 
 describe("formatting", () => {
   describe("formatPlanIdAsTitle", () => {
@@ -101,6 +107,47 @@ describe("formatting", () => {
     it("returns 0s for future or same timestamp", () => {
       const startedAt = new Date("2026-02-16T12:02:35.000Z").toISOString();
       expect(formatUptime(startedAt, mockNow)).toBe("0s");
+    });
+  });
+
+  describe("formatTaskDuration", () => {
+    it("formats duration as MM:SS", () => {
+      const startedAt = "2026-02-16T12:00:00.000Z";
+      const completedAt = "2026-02-16T12:05:30.000Z";
+      expect(formatTaskDuration(startedAt, completedAt)).toBe("5:30");
+    });
+
+    it("pads seconds with zero", () => {
+      const startedAt = "2026-02-16T12:00:00.000Z";
+      const completedAt = "2026-02-16T12:03:09.000Z";
+      expect(formatTaskDuration(startedAt, completedAt)).toBe("3:09");
+    });
+
+    it("handles duration over 60 minutes", () => {
+      const startedAt = "2026-02-16T12:00:00.000Z";
+      const completedAt = "2026-02-16T13:05:30.000Z";
+      expect(formatTaskDuration(startedAt, completedAt)).toBe("65:30");
+    });
+
+    it("returns null when startedAt is missing", () => {
+      expect(formatTaskDuration(null, "2026-02-16T12:05:30.000Z")).toBeNull();
+      expect(formatTaskDuration(undefined, "2026-02-16T12:05:30.000Z")).toBeNull();
+    });
+
+    it("returns null when completedAt is missing", () => {
+      expect(formatTaskDuration("2026-02-16T12:00:00.000Z", null)).toBeNull();
+      expect(formatTaskDuration("2026-02-16T12:00:00.000Z", undefined)).toBeNull();
+    });
+
+    it("returns null when completedAt is before startedAt", () => {
+      const startedAt = "2026-02-16T12:05:30.000Z";
+      const completedAt = "2026-02-16T12:00:00.000Z";
+      expect(formatTaskDuration(startedAt, completedAt)).toBeNull();
+    });
+
+    it("returns null for invalid timestamps", () => {
+      expect(formatTaskDuration("invalid", "2026-02-16T12:05:30.000Z")).toBeNull();
+      expect(formatTaskDuration("2026-02-16T12:00:00.000Z", "invalid")).toBeNull();
     });
   });
 });

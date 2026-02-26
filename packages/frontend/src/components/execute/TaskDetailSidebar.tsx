@@ -12,7 +12,7 @@ import { CloseButton } from "../CloseButton";
 import { PriorityIcon } from "../PriorityIcon";
 import { ComplexityIcon } from "../ComplexityIcon";
 import { TaskStatusBadge, COLUMN_LABELS } from "../kanban";
-import { formatUptime } from "../../lib/formatting";
+import { formatUptime, formatTaskDuration } from "../../lib/formatting";
 import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
 import { getMessageBasedHint } from "../../store/listeners/notificationListener";
 import { filterAgentOutput } from "../../utils/agentOutputFilter";
@@ -333,6 +333,18 @@ export function TaskDetailSidebar({
                     ? task.complexity.charAt(0).toUpperCase() + task.complexity.slice(1)
                     : "—"}
                 </span>
+                {isDoneTask && (() => {
+                  const duration = formatTaskDuration(task.startedAt, task.completedAt);
+                  return duration ? (
+                    <span
+                      className="inline-flex items-center text-theme-muted/80"
+                      data-testid="task-duration"
+                      aria-label={`Took ${duration}`}
+                    >
+                      Took {duration}
+                    </span>
+                  ) : null;
+                })()}
               </div>
               {/* Block reason: shown below status/priority row when task is blocked */}
               {isBlockedTask && task.blockReason && (

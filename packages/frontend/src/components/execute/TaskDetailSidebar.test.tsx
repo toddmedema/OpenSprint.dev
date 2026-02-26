@@ -1026,6 +1026,85 @@ describe("TaskDetailSidebar", () => {
     });
   });
 
+  describe("Task duration", () => {
+    it("shows Took MM:SS for completed tasks with startedAt and completedAt", () => {
+      const props = createMinimalProps({
+        isDoneTask: true,
+        selectedTaskData: {
+          ...createMinimalProps().selectedTaskData,
+          kanbanColumn: "done" as const,
+          status: "closed" as const,
+          startedAt: "2026-02-16T12:00:00.000Z",
+          completedAt: "2026-02-16T12:05:30.000Z",
+        },
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>
+      );
+      const duration = screen.getByTestId("task-duration");
+      expect(duration).toHaveTextContent("Took 5:30");
+      expect(duration).toHaveAttribute("aria-label", "Took 5:30");
+    });
+
+    it("does not show duration for in-progress tasks", () => {
+      const props = createMinimalProps({
+        isDoneTask: false,
+        selectedTaskData: {
+          ...createMinimalProps().selectedTaskData,
+          kanbanColumn: "in_progress" as const,
+          startedAt: "2026-02-16T12:00:00.000Z",
+          completedAt: null,
+        },
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>
+      );
+      expect(screen.queryByTestId("task-duration")).not.toBeInTheDocument();
+    });
+
+    it("does not show duration for completed tasks without completedAt", () => {
+      const props = createMinimalProps({
+        isDoneTask: true,
+        selectedTaskData: {
+          ...createMinimalProps().selectedTaskData,
+          kanbanColumn: "done" as const,
+          status: "closed" as const,
+          startedAt: "2026-02-16T12:00:00.000Z",
+          completedAt: null,
+        },
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>
+      );
+      expect(screen.queryByTestId("task-duration")).not.toBeInTheDocument();
+    });
+
+    it("does not show duration for completed tasks without startedAt", () => {
+      const props = createMinimalProps({
+        isDoneTask: true,
+        selectedTaskData: {
+          ...createMinimalProps().selectedTaskData,
+          kanbanColumn: "done" as const,
+          status: "closed" as const,
+          startedAt: null,
+          completedAt: "2026-02-16T12:05:30.000Z",
+        },
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>
+      );
+      expect(screen.queryByTestId("task-duration")).not.toBeInTheDocument();
+    });
+  });
+
   describe("Layout: priority/state row and active-agent/time row", () => {
     const taskDetailWithPriority = (priority: number) => ({
       id: "epic-1.1",

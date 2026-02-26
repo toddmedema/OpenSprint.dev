@@ -46,6 +46,24 @@ export function formatUptime(startedAt: string, now: Date = new Date()): string 
 }
 
 /**
+ * Formats task duration from startedAt to completedAt as "MM:SS".
+ * Returns null if either timestamp is missing or invalid.
+ */
+export function formatTaskDuration(
+  startedAt: string | null | undefined,
+  completedAt: string | null | undefined
+): string | null {
+  if (!startedAt || !completedAt) return null;
+  const start = new Date(startedAt).getTime();
+  const end = new Date(completedAt).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
+  const totalSeconds = Math.floor((end - start) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+/**
  * Formats a timestamp as relative time ("5m ago", "2h ago") or locale date string.
  * @param ts ISO 8601 timestamp string
  */
