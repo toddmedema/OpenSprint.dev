@@ -177,6 +177,76 @@ Updated auth flow with OAuth support.
     expect(historyRes.body.data.messages[1].content).toBe("Plan updated");
   });
 
+  it("Plan chat with PLAN_UPDATE syncs plan markdown and associated tasks", async () => {
+    const epic = await taskStore.create(projectId, "Auth Epic", { type: "epic" });
+    await taskStore.create(projectId, "Original task 1", {
+      parentId: epic.id,
+      description: "Original desc 1",
+    });
+    await taskStore.create(projectId, "Original task 2", {
+      parentId: epic.id,
+      description: "Original desc 2",
+    });
+
+    await taskStore.planInsert(projectId, "auth-plan", {
+      epic_id: epic.id,
+      content: "# Auth Plan\n\nOriginal content.",
+      metadata: JSON.stringify({
+        planId: "auth-plan",
+        epicId: epic.id,
+        shippedAt: null,
+        complexity: "medium",
+      }),
+    });
+
+    const planUpdateWithTasks = `[PLAN_UPDATE]
+# Auth Plan
+
+## Overview
+Updated auth flow with OAuth support.
+
+## Tasks
+
+### 1. Refined task one
+Updated description for first task.
+
+### 2. Refined task two
+Updated description for second task.
+[/PLAN_UPDATE]`;
+
+    mockInvokePlanningAgent.mockResolvedValue({ content: planUpdateWithTasks });
+
+    const sendRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/chat`)
+      .send({ message: "Add OAuth and refine tasks", context: "plan:auth-plan" });
+
+    expect(sendRes.status).toBe(200);
+    expect(sendRes.body.data.message).toBe("Plan updated");
+
+    const planRow = await taskStore.planGet(projectId, "auth-plan");
+    expect(planRow).not.toBeNull();
+    expect(planRow!.content).toContain("OAuth support");
+    expect(planRow!.content).toContain("Refined task one");
+    expect(planRow!.content).toContain("Refined task two");
+
+    const allTasks = await taskStore.listAll(projectId);
+    const childTasks = allTasks.filter(
+      (t: { id: string; issue_type: string }) =>
+        t.id.startsWith(epic.id + ".") && t.issue_type !== "epic"
+    );
+    expect(childTasks).toHaveLength(2);
+    expect(childTasks.map((t: { title: string }) => t.title)).toContain("Refined task one");
+    expect(childTasks.map((t: { title: string }) => t.title)).toContain("Refined task two");
+    expect(childTasks.map((t: { description: string }) => t.description)).toContain(
+      "Updated description for first task."
+    );
+
+    expect(mockBroadcastToProject).toHaveBeenCalledWith(
+      projectId,
+      expect.objectContaining({ type: "plan.updated", planId: "auth-plan" })
+    );
+  });
+
   it("Plan chat with PLAN_UPDATE plus text shows only the text in chat", async () => {
     await taskStore.planInsert(projectId, "auth-plan", {
       epic_id: "os-auth",

@@ -20,6 +20,7 @@ import {
   validatePlanContent,
   parsePlanTasks,
 } from "@opensprint/shared";
+import { syncPlanTasksFromContent } from "./plan-task-sync.service.js";
 import { ProjectService } from "./project.service.js";
 import { planComplexityToTask } from "./plan-complexity.js";
 import { taskStore as taskStoreSingleton, type StoredTask } from "./task-store.service.js";
@@ -704,82 +705,9 @@ export class PlanService {
     }
 
     // Sync plan markdown tasks to task store when ## Tasks section is present
-    const repoPath = await this.getRepoPath(projectId);
-    await this.syncPlanTasksToStore(projectId, planId, body.content, repoPath);
+    await syncPlanTasksFromContent(projectId, planId, body.content);
 
     return this.getPlan(projectId, planId);
-  }
-
-  /**
-   * Sync tasks from plan markdown (## Tasks section) to task store.
-   * Uses epic prefix + non-epic only. Matches by position: plan task i -> child task i.
-   * Updates title and description when they differ.
-   */
-  private async syncPlanTasksToStore(
-    projectId: string,
-    planId: string,
-    content: string,
-    _repoPath: string
-  ): Promise<void> {
-    const parsedTasks = parsePlanTasks(content);
-    if (parsedTasks.length === 0) return;
-
-    const plan = await this.getPlan(projectId, planId);
-    const epicId = plan.metadata.epicId;
-    if (!epicId) return;
-
-    const allIssues = await this.taskStore.listAll(projectId);
-    const children = allIssues.filter(
-      (issue: StoredTask) =>
-        issue.id.startsWith(epicId + ".") && (issue.issue_type ?? issue.type) !== "epic"
-    );
-
-    // Sort by child index (epic.1, epic.2, ...) for stable ordering; numeric suffix for correct order
-    children.sort((a: StoredTask, b: StoredTask) => {
-      const suffixA = a.id.split(".").pop() ?? "";
-      const suffixB = b.id.split(".").pop() ?? "";
-      const idxA = parseInt(suffixA, 10);
-      const idxB = parseInt(suffixB, 10);
-      if (!Number.isNaN(idxA) && !Number.isNaN(idxB)) return idxA - idxB;
-      return suffixA.localeCompare(suffixB);
-    });
-
-    let updated = 0;
-    for (let i = 0; i < parsedTasks.length && i < children.length; i++) {
-      const parsed = parsedTasks[i]!;
-      const task = children[i]!;
-      const taskTitle = (task.title ?? "").trim();
-      const taskDesc = (task.description ?? "").trim();
-      const needsTitle = parsed.title !== taskTitle;
-      const needsDesc = parsed.description !== taskDesc;
-      if (!needsTitle && !needsDesc) continue;
-
-      try {
-        const updates: { title?: string; description?: string } = {};
-        if (needsTitle) updates.title = parsed.title;
-        if (needsDesc) updates.description = parsed.description;
-        await this.taskStore.update(projectId, task.id, updates);
-        updated++;
-        broadcastToProject(projectId, {
-          type: "task.updated",
-          taskId: task.id,
-          status: task.status,
-          assignee: task.assignee ?? null,
-        });
-      } catch (err) {
-        log.warn("syncPlanTasksToStore: failed to update task", {
-          planId,
-          taskId: task.id,
-          err: getErrorMessage(err),
-        });
-      }
-    }
-
-    if (updated > 0) {
-      await this.taskStore.syncForPush(projectId);
-      broadcastToProject(projectId, { type: "plan.updated", planId });
-      log.info("Synced plan tasks to task store", { planId, updated });
-    }
   }
 
   /**

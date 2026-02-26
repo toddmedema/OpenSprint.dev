@@ -19,6 +19,7 @@ import { ErrorCodes } from "../middleware/error-codes.js";
 import { hilService } from "./hil-service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { syncPlanTasksFromContent } from "./plan-task-sync.service.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
 import {
@@ -377,6 +378,7 @@ export class ChatService {
       displayContent = stripped ? stripped : planUpdate ? "Plan updated" : responseContent;
       if (planUpdate) {
         await this.writePlanContent(projectId, planId, planUpdate);
+        await syncPlanTasksFromContent(projectId, planId, planUpdate);
         broadcastToProject(projectId, { type: "plan.updated", planId });
       }
     } else {
