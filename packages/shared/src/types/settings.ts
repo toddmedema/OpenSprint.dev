@@ -184,18 +184,17 @@ export function parseSettings(raw: unknown): ProjectSettings {
       : "worktree";
 
   if (simpleObj && typeof simpleObj === "object" && complexObj && typeof complexObj === "object") {
-    const hasNewKeys = "simpleComplexityAgent" in (r as object) && "complexComplexityAgent" in (r as object);
-    if (hasNewKeys && (r as ProjectSettings).gitWorkingMode === gitWorkingMode) {
-      return r as ProjectSettings;
-    }
     const simple = simpleObj as AgentConfig;
     const complex = complexObj as AgentConfig;
     return {
       ...(r as Partial<ProjectSettings>),
       simpleComplexityAgent: simple,
       complexComplexityAgent: complex,
+      deployment: (r?.deployment as DeploymentConfig) ?? DEFAULT_DEPLOYMENT_CONFIG,
+      hilConfig: (r?.hilConfig as HilConfig) ?? DEFAULT_HIL_CONFIG,
+      testFramework: (r?.testFramework as string | null) ?? null,
       gitWorkingMode,
-    } as ProjectSettings;
+    };
   }
   const simple =
     (simpleObj && typeof simpleObj === "object" ? (simpleObj as AgentConfig) : null) ?? DEFAULT_AGENT;
