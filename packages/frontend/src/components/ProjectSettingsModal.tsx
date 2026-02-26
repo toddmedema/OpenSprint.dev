@@ -477,28 +477,6 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                     );
                   })()}
                   <div>
-                    <h3 className="text-sm font-semibold text-theme-text mb-1">Git working mode</h3>
-                    <p className="text-xs text-theme-muted mb-3">
-                      {gitWorkingMode === "worktree"
-                        ? "Worktree: isolated directories per task, supports parallel agents."
-                        : "Branches: agents work in main repo on task branches, one at a time."}
-                    </p>
-                    <select
-                      className="input w-full max-w-xs"
-                      value={gitWorkingMode}
-                      onChange={(e) =>
-                        setSettings((s) =>
-                          s ? { ...s, gitWorkingMode: e.target.value as GitWorkingMode } : null
-                        )
-                      }
-                      data-testid="git-working-mode-select"
-                    >
-                      <option value="worktree">Worktree</option>
-                      <option value="branches">Branches</option>
-                    </select>
-                  </div>
-                  <hr />
-                  <div>
                     <h3 className="text-sm font-semibold text-theme-text mb-3">Low Complexity</h3>
                     <p className="text-xs text-theme-muted mb-3">
                       Used for routine tasks (low and medium complexity plans)
@@ -672,6 +650,28 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                         <option value="on-failure-only">On Failure Only</option>
                       </select>
                     </div>
+                  </div>
+                  <hr />
+                  <div>
+                    <h3 className="text-sm font-semibold text-theme-text mb-1">Git working mode</h3>
+                    <p className="text-xs text-theme-muted mb-3">
+                      {gitWorkingMode === "worktree"
+                        ? "Worktree: isolated directories per task, supports parallel agents."
+                        : "Branches: agents work in main repo on task branches, one at a time."}
+                    </p>
+                    <select
+                      className="input w-full max-w-xs"
+                      value={gitWorkingMode}
+                      onChange={(e) =>
+                        setSettings((s) =>
+                          s ? { ...s, gitWorkingMode: e.target.value as GitWorkingMode } : null
+                        )
+                      }
+                      data-testid="git-working-mode-select"
+                    >
+                      <option value="worktree">Worktree</option>
+                      <option value="branches">Branches</option>
+                    </select>
                   </div>
                   <hr />
                   {gitWorkingMode === "branches" ? (

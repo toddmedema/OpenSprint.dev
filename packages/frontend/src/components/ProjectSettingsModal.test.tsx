@@ -428,6 +428,20 @@ describe("ProjectSettingsModal", () => {
     );
   });
 
+  it("Agent Config tab shows Git working mode directly above Parallelism in Worktree mode", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await screen.findByText("Project Settings");
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    const gitWorkingModeHeading = screen.getByText("Git working mode");
+    const parallelismHeading = screen.getByText("Parallelism");
+    expect(gitWorkingModeHeading.compareDocumentPosition(parallelismHeading)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
   it("Agent Config tab shows Git working mode dropdown defaulting to Worktree", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Project Settings");
