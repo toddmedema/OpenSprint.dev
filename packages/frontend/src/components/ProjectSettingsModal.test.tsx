@@ -363,6 +363,19 @@ describe("ProjectSettingsModal", () => {
     expect(screen.queryByText(/Planning Agent Slot|Coding Agent Slot/i)).not.toBeInTheDocument();
   });
 
+  it("Agent Config tab shows API Keys section when claude or cursor is selected", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await screen.findByText("Project Settings");
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Task Complexity");
+    expect(screen.getByTestId("api-keys-section")).toBeInTheDocument();
+    expect(screen.getByText("API Keys")).toBeInTheDocument();
+    expect(screen.getByText("ANTHROPIC_API_KEY (Claude API)")).toBeInTheDocument();
+  });
+
   it("saves simpleComplexityAgent and complexComplexityAgent when Save is clicked", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
     await screen.findByText("Project Settings");

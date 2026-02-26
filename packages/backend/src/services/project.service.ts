@@ -4,6 +4,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { v4 as uuid } from "uuid";
 import type { Project, CreateProjectRequest, ProjectSettings } from "@opensprint/shared";
+import type { ApiKeyEntry, ApiKeys } from "@opensprint/shared";
 import {
   OPENSPRINT_DIR,
   OPENSPRINT_PATHS,
@@ -14,6 +15,7 @@ import {
   parseSettings,
   sanitizeApiKeys,
   getProvidersInUse,
+  API_KEY_PROVIDERS,
 } from "@opensprint/shared";
 import type { DeploymentConfig, HilConfig } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
@@ -83,6 +85,46 @@ function normalizeHilConfig(
 /** Normalize path for comparison: trim and remove trailing slashes. */
 function normalizeRepoPath(p: string): string {
   return p.trim().replace(/\/+$/, "") || "";
+}
+
+/**
+ * Merge incoming apiKeys with current. When an entry has id but no value (frontend
+ * sends masked data), use the existing value from current so we can persist unchanged keys.
+ */
+function mergeApiKeysWithCurrent(
+  incoming: unknown,
+  current: ApiKeys | undefined
+): ApiKeys | undefined {
+  if (incoming == null || typeof incoming !== "object" || Array.isArray(incoming)) {
+    return undefined;
+  }
+  const obj = incoming as Record<string, unknown>;
+  const result: ApiKeys = {};
+  for (const provider of API_KEY_PROVIDERS) {
+    const arr = obj[provider];
+    if (arr == null || !Array.isArray(arr)) continue;
+    const currentEntries = current?.[provider] ?? [];
+    const merged: ApiKeyEntry[] = [];
+    for (const item of arr) {
+      if (!item || typeof item !== "object") continue;
+      const e = item as Record<string, unknown>;
+      const id = typeof e.id === "string" ? e.id.trim() : "";
+      if (!id) continue;
+      let value = e.value;
+      if (typeof value !== "string" || !value.trim()) {
+        const existing = currentEntries.find((x) => x.id === id);
+        value = existing?.value ?? "";
+      }
+      if (!value) continue;
+      merged.push({
+        id,
+        value,
+        ...(e.limitHitAt != null && typeof e.limitHitAt === "string" && { limitHitAt: e.limitHitAt }),
+      });
+    }
+    if (merged.length > 0) result[provider] = merged;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /** Default agent config used when creating or repairing settings (e.g. adopt path). */
@@ -490,7 +532,9 @@ export class ProjectService {
         ? updates.gitWorkingMode
         : (current.gitWorkingMode ?? "worktree");
     const apiKeys =
-      updates.apiKeys !== undefined ? sanitizeApiKeys(updates.apiKeys) ?? undefined : current.apiKeys;
+      updates.apiKeys !== undefined
+        ? sanitizeApiKeys(mergeApiKeysWithCurrent(updates.apiKeys, current.apiKeys)) ?? undefined
+        : current.apiKeys;
     const effectiveSettings: ProjectSettings = {
       ...current,
       ...updates,

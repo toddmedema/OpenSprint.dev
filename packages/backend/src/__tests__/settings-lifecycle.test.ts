@@ -353,6 +353,43 @@ describe("Settings API lifecycle", () => {
     expect(res.body.error?.message).toContain("cannot be empty");
   });
 
+  it("PUT /api/v1/projects/:id/settings merges apiKeys when value omitted (keeps existing)", async () => {
+    await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({
+        apiKeys: {
+          ANTHROPIC_API_KEY: [
+            { id: "k1", value: "sk-ant-original" },
+            { id: "k2", value: "sk-ant-second" },
+          ],
+        },
+      });
+
+    const res = await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({
+        apiKeys: {
+          ANTHROPIC_API_KEY: [
+            { id: "k1", limitHitAt: "2025-02-25T14:00:00Z" },
+            { id: "k2" },
+          ],
+        },
+      });
+
+    expect(res.status).toBe(200);
+    const settings = await readProjectFromGlobalStore(tempDir, projectId);
+    expect(settings.apiKeys?.ANTHROPIC_API_KEY).toHaveLength(2);
+    expect(settings.apiKeys?.ANTHROPIC_API_KEY?.[0]).toEqual({
+      id: "k1",
+      value: "sk-ant-original",
+      limitHitAt: "2025-02-25T14:00:00Z",
+    });
+    expect(settings.apiKeys?.ANTHROPIC_API_KEY?.[1]).toEqual({
+      id: "k2",
+      value: "sk-ant-second",
+    });
+  });
+
   it("PUT /api/v1/projects/:id/settings allows apiKeys without provider when that provider not in use", async () => {
     await request(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)

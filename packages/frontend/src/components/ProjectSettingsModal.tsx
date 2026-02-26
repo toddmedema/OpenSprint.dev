@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { FolderBrowser } from "./FolderBrowser";
 import { CloseButton } from "./CloseButton";
 import { ModelSelect } from "./ModelSelect";
+import { ApiKeysSection } from "./ApiKeysSection";
 import { useTheme } from "../contexts/ThemeContext";
 import { useDisplayPreferences } from "../contexts/DisplayPreferencesContext";
 import type { RunningAgentsDisplayMode } from "../lib/displayPrefs";
@@ -165,6 +166,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
             gitWorkingMode === "branches" ? 1 : (settings?.maxConcurrentCoders ?? 1),
           unknownScopeStrategy: settings?.unknownScopeStrategy ?? "optimistic",
           gitWorkingMode,
+          apiKeys: settings?.apiKeys,
         }),
       ]);
       onSaved?.();
@@ -730,6 +732,14 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       </div>
                     </div>
                   )}
+                  <ApiKeysSection
+                    settings={settings}
+                    onApiKeysChange={(apiKeys) =>
+                      setSettings((s) =>
+                        s ? { ...s, apiKeys: { ...s.apiKeys, ...apiKeys } } : null
+                      )
+                    }
+                  />
                 </div>
               )}
 
