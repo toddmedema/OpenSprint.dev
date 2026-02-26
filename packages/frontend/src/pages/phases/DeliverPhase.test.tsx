@@ -224,6 +224,39 @@ describe("DeliverPhase", () => {
     expect(screen.queryByTestId("deliver-configure-button")).not.toBeInTheDocument();
   });
 
+  it("positions Deploy buttons on right side of top bar (Expo mode)", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      deployment: { mode: "expo" },
+    });
+    const store = createStore();
+    renderWithRouter(store);
+    await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
+    const betaBtn = screen.getByTestId("deploy-beta-button");
+    const prodBtn = screen.getByTestId("deploy-prod-button");
+    const topBar = betaBtn.closest(".flex.items-center.justify-between")!;
+    const leftSection = topBar.querySelector(":scope > div:first-child")!;
+    const rightSection = topBar.querySelector(":scope > div:last-child")!;
+    expect(leftSection).not.toContainElement(betaBtn);
+    expect(leftSection).not.toContainElement(prodBtn);
+    expect(rightSection).toContainElement(betaBtn);
+    expect(rightSection).toContainElement(prodBtn);
+  });
+
+  it("positions Deliver! button on right side of top bar (custom mode)", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      deployment: { mode: "custom", customCommand: "echo deploy" },
+    });
+    const store = createStore();
+    renderWithRouter(store);
+    await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
+    const deliverBtn = screen.getByTestId("deliver-button");
+    const topBar = deliverBtn.closest(".flex.items-center.justify-between")!;
+    const leftSection = topBar.querySelector(":scope > div:first-child")!;
+    const rightSection = topBar.querySelector(":scope > div:last-child")!;
+    expect(leftSection).not.toContainElement(deliverBtn);
+    expect(rightSection).toContainElement(deliverBtn);
+  });
+
   it("shows Deploy to Beta (secondary) left of Deploy to Prod (primary) when Expo mode", async () => {
     mockGetSettings.mockResolvedValueOnce({
       deployment: { mode: "expo" },
@@ -319,9 +352,9 @@ describe("DeliverPhase", () => {
     await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
     const cancelBtn = screen.getByTestId("cancel-deployment-button");
     const spinner = screen.getByTestId("deploy-spinner");
-    const container = cancelBtn.parentElement!;
+    const topBar = cancelBtn.closest(".flex.items-center.justify-between")!;
     const ordered = Array.from(
-      container.querySelectorAll('[data-testid="cancel-deployment-button"], [data-testid="deploy-spinner"]')
+      topBar.querySelectorAll('[data-testid="cancel-deployment-button"], [data-testid="deploy-spinner"]')
     );
     expect(ordered[0]).toBe(cancelBtn);
     expect(ordered[1]).toBe(spinner);

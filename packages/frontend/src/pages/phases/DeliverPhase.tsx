@@ -187,6 +187,8 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
                   Configure
                 </button>
               )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               {settings?.deployment?.mode === "expo" ? (
                 isDeploying ? (
                   <div
