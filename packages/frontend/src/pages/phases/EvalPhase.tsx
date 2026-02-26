@@ -868,7 +868,7 @@ export function EvalPhase({
                   ) : (
                     <span className="flex-1 text-left text-theme-muted">Priority (optional)</span>
                   )}
-                  <span className="text-[10px] opacity-70 shrink-0 pr-2">
+                  <span className="text-[10px] opacity-70 shrink-0">
                     {feedbackPriorityDropdownOpen ? "▲" : "▼"}
                   </span>
                 </button>
