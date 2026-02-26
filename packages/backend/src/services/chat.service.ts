@@ -105,7 +105,7 @@ Example:
 Users struggle to find relevant products due to poor search filters. The current system returns generic results that don't match user intent.
 [/PRD_UPDATE]
 
-Valid section keys: executive_summary, problem_statement, user_personas, goals_and_metrics, feature_list, technical_architecture, data_model, api_contracts, non_functional_requirements, open_questions
+Valid section keys: executive_summary, problem_statement, user_personas, goals_and_metrics, feature_list, technical_architecture, data_model, api_contracts, non_functional_requirements, open_questions. You may also add new sections using snake_case keys (e.g. competitive_landscape, risks_and_mitigations).
 
 Do NOT include a top-level section header (e.g. "## 1. Executive Summary") in the content — the UI already displays the section title. Start with the body content directly (sub-headers like ### 3.1 are fine).
 
@@ -210,18 +210,18 @@ export class ChatService {
   }
 
   /** Parse PRD updates from agent response */
-  private parsePrdUpdates(content: string): Array<{ section: PrdSectionKey; content: string }> {
+  private parsePrdUpdates(content: string): Array<{ section: string; content: string }> {
     return this.parsePrdUpdatesFromContent(content);
   }
 
   /** Public: parse PRD_UPDATE blocks from agent content (used by generate-from-codebase). */
-  parsePrdUpdatesFromContent(content: string): Array<{ section: PrdSectionKey; content: string }> {
-    const updates: Array<{ section: PrdSectionKey; content: string }> = [];
+  parsePrdUpdatesFromContent(content: string): Array<{ section: string; content: string }> {
+    const updates: Array<{ section: string; content: string }> = [];
     const regex = /\[PRD_UPDATE:(\w+)\]([\s\S]*?)\[\/PRD_UPDATE\]/g;
     let match;
 
     while ((match = regex.exec(content)) !== null) {
-      const section = match[1] as PrdSectionKey;
+      const section = match[1];
       const sectionContent = this.stripSectionHeader(match[2].trim());
       updates.push({ section, content: sectionContent });
     }
@@ -391,7 +391,7 @@ export class ChatService {
             section: change.section,
             previousVersion: change.previousVersion,
             newVersion: change.newVersion,
-            content: updateBySection.get(change.section as PrdSectionKey),
+            content: updateBySection.get(change.section),
           });
           broadcastToProject(projectId, {
             type: "prd.updated",

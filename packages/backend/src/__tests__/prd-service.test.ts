@@ -77,9 +77,15 @@ describe("PrdService", () => {
     expect(section.version).toBe(1);
   });
 
-  it("should reject invalid section keys", async () => {
-    await expect(prdService.getSection("test-project", "invalid_key")).rejects.toThrow(
+  it("should reject invalid section key format", async () => {
+    await expect(prdService.getSection("test-project", "invalid-section")).rejects.toThrow(
       "Invalid PRD section key"
+    );
+  });
+
+  it("should return 404 for non-existent section (valid format)", async () => {
+    await expect(prdService.getSection("test-project", "nonexistent_section")).rejects.toThrow(
+      "PRD section 'nonexistent_section' not found"
     );
   });
 
@@ -105,6 +111,26 @@ describe("PrdService", () => {
     expect(prd.changeLog[0].version).toBe(2);
     expect(prd.changeLog[0].timestamp).toBeDefined();
     expect(prd.changeLog[0].diff).toMatch(/lines|chars|Initial content|Content removed|No changes/);
+  });
+
+  it("should accept Sketch agent dynamic sections (e.g. competitive_landscape)", async () => {
+    const result = await prdService.updateSection(
+      "test-project",
+      "competitive_landscape",
+      "Our main competitors are X, Y, and Z.",
+      "sketch"
+    );
+
+    expect(result.previousVersion).toBe(0);
+    expect(result.newVersion).toBe(1);
+    expect(result.section.content).toBe("Our main competitors are X, Y, and Z.");
+
+    const prd = await prdService.getPrd("test-project");
+    expect(prd.sections.competitive_landscape).toBeDefined();
+    expect(prd.sections.competitive_landscape.content).toBe(
+      "Our main competitors are X, Y, and Z."
+    );
+    expect(prd.changeLog[0].section).toBe("competitive_landscape");
   });
 
   it("should update multiple sections at once and append each to change log with diff", async () => {

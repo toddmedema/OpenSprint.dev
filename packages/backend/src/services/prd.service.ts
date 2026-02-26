@@ -24,6 +24,9 @@ const PRD_SECTION_KEYS: PrdSectionKey[] = [
   "open_questions",
 ];
 
+/** Valid section key format for Sketch agent dynamic sections (snake_case). */
+const SECTION_KEY_FORMAT = /^[a-z][a-z0-9_]*$/;
+
 function emptySection(): PrdSection {
   return { content: "", version: 0, updatedAt: new Date().toISOString() };
 }
@@ -129,8 +132,22 @@ export class PrdService {
     });
   }
 
-  /** Validate a section key */
-  private validateSectionKey(key: string): void {
+  /**
+   * Validate a section key.
+   * @param allowDynamic - When true (Sketch agent), accept any key matching snake_case format.
+   *   When false (Harmonizer, etc.), only accept known PRD_SECTION_KEYS.
+   */
+  private validateSectionKey(key: string, allowDynamic = false): void {
+    if (allowDynamic) {
+      if (!SECTION_KEY_FORMAT.test(key)) {
+        throw new AppError(
+          400,
+          "INVALID_SECTION",
+          `Invalid PRD section key '${key}'. Must be snake_case (e.g. competitive_landscape).`
+        );
+      }
+      return;
+    }
     if (!PRD_SECTION_KEYS.includes(key as PrdSectionKey)) {
       throw new AppError(
         400,
@@ -157,11 +174,11 @@ export class PrdService {
     return this.loadPrd(projectId);
   }
 
-  /** Get a specific PRD section */
+  /** Get a specific PRD section (supports dynamic sections added by Sketch agent) */
   async getSection(projectId: string, sectionKey: string): Promise<PrdSection> {
-    this.validateSectionKey(sectionKey);
+    this.validateSectionKey(sectionKey, true);
     const prd = await this.loadPrd(projectId);
-    const section = prd.sections[sectionKey as PrdSectionKey];
+    const section = prd.sections[sectionKey];
     if (!section) {
       throw new AppError(
         404,
@@ -180,9 +197,9 @@ export class PrdService {
     content: string,
     source: PrdChangeLogEntry["source"] = "sketch"
   ): Promise<{ section: PrdSection; previousVersion: number; newVersion: number }> {
-    this.validateSectionKey(sectionKey);
+    this.validateSectionKey(sectionKey, source === "sketch");
     const prd = await this.loadOrCreatePrd(projectId);
-    const key = sectionKey as PrdSectionKey;
+    const key = sectionKey;
     const now = new Date().toISOString();
 
     const existing = prd.sections[key];
@@ -215,15 +232,16 @@ export class PrdService {
   /** Update multiple PRD sections at once */
   async updateSections(
     projectId: string,
-    updates: Array<{ section: PrdSectionKey; content: string }>,
+    updates: Array<{ section: string; content: string }>,
     source: PrdChangeLogEntry["source"] = "sketch"
   ): Promise<Array<{ section: string; previousVersion: number; newVersion: number }>> {
     const prd = await this.loadOrCreatePrd(projectId);
     const changes: Array<{ section: string; previousVersion: number; newVersion: number }> = [];
     const now = new Date().toISOString();
+    const allowDynamic = source === "sketch";
 
     for (const update of updates) {
-      this.validateSectionKey(update.section);
+      this.validateSectionKey(update.section, allowDynamic);
       const existing = prd.sections[update.section];
       const previousVersion = existing ? existing.version : 0;
       const newVersion = previousVersion + 1;

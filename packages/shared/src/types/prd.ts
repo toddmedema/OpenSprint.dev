@@ -20,7 +20,7 @@ export interface PrdSection {
 
 /** Change log entry for PRD modifications */
 export interface PrdChangeLogEntry {
-  section: PrdSectionKey;
+  section: string; // PrdSectionKey | dynamic section (e.g. competitive_landscape)
   version: number;
   source: "sketch" | "plan" | "execute" | "eval" | "deliver";
   timestamp: string;
@@ -43,6 +43,7 @@ export interface PrdUploadResult {
 /** Full PRD document stored at .opensprint/prd.json */
 export interface Prd {
   version: number;
-  sections: Record<PrdSectionKey, PrdSection>;
+  /** Sections keyed by identifier. Sketch agent may add dynamic sections (e.g. competitive_landscape). */
+  sections: Record<string, PrdSection>;
   changeLog: PrdChangeLogEntry[];
 }

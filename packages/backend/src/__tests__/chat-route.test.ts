@@ -404,6 +404,41 @@ Hope that helps!`;
     expect(res.body.data.message).toContain("That's a great question!");
   });
 
+  it("POST /chat persists Sketch agent dynamic sections (e.g. competitive_landscape); visible after refresh", async () => {
+    mockInvokePlanningAgent.mockResolvedValue({
+      content: `I've added a Competitive Landscape section for you.
+
+[PRD_UPDATE:competitive_landscape]
+Our main competitors are X, Y, and Z. We differentiate by offering simpler onboarding.
+[/PRD_UPDATE]
+
+Let me know if you'd like to expand this.`,
+    });
+
+    const res = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/chat`)
+      .send({ message: "Add a competitive landscape section", context: "sketch" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.prdChanges).toHaveLength(1);
+    expect(res.body.data.prdChanges[0].section).toBe("competitive_landscape");
+
+    // Simulate refresh: fetch full PRD (as frontend does on load)
+    const prdRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd`);
+    expect(prdRes.status).toBe(200);
+    expect(prdRes.body.data.sections.competitive_landscape).toBeDefined();
+    expect(prdRes.body.data.sections.competitive_landscape.content).toContain(
+      "Our main competitors are X, Y, and Z"
+    );
+
+    // Verify persisted to .opensprint/prd.json
+    const prdPath = path.join(repoPath, OPENSPRINT_PATHS.prd);
+    const prdOnDisk = JSON.parse(await fs.readFile(prdPath, "utf-8"));
+    expect(prdOnDisk.sections.competitive_landscape.content).toContain(
+      "We differentiate by offering simpler onboarding"
+    );
+  });
+
   it("POST /chat applies PRD_UPDATE and creates prd.json when file was missing (e.g. adopted repo)", async () => {
     const prdPath = path.join(repoPath, OPENSPRINT_PATHS.prd);
     await fs.unlink(prdPath);
