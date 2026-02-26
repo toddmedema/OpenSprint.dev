@@ -580,7 +580,7 @@ describe("EvalPhase feedback form", () => {
       expect(submitButton).toHaveClass("h-10");
     });
 
-    it("priority select has extra right padding for visual breathing room", async () => {
+    it("priority select has equal left and right padding", async () => {
       const store = createStore();
       render(
         <Provider store={store}>
@@ -593,8 +593,7 @@ describe("EvalPhase feedback form", () => {
       });
 
       const prioritySelect = screen.getByTestId("feedback-priority-select");
-      expect(prioritySelect).toHaveClass("pr-5");
-      expect(prioritySelect).toHaveClass("pl-3");
+      expect(prioritySelect).toHaveClass("px-3");
     });
 
     it("actions row uses items-stretch so all controls share the same height", async () => {

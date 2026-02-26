@@ -789,7 +789,7 @@ export function EvalPhase({ projectId, onNavigateToBuildTask }: EvalPhaseProps) 
                   type="button"
                   onClick={() => !submitting && setFeedbackPriorityDropdownOpen((o) => !o)}
                   disabled={submitting}
-                  className="input text-sm h-10 min-h-10 py-2.5 pl-3 pr-5 w-auto min-w-[10rem] inline-flex items-center gap-2 bg-theme-input-bg text-theme-input-text ring-theme-ring"
+                  className="input text-sm h-10 min-h-10 py-2.5 px-3 w-auto min-w-[10rem] inline-flex items-center gap-2 bg-theme-input-bg text-theme-input-text ring-theme-ring"
                   aria-label="Priority (optional)"
                   aria-haspopup="listbox"
                   aria-expanded={feedbackPriorityDropdownOpen}
