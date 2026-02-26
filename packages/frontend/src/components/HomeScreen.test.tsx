@@ -66,26 +66,27 @@ describe("HomeScreen", () => {
     expect(screen.getByText("Loading projects...")).toBeInTheDocument();
   });
 
-  it("shows table with create row when no projects", async () => {
+  it("shows projects grid when no projects", async () => {
     mockProjectsList.mockResolvedValue([]);
 
     renderHomeScreen();
 
-    await screen.findByTestId("projects-table");
-    expect(screen.getByTestId("create-project-row")).toHaveTextContent("+ Create project");
+    await screen.findByTestId("projects-grid");
+    expect(screen.getByTestId("create-new-button")).toHaveTextContent("Create New");
+    expect(screen.getByTestId("add-existing-button")).toHaveTextContent("Add Existing");
   });
 
-  it("renders project rows when projects exist", async () => {
+  it("renders project cards when projects exist", async () => {
     mockProjectsList.mockResolvedValue([mockProject]);
 
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    expect(screen.getByTestId("project-row-proj-1")).toBeInTheDocument();
+    expect(screen.getByTestId("project-card-proj-1")).toBeInTheDocument();
     expect(screen.getByText("/path/to/repo")).toBeInTheDocument();
   });
 
-  it("Create project row navigates to /projects/add-existing", async () => {
+  it("Create New button navigates to /projects/create-new", async () => {
     mockProjectsList.mockResolvedValue([]);
     const user = userEvent.setup();
 
@@ -103,14 +104,37 @@ describe("HomeScreen", () => {
       </Provider>
     );
 
-    await screen.findByTestId("create-project-row");
-    const createRow = screen.getByRole("button", { name: /\+ Create project/i });
-    await user.click(createRow);
+    await screen.findByTestId("create-new-button");
+    await user.click(screen.getByTestId("create-new-button"));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/projects/create-new");
+  });
+
+  it("Add Existing button navigates to /projects/add-existing", async () => {
+    mockProjectsList.mockResolvedValue([]);
+    const user = userEvent.setup();
+
+    function LocationDisplay() {
+      return <div data-testid="location">{useLocation().pathname}</div>;
+    }
+
+    const store = configureStore({ reducer: { notification: notificationReducer } });
+    render(
+      <Provider store={store}>
+        <MemoryRouter>
+          <HomeScreen />
+          <LocationDisplay />
+        </MemoryRouter>
+      </Provider>
+    );
+
+    await screen.findByTestId("add-existing-button");
+    await user.click(screen.getByTestId("add-existing-button"));
 
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/add-existing");
   });
 
-  it("clicking project row navigates to project sketch", async () => {
+  it("clicking project card navigates to project sketch", async () => {
     mockProjectsList.mockResolvedValue([mockProject]);
     const user = userEvent.setup();
 
@@ -129,29 +153,19 @@ describe("HomeScreen", () => {
     );
 
     await screen.findByText("My Project");
-    const row = screen.getByTestId("project-row-proj-1");
-    await user.click(row);
+    const card = screen.getByTestId("project-card-proj-1");
+    await user.click(card);
 
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/proj-1/sketch");
   });
 
-  it("table has Name and Folder path columns", async () => {
+  it("shows three-dot menu button on each project card", async () => {
     mockProjectsList.mockResolvedValue([mockProject]);
 
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    expect(screen.getByRole("columnheader", { name: /name/i })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: /folder path/i })).toBeInTheDocument();
-  });
-
-  it("shows three-dot menu button on each project row", async () => {
-    mockProjectsList.mockResolvedValue([mockProject]);
-
-    renderHomeScreen();
-
-    await screen.findByText("My Project");
-    expect(screen.getByTestId("project-row-menu-proj-1")).toBeInTheDocument();
+    expect(screen.getByTestId("project-card-menu-proj-1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /project actions/i })).toBeInTheDocument();
   });
 
@@ -162,11 +176,11 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    expect(screen.queryByTestId("project-row-dropdown-proj-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("project-card-dropdown-proj-1")).not.toBeInTheDocument();
 
-    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByTestId("project-card-menu-proj-1"));
 
-    expect(screen.getByTestId("project-row-dropdown-proj-1")).toBeInTheDocument();
+    expect(screen.getByTestId("project-card-dropdown-proj-1")).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /archive/i })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /delete/i })).toBeInTheDocument();
   });
@@ -178,7 +192,7 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByTestId("project-card-menu-proj-1"));
     await user.click(screen.getByRole("menuitem", { name: /archive/i }));
 
     expect(screen.getByRole("heading", { name: /archive project/i })).toBeInTheDocument();
@@ -196,7 +210,7 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByTestId("project-card-menu-proj-1"));
     await user.click(screen.getByRole("menuitem", { name: /delete/i }));
 
     expect(screen.getByRole("heading", { name: /delete project/i })).toBeInTheDocument();
@@ -216,7 +230,7 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByTestId("project-card-menu-proj-1"));
     await user.click(screen.getByRole("menuitem", { name: /archive/i }));
 
     expect(screen.getByRole("heading", { name: /archive project/i })).toBeInTheDocument();
@@ -235,11 +249,11 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByTestId("project-card-menu-proj-1"));
     await user.click(screen.getByRole("menuitem", { name: /archive/i }));
     await user.click(screen.getByRole("button", { name: /proceed/i }));
 
-    await screen.findByTestId("projects-table");
+    await screen.findByTestId("projects-grid");
     expect(mockArchive).toHaveBeenCalledWith("proj-1");
     expect(mockProjectsList).toHaveBeenCalledTimes(2); // initial load + refresh
   });
@@ -252,11 +266,11 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByTestId("project-card-menu-proj-1"));
     await user.click(screen.getByRole("menuitem", { name: /delete/i }));
     await user.click(screen.getByRole("button", { name: /proceed/i }));
 
-    await screen.findByTestId("projects-table");
+    await screen.findByTestId("projects-grid");
     expect(mockDelete).toHaveBeenCalledWith("proj-1");
     expect(mockProjectsList).toHaveBeenCalledTimes(2); // initial load + refresh
   });
@@ -269,13 +283,13 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByTestId("project-card-menu-proj-1"));
     await user.click(screen.getByRole("menuitem", { name: /archive/i }));
     await user.click(screen.getByRole("button", { name: /proceed/i }));
 
-    await screen.findByTestId("projects-table");
+    await screen.findByTestId("projects-grid");
     expect(screen.queryByText("My Project")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("project-row-proj-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("project-card-proj-1")).not.toBeInTheDocument();
   });
 
   it("removed project no longer appears after Delete", async () => {
@@ -286,13 +300,13 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByTestId("project-card-menu-proj-1"));
     await user.click(screen.getByRole("menuitem", { name: /delete/i }));
     await user.click(screen.getByRole("button", { name: /proceed/i }));
 
-    await screen.findByTestId("projects-table");
+    await screen.findByTestId("projects-grid");
     expect(screen.queryByText("My Project")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("project-row-proj-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("project-card-proj-1")).not.toBeInTheDocument();
   });
 
   it("dispatches error notification when archive fails", async () => {
@@ -310,7 +324,7 @@ describe("HomeScreen", () => {
     );
 
     await screen.findByText("My Project");
-    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByTestId("project-card-menu-proj-1"));
     await user.click(screen.getByRole("menuitem", { name: /archive/i }));
     await user.click(screen.getByRole("button", { name: /proceed/i }));
 
@@ -334,7 +348,7 @@ describe("HomeScreen", () => {
     );
 
     await screen.findByText("My Project");
-    await user.click(screen.getByTestId("project-row-menu-proj-1"));
+    await user.click(screen.getByTestId("project-card-menu-proj-1"));
     await user.click(screen.getByRole("menuitem", { name: /delete/i }));
     await user.click(screen.getByRole("button", { name: /proceed/i }));
 
@@ -348,41 +362,23 @@ describe("HomeScreen", () => {
 
     renderHomeScreen();
 
-    await screen.findByTestId("projects-table");
+    await screen.findByTestId("projects-grid");
     const container = screen.getByTestId("project-list-container");
     for (const cls of CONTENT_CONTAINER_CLASS.split(" ")) {
       expect(container).toHaveClass(cls);
     }
   });
 
-  it("projects table uses table-fixed so width matches evaluate feedback input regardless of content", async () => {
+  it("projects grid uses w-full so width matches evaluate feedback container", async () => {
     mockProjectsList.mockResolvedValue([]);
 
     renderHomeScreen();
 
-    const table = await screen.findByTestId("projects-table");
-    expect(table).toHaveClass("table-fixed");
-    expect(table).toHaveClass("w-full");
+    const grid = await screen.findByTestId("projects-grid");
+    expect(grid).toHaveClass("w-full");
   });
 
-  it("project name and path columns truncate long content within fixed table width", async () => {
-    mockProjectsList.mockResolvedValue([mockProject]);
-
-    renderHomeScreen();
-
-    await screen.findByText("My Project");
-    const nameHeader = screen.getByRole("columnheader", { name: /name/i });
-    const nameCell = screen.getByTestId("project-row-proj-1").querySelector("td:first-child");
-    const pathCell = screen.getByTestId("project-row-proj-1").querySelector("td:nth-child(2)");
-    // Cells have truncate and min-w-0 so long content is truncated within fixed table width
-    expect(nameHeader).toHaveClass("whitespace-nowrap");
-    expect(nameCell).toHaveClass("truncate");
-    expect(nameCell).toHaveClass("min-w-0");
-    expect(pathCell).toHaveClass("truncate");
-    expect(pathCell).toHaveClass("min-w-0");
-  });
-
-  it("project name and path cells have title attribute for full text tooltip on hover", async () => {
+  it("project name and path have title attribute for full text tooltip on hover", async () => {
     const longPath = "/Users/todd/opensprint.dev";
     mockProjectsList.mockResolvedValue([
       { ...mockProject, name: "My Project", repoPath: longPath },
@@ -391,20 +387,11 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    const nameCell = screen.getByTestId("project-row-proj-1").querySelector("td:first-child");
-    const pathCell = screen.getByTestId("project-row-proj-1").querySelector("td:nth-child(2)");
-    expect(nameCell).toHaveAttribute("title", "My Project");
-    expect(pathCell).toHaveAttribute("title", longPath);
-  });
-
-  it("table wrapper uses w-full so width matches evaluate feedback container", async () => {
-    mockProjectsList.mockResolvedValue([]);
-
-    renderHomeScreen();
-
-    const table = await screen.findByTestId("projects-table");
-    const wrapper = table.closest(".card");
-    expect(wrapper).toHaveClass("w-full");
+    const card = screen.getByTestId("project-card-proj-1");
+    const nameDiv = card.querySelector('[title="My Project"]');
+    const pathDiv = card.querySelector(`[title="${longPath}"]`);
+    expect(nameDiv).toBeInTheDocument();
+    expect(pathDiv).toBeInTheDocument();
   });
 
   it("layout remains consistent with long project names and paths", async () => {
@@ -416,29 +403,16 @@ describe("HomeScreen", () => {
 
     renderHomeScreen();
 
-    await screen.findByTestId("projects-table");
+    await screen.findByTestId("projects-grid");
     const container = screen.getByTestId("project-list-container");
-    const table = screen.getByTestId("projects-table");
+    const grid = screen.getByTestId("projects-grid");
 
-    // Container and table share same width constraint; table-fixed ensures consistent width
     for (const cls of CONTENT_CONTAINER_CLASS.split(" ")) {
       expect(container).toHaveClass(cls);
     }
-    expect(table).toHaveClass("table-fixed");
-    // Long content is truncated (truncate class) rather than expanding layout
-    const nameCell = screen.getByTestId("project-row-proj-long").querySelector("td:first-child");
-    expect(nameCell).toHaveClass("truncate");
-  });
-
-  it("Create project button is horizontally centered", async () => {
-    mockProjectsList.mockResolvedValue([]);
-
-    renderHomeScreen();
-
-    await screen.findByTestId("create-project-row");
-    const createRow = screen.getByTestId("create-project-row");
-    const td = createRow.querySelector("td");
-    expect(td).toHaveClass("text-center");
+    expect(grid).toHaveClass("w-full");
+    const card = screen.getByTestId("project-card-proj-long");
+    expect(card.querySelector(".truncate")).toBeInTheDocument();
   });
 
   it("clicking outside dropdown closes it", async () => {
@@ -448,10 +422,10 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
-    await user.click(screen.getByTestId("project-row-menu-proj-1"));
-    expect(screen.getByTestId("project-row-dropdown-proj-1")).toBeInTheDocument();
+    await user.click(screen.getByTestId("project-card-menu-proj-1"));
+    expect(screen.getByTestId("project-card-dropdown-proj-1")).toBeInTheDocument();
 
     await user.click(document.body);
-    expect(screen.queryByTestId("project-row-dropdown-proj-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("project-card-dropdown-proj-1")).not.toBeInTheDocument();
   });
 });

@@ -167,16 +167,26 @@ export function Navbar({
                 {projects.length === 0 && (
                   <div className="px-4 py-3 text-sm text-theme-muted">No projects</div>
                 )}
-                <div className="border-t border-theme-border-subtle mt-1 pt-1">
+                <div className="border-t border-theme-border-subtle mt-1 pt-1 space-y-0.5">
                   <button
                     type="button"
                     onClick={() => {
                       setDropdownOpen(false);
                       navigate("/projects/add-existing");
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-brand-600 hover:bg-theme-info-bg font-medium"
+                    className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg font-medium"
                   >
-                    + Add Existing Project
+                    Add Existing Project
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      navigate("/projects/create-new");
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg font-medium"
+                  >
+                    Create New Project
                   </button>
                 </div>
               </div>

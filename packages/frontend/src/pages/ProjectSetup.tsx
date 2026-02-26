@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getProjectPhasePath } from "../lib/phaseRouting";
 import { Layout } from "../components/layout/Layout";
 import { FolderBrowser } from "../components/FolderBrowser";
@@ -38,6 +38,8 @@ const STEPS: { key: Step; label: string }[] = [
 
 export function ProjectSetup() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAddExisting = location.pathname === "/projects/add-existing";
   const [step, setStep] = useState<Step>("basics");
   const [creating, setCreating] = useState(false);
 
@@ -229,7 +231,7 @@ export function ProjectSetup() {
       <div className="h-full overflow-y-auto">
         <div className="max-w-2xl mx-auto px-6 py-10">
           <h1 className="text-2xl font-bold text-theme-text mb-2">
-            Add Existing Project
+            {isAddExisting ? "Add Existing Project" : "Create New Project"}
             <span className="text-theme-muted font-normal text-lg ml-2">
               — {STEPS[currentStepIndex]?.label ?? step}
             </span>

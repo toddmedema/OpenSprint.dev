@@ -183,157 +183,138 @@ export function HomeScreen() {
     <Layout>
       <div className={`${CONTENT_CONTAINER_CLASS} py-10`} data-testid="project-list-container">
         {/* Header */}
-        <div className="mb-10">
+        <div className="flex justify-between items-center mb-10">
           <h1 className="text-3xl font-bold text-theme-text">Projects</h1>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => navigate("/projects/add-existing")}
+              className="btn-secondary"
+              data-testid="add-existing-button"
+            >
+              Add Existing
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/projects/create-new")}
+              className="btn-primary"
+              data-testid="create-new-button"
+            >
+              Create New
+            </button>
+          </div>
         </div>
 
         {loading ? (
           <div className="text-center py-20 text-theme-muted">Loading projects...</div>
         ) : (
-          <div className="card overflow-hidden min-w-0 w-full">
-            <table className="w-full table-fixed" data-testid="projects-table">
-              <colgroup>
-                <col style={{ width: "30%" }} />
-                <col />
-                <col style={{ width: "96px" }} />
-              </colgroup>
-              <thead>
-                <tr className="border-b border-theme-border bg-theme-bg-elevated">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-theme-text whitespace-nowrap">
-                    Name
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-theme-text">
-                    Folder path
-                  </th>
-                  <th className="w-24 py-3 px-4" aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {projects.map((project) => (
-                  <tr
-                    key={project.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openProject(project)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        openProject(project);
-                      }
-                    }}
-                    className="group border-b border-theme-border last:border-b-0 hover:bg-theme-bg cursor-pointer transition-colors"
-                    data-testid={`project-row-${project.id}`}
-                  >
-                    <td
-                      className="py-3 px-4 text-theme-text font-medium truncate min-w-0"
+          <div className="grid gap-4 w-full" data-testid="projects-grid">
+            {projects.map((project) => (
+              <div
+                key={project.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openProject(project)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openProject(project);
+                  }
+                }}
+                className="card p-4 group cursor-pointer transition-colors hover:bg-theme-bg-elevated min-w-0"
+                data-testid={`project-card-${project.id}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className="text-theme-text font-medium truncate"
                       title={project.name}
                     >
                       {project.name}
-                    </td>
-                    <td
-                      className="py-3 px-4 text-sm text-theme-muted truncate min-w-0"
+                    </div>
+                    <div
+                      className="text-sm text-theme-muted truncate mt-0.5"
                       title={project.repoPath}
                     >
                       {project.repoPath}
-                    </td>
-                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
-                      <div
-                        className="relative flex items-center justify-end"
-                        ref={menuOpenId === project.id ? menuRef : undefined}
-                      >
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const button = e.currentTarget;
-                            if (menuOpenId === project.id) {
+                    </div>
+                  </div>
+                  <div
+                    className="relative flex items-center flex-shrink-0"
+                    ref={menuOpenId === project.id ? menuRef : undefined}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const button = e.currentTarget;
+                        if (menuOpenId === project.id) {
+                          setMenuOpenId(null);
+                          setMenuAnchorRect(null);
+                        } else {
+                          setMenuAnchorRect(button.getBoundingClientRect());
+                          setMenuOpenId(project.id);
+                        }
+                      }}
+                      className="p-1.5 rounded text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+                      aria-label="Project actions"
+                      aria-expanded={menuOpenId === project.id}
+                      aria-haspopup="menu"
+                      data-testid={`project-card-menu-${project.id}`}
+                    >
+                      <KebabIcon className="w-5 h-5" />
+                    </button>
+                    {menuOpenId === project.id &&
+                      menuAnchorRect &&
+                      createPortal(
+                        <div
+                          ref={dropdownRef}
+                          className="fixed py-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg z-[100] min-w-[140px]"
+                          role="menu"
+                          data-testid={`project-card-dropdown-${project.id}`}
+                          style={{
+                            top: menuAnchorRect.bottom + 4,
+                            left: Math.max(
+                              8,
+                              Math.min(
+                                menuAnchorRect.right - DROPDOWN_MIN_WIDTH,
+                                window.innerWidth - DROPDOWN_MIN_WIDTH - 8
+                              )
+                            ),
+                          }}
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setArchiveModal(project);
                               setMenuOpenId(null);
                               setMenuAnchorRect(null);
-                            } else {
-                              setMenuAnchorRect(button.getBoundingClientRect());
-                              setMenuOpenId(project.id);
-                            }
-                          }}
-                          className="p-1.5 rounded text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
-                          aria-label="Project actions"
-                          aria-expanded={menuOpenId === project.id}
-                          aria-haspopup="menu"
-                          data-testid={`project-row-menu-${project.id}`}
-                        >
-                          <KebabIcon className="w-5 h-5" />
-                        </button>
-                        {menuOpenId === project.id &&
-                          menuAnchorRect &&
-                          createPortal(
-                            <div
-                              ref={dropdownRef}
-                              className="fixed py-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg z-[100] min-w-[140px]"
-                              role="menu"
-                              data-testid={`project-row-dropdown-${project.id}`}
-                              style={{
-                                top: menuAnchorRect.bottom + 4,
-                                left: Math.max(
-                                  8,
-                                  Math.min(
-                                    menuAnchorRect.right - DROPDOWN_MIN_WIDTH,
-                                    window.innerWidth - DROPDOWN_MIN_WIDTH - 8
-                                  )
-                                ),
-                              }}
-                            >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  setArchiveModal(project);
-                                  setMenuOpenId(null);
-                                  setMenuAnchorRect(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-bg-elevated"
-                              >
-                                Archive
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  setDeleteModal(project);
-                                  setMenuOpenId(null);
-                                  setMenuAnchorRect(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-bg-elevated"
-                              >
-                                Delete
-                              </button>
-                            </div>,
-                            document.body
-                          )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                <tr
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => navigate("/projects/add-existing")}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      navigate("/projects/add-existing");
-                    }
-                  }}
-                  className="hover:bg-theme-bg cursor-pointer transition-colors"
-                  data-testid="create-project-row"
-                >
-                  <td
-                    colSpan={3}
-                    className="py-3 px-4 text-sm font-medium text-theme-muted text-center"
-                  >
-                    + Create project
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-bg-elevated"
+                          >
+                            Archive
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setDeleteModal(project);
+                              setMenuOpenId(null);
+                              setMenuAnchorRect(null);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-bg-elevated"
+                          >
+                            Delete
+                          </button>
+                        </div>,
+                        document.body
+                      )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
