@@ -639,6 +639,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
           minWidth={160}
           side="left"
           resizeHandleLabel="Resize table of contents"
+          noBorder
         >
           <PrdTocPanel
             prdContent={prdContent}

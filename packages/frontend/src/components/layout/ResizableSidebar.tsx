@@ -31,6 +31,8 @@ export interface ResizableSidebarProps {
   responsive?: boolean;
   /** Accessible label for the resize handle (default "Resize sidebar") */
   resizeHandleLabel?: string;
+  /** When true, no border is rendered (e.g. for minimal Sketch TOC) */
+  noBorder?: boolean;
 }
 
 function loadPersistedWidth(
@@ -92,6 +94,7 @@ export function ResizableSidebar({
   visible = true,
   responsive = false,
   resizeHandleLabel = "Resize sidebar",
+  noBorder = false,
 }: ResizableSidebarProps) {
   const viewportWidth = useViewportWidth();
   const maxWidth = maxWidthProp ?? Math.max(minWidth, Math.round(viewportWidth * maxWidthPercent));
@@ -162,11 +165,12 @@ export function ResizableSidebar({
     ? "w-full max-w-[var(--sidebar-mobile-max,420px)] md:max-w-none md:w-[var(--sidebar-width)]"
     : "";
 
-  const borderClass = responsive
-    ? ""
-    : side === "left"
-      ? "border-r border-theme-border"
-      : "border-l border-theme-border";
+  const borderClass =
+    noBorder || responsive
+      ? ""
+      : side === "left"
+        ? "border-r border-theme-border"
+        : "border-l border-theme-border";
 
   const handlePositionClass =
     side === "left"

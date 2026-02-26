@@ -116,8 +116,7 @@ export function PrdTocPanel({
     : resizable
       ? "w-full min-w-0"
       : "w-[220px] min-w-[180px]";
-  const borderClass = resizable && !collapsed ? "" : "border-r border-theme-border";
-  const containerClass = `flex flex-col h-full min-h-0 bg-theme-bg shrink-0 overflow-hidden transition-[width] duration-200 ease-out ${borderClass} ${widthClass}`;
+  const containerClass = `flex flex-col h-full min-h-0 bg-theme-bg shrink-0 overflow-hidden transition-[width] duration-200 ease-out ${widthClass}`;
 
   return (
     <div className={containerClass} data-testid="prd-toc-sidebar">
@@ -135,7 +134,7 @@ export function PrdTocPanel({
       ) : (
         <>
           <div
-            className="flex items-center justify-between px-3 py-3 border-b border-theme-border bg-theme-bg shrink-0 sticky top-0 z-10"
+            className="flex items-center justify-between px-3 py-3 bg-theme-bg shrink-0 sticky top-0 z-10"
             data-testid="prd-toc-header"
           >
             <span className="text-sm font-semibold text-theme-text">Contents</span>
