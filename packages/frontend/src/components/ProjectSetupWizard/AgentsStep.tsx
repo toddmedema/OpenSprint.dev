@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { ModelSelect } from "../ModelSelect";
 import { AgentReferenceModal } from "../AgentReferenceModal";
-import type { AgentType, GitWorkingMode, UnknownScopeStrategy } from "@opensprint/shared";
+import { ApiKeysSection } from "../ApiKeysSection";
+import type {
+  AgentType,
+  GitWorkingMode,
+  UnknownScopeStrategy,
+  ApiKeys,
+  ProjectSettings,
+} from "@opensprint/shared";
 import {
   AGENT_ROLE_CANONICAL_ORDER,
   AGENT_ROLE_LABELS,
@@ -42,6 +49,9 @@ export interface AgentsStepProps {
   onUnknownScopeStrategyChange: (value: UnknownScopeStrategy) => void;
   gitWorkingMode: GitWorkingMode;
   onGitWorkingModeChange: (value: GitWorkingMode) => void;
+  /** Optional: project-level API keys (Setup Wizard). When provided, ApiKeysSection is shown when keys are needed. */
+  apiKeys?: ApiKeys;
+  onApiKeysChange?: (apiKeys: Partial<Record<"ANTHROPIC_API_KEY" | "CURSOR_API_KEY", Array<{ id: string; value?: string; limitHitAt?: string }>>>) => void;
 }
 
 export function AgentsStep({
@@ -61,6 +71,8 @@ export function AgentsStep({
   onUnknownScopeStrategyChange,
   gitWorkingMode,
   onGitWorkingModeChange,
+  apiKeys,
+  onApiKeysChange,
 }: AgentsStepProps) {
   const [agentReferenceOpen, setAgentReferenceOpen] = useState(false);
 
@@ -332,6 +344,21 @@ export function AgentsStep({
           </div>
         </div>
       </div>
+      {onApiKeysChange && (simpleComplexityAgent.type === "claude" || complexComplexityAgent.type === "cursor") && (
+        <ApiKeysSection
+          settings={
+            {
+              simpleComplexityAgent,
+              complexComplexityAgent,
+              deployment: { mode: "custom" },
+              hilConfig: { scopeChanges: "automated", architectureDecisions: "automated", dependencyModifications: "automated" },
+              testFramework: null,
+              apiKeys,
+            } as ProjectSettings
+          }
+          onApiKeysChange={onApiKeysChange}
+        />
+      )}
       <hr />
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 flex-1">

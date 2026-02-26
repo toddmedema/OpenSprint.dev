@@ -172,7 +172,8 @@ export function ApiKeysSection({ settings, onApiKeysChange }: ApiKeysSectionProp
       <div>
         <h3 className="text-sm font-semibold text-theme-text mb-1">API Keys</h3>
         <p className="text-xs text-theme-muted mb-3">
-          Add multiple keys per provider for automatic rotation when limits are hit.
+          Add multiple keys per provider for automatic rotation when limits are hit. Project keys
+          take precedence over keys in .env when both are configured.
         </p>
         {providers.map((provider) => {
           const entries = getEntriesForProvider(provider);

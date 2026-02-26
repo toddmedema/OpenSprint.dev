@@ -20,6 +20,23 @@ vi.mock("../../api/client", () => ({
   },
 }));
 
+vi.mock("../ApiKeysSection", () => ({
+  ApiKeysSection: ({
+    settings,
+    onApiKeysChange,
+  }: {
+    settings: { simpleComplexityAgent: { type: string }; complexComplexityAgent: { type: string } };
+    onApiKeysChange: (keys: unknown) => void;
+  }) => (
+    <div data-testid="api-keys-section">
+      <span>ApiKeysSection: {settings.simpleComplexityAgent.type},{settings.complexComplexityAgent.type}</span>
+      <button type="button" onClick={() => onApiKeysChange({ ANTHROPIC_API_KEY: [{ id: "1", value: "sk-test" }] })}>
+        Add key
+      </button>
+    </div>
+  ),
+}));
+
 const defaultLowComplexityAgent = {
   type: "cursor" as const,
   model: "",
@@ -289,6 +306,44 @@ describe("AgentsStep", () => {
       fireEvent.click(closeBtn);
 
       expect(screen.queryByTestId("agent-reference-modal")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("ApiKeysSection", () => {
+    it("shows ApiKeysSection when claude is selected and onApiKeysChange provided", () => {
+      renderAgentsStep({
+        simpleComplexityAgent: { type: "claude", model: "", cliCommand: "" },
+        onApiKeysChange: () => {},
+      });
+
+      expect(screen.getByTestId("api-keys-section")).toBeInTheDocument();
+    });
+
+    it("shows ApiKeysSection when cursor is selected and onApiKeysChange provided", () => {
+      renderAgentsStep({
+        simpleComplexityAgent: { type: "cursor", model: "", cliCommand: "" },
+        onApiKeysChange: () => {},
+      });
+
+      expect(screen.getByTestId("api-keys-section")).toBeInTheDocument();
+    });
+
+    it("does not show ApiKeysSection when onApiKeysChange not provided", () => {
+      renderAgentsStep({
+        simpleComplexityAgent: { type: "claude", model: "", cliCommand: "" },
+      });
+
+      expect(screen.queryByTestId("api-keys-section")).not.toBeInTheDocument();
+    });
+
+    it("does not show ApiKeysSection when only claude-cli and custom are selected", () => {
+      renderAgentsStep({
+        simpleComplexityAgent: { type: "claude-cli", model: "", cliCommand: "" },
+        complexComplexityAgent: { type: "custom", model: "", cliCommand: "my-agent" },
+        onApiKeysChange: () => {},
+      });
+
+      expect(screen.queryByTestId("api-keys-section")).not.toBeInTheDocument();
     });
   });
 });

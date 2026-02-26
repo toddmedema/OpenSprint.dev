@@ -46,6 +46,8 @@ export interface CreateProjectRequest {
   unknownScopeStrategy?: "conservative" | "optimistic";
   /** Git working mode: "worktree" or "branches". Stored in project settings. Default: "worktree". */
   gitWorkingMode?: "worktree" | "branches";
+  /** Per-project API keys. When absent, backend falls back to process.env (from .env). Project keys take precedence. */
+  apiKeys?: ApiKeys;
 }
 
 /** Project update request (partial fields) */
@@ -55,4 +57,9 @@ export interface UpdateProjectRequest {
 }
 
 // Forward references for agent/deployment config — defined in settings.ts
-import type { AgentConfigInput, DeploymentConfigInput, HilConfigInput } from "./settings.js";
+import type {
+  AgentConfigInput,
+  DeploymentConfigInput,
+  HilConfigInput,
+  ApiKeys,
+} from "./settings.js";

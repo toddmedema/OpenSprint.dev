@@ -57,6 +57,7 @@ describe("ApiKeysSection", () => {
     expect(screen.getByTestId("api-keys-section")).toBeInTheDocument();
     expect(screen.getByText("API Keys")).toBeInTheDocument();
     expect(screen.getByText(/Add multiple keys per provider/)).toBeInTheDocument();
+    expect(screen.getByText(/Project keys take precedence over keys in .env/)).toBeInTheDocument();
     expect(screen.getByText("ANTHROPIC_API_KEY (Claude API)")).toBeInTheDocument();
   });
 

@@ -194,4 +194,35 @@ describe("Projects REST API — create and settings", () => {
     expect(res.body.error).toBeDefined();
     expect(res.body.error.code).toBe("INVALID_AGENT_CONFIG");
   });
+
+  it("POST /projects accepts apiKeys and stores them in settings", async () => {
+    const repoPath = path.join(tempDir, "create-with-apikeys");
+    await fs.mkdir(repoPath, { recursive: true });
+
+    const body = {
+      ...validCreateBody,
+      repoPath,
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "key-1", value: "sk-ant-test-123" }],
+        CURSOR_API_KEY: [{ id: "key-2", value: "key_test_456" }],
+      },
+    };
+    const res = await request(app).post(`${API_PREFIX}/projects`).send(body);
+
+    expect(res.status).toBe(201);
+    const projectId = res.body.data.id;
+
+    const settingsRes = await request(app).get(
+      `${API_PREFIX}/projects/${projectId}/settings`
+    );
+    expect(settingsRes.status).toBe(200);
+    // API never returns raw key values; returns masked
+    expect(settingsRes.body.data.apiKeys).toBeDefined();
+    expect(settingsRes.body.data.apiKeys.ANTHROPIC_API_KEY).toHaveLength(1);
+    expect(settingsRes.body.data.apiKeys.ANTHROPIC_API_KEY[0].id).toBe("key-1");
+    expect(settingsRes.body.data.apiKeys.ANTHROPIC_API_KEY[0].masked).toBeDefined();
+    expect(settingsRes.body.data.apiKeys.ANTHROPIC_API_KEY[0].value).toBeUndefined();
+    expect(settingsRes.body.data.apiKeys.CURSOR_API_KEY).toHaveLength(1);
+    expect(settingsRes.body.data.apiKeys.CURSOR_API_KEY[0].id).toBe("key-2");
+  });
 });

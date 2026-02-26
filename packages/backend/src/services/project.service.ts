@@ -347,6 +347,7 @@ export class ProjectService {
     const gitWorkingMode = input.gitWorkingMode === "branches" ? "branches" : "worktree";
     const effectiveMaxConcurrentCoders =
       gitWorkingMode === "branches" ? 1 : (input.maxConcurrentCoders ?? 1);
+    const apiKeys = sanitizeApiKeys(input.apiKeys);
     const settings: ProjectSettings = {
       simpleComplexityAgent,
       complexComplexityAgent,
@@ -361,6 +362,7 @@ export class ProjectService {
         input.unknownScopeStrategy && {
           unknownScopeStrategy: input.unknownScopeStrategy,
         }),
+      ...(apiKeys && Object.keys(apiKeys).length > 0 && { apiKeys }),
     };
     await setSettingsInStore(id, settings);
 

@@ -16,6 +16,7 @@ import {
 import type { ProjectMetadataState } from "../components/ProjectSetupWizard";
 import type {
   AgentType,
+  ApiKeys,
   DeploymentMode,
   GitWorkingMode,
   HilConfig,
@@ -80,6 +81,7 @@ export function ProjectSetup() {
   const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
   const [createError, setCreateError] = useState<string | null>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
+  const [apiKeys, setApiKeys] = useState<ApiKeys | undefined>(undefined);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === step);
 
@@ -198,6 +200,7 @@ export function ProjectSetup() {
         maxConcurrentCoders: gitWorkingMode === "branches" ? 1 : maxConcurrentCoders,
         unknownScopeStrategy,
         gitWorkingMode,
+        ...(apiKeys && Object.keys(apiKeys).length > 0 && { apiKeys }),
       });
       navigate(getProjectPhasePath((project as { id: string }).id, "sketch"));
     } catch (err) {
@@ -293,6 +296,10 @@ export function ProjectSetup() {
                   setGitWorkingMode(v);
                   if (v === "branches") setMaxConcurrentCoders(1);
                 }}
+                apiKeys={apiKeys}
+                onApiKeysChange={(keys) =>
+                  setApiKeys((prev) => ({ ...prev, ...keys } as ApiKeys))
+                }
               />
             )}
 

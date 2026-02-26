@@ -84,7 +84,9 @@ async function isClaudeCliAvailable(): Promise<boolean> {
   }
 }
 
-// GET /env/keys — Check which API keys / CLIs are configured (never returns key values)
+// GET /env/keys — Check which API keys / CLIs are configured (never returns key values).
+// Keys are read from process.env (loaded from .env). Project-level API keys (in Project Settings)
+// take precedence over .env when configured; this endpoint reflects global .env state for fallback.
 envRouter.get("/keys", async (_req, res, next) => {
   try {
     const anthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
@@ -98,7 +100,8 @@ envRouter.get("/keys", async (_req, res, next) => {
   }
 });
 
-// POST /env/keys — Save an API key to .env (creates file if missing)
+// POST /env/keys — Save an API key to .env (creates file if missing).
+// Used as global fallback when no project-level keys are configured. Project keys take precedence.
 envRouter.post("/keys", async (req: Request, res, next) => {
   try {
     const { key, value } = req.body as { key?: string; value?: string };
