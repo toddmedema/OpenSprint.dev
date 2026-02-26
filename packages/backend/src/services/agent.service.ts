@@ -291,7 +291,7 @@ A git merge or rebase has encountered conflicts. The working directory contains 
    * Used when merge/rebase fails with conflicts — the agent resolves them;
    * the caller then runs rebase --continue or merge --continue.
    */
-  async runMergerAgentAndWait(cwd: string, config: AgentConfig): Promise<boolean> {
+  async runMergerAgentAndWait(projectId: string, cwd: string, config: AgentConfig): Promise<boolean> {
     const promptPath = path.join(os.tmpdir(), `opensprint-merger-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.md`);
     await fs.writeFile(promptPath, AgentService.MERGER_PROMPT);
     try {
@@ -300,6 +300,7 @@ A git merge or rebase has encountered conflicts. The working directory contains 
           cwd,
           onOutput: () => {},
           onExit: (code) => resolve(code === 0),
+          projectId,
         });
       });
     } finally {

@@ -247,7 +247,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
             }
             const settings = await this.projectService.getSettings(project.id);
             const config = settings.simpleComplexityAgent as AgentConfig;
-            const resolved = await agentService.runMergerAgentAndWait(repoPath, config);
+            const resolved = await agentService.runMergerAgentAndWait(project.id, repoPath, config);
             if (resolved) {
               try {
                 const msg = formatMergeCommitMessage(job.taskId, taskTitle);

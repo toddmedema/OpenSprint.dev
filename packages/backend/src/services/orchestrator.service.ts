@@ -1603,7 +1603,7 @@ export class OrchestratorService {
   async runMergerAgentAndWait(projectId: string, cwd: string): Promise<boolean> {
     const settings = await this.projectService.getSettings(projectId);
     const config = settings.simpleComplexityAgent as AgentConfig;
-    return agentService.runMergerAgentAndWait(cwd, config);
+    return agentService.runMergerAgentAndWait(projectId, cwd, config);
   }
 }
 

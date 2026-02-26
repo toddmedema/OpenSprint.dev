@@ -103,8 +103,11 @@ export interface ModelOption {
 
 export const api = {
   models: {
-    list: (provider: string) =>
-      request<ModelOption[]>(`/models?provider=${encodeURIComponent(provider)}`),
+    list: (provider: string, projectId?: string) => {
+      const params = new URLSearchParams({ provider });
+      if (projectId) params.set("projectId", projectId);
+      return request<ModelOption[]>(`/models?${params.toString()}`);
+    },
   },
   env: {
     getKeys: () =>

@@ -6,6 +6,11 @@ import * as modelListCache from "../services/model-list-cache.js";
 import { clearInFlightFetches } from "../routes/models.js";
 
 const mockModelsList = vi.fn();
+const mockGetNextKey = vi.fn();
+
+vi.mock("../services/api-key-resolver.service.js", () => ({
+  getNextKey: (...args: unknown[]) => mockGetNextKey(...args),
+}));
 
 vi.mock("@anthropic-ai/sdk", () => ({
   default: vi.fn().mockImplementation(() => ({
@@ -29,6 +34,10 @@ describe("Models API", () => {
     originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
     originalCursorKey = process.env.CURSOR_API_KEY;
     vi.clearAllMocks();
+    mockGetNextKey.mockImplementation(async (_projectId: string, provider: string) => {
+      const key = process.env[provider];
+      return key?.trim() ? { key, keyId: "__env__" } : null;
+    });
     globalThis.fetch = originalFetch;
   });
 
@@ -202,6 +211,24 @@ describe("Models API", () => {
       expect(res.status).toBe(429);
       expect(res.body.error?.message).toContain("rate limit");
       expect(res.body.error?.message).toContain("30 minutes");
+    });
+
+    it("uses project-level API key when projectId is provided", async () => {
+      mockGetNextKey.mockResolvedValue({ key: "sk-ant-project-key", keyId: "k1" });
+      async function* gen() {
+        yield { id: "claude-sonnet-4", display_name: "Claude Sonnet 4" };
+      }
+      mockModelsList.mockReturnValue(gen());
+
+      delete process.env.ANTHROPIC_API_KEY;
+      const res = await request(app).get(
+        `${API_PREFIX}/models?provider=claude&projectId=proj-123`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([{ id: "claude-sonnet-4", displayName: "Claude Sonnet 4" }]);
+      expect(mockGetNextKey).toHaveBeenCalledWith("proj-123", "ANTHROPIC_API_KEY");
+      expect(mockModelsList).toHaveBeenCalledTimes(1);
     });
 
     it("coalesces concurrent Claude requests to avoid rate limits", async () => {

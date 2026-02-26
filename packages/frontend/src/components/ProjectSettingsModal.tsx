@@ -518,6 +518,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                               provider={simpleComplexityAgent.type}
                               value={simpleComplexityAgent.model}
                               onChange={(id) => updateSimpleComplexityAgent({ model: id })}
+                              projectId={project.id}
                               refreshTrigger={modelRefreshTrigger}
                             />
                           </div>
@@ -569,6 +570,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                               provider={complexComplexityAgent.type}
                               value={complexComplexityAgent.model}
                               onChange={(id) => updateComplexComplexityAgent({ model: id })}
+                              projectId={project.id}
                               refreshTrigger={modelRefreshTrigger}
                             />
                           </div>

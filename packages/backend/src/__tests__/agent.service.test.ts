@@ -113,7 +113,7 @@ describe("AgentService", () => {
       );
 
       const config: AgentConfig = { type: "cursor", model: null, cliCommand: null };
-      const result = await service.runMergerAgentAndWait("/tmp/repo", config);
+      const result = await service.runMergerAgentAndWait("proj-123", "/tmp/repo", config);
 
       expect(result).toBe(true);
       expect(mockSpawnWithTaskFile).toHaveBeenCalledWith(
@@ -124,7 +124,7 @@ describe("AgentService", () => {
         expect.any(Function),
         "merger",
         undefined,
-        undefined
+        "proj-123"
       );
     });
 
@@ -137,7 +137,7 @@ describe("AgentService", () => {
       );
 
       const config: AgentConfig = { type: "claude", model: "claude-sonnet-4", cliCommand: null };
-      const result = await service.runMergerAgentAndWait("/tmp/repo", config);
+      const result = await service.runMergerAgentAndWait("proj-123", "/tmp/repo", config);
 
       expect(result).toBe(false);
     });

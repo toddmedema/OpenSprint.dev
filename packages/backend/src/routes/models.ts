@@ -4,6 +4,7 @@ import type { ApiResponse } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import * as modelListCache from "../services/model-list-cache.js";
+import { getNextKey } from "../services/api-key-resolver.service.js";
 
 export interface ModelOption {
   id: string;
@@ -104,13 +105,30 @@ const CLAUDE_CLI_DEFAULT_MODELS: ModelOption[] = [
   { id: "claude-haiku-35-20241022", displayName: "Claude 3.5 Haiku" },
 ];
 
-// GET /models?provider=claude|claude-cli|cursor — List available models for the given provider
+/**
+ * Resolve API key for models fetch: use project-level keys when projectId provided,
+ * otherwise fall back to process.env (backward compatibility).
+ */
+async function resolveApiKey(
+  projectId: string | undefined,
+  provider: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY"
+): Promise<string | null> {
+  if (projectId) {
+    const resolved = await getNextKey(projectId, provider);
+    return resolved?.key?.trim() ?? null;
+  }
+  const key = process.env[provider];
+  return key?.trim() ?? null;
+}
+
+// GET /models?provider=claude|claude-cli|cursor&projectId=... — List available models for the given provider
 modelsRouter.get("/", async (req: Request, res, next) => {
   try {
     const provider = (req.query.provider as string) || "claude";
+    const projectId = req.query.projectId as string | undefined;
 
     if (provider === "claude") {
-      const apiKey = process.env.ANTHROPIC_API_KEY;
+      const apiKey = await resolveApiKey(projectId, "ANTHROPIC_API_KEY");
       if (!apiKey) {
         res.json({ data: [] } as ApiResponse<ModelOption[]>);
         return;
@@ -122,7 +140,7 @@ modelsRouter.get("/", async (req: Request, res, next) => {
     }
 
     if (provider === "claude-cli") {
-      const apiKey = process.env.ANTHROPIC_API_KEY;
+      const apiKey = await resolveApiKey(projectId, "ANTHROPIC_API_KEY");
       if (apiKey) {
         const models = await getModelsWithCoalescing("claude", () => fetchClaudeModels(apiKey));
         res.json({ data: models } as ApiResponse<ModelOption[]>);
@@ -133,7 +151,7 @@ modelsRouter.get("/", async (req: Request, res, next) => {
     }
 
     if (provider === "cursor") {
-      const apiKey = process.env.CURSOR_API_KEY;
+      const apiKey = await resolveApiKey(projectId, "CURSOR_API_KEY");
       if (!apiKey) {
         res.json({ data: [] } as ApiResponse<ModelOption[]>);
         return;

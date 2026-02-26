@@ -8,6 +8,8 @@ interface ModelSelectProps {
   onChange: (modelId: string | null) => void;
   disabled?: boolean;
   className?: string;
+  /** Project ID for API key resolution when listing models (project-level keys) */
+  projectId?: string;
   /** Increment to trigger a refetch of models (e.g. after saving an API key) */
   refreshTrigger?: number;
 }
@@ -18,6 +20,7 @@ export function ModelSelect({
   onChange,
   disabled,
   className = "input",
+  projectId,
   refreshTrigger,
 }: ModelSelectProps) {
   const [models, setModels] = useState<ModelOption[]>([]);
@@ -34,14 +37,14 @@ export function ModelSelect({
     setLoading(true);
     setError(null);
     api.models
-      .list(provider)
+      .list(provider, projectId)
       .then((list) => setModels(list))
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Failed to load models");
         setModels([]);
       })
       .finally(() => setLoading(false));
-  }, [provider, refreshTrigger]);
+  }, [provider, projectId, refreshTrigger]);
 
   // Default to first agent from provider list when list loads and no valid selection
   useEffect(() => {
