@@ -12,6 +12,10 @@ export interface TaskUpdatedEvent {
   priority?: number;
   /** Reason task was blocked. Set when status is blocked; cleared when unblocked. */
   blockReason?: string | null;
+  /** Optional; when present (e.g. plan-task-sync), syncs title into execute state */
+  title?: string;
+  /** Optional; when present (e.g. plan-task-sync), syncs description into execute state */
+  description?: string;
 }
 
 export interface AgentOutputEvent {

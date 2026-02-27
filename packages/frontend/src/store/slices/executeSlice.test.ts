@@ -321,6 +321,21 @@ describe("executeSlice", () => {
       expect(task.priority).toBe(0);
     });
 
+    it("taskUpdated updates title and description when provided", () => {
+      const store = createStore();
+      store.dispatch(setTasks([mockTask]));
+      store.dispatch(
+        taskUpdated({
+          taskId: "task-1",
+          title: "Updated title",
+          description: "Updated description",
+        })
+      );
+      const task = selectTasks(store.getState())[0];
+      expect(task?.title).toBe("Updated title");
+      expect(task?.description).toBe("Updated description");
+    });
+
     it("setTasks replaces tasks", () => {
       const store = createStore();
       store.dispatch(setTasks([mockTask]));

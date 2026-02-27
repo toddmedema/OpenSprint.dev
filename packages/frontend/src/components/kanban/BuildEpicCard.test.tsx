@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Provider } from "react-redux";
+import { configureStore } from "@reduxjs/toolkit";
 import { BuildEpicCard } from "./BuildEpicCard";
+import executeReducer from "../../store/slices/executeSlice";
 
 const createMockTask = (
   overrides: Partial<{
@@ -36,6 +39,13 @@ const createMockTask = (
   ...overrides,
 });
 
+function renderWithStore(ui: React.ReactElement) {
+  const store = configureStore({
+    reducer: { execute: executeReducer },
+  });
+  return render(<Provider store={store}>{ui}</Provider>);
+}
+
 describe("BuildEpicCard", () => {
   it("renders epic title and progress bar", () => {
     const onTaskSelect = vi.fn();
@@ -43,7 +53,7 @@ describe("BuildEpicCard", () => {
       createMockTask({ id: "epic-1.1", title: "Task A", kanbanColumn: "done" }),
       createMockTask({ id: "epic-1.2", title: "Task B", kanbanColumn: "in_progress" }),
     ];
-    render(
+    renderWithStore(
       <BuildEpicCard
         epicId="epic-1"
         epicTitle="Authentication"
@@ -64,7 +74,7 @@ describe("BuildEpicCard", () => {
       createMockTask({ id: "epic-1.2", title: "Task B", kanbanColumn: "in_progress" }),
       createMockTask({ id: "epic-1.3", title: "Task C", kanbanColumn: "backlog" }),
     ];
-    render(
+    renderWithStore(
       <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={onTaskSelect} />
     );
 
@@ -80,7 +90,7 @@ describe("BuildEpicCard", () => {
     const user = userEvent.setup();
     const onTaskSelect = vi.fn();
     const tasks = [createMockTask({ id: "epic-1.1", title: "Task A", kanbanColumn: "done" })];
-    render(
+    renderWithStore(
       <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={onTaskSelect} />
     );
 
@@ -91,14 +101,15 @@ describe("BuildEpicCard", () => {
 
   it("shows +X more when there are more than 3 subtasks", () => {
     const onTaskSelect = vi.fn();
+    // Sort order: in_progress < in_review < ready < backlog < done — first 3 visible
     const tasks = [
-      createMockTask({ id: "epic-1.1", title: "Task 1", kanbanColumn: "done" }),
+      createMockTask({ id: "epic-1.1", title: "Task 1", kanbanColumn: "in_progress" }),
       createMockTask({ id: "epic-1.2", title: "Task 2", kanbanColumn: "ready" }),
       createMockTask({ id: "epic-1.3", title: "Task 3", kanbanColumn: "backlog" }),
       createMockTask({ id: "epic-1.4", title: "Task 4", kanbanColumn: "backlog" }),
-      createMockTask({ id: "epic-1.5", title: "Task 5", kanbanColumn: "backlog" }),
+      createMockTask({ id: "epic-1.5", title: "Task 5", kanbanColumn: "done" }),
     ];
-    render(
+    renderWithStore(
       <BuildEpicCard
         epicId="epic-1"
         epicTitle="Large Epic"
@@ -118,13 +129,14 @@ describe("BuildEpicCard", () => {
   it("expands to show all subtasks when +X more is clicked", async () => {
     const user = userEvent.setup();
     const onTaskSelect = vi.fn();
+    // Sort order: in_progress < ready < backlog < done — first 3 visible, Task 4 hidden
     const tasks = [
-      createMockTask({ id: "epic-1.1", title: "Task 1", kanbanColumn: "done" }),
+      createMockTask({ id: "epic-1.1", title: "Task 1", kanbanColumn: "in_progress" }),
       createMockTask({ id: "epic-1.2", title: "Task 2", kanbanColumn: "ready" }),
       createMockTask({ id: "epic-1.3", title: "Task 3", kanbanColumn: "backlog" }),
-      createMockTask({ id: "epic-1.4", title: "Task 4", kanbanColumn: "backlog" }),
+      createMockTask({ id: "epic-1.4", title: "Task 4", kanbanColumn: "done" }),
     ];
-    render(
+    renderWithStore(
       <BuildEpicCard
         epicId="epic-1"
         epicTitle="Large Epic"
@@ -147,7 +159,7 @@ describe("BuildEpicCard", () => {
     const tasks = [
       createMockTask({ id: "epic-1.1", title: "Blocked Task", kanbanColumn: "blocked" }),
     ];
-    render(
+    renderWithStore(
       <BuildEpicCard
         epicId="epic-1"
         epicTitle="Auth"
@@ -170,7 +182,7 @@ describe("BuildEpicCard", () => {
     const tasks = [
       createMockTask({ id: "epic-1.1", title: "Blocked Task", kanbanColumn: "blocked" }),
     ];
-    render(<BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />);
+    renderWithStore(<BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />);
 
     expect(screen.queryByRole("button", { name: "Unblock" })).not.toBeInTheDocument();
   });
@@ -184,7 +196,7 @@ describe("BuildEpicCard", () => {
         kanbanColumn: "in_progress",
       }),
     ];
-    render(<BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />);
+    renderWithStore(<BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />);
 
     expect(screen.getByText("Frodo")).toBeInTheDocument();
   });
@@ -195,7 +207,7 @@ describe("BuildEpicCard", () => {
     const tasks = [
       createMockTask({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" }),
     ];
-    render(
+    renderWithStore(
       <BuildEpicCard
         epicId="epic-1"
         epicTitle="Auth"
@@ -211,7 +223,7 @@ describe("BuildEpicCard", () => {
 
   it("handles epic with no tasks", () => {
     const onTaskSelect = vi.fn();
-    render(
+    renderWithStore(
       <BuildEpicCard
         epicId="epic-empty"
         epicTitle="Empty Epic"
@@ -228,7 +240,7 @@ describe("BuildEpicCard", () => {
     const tasks = [
       createMockTask({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" }),
     ];
-    const { container } = render(
+    const { container } = renderWithStore(
       <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />
     );
     const row = container.querySelector("li");
@@ -254,7 +266,7 @@ describe("BuildEpicCard", () => {
         kanbanColumn: "in_progress",
       }),
     ];
-    const { container } = render(
+    const { container } = renderWithStore(
       <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />
     );
     const row = container.querySelector("li");
@@ -277,7 +289,7 @@ describe("BuildEpicCard", () => {
         kanbanColumn: "ready",
       }),
     ];
-    render(<BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />);
+    renderWithStore(<BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />);
     expect(screen.getByText("Unassigned Task")).toBeInTheDocument();
     expect(screen.getByTitle("Ready")).toBeInTheDocument();
     expect(screen.queryByText("—")).not.toBeInTheDocument();
@@ -289,7 +301,7 @@ describe("BuildEpicCard", () => {
       createMockTask({ id: "epic-1.1", title: "Task A", kanbanColumn: "done" }),
       createMockTask({ id: "epic-1.2", title: "Task B", kanbanColumn: "done" }),
     ];
-    render(<BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />);
+    renderWithStore(<BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />);
 
     const checkmark = screen.getByTestId("epic-completed-checkmark");
     expect(checkmark).toBeInTheDocument();
@@ -302,7 +314,7 @@ describe("BuildEpicCard", () => {
       createMockTask({ id: "epic-1.1", title: "Task A", kanbanColumn: "done" }),
       createMockTask({ id: "epic-1.2", title: "Task B", kanbanColumn: "in_progress" }),
     ];
-    render(<BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />);
+    renderWithStore(<BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />);
 
     expect(screen.queryByTestId("epic-completed-checkmark")).not.toBeInTheDocument();
   });
@@ -317,7 +329,7 @@ describe("BuildEpicCard", () => {
     ];
     for (const col of states) {
       const tasks = [createMockTask({ id: "epic-1.1", title: "Task", kanbanColumn: col })];
-      const { unmount } = render(
+      const { unmount } = renderWithStore(
         <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />
       );
       expect(screen.queryByTestId("epic-completed-checkmark")).not.toBeInTheDocument();
@@ -326,7 +338,7 @@ describe("BuildEpicCard", () => {
   });
 
   it("does not show checkmark when epic has no tasks", () => {
-    render(
+    renderWithStore(
       <BuildEpicCard epicId="epic-empty" epicTitle="Empty Epic" tasks={[]} onTaskSelect={vi.fn()} />
     );
     expect(screen.queryByTestId("epic-completed-checkmark")).not.toBeInTheDocument();
@@ -353,7 +365,7 @@ describe("BuildEpicCard", () => {
         kanbanColumn: "in_progress",
       }),
     ];
-    render(
+    renderWithStore(
       <BuildEpicCard epicId="epic-1" epicTitle="Priorities" tasks={tasks} onTaskSelect={vi.fn()} />
     );
 
@@ -371,7 +383,7 @@ describe("BuildEpicCard", () => {
         complexity: "simple",
       }),
     ];
-    render(
+    renderWithStore(
       <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />
     );
 
@@ -384,7 +396,7 @@ describe("BuildEpicCard", () => {
     const tasks = [
       createMockTask({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" }),
     ];
-    render(
+    renderWithStore(
       <BuildEpicCard
         epicId="epic-1"
         epicTitle="Auth Feature"
@@ -405,7 +417,7 @@ describe("BuildEpicCard", () => {
     const tasks = [
       createMockTask({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" }),
     ];
-    render(
+    renderWithStore(
       <BuildEpicCard
         epicId="epic-1"
         epicTitle="Auth Feature"
@@ -426,7 +438,7 @@ describe("BuildEpicCard", () => {
     const tasks = states.map((col, i) =>
       createMockTask({ id: `epic-1.${i}`, title: `Task ${i}`, kanbanColumn: col })
     );
-    render(
+    renderWithStore(
       <BuildEpicCard epicId="epic-1" epicTitle="All States" tasks={tasks} onTaskSelect={vi.fn()} />
     );
     await user.click(screen.getByRole("button", { name: "+4 more" }));

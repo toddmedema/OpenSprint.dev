@@ -227,6 +227,8 @@ export const websocketMiddleware: Middleware = (storeApi) => {
             assignee: event.assignee,
             priority: event.priority as TaskPriority | undefined,
             blockReason: event.blockReason,
+            title: event.title,
+            description: event.description,
           })
         );
         // For newly created tasks, taskUpdated is a no-op (task not in state). Fetch and merge so Plan page shows them in real time.

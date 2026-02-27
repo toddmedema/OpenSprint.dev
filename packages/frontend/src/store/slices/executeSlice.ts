@@ -399,10 +399,13 @@ const executeSlice = createSlice({
         assignee?: string | null;
         priority?: TaskPriority;
         blockReason?: string | null;
+        title?: string;
+        description?: string;
       }>
     ) {
       ensureTasksState(state);
-      const { taskId, status, assignee, priority, blockReason } = action.payload;
+      const { taskId, status, assignee, priority, blockReason, title, description } =
+        action.payload;
       const task = state.tasksById[taskId];
       if (task) {
         if (status !== undefined) {
@@ -414,6 +417,8 @@ const executeSlice = createSlice({
         if (assignee !== undefined) task.assignee = assignee;
         if (priority !== undefined) task.priority = priority;
         if (blockReason !== undefined) task.blockReason = blockReason;
+        if (title !== undefined) task.title = title;
+        if (description !== undefined) task.description = description;
       }
     },
     setTasks(state, action: PayloadAction<Task[]>) {
@@ -760,6 +765,11 @@ export const selectTaskSummaries = createSelector(
       ])
     )
 );
+
+/** Task by id. Use for granular subscription so only components using this task re-render on update. */
+export function selectTaskById(state: ExecuteRootState, taskId: string): Task | undefined {
+  return state.execute?.tasksById?.[taskId];
+}
 
 /** Task title by id from execute.tasks. */
 export function selectTaskTitle(state: ExecuteRootState, taskId: string): string | undefined {

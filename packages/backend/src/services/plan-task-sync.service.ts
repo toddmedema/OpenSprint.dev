@@ -69,6 +69,8 @@ export async function syncPlanTasksFromContent(
         taskId: task.id,
         status: task.status,
         assignee: task.assignee ?? null,
+        ...(needsTitle && { title: parsed.title }),
+        ...(needsDesc && { description: parsed.description }),
       });
     } catch (err) {
       log.warn("syncPlanTasksFromContent: failed to update task", {

@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo, memo } from "react";
 import type { Task } from "@opensprint/shared";
+import { shallowEqual } from "react-redux";
+import { useAppSelector } from "../../store";
+import { selectTaskById } from "../../store/slices/executeSlice";
 import { PriorityIcon } from "../PriorityIcon";
 import { ComplexityIcon } from "../ComplexityIcon";
 import { TaskStatusBadge, COLUMN_LABELS } from "./TaskStatusBadge";
@@ -7,18 +10,24 @@ import { formatUptime } from "../../lib/formatting";
 
 const VISIBLE_SUBTASKS = 3;
 
-/** Task row: status badge left, title center, assignee right. No duplicate indicators. */
-function EpicTaskRow({
-  task,
+/** Task row: subscribes to single task for granular re-renders when task.updated fires. When task prop is provided (e.g. tests), use it instead of Redux. */
+const EpicTaskRow = memo(function EpicTaskRow({
+  taskId,
+  task: taskProp,
   elapsed,
   onTaskSelect,
   onUnblock,
 }: {
-  task: Task;
+  taskId: string;
+  task?: Task;
   elapsed: string | null;
   onTaskSelect: (taskId: string) => void;
   onUnblock?: (taskId: string) => void;
 }) {
+  const taskFromRedux = useAppSelector((s) => selectTaskById(s, taskId), shallowEqual);
+  const task = taskProp ?? taskFromRedux;
+  if (!task) return null;
+
   const rightContent = [task.assignee, elapsed].filter(Boolean).join(" · ");
   return (
     <li data-testid={task.kanbanColumn === "blocked" ? "task-blocked" : undefined}>
@@ -28,7 +37,6 @@ function EpicTaskRow({
           onClick={() => onTaskSelect(task.id)}
           className="flex-1 flex items-center gap-3 text-left hover:bg-theme-info-bg/50 transition-colors text-sm min-w-0"
         >
-          {/* Status: exclusively on the left */}
           <TaskStatusBadge
             column={task.kanbanColumn}
             size="xs"
@@ -39,7 +47,6 @@ function EpicTaskRow({
           <span className="flex-1 min-w-0 truncate font-medium text-theme-text" title={task.title}>
             {task.title}
           </span>
-          {/* Assignee/elapsed: exclusively on the right; nothing when unassigned and no elapsed */}
           {rightContent ? (
             <span
               className="text-xs text-theme-muted shrink-0 tabular-nums"
@@ -64,12 +71,23 @@ function EpicTaskRow({
       </div>
     </li>
   );
-}
+});
+
+import type { StatusFilter } from "../../lib/executeTaskFilter";
+import {
+  filterTasksByStatusAndSearch,
+} from "../../lib/executeTaskFilter";
+import { sortEpicTasksByStatus } from "../../lib/executeTaskSort";
+import { selectTasksForEpic } from "../../store/slices/executeSlice";
 
 export interface BuildEpicCardProps {
   epicId: string;
   epicTitle: string;
-  tasks: Task[];
+  /** Status and search filter for task list. Default "all" and "" when tasks prop is provided. */
+  statusFilter?: StatusFilter;
+  searchQuery?: string;
+  /** When provided (e.g. in tests), use this instead of Redux. Otherwise subscribe to tasks via selectTasksForEpic. */
+  tasks?: Task[];
   /** When true, progress summary reflects filtered results; show indicator */
   filteringActive?: boolean;
   onTaskSelect: (taskId: string) => void;
@@ -83,7 +101,9 @@ export interface BuildEpicCardProps {
 export function BuildEpicCard({
   epicId,
   epicTitle,
-  tasks,
+  statusFilter = "all",
+  searchQuery = "",
+  tasks: tasksProp,
   filteringActive = false,
   onTaskSelect,
   onUnblock,
@@ -91,13 +111,27 @@ export function BuildEpicCard({
   taskIdToStartedAt = {},
 }: BuildEpicCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const doneCount = tasks.filter((t) => t.kanbanColumn === "done").length;
-  const totalCount = tasks.length;
+  const tasksFromRedux = useAppSelector(
+    (s) => selectTasksForEpic(s, epicId),
+    shallowEqual
+  );
+  const tasks = tasksProp ?? tasksFromRedux;
+  const filteredTasks = useMemo(
+    () => filterTasksByStatusAndSearch(tasks, statusFilter, searchQuery),
+    [tasks, statusFilter, searchQuery]
+  );
+  const sortedTasks = useMemo(
+    () => sortEpicTasksByStatus(filteredTasks),
+    [filteredTasks]
+  );
+  const doneCount = sortedTasks.filter((t) => t.kanbanColumn === "done").length;
+  const totalCount = sortedTasks.length;
   const progress = totalCount > 0 ? (doneCount / totalCount) * 100 : 0;
-  const hasMore = tasks.length > VISIBLE_SUBTASKS;
-  const visibleTasks = expanded ? tasks : tasks.slice(0, VISIBLE_SUBTASKS);
-  const hiddenCount = tasks.length - VISIBLE_SUBTASKS;
-  const allTasksDone = totalCount > 0 && tasks.every((t) => t.kanbanColumn === "done");
+  const hasMore = sortedTasks.length > VISIBLE_SUBTASKS;
+  const visibleTasks = expanded ? sortedTasks : sortedTasks.slice(0, VISIBLE_SUBTASKS);
+  const hiddenCount = sortedTasks.length - VISIBLE_SUBTASKS;
+  const allTasksDone = totalCount > 0 && sortedTasks.every((t) => t.kanbanColumn === "done");
+  const useTaskProp = tasksProp != null;
 
   return (
     <div
@@ -164,23 +198,24 @@ export function BuildEpicCard({
         </div>
       </div>
 
-      {/* Nested subtasks: status left, title center, assignee right (no duplicates) */}
-      {tasks.length > 0 && (
+      {/* Nested subtasks: each row subscribes to its task for granular re-renders (or uses task prop when provided) */}
+      {sortedTasks.length > 0 && (
         <div className="border-t border-theme-border-subtle">
           <ul className="divide-y divide-theme-border-subtle">
-            {visibleTasks.map((task) => (
+            {visibleTasks.map((t) => (
               <EpicTaskRow
-                key={task.id}
-                task={task}
+                key={t.id}
+                taskId={t.id}
+                task={useTaskProp ? t : undefined}
                 elapsed={
-                  taskIdToStartedAt[task.id] ? formatUptime(taskIdToStartedAt[task.id]) : null
+                  taskIdToStartedAt[t.id] ? formatUptime(taskIdToStartedAt[t.id]) : null
                 }
                 onTaskSelect={onTaskSelect}
-                onUnblock={task.kanbanColumn === "blocked" ? onUnblock : undefined}
+                onUnblock={onUnblock}
               />
             ))}
           </ul>
-          {hasMore && !expanded && (
+          {hasMore && !expanded && hiddenCount > 0 && (
             <button
               type="button"
               onClick={() => setExpanded(true)}

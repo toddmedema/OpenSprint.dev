@@ -221,7 +221,8 @@ export function ExecutePhase({
                       key={lane.epicId || "other"}
                       epicId={lane.epicId}
                       epicTitle={lane.epicTitle}
-                      tasks={lane.tasks}
+                      statusFilter={statusFilter}
+                      searchQuery={searchQuery}
                       filteringActive={isSearchActive}
                       onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
                       onUnblock={(taskId) => dispatch(unblockTask({ projectId, taskId }))}

@@ -9,6 +9,7 @@ export interface Swimlane {
   epicId: string;
   epicTitle: string;
   planId: string | null;
+  /** Tasks for this epic (filtered and sorted). BuildEpicCard subscribes to Redux; this is used for swimlane inclusion only. */
   tasks: Task[];
 }
 
