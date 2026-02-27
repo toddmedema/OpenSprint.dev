@@ -175,6 +175,20 @@ CREATE TABLE IF NOT EXISTS plans (
 );
 CREATE INDEX IF NOT EXISTS idx_plans_project_id ON plans(project_id);
 CREATE INDEX IF NOT EXISTS idx_plans_project_epic ON plans(project_id, epic_id);
+
+-- Open questions / notifications (agent clarification requests)
+CREATE TABLE IF NOT EXISTS open_questions (
+    id           TEXT PRIMARY KEY,
+    project_id   TEXT NOT NULL,
+    source       TEXT NOT NULL,
+    source_id    TEXT NOT NULL,
+    questions    TEXT NOT NULL DEFAULT '[]',
+    status       TEXT NOT NULL DEFAULT 'open',
+    created_at   TEXT NOT NULL,
+    resolved_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_open_questions_project_id ON open_questions(project_id);
+CREATE INDEX IF NOT EXISTS idx_open_questions_status ON open_questions(status);
 `;
 
 export interface StoredTask {

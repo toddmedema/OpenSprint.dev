@@ -1,0 +1,205 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import initSqlJs from "sql.js";
+import { TaskStoreService } from "../services/task-store.service.js";
+import { NotificationService } from "../services/notification.service.js";
+import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
+import type { Database } from "sql.js";
+
+let sharedDb: Database;
+vi.mock("../services/task-store.service.js", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("../services/task-store.service.js")>();
+  return {
+    ...mod,
+    taskStore: {
+      async getDb() {
+        if (!sharedDb) throw new Error("sharedDb not initialized");
+        return sharedDb;
+      },
+      async runWrite<T>(fn: (db: Database) => Promise<T>): Promise<T> {
+        if (!sharedDb) throw new Error("sharedDb not initialized");
+        return fn(sharedDb);
+      },
+    },
+  };
+});
+
+describe("NotificationService", () => {
+  let store: TaskStoreService;
+  let service: NotificationService;
+
+  beforeEach(async () => {
+    const SQL = await initSqlJs();
+    sharedDb = new SQL.Database();
+    store = new TaskStoreService(sharedDb);
+    await store.init();
+    service = new NotificationService();
+  });
+
+  describe("create", () => {
+    it("creates a notification with open status", async () => {
+      const result = await service.create({
+        projectId: "proj-1",
+        source: "plan",
+        sourceId: "plan-abc",
+        questions: [
+          { id: "q1", text: "What is the target audience?" },
+          { id: "q2", text: "What is the deadline?" },
+        ],
+      });
+
+      expect(result.id).toMatch(/^oq-[0-9a-f]{8}$/);
+      expect(result.projectId).toBe("proj-1");
+      expect(result.source).toBe("plan");
+      expect(result.sourceId).toBe("plan-abc");
+      expect(result.questions).toHaveLength(2);
+      expect(result.questions[0]).toEqual({
+        id: "q1",
+        text: "What is the target audience?",
+        createdAt: expect.any(String),
+      });
+      expect(result.questions[1]).toEqual({
+        id: "q2",
+        text: "What is the deadline?",
+        createdAt: expect.any(String),
+      });
+      expect(result.status).toBe("open");
+      expect(result.resolvedAt).toBeNull();
+    });
+
+    it("persists notification to database", async () => {
+      const created = await service.create({
+        projectId: "proj-2",
+        source: "execute",
+        sourceId: "task-xyz",
+        questions: [{ id: "q1", text: "Clarify scope?" }],
+      });
+
+      const listed = await service.listByProject("proj-2");
+      expect(listed).toHaveLength(1);
+      expect(listed[0]!.id).toBe(created.id);
+      expect(listed[0]!.source).toBe("execute");
+      expect(listed[0]!.sourceId).toBe("task-xyz");
+    });
+  });
+
+  describe("listByProject", () => {
+    it("returns only open notifications for the project", async () => {
+      await service.create({
+        projectId: "proj-a",
+        source: "plan",
+        sourceId: "p1",
+        questions: [{ id: "q1", text: "Q1" }],
+      });
+      await service.create({
+        projectId: "proj-a",
+        source: "prd",
+        sourceId: "s1",
+        questions: [{ id: "q2", text: "Q2" }],
+      });
+      await service.create({
+        projectId: "proj-b",
+        source: "plan",
+        sourceId: "p2",
+        questions: [{ id: "q3", text: "Q3" }],
+      });
+
+      const list = await service.listByProject("proj-a");
+      expect(list).toHaveLength(2);
+      expect(list.map((n) => n.sourceId)).toContain("p1");
+      expect(list.map((n) => n.sourceId)).toContain("s1");
+      expect(list.map((n) => n.sourceId)).not.toContain("p2");
+    });
+
+    it("excludes resolved notifications", async () => {
+      const created = await service.create({
+        projectId: "proj-c",
+        source: "eval",
+        sourceId: "fb-1",
+        questions: [{ id: "q1", text: "Q1" }],
+      });
+      await service.resolve("proj-c", created.id);
+
+      const list = await service.listByProject("proj-c");
+      expect(list).toHaveLength(0);
+    });
+
+    it("returns empty array when no notifications", async () => {
+      const list = await service.listByProject("proj-empty");
+      expect(list).toEqual([]);
+    });
+  });
+
+  describe("listGlobal", () => {
+    it("returns all open notifications across projects", async () => {
+      await service.create({
+        projectId: "proj-x",
+        source: "plan",
+        sourceId: "p1",
+        questions: [{ id: "q1", text: "Q1" }],
+      });
+      await service.create({
+        projectId: "proj-y",
+        source: "execute",
+        sourceId: "t1",
+        questions: [{ id: "q2", text: "Q2" }],
+      });
+
+      const list = await service.listGlobal();
+      expect(list).toHaveLength(2);
+      expect(list.map((n) => n.projectId)).toContain("proj-x");
+      expect(list.map((n) => n.projectId)).toContain("proj-y");
+    });
+
+    it("excludes resolved notifications", async () => {
+      const created = await service.create({
+        projectId: "proj-z",
+        source: "plan",
+        sourceId: "p1",
+        questions: [{ id: "q1", text: "Q1" }],
+      });
+      await service.resolve("proj-z", created.id);
+
+      const list = await service.listGlobal();
+      expect(list).toHaveLength(0);
+    });
+  });
+
+  describe("resolve", () => {
+    it("marks notification as resolved", async () => {
+      const created = await service.create({
+        projectId: "proj-r",
+        source: "plan",
+        sourceId: "plan-1",
+        questions: [{ id: "q1", text: "Q1" }],
+      });
+
+      const resolved = await service.resolve("proj-r", created.id);
+      expect(resolved.status).toBe("resolved");
+      expect(resolved.resolvedAt).toBeTruthy();
+
+      const list = await service.listByProject("proj-r");
+      expect(list).toHaveLength(0);
+    });
+
+    it("throws NOTIFICATION_NOT_FOUND when notification does not exist", async () => {
+      const err = await service.resolve("proj-r", "oq-nonexistent").catch((e) => e);
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).statusCode).toBe(404);
+      expect((err as AppError).code).toBe(ErrorCodes.NOTIFICATION_NOT_FOUND);
+    });
+
+    it("throws when project ID does not match", async () => {
+      const created = await service.create({
+        projectId: "proj-match",
+        source: "plan",
+        sourceId: "p1",
+        questions: [{ id: "q1", text: "Q1" }],
+      });
+
+      const err = await service.resolve("proj-wrong", created.id).catch((e) => e);
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).statusCode).toBe(404);
+    });
+  });
+});
