@@ -310,6 +310,7 @@ export function ExecutePhase({
           <ResizableSidebar
             storageKey="execute"
             defaultWidth={420}
+            resizeHandleLabel="Resize task detail sidebar"
             className="fixed md:static inset-y-0 right-0 z-50 md:border-l border-theme-border shadow-xl md:shadow-none animate-slide-in-right md:animate-none max-w-[100vw] md:max-w-none"
           >
             <TaskDetailSidebar
