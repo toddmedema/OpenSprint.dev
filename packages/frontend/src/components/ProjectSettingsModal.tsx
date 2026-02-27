@@ -15,7 +15,13 @@ import type {
   ReviewMode,
   UnknownScopeStrategy,
 } from "@opensprint/shared";
-import { DEFAULT_HIL_CONFIG, DEFAULT_REVIEW_MODE } from "@opensprint/shared";
+import {
+  DEFAULT_HIL_CONFIG,
+  DEFAULT_REVIEW_MODE,
+  getDeploymentTargetsForUi,
+  AUTO_DEPLOY_TRIGGER_OPTIONS,
+  type AutoDeployTrigger,
+} from "@opensprint/shared";
 
 interface ProjectSettingsModalProps {
   project: Project;
@@ -135,8 +141,6 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
             rollbackCommand: deployment.rollbackCommand ?? undefined,
             targets: deployment.targets,
             envVars: deployment.envVars,
-            autoDeployOnEpicCompletion: deployment.autoDeployOnEpicCompletion ?? false,
-            autoDeployOnEvalResolution: deployment.autoDeployOnEvalResolution ?? false,
             autoResolveFeedbackOnTaskCompletion:
               deployment.autoResolveFeedbackOnTaskCompletion ?? false,
           },
@@ -640,45 +644,43 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
               {activeTab === "deployment" && (
                 <div className="space-y-4">
                   <div className="space-y-3 p-3 rounded-lg bg-theme-bg-elevated border border-theme-border">
-                    <h3 className="text-sm font-semibold text-theme-text">Auto-deploy triggers</h3>
+                    <h3 className="text-sm font-semibold text-theme-text">
+                      Auto-deploy per environment
+                    </h3>
                     <p className="text-xs text-theme-muted">
-                      Both off by default. Enable to auto-trigger deployment.
+                      Choose when to automatically deploy to each target.
                     </p>
-                    <label className="flex items-center justify-between gap-3 cursor-pointer">
-                      <span className="text-sm text-theme-text">
-                        Auto-deploy on epic completion
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={deployment.autoDeployOnEpicCompletion ?? false}
-                        onChange={(e) =>
-                          updateDeployment({ autoDeployOnEpicCompletion: e.target.checked })
-                        }
-                        className="rounded"
-                        data-testid="auto-deploy-epic-toggle"
-                      />
-                    </label>
-                    <p className="text-xs text-theme-muted ml-1">
-                      When all tasks in an epic reach Done, trigger deployment automatically.
-                    </p>
-                    <label className="flex items-center justify-between gap-3 cursor-pointer">
-                      <span className="text-sm text-theme-text">
-                        Auto-deploy on Evaluate resolution
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={deployment.autoDeployOnEvalResolution ?? false}
-                        onChange={(e) =>
-                          updateDeployment({ autoDeployOnEvalResolution: e.target.checked })
-                        }
-                        className="rounded"
-                        data-testid="auto-deploy-eval-toggle"
-                      />
-                    </label>
-                    <p className="text-xs text-theme-muted ml-1">
-                      When all critical (bug) feedback is resolved, trigger deployment
-                      automatically.
-                    </p>
+                    {getDeploymentTargetsForUi(deployment).map((target) => (
+                      <div key={target.name} className="flex items-center justify-between gap-3">
+                        <label className="text-sm text-theme-text shrink-0">
+                          {target.name}:
+                        </label>
+                        <select
+                          value={target.autoDeployTrigger ?? "none"}
+                          onChange={(e) => {
+                            const trigger = e.target.value as AutoDeployTrigger;
+                            const uiTargets = getDeploymentTargetsForUi(deployment);
+                            const current = deployment.targets ?? [];
+                            const updated = uiTargets.map((t) => {
+                              const existing = current.find((c) => c.name === t.name);
+                              const base = existing ?? { name: t.name };
+                              return t.name === target.name
+                                ? { ...base, autoDeployTrigger: trigger }
+                                : { ...base, autoDeployTrigger: base.autoDeployTrigger ?? t.autoDeployTrigger ?? "none" };
+                            });
+                            updateDeployment({ targets: updated });
+                          }}
+                          className="rounded border border-theme-border bg-theme-surface px-2 py-1 text-sm"
+                          data-testid={`auto-deploy-trigger-${target.name}`}
+                        >
+                          {AUTO_DEPLOY_TRIGGER_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
                     <label className="flex items-center justify-between gap-3 cursor-pointer">
                       <span className="text-sm text-theme-text">
                         Auto-resolve feedback when tasks done

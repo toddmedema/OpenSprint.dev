@@ -176,24 +176,41 @@ describe("Deliver API (phase routes for deployment records)", () => {
       refreshSpy.mockRestore();
     });
 
-    it("should accept and persist autoDeployOnEpicCompletion, autoDeployOnEvalResolution, and autoResolveFeedbackOnTaskCompletion (PRD §7.5.3, §10.2)", async () => {
+    it("should accept and persist autoDeployTrigger per target and autoResolveFeedbackOnTaskCompletion (PRD §7.5.3, §10.2)", async () => {
       const res = await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({
           mode: "custom",
-          autoDeployOnEpicCompletion: true,
-          autoDeployOnEvalResolution: true,
+          targets: [
+            { name: "staging", autoDeployTrigger: "each_task", isDefault: true },
+            { name: "production", autoDeployTrigger: "eval_resolution" },
+          ],
           autoResolveFeedbackOnTaskCompletion: true,
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.data.deployment.autoDeployOnEpicCompletion).toBe(true);
-      expect(res.body.data.deployment.autoDeployOnEvalResolution).toBe(true);
+      expect(res.body.data.deployment.targets).toHaveLength(2);
+      expect(res.body.data.deployment.targets[0]).toMatchObject({
+        name: "staging",
+        autoDeployTrigger: "each_task",
+        isDefault: true,
+      });
+      expect(res.body.data.deployment.targets[1]).toMatchObject({
+        name: "production",
+        autoDeployTrigger: "eval_resolution",
+      });
       expect(res.body.data.deployment.autoResolveFeedbackOnTaskCompletion).toBe(true);
 
       const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
-      expect(getRes.body.data.deployment.autoDeployOnEpicCompletion).toBe(true);
-      expect(getRes.body.data.deployment.autoDeployOnEvalResolution).toBe(true);
+      expect(getRes.body.data.deployment.targets).toHaveLength(2);
+      expect(getRes.body.data.deployment.targets[0]).toMatchObject({
+        name: "staging",
+        autoDeployTrigger: "each_task",
+      });
+      expect(getRes.body.data.deployment.targets[1]).toMatchObject({
+        name: "production",
+        autoDeployTrigger: "eval_resolution",
+      });
       expect(getRes.body.data.deployment.autoResolveFeedbackOnTaskCompletion).toBe(true);
     });
 

@@ -5,7 +5,7 @@ import type {
   FeedbackCategory,
   ProposedTask,
 } from "@opensprint/shared";
-import { getAgentForPlanningRole } from "@opensprint/shared";
+import { getAgentForPlanningRole, getTargetsForDeployEvent } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { ProjectService } from "./project.service.js";
@@ -1220,7 +1220,8 @@ export class FeedbackService {
 
     if (allCriticalResolved) {
       const settings = await this.projectService.getSettings(projectId);
-      if (settings.deployment.autoDeployOnEvalResolution) {
+      const evalTargets = getTargetsForDeployEvent(settings.deployment, "eval_resolution");
+      if (evalTargets.length > 0) {
         triggerDeploy(projectId).catch((err) => {
           log.warn("Auto-deploy on Evaluate resolution failed", { projectId, err });
         });

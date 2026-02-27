@@ -346,7 +346,7 @@ describe("OrchestratorService (slot-based model)", () => {
     simpleComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
     complexComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
     reviewMode: "never",
-    deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
+    deployment: { mode: "custom", autoResolveFeedbackOnTaskCompletion: false },
     maxConcurrentCoders: 1,
     gitWorkingMode: "worktree" as const,
   };

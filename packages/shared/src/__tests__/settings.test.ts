@@ -6,6 +6,8 @@ import {
   parseSettings,
   getDefaultDeploymentTarget,
   getDeploymentTargetConfig,
+  getTargetsForDeployEvent,
+  getDeploymentTargetsForUi,
   API_KEY_PROVIDERS,
   validateApiKeyEntry,
   sanitizeApiKeys,
@@ -243,6 +245,179 @@ describe("getDeploymentTargetConfig", () => {
   it("returns undefined when no targets", () => {
     const config: DeploymentConfig = { mode: "custom" };
     expect(getDeploymentTargetConfig(config, "staging")).toBeUndefined();
+  });
+});
+
+describe("getTargetsForDeployEvent", () => {
+  it("returns targets with matching autoDeployTrigger", () => {
+    const config: DeploymentConfig = {
+      mode: "custom",
+      targets: [
+        { name: "staging", autoDeployTrigger: "each_task" },
+        { name: "production", autoDeployTrigger: "each_epic" },
+        { name: "preview", autoDeployTrigger: "each_task" },
+      ],
+    };
+    expect(getTargetsForDeployEvent(config, "each_task")).toEqual(["staging", "preview"]);
+    expect(getTargetsForDeployEvent(config, "each_epic")).toEqual(["production"]);
+    expect(getTargetsForDeployEvent(config, "eval_resolution")).toEqual([]);
+  });
+
+  it("treats missing autoDeployTrigger as none", () => {
+    const config: DeploymentConfig = {
+      mode: "custom",
+      targets: [{ name: "staging" }, { name: "production", autoDeployTrigger: "each_task" }],
+    };
+    expect(getTargetsForDeployEvent(config, "each_task")).toEqual(["production"]);
+    expect(getTargetsForDeployEvent(config, "each_epic")).toEqual([]);
+  });
+
+  it("returns empty array when no targets", () => {
+    const config: DeploymentConfig = { mode: "custom" };
+    expect(getTargetsForDeployEvent(config, "each_task")).toEqual([]);
+    expect(getTargetsForDeployEvent(config, "each_epic")).toEqual([]);
+    expect(getTargetsForDeployEvent(config, "eval_resolution")).toEqual([]);
+  });
+
+  it("returns empty array when targets is empty", () => {
+    const config: DeploymentConfig = { mode: "custom", targets: [] };
+    expect(getTargetsForDeployEvent(config, "each_task")).toEqual([]);
+  });
+});
+
+describe("parseSettings deployment migration", () => {
+  it("migrates autoDeployOnEpicCompletion to default target autoDeployTrigger", () => {
+    const raw = {
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: {
+        mode: "custom",
+        target: "production",
+        autoDeployOnEpicCompletion: true,
+      },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+    };
+    const parsed = parseSettings(raw);
+    expect(parsed.deployment).not.toHaveProperty("autoDeployOnEpicCompletion");
+    expect(parsed.deployment.targets).toHaveLength(1);
+    expect(parsed.deployment.targets?.[0]).toMatchObject({
+      name: "production",
+      autoDeployTrigger: "each_epic",
+    });
+  });
+
+  it("migrates autoDeployOnEvalResolution to default target autoDeployTrigger", () => {
+    const raw = {
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: {
+        mode: "custom",
+        target: "staging",
+        autoDeployOnEvalResolution: true,
+      },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+    };
+    const parsed = parseSettings(raw);
+    expect(parsed.deployment).not.toHaveProperty("autoDeployOnEvalResolution");
+    expect(parsed.deployment.targets).toHaveLength(1);
+    expect(parsed.deployment.targets?.[0]).toMatchObject({
+      name: "staging",
+      autoDeployTrigger: "eval_resolution",
+    });
+  });
+
+  it("migrates both flags: autoDeployOnEpicCompletion takes precedence", () => {
+    const raw = {
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: {
+        mode: "custom",
+        autoDeployOnEpicCompletion: true,
+        autoDeployOnEvalResolution: true,
+      },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+    };
+    const parsed = parseSettings(raw);
+    expect(parsed.deployment).not.toHaveProperty("autoDeployOnEpicCompletion");
+    expect(parsed.deployment).not.toHaveProperty("autoDeployOnEvalResolution");
+    expect(parsed.deployment.targets).toHaveLength(1);
+    expect(parsed.deployment.targets?.[0]).toMatchObject({
+      name: "production",
+      autoDeployTrigger: "each_epic",
+    });
+  });
+
+  it("migrates to existing default target in targets array", () => {
+    const raw = {
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: {
+        mode: "custom",
+        targets: [
+          { name: "staging", isDefault: false },
+          { name: "production", isDefault: true, webhookUrl: "https://example.com" },
+        ],
+        autoDeployOnEpicCompletion: true,
+      },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+    };
+    const parsed = parseSettings(raw);
+    expect(parsed.deployment.targets).toHaveLength(2);
+    const prod = parsed.deployment.targets?.find((t) => t.name === "production");
+    expect(prod).toMatchObject({
+      name: "production",
+      isDefault: true,
+      webhookUrl: "https://example.com",
+      autoDeployTrigger: "each_epic",
+    });
+  });
+
+  it("does not add migration when legacy flags are false or absent", () => {
+    const raw = {
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+    };
+    const parsed = parseSettings(raw);
+    expect(parsed.deployment).not.toHaveProperty("autoDeployOnEpicCompletion");
+    expect(parsed.deployment).not.toHaveProperty("autoDeployOnEvalResolution");
+    expect(parsed.deployment.targets).toBeUndefined();
+  });
+});
+
+describe("getDeploymentTargetsForUi", () => {
+  it("returns synthetic staging and production for expo mode with no targets", () => {
+    const config: DeploymentConfig = { mode: "expo" };
+    const targets = getDeploymentTargetsForUi(config);
+    expect(targets).toHaveLength(2);
+    expect(targets[0]).toMatchObject({ name: "staging", autoDeployTrigger: "none" });
+    expect(targets[1]).toMatchObject({ name: "production", autoDeployTrigger: "none" });
+  });
+
+  it("returns targets array for custom mode", () => {
+    const config: DeploymentConfig = {
+      mode: "custom",
+      targets: [
+        { name: "staging", autoDeployTrigger: "each_task" },
+        { name: "production", autoDeployTrigger: "none" },
+      ],
+    };
+    const targets = getDeploymentTargetsForUi(config);
+    expect(targets).toHaveLength(2);
+    expect(targets[0]).toMatchObject({ name: "staging", autoDeployTrigger: "each_task" });
+    expect(targets[1]).toMatchObject({ name: "production", autoDeployTrigger: "none" });
+  });
+
+  it("returns empty array for custom mode with no targets", () => {
+    const config: DeploymentConfig = { mode: "custom" };
+    const targets = getDeploymentTargetsForUi(config);
+    expect(targets).toEqual([]);
   });
 });
 

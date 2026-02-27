@@ -17,6 +17,14 @@ export type DeploymentMode = "expo" | "custom";
 /** Deployment target (staging/production) */
 export type DeploymentTarget = "staging" | "production";
 
+/** When to auto-deploy to this target (PRD §7.5.3) */
+export type AutoDeployTrigger =
+  | "each_task"
+  | "each_epic"
+  | "eval_resolution"
+  | "nightly"
+  | "none";
+
 /** Deployment target config (PRD ?7.5.2/7.5.4): staging/production targets with per-target command/webhook */
 export interface DeploymentTargetConfig {
   name: string;
@@ -28,6 +36,8 @@ export interface DeploymentTargetConfig {
   rollbackCommand?: string;
   /** When true, this target is selected by default in the Deliver tab */
   isDefault?: boolean;
+  /** When to auto-deploy to this target. Default: "none". */
+  autoDeployTrigger?: AutoDeployTrigger;
 }
 
 /** Deployment configuration */
@@ -39,10 +49,6 @@ export interface DeploymentConfig {
   targets?: DeploymentTargetConfig[];
   /** Environment variables for deployment (PRD ?7.5.4) */
   envVars?: Record<string, string>;
-  /** Auto-deploy when all tasks in an epic reach Done (PRD ?7.5.3). Default: false. */
-  autoDeployOnEpicCompletion?: boolean;
-  /** Auto-deploy when all critical feedback (bugs) are resolved (PRD ?7.5.3). Default: false. */
-  autoDeployOnEvalResolution?: boolean;
   /** Auto-resolve feedback when all its created tasks are Done (PRD ?10.2). Default: false. */
   autoResolveFeedbackOnTaskCompletion?: boolean;
   expoConfig?: {
@@ -78,13 +84,102 @@ export function getDeploymentTargetConfig(
   return config.targets?.find((t) => t.name === targetName);
 }
 
+/** Deploy event types that can trigger auto-deploy (excludes "nightly" which is schedule-based) */
+export type DeployEvent = "each_task" | "each_epic" | "eval_resolution";
+
+/**
+ * Get target names that should be deployed for a given event.
+ * Returns targets whose autoDeployTrigger matches the event.
+ */
+export function getTargetsForDeployEvent(
+  config: DeploymentConfig,
+  event: DeployEvent
+): string[] {
+  const targets = config.targets;
+  if (!targets || targets.length === 0) return [];
+  return targets
+    .filter((t) => (t.autoDeployTrigger ?? "none") === event)
+    .map((t) => t.name);
+}
+
+/** Auto-deploy trigger options for UI dropdown */
+export const AUTO_DEPLOY_TRIGGER_OPTIONS: { value: AutoDeployTrigger; label: string }[] = [
+  { value: "each_task", label: "Each task" },
+  { value: "each_epic", label: "Each feature plan/epic" },
+  { value: "eval_resolution", label: "Evaluate resolution" },
+  { value: "nightly", label: "Nightly" },
+  { value: "none", label: "None" },
+];
+
+/**
+ * Get targets to display in the deployment UI.
+ * Expo mode with empty targets: returns synthetic staging and production.
+ * Custom mode: returns targets array (may be empty).
+ */
+export function getDeploymentTargetsForUi(config: DeploymentConfig): DeploymentTargetConfig[] {
+  const targets = config.targets;
+  if (config.mode === "expo" && (!targets || targets.length === 0)) {
+    return [
+      { name: "staging", autoDeployTrigger: "none" },
+      { name: "production", autoDeployTrigger: "none" },
+    ];
+  }
+  return targets ?? [];
+}
+
 /** Default deployment configuration (PRD ?6.4, ?7.5.3) */
 export const DEFAULT_DEPLOYMENT_CONFIG: DeploymentConfig = {
   mode: "custom",
-  autoDeployOnEpicCompletion: false,
-  autoDeployOnEvalResolution: false,
   autoResolveFeedbackOnTaskCompletion: false,
 };
+
+/** Legacy deployment shape (pre-migration) with top-level auto-deploy flags */
+interface LegacyDeploymentInput extends Record<string, unknown> {
+  autoDeployOnEpicCompletion?: boolean;
+  autoDeployOnEvalResolution?: boolean;
+}
+
+/**
+ * Migrate legacy autoDeployOnEpicCompletion/autoDeployOnEvalResolution to per-target autoDeployTrigger.
+ * Applies migrated trigger to the default target. Strips legacy flags from output.
+ */
+function migrateDeploymentConfig(raw: unknown): DeploymentConfig {
+  const input = (raw ?? DEFAULT_DEPLOYMENT_CONFIG) as LegacyDeploymentInput & DeploymentConfig;
+  const base: DeploymentConfig = {
+    ...DEFAULT_DEPLOYMENT_CONFIG,
+    ...input,
+    mode: input.mode ?? "custom",
+    targets: input.targets,
+    envVars: input.envVars,
+    autoResolveFeedbackOnTaskCompletion: input.autoResolveFeedbackOnTaskCompletion,
+    expoConfig: input.expoConfig,
+    customCommand: input.customCommand,
+    webhookUrl: input.webhookUrl,
+    rollbackCommand: input.rollbackCommand,
+  };
+  delete (base as Record<string, unknown>).autoDeployOnEpicCompletion;
+  delete (base as Record<string, unknown>).autoDeployOnEvalResolution;
+
+  const epic = input.autoDeployOnEpicCompletion === true;
+  const evalRes = input.autoDeployOnEvalResolution === true;
+  if (!epic && !evalRes) return base;
+
+  const resolvedTrigger: AutoDeployTrigger = epic ? "each_epic" : "eval_resolution";
+  const defaultTargetName = getDefaultDeploymentTarget(base);
+  const existingTargets = base.targets ?? [];
+  const targetIndex = existingTargets.findIndex((t) => t.name === defaultTargetName);
+  const migratedTargets = [...existingTargets];
+
+  if (targetIndex >= 0) {
+    migratedTargets[targetIndex] = {
+      ...migratedTargets[targetIndex],
+      autoDeployTrigger: resolvedTrigger,
+    };
+  } else {
+    migratedTargets.push({ name: defaultTargetName, autoDeployTrigger: resolvedTrigger });
+  }
+  return { ...base, targets: migratedTargets };
+}
 
 /** HIL notification mode for each category */
 export type HilNotificationMode = "automated" | "notify_and_proceed" | "requires_approval";
@@ -241,7 +336,7 @@ export function parseSettings(raw: unknown): ProjectSettings {
   const apiKeys = sanitizeApiKeys(r?.apiKeys);
 
   const base = {
-    deployment: (r?.deployment as DeploymentConfig) ?? DEFAULT_DEPLOYMENT_CONFIG,
+    deployment: migrateDeploymentConfig(r?.deployment),
     hilConfig: (r?.hilConfig as HilConfig) ?? DEFAULT_HIL_CONFIG,
     testFramework: (r?.testFramework as string | null) ?? null,
     gitWorkingMode,

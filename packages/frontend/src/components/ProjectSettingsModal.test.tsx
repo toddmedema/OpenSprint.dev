@@ -274,30 +274,37 @@ describe("ProjectSettingsModal", () => {
     expect(screen.queryByText(/Test Failures|testFailuresAndRetries/i)).not.toBeInTheDocument();
   });
 
-  it("Deliver tab shows auto-deploy toggles", async () => {
+  it("Deliver tab shows auto-deploy per environment", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      deployment: { mode: "expo" as const },
+    });
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Settings");
 
     const deploymentTab = screen.getByRole("button", { name: "Deliver" });
     await userEvent.click(deploymentTab);
 
-    expect(screen.getByText("Auto-deploy on epic completion")).toBeInTheDocument();
-    expect(screen.getByText("Auto-deploy on Evaluate resolution")).toBeInTheDocument();
-    const epicToggle = screen.getByTestId("auto-deploy-epic-toggle");
-    const evalToggle = screen.getByTestId("auto-deploy-eval-toggle");
-    expect(epicToggle).not.toBeChecked();
-    expect(evalToggle).not.toBeChecked();
+    expect(screen.getByText("Auto-deploy per environment")).toBeInTheDocument();
+    expect(screen.getByTestId("auto-deploy-trigger-staging")).toBeInTheDocument();
+    expect(screen.getByTestId("auto-deploy-trigger-production")).toBeInTheDocument();
+    expect(screen.getByTestId("auto-deploy-trigger-staging")).toHaveValue("none");
+    expect(screen.getByTestId("auto-deploy-trigger-production")).toHaveValue("none");
   });
 
-  it("saves auto-deploy toggles when changed and Save is clicked", async () => {
+  it("saves auto-deploy trigger when changed and Save is clicked", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      deployment: { mode: "expo" as const },
+    });
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
     await screen.findByText("Settings");
 
     const deploymentTab = screen.getByRole("button", { name: "Deliver" });
     await userEvent.click(deploymentTab);
 
-    const epicToggle = screen.getByTestId("auto-deploy-epic-toggle");
-    await userEvent.click(epicToggle);
+    const stagingSelect = screen.getByTestId("auto-deploy-trigger-staging");
+    await userEvent.selectOptions(stagingSelect, "each_epic");
 
     const saveButton = screen.getByRole("button", { name: "Save Changes" });
     await userEvent.click(saveButton);
@@ -306,8 +313,10 @@ describe("ProjectSettingsModal", () => {
       "proj-1",
       expect.objectContaining({
         deployment: expect.objectContaining({
-          autoDeployOnEpicCompletion: true,
-          autoDeployOnEvalResolution: false,
+          targets: expect.arrayContaining([
+            expect.objectContaining({ name: "staging", autoDeployTrigger: "each_epic" }),
+            expect.objectContaining({ name: "production", autoDeployTrigger: "none" }),
+          ]),
         }),
       })
     );

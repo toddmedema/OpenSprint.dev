@@ -120,7 +120,7 @@ describe("PhaseExecutorService", () => {
       simpleComplexityAgent: { type: "cursor", model: null, cliCommand: null },
       complexComplexityAgent: { type: "cursor", model: null, cliCommand: null },
       reviewMode: "never",
-      deployment: { autoDeployOnEpicCompletion: false, autoResolveFeedbackOnTaskCompletion: false },
+      deployment: { mode: "custom", autoResolveFeedbackOnTaskCompletion: false },
       maxConcurrentCoders: 1,
       gitWorkingMode: "worktree",
     });
@@ -194,7 +194,7 @@ describe("PhaseExecutorService", () => {
         complexComplexityAgent: { type: "cursor", model: null, cliCommand: null },
         reviewMode: "never",
         deployment: {
-          autoDeployOnEpicCompletion: false,
+          mode: "custom",
           autoResolveFeedbackOnTaskCompletion: false,
         },
         maxConcurrentCoders: 1,
@@ -221,7 +221,7 @@ describe("PhaseExecutorService", () => {
         complexComplexityAgent: { type: "cursor", model: null, cliCommand: null },
         reviewMode: "never",
         deployment: {
-          autoDeployOnEpicCompletion: false,
+          mode: "custom",
           autoResolveFeedbackOnTaskCompletion: false,
         },
         maxConcurrentCoders: 1,
@@ -247,7 +247,7 @@ describe("PhaseExecutorService", () => {
         complexComplexityAgent: { type: "cursor", model: null, cliCommand: null },
         reviewMode: "never",
         deployment: {
-          autoDeployOnEpicCompletion: false,
+          mode: "custom",
           autoResolveFeedbackOnTaskCompletion: false,
         },
         maxConcurrentCoders: 1,

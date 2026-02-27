@@ -16,6 +16,7 @@ import { RebaseConflictError } from "./branch-manager.js";
 import { gitCommitQueue } from "./git-commit-queue.service.js";
 import { agentIdentityService } from "./agent-identity.service.js";
 import { eventLogService } from "./event-log.service.js";
+import { getTargetsForDeployEvent } from "@opensprint/shared";
 import { triggerDeploy } from "./deploy-trigger.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import type { TimerRegistry } from "./timer-registry.js";
@@ -110,7 +111,7 @@ export interface MergeCoordinatorHost {
     getSettings(projectId: string): Promise<{
       simpleComplexityAgent: { type: string; model?: string | null };
       complexComplexityAgent: { type: string; model?: string | null };
-      deployment: { autoDeployOnEpicCompletion?: boolean };
+      deployment: { targets?: Array<{ name: string; autoDeployTrigger?: string }> };
       gitWorkingMode?: "worktree" | "branches";
     }>;
   };
@@ -436,7 +437,8 @@ export class MergeCoordinatorService {
         implTasks.length > 0 && implTasks.every((i) => (i.status as string) === "closed");
       if (allClosed) {
         const settings = await this.host.projectService.getSettings(projectId);
-        if (settings.deployment.autoDeployOnEpicCompletion) {
+        const epicTargets = getTargetsForDeployEvent(settings.deployment, "each_epic");
+        if (epicTargets.length > 0) {
           triggerDeploy(projectId).catch((err) => {
             log.warn("Auto-deploy on epic completion failed", { projectId, err });
           });

@@ -9,6 +9,7 @@ import { ErrorCodes } from "../middleware/error-codes.js";
 import { SessionManager } from "./session-manager.js";
 import { orchestratorService } from "./orchestrator.service.js";
 import { broadcastToProject } from "../websocket/index.js";
+import { getTargetsForDeployEvent } from "@opensprint/shared";
 import { triggerDeploy } from "./deploy-trigger.service.js";
 import { ContextAssembler } from "./context-assembler.js";
 import { BranchManager } from "./branch-manager.js";
@@ -522,7 +523,8 @@ export class TaskService {
 
           // PRD §7.5.3: Auto-deploy on epic completion when user manually marks last task done
           const settings = await this.projectService.getSettings(projectId);
-          if (settings.deployment.autoDeployOnEpicCompletion) {
+          const epicTargets = getTargetsForDeployEvent(settings.deployment, "each_epic");
+          if (epicTargets.length > 0) {
             triggerDeploy(projectId).catch((err) => {
               log.warn("Auto-deploy on epic completion failed", { projectId, err });
             });

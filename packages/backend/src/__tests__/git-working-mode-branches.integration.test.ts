@@ -113,7 +113,7 @@ describe("Git working mode Branches — full Execute flow integration", () => {
     const mockGetSettings = vi.fn().mockResolvedValue({
       simpleComplexityAgent: { type: "cursor", model: null },
       complexComplexityAgent: { type: "cursor", model: null },
-      deployment: { autoDeployOnEpicCompletion: false },
+      deployment: { mode: "custom" },
       gitWorkingMode: "branches",
     });
 

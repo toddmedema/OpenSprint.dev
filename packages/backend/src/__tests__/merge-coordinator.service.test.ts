@@ -91,7 +91,7 @@ describe("MergeCoordinatorService", () => {
     mockGetSettings.mockResolvedValue({
       simpleComplexityAgent: { type: "cursor", model: null },
       complexComplexityAgent: { type: "cursor", model: null },
-      deployment: { autoDeployOnEpicCompletion: false },
+      deployment: { mode: "custom" },
       gitWorkingMode: "worktree",
     });
 
