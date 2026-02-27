@@ -151,6 +151,35 @@ describe("TaskDetailSidebar", () => {
     expect(screen.getByTestId("task-detail-title")).toHaveTextContent("Task A");
   });
 
+  it("renders OpenQuestionsBlock when openQuestionNotification is provided", () => {
+    const openQuestionNotification = {
+      id: "oq-exec-1",
+      projectId: "proj-1",
+      source: "execute" as const,
+      sourceId: "epic-1.1",
+      questions: [
+        { id: "q1", text: "Which database should I use for this feature?", createdAt: "2025-01-01T00:00:00Z" },
+      ],
+      status: "open" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      resolvedAt: null,
+    };
+    const props = createMinimalProps({
+      openQuestionNotification,
+      onOpenQuestionResolved: vi.fn(),
+    });
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    expect(screen.getByTestId("open-questions-block")).toBeInTheDocument();
+    expect(screen.getByText("Which database should I use for this feature?")).toBeInTheDocument();
+    expect(screen.getByTestId("open-questions-answer-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("open-questions-dismiss-btn")).toBeInTheDocument();
+  });
+
   it("shows task title immediately from cached list data while detail loads (feedback t586o4)", () => {
     const props = createMinimalProps({
       taskDetailLoading: true,

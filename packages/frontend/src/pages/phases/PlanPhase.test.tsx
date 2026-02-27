@@ -2234,6 +2234,41 @@ Updated auth flow with OAuth support.
   });
 });
 
+describe("PlanPhase open questions", () => {
+  it("renders OpenQuestionsBlock in plan sidebar when planner has open questions", async () => {
+    const planNotification = {
+      id: "oq-plan-1",
+      projectId: "proj-1",
+      source: "plan" as const,
+      sourceId: "archive-test-feature",
+      questions: [{ id: "q1", text: "What is the expected user flow?", createdAt: "2025-01-01T00:00:00Z" }],
+      status: "open" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      resolvedAt: null,
+    };
+    vi.mocked(api.notifications.listByProject).mockResolvedValue([planNotification]);
+
+    const store = createStore(undefined, null, defaultExecuteTasks, {
+      selectedPlanId: "archive-test-feature",
+    });
+
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <PlanPhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("open-questions-block")).toBeInTheDocument();
+    });
+    expect(screen.getByText("What is the expected user flow?")).toBeInTheDocument();
+    expect(screen.getByTestId("open-questions-answer-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("open-questions-dismiss-btn")).toBeInTheDocument();
+  });
+});
+
 describe("PlanPhase Generate Plan", () => {
   beforeEach(() => {
     vi.clearAllMocks();

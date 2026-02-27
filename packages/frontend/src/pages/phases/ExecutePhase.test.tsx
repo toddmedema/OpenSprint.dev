@@ -5,6 +5,7 @@ import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
 import { configureStore } from "@reduxjs/toolkit";
 import { ExecutePhase } from "./ExecutePhase";
+import { api } from "../../api/client";
 import {
   setSelectedTaskId,
   taskUpdated,
@@ -1627,6 +1628,46 @@ describe("ExecutePhase view toggle", () => {
 describe("ExecutePhase Redux integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("renders OpenQuestionsBlock in task detail when coder has open questions", async () => {
+    const taskNotification = {
+      id: "oq-exec-1",
+      projectId: "proj-1",
+      source: "execute" as const,
+      sourceId: "epic-1.1",
+      questions: [
+        { id: "q1", text: "Which database should I use?", createdAt: "2025-01-01T00:00:00Z" },
+      ],
+      status: "open" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      resolvedAt: null,
+    };
+    vi.mocked(api.notifications.listByProject).mockResolvedValue([taskNotification]);
+    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("open-questions-block")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Which database should I use?")).toBeInTheDocument();
   });
 
   it("dispatches fetchTaskDetail when a task is selected", async () => {
