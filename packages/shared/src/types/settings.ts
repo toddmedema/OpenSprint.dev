@@ -104,6 +104,18 @@ export function getTargetsForDeployEvent(
     .map((t) => t.name);
 }
 
+/**
+ * Get target names that should be deployed on nightly schedule.
+ * Returns targets whose autoDeployTrigger is "nightly".
+ */
+export function getTargetsForNightlyDeploy(config: DeploymentConfig): string[] {
+  const targets = config.targets;
+  if (!targets || targets.length === 0) return [];
+  return targets
+    .filter((t) => (t.autoDeployTrigger ?? "none") === "nightly")
+    .map((t) => t.name);
+}
+
 /** Auto-deploy trigger options for UI dropdown */
 export const AUTO_DEPLOY_TRIGGER_OPTIONS: { value: AutoDeployTrigger; label: string }[] = [
   { value: "each_task", label: "Each task" },

@@ -7,6 +7,7 @@ import {
   getDefaultDeploymentTarget,
   getDeploymentTargetConfig,
   getTargetsForDeployEvent,
+  getTargetsForNightlyDeploy,
   getDeploymentTargetsForUi,
   API_KEY_PROVIDERS,
   validateApiKeyEntry,
@@ -282,6 +283,36 @@ describe("getTargetsForDeployEvent", () => {
   it("returns empty array when targets is empty", () => {
     const config: DeploymentConfig = { mode: "custom", targets: [] };
     expect(getTargetsForDeployEvent(config, "each_task")).toEqual([]);
+  });
+});
+
+describe("getTargetsForNightlyDeploy", () => {
+  it("returns targets with autoDeployTrigger nightly", () => {
+    const config: DeploymentConfig = {
+      mode: "custom",
+      targets: [
+        { name: "staging", autoDeployTrigger: "nightly" },
+        { name: "production", autoDeployTrigger: "each_epic" },
+        { name: "preview", autoDeployTrigger: "nightly" },
+      ],
+    };
+    expect(getTargetsForNightlyDeploy(config)).toEqual(["staging", "preview"]);
+  });
+
+  it("returns empty array when no nightly targets", () => {
+    const config: DeploymentConfig = {
+      mode: "custom",
+      targets: [
+        { name: "staging", autoDeployTrigger: "each_task" },
+        { name: "production", autoDeployTrigger: "none" },
+      ],
+    };
+    expect(getTargetsForNightlyDeploy(config)).toEqual([]);
+  });
+
+  it("returns empty array when targets is empty", () => {
+    const config: DeploymentConfig = { mode: "custom", targets: [] };
+    expect(getTargetsForNightlyDeploy(config)).toEqual([]);
   });
 });
 

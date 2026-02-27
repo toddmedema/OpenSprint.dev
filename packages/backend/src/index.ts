@@ -20,6 +20,10 @@ import { watchdogService } from "./services/watchdog.service.js";
 import { sessionRetentionService } from "./services/session-retention.service.js";
 import { startProcessReaper, stopProcessReaper } from "./services/process-reaper.js";
 import {
+  startNightlyDeployScheduler,
+  stopNightlyDeployScheduler,
+} from "./services/nightly-deploy-scheduler.service.js";
+import {
   killAllTrackedAgentProcesses,
   clearAgentProcessRegistry,
 } from "./services/agent-process-registry.js";
@@ -226,6 +230,7 @@ const shutdown = async () => {
   }
   stopProcessReaper();
   sessionRetentionService.stop();
+  stopNightlyDeployScheduler();
   watchdogService.stop();
   orchestratorService.stopAll();
 
@@ -269,6 +274,7 @@ server.listen(port, () => {
   logStartup.info("OpenSprint backend listening", { url: `http://localhost:${port}` });
   logStartup.info("WebSocket server ready", { url: `ws://localhost:${port}/ws` });
   startProcessReaper();
+  startNightlyDeployScheduler();
   initAlwaysOnOrchestrator().catch((err) => {
     const message = err instanceof Error ? err.message : String(err);
     const code =
