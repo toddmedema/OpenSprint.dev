@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vite
 import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
+import { MemoryRouter } from "react-router-dom";
 import { configureStore } from "@reduxjs/toolkit";
 import { SketchPhase } from "./SketchPhase";
 import sketchReducer from "../../store/slices/sketchSlice";
@@ -34,6 +35,9 @@ const mockPrdUpdateSection = vi.fn();
 const mockPrdUpload = vi.fn();
 const mockPlansDecompose = vi.fn();
 
+vi.mock("../../hooks/useOpenQuestionNotifications", () => ({
+  useOpenQuestionNotifications: () => [],
+}));
 vi.mock("../../components/prd/PrdSectionEditor", () => ({
   PrdSectionEditor: ({
     sectionKey,
@@ -75,6 +79,9 @@ vi.mock("../../api/client", () => ({
     projects: {
       getPlanStatus: (...args: unknown[]) => mockGetPlanStatus(...args),
       getSketchContext: vi.fn().mockResolvedValue({ hasExistingCode: false }),
+    },
+    notifications: {
+      listByProject: vi.fn().mockResolvedValue([]),
     },
   },
 }));
@@ -121,9 +128,11 @@ function createStore(preloadedState?: {
 
 function renderSketchPhase(store = createStore()) {
   return render(
-    <Provider store={store}>
-      <SketchPhase projectId="proj-1" />
-    </Provider>
+    <MemoryRouter>
+      <Provider store={store}>
+        <SketchPhase projectId="proj-1" />
+      </Provider>
+    </MemoryRouter>
   );
 }
 
@@ -501,9 +510,11 @@ describe("SketchPhase with sketchSlice", () => {
       Object.defineProperty(scrollEl, "clientHeight", { value: 100, configurable: true });
 
       rerender(
-        <Provider store={store}>
-          <SketchPhase projectId="proj-1" />
-        </Provider>
+        <MemoryRouter>
+          <Provider store={store}>
+            <SketchPhase projectId="proj-1" />
+          </Provider>
+        </MemoryRouter>
       );
 
       await new Promise((r) => requestAnimationFrame(r));

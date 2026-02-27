@@ -7,6 +7,8 @@ export interface PrdViewerProps {
   savingSections: string[];
   onSectionChange: (section: string, markdown: string) => void;
   containerRef?: React.RefObject<HTMLDivElement | null>;
+  /** Notification ID per section for scroll-to-question (e.g. { open_questions: "notif-xyz" }) */
+  questionIdBySection?: Record<string, string>;
 }
 
 export function PrdViewer({
@@ -14,6 +16,7 @@ export function PrdViewer({
   savingSections,
   onSectionChange,
   containerRef,
+  questionIdBySection,
 }: PrdViewerProps) {
   return (
     <div ref={containerRef}>
@@ -21,8 +24,14 @@ export function PrdViewer({
       <div className="space-y-8">
         {getOrderedSections(prdContent).map((sectionKey, index, arr) => {
           const isLast = index === arr.length - 1;
+          const questionId = questionIdBySection?.[sectionKey];
           return (
-            <div key={sectionKey} data-prd-section={sectionKey} className="group relative">
+            <div
+              key={sectionKey}
+              data-prd-section={sectionKey}
+              className="group relative"
+              {...(questionId && { "data-question-id": questionId })}
+            >
               {/* Section header */}
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold text-theme-text">

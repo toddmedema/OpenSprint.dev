@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
+import { MemoryRouter } from "react-router-dom";
 import { configureStore } from "@reduxjs/toolkit";
 import { ExecutePhase } from "./ExecutePhase";
 import {
@@ -43,6 +44,9 @@ vi.mock("../../api/client", () => ({
     },
     feedback: {
       get: (...args: unknown[]) => mockFeedbackGet(...args),
+    },
+    notifications: {
+      listByProject: vi.fn().mockResolvedValue([]),
     },
   },
 }));
@@ -167,9 +171,11 @@ describe("ExecutePhase epic card task order", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
@@ -202,9 +208,11 @@ describe("ExecutePhase epic card task order", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
@@ -258,9 +266,11 @@ describe("ExecutePhase epic card task order", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
@@ -301,9 +311,11 @@ describe("ExecutePhase epic completed checkmark", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     // "All" filter hides fully-completed epics; switch to "Done" filter to see them
@@ -336,9 +348,11 @@ describe("ExecutePhase epic completed checkmark", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const epicCard = screen.getByTestId("epic-card-epic-1");
@@ -368,9 +382,11 @@ describe("ExecutePhase epic completed checkmark", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const epicCard = () => screen.getByTestId("epic-card-epic-1");
@@ -408,9 +424,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.queryByRole("heading", { name: "Execute" })).not.toBeInTheDocument();
@@ -440,9 +458,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("filter-chip-all")).toHaveTextContent("All");
@@ -485,9 +505,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("filter-chip-in_progress")).toHaveTextContent("1");
@@ -516,9 +538,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("filter-chip-ready")).toHaveTextContent("1");
@@ -555,9 +579,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("⚠️ Blocked on Human");
@@ -602,9 +628,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("filter-chip-in_line"));
@@ -648,9 +676,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
@@ -692,9 +722,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("filter-chip-done"));
@@ -721,9 +753,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("filter-chip-all")).toHaveAttribute("aria-pressed", "true");
@@ -742,9 +776,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.queryByRole("button", { name: /pick up next task/i })).not.toBeInTheDocument();
@@ -764,9 +800,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks, { awaitingApproval: true });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByText("Awaiting approval…")).toBeInTheDocument();
@@ -785,9 +823,11 @@ describe("ExecutePhase top bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.queryByText("Awaiting approval…")).not.toBeInTheDocument();
@@ -812,9 +852,11 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("execute-search-expand")).toBeInTheDocument();
@@ -839,9 +881,11 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("execute-search-expand"));
@@ -866,9 +910,11 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("execute-search-expand"));
@@ -892,9 +938,11 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("execute-search-expand"));
@@ -924,9 +972,11 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("execute-search-expand"));
@@ -949,9 +999,11 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("execute-search-expand"));
@@ -994,9 +1046,11 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("execute-search-expand"));
@@ -1032,9 +1086,11 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("filter-chip-done"));
@@ -1085,9 +1141,11 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await userEvent.click(screen.getByTestId("execute-search-expand"));
@@ -1165,9 +1223,11 @@ describe("ExecutePhase expandable search bar", () => {
       },
     });
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(container.querySelectorAll('[data-testid^="epic-card-"]')).toHaveLength(2);
@@ -1205,9 +1265,11 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("execute-search-expand"));
@@ -1255,9 +1317,11 @@ describe("ExecutePhase expandable search bar", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await userEvent.click(screen.getByTestId("execute-search-expand"));
@@ -1298,9 +1362,11 @@ describe("ExecutePhase view toggle", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("epic-card-epic-1")).toBeInTheDocument();
@@ -1322,9 +1388,11 @@ describe("ExecutePhase view toggle", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("epic-card-epic-1")).toBeInTheDocument();
@@ -1350,9 +1418,11 @@ describe("ExecutePhase view toggle", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("view-toggle-timeline"));
@@ -1385,9 +1455,11 @@ describe("ExecutePhase view toggle", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("view-toggle-timeline"));
@@ -1422,9 +1494,11 @@ describe("ExecutePhase view toggle", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("view-toggle-timeline"));
@@ -1455,9 +1529,11 @@ describe("ExecutePhase view toggle", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("view-toggle-timeline"));
@@ -1479,9 +1555,11 @@ describe("ExecutePhase view toggle", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await user.click(screen.getByTestId("view-toggle-timeline"));
@@ -1507,9 +1585,11 @@ describe("ExecutePhase view toggle", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("timeline-list")).toBeInTheDocument();
@@ -1531,9 +1611,11 @@ describe("ExecutePhase view toggle", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("epic-card-epic-1")).toBeInTheDocument();
@@ -1561,9 +1643,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -1585,9 +1669,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const menuTrigger = await screen.findByTestId("sidebar-actions-menu-trigger");
@@ -1615,9 +1701,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const menuTrigger = await screen.findByTestId("sidebar-actions-menu-trigger");
@@ -1648,9 +1736,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -1679,9 +1769,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -1710,9 +1802,11 @@ describe("ExecutePhase Redux integration", () => {
     const store = createStore(tasks, { selectedTaskId: null });
     const onClose = vi.fn();
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" initialTaskIdFromUrl="epic-1.1" onClose={onClose} />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" initialTaskIdFromUrl="epic-1.1" onClose={onClose} />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -1738,9 +1832,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
     const scrollArea = document.querySelector(".overflow-auto.min-h-0");
     expect(scrollArea).toBeInTheDocument();
@@ -1760,9 +1856,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks);
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
     const root = container.firstElementChild;
     expect(root).toHaveClass("flex");
@@ -1785,9 +1883,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -1812,9 +1912,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -1852,9 +1954,11 @@ describe("ExecutePhase Redux integration", () => {
       { connected: true }
     );
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const liveOutput = await vi.waitFor(() => {
@@ -1881,9 +1985,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -1918,9 +2024,11 @@ describe("ExecutePhase Redux integration", () => {
         { connected: true }
       );
       render(
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
+        <MemoryRouter>
+          <Provider store={store}>
+            <ExecutePhase projectId="proj-1" />
+          </Provider>
+        </MemoryRouter>
       );
 
       await vi.waitFor(() => {
@@ -1956,9 +2064,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -1996,9 +2106,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2041,9 +2153,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2085,9 +2199,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const descriptionContainer = await screen.findByTestId("task-description-markdown", {
@@ -2126,9 +2242,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2171,9 +2289,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const descHeader = await screen.findByRole("button", { name: /description/i });
@@ -2212,9 +2332,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const toggleBtn = await screen.findByRole("button", { name: /description/i });
@@ -2255,9 +2377,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const markdown = await screen.findByTestId("task-description-markdown");
@@ -2303,9 +2427,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2364,9 +2490,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     const { container } = render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2441,9 +2569,11 @@ describe("ExecutePhase Redux integration", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2490,9 +2620,11 @@ describe("ExecutePhase task detail plan link", () => {
     const onNavigateToPlan = vi.fn();
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2533,9 +2665,11 @@ describe("ExecutePhase task detail plan link", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2575,9 +2709,11 @@ describe("ExecutePhase task detail plan link", () => {
     const onNavigateToPlan = vi.fn();
     const store = createStore(tasks, { selectedTaskId: "other-1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2618,9 +2754,11 @@ describe("ExecutePhase task detail plan link", () => {
     const onNavigateToPlan = vi.fn();
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2654,9 +2792,11 @@ describe("ExecutePhase epic card plan navigation", () => {
     const onNavigateToPlan = vi.fn();
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
+        </Provider>
+      </MemoryRouter>
     );
 
     const epicTitleButton = await screen.findByRole("button", { name: "Build Test" });
@@ -2678,9 +2818,11 @@ describe("ExecutePhase epic card plan navigation", () => {
     ];
     const store = createStore(tasks);
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await screen.findByText("Build Test");
@@ -2724,9 +2866,11 @@ describe("ExecutePhase Source feedback section", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(await screen.findByRole("button", { name: /source feedback/i })).toBeInTheDocument();
@@ -2761,9 +2905,11 @@ describe("ExecutePhase Source feedback section", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2803,9 +2949,11 @@ describe("ExecutePhase Source feedback section", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2854,9 +3002,11 @@ describe("ExecutePhase Source feedback section", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -2909,9 +3059,11 @@ describe("ExecutePhase Source feedback section", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const toggleBtn = await screen.findByRole("button", { name: /source feedback/i });
@@ -2990,9 +3142,11 @@ describe("ExecutePhase Source feedback section", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -3055,9 +3209,11 @@ describe("ExecutePhase Source feedback section", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await vi.waitFor(() => {
@@ -3107,9 +3263,11 @@ describe("ExecutePhase task detail cached state", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const title = screen.getByTestId("task-detail-title");
@@ -3135,9 +3293,11 @@ describe("ExecutePhase task detail cached state", () => {
       activeTasks: [{ taskId: "epic-1.1", phase: "review", startedAt }],
     });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     // Header shows only title
@@ -3168,9 +3328,11 @@ describe("ExecutePhase task detail cached state", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const row = screen.getByTestId("task-detail-priority-state-row");
@@ -3201,9 +3363,11 @@ describe("ExecutePhase task detail cached state", () => {
       activeTasks: [{ taskId: "epic-1.1", phase: "coding", startedAt }],
     });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     const callout = screen.getByTestId("task-detail-active-callout");
@@ -3228,9 +3392,11 @@ describe("ExecutePhase task detail cached state", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("task-detail-loading")).toBeInTheDocument();
@@ -3251,9 +3417,11 @@ describe("ExecutePhase task detail cached state", () => {
     ];
     const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     expect(screen.getByTestId("task-detail-title")).toHaveTextContent("Task With Error");

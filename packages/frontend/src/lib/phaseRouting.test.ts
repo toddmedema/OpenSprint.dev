@@ -204,6 +204,14 @@ describe("phaseRouting", () => {
     });
   });
 
+  describe("getProjectPhasePath with section", () => {
+    it("appends section param for Sketch phase (e.g. open_questions)", () => {
+      expect(
+        getProjectPhasePath("proj-1", "sketch", { section: "open_questions" })
+      ).toBe("/projects/proj-1/sketch?section=open_questions");
+    });
+  });
+
   describe("VALID_PHASES", () => {
     it("contains all five phases in order", () => {
       expect(VALID_PHASES).toEqual(["sketch", "plan", "execute", "eval", "deliver"]);

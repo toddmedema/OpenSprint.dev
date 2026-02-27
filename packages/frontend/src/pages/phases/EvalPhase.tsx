@@ -27,6 +27,8 @@ import { ImageDropZone } from "../../components/ImageDropZone";
 import { useImageAttachment } from "../../hooks/useImageAttachment";
 import { useImageDragOverPage } from "../../hooks/useImageDragOverPage";
 import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
+import { useScrollToQuestion } from "../../hooks/useScrollToQuestion";
+import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotifications";
 import { CONTENT_CONTAINER_CLASS } from "../../lib/constants";
 
 /** Reply icon (message turn / corner up-right) */
@@ -233,6 +235,10 @@ interface FeedbackCardProps {
   isDraggingImage: boolean;
   clearDragState: () => void;
   tasks: Array<{ id: string; kanbanColumn: string }>;
+  /** Notification ID for scroll-to-question when this feedback has open questions */
+  questionId?: string | null;
+  /** Map of feedbackId -> notificationId for nested feedback cards */
+  questionIdByFeedbackId?: Record<string, string>;
 }
 
 const FADE_OUT_DURATION_MS = 500;
@@ -256,6 +262,8 @@ const FeedbackCard = memo(
     isDraggingImage,
     clearDragState,
     tasks,
+    questionId,
+    questionIdByFeedbackId,
   }: FeedbackCardProps) {
     const { item, children } = node;
     const [replyText, setReplyText] = useState("");
@@ -353,6 +361,7 @@ const FeedbackCard = memo(
         ref={collapseRef}
         className={depth > 0 ? "ml-4 mt-2 border-l-2 border-theme-border pl-4" : ""}
         data-feedback-id={item.id}
+        {...(questionId && { "data-question-id": questionId })}
         style={rootStyle}
         onTransitionEnd={handleTransitionEnd}
       >
@@ -571,6 +580,8 @@ const FeedbackCard = memo(
               isDraggingImage={isDraggingImage}
               clearDragState={clearDragState}
               tasks={tasks}
+              questionId={questionIdByFeedbackId?.[child.item.id]}
+              questionIdByFeedbackId={questionIdByFeedbackId}
             />
           ))}
       </div>
@@ -584,6 +595,8 @@ const FeedbackCard = memo(
     if (prev.isDraggingImage !== next.isDraggingImage) return false;
     if (prev.clearDragState !== next.clearDragState) return false;
     if (prev.tasks !== next.tasks) return false;
+    if (prev.questionId !== next.questionId) return false;
+    if (prev.questionIdByFeedbackId !== next.questionIdByFeedbackId) return false;
     return true;
   }
 );
@@ -862,6 +875,18 @@ export function EvalPhase({
   );
   const feedbackTree = useMemo(() => buildFeedbackTree(filteredFeedback), [filteredFeedback]);
 
+  useScrollToQuestion();
+  const openQuestionNotifications = useOpenQuestionNotifications(projectId);
+  const questionIdByFeedbackId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const n of openQuestionNotifications) {
+      if (n.source === "eval" && n.sourceId) {
+        map[n.sourceId] = n.id;
+      }
+    }
+    return map;
+  }, [openQuestionNotifications]);
+
   return (
     <div className="h-full flex flex-col min-h-0">
       <div
@@ -1046,6 +1071,8 @@ export function EvalPhase({
                     isDraggingImage={isDraggingImage}
                     clearDragState={clearDragState}
                     tasks={tasks}
+                    questionId={questionIdByFeedbackId[node.item.id]}
+                    questionIdByFeedbackId={questionIdByFeedbackId}
                   />
                 ))}
               </div>

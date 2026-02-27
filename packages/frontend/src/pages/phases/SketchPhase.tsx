@@ -21,6 +21,8 @@ import {
 import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
 import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
 import { useImageAttachment } from "../../hooks/useImageAttachment";
+import { useScrollToQuestion } from "../../hooks/useScrollToQuestion";
+import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotifications";
 import { ImageAttachmentThumbnails, ImageAttachmentButton } from "../../components/ImageAttachment";
 import { SparklesIcon, CommentIcon } from "../../components/icons/PrdIcons";
 import { api } from "../../api/client";
@@ -152,6 +154,18 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
     setTocCollapsedState(collapsed);
     saveSketchTocSidebarCollapsed(collapsed);
   }, []);
+
+  useScrollToQuestion();
+  const openQuestionNotifications = useOpenQuestionNotifications(projectId);
+  const questionIdBySection = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const n of openQuestionNotifications) {
+      if (n.source === "prd" && n.sourceId) {
+        map[n.sourceId] = n.id;
+      }
+    }
+    return map;
+  }, [openQuestionNotifications]);
 
   /* ── Refs ── */
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -688,6 +702,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
             savingSections={savingSections}
             onSectionChange={handleSectionChange}
             containerRef={prdContainerRef}
+            questionIdBySection={questionIdBySection}
           />
 
           <PrdChangeLog

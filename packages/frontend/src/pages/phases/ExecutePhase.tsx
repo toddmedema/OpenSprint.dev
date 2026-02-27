@@ -16,6 +16,8 @@ import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
 import { BuildEpicCard } from "../../components/kanban";
 import { useTaskFilter } from "../../hooks/useTaskFilter";
 import { useExecuteSwimlanes } from "../../hooks/useExecuteSwimlanes";
+import { useScrollToQuestion } from "../../hooks/useScrollToQuestion";
+import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotifications";
 import { ExecuteFilterToolbar } from "../../components/execute/ExecuteFilterToolbar";
 import { TaskDetailSidebar } from "../../components/execute/TaskDetailSidebar";
 import { TimelineList } from "../../components/execute/TimelineList";
@@ -178,6 +180,14 @@ export function ExecutePhase({
     searchQuery
   );
 
+  useScrollToQuestion();
+  const openQuestionNotifications = useOpenQuestionNotifications(projectId);
+  const taskNotificationId =
+    effectiveSelectedTask &&
+    openQuestionNotifications.find(
+      (n) => n.source === "execute" && n.sourceId === effectiveSelectedTask
+    )?.id;
+
   return (
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
@@ -301,6 +311,7 @@ export function ExecutePhase({
               projectId={projectId}
               selectedTask={effectiveSelectedTask}
               selectedTaskData={selectedTaskData ?? null}
+              questionId={taskNotificationId}
               taskDetailLoading={taskDetailLoading}
               taskDetailError={taskDetailError}
               agentOutput={selectedAgentOutput}

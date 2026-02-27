@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import { Provider } from "react-redux";
+import { MemoryRouter } from "react-router-dom";
 import { configureStore } from "@reduxjs/toolkit";
 import { ExecutePhase } from "../pages/phases/ExecutePhase";
 import { appendAgentOutput } from "../store/slices/executeSlice";
@@ -42,6 +43,9 @@ vi.mock("../api/client", () => ({
     },
     feedback: {
       get: vi.fn().mockResolvedValue(null),
+    },
+    notifications: {
+      listByProject: vi.fn().mockResolvedValue([]),
     },
   },
 }));
@@ -167,9 +171,11 @@ describe("E2E: Readable agent output", () => {
     });
 
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await waitFor(() => {
@@ -216,9 +222,11 @@ describe("E2E: Readable agent output", () => {
     });
 
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await waitFor(() => {
@@ -435,9 +443,11 @@ describe("E2E: Readable agent output", () => {
     });
 
     render(
-      <Provider store={store}>
-        <ExecutePhase projectId="proj-1" />
-      </Provider>
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
     );
 
     await waitFor(() => {

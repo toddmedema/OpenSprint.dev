@@ -53,6 +53,8 @@ export interface TaskDetailSidebarProps {
   setArtifactsSectionExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   onNavigateToPlan?: (planId: string) => void;
   onClose: () => void;
+  /** Notification ID for scroll-to-question when this task has open questions */
+  questionId?: string | null;
   onMarkDone: () => void;
   onUnblock: () => void;
   onSelectTask: (taskId: string) => void;
@@ -92,6 +94,7 @@ export function TaskDetailSidebar({
   setArtifactsSectionExpanded,
   onNavigateToPlan,
   onClose,
+  questionId,
   onMarkDone,
   onUnblock,
   onSelectTask,
@@ -237,7 +240,10 @@ export function TaskDetailSidebar({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div
+        className="flex-1 overflow-y-auto min-h-0"
+        {...(questionId && { "data-question-id": questionId })}
+      >
         <div className="p-4 border-b border-theme-border has-[+_[data-section=view-plan-deps-addlink]]:border-b-0">
           {task && (
             <>

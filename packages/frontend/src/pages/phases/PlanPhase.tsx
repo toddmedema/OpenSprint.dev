@@ -35,6 +35,8 @@ import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
 import { ChatInput } from "../../components/ChatInput";
 import { fetchTasks, selectTasksForEpic } from "../../store/slices/executeSlice";
 import { usePlanFilter } from "../../hooks/usePlanFilter";
+import { useScrollToQuestion } from "../../hooks/useScrollToQuestion";
+import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotifications";
 import { formatPlanIdAsTitle } from "../../lib/formatting";
 import { matchesPlanSearchQuery } from "../../lib/planSearchFilter";
 
@@ -132,6 +134,13 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     handleSearchClose,
     handleSearchKeyDown,
   } = usePlanFilter();
+  useScrollToQuestion();
+  const openQuestionNotifications = useOpenQuestionNotifications(projectId);
+  const planNotificationId =
+    selectedPlanId &&
+    openQuestionNotifications.find(
+      (n) => n.source === "plan" && n.sourceId === selectedPlanId
+    )?.id;
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
   const prevChatMessageCountRef = useRef(0);
 
@@ -890,7 +899,11 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                     </div>
 
                     {/* Chat messages */}
-                    <div className="p-4" data-testid="plan-chat-messages">
+                    <div
+                      className="p-4"
+                      data-testid="plan-chat-messages"
+                      {...(planNotificationId && { "data-question-id": planNotificationId })}
+                    >
                       <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide mb-3">
                         Refine with AI
                       </h4>
@@ -947,7 +960,11 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                 className="flex-1 overflow-y-auto min-h-0 flex flex-col"
               >
                 <div className="p-4 text-sm text-theme-muted">Loading plan...</div>
-                <div className="p-4" data-testid="plan-chat-messages">
+                <div
+                  className="p-4"
+                  data-testid="plan-chat-messages"
+                  {...(planNotificationId && { "data-question-id": planNotificationId })}
+                >
                   <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide mb-3">
                     Refine with AI
                   </h4>

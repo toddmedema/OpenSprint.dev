@@ -150,16 +150,22 @@ export function ProjectView() {
 
   // Sync Redux selection → URL when user selects plan/task (shareable links).
   // Use URL params as fallback so we don't overwrite a deep link before URL→Redux effect has run.
-  // Preserve feedback param on Evaluate phase (e.g. from Analyst dropdown click).
+  // Preserve feedback, question, section params (e.g. from Analyst dropdown or NotificationBell).
   useEffect(() => {
     if (!projectId) return;
-    const { plan: urlPlan, task: urlTask, feedback: urlFeedback } = parseDetailParams(
-      location.search
-    );
+    const {
+      plan: urlPlan,
+      task: urlTask,
+      feedback: urlFeedback,
+      question: urlQuestion,
+      section: urlSection,
+    } = parseDetailParams(location.search);
     const path = getProjectPhasePath(projectId, currentPhase, {
       plan: currentPhase === "plan" ? (selectedPlanId ?? urlPlan ?? undefined) : undefined,
       task: currentPhase === "execute" ? (selectedTaskId ?? urlTask ?? undefined) : undefined,
       feedback: currentPhase === "eval" ? urlFeedback ?? undefined : undefined,
+      question: urlQuestion ?? undefined,
+      section: urlSection ?? undefined,
     });
     const currentPath = location.pathname + location.search;
     if (path !== currentPath) {
