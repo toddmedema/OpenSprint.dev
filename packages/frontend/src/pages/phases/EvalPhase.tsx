@@ -14,7 +14,11 @@ import {
   removeFeedbackItem,
   fetchMoreFeedback,
 } from "../../store/slices/evalSlice";
-import { fetchTasks, selectTasks } from "../../store/slices/executeSlice";
+import {
+  fetchTasks,
+  fetchTasksByIds,
+  selectTasks,
+} from "../../store/slices/executeSlice";
 import { FeedbackTaskChip } from "../../components/FeedbackTaskChip";
 import { KeyboardShortcutTooltip } from "../../components/KeyboardShortcutTooltip";
 import { PriorityIcon } from "../../components/PriorityIcon";
@@ -96,6 +100,9 @@ function countByStatus(feedback: FeedbackItem[], filter: FeedbackStatusFilter): 
 }
 
 const VALID_FILTER_VALUES: FeedbackStatusFilter[] = ["all", "pending", "resolved", "cancelled"];
+
+/** Stable empty object for tasksById fallback (avoids selector returning new ref each render) */
+const EMPTY_TASKS_BY_ID: Record<string, never> = {};
 
 function loadFeedbackStatusFilter(): FeedbackStatusFilter {
   if (typeof window === "undefined") return "pending";
@@ -562,6 +569,7 @@ export function EvalPhase({
 
   /* ── Redux state ── */
   const feedback = useAppSelector((s) => s.eval.feedback);
+  const tasksById = useAppSelector((s) => s.execute?.tasksById ?? EMPTY_TASKS_BY_ID);
   const tasks = useAppSelector((s) =>
     selectTasks(s).map((t) => ({ id: t.id, kanbanColumn: t.kanbanColumn }))
   );
@@ -576,6 +584,23 @@ export function EvalPhase({
       dispatch(fetchTasks(projectId));
     }
   }, [projectId, tasksCount, dispatch]);
+
+  /* Fetch tasks for feedback cards so chips live-update when task.updated fires */
+  const taskIdsFromFeedback = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of feedback) {
+      for (const id of item.createdTaskIds ?? []) ids.add(id);
+    }
+    return ids;
+  }, [feedback]);
+
+  useEffect(() => {
+    if (!projectId || taskIdsFromFeedback.size === 0) return;
+    const missing = [...taskIdsFromFeedback].filter((id) => !(id in tasksById));
+    if (missing.length > 0) {
+      dispatch(fetchTasksByIds({ projectId, taskIds: missing }));
+    }
+  }, [projectId, taskIdsFromFeedback, tasksById, dispatch]);
 
   /* Auto-focus feedback input when Evaluate tab activates */
   useLayoutEffect(() => {
