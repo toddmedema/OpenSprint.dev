@@ -39,6 +39,8 @@ export function isValidPhaseSlug(
 export const PLAN_PARAM = "plan";
 export const TASK_PARAM = "task";
 export const FEEDBACK_PARAM = "feedback";
+export const QUESTION_PARAM = "question";
+export const SECTION_PARAM = "section";
 
 export interface PhasePathOptions {
   /** Plan ID to deep link to (Plan phase detail pane) */
@@ -47,6 +49,10 @@ export interface PhasePathOptions {
   task?: string | null;
   /** Feedback ID to deep link to (Evaluate phase — scroll/focus specific feedback item) */
   feedback?: string | null;
+  /** Question/notification ID for scroll-to-question target */
+  question?: string | null;
+  /** PRD section key for Sketch phase (e.g. open_questions) */
+  section?: string | null;
 }
 
 /**
@@ -64,6 +70,8 @@ export function getProjectPhasePath(
   if (options?.plan) params.set(PLAN_PARAM, options.plan);
   if (options?.task) params.set(TASK_PARAM, options.task);
   if (options?.feedback) params.set(FEEDBACK_PARAM, options.feedback);
+  if (options?.question) params.set(QUESTION_PARAM, options.question);
+  if (options?.section) params.set(SECTION_PARAM, options.section);
   const query = params.toString();
   return query ? `${base}?${query}` : base;
 }
@@ -75,11 +83,15 @@ export function parseDetailParams(search: string): {
   plan: string | null;
   task: string | null;
   feedback: string | null;
+  question: string | null;
+  section: string | null;
 } {
   const params = new URLSearchParams(search);
   return {
     plan: params.get(PLAN_PARAM),
     task: params.get(TASK_PARAM),
     feedback: params.get(FEEDBACK_PARAM),
+    question: params.get(QUESTION_PARAM),
+    section: params.get(SECTION_PARAM),
   };
 }

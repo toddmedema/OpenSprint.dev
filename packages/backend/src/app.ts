@@ -10,6 +10,10 @@ import { deliverRouter } from "./routes/deliver.js";
 import { agentsRouter } from "./routes/agents.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { feedbackRouter } from "./routes/feedback.js";
+import {
+  projectNotificationsRouter,
+  globalNotificationsRouter,
+} from "./routes/notifications.js";
 import { fsRouter } from "./routes/fs.js";
 import { modelsRouter } from "./routes/models.js";
 import { envRouter } from "./routes/env.js";
@@ -40,6 +44,8 @@ export function createApp() {
   app.use(`${API_PREFIX}/projects/:projectId/agents`, agentsRouter);
   app.use(`${API_PREFIX}/projects/:projectId/tasks`, tasksRouter);
   app.use(`${API_PREFIX}/projects/:projectId/feedback`, feedbackRouter);
+  app.use(`${API_PREFIX}/projects/:projectId/notifications`, projectNotificationsRouter);
+  app.use(`${API_PREFIX}/notifications`, globalNotificationsRouter);
   app.use(`${API_PREFIX}/fs`, fsRouter);
 
   // Error handling

@@ -9,6 +9,8 @@ import { getProjectPhasePath } from "../../lib/phaseRouting";
 import { api } from "../../api/client";
 import { ActiveAgentsList } from "../ActiveAgentsList";
 import { GlobalActiveAgentsList } from "../GlobalActiveAgentsList";
+import { NotificationBell } from "../NotificationBell";
+import { GlobalNotificationBell } from "../GlobalNotificationBell";
 import { ConnectionIndicator } from "../ConnectionIndicator";
 import { ProjectSettingsModal } from "../ProjectSettingsModal";
 import { DisplaySettingsModal } from "../DisplaySettingsModal";
@@ -230,6 +232,7 @@ export function Navbar({
           {project ? (
             <>
               <ActiveAgentsList projectId={project.id} />
+              <NotificationBell projectId={project.id} />
               <ConnectionIndicator />
               <button
                 type="button"
@@ -270,6 +273,7 @@ export function Navbar({
           ) : projects.length >= 1 ? (
             <>
               <GlobalActiveAgentsList />
+              <GlobalNotificationBell />
               <button
                 type="button"
                 onClick={() => setHelpOpen(true)}

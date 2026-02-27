@@ -26,6 +26,7 @@ import type {
   ChatResponse,
   Conversation,
   ActiveAgent,
+  Notification,
   DeploymentRecord,
   DeploymentConfig,
   HelpChatRequest,
@@ -421,6 +422,17 @@ export const api = {
       request<{ framework: string; testCommand: string } | null>(
         `/fs/detect-test-framework?path=${encodeURIComponent(path)}`
       ),
+  },
+
+  // ─── Notifications (open questions / agent clarification requests) ───
+  notifications: {
+    listByProject: (projectId: string) =>
+      request<Notification[]>(`/projects/${projectId}/notifications`),
+    listGlobal: () => request<Notification[]>("/notifications"),
+    resolve: (projectId: string, notificationId: string) =>
+      request<Notification>(`/projects/${projectId}/notifications/${notificationId}`, {
+        method: "PATCH",
+      }),
   },
 
   // ─── Agents ───

@@ -9,6 +9,7 @@ import {
   PLAN_PARAM,
   TASK_PARAM,
   FEEDBACK_PARAM,
+  QUESTION_PARAM,
 } from "./phaseRouting";
 
 describe("phaseRouting", () => {
@@ -101,8 +102,20 @@ describe("phaseRouting", () => {
 
   describe("parseDetailParams", () => {
     it("returns null for all when search is empty", () => {
-      expect(parseDetailParams("")).toEqual({ plan: null, task: null, feedback: null });
-      expect(parseDetailParams("?")).toEqual({ plan: null, task: null, feedback: null });
+      expect(parseDetailParams("")).toEqual({
+        plan: null,
+        task: null,
+        feedback: null,
+        question: null,
+        section: null,
+      });
+      expect(parseDetailParams("?")).toEqual({
+        plan: null,
+        task: null,
+        feedback: null,
+        question: null,
+        section: null,
+      });
     });
 
     it("parses plan param", () => {
@@ -110,6 +123,8 @@ describe("phaseRouting", () => {
         plan: "opensprint.dev-xyz",
         task: null,
         feedback: null,
+        question: null,
+        section: null,
       });
     });
 
@@ -118,6 +133,8 @@ describe("phaseRouting", () => {
         plan: null,
         task: "opensprint.dev-xyz.1",
         feedback: null,
+        question: null,
+        section: null,
       });
     });
 
@@ -126,6 +143,28 @@ describe("phaseRouting", () => {
         plan: null,
         task: null,
         feedback: "fsi69v",
+        question: null,
+        section: null,
+      });
+    });
+
+    it("parses question param", () => {
+      expect(parseDetailParams("?question=oq-abc123")).toEqual({
+        plan: null,
+        task: null,
+        feedback: null,
+        question: "oq-abc123",
+        section: null,
+      });
+    });
+
+    it("parses section param", () => {
+      expect(parseDetailParams("?section=open_questions")).toEqual({
+        plan: null,
+        task: null,
+        feedback: null,
+        question: null,
+        section: "open_questions",
       });
     });
 
@@ -134,15 +173,18 @@ describe("phaseRouting", () => {
         plan: "opensprint.dev-abc",
         task: "opensprint.dev-abc.1",
         feedback: null,
+        question: null,
+        section: null,
       });
     });
   });
 
-  describe("PLAN_PARAM, TASK_PARAM, and FEEDBACK_PARAM", () => {
+  describe("PLAN_PARAM, TASK_PARAM, FEEDBACK_PARAM, QUESTION_PARAM", () => {
     it("exports correct param names", () => {
       expect(PLAN_PARAM).toBe("plan");
       expect(TASK_PARAM).toBe("task");
       expect(FEEDBACK_PARAM).toBe("feedback");
+      expect(QUESTION_PARAM).toBe("question");
     });
   });
 
@@ -150,6 +192,14 @@ describe("phaseRouting", () => {
     it("appends feedback param for Evaluate phase deep linking", () => {
       expect(getProjectPhasePath("proj-1", "eval", { feedback: "fsi69v" })).toBe(
         "/projects/proj-1/eval?feedback=fsi69v"
+      );
+    });
+  });
+
+  describe("getProjectPhasePath with question", () => {
+    it("appends question param for scroll-to-question target", () => {
+      expect(getProjectPhasePath("proj-1", "plan", { plan: "p1", question: "oq-abc" })).toBe(
+        "/projects/proj-1/plan?plan=p1&question=oq-abc"
       );
     });
   });

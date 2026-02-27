@@ -24,6 +24,10 @@ vi.mock("../../api/client", () => ({
       getSettings: (...args: unknown[]) => mockGetSettings(...args),
     },
     agents: { active: vi.fn().mockResolvedValue([]) },
+    notifications: {
+      listByProject: vi.fn().mockResolvedValue([]),
+      listGlobal: vi.fn().mockResolvedValue([]),
+    },
     env: {
       getKeys: vi.fn().mockResolvedValue({
         anthropic: true,

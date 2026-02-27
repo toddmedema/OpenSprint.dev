@@ -74,6 +74,10 @@ vi.mock("../api/client", () => ({
       status: vi.fn().mockResolvedValue({ activeDeployId: null, currentDeploy: null }),
       history: vi.fn().mockResolvedValue([]),
     },
+    notifications: {
+      listByProject: vi.fn().mockResolvedValue([]),
+      listGlobal: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 

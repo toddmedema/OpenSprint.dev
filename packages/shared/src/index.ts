@@ -6,6 +6,7 @@ export * from "./types/task.js";
 export * from "./types/agent.js";
 export * from "./types/conversation.js";
 export * from "./types/feedback.js";
+export * from "./types/notification.js";
 export * from "./types/settings.js";
 export * from "./types/deploy.js";
 

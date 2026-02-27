@@ -17,6 +17,10 @@ vi.mock("../../api/client", () => ({
   api: {
     projects: { list: () => Promise.resolve([]) },
     agents: { active: () => Promise.resolve([]) },
+    notifications: {
+      listByProject: () => Promise.resolve([]),
+      listGlobal: () => Promise.resolve([]),
+    },
   },
 }));
 
