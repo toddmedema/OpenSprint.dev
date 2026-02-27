@@ -258,6 +258,8 @@ export class TaskStoreService {
   private writeLock: Promise<void> = Promise.resolve();
   private dbPath: string;
   private injectedDb: Database | null = null;
+  /** Serializes init so only one run runs at a time; concurrent callers await the same promise. */
+  private initPromise: Promise<void> | null = null;
 
   constructor(injectedDb?: Database) {
     this.dbPath = getDbPath();
@@ -275,64 +277,81 @@ export class TaskStoreService {
       return;
     }
 
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+
+    this.initPromise = this.runInitInternal();
     try {
-      const SQL = await initSqlJs({
-        locateFile: (file: string) => {
-          const decodedPath = decodeURIComponent(new URL(import.meta.url).pathname);
-          const candidates = [
-            path.join(
-              path.dirname(decodedPath),
-              "..",
-              "..",
-              "node_modules",
-              "sql.js",
-              "dist",
-              file
-            ),
-            path.join(
-              path.dirname(decodedPath),
-              "..",
-              "..",
-              "..",
-              "..",
-              "node_modules",
-              "sql.js",
-              "dist",
-              file
-            ),
-          ];
-          for (const candidate of candidates) {
-            if (fs.existsSync(candidate)) return candidate;
-          }
-          return candidates[0];
-        },
-      });
-
-      const dir = path.dirname(this.dbPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-
-      if (fs.existsSync(this.dbPath)) {
-        const buf = fs.readFileSync(this.dbPath);
-        this.db = new SQL.Database(buf);
-        log.info("Loaded task DB from disk", { path: this.dbPath });
-      } else {
-        this.db = new SQL.Database();
-        log.info("Created new task DB", { path: this.dbPath });
-      }
-
-      this.db.run(SCHEMA_SQL);
-      this.migrateTaskDurationColumns();
-      await this.migratePlansWithGateTasks();
-      await this.saveToDisk();
+      await this.initPromise;
     } catch (err) {
+      this.initPromise = null;
       throw new AppError(
         500,
         ErrorCodes.TASK_STORE_INIT_FAILED,
         `Failed to initialize task store: ${err instanceof Error ? err.message : String(err)}`
       );
     }
+  }
+
+  /**
+   * Actual init work: load DB, run schema/migrations, persist under write lock.
+   * Only one run executes at a time; callers serialize via initPromise in init().
+   */
+  private async runInitInternal(): Promise<void> {
+    const SQL = await initSqlJs({
+      locateFile: (file: string) => {
+        const decodedPath = decodeURIComponent(new URL(import.meta.url).pathname);
+        const candidates = [
+          path.join(
+            path.dirname(decodedPath),
+            "..",
+            "..",
+            "node_modules",
+            "sql.js",
+            "dist",
+            file
+          ),
+          path.join(
+            path.dirname(decodedPath),
+            "..",
+            "..",
+            "..",
+            "..",
+            "node_modules",
+            "sql.js",
+            "dist",
+            file
+          ),
+        ];
+        for (const candidate of candidates) {
+          if (fs.existsSync(candidate)) return candidate;
+        }
+        return candidates[0];
+      },
+    });
+
+    const dir = path.dirname(this.dbPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    if (fs.existsSync(this.dbPath)) {
+      const buf = fs.readFileSync(this.dbPath);
+      this.db = new SQL.Database(buf);
+      log.info("Loaded task DB from disk", { path: this.dbPath });
+    } else {
+      this.db = new SQL.Database();
+      log.info("Created new task DB", { path: this.dbPath });
+    }
+
+    this.db.run(SCHEMA_SQL);
+    this.migrateTaskDurationColumns();
+    await this.migratePlansWithGateTasks();
+    await this.withWriteLock(async () => {
+      await this.saveToDisk();
+    });
   }
 
   /**
