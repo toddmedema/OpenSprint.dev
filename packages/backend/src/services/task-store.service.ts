@@ -267,6 +267,8 @@ export interface PlanInsertData {
  * sql.js-backed task store. Replaces the old Dolt/CLI task system with
  * an in-memory SQLite database persisted to ~/.opensprint/tasks.db.
  */
+const SAVE_DEBOUNCE_MS = 80;
+
 export class TaskStoreService {
   private db: Database | null = null;
   private writeLock: Promise<void> = Promise.resolve();
@@ -274,6 +276,10 @@ export class TaskStoreService {
   private injectedDb: Database | null = null;
   /** Serializes init so only one run runs at a time; concurrent callers await the same promise. */
   private initPromise: Promise<void> | null = null;
+  /** Debounced save: timer for scheduling a single save after mutations. */
+  private saveTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** One-time registration of beforeExit so we flush on process shutdown. */
+  private beforeExitRegistered = false;
 
   constructor(injectedDb?: Database) {
     this.dbPath = getDbPath();
@@ -364,7 +370,19 @@ export class TaskStoreService {
     this.migrateTaskDurationColumns();
     await this.migratePlansWithGateTasks();
     await this.withWriteLock(async () => {
-      await this.saveToDisk();
+      await this.saveToDisk(); // initial save immediately, not debounced
+    });
+    this.registerBeforeExit();
+  }
+
+  /** Register process beforeExit once so we flush pending save on shutdown. */
+  private registerBeforeExit(): void {
+    if (this.injectedDb || this.beforeExitRegistered) return;
+    this.beforeExitRegistered = true;
+    process.on("beforeExit", () => {
+      this.flushSave().catch((err) => {
+        log.warn("Task store flush on exit failed", { error: err instanceof Error ? err.message : String(err) });
+      });
     });
   }
 
@@ -533,6 +551,38 @@ export class TaskStoreService {
       }
     }
     throw lastErr;
+  }
+
+  /**
+   * Schedule a debounced save. Multiple mutations within SAVE_DEBOUNCE_MS result in one save.
+   * No-op for injected (in-memory) DB. Call flushPersist() to force an immediate save (e.g. on shutdown).
+   */
+  private scheduleSave(): void {
+    if (this.injectedDb) return;
+    if (this.saveTimeout) clearTimeout(this.saveTimeout);
+    this.saveTimeout = setTimeout(() => {
+      this.saveTimeout = null;
+      this.withWriteLock(async () => {
+        await this.saveToDisk();
+      }).catch((err) => {
+        log.error("Task store debounced save failed", { error: err instanceof Error ? err.message : String(err) });
+      });
+    }, SAVE_DEBOUNCE_MS);
+  }
+
+  /**
+   * Cancel any pending debounced save and run save immediately under the write lock.
+   * Use on graceful shutdown so the last burst of changes is persisted.
+   */
+  private async flushSave(): Promise<void> {
+    if (this.injectedDb) return;
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
+    await this.withWriteLock(async () => {
+      await this.saveToDisk();
+    });
   }
 
   /**
@@ -874,7 +924,7 @@ export class TaskStoreService {
         );
       }
 
-      await this.saveToDisk();
+      this.scheduleSave();
       return this.show(projectId, id);
     });
   }
@@ -983,7 +1033,7 @@ export class TaskStoreService {
         db.run("ROLLBACK");
         throw err;
       }
-      await this.saveToDisk();
+      this.scheduleSave();
       return ids.map((id) => this.show(projectId, id));
     });
   }
@@ -1098,7 +1148,7 @@ export class TaskStoreService {
           issueId: id,
         });
       }
-      await this.saveToDisk();
+      this.scheduleSave();
       return this.show(projectId, id);
     });
   }
@@ -1159,7 +1209,7 @@ export class TaskStoreService {
         db.run("ROLLBACK");
         throw err;
       }
-      await this.saveToDisk();
+      this.scheduleSave();
       return updates.map((u) => this.show(projectId, u.id));
     });
   }
@@ -1178,7 +1228,7 @@ export class TaskStoreService {
           issueId: id,
         });
       }
-      await this.saveToDisk();
+      this.scheduleSave();
       return this.show(projectId, id);
     });
   }
@@ -1204,7 +1254,7 @@ export class TaskStoreService {
         db.run("ROLLBACK");
         throw err;
       }
-      await this.saveToDisk();
+      this.scheduleSave();
       return items.map((item) => this.show(projectId, item.id));
     });
   }
@@ -1222,7 +1272,7 @@ export class TaskStoreService {
         "INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_id, dep_type) VALUES (?, ?, ?)",
         [childId, parentId, type ?? "blocks"]
       );
-      await this.saveToDisk();
+      this.scheduleSave();
     });
   }
 
@@ -1246,7 +1296,7 @@ export class TaskStoreService {
         db.run("ROLLBACK");
         throw err;
       }
-      await this.saveToDisk();
+      this.scheduleSave();
     });
   }
 
@@ -1261,7 +1311,7 @@ export class TaskStoreService {
           issueId: id,
         });
       }
-      await this.saveToDisk();
+      this.scheduleSave();
     });
   }
 
@@ -1283,7 +1333,7 @@ export class TaskStoreService {
         db.run("ROLLBACK");
         throw err;
       }
-      await this.saveToDisk();
+      this.scheduleSave();
     });
   }
 
@@ -1311,7 +1361,7 @@ export class TaskStoreService {
       db.run("DELETE FROM orchestrator_counters WHERE project_id = ?", [projectId]);
       db.run("DELETE FROM deployments WHERE project_id = ?", [projectId]);
       db.run("DELETE FROM plans WHERE project_id = ?", [projectId]);
-      await this.saveToDisk();
+      this.scheduleSave();
     });
   }
 
@@ -1341,7 +1391,7 @@ export class TaskStoreService {
           id,
           projectId,
         ]);
-        await this.saveToDisk();
+        this.scheduleSave();
       }
     });
   }
@@ -1369,7 +1419,7 @@ export class TaskStoreService {
           id,
           projectId,
         ]);
-        await this.saveToDisk();
+        this.scheduleSave();
       }
     });
   }
@@ -1458,7 +1508,7 @@ export class TaskStoreService {
           now,
         ]
       );
-      await this.saveToDisk();
+      this.scheduleSave();
     });
   }
 
@@ -1569,7 +1619,7 @@ export class TaskStoreService {
         projectId,
         planId,
       ]);
-      await this.saveToDisk();
+      this.scheduleSave();
     });
   }
 
@@ -1596,7 +1646,7 @@ export class TaskStoreService {
         projectId,
         planId,
       ]);
-      await this.saveToDisk();
+      this.scheduleSave();
     });
   }
 
@@ -1620,7 +1670,7 @@ export class TaskStoreService {
         projectId,
         planId,
       ]);
-      await this.saveToDisk();
+      this.scheduleSave();
     });
   }
 
@@ -1651,7 +1701,7 @@ export class TaskStoreService {
       existing.free();
       if (!found) return false;
       db.run("DELETE FROM plans WHERE project_id = ? AND plan_id = ?", [projectId, planId]);
-      await this.saveToDisk();
+      this.scheduleSave();
       return true;
     });
   }
@@ -1679,16 +1729,14 @@ export class TaskStoreService {
     await this.ensureInitialized();
     return this.withWriteLock(async () => {
       const result = await fn(this.ensureDb());
-      await this.saveToDisk();
+      this.scheduleSave();
       return result;
     });
   }
 
   /** Wait for any in-flight writes to finish and persist to disk. Use on shutdown. */
   flushPersist(): Promise<void> {
-    return this.withWriteLock(async () => {
-      await this.saveToDisk();
-    });
+    return this.flushSave();
   }
 }
 

@@ -1080,6 +1080,7 @@ describe("TaskStoreService", () => {
           ]
         );
       });
+      await store1.flushPersist(); // ensure debounced save is written before store2 loads from disk
 
       const store2 = new TaskStoreService();
       await store2.init();
@@ -1128,6 +1129,7 @@ describe("TaskStoreService", () => {
           ]
         );
       });
+      await store1.flushPersist(); // ensure debounced save is written before store2 loads from disk
 
       const store2 = new TaskStoreService();
       await store2.init();
