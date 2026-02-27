@@ -28,12 +28,12 @@ import { CloseButton } from "../../components/CloseButton";
 import { CrossEpicConfirmModal } from "../../components/CrossEpicConfirmModal";
 import { DependencyGraph } from "../../components/DependencyGraph";
 import { PlanDetailContent } from "../../components/plan/PlanDetailContent";
+import { AddPlanModal } from "../../components/plan/AddPlanModal";
 import { PlanFilterToolbar, type PlanViewMode } from "../../components/plan/PlanFilterToolbar";
 import { EpicCard } from "../../components/EpicCard";
 import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
 import { ChatInput } from "../../components/ChatInput";
 import { fetchTasks, selectTasksForEpic } from "../../store/slices/executeSlice";
-import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
 import { usePlanFilter } from "../../hooks/usePlanFilter";
 import { formatPlanIdAsTitle } from "../../lib/formatting";
 import { matchesPlanSearchQuery } from "../../lib/planSearchFilter";
@@ -97,7 +97,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   );
 
   /* ── Local UI state (preserved by mount-all) ── */
-  const [featureDescription, setFeatureDescription] = useState("");
+  const [addPlanModalOpen, setAddPlanModalOpen] = useState(false);
   const [crossEpicModal, setCrossEpicModal] = useState<{
     planId: string;
     prerequisitePlanIds: string[];
@@ -438,19 +438,20 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     }
   };
 
-  const handleGeneratePlan = useCallback(() => {
-    const description = featureDescription.trim();
-    if (!description) return;
+  const handleGeneratePlan = useCallback(
+    (description: string) => {
+      const trimmed = description.trim();
+      if (!trimmed) return;
 
-    const title = description.slice(0, 30);
-    const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const title = trimmed.slice(0, 30);
+      const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-    dispatch(addOptimisticPlan({ tempId, title }));
-    setFeatureDescription("");
-
-    generateQueueRef.current = [...generateQueueRef.current, { description, tempId }];
-    processGenerateQueue();
-  }, [featureDescription, dispatch, processGenerateQueue]);
+      dispatch(addOptimisticPlan({ tempId, title }));
+      generateQueueRef.current = [...generateQueueRef.current, { description: trimmed, tempId }];
+      processGenerateQueue();
+    },
+    [dispatch, processGenerateQueue]
+  );
 
   const handleSelectPlan = useCallback(
     (plan: Plan) => {
@@ -499,11 +500,6 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     setChatSending(false);
   };
 
-  const onKeyDownFeatureDescription = useSubmitShortcut(handleGeneratePlan, {
-    multiline: true,
-    disabled: !featureDescription.trim(),
-  });
-
   return (
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
       {/* Main content */}
@@ -522,6 +518,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           planTasksPlanIds={planTasksPlanIds ?? []}
           onPlanAllTasks={handlePlanAllTasks}
           onExecuteAll={handleExecuteAll}
+          onAddPlan={() => setAddPlanModalOpen(true)}
           searchExpanded={searchExpanded}
           searchInputValue={searchInputValue}
           setSearchInputValue={setSearchInputValue}
@@ -578,39 +575,9 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
               )}
             </div>
           ) : (
-            /* Card Mode: Generate Plan + Feature Plans */
+            /* Card Mode: Feature Plans */
             <>
-              {/* Generate Plan input */}
-        <div className="card mb-6 p-4" data-testid="generate-plan-section">
-          <label
-            htmlFor="feature-description"
-            className="block text-sm font-medium text-theme-text mb-2"
-          >
-            Add Feature
-          </label>
-          <textarea
-            id="feature-description"
-            className="input w-full text-sm min-h-[100px] resize-y"
-            value={featureDescription}
-            onChange={(e) => setFeatureDescription(e.target.value)}
-            onKeyDown={onKeyDownFeatureDescription}
-            placeholder="Describe your feature idea…"
-            data-testid="feature-description-input"
-          />
-          <div className="mt-3 flex justify-end">
-            <button
-              type="button"
-              onClick={handleGeneratePlan}
-              disabled={!featureDescription.trim()}
-              className="btn-primary text-sm disabled:opacity-50"
-              data-testid="generate-plan-button"
-            >
-              Generate Plan
-            </button>
-          </div>
-        </div>
-
-        {/* Plan Cards */}
+              {/* Plan Cards */}
         <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
           <h2 className="text-lg font-semibold text-theme-text">Feature Plans</h2>
         </div>
@@ -620,8 +587,8 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         ) : plans.length === 0 && optimisticPlans.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-theme-muted">
-              No plans yet. Describe a feature above to generate a plan, or use &ldquo;Plan
-              it&rdquo; from the Sketch phase.
+              No plans yet. Click &ldquo;Add Plan&rdquo; in the topbar to generate a plan, or use
+              &ldquo;Plan it&rdquo; from the Sketch phase.
             </p>
           </div>
         ) : filteredAndSortedPlans.length === 0 && optimisticPlans.length === 0 ? (
@@ -686,6 +653,13 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           )}
         </div>
       </div>
+
+      {addPlanModalOpen && (
+        <AddPlanModal
+          onGenerate={handleGeneratePlan}
+          onClose={() => setAddPlanModalOpen(false)}
+        />
+      )}
 
       {crossEpicModal && (
         <CrossEpicConfirmModal

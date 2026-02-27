@@ -59,6 +59,7 @@ interface PlanFilterToolbarProps {
   planTasksPlanIds: string[];
   onPlanAllTasks: () => void;
   onExecuteAll: () => void;
+  onAddPlan: () => void;
   /** Search (mirrors ExecuteFilterToolbar) */
   searchExpanded?: boolean;
   searchInputValue?: string;
@@ -83,6 +84,7 @@ export function PlanFilterToolbar({
   planTasksPlanIds,
   onPlanAllTasks,
   onExecuteAll,
+  onAddPlan,
   searchExpanded,
   searchInputValue = "",
   setSearchInputValue,
@@ -138,6 +140,16 @@ export function PlanFilterToolbar({
               {planAllInProgress ? "Planning all…" : "Plan All Tasks"}
             </button>
           )}
+        </div>
+        <div className="flex items-center shrink-0 gap-2">
+          <button
+            type="button"
+            onClick={onAddPlan}
+            className="btn-secondary text-sm py-1.5 px-2.5"
+            data-testid="add-plan-button"
+          >
+            Add Plan
+          </button>
           {plansReadyToExecuteCount >= 2 && (
             <button
               type="button"
@@ -149,8 +161,6 @@ export function PlanFilterToolbar({
               {executeAllInProgress ? "Executing all…" : "Execute All"}
             </button>
           )}
-        </div>
-        <div className="flex items-center shrink-0">
           {handleSearchExpand && handleSearchClose && handleSearchKeyDown && setSearchInputValue && searchInputRef ? (
             searchExpanded ? (
               <div

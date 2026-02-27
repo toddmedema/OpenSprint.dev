@@ -281,28 +281,37 @@ describe("PlanPhase Redux integration", () => {
     expect(screen.queryByText("Failed to load plans")).not.toBeInTheDocument();
   });
 
-  it("renders inline feature description textarea and Generate Plan button", () => {
+  it("renders Add Plan button in topbar; modal has textarea and Generate Plan button", async () => {
     const store = createStore();
+    const user = userEvent.setup();
     render(
       <Provider store={store}>
         <PlanPhase projectId="proj-1" />
       </Provider>
     );
 
+    expect(screen.getByTestId("add-plan-button")).toBeInTheDocument();
+    expect(screen.getByTestId("add-plan-button")).toHaveTextContent("Add Plan");
+    expect(screen.queryByTestId("add-plan-modal")).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("add-plan-button"));
+    expect(screen.getByTestId("add-plan-modal")).toBeInTheDocument();
     expect(screen.getByTestId("feature-description-input")).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/describe your feature idea/i)).toBeInTheDocument();
     expect(screen.getByTestId("generate-plan-button")).toBeInTheDocument();
     expect(screen.getByText("Generate Plan")).toBeInTheDocument();
   });
 
-  it("disables Generate Plan button when feature description is empty", () => {
+  it("disables Generate Plan button when feature description is empty in Add Plan modal", async () => {
     const store = createStore();
+    const user = userEvent.setup();
     render(
       <Provider store={store}>
         <PlanPhase projectId="proj-1" />
       </Provider>
     );
 
+    await user.click(screen.getByTestId("add-plan-button"));
     const button = screen.getByTestId("generate-plan-button");
     expect(button).toBeDisabled();
   });
@@ -2085,7 +2094,7 @@ describe("PlanPhase Generate Plan", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("enables Generate Plan button when user types a description", async () => {
+  it("enables Generate Plan button when user types a description in Add Plan modal", async () => {
     const store = createStore();
     const user = userEvent.setup();
     render(
@@ -2094,6 +2103,7 @@ describe("PlanPhase Generate Plan", () => {
       </Provider>
     );
 
+    await user.click(screen.getByTestId("add-plan-button"));
     const textarea = screen.getByTestId("feature-description-input");
     const button = screen.getByTestId("generate-plan-button");
 
@@ -2102,7 +2112,7 @@ describe("PlanPhase Generate Plan", () => {
     expect(button).not.toBeDisabled();
   });
 
-  it("keeps Generate Plan button disabled for whitespace-only input", async () => {
+  it("keeps Generate Plan button disabled for whitespace-only input in Add Plan modal", async () => {
     const store = createStore();
     const user = userEvent.setup();
     render(
@@ -2111,6 +2121,7 @@ describe("PlanPhase Generate Plan", () => {
       </Provider>
     );
 
+    await user.click(screen.getByTestId("add-plan-button"));
     const textarea = screen.getByTestId("feature-description-input");
     const button = screen.getByTestId("generate-plan-button");
 
@@ -2118,7 +2129,7 @@ describe("PlanPhase Generate Plan", () => {
     expect(button).toBeDisabled();
   });
 
-  it("calls generate API when Generate Plan is clicked and shows optimistic card", async () => {
+  it("calls generate API when Generate Plan is clicked in Add Plan modal and shows optimistic card", async () => {
     let resolveGenerate: (v: unknown) => void;
     const generatePromise = new Promise((r) => {
       resolveGenerate = r;
@@ -2133,13 +2144,14 @@ describe("PlanPhase Generate Plan", () => {
       </Provider>
     );
 
+    await user.click(screen.getByTestId("add-plan-button"));
     const textarea = screen.getByTestId("feature-description-input");
     await user.type(textarea, "Add dark mode support");
 
     const button = screen.getByTestId("generate-plan-button");
     await user.click(button);
 
-    expect(textarea.value).toBe("");
+    expect(screen.queryByTestId("add-plan-modal")).not.toBeInTheDocument();
     const { optimisticPlans } = store.getState().plan;
     expect(optimisticPlans).toHaveLength(1);
     expect(optimisticPlans[0].title).toBe("Add dark mode support");
@@ -2164,7 +2176,7 @@ describe("PlanPhase Generate Plan", () => {
     });
   });
 
-  it("clears the textarea after submitting", async () => {
+  it("closes Add Plan modal after submitting", async () => {
     const store = createStore();
     const user = userEvent.setup();
     render(
@@ -2173,11 +2185,11 @@ describe("PlanPhase Generate Plan", () => {
       </Provider>
     );
 
-    const textarea = screen.getByTestId("feature-description-input") as HTMLTextAreaElement;
-    await user.type(textarea, "Some feature");
+    await user.click(screen.getByTestId("add-plan-button"));
+    await user.type(screen.getByTestId("feature-description-input"), "Some feature");
     await user.click(screen.getByTestId("generate-plan-button"));
 
-    expect(textarea.value).toBe("");
+    expect(screen.queryByTestId("add-plan-modal")).not.toBeInTheDocument();
   });
 
   it("shows success notification after plan is generated", async () => {
@@ -2189,6 +2201,7 @@ describe("PlanPhase Generate Plan", () => {
       </Provider>
     );
 
+    await user.click(screen.getByTestId("add-plan-button"));
     await user.type(screen.getByTestId("feature-description-input"), "Feature idea");
     await user.click(screen.getByTestId("generate-plan-button"));
 
@@ -2211,6 +2224,7 @@ describe("PlanPhase Generate Plan", () => {
       </Provider>
     );
 
+    await user.click(screen.getByTestId("add-plan-button"));
     await user.type(screen.getByTestId("feature-description-input"), "Feature idea");
     await user.click(screen.getByTestId("generate-plan-button"));
 
@@ -2221,30 +2235,7 @@ describe("PlanPhase Generate Plan", () => {
     });
   });
 
-  it("renders the generate-plan-section with correct testid", () => {
-    const store = createStore();
-    render(
-      <Provider store={store}>
-        <PlanPhase projectId="proj-1" />
-      </Provider>
-    );
-
-    expect(screen.getByTestId("generate-plan-section")).toBeInTheDocument();
-  });
-
-  it("renders 'Add Feature' label for the textarea", () => {
-    const store = createStore();
-    render(
-      <Provider store={store}>
-        <PlanPhase projectId="proj-1" />
-      </Provider>
-    );
-
-    expect(screen.getByText("Add Feature")).toBeInTheDocument();
-    expect(screen.getByLabelText("Add Feature")).toBeInTheDocument();
-  });
-
-  it("textarea accepts multi-line text (Shift+Enter for newline)", async () => {
+  it("Add Plan modal has Feature plan idea label", async () => {
     const store = createStore();
     const user = userEvent.setup();
     render(
@@ -2253,6 +2244,21 @@ describe("PlanPhase Generate Plan", () => {
       </Provider>
     );
 
+    await user.click(screen.getByTestId("add-plan-button"));
+    expect(screen.getByText("Feature plan idea")).toBeInTheDocument();
+    expect(screen.getByLabelText("Feature plan idea")).toBeInTheDocument();
+  });
+
+  it("Add Plan modal textarea accepts multi-line text (Shift+Enter for newline)", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <PlanPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await user.click(screen.getByTestId("add-plan-button"));
     const textarea = screen.getByTestId("feature-description-input") as HTMLTextAreaElement;
     await user.type(textarea, "Line 1");
     await user.keyboard("{Shift>}{Enter}{/Shift}");
@@ -2264,7 +2270,7 @@ describe("PlanPhase Generate Plan", () => {
     expect(textarea.value).toContain("Line 3");
   });
 
-  it("keeps Generate Plan button and input enabled for queuing multiple plans (optimistic UX)", () => {
+  it("keeps Add Plan modal usable for queuing multiple plans when generating (optimistic UX)", async () => {
     const store = configureStore({
       reducer: {
         project: projectReducer,
@@ -2314,18 +2320,21 @@ describe("PlanPhase Generate Plan", () => {
       },
     });
 
+    const user = userEvent.setup();
     render(
       <Provider store={store}>
         <PlanPhase projectId="proj-1" />
       </Provider>
     );
 
+    await user.click(screen.getByTestId("add-plan-button"));
+    expect(screen.getByTestId("add-plan-modal")).toBeInTheDocument();
     expect(screen.getByText("Generate Plan")).toBeInTheDocument();
     const textarea = screen.getByTestId("feature-description-input");
     expect(textarea).not.toBeDisabled();
   });
 
-  it("queues multiple plans when user submits several in quick succession", async () => {
+  it("queues multiple plans when user submits several in quick succession via Add Plan modal", async () => {
     let resolveFirst: (v: unknown) => void;
     const firstPromise = new Promise((r) => {
       resolveFirst = r;
@@ -2354,12 +2363,14 @@ describe("PlanPhase Generate Plan", () => {
       </Provider>
     );
 
+    await user.click(screen.getByTestId("add-plan-button"));
     await user.type(screen.getByTestId("feature-description-input"), "First feature idea");
     await user.click(screen.getByTestId("generate-plan-button"));
 
     expect(store.getState().plan.optimisticPlans).toHaveLength(1);
     expect(store.getState().plan.optimisticPlans[0].title).toBe("First feature idea");
 
+    await user.click(screen.getByTestId("add-plan-button"));
     await user.type(screen.getByTestId("feature-description-input"), "Second feature idea");
     await user.click(screen.getByTestId("generate-plan-button"));
 
@@ -2386,7 +2397,7 @@ describe("PlanPhase Generate Plan", () => {
     });
   });
 
-  it("does not call generate API when description is empty", async () => {
+  it("does not call generate API when description is empty in Add Plan modal", async () => {
     const store = createStore();
     const user = userEvent.setup();
     render(
@@ -2395,7 +2406,9 @@ describe("PlanPhase Generate Plan", () => {
       </Provider>
     );
 
+    await user.click(screen.getByTestId("add-plan-button"));
     const button = screen.getByTestId("generate-plan-button");
+    expect(button).toBeDisabled();
     await user.click(button);
 
     expect(mockGenerate).not.toHaveBeenCalled();
