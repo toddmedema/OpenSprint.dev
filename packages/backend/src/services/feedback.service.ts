@@ -479,7 +479,7 @@ export class FeedbackService {
                   depends_on: Array.isArray(deps)
                     ? deps.filter((d): d is number => typeof d === "number")
                     : [],
-                  complexity,
+                  complexity: complexity as ProposedTask["complexity"],
                 };
               }
             );

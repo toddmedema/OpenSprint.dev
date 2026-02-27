@@ -128,7 +128,7 @@ export interface NotificationAddedEvent {
     source: "plan" | "prd" | "execute" | "eval";
     sourceId: string;
     questions: Array<{ id: string; text: string; createdAt?: string }>;
-    status: "open";
+    status: "open" | "resolved";
     createdAt: string;
     resolvedAt: string | null;
     kind?: "open_question" | "api_blocked";

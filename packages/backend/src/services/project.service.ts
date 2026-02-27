@@ -120,8 +120,10 @@ function mergeApiKeysWithCurrent(
       const e = item as Record<string, unknown>;
       const id = typeof e.id === "string" ? e.id.trim() : "";
       if (!id) continue;
-      let value = e.value;
-      if (typeof value !== "string" || !value.trim()) {
+      let value: string;
+      if (typeof e.value === "string" && e.value.trim()) {
+        value = e.value;
+      } else {
         const existing = currentEntries.find((x) => x.id === id);
         value = existing?.value ?? "";
       }
