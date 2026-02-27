@@ -845,6 +845,95 @@ describe("TaskDetailSidebar", () => {
         expect(mockAddDependency).toHaveBeenCalledWith("proj-1", "epic-1.1", "epic-1.2", "blocks");
       });
     });
+
+    it("navigates suggestions with arrow keys and Enter selects highlighted entry", async () => {
+      const user = userEvent.setup();
+      mockTasksGet.mockResolvedValue({
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [{ targetId: "epic-1.3", type: "blocks" }],
+        description: "",
+        createdAt: "",
+        updatedAt: "",
+      });
+      const taskB = { id: "epic-1.2", title: "Task B", epicId: "epic-1", kanbanColumn: "in_progress" as const, priority: 0, assignee: null, type: "task" as const, status: "in_progress" as const, labels: [], dependencies: [], description: "", createdAt: "", updatedAt: "" };
+      const taskC = { id: "epic-1.3", title: "Task C", epicId: "epic-1", kanbanColumn: "in_progress" as const, priority: 0, assignee: null, type: "task" as const, status: "in_progress" as const, labels: [], dependencies: [], description: "", createdAt: "", updatedAt: "" };
+      const props = createMinimalProps({
+        tasks: [
+          { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress" as const, priority: 0, assignee: null, type: "task" as const, status: "in_progress" as const, labels: [], dependencies: [], description: "", createdAt: "", updatedAt: "" },
+          taskB,
+          taskC,
+        ],
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>
+      );
+      await user.click(screen.getByTestId("sidebar-add-link-btn"));
+      await user.type(screen.getByTestId("add-link-input"), "task");
+      const suggestionList = await screen.findByTestId("add-link-suggestions");
+      expect(suggestionList).toBeInTheDocument();
+
+      const options = within(suggestionList).getAllByRole("option");
+      expect(options).toHaveLength(2);
+
+      await user.keyboard("{ArrowDown}");
+      expect(options[1]).toHaveAttribute("aria-selected", "true");
+
+      await user.keyboard("{ArrowUp}");
+      expect(options[0]).toHaveAttribute("aria-selected", "true");
+
+      await user.keyboard("{ArrowDown}");
+      await user.keyboard("{Enter}");
+      await waitFor(() => {
+        expect(mockAddDependency).toHaveBeenCalledWith("proj-1", "epic-1.1", "epic-1.3", "blocks");
+      });
+    });
+
+    it("Enter on first suggestion selects and saves without arrow navigation", async () => {
+      const user = userEvent.setup();
+      mockTasksGet.mockResolvedValue({
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [{ targetId: "epic-1.2", type: "blocks" }],
+        description: "",
+        createdAt: "",
+        updatedAt: "",
+      });
+      const props = createMinimalProps({
+        tasks: [
+          { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress" as const, priority: 0, assignee: null, type: "task" as const, status: "in_progress" as const, labels: [], dependencies: [], description: "", createdAt: "", updatedAt: "" },
+          { id: "epic-1.2", title: "Task B", epicId: "epic-1", kanbanColumn: "in_progress" as const, priority: 0, assignee: null, type: "task" as const, status: "in_progress" as const, labels: [], dependencies: [], description: "", createdAt: "", updatedAt: "" },
+        ],
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>
+      );
+      await user.click(screen.getByTestId("sidebar-add-link-btn"));
+      await user.type(screen.getByTestId("add-link-input"), "b");
+      await screen.findByTestId("add-link-suggestions");
+      await user.keyboard("{Enter}");
+      await waitFor(() => {
+        expect(mockAddDependency).toHaveBeenCalledWith("proj-1", "epic-1.1", "epic-1.2", "blocks");
+      });
+    });
   });
 
   it("renders task description markdown when selectedTaskData has description", () => {

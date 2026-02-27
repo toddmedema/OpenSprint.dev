@@ -49,7 +49,9 @@ export function AddLinkFlow({
   exclude.add(childTaskId);
 
   const suggestions = filterTasksByQuery(tasks, inputValue, exclude);
-  const showSuggestions = inputValue.trim().length > 0 && suggestions.length > 0;
+  const maxDisplayed = 8;
+  const displayedSuggestions = suggestions.slice(0, maxDisplayed);
+  const showSuggestions = inputValue.trim().length > 0 && displayedSuggestions.length > 0;
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -63,13 +65,13 @@ export function AddLinkFlow({
     if (!showSuggestions) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlightedIndex((i) => Math.min(i + 1, suggestions.length - 1));
+      setHighlightedIndex((i) => Math.min(i + 1, displayedSuggestions.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlightedIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter" && suggestions[highlightedIndex]) {
+    } else if (e.key === "Enter" && displayedSuggestions[highlightedIndex]) {
       e.preventDefault();
-      selectTask(suggestions[highlightedIndex]);
+      selectTask(displayedSuggestions[highlightedIndex]);
     } else if (e.key === "Escape") {
       onCancel();
     }
@@ -145,7 +147,7 @@ export function AddLinkFlow({
               className="absolute left-0 right-0 top-full mt-0.5 z-50 max-h-32 overflow-y-auto rounded border border-theme-border bg-theme-surface shadow-lg py-1"
               data-testid="add-link-suggestions"
             >
-              {suggestions.slice(0, 8).map((t, i) => (
+              {displayedSuggestions.map((t, i) => (
                 <li
                   key={t.id}
                   role="option"
