@@ -110,7 +110,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as ServerEvent;
-        handleServerEvent(dispatch, projectId, data);
+        handleServerEvent(dispatch, storeApi.getState, projectId, data);
       } catch {
         // ignore parse errors
       }
@@ -182,7 +182,12 @@ export const websocketMiddleware: Middleware = (storeApi) => {
     });
   }
 
-  function handleServerEvent(d: StoreDispatch, projectId: string, event: ServerEvent) {
+  function handleServerEvent(
+    d: StoreDispatch,
+    getState: () => unknown,
+    projectId: string,
+    event: ServerEvent
+  ) {
     switch (event.type) {
       case "hil.request":
         if (event.blocking) {
@@ -202,6 +207,11 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         d(fetchPlanStatus(projectId));
         break;
 
+      case "plan.generated":
+        d(fetchPlans({ projectId, background: true }));
+        d(fetchSinglePlan({ projectId, planId: event.planId }));
+        break;
+
       case "plan.updated":
         d(fetchPlans({ projectId, background: true }));
         d(fetchSinglePlan({ projectId, planId: event.planId }));
@@ -209,7 +219,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         d(fetchTasks(projectId));
         break;
 
-      case "task.updated":
+      case "task.updated": {
         d(
           taskUpdated({
             taskId: event.taskId,
@@ -219,7 +229,14 @@ export const websocketMiddleware: Middleware = (storeApi) => {
             blockReason: event.blockReason,
           })
         );
+        // For newly created tasks, taskUpdated is a no-op (task not in state). Fetch and merge so Plan page shows them in real time.
+        const root = getState() as { execute: { tasks: Array<{ id: string }> } };
+        const taskExists = root.execute?.tasks?.some((t) => t.id === event.taskId);
+        if (!taskExists) {
+          d(fetchTasksByIds({ projectId, taskIds: [event.taskId] }));
+        }
         break;
+      }
 
       case "agent.started":
         d(fetchTasks(projectId));

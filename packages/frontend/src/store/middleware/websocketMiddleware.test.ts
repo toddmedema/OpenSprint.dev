@@ -305,6 +305,24 @@ describe("websocketMiddleware", () => {
       });
     });
 
+    it("dispatches fetchPlans and fetchSinglePlan on plan.generated (new plan live update)", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      const { api } = await import("../../api/client");
+      vi.mocked(api.plans.list).mockClear();
+      vi.mocked(api.plans.get).mockClear();
+
+      wsInstance!.simulateMessage({ type: "plan.generated", planId: "plan-new-123" });
+
+      await vi.waitFor(() => {
+        expect(api.plans.list).toHaveBeenCalledWith("proj-1");
+        expect(api.plans.get).toHaveBeenCalledWith("proj-1", "plan-new-123");
+      });
+    });
+
     it("dispatches to domain slices on plan.updated (background refresh, incl. fetchPlanChat, fetchTasks)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
@@ -373,7 +391,7 @@ describe("websocketMiddleware", () => {
       });
     });
 
-    it("dispatches taskUpdated on task.updated (no fetchTasks)", async () => {
+    it("dispatches taskUpdated on task.updated for existing task (no fetch)", async () => {
       const store = createStore();
       const { setTasks } = await import("../slices/executeSlice");
       store.dispatch(
@@ -399,6 +417,7 @@ describe("websocketMiddleware", () => {
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
+      const { api } = await import("../../api/client");
       wsInstance!.simulateMessage({
         type: "task.updated",
         taskId: "task-1",
@@ -408,6 +427,47 @@ describe("websocketMiddleware", () => {
 
       await vi.waitFor(() => {
         expect(store.getState().execute.tasks[0]?.kanbanColumn).toBe("in_progress");
+      });
+      expect(api.tasks.get).not.toHaveBeenCalled();
+    });
+
+    it("fetches new task via fetchTasksByIds when task.updated for unknown task (Plan page live loading)", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      const { api } = await import("../../api/client");
+      const newTask = {
+        id: "epic-1.1",
+        title: "Newly created task",
+        description: "",
+        type: "task" as const,
+        status: "open" as const,
+        priority: 1,
+        assignee: null,
+        labels: [],
+        dependencies: [],
+        epicId: "epic-1",
+        kanbanColumn: "backlog" as const,
+        createdAt: "",
+        updatedAt: "",
+      };
+      vi.mocked(api.tasks.get).mockResolvedValue(newTask as never);
+
+      wsInstance!.simulateMessage({
+        type: "task.updated",
+        taskId: "epic-1.1",
+        status: "open",
+        assignee: null,
+      });
+
+      await vi.waitFor(() => {
+        expect(api.tasks.get).toHaveBeenCalledWith("proj-1", "epic-1.1");
+      });
+      await vi.waitFor(() => {
+        expect(store.getState().execute.tasks).toHaveLength(1);
+        expect(store.getState().execute.tasks[0]?.title).toBe("Newly created task");
       });
     });
 
