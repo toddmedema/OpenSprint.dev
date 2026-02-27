@@ -18,15 +18,6 @@ import { useDisplayPreferences } from "../contexts/DisplayPreferencesContext";
 import { UptimeDisplay } from "./UptimeDisplay";
 import { api } from "../api/client";
 
-/** Runtime threshold (ms) beyond which the Kill button is shown */
-const KILL_BUTTON_THRESHOLD_MS = 30 * 60 * 1000;
-
-function isAgentRunningOver30Minutes(agent: ActiveAgent): boolean {
-  if (!agent.startedAt) return false;
-  const elapsed = Date.now() - new Date(agent.startedAt).getTime();
-  return elapsed >= KILL_BUTTON_THRESHOLD_MS;
-}
-
 const POLL_INTERVAL_MS = 5000;
 
 /** z-index for dropdown portal — above Build sidebar (z-50) and Navbar (z-60) */
@@ -64,8 +55,8 @@ const isPlanningAgent = (agent: ActiveAgent) =>
   agent.phase === "plan" ||
   (agent.role && getSlotForRole(agent.role as Parameters<typeof getSlotForRole>[0]) === "planning");
 
-/** X icon for Kill button */
-function KillAgentXIcon({ className = "w-4 h-4" }: { className?: string }) {
+/** Circled X icon (⊗) for Kill button */
+function KillAgentCircledXIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -77,7 +68,8 @@ function KillAgentXIcon({ className = "w-4 h-4" }: { className?: string }) {
       strokeLinejoin="round"
       aria-hidden
     >
-      <path d="M6 18L18 6M6 6l12 12" />
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 8l8 8M16 8l-8 8" />
     </svg>
   );
 }
@@ -97,7 +89,6 @@ const AgentDropdownItem = memo(function AgentDropdownItem({
   const [killing, setKilling] = useState(false);
   const roleForDesc = getAgentRoleForDescription(agent);
   const description = roleForDesc ? AGENT_ROLE_DESCRIPTIONS[roleForDesc] : undefined;
-  const showKill = isAgentRunningOver30Minutes(agent);
 
   const handleKill = useCallback(
     (e: React.MouseEvent) => {
@@ -114,7 +105,7 @@ const AgentDropdownItem = memo(function AgentDropdownItem({
   );
 
   return (
-    <li role="option" className="flex items-stretch">
+    <li role="option" className="group flex items-stretch">
       <button
         type="button"
         className="flex-1 min-w-0 px-4 py-2.5 text-sm text-left hover:bg-theme-border-subtle transition-colors flex items-start gap-3"
@@ -139,18 +130,16 @@ const AgentDropdownItem = memo(function AgentDropdownItem({
           </div>
         </div>
       </button>
-      {showKill && (
-        <button
-          type="button"
-          onClick={handleKill}
-          disabled={killing}
-          className="shrink-0 px-2 flex items-center justify-center text-theme-muted hover:text-red-600 hover:bg-theme-border-subtle transition-colors disabled:opacity-50"
-          title="Kill agent (running over 30 minutes)"
-          aria-label="Kill agent"
-        >
-          <KillAgentXIcon className="w-4 h-4" />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={handleKill}
+        disabled={killing}
+        className="shrink-0 px-2 flex items-center justify-center text-theme-muted hover:text-red-600 hover:bg-theme-border-subtle transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
+        title="Kill agent"
+        aria-label="Kill agent"
+      >
+        <KillAgentCircledXIcon className="w-4 h-4" />
+      </button>
     </li>
   );
 });

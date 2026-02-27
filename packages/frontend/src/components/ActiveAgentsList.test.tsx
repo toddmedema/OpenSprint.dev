@@ -501,8 +501,8 @@ describe("ActiveAgentsList", () => {
     });
   });
 
-  it("shows Kill button (X icon) when agent runtime exceeds 30 minutes", async () => {
-    const startedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+  it("shows Kill button (circled X icon) for all agents, visible on card hover", async () => {
+    const startedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     mockAgentsActive.mockResolvedValue([
       {
         id: "task-1",
@@ -525,31 +525,8 @@ describe("ActiveAgentsList", () => {
     expect(killButton).toBeInTheDocument();
   });
 
-  it("does not show Kill button when agent runtime is under 30 minutes", async () => {
-    const startedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    mockAgentsActive.mockResolvedValue([
-      {
-        id: "task-1",
-        phase: "coding",
-        role: "coder",
-        label: "Task 1",
-        startedAt,
-      },
-    ]);
-
-    renderActiveAgentsList();
-    await waitFor(() => {
-      expect(screen.getByText("1 agent running")).toBeInTheDocument();
-    });
-
-    const user = userEvent.setup();
-    await user.click(screen.getByTitle("Active agents"));
-
-    expect(screen.queryByRole("button", { name: "Kill agent" })).not.toBeInTheDocument();
-  });
-
   it("calls kill API when Kill button is clicked", async () => {
-    const startedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+    const startedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     mockAgentsActive.mockResolvedValue([
       {
         id: "task-1",
