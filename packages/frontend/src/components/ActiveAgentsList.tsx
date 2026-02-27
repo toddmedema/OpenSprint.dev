@@ -64,8 +64,8 @@ const isPlanningAgent = (agent: ActiveAgent) =>
   agent.phase === "plan" ||
   (agent.role && getSlotForRole(agent.role as Parameters<typeof getSlotForRole>[0]) === "planning");
 
-/** Skull icon for Kill button (outline style) */
-function SkullIcon({ className = "w-4 h-4" }: { className?: string }) {
+/** X icon for Kill button */
+function KillAgentXIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -77,10 +77,7 @@ function SkullIcon({ className = "w-4 h-4" }: { className?: string }) {
       strokeLinejoin="round"
       aria-hidden
     >
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
-      <circle cx="9" cy="10" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="15" cy="10" r="1.5" fill="currentColor" stroke="none" />
-      <path d="M8 15h8" />
+      <path d="M6 18L18 6M6 6l12 12" />
     </svg>
   );
 }
@@ -151,7 +148,7 @@ const AgentDropdownItem = memo(function AgentDropdownItem({
           title="Kill agent (running over 30 minutes)"
           aria-label="Kill agent"
         >
-          <SkullIcon className="w-4 h-4" />
+          <KillAgentXIcon className="w-4 h-4" />
         </button>
       )}
     </li>

@@ -501,7 +501,7 @@ describe("ActiveAgentsList", () => {
     });
   });
 
-  it("shows Kill button (skull icon) when agent runtime exceeds 30 minutes", async () => {
+  it("shows Kill button (X icon) when agent runtime exceeds 30 minutes", async () => {
     const startedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
     mockAgentsActive.mockResolvedValue([
       {
