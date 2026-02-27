@@ -495,11 +495,30 @@ export class TaskStoreService {
     const data = db.export();
     const tmp = this.dbPath + ".tmp";
     const dir = path.dirname(this.dbPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    const maxAttempts = 3; // initial + 2 retries
+    const delayMs = 100;
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        await fs.promises.writeFile(tmp, Buffer.from(data));
+        await fs.promises.rename(tmp, this.dbPath);
+        return;
+      } catch (err) {
+        lastErr = err;
+        if (attempt < maxAttempts) {
+          log.warn("Task store save failed, retrying", {
+            attempt,
+            maxAttempts,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+      }
     }
-    await fs.promises.writeFile(tmp, Buffer.from(data));
-    await fs.promises.rename(tmp, this.dbPath);
+    throw lastErr;
   }
 
   private hydrateTask(row: Record<string, unknown>): StoredTask {

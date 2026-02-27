@@ -173,6 +173,55 @@ function ensureDependenciesSection(content: string, dependsOnPlans: string[]): s
   return content.trimEnd() + "\n\n" + section;
 }
 
+/**
+ * Extract a relative path to a .json file from agent response text.
+ * Matches backtick-wrapped paths (e.g. `docs/feature-plans/foo.json`) or
+ * paths after "saved at" / "written to". Returns the first match or null.
+ */
+function extractPlanJsonPathFromResponse(content: string): string | null {
+  // Backtick-wrapped path ending in .json
+  const backtickMatch = content.match(/`([^`]+\.json)`/);
+  if (backtickMatch) return backtickMatch[1].trim();
+  // "saved at path" or "written to path"
+  const phraseMatch = content.match(
+    /(?:saved at|written to)\s+[`']?([a-zA-Z0-9_./-]+\.json)[`']?/i
+  );
+  if (phraseMatch) return phraseMatch[1].trim();
+  return null;
+}
+
+/**
+ * Read a plan JSON file from the repo. Resolves path relative to repoPath,
+ * ensures it stays under the repo (no escape), then reads and parses.
+ * Returns the parsed object if it has a "title" or "plan_title" key, else null.
+ */
+async function readPlanJsonFromRepo(
+  repoPath: string,
+  relativePath: string
+): Promise<Record<string, unknown> | null> {
+  const normalizedRepo = path.resolve(repoPath);
+  const resolved = path.resolve(normalizedRepo, relativePath);
+  const relative = path.relative(normalizedRepo, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    log.warn("Plan file path escapes repo, ignoring", { relativePath, resolved });
+    return null;
+  }
+  try {
+    const raw = await fs.readFile(resolved, "utf-8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed && (typeof parsed.title === "string" || typeof parsed.plan_title === "string")) {
+      return parsed;
+    }
+    return null;
+  } catch (err) {
+    log.warn("Failed to read plan JSON from file", {
+      path: resolved,
+      err: getErrorMessage(err),
+    });
+    return null;
+  }
+}
+
 const DECOMPOSE_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. You analyze Product Requirements Documents (PRDs) and suggest a breakdown into discrete, implementable features (Plans).
 
 **Output format:** Your response MUST be the plan(s) as JSON in this message. Do NOT write plans to files; do NOT respond with only a summary or "here's what I created" — the system parses your message for JSON only. Produce exactly the JSON output (no preamble, no explanation after the JSON). You may wrap in a \`\`\`json ... \`\`\` code block. Required shape:
@@ -1764,9 +1813,18 @@ Field rules: complexity: low, medium, high, or very_high (plan-level). Task-leve
     });
 
     // Try "title" or "plan_title" so we find JSON when Planner uses snake_case
-    const parsed =
+    let parsed: Record<string, unknown> | null =
       extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "title") ??
       extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "plan_title");
+
+    // Fallback: agent may have written the plan to a JSON file and summarized in the message
+    if (!parsed) {
+      const planJsonPath = extractPlanJsonPathFromResponse(response.content);
+      if (planJsonPath) {
+        parsed = await readPlanJsonFromRepo(repoPath, planJsonPath);
+        if (parsed) log.info("Used plan from file (agent wrote to file)", { path: planJsonPath });
+      }
+    }
 
     if (!parsed) {
       throw new AppError(
