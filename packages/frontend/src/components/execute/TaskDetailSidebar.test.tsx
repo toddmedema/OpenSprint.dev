@@ -606,7 +606,7 @@ describe("TaskDetailSidebar", () => {
     expect(screen.getByTestId("task-detail-error")).toHaveTextContent("Network error");
   });
 
-  it("renders Depends on above Description in DOM order", () => {
+  it("renders Links above Description in DOM order", () => {
     const depTask = {
       id: "epic-1.2",
       title: "Prerequisite Task",
@@ -648,14 +648,14 @@ describe("TaskDetailSidebar", () => {
       </Provider>
     );
 
-    const dependsOn = screen.getByText("Depends on:");
+    const linksHeader = screen.getByText("Links:");
     const descriptionHeader = screen.getByRole("button", { name: /collapse description/i });
     expect(
-      dependsOn.compareDocumentPosition(descriptionHeader) & Node.DOCUMENT_POSITION_FOLLOWING
+      linksHeader.compareDocumentPosition(descriptionHeader) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
   });
 
-  it("hides Depends on section when epic is the only dependency", () => {
+  it("hides Links section when epic is the only dependency", () => {
     const props = createMinimalProps({
       selectedTaskData: {
         id: "epic-1.1",
@@ -682,10 +682,10 @@ describe("TaskDetailSidebar", () => {
       </Provider>
     );
 
-    expect(screen.queryByText("Depends on:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Links:")).not.toBeInTheDocument();
   });
 
-  it("shows Depends on only non-epic dependencies when epic and others exist", () => {
+  it("shows Links only non-epic dependencies when epic and others exist", () => {
     const depTask = {
       id: "epic-1.2",
       title: "Prerequisite Task",
@@ -730,12 +730,12 @@ describe("TaskDetailSidebar", () => {
       </Provider>
     );
 
-    expect(screen.getByText("Depends on:")).toBeInTheDocument();
+    expect(screen.getByText("Links:")).toBeInTheDocument();
     expect(screen.getByText("Prerequisite Task")).toBeInTheDocument();
     expect(screen.queryByText("epic-1")).not.toBeInTheDocument();
   });
 
-  it("shows Depends on when task has only non-epic dependencies", () => {
+  it("shows Links when task has only non-epic dependencies", () => {
     const depTask = {
       id: "epic-1.2",
       title: "Other Task",
@@ -777,8 +777,102 @@ describe("TaskDetailSidebar", () => {
       </Provider>
     );
 
-    expect(screen.getByText("Depends on:")).toBeInTheDocument();
+    expect(screen.getByText("Links:")).toBeInTheDocument();
     expect(screen.getByText("Other Task")).toBeInTheDocument();
+  });
+
+  it("shows link type per task and sorts by type (blocked, parent/child, related)", () => {
+    const blockedTask = {
+      id: "epic-1.2",
+      title: "Remove pagination",
+      epicId: "epic-1",
+      kanbanColumn: "done" as const,
+      priority: 1,
+      assignee: null,
+      type: "task" as const,
+      status: "closed" as const,
+      labels: [],
+      dependencies: [],
+      description: "",
+      createdAt: "",
+      updatedAt: "",
+    };
+    const parentTask = {
+      id: "epic-1.3",
+      title: "Sync plan tasks when agent updates",
+      epicId: "epic-1",
+      kanbanColumn: "ready" as const,
+      priority: 1,
+      assignee: null,
+      type: "task" as const,
+      status: "open" as const,
+      labels: [],
+      dependencies: [],
+      description: "",
+      createdAt: "",
+      updatedAt: "",
+    };
+    const relatedTask = {
+      id: "epic-1.4",
+      title: "Add hover background",
+      epicId: "epic-1",
+      kanbanColumn: "backlog" as const,
+      priority: 1,
+      assignee: null,
+      type: "task" as const,
+      status: "open" as const,
+      labels: [],
+      dependencies: [],
+      description: "",
+      createdAt: "",
+      updatedAt: "",
+    };
+    const props = createMinimalProps({
+      selectedTaskData: {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "in_progress" as const,
+        labels: [],
+        dependencies: [
+          { targetId: "epic-1.4", type: "related" },
+          { targetId: "epic-1.2", type: "blocks" },
+          { targetId: "epic-1.3", type: "parent-child" },
+        ],
+        description: "",
+        createdAt: "",
+        updatedAt: "",
+      },
+      tasks: [blockedTask, parentTask, relatedTask],
+      descriptionSectionExpanded: true,
+    });
+
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    expect(screen.getByText("Links:")).toBeInTheDocument();
+    expect(screen.getByText("Blocked on:")).toBeInTheDocument();
+    expect(screen.getByText("Parent:")).toBeInTheDocument();
+    expect(screen.getByText("Related:")).toBeInTheDocument();
+    expect(screen.getByText("Remove pagination")).toBeInTheDocument();
+    expect(screen.getByText("Sync plan tasks when agent updates")).toBeInTheDocument();
+    expect(screen.getByText("Add hover background")).toBeInTheDocument();
+
+    const linkButtons = screen.getAllByRole("button", { name: /Remove pagination|Sync plan tasks|Add hover background/i });
+    expect(linkButtons).toHaveLength(3);
+    const firstText = linkButtons[0].textContent ?? "";
+    const secondText = linkButtons[1].textContent ?? "";
+    const thirdText = linkButtons[2].textContent ?? "";
+    expect(firstText).toContain("Remove pagination");
+    expect(secondText).toContain("Sync plan tasks when agent updates");
+    expect(thirdText).toContain("Add hover background");
   });
 
   describe("Add link", () => {

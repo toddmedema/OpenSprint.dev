@@ -421,7 +421,7 @@ export function TaskDetailSidebar({
                 );
               })()}
 
-            {/* Dependencies */}
+            {/* Links */}
             {(() => {
               const nonEpicDeps = (task.dependencies ?? []).filter(
                 (d) =>
@@ -431,14 +431,31 @@ export function TaskDetailSidebar({
               );
               const hasDeps = nonEpicDeps.length > 0;
               if (!hasDeps) return null;
+
+              const TYPE_ORDER: Record<string, number> = {
+                blocks: 0,
+                "parent-child": 1,
+                related: 2,
+              };
+              const TYPE_LABEL: Record<string, string> = {
+                blocks: "Blocked on:",
+                "parent-child": "Parent:",
+                related: "Related:",
+              };
+              const sorted = [...nonEpicDeps].sort(
+                (a, b) =>
+                  (TYPE_ORDER[a.type] ?? 3) - (TYPE_ORDER[b.type] ?? 3)
+              );
+
               return (
                 <div className="text-xs mt-1.5">
-                  <span className="text-theme-muted">Depends on:</span>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-1.5">
-                    {nonEpicDeps.map((d) => {
+                  <span className="text-theme-muted">Links:</span>
+                  <div className="flex flex-col gap-y-1.5 mt-1.5">
+                    {sorted.map((d) => {
                       const depTask = tasks.find((t) => t.id === d.targetId);
                       const label = depTask?.title ?? d.targetId;
                       const col = depTask?.kanbanColumn ?? "backlog";
+                      const typeLabel = TYPE_LABEL[d.type] ?? "Related:";
                       return (
                         <button
                           key={d.targetId}
@@ -451,6 +468,9 @@ export function TaskDetailSidebar({
                             size="xs"
                             title={COLUMN_LABELS[col]}
                           />
+                          <span className="text-theme-muted shrink-0">
+                            {typeLabel}
+                          </span>
                           <span className="truncate max-w-[200px]" title={label}>
                             {label}
                           </span>
