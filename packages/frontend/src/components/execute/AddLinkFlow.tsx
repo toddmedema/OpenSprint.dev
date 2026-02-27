@@ -140,9 +140,14 @@ export function AddLinkFlow({
             aria-label="Task to link"
             aria-autocomplete="list"
             aria-expanded={showSuggestions}
+            aria-controls={showSuggestions ? "add-link-listbox" : undefined}
+            aria-activedescendant={
+              showSuggestions ? `add-link-option-${highlightedIndex}` : undefined
+            }
           />
           {showSuggestions && (
             <ul
+              id="add-link-listbox"
               role="listbox"
               className="absolute left-0 right-0 top-full mt-0.5 z-50 max-h-32 overflow-y-auto rounded border border-theme-border bg-theme-surface shadow-lg py-1"
               data-testid="add-link-suggestions"
@@ -150,12 +155,16 @@ export function AddLinkFlow({
               {displayedSuggestions.map((t, i) => (
                 <li
                   key={t.id}
+                  id={`add-link-option-${i}`}
                   role="option"
                   aria-selected={i === highlightedIndex}
-                  className={`px-2 py-1 text-xs cursor-pointer ${
-                    i === highlightedIndex ? "bg-theme-border-subtle" : "hover:bg-theme-border-subtle/50"
+                  className={`px-2 py-1 text-xs cursor-pointer transition-colors ${
+                    i === highlightedIndex
+                      ? "bg-theme-info-bg text-theme-text"
+                      : "hover:bg-theme-border-subtle/50"
                   }`}
                   onClick={() => selectTask(t)}
+                  onMouseEnter={() => setHighlightedIndex(i)}
                 >
                   <span className="font-mono text-theme-muted">{t.id}</span>
                   <span className="ml-2 truncate">{t.title ?? ""}</span>

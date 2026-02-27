@@ -927,6 +927,40 @@ describe("TaskDetailSidebar", () => {
       });
     });
 
+    it("selected suggestion has distinct background when navigating with arrow keys", async () => {
+      const user = userEvent.setup();
+      const taskB = { id: "epic-1.2", title: "Task B", epicId: "epic-1", kanbanColumn: "in_progress" as const, priority: 0, assignee: null, type: "task" as const, status: "in_progress" as const, labels: [], dependencies: [], description: "", createdAt: "", updatedAt: "" };
+      const taskC = { id: "epic-1.3", title: "Task C", epicId: "epic-1", kanbanColumn: "in_progress" as const, priority: 0, assignee: null, type: "task" as const, status: "in_progress" as const, labels: [], dependencies: [], description: "", createdAt: "", updatedAt: "" };
+      const props = createMinimalProps({
+        tasks: [
+          { id: "epic-1.1", title: "Task A", epicId: "epic-1", kanbanColumn: "in_progress" as const, priority: 0, assignee: null, type: "task" as const, status: "in_progress" as const, labels: [], dependencies: [], description: "", createdAt: "", updatedAt: "" },
+          taskB,
+          taskC,
+        ],
+      });
+      render(
+        <Provider store={createStore()}>
+          <TaskDetailSidebar {...props} />
+        </Provider>
+      );
+      await user.click(screen.getByTestId("sidebar-add-link-btn"));
+      await user.type(screen.getByTestId("add-link-input"), "task");
+      const suggestionList = await screen.findByTestId("add-link-suggestions");
+      const options = within(suggestionList).getAllByRole("option");
+
+      // Initially first option is selected
+      expect(options[0]).toHaveClass("bg-theme-info-bg");
+      expect(options[1]).not.toHaveClass("bg-theme-info-bg");
+
+      await user.keyboard("{ArrowDown}");
+      expect(options[0]).not.toHaveClass("bg-theme-info-bg");
+      expect(options[1]).toHaveClass("bg-theme-info-bg");
+
+      await user.keyboard("{ArrowUp}");
+      expect(options[0]).toHaveClass("bg-theme-info-bg");
+      expect(options[1]).not.toHaveClass("bg-theme-info-bg");
+    });
+
     it("Enter on first suggestion selects and saves without arrow navigation", async () => {
       const user = userEvent.setup();
       mockTasksGet.mockResolvedValue({
