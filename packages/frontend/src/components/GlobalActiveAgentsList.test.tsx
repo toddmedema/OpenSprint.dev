@@ -221,6 +221,32 @@ describe("GlobalActiveAgentsList", () => {
     expect(screen.queryByText(/Coder \(/)).not.toBeInTheDocument();
   });
 
+  it("dropdown agent items have hover background and cursor pointer for clickability feedback", async () => {
+    mockProjectsList.mockResolvedValue([{ id: "proj-1", name: "Project A" }]);
+    mockAgentsActive.mockResolvedValue([
+      {
+        id: "task-1",
+        phase: "coding",
+        role: "coder",
+        label: "Task 1",
+        startedAt: "2026-02-16T12:00:00.000Z",
+      },
+    ]);
+
+    renderGlobalActiveAgentsList();
+    await waitFor(() => {
+      expect(screen.getByText("1 agent running")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Active agents"));
+
+    const agentButton = within(screen.getByRole("listbox")).getByRole("button", { name: /Task 1/ });
+    expect(agentButton).toHaveClass("hover:bg-theme-border-subtle");
+    expect(agentButton).toHaveClass("group-hover:bg-theme-border-subtle");
+    expect(agentButton).toHaveClass("cursor-pointer");
+  });
+
   it("shows agent role description as tooltip on dropdown item hover", async () => {
     const coderDescription = "Implements tasks and ships working code with tests.";
     mockProjectsList.mockResolvedValue([{ id: "proj-1", name: "Project A" }]);
