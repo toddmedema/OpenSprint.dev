@@ -275,6 +275,71 @@ describe("EvalPhase feedback form", () => {
     });
   });
 
+  it("refocuses feedback input after submitting new feedback via Submit button", async () => {
+    const { api } = await import("../../api/client");
+    vi.mocked(api.feedback.submit).mockResolvedValue({
+      id: "fb-new",
+      text: "Test feedback",
+      category: "bug",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    });
+
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <EvalPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Describe a bug/)).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    const input = screen.getByTestId("eval-feedback-input");
+    await user.type(input, "Some feedback");
+    await user.click(screen.getByRole("button", { name: /Submit Feedback/i }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(input);
+    });
+  });
+
+  it("refocuses feedback input after submitting new feedback via Enter key", async () => {
+    const { api } = await import("../../api/client");
+    vi.mocked(api.feedback.submit).mockResolvedValue({
+      id: "fb-new",
+      text: "Test feedback",
+      category: "bug",
+      mappedPlanId: null,
+      createdTaskIds: [],
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    });
+
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <EvalPhase projectId="proj-1" />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Describe a bug/)).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    const input = screen.getByTestId("eval-feedback-input");
+    await user.type(input, "Some feedback{Enter}");
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(input);
+    });
+  });
+
   it("renders priority dropdown with placeholder and options", async () => {
     const store = createStore();
     const user = userEvent.setup();

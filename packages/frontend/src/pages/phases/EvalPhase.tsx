@@ -640,6 +640,7 @@ export function EvalPhase({
     );
     if (submitFeedback.fulfilled.match(result)) {
       clearFeedbackFormDraft(projectId);
+      feedbackInputRef.current?.focus();
     }
   };
 
