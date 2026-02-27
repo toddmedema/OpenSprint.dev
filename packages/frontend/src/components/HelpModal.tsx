@@ -52,6 +52,7 @@ export function HelpModal({ onClose, project }: HelpModalProps) {
       <div
         className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col rounded-lg bg-theme-surface shadow-xl"
         onClick={(e) => e.stopPropagation()}
+        data-testid="help-modal-content"
       >
         {/* Header with tabs */}
         <div className="shrink-0 border-b border-theme-border">

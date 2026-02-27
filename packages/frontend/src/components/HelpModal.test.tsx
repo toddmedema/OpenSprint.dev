@@ -109,6 +109,13 @@ describe("HelpModal", () => {
     expect(dialog).toHaveAttribute("aria-labelledby", "help-modal-title");
   });
 
+  it("has max-height 90vh for viewport-relative sizing on large screens", () => {
+    render(<HelpModal onClose={vi.fn()} />);
+
+    const modalContent = screen.getByTestId("help-modal-content");
+    expect(modalContent).toHaveClass("max-h-[90vh]");
+  });
+
   it("Ask a Question tab shows chat input and sends messages", async () => {
     vi.mocked(api.help.chat).mockResolvedValue({ message: "Here is my response." });
     const user = userEvent.setup();
