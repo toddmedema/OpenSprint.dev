@@ -15,6 +15,14 @@ function getDbPath(): string {
   return path.join(home, ".opensprint", "tasks.db");
 }
 
+const DB_EXT_BACKUP = ".bak";
+const DB_EXT_TMP = ".tmp";
+
+function isCorruptionError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("malformed") || msg.includes("corrupt") || msg.includes("database disk image");
+}
+
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS tasks (
     id            TEXT PRIMARY KEY,
@@ -359,11 +367,36 @@ export class TaskStoreService {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    if (fs.existsSync(this.dbPath)) {
-      const buf = fs.readFileSync(this.dbPath);
-      this.db = new SQL.Database(buf);
-      log.info("Loaded task DB from disk", { path: this.dbPath });
-    } else {
+    const candidates = [
+      this.dbPath,
+      this.dbPath + DB_EXT_BACKUP,
+      this.dbPath + DB_EXT_TMP,
+    ] as const;
+    for (const candidate of candidates) {
+      if (!fs.existsSync(candidate)) continue;
+      try {
+        const buf = fs.readFileSync(candidate);
+        this.db = new SQL.Database(buf);
+        this.db.run("PRAGMA quick_check");
+        log.info("Loaded task DB from disk", {
+          path: candidate === this.dbPath ? this.dbPath : candidate,
+          fallback: candidate !== this.dbPath,
+        });
+        break;
+      } catch (err) {
+        if (isCorruptionError(err)) {
+          log.warn("Task DB file corrupted, trying next candidate", {
+            path: candidate,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          this.db?.close();
+          this.db = null;
+          continue;
+        }
+        throw err;
+      }
+    }
+    if (!this.db) {
       this.db = new SQL.Database();
       log.info("Created new task DB", { path: this.dbPath });
     }
@@ -574,7 +607,8 @@ export class TaskStoreService {
         // File doesn't exist, safe to write
       }
     }
-    const tmp = this.dbPath + ".tmp";
+    const tmp = this.dbPath + DB_EXT_TMP;
+    const bak = this.dbPath + DB_EXT_BACKUP;
     const dir = path.dirname(this.dbPath);
     const maxAttempts = 3; // initial + 2 retries
     const delayMs = 100;
@@ -584,11 +618,27 @@ export class TaskStoreService {
         if (!fs.existsSync(dir)) {
           fs.mkdirSync(dir, { recursive: true });
         }
-        await fs.promises.writeFile(tmp, Buffer.from(data));
+        const f = await fs.promises.open(tmp, "w");
+        try {
+          await f.write(Buffer.from(data));
+          await f.sync();
+        } finally {
+          await f.close();
+        }
+        if (fs.existsSync(this.dbPath)) {
+          await fs.promises.rename(this.dbPath, bak);
+        }
         await fs.promises.rename(tmp, this.dbPath);
         return;
       } catch (err) {
         lastErr = err;
+        if (fs.existsSync(tmp)) {
+          try {
+            await fs.promises.unlink(tmp);
+          } catch {
+            /* ignore */
+          }
+        }
         if (attempt < maxAttempts) {
           log.warn("Task store save failed, retrying", {
             attempt,
