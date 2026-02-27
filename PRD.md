@@ -807,9 +807,11 @@ The orchestrator creates tasks from this output, resolving ordinal indices to ac
 
 **Purpose:** Categorize user feedback and map it to the appropriate Plan epic and tasks.
 
-**Input:** `context/prd.json`, `context/plans_index.json`, `context/feedback.txt`. **Additional config:** `feedback_id`.
+**Plan/epic association:** Associate feedback to a plan/epic ONLY when there is a very clear link. When feedback does not clearly map to work in an existing plan/epic, use `mapped_plan_id: null` and `mapped_epic_id: null`. In that case, `proposed_tasks` create top-level (standalone) tasks — do not force feedback into an existing plan when the link is ambiguous.
 
-**Output (`result.json`):** `{ "status": "success", "category": "<bug|feature|ux|scope>", "mapped_plan_id": "<id>", "mapped_epic_id": "<id>", "proposed_tasks": [<indexed task list, same format as Planner>], "is_scope_change": <bool> }`. When `is_scope_change` is `true`, the orchestrator also invokes the Harmonizer with `trigger: "scope_change"`.
+**Input:** `context/prd.json`, `context/plans_index.json`, `context/feedback.txt`, open tasks list. **Additional config:** `feedback_id`.
+
+**Output (`result.json`):** `{ "status": "success", "category": "<bug|feature|ux|scope>", "mapped_plan_id": "<id>|null", "mapped_epic_id": "<id>|null", "proposed_tasks": [<indexed task list, same format as Planner>], "is_scope_change": <bool>, "link_to_existing_task_ids": ["task-id"], "update_existing_tasks": {...} }`. When `is_scope_change` is `true`, the orchestrator also invokes the Harmonizer with `trigger: "scope_change"`. When `link_to_existing_task_ids` is non-empty, no new tasks are created; feedback is linked to those existing tasks.
 
 #### 12.3.5 Summarizer
 

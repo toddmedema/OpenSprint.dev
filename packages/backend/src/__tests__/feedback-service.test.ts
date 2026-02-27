@@ -686,7 +686,7 @@ describe("FeedbackService", () => {
     const prompt = mockInvoke.mock.calls[0][0]?.prompt ?? "";
     expect(prompt).toContain("# PRD");
     expect(prompt).toContain("# Plans");
-    expect(prompt).toContain("# Existing OPEN/READY tasks");
+    expect(prompt).toContain("# Existing OPEN tasks");
     expect(prompt).toContain("Users want dark mode");
 
     const { broadcastToProject } = await import("../websocket/index.js");
@@ -712,7 +712,7 @@ describe("FeedbackService", () => {
       issue_type: "task",
       status: "open",
     };
-    mockTaskStoreReady.mockResolvedValue([existingTask]);
+    mockTaskStoreListAll.mockResolvedValue([existingTask]);
     const { taskStore } = await import("../services/task-store.service.js");
     (taskStore.show as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...existingTask,
@@ -763,7 +763,7 @@ describe("FeedbackService", () => {
       issue_type: "bug",
       status: "open",
     };
-    mockTaskStoreReady.mockResolvedValue([existingTask]);
+    mockTaskStoreListAll.mockResolvedValue([existingTask]);
     const { taskStore } = await import("../services/task-store.service.js");
     (taskStore.show as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...existingTask,
@@ -798,7 +798,7 @@ describe("FeedbackService", () => {
   });
 
   it("should fall through to create when similar_existing_task_id is invalid", async () => {
-    mockTaskStoreReady.mockResolvedValue([]);
+    mockTaskStoreListAll.mockResolvedValue([]);
     mockInvoke.mockResolvedValue({
       content: JSON.stringify({
         category: "bug",
@@ -820,7 +820,7 @@ describe("FeedbackService", () => {
   });
 
   it("should re-enqueue when link_to_existing_task_ids contains invalid task ID", async () => {
-    mockTaskStoreReady.mockResolvedValue([]);
+    mockTaskStoreListAll.mockResolvedValue([]);
     mockInvoke.mockResolvedValue({
       content: JSON.stringify({
         category: "feature",
@@ -925,6 +925,43 @@ describe("FeedbackService", () => {
 
     // Inter-task blocks dependency (task 1 depends_on task 0) + 2 discovered-from
     expect(mockTaskStoreAddDependency).toHaveBeenCalledTimes(3);
+  });
+
+  it("should respect mapped_plan_id: null and mapped_epic_id: null when feedback lacks clear plan/epic link", async () => {
+    mockInvoke.mockResolvedValue({
+      content: JSON.stringify({
+        category: "feature",
+        mapped_plan_id: null,
+        mapped_epic_id: null,
+        is_scope_change: false,
+        proposed_tasks: [
+          {
+            index: 0,
+            title: "Standalone feature task",
+            description: "Feedback with no clear plan link",
+            priority: 2,
+            depends_on: [],
+          },
+        ],
+      }),
+    });
+
+    const item = await feedbackService.submitFeedback(projectId, {
+      text: "Add a new standalone feature that doesn't fit any existing plan",
+    });
+
+    await feedbackService.processFeedbackWithAnalyst(projectId, item.id);
+
+    const updated = await feedbackService.getFeedback(projectId, item.id);
+    expect(updated.mappedPlanId).toBeNull();
+    expect(updated.mappedEpicId).toBeUndefined();
+    expect(updated.proposedTasks).toHaveLength(1);
+    expect(updated.createdTaskIds).toHaveLength(1);
+    // Tasks created without parent epic (top-level) when mapped_plan_id is null
+    const createCalls = mockTaskStoreCreateWithRetry.mock.calls;
+    const taskCreateCalls = createCalls.filter((c) => c[2]?.type === "feature");
+    expect(taskCreateCalls.length).toBeGreaterThan(0);
+    expect(taskCreateCalls[0][2].parentId).toBeUndefined();
   });
 
   it("accepts camelCase proposedTasks with dependsOn, task_title, task_description from Planner", async () => {
