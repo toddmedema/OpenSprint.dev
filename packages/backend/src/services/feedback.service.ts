@@ -1193,8 +1193,8 @@ export class FeedbackService {
   /**
    * Resolve a feedback item (status -> resolved).
    * When resolving a parent, cascades to all children/replies recursively.
-   * PRD §7.5.3: When all critical feedback (bugs) are resolved and autoDeployOnEvaluateResolution is enabled,
-   * auto-triggers deployment.
+   * PRD §7.5.3: When all critical feedback (bugs) are resolved, triggers deploy for targets
+   * with autoDeployTrigger "eval_resolution" via triggerDeployForEvent.
    */
   async resolveFeedback(projectId: string, feedbackId: string): Promise<FeedbackItem> {
     const item = await this.getFeedback(projectId, feedbackId);

@@ -85,6 +85,11 @@ vi.mock("../websocket/index.js", () => ({
   broadcastToProject: vi.fn(),
 }));
 
+const mockTriggerDeployForEvent = vi.fn().mockResolvedValue([]);
+vi.mock("../services/deploy-trigger.service.js", () => ({
+  triggerDeployForEvent: (...args: unknown[]) => mockTriggerDeployForEvent(...args),
+}));
+
 let taskStoreCreateCallCount = 0;
 const mockTaskStoreCreate = vi.fn().mockImplementation(() => {
   taskStoreCreateCallCount += 1;
@@ -2207,6 +2212,115 @@ describe("FeedbackService", () => {
       expect(storedParent.status).toBe("pending");
       expect(storedChild1.status).toBe("resolved");
       expect(storedChild2.status).toBe("pending");
+    });
+  });
+
+  describe("resolveFeedback eval_resolution deploy trigger (PRD §7.5.3)", () => {
+    it("should call triggerDeployForEvent(projectId, eval_resolution) when all critical (bug) feedback is resolved", async () => {
+      await feedbackStore.insertFeedback(
+        projectId,
+        {
+          id: "fb-eval-1",
+          text: "Bug 1",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        },
+        null
+      );
+      await feedbackStore.insertFeedback(
+        projectId,
+        {
+          id: "fb-eval-2",
+          text: "Bug 2",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        },
+        null
+      );
+
+      await feedbackService.resolveFeedback(projectId, "fb-eval-1");
+      expect(mockTriggerDeployForEvent).not.toHaveBeenCalled();
+
+      await feedbackService.resolveFeedback(projectId, "fb-eval-2");
+      expect(mockTriggerDeployForEvent).toHaveBeenCalledTimes(1);
+      expect(mockTriggerDeployForEvent).toHaveBeenCalledWith(projectId, "eval_resolution");
+    });
+
+    it("should NOT call triggerDeployForEvent when not all critical feedback is resolved", async () => {
+      await feedbackStore.insertFeedback(
+        projectId,
+        {
+          id: "fb-eval-3",
+          text: "Bug 1",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        },
+        null
+      );
+      await feedbackStore.insertFeedback(
+        projectId,
+        {
+          id: "fb-eval-4",
+          text: "Bug 2",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        },
+        null
+      );
+
+      await feedbackService.resolveFeedback(projectId, "fb-eval-3");
+      expect(mockTriggerDeployForEvent).not.toHaveBeenCalled();
+    });
+
+    it("should NOT call triggerDeployForEvent when there are no critical (bug) feedback items", async () => {
+      await feedbackStore.insertFeedback(
+        projectId,
+        {
+          id: "fb-eval-5",
+          text: "Feature request",
+          category: "feature",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        },
+        null
+      );
+
+      await feedbackService.resolveFeedback(projectId, "fb-eval-5");
+      expect(mockTriggerDeployForEvent).not.toHaveBeenCalled();
+    });
+
+    it("should call triggerDeployForEvent when resolving last bug (single critical item)", async () => {
+      await feedbackStore.insertFeedback(
+        projectId,
+        {
+          id: "fb-eval-6",
+          text: "Only bug",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        },
+        null
+      );
+
+      await feedbackService.resolveFeedback(projectId, "fb-eval-6");
+      expect(mockTriggerDeployForEvent).toHaveBeenCalledTimes(1);
+      expect(mockTriggerDeployForEvent).toHaveBeenCalledWith(projectId, "eval_resolution");
     });
   });
 });
