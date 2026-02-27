@@ -22,6 +22,36 @@ import { ExecuteFilterToolbar } from "../../components/execute/ExecuteFilterTool
 import { TaskDetailSidebar } from "../../components/execute/TaskDetailSidebar";
 import { TimelineList } from "../../components/execute/TimelineList";
 
+/** Skeleton cards matching the kanban grid so layout is visible while tasks load. */
+function TaskListLoadingSkeleton() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="task-list-loading">
+      {[1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="rounded-xl border border-theme-border bg-theme-surface overflow-hidden"
+          style={{ minHeight: 160 }}
+        >
+          <div className="p-4 border-b border-theme-border-subtle">
+            <div className="h-4 w-3/4 rounded bg-theme-surface-muted animate-pulse" />
+            <div className="h-2 w-1/2 rounded bg-theme-surface-muted/70 animate-pulse mt-2" />
+          </div>
+          <ul className="divide-y divide-theme-border-subtle">
+            {[1, 2, 3].map((j) => (
+              <li key={j} className="px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="h-5 w-16 rounded bg-theme-surface-muted/70 animate-pulse" />
+                  <div className="h-4 flex-1 rounded bg-theme-surface-muted animate-pulse" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface ExecutePhaseProps {
   projectId: string;
   /** Task ID from URL (?task=...) so sidebar can show on first paint before Redux sync. */
@@ -210,7 +240,7 @@ export function ExecutePhase({
 
         <div className="flex-1 min-h-0 overflow-auto p-6">
           {loading ? (
-            <div className="text-center py-10 text-theme-muted">Loading tasks...</div>
+            <TaskListLoadingSkeleton />
           ) : implTasks.length === 0 ? (
             <div className="text-center py-10 text-theme-muted">
               No tasks yet. Ship a Plan to start generating tasks.

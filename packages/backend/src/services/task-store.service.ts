@@ -535,32 +535,88 @@ export class TaskStoreService {
     throw lastErr;
   }
 
-  private hydrateTask(row: Record<string, unknown>): StoredTask {
+  /**
+   * Load all dependency rows and dependent counts for a project in two queries (batch).
+   * Used by listAll/list to avoid N+1 when hydrating many tasks.
+   */
+  private loadDepsMapsForProject(projectId: string): {
+    depsByTaskId: Map<string, Array<{ depends_on_id: string; type: string }>>;
+    dependentCountByTaskId: Map<string, number>;
+  } {
     const db = this.ensureDb();
-    const labels: string[] = JSON.parse((row.labels as string) || "[]");
-    const extra: Record<string, unknown> = JSON.parse((row.extra as string) || "{}");
+    const depsByTaskId = new Map<string, Array<{ depends_on_id: string; type: string }>>();
+    const dependentCountByTaskId = new Map<string, number>();
 
-    const deps: Array<{ depends_on_id: string; type: string }> = [];
     const depStmt = db.prepare(
-      "SELECT depends_on_id, dep_type FROM task_dependencies WHERE task_id = ?"
+      "SELECT task_id, depends_on_id, dep_type FROM task_dependencies WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)"
     );
-    depStmt.bind([row.id as string]);
+    depStmt.bind([projectId]);
     while (depStmt.step()) {
-      const depRow = depStmt.getAsObject();
-      deps.push({
-        depends_on_id: depRow.depends_on_id as string,
-        type: depRow.dep_type as string,
+      const row = depStmt.getAsObject();
+      const taskId = row.task_id as string;
+      let arr = depsByTaskId.get(taskId);
+      if (!arr) {
+        arr = [];
+        depsByTaskId.set(taskId, arr);
+      }
+      arr.push({
+        depends_on_id: row.depends_on_id as string,
+        type: row.dep_type as string,
       });
     }
     depStmt.free();
 
-    const depCountStmt = db.prepare(
-      "SELECT COUNT(*) as cnt FROM task_dependencies WHERE depends_on_id = ?"
+    const countStmt = db.prepare(
+      "SELECT depends_on_id, COUNT(*) as cnt FROM task_dependencies WHERE depends_on_id IN (SELECT id FROM tasks WHERE project_id = ?) GROUP BY depends_on_id"
     );
-    depCountStmt.bind([row.id as string]);
-    depCountStmt.step();
-    const dependentCount = (depCountStmt.getAsObject().cnt as number) ?? 0;
-    depCountStmt.free();
+    countStmt.bind([projectId]);
+    while (countStmt.step()) {
+      const row = countStmt.getAsObject();
+      dependentCountByTaskId.set(row.depends_on_id as string, (row.cnt as number) ?? 0);
+    }
+    countStmt.free();
+
+    return { depsByTaskId, dependentCountByTaskId };
+  }
+
+  private hydrateTask(
+    row: Record<string, unknown>,
+    depsByTaskId?: Map<string, Array<{ depends_on_id: string; type: string }>>,
+    dependentCountByTaskId?: Map<string, number>
+  ): StoredTask {
+    const db = this.ensureDb();
+    const labels: string[] = JSON.parse((row.labels as string) || "[]");
+    const extra: Record<string, unknown> = JSON.parse((row.extra as string) || "{}");
+
+    let deps: Array<{ depends_on_id: string; type: string }>;
+    let dependentCount: number;
+
+    if (depsByTaskId != null && dependentCountByTaskId != null) {
+      deps = depsByTaskId.get(row.id as string) ?? [];
+      dependentCount = dependentCountByTaskId.get(row.id as string) ?? 0;
+    } else {
+      deps = [];
+      const depStmt = db.prepare(
+        "SELECT depends_on_id, dep_type FROM task_dependencies WHERE task_id = ?"
+      );
+      depStmt.bind([row.id as string]);
+      while (depStmt.step()) {
+        const depRow = depStmt.getAsObject();
+        deps.push({
+          depends_on_id: depRow.depends_on_id as string,
+          type: depRow.dep_type as string,
+        });
+      }
+      depStmt.free();
+
+      const depCountStmt = db.prepare(
+        "SELECT COUNT(*) as cnt FROM task_dependencies WHERE depends_on_id = ?"
+      );
+      depCountStmt.bind([row.id as string]);
+      depCountStmt.step();
+      dependentCount = (depCountStmt.getAsObject().cnt as number) ?? 0;
+      depCountStmt.free();
+    }
 
     const blockReason = (extra.block_reason as string) ?? null;
     const rawComplexity = extra.complexity as string | undefined;
@@ -596,6 +652,27 @@ export class TaskStoreService {
       dependency_count: deps.length,
       dependent_count: dependentCount,
     };
+  }
+
+  /** Run query and hydrate rows using batched deps/counts for the project (avoids N+1). */
+  private execAndHydrateWithDeps(
+    projectId: string,
+    sql: string,
+    params?: unknown[]
+  ): StoredTask[] {
+    const db = this.ensureDb();
+    const stmt = db.prepare(sql);
+    if (params) stmt.bind(params);
+    const rows: Record<string, unknown>[] = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject());
+    }
+    stmt.free();
+    if (rows.length === 0) return [];
+    const { depsByTaskId, dependentCountByTaskId } = this.loadDepsMapsForProject(projectId);
+    return rows.map((row) =>
+      this.hydrateTask(row, depsByTaskId, dependentCountByTaskId)
+    );
   }
 
   private execAndHydrate(sql: string, params?: unknown[]): StoredTask[] {
@@ -649,7 +726,8 @@ export class TaskStoreService {
 
   async listAll(projectId: string): Promise<StoredTask[]> {
     await this.ensureInitialized();
-    return this.execAndHydrate(
+    return this.execAndHydrateWithDeps(
+      projectId,
       "SELECT * FROM tasks WHERE project_id = ? ORDER BY priority ASC, created_at ASC",
       [projectId]
     );
@@ -657,7 +735,8 @@ export class TaskStoreService {
 
   async list(projectId: string): Promise<StoredTask[]> {
     await this.ensureInitialized();
-    return this.execAndHydrate(
+    return this.execAndHydrateWithDeps(
+      projectId,
       "SELECT * FROM tasks WHERE project_id = ? AND status IN ('open', 'in_progress') ORDER BY priority ASC, created_at ASC",
       [projectId]
     );

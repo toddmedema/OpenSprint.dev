@@ -36,17 +36,21 @@ export class TaskService {
   ): Promise<Task[] | { items: Task[]; total: number }> {
     const project = await this.projectService.getProject(projectId);
 
-    const allIssues = await this.taskStore.listAll(projectId);
+    const [allIssues, sessionsByTask, buildStatus] = await Promise.all([
+      this.taskStore.listAll(projectId),
+      this.sessionManager.loadSessionsGroupedByTaskId(project.repoPath),
+      orchestratorService.getStatus(projectId),
+    ]);
+
     const readyIds = this.computeReadyIdsFromListAll(allIssues);
     const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
 
     const tasks = allIssues
       .map((issue) => this.storedTaskToTask(issue, readyIds, idToIssue))
       .filter((t) => t.type !== "chore");
-    await this.enrichTasksWithTestResults(project.repoPath, tasks);
+    this.enrichTasksWithTestResultsFromMap(tasks, sessionsByTask);
 
     // Override kanban column for active review tasks (PRD §7.3.2)
-    const buildStatus = await orchestratorService.getStatus(projectId);
     for (const active of buildStatus.activeTasks) {
       if (active.phase === "review") {
         const reviewTask = tasks.find((t) => t.id === active.taskId);
@@ -299,6 +303,13 @@ export class TaskService {
   /** Enrich tasks with latest test results from agent sessions (PRD §8.3). Uses single readdir. */
   private async enrichTasksWithTestResults(repoPath: string, tasks: Task[]): Promise<void> {
     const sessionsByTask = await this.sessionManager.loadSessionsGroupedByTaskId(repoPath);
+    this.enrichTasksWithTestResultsFromMap(tasks, sessionsByTask);
+  }
+
+  private enrichTasksWithTestResultsFromMap(
+    tasks: Task[],
+    sessionsByTask: Map<string, AgentSession[]>
+  ): void {
     for (const task of tasks) {
       const sessions = sessionsByTask.get(task.id);
       const latest = sessions?.[sessions.length - 1];
