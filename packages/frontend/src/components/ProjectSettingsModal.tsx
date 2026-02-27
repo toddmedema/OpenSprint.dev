@@ -3,6 +3,7 @@ import { FolderBrowser } from "./FolderBrowser";
 import { CloseButton } from "./CloseButton";
 import { ModelSelect } from "./ModelSelect";
 import { DisplaySettingsContent } from "./DisplaySettingsContent";
+import { AgentsMdSection } from "./AgentsMdSection";
 import { api } from "../api/client";
 import type {
   Project,
@@ -631,6 +632,8 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                       </div>
                     </div>
                   )}
+                  <hr />
+                  <AgentsMdSection projectId={project.id} />
                 </div>
               )}
 

@@ -12,6 +12,7 @@ const storage: Record<string, string> = {};
 const mockGetSettings = vi.fn();
 const mockUpdate = vi.fn();
 const mockUpdateSettings = vi.fn();
+const mockGetAgentsInstructions = vi.fn();
 const mockGetKeys = vi.fn();
 const mockModelsList = vi.fn();
 
@@ -21,6 +22,7 @@ vi.mock("../api/client", () => ({
       getSettings: (...args: unknown[]) => mockGetSettings(...args),
       update: (...args: unknown[]) => mockUpdate(...args),
       updateSettings: (...args: unknown[]) => mockUpdateSettings(...args),
+      getAgentsInstructions: (...args: unknown[]) => mockGetAgentsInstructions(...args),
     },
     env: {
       getKeys: (...args: unknown[]) => mockGetKeys(...args),
@@ -59,6 +61,7 @@ describe("ProjectSettingsModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSettings.mockResolvedValue(mockSettings);
+    mockGetAgentsInstructions.mockResolvedValue({ content: "# Agent Instructions\n\nUse bd for tasks." });
     mockGetKeys.mockResolvedValue({
       anthropic: true,
       cursor: true,

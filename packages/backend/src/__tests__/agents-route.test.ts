@@ -82,6 +82,74 @@ describe("Agents API", () => {
     });
   });
 
+  describe("GET /projects/:projectId/agents/instructions", () => {
+    it("should return content when AGENTS.md exists", async () => {
+      const repoPath = path.join(tempDir, "my-project");
+      await fs.mkdir(repoPath, { recursive: true });
+      await fs.writeFile(path.join(repoPath, "AGENTS.md"), "# Agent Instructions\n\nUse bd for tasks.", "utf-8");
+
+      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/agents/instructions`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({ content: "# Agent Instructions\n\nUse bd for tasks." });
+    });
+
+    it("should return empty content when AGENTS.md is missing", async () => {
+      const repoPath = path.join(tempDir, "my-project");
+      await fs.unlink(path.join(repoPath, "AGENTS.md"));
+
+      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/agents/instructions`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({ content: "" });
+    });
+
+    it("should return 404 for non-existent project", async () => {
+      const res = await request(app).get(`${API_PREFIX}/projects/nonexistent-id/agents/instructions`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBeDefined();
+      expect(res.body.error.code).toBe("PROJECT_NOT_FOUND");
+    });
+  });
+
+  describe("PUT /projects/:projectId/agents/instructions", () => {
+    it("should write content to AGENTS.md", async () => {
+      const repoPath = path.join(tempDir, "my-project");
+      await fs.mkdir(repoPath, { recursive: true });
+
+      const res = await request(app)
+        .put(`${API_PREFIX}/projects/${projectId}/agents/instructions`)
+        .send({ content: "# New Instructions\n\nHello world." });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({ ok: true });
+
+      const written = await fs.readFile(path.join(repoPath, "AGENTS.md"), "utf-8");
+      expect(written).toBe("# New Instructions\n\nHello world.");
+    });
+
+    it("should return 400 when content is missing", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/projects/${projectId}/agents/instructions`)
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBeDefined();
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    });
+
+    it("should return 404 for non-existent project", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/projects/nonexistent-id/agents/instructions`)
+        .send({ content: "test" });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBeDefined();
+      expect(res.body.error.code).toBe("PROJECT_NOT_FOUND");
+    });
+  });
+
   describe("POST /projects/:projectId/agents/:agentId/kill", () => {
     it("should return 404 when agent is not in slots (e.g. planning agent)", async () => {
       activeAgentsService.register(
