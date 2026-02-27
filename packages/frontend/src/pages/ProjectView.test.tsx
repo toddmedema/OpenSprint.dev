@@ -54,9 +54,21 @@ vi.mock("../api/client", () => ({
     },
     prd: { get: vi.fn().mockResolvedValue({}), getHistory: vi.fn().mockResolvedValue([]) },
     plans: { list: vi.fn().mockResolvedValue({ plans: [], edges: [] }) },
-    tasks: { list: vi.fn().mockResolvedValue([]) },
+    tasks: {
+      list: vi.fn().mockImplementation((_projectId: string, options?: { limit?: number; offset?: number }) =>
+        options?.limit != null && options?.offset != null
+          ? Promise.resolve({ items: [], total: 0 })
+          : Promise.resolve([])
+      ),
+    },
     execute: { status: vi.fn().mockResolvedValue({}) },
-    feedback: { list: vi.fn().mockResolvedValue([]) },
+    feedback: {
+      list: vi.fn().mockImplementation((_projectId: string, options?: { limit?: number; offset?: number }) =>
+        options?.limit != null && options?.offset != null
+          ? Promise.resolve({ items: [], total: 0 })
+          : Promise.resolve([])
+      ),
+    },
     chat: { history: vi.fn().mockResolvedValue({ messages: [] }) },
     deliver: {
       status: vi.fn().mockResolvedValue({ activeDeployId: null, currentDeploy: null }),
@@ -209,9 +221,11 @@ describe("ProjectView upfront loading and mount-all", () => {
       expect(mockedApi.prd.get).toHaveBeenCalledWith("proj-1");
       expect(mockedApi.prd.getHistory).toHaveBeenCalledWith("proj-1");
       expect(mockedApi.plans.list).toHaveBeenCalledWith("proj-1");
-      expect(mockedApi.tasks.list).toHaveBeenCalledWith("proj-1");
+      expect(mockedApi.tasks.list).toHaveBeenCalled();
+      expect(mockedApi.tasks.list.mock.calls[0][0]).toBe("proj-1");
       expect(mockedApi.execute.status).toHaveBeenCalledWith("proj-1");
-      expect(mockedApi.feedback.list).toHaveBeenCalledWith("proj-1");
+      expect(mockedApi.feedback.list).toHaveBeenCalled();
+      expect(mockedApi.feedback.list.mock.calls[0][0]).toBe("proj-1");
       expect(mockedApi.chat.history).toHaveBeenCalledWith("proj-1", "sketch");
     });
   });
@@ -299,7 +313,11 @@ const TASK_FOR_DEEP_LINK = {
 describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(api.tasks.list).mockResolvedValue([TASK_FOR_DEEP_LINK]);
+    vi.mocked(api.tasks.list).mockImplementation((_projectId: string, options?: { limit?: number; offset?: number }) =>
+      options?.limit != null && options?.offset != null
+        ? Promise.resolve({ items: [TASK_FOR_DEEP_LINK], total: 1 })
+        : Promise.resolve([TASK_FOR_DEEP_LINK])
+    );
   });
 
   it("dispatches setSelectedPlanId when loading plan phase with plan param", async () => {
@@ -341,7 +359,6 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
   });
 
   it("dispatches setSelectedTaskId when loading execute phase with task param", async () => {
-    vi.mocked(api.tasks.list).mockResolvedValueOnce([mockTaskForDeepLink]);
     const store = createStore();
     renderWithRouter("/projects/proj-1/execute?task=opensprint.dev-xyz.1", store);
 
@@ -355,7 +372,6 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
   });
 
   it("preserves selected task when switching from execute to plan and back to execute", async () => {
-    vi.mocked(api.tasks.list).mockResolvedValueOnce([mockTaskForDeepLink]);
     const store = createStore();
     renderWithRouter("/projects/proj-1/execute?task=opensprint.dev-xyz.1", store);
 

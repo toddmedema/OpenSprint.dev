@@ -10,11 +10,20 @@ export const feedbackRouter = Router({ mergeParams: true });
 type ProjectParams = { projectId: string };
 type FeedbackParams = { projectId: string; feedbackId: string };
 
-// GET /projects/:projectId/feedback — List all feedback items
+// GET /projects/:projectId/feedback — List all feedback items (supports ?limit=&offset= for pagination)
 feedbackRouter.get("/", async (req: Request<ProjectParams>, res, next) => {
   try {
-    const items = await feedbackService.listFeedback(req.params.projectId);
-    const body: ApiResponse<FeedbackItem[]> = { data: items };
+    const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : undefined;
+    const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : undefined;
+    const options =
+      limit != null && offset != null && !Number.isNaN(limit) && !Number.isNaN(offset)
+        ? { limit, offset }
+        : undefined;
+
+    const result = await feedbackService.listFeedback(req.params.projectId, options);
+    const body: ApiResponse<FeedbackItem[] | { items: FeedbackItem[]; total: number }> = {
+      data: result,
+    };
     res.json(body);
   } catch (err) {
     next(err);

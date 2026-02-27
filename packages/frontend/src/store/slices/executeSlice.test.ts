@@ -3,6 +3,7 @@ import { configureStore } from "@reduxjs/toolkit";
 import { agentOutputFilterMiddleware } from "../middleware/agentOutputFilterMiddleware";
 import executeReducer, {
   fetchTasks,
+  fetchMoreTasks,
   fetchTasksByIds,
   fetchExecutePlans,
   fetchExecuteStatus,
@@ -352,11 +353,48 @@ describe("executeSlice", () => {
       expect(api.tasks.list).toHaveBeenCalledWith("proj-1");
     });
 
+    it("stores paginated tasks and sets hasMoreTasks when limit/offset provided", async () => {
+      vi.mocked(api.tasks.list).mockResolvedValue({
+        items: [mockTask],
+        total: 150,
+      } as never);
+      const store = createStore();
+      await store.dispatch(fetchTasks({ projectId: "proj-1", limit: 100, offset: 0 }));
+      const state = store.getState().execute;
+      expect(state.tasks).toEqual([mockTask]);
+      expect(state.tasksTotalCount).toBe(150);
+      expect(state.hasMoreTasks).toBe(true);
+      expect(api.tasks.list).toHaveBeenCalledWith("proj-1", { limit: 100, offset: 0 });
+    });
+
     it("sets error on rejected", async () => {
       vi.mocked(api.tasks.list).mockRejectedValue(new Error("Network error"));
       const store = createStore();
       await store.dispatch(fetchTasks("proj-1"));
       expect(store.getState().execute.error).toBe("Network error");
+    });
+  });
+
+  describe("fetchMoreTasks thunk", () => {
+    it("appends next page and updates hasMoreTasks", async () => {
+      const task2 = { ...mockTask, id: "task-2", title: "Task 2" };
+      vi.mocked(api.tasks.list)
+        .mockResolvedValueOnce({ items: [mockTask], total: 150 } as never)
+        .mockResolvedValueOnce({ items: [task2], total: 150 } as never);
+      const store = createStore();
+      await store.dispatch(fetchTasks({ projectId: "proj-1", limit: 100, offset: 0 }));
+      expect(store.getState().execute.tasks).toHaveLength(1);
+      await store.dispatch(fetchMoreTasks("proj-1"));
+      const state = store.getState().execute;
+      expect(state.tasks).toHaveLength(2);
+      expect(state.tasks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "task-1" }),
+          expect.objectContaining({ id: "task-2" }),
+        ])
+      );
+      expect(state.hasMoreTasks).toBe(true);
+      expect(api.tasks.list).toHaveBeenLastCalledWith("proj-1", { limit: 100, offset: 1 });
     });
   });
 

@@ -12,11 +12,18 @@ type ProjectParams = { projectId: string };
 type TaskParams = { projectId: string; taskId: string };
 type SessionParams = { projectId: string; taskId: string; attempt: string };
 
-// GET /projects/:projectId/tasks — List all tasks
+// GET /projects/:projectId/tasks — List all tasks (supports ?limit=&offset= for pagination)
 tasksRouter.get("/", async (req: Request<ProjectParams>, res, next) => {
   try {
-    const tasks = await taskService.listTasks(req.params.projectId);
-    const body: ApiResponse<Task[]> = { data: tasks };
+    const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : undefined;
+    const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : undefined;
+    const options =
+      limit != null && offset != null && !Number.isNaN(limit) && !Number.isNaN(offset)
+        ? { limit, offset }
+        : undefined;
+
+    const result = await taskService.listTasks(req.params.projectId, options);
+    const body: ApiResponse<Task[] | { items: Task[]; total: number }> = { data: result };
     res.json(body);
   } catch (err) {
     next(err);

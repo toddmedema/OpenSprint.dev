@@ -17,6 +17,10 @@ export interface EvalState {
   async: AsyncStates<EvalAsyncKey>;
   /** Last error from any async operation (backward compat) */
   error: string | null;
+  /** When using pagination: total feedback count */
+  feedbackTotalCount: number | null;
+  /** When using pagination: true if more feedback available to load */
+  hasMoreFeedback: boolean;
 }
 
 const initialState: EvalState = {
@@ -26,10 +30,48 @@ const initialState: EvalState = {
   feedbackItemLoadingId: null,
   async: createInitialAsyncStates(EVAL_ASYNC_KEYS),
   error: null,
+  feedbackTotalCount: null,
+  hasMoreFeedback: false,
 };
 
-export const fetchFeedback = createAsyncThunk("eval/fetchFeedback", async (projectId: string) => {
-  return api.feedback.list(projectId);
+export type FetchFeedbackArg =
+  | string
+  | { projectId: string; limit?: number; offset?: number };
+
+function normalizeFetchFeedbackArg(arg: FetchFeedbackArg): {
+  projectId: string;
+  limit?: number;
+  offset?: number;
+} {
+  if (typeof arg === "string") return { projectId: arg };
+  return arg;
+}
+
+const FEEDBACK_PAGE_SIZE = 100;
+
+export const fetchFeedback = createAsyncThunk<
+  FeedbackItem[] | { items: FeedbackItem[]; total: number },
+  FetchFeedbackArg
+>("eval/fetchFeedback", async (arg) => {
+  const { projectId, limit, offset } = normalizeFetchFeedbackArg(arg);
+  const options =
+    limit != null && offset != null ? { limit, offset } : undefined;
+  return options
+    ? api.feedback.list(projectId, options)
+    : api.feedback.list(projectId);
+});
+
+/** Fetch next page of feedback and append. */
+export const fetchMoreFeedback = createAsyncThunk<
+  { items: FeedbackItem[]; total: number },
+  string
+>("eval/fetchMoreFeedback", async (projectId: string, { getState }) => {
+  const root = getState() as { eval: EvalState };
+  const offset = root.eval.feedback.length;
+  return api.feedback.list(projectId, {
+    limit: FEEDBACK_PAGE_SIZE,
+    offset,
+  }) as Promise<{ items: FeedbackItem[]; total: number }>;
 });
 
 export const submitFeedback = createAsyncThunk(
@@ -144,13 +186,47 @@ const evalSlice = createSlice({
     createAsyncHandlers("feedback", fetchFeedback, builder, {
       ensureState: ensureAsync,
       onFulfilled: (state, action) => {
-        state.feedback = action.payload as FeedbackItem[];
+        const payload = action.payload;
+        const isPaginated =
+          payload != null &&
+          typeof payload === "object" &&
+          "items" in payload &&
+          "total" in payload;
+        if (isPaginated) {
+          const { items, total } = payload as { items: FeedbackItem[]; total: number };
+          const offset = (action.meta.arg as { offset?: number })?.offset ?? 0;
+          state.feedback = items;
+          state.feedbackTotalCount = total;
+          state.hasMoreFeedback = offset + items.length < total;
+        } else {
+          state.feedback = (payload ?? []) as FeedbackItem[];
+          state.feedbackTotalCount = null;
+          state.hasMoreFeedback = false;
+        }
       },
       onRejected: (state, action) => {
         state.error = action.error?.message ?? "Failed to load feedback";
       },
       defaultError: "Failed to load feedback",
     });
+
+    builder
+      .addCase(fetchMoreFeedback.pending, (state) => {
+        ensureAsync(state);
+        state.async.feedback.loading = true;
+      })
+      .addCase(fetchMoreFeedback.fulfilled, (state, action) => {
+        ensureAsync(state);
+        const { items, total } = action.payload;
+        state.feedback = [...state.feedback, ...items];
+        state.feedbackTotalCount = total;
+        state.hasMoreFeedback = state.feedback.length < total;
+        state.async.feedback.loading = false;
+      })
+      .addCase(fetchMoreFeedback.rejected, (state) => {
+        ensureAsync(state);
+        state.async.feedback.loading = false;
+      });
     // submitFeedback — optimistic: show feedback immediately, replace on fulfilled, remove on rejected
     builder.addCase(submitFeedback.pending, (state, action) => {
       ensureAsync(state);

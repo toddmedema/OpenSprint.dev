@@ -75,6 +75,10 @@ export interface ExecuteState {
   async: AsyncStates<ExecuteAsyncKey>;
   /** Last error from any async operation (for backward compat / display) */
   error: string | null;
+  /** When using pagination: total task count from last fetch */
+  tasksTotalCount: number | null;
+  /** When using pagination: true if more tasks available to load */
+  hasMoreTasks: boolean;
 }
 
 export const initialExecuteState: ExecuteState = {
@@ -95,19 +99,57 @@ export const initialExecuteState: ExecuteState = {
   archivedSessions: [],
   async: createInitialAsyncStates(EXECUTE_ASYNC_KEYS),
   error: null,
+  tasksTotalCount: null,
+  hasMoreTasks: false,
 };
 
-export const fetchTasks = createAsyncThunk<Task[], string>(
+const TASKS_PAGE_SIZE = 100;
+
+export type FetchTasksArg =
+  | string
+  | { projectId: string; limit?: number; offset?: number };
+
+function normalizeFetchTasksArg(arg: FetchTasksArg): {
+  projectId: string;
+  limit?: number;
+  offset?: number;
+} {
+  if (typeof arg === "string") return { projectId: arg };
+  return arg;
+}
+
+export const fetchTasks = createAsyncThunk<
+  Task[] | { items: Task[]; total: number },
+  FetchTasksArg
+>(
   "execute/fetchTasks",
-  async (projectId: string, { getState, rejectWithValue }) => {
+  async (arg, { getState, rejectWithValue }) => {
+    const { projectId, limit, offset } = normalizeFetchTasksArg(arg);
     const root = getState() as { execute: ExecuteState };
     const inFlight = root.execute[TASKS_IN_FLIGHT_KEY] ?? 0;
     if (inFlight > 1) {
       return rejectWithValue(DEDUP_SKIP);
     }
-    return api.tasks.list(projectId);
+    const options =
+      limit != null && offset != null ? { limit, offset } : undefined;
+    return options
+      ? (api.tasks.list(projectId, options) as Promise<Task[] | { items: Task[]; total: number }>)
+      : (api.tasks.list(projectId) as Promise<Task[] | { items: Task[]; total: number }>);
   }
 );
+
+/** Fetch next page of tasks and append. Uses current tasks length as offset. */
+export const fetchMoreTasks = createAsyncThunk<
+  { items: Task[]; total: number },
+  string
+>("execute/fetchMoreTasks", async (projectId: string, { getState }) => {
+  const root = getState() as { execute: ExecuteState };
+  const offset = root.execute.tasks.length;
+  return api.tasks.list(projectId, {
+    limit: TASKS_PAGE_SIZE,
+    offset,
+  }) as Promise<{ items: Task[]; total: number }>;
+});
 
 /** Fetch only specific tasks and merge into state. Used when Analyst creates tickets so only the affected feedback card updates. */
 export const fetchTasksByIds = createAsyncThunk<Task[], { projectId: string; taskIds: string[] }>(
@@ -180,7 +222,10 @@ export const markTaskDone = createAsyncThunk(
       api.plans.list(projectId),
     ]);
     dispatch(setPlansAndGraph({ plans: plansGraph.plans, dependencyGraph: plansGraph }));
-    return { tasks: tasksData ?? [] };
+    const tasks = Array.isArray(tasksData)
+      ? tasksData
+      : (tasksData as { items: Task[] })?.items ?? [];
+    return { tasks };
   }
 );
 
@@ -223,7 +268,10 @@ export const unblockTask = createAsyncThunk(
       api.plans.list(projectId),
     ]);
     dispatch(setPlansAndGraph({ plans: plansGraph.plans, dependencyGraph: plansGraph }));
-    return { tasks: tasksData ?? [], taskId };
+    const tasks = Array.isArray(tasksData)
+      ? tasksData
+      : (tasksData as { items: Task[] })?.items ?? [];
+    return { tasks, taskId };
   }
 );
 
@@ -342,19 +390,36 @@ const executeSlice = createSlice({
       })
       .addCase(fetchTasks.fulfilled, (state, action) => {
         ensureAsync(state);
-        const incoming = (action.payload ?? []) as Task[];
+        const payload = action.payload;
+        const isPaginated =
+          payload != null &&
+          typeof payload === "object" &&
+          "items" in payload &&
+          "total" in payload;
+        const incoming: Task[] = isPaginated
+          ? (payload as { items: Task[]; total: number }).items
+          : (payload ?? []) as Task[];
+        const total = isPaginated
+          ? (payload as { items: Task[]; total: number }).total
+          : incoming.length;
+        const offset = isPaginated ? (action.meta.arg as { offset?: number })?.offset ?? 0 : 0;
+
         const doneIds = new Set(
           state.tasks.filter((t) => t.kanbanColumn === "done").map((t) => t.id)
         );
-        state.tasks = incoming.map((t) => {
+        const merged = incoming.map((t) => {
           if (doneIds.has(t.id) && t.kanbanColumn !== "done") {
             return { ...t, kanbanColumn: "done" as const, status: "closed" as const };
           }
           return t;
         });
+
+        state.tasks = merged;
+        state.tasksTotalCount = isPaginated ? total : null;
+        state.hasMoreTasks = isPaginated ? offset + merged.length < total : false;
         state.async.tasks.loading = false;
         state[TASKS_IN_FLIGHT_KEY] = Math.max(0, (state[TASKS_IN_FLIGHT_KEY] ?? 1) - 1);
-        const taskIds = new Set((action.payload ?? []).map((t: Task) => t.id));
+        const taskIds = new Set(merged.map((t) => t.id));
         if (state.selectedTaskId && !taskIds.has(state.selectedTaskId)) {
           state.selectedTaskId = null;
           state.async.taskDetail.error = null;
@@ -367,6 +432,34 @@ const executeSlice = createSlice({
         state.async.tasks.loading = false;
         state.async.tasks.error = action.error.message ?? "Failed to load tasks";
         state.error = action.error.message ?? "Failed to load tasks";
+      });
+
+    // fetchMoreTasks — append next page
+    builder
+      .addCase(fetchMoreTasks.pending, (state) => {
+        ensureAsync(state);
+        state.async.tasks.loading = true;
+      })
+      .addCase(fetchMoreTasks.fulfilled, (state, action) => {
+        ensureAsync(state);
+        const { items, total } = action.payload;
+        const doneIds = new Set(
+          state.tasks.filter((t) => t.kanbanColumn === "done").map((t) => t.id)
+        );
+        const merged = items.map((t) => {
+          if (doneIds.has(t.id) && t.kanbanColumn !== "done") {
+            return { ...t, kanbanColumn: "done" as const, status: "closed" as const };
+          }
+          return t;
+        });
+        state.tasks = [...state.tasks, ...merged];
+        state.tasksTotalCount = total;
+        state.hasMoreTasks = state.tasks.length < total;
+        state.async.tasks.loading = false;
+      })
+      .addCase(fetchMoreTasks.rejected, (state) => {
+        ensureAsync(state);
+        state.async.tasks.loading = false;
       });
 
     // fetchTasksByIds — merge only fetched tasks (no loading state, minimal re-renders)

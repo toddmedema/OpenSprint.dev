@@ -28,8 +28,12 @@ export class TaskService {
 
   /** List all tasks for a project with computed kanban columns and test results.
    * Uses task store for listAll.
+   * When limit/offset provided, returns paginated slice (items + total).
    */
-  async listTasks(projectId: string): Promise<Task[]> {
+  async listTasks(
+    projectId: string,
+    options?: { limit?: number; offset?: number }
+  ): Promise<Task[] | { items: Task[]; total: number }> {
     const project = await this.projectService.getProject(projectId);
 
     const allIssues = await this.taskStore.listAll(projectId);
@@ -50,6 +54,13 @@ export class TaskService {
           reviewTask.kanbanColumn = "in_review";
         }
       }
+    }
+
+    if (options?.limit != null && options?.offset != null) {
+      const offset = Math.max(0, options.offset);
+      const limit = Math.max(1, Math.min(500, options.limit));
+      const items = tasks.slice(offset, offset + limit);
+      return { items, total: tasks.length };
     }
 
     return tasks;

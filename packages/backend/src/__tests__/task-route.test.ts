@@ -158,6 +158,35 @@ describe("Tasks REST - task-to-kanban-column mapping", () => {
     }
   );
 
+  it("GET /tasks with limit and offset returns paginated { items, total }", async () => {
+    const planRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send({
+        title: "Pagination Test",
+        content: "# Pagination\n\nTest.",
+        complexity: "low",
+        tasks: [
+          { title: "Task 1", description: "", priority: 0, dependsOn: [] },
+          { title: "Task 2", description: "", priority: 1, dependsOn: [] },
+        ],
+      });
+    expect(planRes.status).toBe(201);
+    const plan = planRes.body.data;
+    const epicId = plan.metadata.epicId;
+    await taskStore.update(projectId, epicId, { status: "open" });
+
+    const res = await request(app).get(
+      `${API_PREFIX}/projects/${projectId}/tasks?limit=1&offset=0`
+    );
+    expect(res.status).toBe(200);
+    const body = res.body.data;
+    expect(body).toHaveProperty("items");
+    expect(body).toHaveProperty("total");
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.items).toHaveLength(1);
+    expect(body.total).toBeGreaterThanOrEqual(2);
+  });
+
   it(
     "GET /tasks/ready excludes tasks in blocked epic (epic-blocked model)",
     { timeout: 20000 },

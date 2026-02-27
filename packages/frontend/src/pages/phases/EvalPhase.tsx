@@ -12,6 +12,7 @@ import {
   resolveFeedback,
   cancelFeedback,
   removeFeedbackItem,
+  fetchMoreFeedback,
 } from "../../store/slices/evalSlice";
 import { fetchTasks } from "../../store/slices/executeSlice";
 import { FeedbackTaskChip } from "../../components/FeedbackTaskChip";
@@ -559,6 +560,7 @@ export function EvalPhase({
   );
   const tasksCount = tasks.length;
   const loading = useAppSelector((s) => s.eval?.async?.feedback?.loading ?? false);
+  const hasMoreFeedback = useAppSelector((s) => s.eval?.hasMoreFeedback ?? false);
   const submitting = useAppSelector((s) => s.eval?.async?.submit?.loading ?? false);
 
   /* Load tasks when entering Eval so FeedbackTaskChip can show live status */
@@ -957,30 +959,44 @@ export function EvalPhase({
                     : "No cancelled feedback yet."}
             </div>
           ) : (
-            <div className="space-y-3">
-              {/* key=node.item.id preserves DOM identity when a single item is updated via WebSocket */}
-              {feedbackTree.map((node) => (
-                <FeedbackCard
-                  key={node.item.id}
-                  node={node}
-                  depth={0}
-                  projectId={projectId}
-                  onNavigateToBuildTask={onNavigateToBuildTask}
-                  replyingToId={replyingToId}
-                  onStartReply={setReplyingToId}
-                  onCancelReply={() => setReplyingToId(null)}
-                  onSubmitReply={handleSubmitReply}
-                  onResolve={handleResolve}
-                  onCancel={handleCancel}
-                  onRemoveAfterAnimation={handleRemoveAfterAnimation}
-                  collapsedIds={collapsedIds}
-                  onToggleCollapse={handleToggleCollapse}
-                  submitting={submitting}
-                  isDraggingImage={isDraggingImage}
-                  tasks={tasks}
-                />
-              ))}
-            </div>
+            <>
+              <div className="space-y-3">
+                {/* key=node.item.id preserves DOM identity when a single item is updated via WebSocket */}
+                {feedbackTree.map((node) => (
+                  <FeedbackCard
+                    key={node.item.id}
+                    node={node}
+                    depth={0}
+                    projectId={projectId}
+                    onNavigateToBuildTask={onNavigateToBuildTask}
+                    replyingToId={replyingToId}
+                    onStartReply={setReplyingToId}
+                    onCancelReply={() => setReplyingToId(null)}
+                    onSubmitReply={handleSubmitReply}
+                    onResolve={handleResolve}
+                    onCancel={handleCancel}
+                    onRemoveAfterAnimation={handleRemoveAfterAnimation}
+                    collapsedIds={collapsedIds}
+                    onToggleCollapse={handleToggleCollapse}
+                    submitting={submitting}
+                    isDraggingImage={isDraggingImage}
+                    tasks={tasks}
+                  />
+                ))}
+              </div>
+              {hasMoreFeedback && (
+                <div className="mt-6 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => dispatch(fetchMoreFeedback(projectId))}
+                    disabled={loading}
+                    className="rounded-lg border border-theme-border bg-theme-surface px-4 py-2 text-sm font-medium text-theme-text hover:bg-theme-border-subtle disabled:opacity-50"
+                  >
+                    {loading ? "Loading…" : "Load more feedback"}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

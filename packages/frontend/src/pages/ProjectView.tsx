@@ -103,9 +103,21 @@ export function ProjectView() {
     dispatch(fetchPrd(projectId));
     dispatch(fetchPrdHistory(projectId));
     dispatch(fetchPlans(projectId));
-    dispatch(fetchTasks(projectId));
+    dispatch(
+      fetchTasks({
+        projectId,
+        limit: 100,
+        offset: 0,
+      })
+    );
     dispatch(fetchExecuteStatus(projectId));
-    dispatch(fetchFeedback(projectId));
+    dispatch(
+      fetchFeedback({
+        projectId,
+        limit: 100,
+        offset: 0,
+      })
+    );
     dispatch(fetchDeliverStatus(projectId));
     dispatch(fetchDeliverHistory(projectId));
 

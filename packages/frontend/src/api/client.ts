@@ -265,7 +265,18 @@ export const api = {
 
   // ─── Tasks ───
   tasks: {
-    list: (projectId: string) => request<Task[]>(`/projects/${projectId}/tasks`),
+    list: (projectId: string, options?: { limit?: number; offset?: number }) => {
+      if (options?.limit == null || options?.offset == null) {
+        return request<Task[] | { items: Task[]; total: number }>(`/projects/${projectId}/tasks`);
+      }
+      const params = new URLSearchParams({
+        limit: String(options.limit),
+        offset: String(options.offset),
+      });
+      return request<Task[] | { items: Task[]; total: number }>(
+        `/projects/${projectId}/tasks?${params.toString()}`
+      );
+    },
     ready: (projectId: string) => request<Task[]>(`/projects/${projectId}/tasks/ready`),
     get: (projectId: string, taskId: string) =>
       request<Task>(`/projects/${projectId}/tasks/${taskId}`),
@@ -337,7 +348,20 @@ export const api = {
 
   // ─── Feedback ───
   feedback: {
-    list: (projectId: string) => request<FeedbackItem[]>(`/projects/${projectId}/feedback`),
+    list: (projectId: string, options?: { limit?: number; offset?: number }) => {
+      if (options?.limit == null || options?.offset == null) {
+        return request<FeedbackItem[] | { items: FeedbackItem[]; total: number }>(
+          `/projects/${projectId}/feedback`
+        );
+      }
+      const params = new URLSearchParams({
+        limit: String(options.limit),
+        offset: String(options.offset),
+      });
+      return request<FeedbackItem[] | { items: FeedbackItem[]; total: number }>(
+        `/projects/${projectId}/feedback?${params.toString()}`
+      );
+    },
     submit: (
       projectId: string,
       text: string,

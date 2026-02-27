@@ -139,8 +139,16 @@ export class FeedbackService {
     }
   }
 
-  async listFeedback(projectId: string): Promise<FeedbackItem[]> {
-    return feedbackStore.listFeedback(projectId);
+  async listFeedback(projectId: string): Promise<FeedbackItem[]>;
+  async listFeedback(
+    projectId: string,
+    options?: { limit?: number; offset?: number }
+  ): Promise<FeedbackItem[] | { items: FeedbackItem[]; total: number }>;
+  async listFeedback(
+    projectId: string,
+    options?: { limit?: number; offset?: number }
+  ): Promise<FeedbackItem[] | { items: FeedbackItem[]; total: number }> {
+    return feedbackStore.listFeedback(projectId, options);
   }
 
   /** Submit new feedback with AI categorization and mapping */

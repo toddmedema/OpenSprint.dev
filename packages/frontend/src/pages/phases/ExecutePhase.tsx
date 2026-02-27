@@ -5,6 +5,7 @@ import {
   fetchArchivedSessions,
   fetchLiveOutputBackfill,
   fetchActiveAgents,
+  fetchMoreTasks,
   markTaskDone,
   unblockTask,
   setSelectedTaskId,
@@ -75,6 +76,7 @@ export function ExecutePhase({
   const markDoneLoading = useAppSelector((s) => s.execute?.async?.markDone?.loading ?? false);
   const unblockLoading = useAppSelector((s) => s.execute?.async?.unblock?.loading ?? false);
   const loading = useAppSelector((s) => s.execute?.async?.tasks?.loading ?? false);
+  const hasMoreTasks = useAppSelector((s) => s.execute?.hasMoreTasks ?? false);
   const taskIdToStartedAt = useAppSelector((s) => s.execute?.taskIdToStartedAt ?? {});
   const selectedTaskData = effectiveSelectedTask
     ? (tasks.find((t) => t.id === effectiveSelectedTask) ?? null)
@@ -211,25 +213,39 @@ export function ExecutePhase({
                     : "No tasks match this filter."}
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {swimlanes.map((lane) => (
-                  <BuildEpicCard
-                    key={lane.epicId || "other"}
-                    epicId={lane.epicId}
-                    epicTitle={lane.epicTitle}
-                    tasks={lane.tasks}
-                    filteringActive={isSearchActive}
-                    onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
-                    onUnblock={(taskId) => dispatch(unblockTask({ projectId, taskId }))}
-                    onViewPlan={
-                      lane.planId && onNavigateToPlan
-                        ? () => onNavigateToPlan(lane.planId!)
-                        : undefined
-                    }
-                    taskIdToStartedAt={taskIdToStartedAt}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {swimlanes.map((lane) => (
+                    <BuildEpicCard
+                      key={lane.epicId || "other"}
+                      epicId={lane.epicId}
+                      epicTitle={lane.epicTitle}
+                      tasks={lane.tasks}
+                      filteringActive={isSearchActive}
+                      onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
+                      onUnblock={(taskId) => dispatch(unblockTask({ projectId, taskId }))}
+                      onViewPlan={
+                        lane.planId && onNavigateToPlan
+                          ? () => onNavigateToPlan(lane.planId!)
+                          : undefined
+                      }
+                      taskIdToStartedAt={taskIdToStartedAt}
+                    />
+                  ))}
+                </div>
+                {hasMoreTasks && !isSearchActive && (
+                  <div className="mt-6 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => dispatch(fetchMoreTasks(projectId))}
+                      disabled={loading}
+                      className="rounded-lg border border-theme-border bg-theme-surface px-4 py-2 text-sm font-medium text-theme-text hover:bg-theme-border-subtle disabled:opacity-50"
+                    >
+                      {loading ? "Loading…" : "Load more tasks"}
+                    </button>
+                  </div>
+                )}
+              </>
             )
           ) : filteredTasks.length === 0 ? (
             <div className="text-center py-10 text-theme-muted">
@@ -240,13 +256,27 @@ export function ExecutePhase({
                   : "No tasks match this filter."}
             </div>
           ) : (
-            <TimelineList
-              tasks={filteredTasks}
-              plans={plans}
-              onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
-              onUnblock={(taskId) => dispatch(unblockTask({ projectId, taskId }))}
-              taskIdToStartedAt={taskIdToStartedAt}
-            />
+            <>
+              <TimelineList
+                tasks={filteredTasks}
+                plans={plans}
+                onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
+                onUnblock={(taskId) => dispatch(unblockTask({ projectId, taskId }))}
+                taskIdToStartedAt={taskIdToStartedAt}
+              />
+              {hasMoreTasks && !isSearchActive && (
+                <div className="mt-6 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => dispatch(fetchMoreTasks(projectId))}
+                    disabled={loading}
+                    className="rounded-lg border border-theme-border bg-theme-surface px-4 py-2 text-sm font-medium text-theme-text hover:bg-theme-border-subtle disabled:opacity-50"
+                  >
+                    {loading ? "Loading…" : "Load more tasks"}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

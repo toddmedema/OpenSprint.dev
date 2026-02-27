@@ -300,8 +300,49 @@ export class FeedbackStoreService {
     return item;
   }
 
-  async listFeedback(projectId: string): Promise<FeedbackItem[]> {
+  async listFeedback(projectId: string): Promise<FeedbackItem[]>;
+  async listFeedback(
+    projectId: string,
+    options?: { limit?: number; offset?: number }
+  ): Promise<FeedbackItem[] | { items: FeedbackItem[]; total: number }>;
+  async listFeedback(
+    projectId: string,
+    options?: { limit?: number; offset?: number }
+  ): Promise<FeedbackItem[] | { items: FeedbackItem[]; total: number }> {
     const db = await taskStore.getDb();
+    const limit = options?.limit;
+    const offset = options?.offset ?? 0;
+
+    if (limit != null) {
+      const countStmt = db.prepare(
+        "SELECT COUNT(*) as cnt FROM feedback WHERE project_id = ?"
+      );
+      countStmt.bind([projectId]);
+      const total = (countStmt.step() ? countStmt.getAsObject() : { cnt: 0 }) as { cnt: number };
+      countStmt.free();
+
+      const safeLimit = Math.max(1, Math.min(500, limit));
+      const safeOffset = Math.max(0, offset);
+      const stmt = db.prepare(
+        "SELECT * FROM feedback WHERE project_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?"
+      );
+      stmt.bind([projectId, safeLimit, safeOffset]);
+      const rows: FeedbackRow[] = [];
+      while (stmt.step()) {
+        rows.push(stmt.getAsObject() as unknown as FeedbackRow);
+      }
+      stmt.free();
+
+      const items: FeedbackItem[] = [];
+      for (const row of rows) {
+        const item = rowToItem(row);
+        const paths: string[] = row.image_paths ? JSON.parse(row.image_paths) : [];
+        item.images = await loadFeedbackImages(projectId, row.id, paths.length ? paths : null);
+        items.push(item);
+      }
+      return { items, total: total.cnt };
+    }
+
     const stmt = db.prepare("SELECT * FROM feedback WHERE project_id = ? ORDER BY created_at DESC");
     stmt.bind([projectId]);
     const rows: FeedbackRow[] = [];
