@@ -10,8 +10,6 @@ interface LayoutProps {
   currentPhase?: ProjectPhase;
   onPhaseChange?: (phase: ProjectPhase) => void;
   onProjectSaved?: () => void;
-  settingsOpen?: boolean;
-  onSettingsOpenChange?: (open: boolean) => void;
 }
 
 export function Layout({
@@ -20,8 +18,6 @@ export function Layout({
   currentPhase,
   onPhaseChange,
   onProjectSaved,
-  settingsOpen,
-  onSettingsOpenChange,
 }: LayoutProps) {
   return (
     <div className="h-full flex flex-col bg-theme-bg">
@@ -31,8 +27,6 @@ export function Layout({
         currentPhase={currentPhase}
         onPhaseChange={onPhaseChange}
         onProjectSaved={onProjectSaved}
-        settingsOpen={settingsOpen}
-        onSettingsOpenChange={onSettingsOpenChange}
       />
       <NotificationBar />
       <main className="flex-1 min-h-0 flex flex-col overflow-hidden bg-theme-bg">{children}</main>

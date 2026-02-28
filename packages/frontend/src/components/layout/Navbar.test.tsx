@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { Provider } from "react-redux";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
@@ -15,6 +15,7 @@ import executeReducer, { toTasksByIdAndOrder } from "../../store/slices/executeS
 import planReducer from "../../store/slices/planSlice";
 import websocketReducer from "../../store/slices/websocketSlice";
 import openQuestionsReducer from "../../store/slices/openQuestionsSlice";
+import notificationReducer from "../../store/slices/notificationSlice";
 
 const mockGetSettings = vi.fn();
 const mockProjectsList = vi.fn();
@@ -38,6 +39,14 @@ vi.mock("../../api/client", () => ({
         useCustomCli: false,
       }),
       getGlobalStatus: (...args: unknown[]) => mockGetGlobalStatus(...args),
+    },
+    globalSettings: {
+      get: vi.fn().mockResolvedValue({ databaseUrl: "" }),
+      put: vi.fn(),
+    },
+    help: {
+      history: vi.fn().mockResolvedValue({ messages: [] }),
+      chat: vi.fn(),
     },
   },
 }));
@@ -94,6 +103,7 @@ function createStore(executeTasks: Task[] = []) {
       plan: planReducer,
       websocket: websocketReducer,
       openQuestions: openQuestionsReducer,
+      notification: notificationReducer,
     },
     preloadedState: {
       execute: {
@@ -273,27 +283,38 @@ describe("Navbar", () => {
     expect(screen.queryByRole("button", { name: "⚠️ Execute" })).not.toBeInTheDocument();
   });
 
-  describe("integration: (?) opens Help modal with tabs", () => {
-    it("homepage (project=null): click (?) opens Help modal with two tabs, Ask a Question default", async () => {
+  describe("integration: (?) navigates to Help page", () => {
+    it("homepage (project=null): Help link has correct href and navigates to help page", async () => {
       const user = userEvent.setup();
-      renderNavbar(<Navbar project={null} />);
+      const { HelpPage } = await import("../../pages/HelpPage");
+      render(
+        <ThemeProvider>
+          <DisplayPreferencesProvider>
+            <Provider store={createStore()}>
+              <QueryClientProvider client={queryClient}>
+                <MemoryRouter initialEntries={["/"]}>
+                  <Routes>
+                    <Route path="/" element={<Navbar project={null} />} />
+                    <Route path="/help" element={<HelpPage />} />
+                  </Routes>
+                </MemoryRouter>
+              </QueryClientProvider>
+            </Provider>
+          </DisplayPreferencesProvider>
+        </ThemeProvider>
+      );
 
-      const helpButton = await screen.findByRole("button", { name: "Help" });
-      await user.click(helpButton);
+      const helpLink = await screen.findByRole("link", { name: "Help" });
+      expect(helpLink).toHaveAttribute("href", "/help");
+      await user.click(helpLink);
 
-      expect(screen.getByRole("dialog", { name: /help/i })).toBeInTheDocument();
-      expect(screen.getByText("Help")).toBeInTheDocument();
+      expect(screen.getByTestId("help-page")).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: "Ask a Question" })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: "Meet your Team" })).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: "Ask a Question" })).toHaveAttribute(
-        "aria-selected",
-        "true"
-      );
       expect(screen.getByText(/Ask about your projects/)).toBeInTheDocument();
     });
 
-    it("project view (project set): click (?) opens Help modal with two tabs", async () => {
-      const user = userEvent.setup();
+    it("project view (project set): Help link has project-scoped href", () => {
       const mockProject = {
         id: "proj-1",
         name: "Test",
@@ -304,22 +325,29 @@ describe("Navbar", () => {
       };
       renderNavbar(<Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />);
 
-      const helpButton = screen.getByRole("button", { name: "Help" });
-      expect(helpButton).toBeInTheDocument();
-      await user.click(helpButton);
-
-      expect(screen.getByRole("dialog", { name: /help/i })).toBeInTheDocument();
-      expect(screen.getByText("Help")).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: "Ask a Question" })).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: "Meet your Team" })).toBeInTheDocument();
+      const helpLink = screen.getByRole("link", { name: "Help" });
+      expect(helpLink).toHaveAttribute("href", "/projects/proj-1/help");
     });
 
-    it("Meet your Team tab shows agent grid with roles and phases", async () => {
+    it("Meet your Team tab shows agent grid when on help page", async () => {
       const user = userEvent.setup();
-      renderNavbar(<Navbar project={null} />);
-
-      const helpButton = await screen.findByRole("button", { name: "Help" });
-      await user.click(helpButton);
+      const { HelpPage } = await import("../../pages/HelpPage");
+      render(
+        <ThemeProvider>
+          <DisplayPreferencesProvider>
+            <Provider store={createStore()}>
+              <QueryClientProvider client={queryClient}>
+                <MemoryRouter initialEntries={["/help"]}>
+                  <Routes>
+                    <Route path="/" element={<Navbar project={null} />} />
+                    <Route path="/help" element={<HelpPage />} />
+                  </Routes>
+                </MemoryRouter>
+              </QueryClientProvider>
+            </Provider>
+          </DisplayPreferencesProvider>
+        </ThemeProvider>
+      );
 
       await user.click(screen.getByRole("tab", { name: "Meet your Team" }));
       expect(screen.getByRole("tab", { name: "Meet your Team" })).toHaveAttribute(
@@ -333,14 +361,16 @@ describe("Navbar", () => {
     });
   });
 
-  it("homepage shows settings icon when no projects", () => {
+  it("homepage shows settings link when no projects", () => {
     mockProjectsList.mockResolvedValue([]);
     renderNavbar(<Navbar project={null} />);
 
-    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+    const settingsLink = screen.getByRole("link", { name: "Settings" });
+    expect(settingsLink).toBeInTheDocument();
+    expect(settingsLink).toHaveAttribute("href", "/settings");
   });
 
-  it("homepage shows settings icon when projects exist", async () => {
+  it("homepage shows settings link when projects exist", async () => {
     const projects = [
       {
         id: "proj-1",
@@ -354,20 +384,35 @@ describe("Navbar", () => {
     mockProjectsList.mockResolvedValue(projects);
     renderNavbar(<Navbar project={null} />);
 
-    await screen.findByRole("button", { name: "Settings" });
-    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+    const settingsLink = await screen.findByRole("link", { name: "Settings" });
+    expect(settingsLink).toHaveAttribute("href", "/settings");
   });
 
-  it("homepage: clicking settings icon opens DisplaySettingsModal", async () => {
+  it("homepage: clicking settings link navigates to settings page", async () => {
     mockProjectsList.mockResolvedValue([]);
     const user = userEvent.setup();
-    renderNavbar(<Navbar project={null} />);
+    const { SettingsPage } = await import("../../pages/SettingsPage");
+    render(
+      <ThemeProvider>
+        <DisplayPreferencesProvider>
+          <Provider store={createStore()}>
+            <QueryClientProvider client={queryClient}>
+              <MemoryRouter initialEntries={["/"]}>
+                <Routes>
+                  <Route path="/" element={<Navbar project={null} />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Routes>
+              </MemoryRouter>
+            </QueryClientProvider>
+          </Provider>
+        </DisplayPreferencesProvider>
+      </ThemeProvider>
+    );
 
-    const settingsButton = screen.getByRole("button", { name: "Settings" });
-    await user.click(settingsButton);
+    const settingsLink = screen.getByRole("link", { name: "Settings" });
+    await user.click(settingsLink);
 
-    expect(screen.getByTestId("display-settings-modal")).toBeInTheDocument();
-    expect(screen.getByText("Settings")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-page")).toBeInTheDocument();
     expect(screen.getByTestId("display-section")).toBeInTheDocument();
     expect(screen.getByTestId("theme-option-light")).toBeInTheDocument();
   });
@@ -403,41 +448,52 @@ describe("Navbar", () => {
     expect(screen.getByTestId("api-key-setup-modal")).toBeInTheDocument();
   });
 
-  it("theme is configurable from project settings Display mode (global)", async () => {
+  it("theme is configurable from settings page", async () => {
     const user = userEvent.setup();
-    const mockProject = {
-      id: "proj-1",
-      name: "Test",
-      repoPath: "/path",
-      currentPhase: "sketch" as const,
-      createdAt: "2025-01-01T00:00:00Z",
-      updatedAt: "2025-01-01T00:00:00Z",
-    };
-    mockGetSettings.mockResolvedValue({
-      simpleComplexityAgent: { type: "claude", model: "claude-3-5-sonnet", cliCommand: null },
-      complexComplexityAgent: { type: "claude", model: "claude-3-5-sonnet", cliCommand: null },
-      deployment: { mode: "custom" },
-      hilConfig: {
-        scopeChanges: "requires_approval",
-        architectureDecisions: "requires_approval",
-        dependencyModifications: "requires_approval",
-      },
-    });
-
-    const onSettingsOpenChange = vi.fn();
-    renderNavbar(
-      <Navbar
-        project={mockProject}
-        settingsOpen={true}
-        onSettingsOpenChange={onSettingsOpenChange}
-      />
+    const { SettingsPage } = await import("../../pages/SettingsPage");
+    render(
+      <ThemeProvider>
+        <DisplayPreferencesProvider>
+          <Provider store={createStore()}>
+            <QueryClientProvider client={queryClient}>
+              <MemoryRouter initialEntries={["/settings"]}>
+                <Routes>
+                  <Route path="/" element={<Navbar project={null} />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Routes>
+              </MemoryRouter>
+            </QueryClientProvider>
+          </Provider>
+        </DisplayPreferencesProvider>
+      </ThemeProvider>
     );
 
-    await screen.findByText("Settings");
-    await user.click(screen.getByTestId("display-mode-button"));
-
+    await screen.findByTestId("display-section");
     await user.click(screen.getByTestId("theme-option-dark"));
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
     expect(localStorage.getItem("opensprint.theme")).toBe("dark");
+  });
+
+  it("Settings and Help links show blue active state when on their page", async () => {
+    const { SettingsPage } = await import("../../pages/SettingsPage");
+    render(
+      <ThemeProvider>
+        <DisplayPreferencesProvider>
+          <Provider store={createStore()}>
+            <QueryClientProvider client={queryClient}>
+              <MemoryRouter initialEntries={["/settings"]}>
+                <Routes>
+                  <Route path="/" element={<Navbar project={null} />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Routes>
+              </MemoryRouter>
+            </QueryClientProvider>
+          </Provider>
+        </DisplayPreferencesProvider>
+      </ThemeProvider>
+    );
+
+    const settingsLink = screen.getByRole("link", { name: "Settings" });
+    expect(settingsLink).toHaveClass("phase-tab-active");
   });
 });

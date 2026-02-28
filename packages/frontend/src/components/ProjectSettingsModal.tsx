@@ -28,6 +28,8 @@ interface ProjectSettingsModalProps {
   project: Project;
   onClose: () => void;
   onSaved?: () => void;
+  /** When true, render as full-screen page instead of modal overlay */
+  fullScreen?: boolean;
 }
 
 type Tab = "basics" | "agents" | "deployment" | "hil";
@@ -41,7 +43,7 @@ const TABS: { key: Tab; label: string }[] = [
 
 type SettingsMode = "project" | "display";
 
-export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSettingsModalProps) {
+export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: ProjectSettingsModalProps) {
   const [mode, setMode] = useState<SettingsMode>("project");
   const [activeTab, setActiveTab] = useState<Tab>("basics");
   const [saving, setSaving] = useState(false);
@@ -201,14 +203,21 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
     setSettings((s) => (s ? { ...s, aiAutonomyLevel: level } : null));
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-theme-overlay backdrop-blur-sm" onClick={onClose} />
+  const wrapperClass = fullScreen
+    ? "flex-1 min-h-0 flex flex-col overflow-hidden"
+    : "fixed inset-0 z-50 flex items-center justify-center";
+  const contentClass = fullScreen
+    ? "relative bg-theme-surface flex-1 min-h-0 flex flex-col overflow-hidden rounded-xl border border-theme-border"
+    : "relative bg-theme-surface rounded-xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[85vh] overflow-hidden";
 
-      {/* Modal */}
+  return (
+    <div className={wrapperClass}>
+      {!fullScreen && (
+        <div className="absolute inset-0 bg-theme-overlay backdrop-blur-sm" onClick={onClose} />
+      )}
+
       <div
-        className="relative bg-theme-surface rounded-xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[85vh] overflow-hidden"
+        className={contentClass}
         data-testid="settings-modal"
       >
         {/* Header */}

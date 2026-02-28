@@ -81,7 +81,6 @@ export function ProjectView() {
   const selectedPlanId = useAppSelector((s) => s.plan.selectedPlanId);
   const selectedTaskId = useAppSelector((s) => s.execute.selectedTaskId);
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const prevProjectIdRef = useRef<string | null>(null);
   /** Last synced data refs per key so we only dispatch when data actually changed (avoids flash from same data re-syncing). */
   const lastSyncedRef = useRef<Record<string, unknown>>({});
@@ -362,8 +361,6 @@ export function ProjectView() {
         currentPhase={currentPhase}
         onPhaseChange={handlePhaseChange}
         onProjectSaved={handleProjectSaved}
-        settingsOpen={settingsOpen}
-        onSettingsOpenChange={setSettingsOpen}
       >
         {/* Mount only active phase; lazy-load phase content. Layout and phase shell render eagerly.
             Phase data stays in global store (Redux + TanStack Query) so switching phases shows cached data. */}
@@ -406,7 +403,7 @@ export function ProjectView() {
             {currentPhase === "deliver" && (
               <LazyDeliverPhase
                 projectId={projectId}
-                onOpenSettings={() => setSettingsOpen(true)}
+                onOpenSettings={() => navigate(`/projects/${projectId}/settings`)}
               />
             )}
           </Suspense>

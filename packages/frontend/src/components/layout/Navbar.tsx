@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import type { Project, ProjectPhase } from "@opensprint/shared";
 import { NAVBAR_HEIGHT } from "../../lib/constants";
 import { useAppSelector, useAppDispatch } from "../../store";
@@ -12,9 +12,6 @@ import { GlobalActiveAgentsList } from "../GlobalActiveAgentsList";
 import { NotificationBell } from "../NotificationBell";
 import { GlobalNotificationBell } from "../GlobalNotificationBell";
 import { ConnectionIndicator } from "../ConnectionIndicator";
-import { ProjectSettingsModal } from "../ProjectSettingsModal";
-import { DisplaySettingsModal } from "../DisplaySettingsModal";
-import { HelpModal } from "../HelpModal";
 import { ApiKeySetupModal } from "../ApiKeySetupModal";
 
 interface NavbarProps {
@@ -22,9 +19,6 @@ interface NavbarProps {
   currentPhase?: ProjectPhase;
   onPhaseChange?: (phase: ProjectPhase) => void;
   onProjectSaved?: () => void;
-  /** When provided, settings modal is controlled by parent */
-  settingsOpen?: boolean;
-  onSettingsOpenChange?: (open: boolean) => void;
 }
 
 const PHASE_LABELS: Record<ProjectPhase, string> = {
@@ -40,18 +34,23 @@ export function Navbar({
   currentPhase,
   onPhaseChange,
   onProjectSaved,
-  settingsOpen: controlledSettingsOpen,
-  onSettingsOpenChange,
 }: NavbarProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [internalSettingsOpen, setInternalSettingsOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
   const [apiKeyModalRoute, setApiKeyModalRoute] = useState<string | null>(null);
-  const settingsOpen = controlledSettingsOpen ?? internalSettingsOpen;
-  const setSettingsOpen = onSettingsOpenChange ?? setInternalSettingsOpen;
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const isSettingsActive =
+    location.pathname === "/settings" ||
+    (project && location.pathname === `/projects/${project.id}/settings`);
+  const isHelpActive =
+    location.pathname === "/help" ||
+    (project && location.pathname === `/projects/${project.id}/help`);
+
+  const settingsHref = project ? `/projects/${project.id}/settings` : "/settings";
+  const helpHref = project ? `/projects/${project.id}/help` : "/help";
 
   const dispatch = useAppDispatch();
   const executeBlockedCount = useAppSelector((s) => {
@@ -234,19 +233,21 @@ export function Navbar({
               <ActiveAgentsList projectId={project.id} />
               <NotificationBell projectId={project.id} />
               <ConnectionIndicator />
-              <button
-                type="button"
-                onClick={() => setHelpOpen(true)}
-                className="p-1.5 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+              <Link
+                to={helpHref}
+                className={`p-1.5 rounded-md transition-colors ${
+                  isHelpActive ? "phase-tab phase-tab-active" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle"
+                }`}
                 aria-label="Help"
                 title="Help"
               >
                 <span className="text-lg font-medium leading-none">?</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="p-1.5 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+              </Link>
+              <Link
+                to={settingsHref}
+                className={`p-1.5 rounded-md transition-colors ${
+                  isSettingsActive ? "phase-tab phase-tab-active" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle"
+                }`}
                 aria-label="Project settings"
                 title="Project settings"
               >
@@ -268,25 +269,27 @@ export function Navbar({
                     d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-              </button>
+              </Link>
             </>
           ) : projects.length >= 1 ? (
             <>
               <GlobalActiveAgentsList />
               <GlobalNotificationBell />
-              <button
-                type="button"
-                onClick={() => setHelpOpen(true)}
-                className="p-1.5 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+              <Link
+                to={helpHref}
+                className={`p-1.5 rounded-md transition-colors ${
+                  isHelpActive ? "phase-tab phase-tab-active" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle"
+                }`}
                 aria-label="Help"
                 title="Help"
               >
                 <span className="text-lg font-medium leading-none">?</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="p-1.5 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+              </Link>
+              <Link
+                to={settingsHref}
+                className={`p-1.5 rounded-md transition-colors ${
+                  isSettingsActive ? "phase-tab phase-tab-active" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle"
+                }`}
                 aria-label="Settings"
                 title="Settings"
               >
@@ -308,23 +311,25 @@ export function Navbar({
                     d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-              </button>
+              </Link>
             </>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => setHelpOpen(true)}
-                className="p-1.5 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+              <Link
+                to={helpHref}
+                className={`p-1.5 rounded-md transition-colors ${
+                  isHelpActive ? "phase-tab phase-tab-active" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle"
+                }`}
                 aria-label="Help"
                 title="Help"
               >
                 <span className="text-lg font-medium leading-none">?</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="p-1.5 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+              </Link>
+              <Link
+                to={settingsHref}
+                className={`p-1.5 rounded-md transition-colors ${
+                  isSettingsActive ? "phase-tab phase-tab-active" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle"
+                }`}
                 aria-label="Settings"
                 title="Settings"
               >
@@ -346,26 +351,12 @@ export function Navbar({
                     d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-              </button>
+              </Link>
             </>
           )}
         </div>
       </div>
 
-      {helpOpen && <HelpModal project={project ?? undefined} onClose={() => setHelpOpen(false)} />}
-      {settingsOpen && project && (
-        <ProjectSettingsModal
-          project={project}
-          onClose={() => setSettingsOpen(false)}
-          onSaved={() => {
-            setSettingsOpen(false);
-            onProjectSaved?.();
-          }}
-        />
-      )}
-      {settingsOpen && !project && (
-        <DisplaySettingsModal onClose={() => setSettingsOpen(false)} />
-      )}
       {apiKeyModalRoute && (
         <ApiKeySetupModal
           onComplete={() => {
