@@ -128,7 +128,11 @@ export class TaskStoreService {
     this.onTaskChange?.(projectId, changeType, task);
   }
 
-  async init(_repoPath?: string): Promise<void> {
+  /**
+   * Initialize the task store. When databaseUrl is provided (e.g. from startup),
+   * use it; otherwise fetch from global settings. Tests may inject a client via constructor.
+   */
+  async init(databaseUrl?: string): Promise<void> {
     if (this.client) return;
 
     if (this.injectedClient) {
@@ -143,7 +147,7 @@ export class TaskStoreService {
       return;
     }
 
-    this.initPromise = this.runInitInternal();
+    this.initPromise = this.runInitInternal(databaseUrl);
     try {
       await this.initPromise;
     } catch (err) {
@@ -156,9 +160,9 @@ export class TaskStoreService {
     }
   }
 
-  private async runInitInternal(): Promise<void> {
-    const databaseUrl = await getDatabaseUrl();
-    const pool = new pg.Pool({ connectionString: databaseUrl });
+  private async runInitInternal(databaseUrl?: string): Promise<void> {
+    const url = databaseUrl ?? (await getDatabaseUrl());
+    const pool = new pg.Pool({ connectionString: url });
     this.pool = pool;
     this.client = createPostgresDbClient(pool);
 

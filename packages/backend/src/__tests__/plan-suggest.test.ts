@@ -104,7 +104,7 @@ describe("Plan suggestPlans (POST /plans/suggest)", () => {
     });
     projectId = project.id;
 
-    await taskStore.init(repoPath);
+    await taskStore.init();
 
     const prdPath = path.join(repoPath, OPENSPRINT_PATHS.prd);
     await fs.mkdir(path.dirname(prdPath), { recursive: true });
