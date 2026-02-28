@@ -22,7 +22,10 @@ import { filterAgentOutput } from "../../utils/agentOutputFilter";
 import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
 import { BuildEpicCard } from "../../components/kanban";
 import { useTaskFilter } from "../../hooks/useTaskFilter";
-import { useExecuteSwimlanes } from "../../hooks/useExecuteSwimlanes";
+import {
+  useExecuteSwimlanes,
+  showReadyInLineSections,
+} from "../../hooks/useExecuteSwimlanes";
 import { useScrollToQuestion } from "../../hooks/useScrollToQuestion";
 import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotifications";
 import { ExecuteFilterToolbar } from "../../components/execute/ExecuteFilterToolbar";
@@ -220,12 +223,17 @@ export function ExecutePhase({
     }
   };
 
-  const { implTasks, filteredTasks, swimlanes, chipConfig } = useExecuteSwimlanes(
-    tasks,
-    plans,
-    statusFilter,
-    searchQuery
-  );
+  const {
+    implTasks,
+    filteredTasks,
+    swimlanes,
+    readySwimlanes,
+    inLineSwimlanes,
+    chipConfig,
+  } = useExecuteSwimlanes(tasks, plans, statusFilter, searchQuery);
+
+  const useReadyInLineSections =
+    showReadyInLineSections(statusFilter) && implTasks.length > 0;
 
   // Default to "All" when selected filter has no visible tasks (e.g. user navigated with "Blocked" selected but no blocked tasks)
   useEffect(() => {
@@ -273,7 +281,76 @@ export function ExecutePhase({
               No tasks yet. Ship a Plan to start generating tasks.
             </div>
           ) : viewMode === "kanban" ? (
-            swimlanes.length === 0 ? (
+            useReadyInLineSections ? (
+              (readySwimlanes.length > 0 || inLineSwimlanes.length > 0) ? (
+                <div className="space-y-8">
+                  {readySwimlanes.length > 0 && (
+                    <section data-testid="execute-section-ready">
+                      <h2 className="text-sm font-semibold text-theme-muted tracking-wide uppercase mb-4">
+                        Ready
+                      </h2>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {readySwimlanes.map((lane) => (
+                          <BuildEpicCard
+                            key={lane.epicId || "other"}
+                            epicId={lane.epicId}
+                            epicTitle={lane.epicTitle}
+                            statusFilter="ready"
+                            searchQuery={searchQuery}
+                            filteringActive={isSearchActive}
+                            onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
+                            onUnblock={(taskId) => unblockMutation.mutate({ taskId })}
+                            onViewPlan={
+                              lane.planId && onNavigateToPlan
+                                ? () => onNavigateToPlan(lane.planId!)
+                                : undefined
+                            }
+                            taskIdToStartedAt={taskIdToStartedAt}
+                            selectedTaskId={effectiveSelectedTask}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                  {inLineSwimlanes.length > 0 && (
+                    <section data-testid="execute-section-in_line">
+                      <h2 className="text-sm font-semibold text-theme-muted tracking-wide uppercase mb-4">
+                        In Line
+                      </h2>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {inLineSwimlanes.map((lane) => (
+                          <BuildEpicCard
+                            key={lane.epicId || "other"}
+                            epicId={lane.epicId}
+                            epicTitle={lane.epicTitle}
+                            statusFilter="in_line"
+                            searchQuery={searchQuery}
+                            filteringActive={isSearchActive}
+                            onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
+                            onUnblock={(taskId) => unblockMutation.mutate({ taskId })}
+                            onViewPlan={
+                              lane.planId && onNavigateToPlan
+                                ? () => onNavigateToPlan(lane.planId!)
+                                : undefined
+                            }
+                            taskIdToStartedAt={taskIdToStartedAt}
+                            selectedTaskId={effectiveSelectedTask}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-10 text-theme-muted">
+                  {isSearchActive
+                    ? "No tasks match your search."
+                    : statusFilter === "all"
+                      ? "All tasks completed."
+                      : "No tasks match this filter."}
+                </div>
+              )
+            ) : swimlanes.length === 0 ? (
               <div className="text-center py-10 text-theme-muted">
                 {isSearchActive
                   ? "No tasks match your search."

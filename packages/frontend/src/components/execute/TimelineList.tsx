@@ -36,6 +36,8 @@ const SECTION_LABELS: Record<string, string> = {
   [TIMELINE_SECTION.queue]: "In Line",
   [TIMELINE_SECTION.completed]: "Completed",
   blocked: "Blocked",
+  ready: "Ready",
+  in_line: "In Line",
 };
 
 function TimelineRow({
@@ -130,31 +132,29 @@ export function TimelineList({
     statusFilter === "all" ? sorted.filter((t) => t.kanbanColumn === "blocked") : [];
   const showBlockedSection = blockedTasks.length > 0;
 
-  const queueFilter = (t: Task) => {
-    const inQueue = getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.queue;
-    if (showBlockedSection && t.kanbanColumn === "blocked") return false;
-    return inQueue;
-  };
-
   const bySection = useMemo(
     () => ({
       [TIMELINE_SECTION.active]: sorted.filter(
         (t) => getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.active
       ),
-      [TIMELINE_SECTION.queue]: sorted.filter(queueFilter),
       [TIMELINE_SECTION.completed]: sorted.filter(
         (t) => getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.completed
       ),
       blocked: blockedTasks,
+      ready: sorted.filter((t) => t.kanbanColumn === "ready"),
+      in_line: sorted.filter(
+        (t) => t.kanbanColumn === "backlog" || t.kanbanColumn === "planning"
+      ),
     }),
-    [sorted, showBlockedSection, blockedTasks]
+    [sorted, blockedTasks]
   );
 
   const sections = useMemo(
     () => [
       ...(showBlockedSection ? [{ key: "blocked" as const, tasks: bySection.blocked }] : []),
       { key: TIMELINE_SECTION.active, tasks: bySection[TIMELINE_SECTION.active] },
-      { key: TIMELINE_SECTION.queue, tasks: bySection[TIMELINE_SECTION.queue] },
+      { key: "ready" as const, tasks: bySection.ready },
+      { key: "in_line" as const, tasks: bySection.in_line },
       { key: TIMELINE_SECTION.completed, tasks: bySection[TIMELINE_SECTION.completed] },
     ],
     [showBlockedSection, bySection]

@@ -71,14 +71,16 @@ describe("TimelineList", () => {
 
     expect(screen.getByTestId("timeline-section-active")).toBeInTheDocument();
     expect(screen.getByTestId("timeline-section-completed")).toBeInTheDocument();
-    expect(screen.queryByTestId("timeline-section-queue")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("timeline-section-ready")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("timeline-section-in_line")).not.toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "In Progress" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Completed" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Ready" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "In Line" })).not.toBeInTheDocument();
   });
 
-  it("displays In Line section when queue has tasks", () => {
+  it("displays Ready section when ready tasks exist", () => {
     const tasks = [
       createMockTask({ id: "a", kanbanColumn: "in_progress", title: "Active Task" }),
       createMockTask({ id: "b", kanbanColumn: "ready", title: "Queued Task" }),
@@ -88,8 +90,22 @@ describe("TimelineList", () => {
     render(<TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} />);
 
     expect(screen.getByRole("heading", { name: "In Progress" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "In Line" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ready" })).toBeInTheDocument();
     expect(screen.getByText("Queued Task")).toBeInTheDocument();
+  });
+
+  it("displays In Line section when backlog/planning tasks exist", () => {
+    const tasks = [
+      createMockTask({ id: "a", kanbanColumn: "in_progress", title: "Active Task" }),
+      createMockTask({ id: "b", kanbanColumn: "backlog", title: "Blocked Task" }),
+    ];
+    const plans = [createMockPlan("epic-1", "Auth Epic")];
+
+    render(<TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} />);
+
+    expect(screen.getByRole("heading", { name: "In Progress" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "In Line" })).toBeInTheDocument();
+    expect(screen.getByText("Blocked Task")).toBeInTheDocument();
   });
 
   it("rows display correct status badge, priority icon, title, epic name", () => {
@@ -203,7 +219,7 @@ describe("TimelineList", () => {
     expect(screen.queryByRole("heading", { name: "Blocked" })).not.toBeInTheDocument();
   });
 
-  it("blocked tasks appear only in Blocked section, not duplicated in In Line", () => {
+  it("blocked tasks appear only in Blocked section, not duplicated in Ready", () => {
     const tasks = [
       createMockTask({ id: "blocked-1", title: "Blocked task", kanbanColumn: "blocked" }),
       createMockTask({ id: "ready-1", title: "Ready task", kanbanColumn: "ready" }),
@@ -220,15 +236,15 @@ describe("TimelineList", () => {
     );
 
     expect(screen.getByTestId("timeline-section-blocked")).toBeInTheDocument();
-    expect(screen.getByTestId("timeline-section-queue")).toBeInTheDocument();
+    expect(screen.getByTestId("timeline-section-ready")).toBeInTheDocument();
     expect(screen.getByText("Blocked task")).toBeInTheDocument();
     expect(screen.getByText("Ready task")).toBeInTheDocument();
 
     const blockedSection = screen.getByTestId("timeline-section-blocked");
-    const queueSection = screen.getByTestId("timeline-section-queue");
+    const readySection = screen.getByTestId("timeline-section-ready");
     expect(blockedSection).toContainElement(screen.getByTestId("timeline-row-blocked-1"));
-    expect(queueSection).not.toContainElement(screen.getByTestId("timeline-row-blocked-1"));
-    expect(queueSection).toContainElement(screen.getByTestId("timeline-row-ready-1"));
+    expect(readySection).not.toContainElement(screen.getByTestId("timeline-row-blocked-1"));
+    expect(readySection).toContainElement(screen.getByTestId("timeline-row-ready-1"));
   });
 
   it("empty tasks array renders nothing", () => {

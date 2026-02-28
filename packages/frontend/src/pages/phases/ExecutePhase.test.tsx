@@ -1599,7 +1599,7 @@ describe("ExecutePhase view toggle", () => {
     expect(screen.getByText("Ready task")).toBeInTheDocument();
     const blockedSection = screen.getByTestId("timeline-section-blocked");
     expect(blockedSection).toContainElement(screen.getByTestId("timeline-row-epic-1.1"));
-    expect(screen.getByTestId("timeline-section-queue")).not.toContainElement(
+    expect(screen.getByTestId("timeline-section-ready")).not.toContainElement(
       screen.getByTestId("timeline-row-epic-1.1")
     );
   });
