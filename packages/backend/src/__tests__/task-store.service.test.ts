@@ -1002,7 +1002,7 @@ describe("TaskStoreService", () => {
   });
 
   describe("deleteByProjectId", () => {
-    it("should remove tasks, dependencies, feedback, sessions, stats, events, counters, deployments, and plans for a project", async () => {
+    it("should remove tasks, dependencies, feedback, sessions, stats, events, counters, deployments, plans, and open_questions for a project", async () => {
       const pid = "proj-delete-test";
       const otherPid = "proj-keep";
       const now = new Date().toISOString();
@@ -1046,6 +1046,16 @@ describe("TaskStoreService", () => {
         `INSERT INTO deployments (id, project_id, status, started_at) VALUES (?, ?, ?, ?)`,
         ["dep-1", pid, "completed", now]
       );
+      db.run(
+        `INSERT INTO open_questions (id, project_id, source, source_id, questions, status, created_at, kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["oq-1", pid, "execute", "task-1", "[]", "open", now, "open_question"]
+      );
+      db.run(
+        `INSERT INTO open_questions (id, project_id, source, source_id, questions, status, created_at, kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["oq-other", otherPid, "execute", "task-2", "[]", "open", now, "open_question"]
+      );
       await store.planInsert(pid, "plan-1", {
         epic_id: "ep-1",
         content: "# Plan",
@@ -1079,6 +1089,8 @@ describe("TaskStoreService", () => {
       expect(countRow("orchestrator_counters", pid)).toBe(0);
       expect(countRow("deployments", pid)).toBe(0);
       expect(countRow("plans", pid)).toBe(0);
+      expect(countRow("open_questions", pid)).toBe(0);
+      expect(countRow("open_questions", otherPid)).toBe(1);
 
       const depStmt = db.prepare(
         "SELECT COUNT(*) as cnt FROM task_dependencies WHERE task_id = ? OR depends_on_id = ?"
@@ -1096,6 +1108,44 @@ describe("TaskStoreService", () => {
       await store.deleteByProjectId(pid);
       const tasks = await store.listAll(pid);
       expect(tasks).toHaveLength(0);
+    });
+  });
+
+  describe("deleteOpenQuestionsByProjectId", () => {
+    it("should remove all open_questions for a project", async () => {
+      const pid = "proj-oq-test";
+      const otherPid = "proj-oq-keep";
+      const now = new Date().toISOString();
+
+      const db = await store.getDb();
+      db.run(
+        `INSERT INTO open_questions (id, project_id, source, source_id, questions, status, created_at, kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["oq-a", pid, "execute", "task-1", "[]", "open", now, "open_question"]
+      );
+      db.run(
+        `INSERT INTO open_questions (id, project_id, source, source_id, questions, status, created_at, kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["oq-b", pid, "plan", "plan-1", "[]", "open", now, "open_question"]
+      );
+      db.run(
+        `INSERT INTO open_questions (id, project_id, source, source_id, questions, status, created_at, kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["oq-keep", otherPid, "execute", "task-2", "[]", "open", now, "open_question"]
+      );
+
+      await store.deleteOpenQuestionsByProjectId(pid);
+
+      const countRow = (table: string, projId: string): number => {
+        const stmt = db.prepare(`SELECT COUNT(*) as cnt FROM ${table} WHERE project_id = ?`);
+        stmt.bind([projId]);
+        stmt.step();
+        const cnt = stmt.getAsObject().cnt as number;
+        stmt.free();
+        return cnt;
+      };
+      expect(countRow("open_questions", pid)).toBe(0);
+      expect(countRow("open_questions", otherPid)).toBe(1);
     });
   });
 

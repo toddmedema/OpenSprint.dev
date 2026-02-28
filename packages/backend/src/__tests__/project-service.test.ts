@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { ProjectService } from "../services/project.service.js";
+import { notificationService } from "../services/notification.service.js";
 import { DEFAULT_HIL_CONFIG, DEFAULT_REVIEW_MODE } from "@opensprint/shared";
 
 /** Read project settings from global store (when HOME=tempDir in tests). */
@@ -658,6 +659,32 @@ describe("ProjectService", () => {
     expect(stat.isDirectory()).toBe(true);
   });
 
+  it("archiveProject cascades delete of open_questions for the project", async () => {
+    const repoPath = path.join(tempDir, "archive-oq-test");
+    const project = await projectService.createProject({
+      name: "Archive OQ",
+      repoPath,
+      simpleComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      complexComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    await notificationService.create({
+      projectId: project.id,
+      source: "execute",
+      sourceId: "task-1",
+      questions: [{ id: "q1", text: "Clarification?", createdAt: new Date().toISOString() }],
+    });
+    const before = await notificationService.listByProject(project.id);
+    expect(before).toHaveLength(1);
+
+    await projectService.archiveProject(project.id);
+
+    const after = await notificationService.listByProject(project.id);
+    expect(after).toHaveLength(0);
+  });
+
   it("archiveProject throws 404 for non-existent project", async () => {
     await expect(projectService.archiveProject("non-existent")).rejects.toMatchObject({
       statusCode: 404,
@@ -728,6 +755,32 @@ describe("ProjectService", () => {
     const afterRaw = await fs.readFile(indexPath, "utf-8");
     const after = JSON.parse(afterRaw) as { projects: Array<{ id: string }> };
     expect(after.projects.some((p) => p.id === project.id)).toBe(false);
+  });
+
+  it("deleteProject cascades delete of open_questions for the project", async () => {
+    const repoPath = path.join(tempDir, "delete-oq-test");
+    const project = await projectService.createProject({
+      name: "Delete OQ",
+      repoPath,
+      simpleComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      complexComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    await notificationService.create({
+      projectId: project.id,
+      source: "execute",
+      sourceId: "task-1",
+      questions: [{ id: "q1", text: "Clarification?", createdAt: new Date().toISOString() }],
+    });
+    const before = await notificationService.listByProject(project.id);
+    expect(before).toHaveLength(1);
+
+    await projectService.deleteProject(project.id);
+
+    const after = await notificationService.listByProject(project.id);
+    expect(after).toHaveLength(0);
   });
 
   it("deleteProject removes feedback-assets from global store", async () => {

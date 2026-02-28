@@ -1479,6 +1479,16 @@ export class TaskStoreService {
     });
   }
 
+  /** Delete all open_questions for a project. Used when archiving (index-only removal). */
+  async deleteOpenQuestionsByProjectId(projectId: string): Promise<void> {
+    return this.withWriteLock(async () => {
+      await this.ensureInitialized();
+      const db = this.ensureDb();
+      db.run("DELETE FROM open_questions WHERE project_id = ?", [projectId]);
+      this.scheduleSave();
+    });
+  }
+
   /** Delete all data for a project from every project-scoped table. */
   async deleteByProjectId(projectId: string): Promise<void> {
     return this.withWriteLock(async () => {
@@ -1503,6 +1513,7 @@ export class TaskStoreService {
       db.run("DELETE FROM orchestrator_counters WHERE project_id = ?", [projectId]);
       db.run("DELETE FROM deployments WHERE project_id = ?", [projectId]);
       db.run("DELETE FROM plans WHERE project_id = ?", [projectId]);
+      db.run("DELETE FROM open_questions WHERE project_id = ?", [projectId]);
       this.scheduleSave();
     });
   }

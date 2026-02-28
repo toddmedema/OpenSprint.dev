@@ -812,6 +812,7 @@ export class ProjectService {
   /** Archive a project: remove from index only. Data in project folder remains. */
   async archiveProject(id: string): Promise<void> {
     await this.getProject(id); // validate exists, throws 404 if not
+    await this.taskStore.deleteOpenQuestionsByProjectId(id);
     await projectIndex.removeProject(id);
     this.invalidateListCache();
   }
