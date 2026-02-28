@@ -48,6 +48,7 @@ const mockSettings = {
   simpleComplexityAgent: { type: "claude" as const, model: "claude-3-5-sonnet", cliCommand: null },
   complexComplexityAgent: { type: "claude" as const, model: "claude-3-5-sonnet", cliCommand: null },
   deployment: { mode: "custom" as const },
+  aiAutonomyLevel: "confirm_all" as const,
   hilConfig: {
     scopeChanges: "requires_approval" as const,
     architectureDecisions: "requires_approval" as const,
@@ -261,17 +262,18 @@ describe("ProjectSettingsModal", () => {
     );
   });
 
-  it("Autonomy tab shows only configurable HIL categories (no testFailuresAndRetries)", async () => {
+  it("Autonomy tab shows AI Autonomy slider with three levels", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Settings");
 
     const autonomyTab = screen.getByRole("button", { name: "Autonomy" });
     await userEvent.click(autonomyTab);
 
-    expect(screen.getByText("Scope Changes")).toBeInTheDocument();
-    expect(screen.getByText("Architecture Decisions")).toBeInTheDocument();
-    expect(screen.getByText("Dependency Modifications")).toBeInTheDocument();
-    expect(screen.queryByText(/Test Failures|testFailuresAndRetries/i)).not.toBeInTheDocument();
+    expect(screen.getByText("AI Autonomy")).toBeInTheDocument();
+    expect(screen.getByText("Confirm all scope changes")).toBeInTheDocument();
+    expect(screen.getByText("Major scope changes only")).toBeInTheDocument();
+    expect(screen.getByText("Full autonomy")).toBeInTheDocument();
+    expect(screen.getByTestId("ai-autonomy-slider")).toBeInTheDocument();
   });
 
   it("Deliver tab shows auto-deploy per environment", async () => {

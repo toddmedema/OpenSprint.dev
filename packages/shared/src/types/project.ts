@@ -37,7 +37,10 @@ export interface CreateProjectRequest {
   simpleComplexityAgent?: AgentConfigInput;
   complexComplexityAgent?: AgentConfigInput;
   deployment: DeploymentConfigInput;
-  hilConfig: HilConfigInput;
+  /** AI Autonomy level. When provided, replaces hilConfig. Legacy hilConfig accepted for backward compat. */
+  aiAutonomyLevel?: AiAutonomyLevel;
+  /** @deprecated Use aiAutonomyLevel. Accepted for backward compat. */
+  hilConfig?: HilConfigInput;
   /** Detected or user-selected test framework (PRD §10.2) */
   testFramework?: string | null;
   /** Max concurrent coder agents (default 1). Stored in project settings. */
@@ -87,5 +90,6 @@ import type {
   AgentConfigInput,
   DeploymentConfigInput,
   HilConfigInput,
+  AiAutonomyLevel,
   ApiKeys,
 } from "./settings.js";

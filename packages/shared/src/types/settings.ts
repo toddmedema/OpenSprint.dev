@@ -206,6 +206,67 @@ export interface HilConfig {
 
 export type HilConfigInput = HilConfig;
 
+/** AI Autonomy level: single slider replacing per-category HIL config */
+export type AiAutonomyLevel = "confirm_all" | "major_only" | "full";
+
+/** Labels for AI Autonomy slider (left to right) */
+export const AI_AUTONOMY_LEVELS: { value: AiAutonomyLevel; label: string }[] = [
+  { value: "confirm_all", label: "Confirm all scope changes" },
+  { value: "major_only", label: "Major scope changes only" },
+  { value: "full", label: "Full autonomy" },
+];
+
+/** Default AI autonomy level for new projects */
+export const DEFAULT_AI_AUTONOMY_LEVEL: AiAutonomyLevel = "full";
+
+/**
+ * Derive HilConfig from AiAutonomyLevel for HIL service and agents.
+ * - confirm_all: all categories require approval
+ * - major_only: scopeChanges + architectureDecisions require approval; dependencyModifications automated
+ * - full: all automated
+ */
+export function hilConfigFromAiAutonomyLevel(level: AiAutonomyLevel): HilConfig {
+  switch (level) {
+    case "confirm_all":
+      return {
+        scopeChanges: "requires_approval",
+        architectureDecisions: "requires_approval",
+        dependencyModifications: "requires_approval",
+      };
+    case "major_only":
+      return {
+        scopeChanges: "requires_approval",
+        architectureDecisions: "requires_approval",
+        dependencyModifications: "automated",
+      };
+    case "full":
+    default:
+      return {
+        scopeChanges: "automated",
+        architectureDecisions: "automated",
+        dependencyModifications: "automated",
+      };
+  }
+}
+
+/**
+ * Derive AiAutonomyLevel from legacy HilConfig (migration).
+ */
+export function aiAutonomyLevelFromHilConfig(hilConfig: HilConfig): AiAutonomyLevel {
+  const { scopeChanges, architectureDecisions, dependencyModifications } = hilConfig;
+  const allRequireApproval =
+    scopeChanges === "requires_approval" &&
+    architectureDecisions === "requires_approval" &&
+    dependencyModifications === "requires_approval";
+  if (allRequireApproval) return "confirm_all";
+  const majorRequireApproval =
+    scopeChanges === "requires_approval" &&
+    architectureDecisions === "requires_approval" &&
+    dependencyModifications === "automated";
+  if (majorRequireApproval) return "major_only";
+  return "full";
+}
+
 /** Review mode controls when the review agent is invoked after coding */
 export type ReviewMode = "always" | "never" | "on-failure-only";
 
@@ -275,6 +336,9 @@ export interface ProjectSettings {
   simpleComplexityAgent: AgentConfig;
   complexComplexityAgent: AgentConfig;
   deployment: DeploymentConfig;
+  /** AI Autonomy level (source of truth). HilConfig is derived from this for HIL service. */
+  aiAutonomyLevel?: AiAutonomyLevel;
+  /** @deprecated Derived from aiAutonomyLevel. Kept for backward compat; use hilConfigFromAiAutonomyLevel(aiAutonomyLevel) when reading. */
   hilConfig: HilConfig;
   testFramework: string | null;
   /** Test command (auto-detected from package.json, default: npm test, overridable) */
@@ -333,10 +397,12 @@ export function getAgentForComplexity(
 /** Default agent config when settings are missing */
 const DEFAULT_AGENT: AgentConfig = { type: "cursor", model: null, cliCommand: null };
 
+const VALID_AI_AUTONOMY_LEVELS: AiAutonomyLevel[] = ["confirm_all", "major_only", "full"];
+
 /**
  * Parse raw settings into ProjectSettings. Expects two-tier format (simpleComplexityAgent, complexComplexityAgent).
  * Backward compat: accepts legacy lowComplexityAgent/highComplexityAgent.
- * Missing or invalid agent fields default to { type: "cursor", model: null, cliCommand: null }.
+ * aiAutonomyLevel is source of truth; hilConfig derived from it. Legacy hilConfig migrates to aiAutonomyLevel.
  */
 export function parseSettings(raw: unknown): ProjectSettings {
   const r = raw as Record<string, unknown>;
@@ -348,9 +414,22 @@ export function parseSettings(raw: unknown): ProjectSettings {
       : "worktree";
   const apiKeys = sanitizeApiKeys(r?.apiKeys);
 
+  let aiAutonomyLevel: AiAutonomyLevel = DEFAULT_AI_AUTONOMY_LEVEL;
+  const rawLevel = r?.aiAutonomyLevel;
+  if (typeof rawLevel === "string" && VALID_AI_AUTONOMY_LEVELS.includes(rawLevel as AiAutonomyLevel)) {
+    aiAutonomyLevel = rawLevel as AiAutonomyLevel;
+  } else {
+    const legacyHil = r?.hilConfig as HilConfig | undefined;
+    if (legacyHil && typeof legacyHil === "object") {
+      aiAutonomyLevel = aiAutonomyLevelFromHilConfig(legacyHil);
+    }
+  }
+  const hilConfig = hilConfigFromAiAutonomyLevel(aiAutonomyLevel);
+
   const base = {
     deployment: migrateDeploymentConfig(r?.deployment),
-    hilConfig: (r?.hilConfig as HilConfig) ?? DEFAULT_HIL_CONFIG,
+    aiAutonomyLevel,
+    hilConfig,
     testFramework: (r?.testFramework as string | null) ?? null,
     gitWorkingMode,
     apiKeys: apiKeys ?? undefined,

@@ -16,15 +16,17 @@ import {
   OPENSPRINT_DIR,
   OPENSPRINT_PATHS,
   DEFAULT_HIL_CONFIG,
+  DEFAULT_AI_AUTONOMY_LEVEL,
   DEFAULT_DEPLOYMENT_CONFIG,
   DEFAULT_REVIEW_MODE,
   getTestCommandForFramework,
+  hilConfigFromAiAutonomyLevel,
   parseSettings,
   sanitizeApiKeys,
   getProvidersInUse,
   API_KEY_PROVIDERS,
 } from "@opensprint/shared";
-import type { DeploymentConfig, HilConfig } from "@opensprint/shared";
+import type { AiAutonomyLevel, DeploymentConfig, HilConfig } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import {
   getSettingsFromStore,
@@ -69,26 +71,27 @@ function normalizeDeployment(input: CreateProjectRequest["deployment"]): Deploym
   };
 }
 
-/** Normalize HIL config: merge partial input with defaults (PRD §6.5). Only valid keys are used. Test failures are always automated (PRD §6.5.1) — not configurable, so testFailuresAndRetries is never in HilConfig. */
-const HIL_CONFIG_KEYS: (keyof HilConfig)[] = [
-  "scopeChanges",
-  "architectureDecisions",
-  "dependencyModifications",
-];
+const VALID_AI_AUTONOMY_LEVELS: AiAutonomyLevel[] = ["confirm_all", "major_only", "full"];
 
-function normalizeHilConfig(
-  input: CreateProjectRequest["hilConfig"] | Record<string, unknown>
-): HilConfig {
-  if (!input) return DEFAULT_HIL_CONFIG;
-  const defined = Object.fromEntries(
-    HIL_CONFIG_KEYS.filter((k) => (input as Record<string, unknown>)[k] !== undefined).map((k) => [
-      k,
-      (input as Record<string, unknown>)[k],
-    ])
-  );
+/** Resolve aiAutonomyLevel and hilConfig from create/update input. aiAutonomyLevel takes precedence. */
+function resolveAiAutonomyAndHil(
+  input: { aiAutonomyLevel?: AiAutonomyLevel; hilConfig?: CreateProjectRequest["hilConfig"] }
+): { aiAutonomyLevel: AiAutonomyLevel; hilConfig: HilConfig } {
+  const level = input.aiAutonomyLevel;
+  if (typeof level === "string" && VALID_AI_AUTONOMY_LEVELS.includes(level)) {
+    return { aiAutonomyLevel: level, hilConfig: hilConfigFromAiAutonomyLevel(level) };
+  }
+  const legacy = input.hilConfig;
+  if (legacy && typeof legacy === "object") {
+    const derived = parseSettings({ hilConfig: legacy });
+    return {
+      aiAutonomyLevel: derived.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL,
+      hilConfig: derived.hilConfig,
+    };
+  }
   return {
-    ...DEFAULT_HIL_CONFIG,
-    ...defined,
+    aiAutonomyLevel: DEFAULT_AI_AUTONOMY_LEVEL,
+    hilConfig: DEFAULT_HIL_CONFIG,
   };
 }
 
@@ -152,6 +155,7 @@ function buildDefaultSettings(): ProjectSettings {
     simpleComplexityAgent: { ...DEFAULT_AGENT_CONFIG },
     complexComplexityAgent: { ...DEFAULT_AGENT_CONFIG },
     deployment: { ...DEFAULT_DEPLOYMENT_CONFIG },
+    aiAutonomyLevel: DEFAULT_AI_AUTONOMY_LEVEL,
     hilConfig: { ...DEFAULT_HIL_CONFIG },
     testFramework: null,
     testCommand: null,
@@ -162,11 +166,13 @@ function buildDefaultSettings(): ProjectSettings {
 
 /** Build canonical ProjectSettings for persistence. */
 function toCanonicalSettings(s: ProjectSettings): ProjectSettings {
+  const aiAutonomyLevel = s.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL;
   return {
     simpleComplexityAgent: s.simpleComplexityAgent,
     complexComplexityAgent: s.complexComplexityAgent,
     deployment: s.deployment,
-    hilConfig: s.hilConfig,
+    aiAutonomyLevel,
+    hilConfig: hilConfigFromAiAutonomyLevel(aiAutonomyLevel),
     testFramework: s.testFramework ?? null,
     testCommand: s.testCommand ?? null,
     reviewMode: s.reviewMode ?? DEFAULT_REVIEW_MODE,
@@ -351,7 +357,7 @@ export class ProjectService {
 
     // Write settings (deployment and HIL normalized per PRD §6.4, §6.5)
     const deployment = normalizeDeployment(input.deployment);
-    const hilConfig = normalizeHilConfig(input.hilConfig);
+    const { aiAutonomyLevel, hilConfig } = resolveAiAutonomyAndHil(input);
     const detected = await detectTestFramework(repoPath);
     const testFramework = input.testFramework ?? detected?.framework ?? null;
     const testCommand =
@@ -364,6 +370,7 @@ export class ProjectService {
       simpleComplexityAgent,
       complexComplexityAgent,
       deployment,
+      aiAutonomyLevel,
       hilConfig,
       testFramework,
       testCommand,
@@ -500,7 +507,7 @@ export class ProjectService {
       simpleComplexityAgent: simpleInput as AgentConfigInput,
       complexComplexityAgent: complexInput as AgentConfigInput,
       deployment: DEFAULT_DEPLOYMENT_CONFIG,
-      hilConfig: DEFAULT_HIL_CONFIG,
+      aiAutonomyLevel: DEFAULT_AI_AUTONOMY_LEVEL,
       gitWorkingMode: "worktree",
       maxConcurrentCoders: 1,
       testFramework: null,
@@ -695,10 +702,7 @@ export class ProjectService {
       const withApiKeys = await this.mergeApiKeysForResponse(enriched);
       return toCanonicalSettings(withApiKeys);
     }
-    const normalized = {
-      ...stored,
-      hilConfig: normalizeHilConfig(stored.hilConfig ?? {}),
-    };
+    const normalized = { ...stored };
     const parsed = toCanonicalSettings(parseSettings(normalized));
     const withApiKeys = await this.mergeApiKeysForResponse(parsed);
     return withApiKeys;
@@ -751,9 +755,12 @@ export class ProjectService {
       }
     }
 
-    const hilConfig = normalizeHilConfig(
-      (updates.hilConfig ?? current.hilConfig) as CreateProjectRequest["hilConfig"]
-    );
+    const aiAutonomyLevel =
+      typeof updates.aiAutonomyLevel === "string" &&
+      VALID_AI_AUTONOMY_LEVELS.includes(updates.aiAutonomyLevel)
+        ? updates.aiAutonomyLevel
+        : (current.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL);
+    const hilConfig = hilConfigFromAiAutonomyLevel(aiAutonomyLevel);
     const gitWorkingMode =
       updates.gitWorkingMode === "worktree" || updates.gitWorkingMode === "branches"
         ? updates.gitWorkingMode
@@ -767,6 +774,7 @@ export class ProjectService {
       ...updates,
       simpleComplexityAgent,
       complexComplexityAgent,
+      aiAutonomyLevel,
       hilConfig,
       gitWorkingMode,
       apiKeys,

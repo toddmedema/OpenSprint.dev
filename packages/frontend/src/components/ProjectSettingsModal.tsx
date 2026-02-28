@@ -9,14 +9,15 @@ import type {
   Project,
   ProjectSettings,
   AgentType,
+  AiAutonomyLevel,
   DeploymentMode,
   GitWorkingMode,
-  HilNotificationMode,
   ReviewMode,
   UnknownScopeStrategy,
 } from "@opensprint/shared";
 import {
-  DEFAULT_HIL_CONFIG,
+  AI_AUTONOMY_LEVELS,
+  DEFAULT_AI_AUTONOMY_LEVEL,
   DEFAULT_REVIEW_MODE,
   getDeploymentTargetsForUi,
   AUTO_DEPLOY_TRIGGER_OPTIONS,
@@ -107,7 +108,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
     cliCommand: null,
   };
   const deployment = settings?.deployment ?? { mode: "custom" as DeploymentMode };
-  const hilConfig = settings?.hilConfig ?? DEFAULT_HIL_CONFIG;
+  const aiAutonomyLevel = settings?.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL;
   const gitWorkingMode = settings?.gitWorkingMode ?? "worktree";
 
   const handleSave = async () => {
@@ -144,7 +145,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
             autoResolveFeedbackOnTaskCompletion:
               deployment.autoResolveFeedbackOnTaskCompletion ?? false,
           },
-          hilConfig,
+          aiAutonomyLevel,
           testCommand: settings?.testCommand ?? undefined,
           reviewMode: settings?.reviewMode ?? DEFAULT_REVIEW_MODE,
           maxConcurrentCoders:
@@ -196,8 +197,8 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
     setSettings((s) => (s ? { ...s, deployment: { ...s.deployment, ...updates } } : null));
   };
 
-  const updateHilConfig = (key: keyof typeof hilConfig, value: HilNotificationMode) => {
-    setSettings((s) => (s ? { ...s, hilConfig: { ...s.hilConfig, [key]: value } } : null));
+  const updateAiAutonomyLevel = (level: AiAutonomyLevel) => {
+    setSettings((s) => (s ? { ...s, aiAutonomyLevel: level } : null));
   };
 
   return (
@@ -917,46 +918,41 @@ export function ProjectSettingsModal({ project, onClose, onSaved }: ProjectSetti
                   <p className="text-sm text-theme-muted mb-4">
                     Configure when Open Sprint should pause for your input vs. proceed autonomously.
                   </p>
-                  {(
-                    [
-                      {
-                        key: "scopeChanges" as const,
-                        label: "Scope Changes",
-                        desc: "Adds, removes, or alters features",
-                      },
-                      {
-                        key: "architectureDecisions" as const,
-                        label: "Architecture Decisions",
-                        desc: "Tech stack, integrations, schema changes",
-                      },
-                      {
-                        key: "dependencyModifications" as const,
-                        label: "Dependency Modifications",
-                        desc: "Task reordering and re-prioritization",
-                      },
-                    ] as const
-                  ).map((cat) => (
-                    <div
-                      key={cat.key}
-                      className="flex items-center justify-between p-3 rounded-lg bg-theme-bg-elevated"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-theme-text">{cat.label}</p>
-                        <p className="text-xs text-theme-muted">{cat.desc}</p>
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-theme-text">AI Autonomy</h3>
+                    <div className="space-y-3">
+                      <input
+                        type="range"
+                        min={0}
+                        max={AI_AUTONOMY_LEVELS.length - 1}
+                        step={1}
+                        value={(() => {
+                          const idx = AI_AUTONOMY_LEVELS.findIndex((l) => l.value === aiAutonomyLevel);
+                          return idx >= 0 ? idx : AI_AUTONOMY_LEVELS.length - 1;
+                        })()}
+                        onChange={(e) => {
+                          const i = Number(e.target.value);
+                          const opt = AI_AUTONOMY_LEVELS[i];
+                          if (opt) updateAiAutonomyLevel(opt.value);
+                        }}
+                        className="w-full accent-brand-600"
+                        aria-label="AI Autonomy level"
+                        data-testid="ai-autonomy-slider"
+                      />
+                      <div className="flex justify-between text-xs text-theme-muted">
+                        {AI_AUTONOMY_LEVELS.map((opt) => (
+                          <span
+                            key={opt.value}
+                            className={
+                              opt.value === aiAutonomyLevel ? "font-medium text-theme-text" : ""
+                            }
+                          >
+                            {opt.label}
+                          </span>
+                        ))}
                       </div>
-                      <select
-                        className="input w-48"
-                        value={hilConfig[cat.key]}
-                        onChange={(e) =>
-                          updateHilConfig(cat.key, e.target.value as HilNotificationMode)
-                        }
-                      >
-                        <option value="requires_approval">Requires Approval</option>
-                        <option value="notify_and_proceed">Notify & Proceed</option>
-                        <option value="automated">Automated</option>
-                      </select>
                     </div>
-                  ))}
+                  </div>
                 </div>
               )}
 

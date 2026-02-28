@@ -1,46 +1,33 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { HilStep } from "./HilStep";
-import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
+import { DEFAULT_AI_AUTONOMY_LEVEL } from "@opensprint/shared";
 
 describe("HilStep", () => {
-  it("defaults all three categories to Automated when using DEFAULT_HIL_CONFIG", () => {
+  it("defaults to full autonomy when using DEFAULT_AI_AUTONOMY_LEVEL", () => {
     const onChange = vi.fn();
-    render(<HilStep value={DEFAULT_HIL_CONFIG} onChange={onChange} />);
+    render(<HilStep value={DEFAULT_AI_AUTONOMY_LEVEL} onChange={onChange} />);
 
-    const selects = screen.getAllByRole("combobox");
-    expect(selects).toHaveLength(3);
-    expect(selects[0]).toHaveValue("automated");
-    expect(selects[1]).toHaveValue("automated");
-    expect(selects[2]).toHaveValue("automated");
+    const slider = screen.getByTestId("ai-autonomy-slider");
+    expect(slider).toHaveValue("2"); // full is index 2
   });
 
-  it("renders only configurable HIL categories (no testFailuresAndRetries)", () => {
+  it("renders AI Autonomy slider with three levels", () => {
     const onChange = vi.fn();
-    render(<HilStep value={DEFAULT_HIL_CONFIG} onChange={onChange} />);
+    render(<HilStep value="full" onChange={onChange} />);
 
-    expect(screen.getByText("Scope Changes")).toBeInTheDocument();
-    expect(screen.getByText("Architecture Decisions")).toBeInTheDocument();
-    expect(screen.getByText("Dependency Modifications")).toBeInTheDocument();
-    expect(screen.queryByText(/Test Failures|testFailuresAndRetries/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Confirm all scope changes")).toBeInTheDocument();
+    expect(screen.getByText("Major scope changes only")).toBeInTheDocument();
+    expect(screen.getByText("Full autonomy")).toBeInTheDocument();
   });
 
-  it("calls onChange when a category mode is changed", async () => {
-    const user = userEvent.setup();
+  it("calls onChange when slider is moved", () => {
     const onChange = vi.fn();
-    render(<HilStep value={DEFAULT_HIL_CONFIG} onChange={onChange} />);
+    render(<HilStep value="full" onChange={onChange} />);
 
-    const selects = screen.getAllByRole("combobox");
-    expect(selects).toHaveLength(3);
+    const slider = screen.getByTestId("ai-autonomy-slider");
+    fireEvent.change(slider, { target: { value: "0" } });
 
-    await user.selectOptions(selects[0]!, "automated");
-
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ...DEFAULT_HIL_CONFIG,
-        scopeChanges: "automated",
-      })
-    );
+    expect(onChange).toHaveBeenCalledWith("confirm_all");
   });
 });

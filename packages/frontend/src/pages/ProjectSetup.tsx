@@ -15,11 +15,11 @@ import {
 import type { ProjectMetadataState } from "../components/ProjectSetupWizard";
 import type {
   AgentType,
+  AiAutonomyLevel,
   GitWorkingMode,
-  HilConfig,
   UnknownScopeStrategy,
 } from "@opensprint/shared";
-import { DEFAULT_HIL_CONFIG, DEFAULT_DEPLOYMENT_CONFIG } from "@opensprint/shared";
+import { DEFAULT_AI_AUTONOMY_LEVEL, DEFAULT_DEPLOYMENT_CONFIG } from "@opensprint/shared";
 import { api, isApiError } from "../api/client";
 
 type Step = "basics" | "agents" | "testing" | "hil" | "confirm";
@@ -54,7 +54,7 @@ export function ProjectSetup() {
     cliCommand: "",
   });
   const [testFramework, setTestFramework] = useState<string>("none");
-  const [hilConfig, setHilConfig] = useState<HilConfig>(DEFAULT_HIL_CONFIG);
+  const [aiAutonomyLevel, setAiAutonomyLevel] = useState<AiAutonomyLevel>(DEFAULT_AI_AUTONOMY_LEVEL);
   const [maxConcurrentCoders, setMaxConcurrentCoders] = useState(1);
   const [unknownScopeStrategy, setUnknownScopeStrategy] =
     useState<UnknownScopeStrategy>("optimistic");
@@ -154,7 +154,7 @@ export function ProjectSetup() {
               : null,
         },
         deployment: { ...DEFAULT_DEPLOYMENT_CONFIG },
-        hilConfig,
+        aiAutonomyLevel,
         testFramework: testFramework === "none" ? null : testFramework,
         maxConcurrentCoders: gitWorkingMode === "branches" ? 1 : maxConcurrentCoders,
         unknownScopeStrategy,
@@ -273,7 +273,7 @@ export function ProjectSetup() {
               />
             )}
 
-            {step === "hil" && <HilStep value={hilConfig} onChange={setHilConfig} />}
+            {step === "hil" && <HilStep value={aiAutonomyLevel} onChange={setAiAutonomyLevel} />}
 
             {step === "confirm" && (
               <ConfirmStep

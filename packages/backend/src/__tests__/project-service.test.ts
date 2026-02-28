@@ -508,30 +508,27 @@ describe("ProjectService", () => {
     expect(reloaded.complexComplexityAgent.model).toBe("claude-opus-5");
   });
 
-  it("should strip testFailuresAndRetries from hilConfig in updateSettings (PRD §6.5.1)", async () => {
-    const repoPath = path.join(tempDir, "hil-strip");
+  it("should persist aiAutonomyLevel in updateSettings", async () => {
+    const repoPath = path.join(tempDir, "ai-autonomy");
     const project = await projectService.createProject({
-      name: "HIL Strip",
-
+      name: "AI Autonomy",
       repoPath,
       simpleComplexityAgent: { type: "claude", model: null, cliCommand: null },
       complexComplexityAgent: { type: "claude", model: null, cliCommand: null },
       deployment: { mode: "custom" },
-      hilConfig: DEFAULT_HIL_CONFIG,
+      aiAutonomyLevel: "full",
     });
 
     const updated = await projectService.updateSettings(project.id, {
-      hilConfig: {
-        ...DEFAULT_HIL_CONFIG,
-        testFailuresAndRetries: "requires_approval",
-      } as typeof DEFAULT_HIL_CONFIG & { testFailuresAndRetries: string },
+      aiAutonomyLevel: "confirm_all",
     });
 
-    expect(updated.hilConfig).not.toHaveProperty("testFailuresAndRetries");
-    expect(updated.hilConfig.scopeChanges).toBe("automated");
+    expect(updated.aiAutonomyLevel).toBe("confirm_all");
+    expect(updated.hilConfig.scopeChanges).toBe("requires_approval");
 
     const reloaded = await projectService.getSettings(project.id);
-    expect(reloaded.hilConfig).not.toHaveProperty("testFailuresAndRetries");
+    expect(reloaded.aiAutonomyLevel).toBe("confirm_all");
+    expect(reloaded.hilConfig.scopeChanges).toBe("requires_approval");
   });
 
   it("should strip testFailuresAndRetries from hilConfig when reading settings (PRD §6.5.1)", async () => {

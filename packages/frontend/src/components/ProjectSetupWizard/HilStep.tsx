@@ -1,52 +1,53 @@
-import type { HilConfig, HilNotificationMode } from "@opensprint/shared";
+import type { AiAutonomyLevel } from "@opensprint/shared";
+import { AI_AUTONOMY_LEVELS, DEFAULT_AI_AUTONOMY_LEVEL } from "@opensprint/shared";
 
 export interface HilStepProps {
-  value: HilConfig;
-  onChange: (config: HilConfig) => void;
+  value: AiAutonomyLevel;
+  onChange: (level: AiAutonomyLevel) => void;
 }
 
-const HIL_CATEGORIES = [
-  { key: "scopeChanges", label: "Scope Changes", desc: "Adds, removes, or alters features" },
-  {
-    key: "architectureDecisions",
-    label: "Architecture Decisions",
-    desc: "Tech stack, integrations, schema changes",
-  },
-  {
-    key: "dependencyModifications",
-    label: "Dependency Modifications",
-    desc: "Task reordering and re-prioritization",
-  },
-] as const;
-
 export function HilStep({ value, onChange }: HilStepProps) {
+  const level = value ?? DEFAULT_AI_AUTONOMY_LEVEL;
+  const index = AI_AUTONOMY_LEVELS.findIndex((l) => l.value === level);
+  const sliderValue = index >= 0 ? index : AI_AUTONOMY_LEVELS.length - 1;
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const i = Number(e.target.value);
+    const opt = AI_AUTONOMY_LEVELS[i];
+    if (opt) onChange(opt.value);
+  };
+
   return (
     <div className="space-y-4" data-testid="hil-step">
       <p className="text-sm text-theme-muted mb-4">
         Configure when Open Sprint should pause for your input vs. proceed autonomously.
       </p>
-      {HIL_CATEGORIES.map((cat) => (
-        <div
-          key={cat.key}
-          className="flex items-center justify-between p-3 rounded-lg bg-theme-surface-muted"
-        >
-          <div>
-            <p className="text-sm font-medium text-theme-text">{cat.label}</p>
-            <p className="text-xs text-theme-muted">{cat.desc}</p>
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-theme-text">AI Autonomy</h3>
+        <div className="space-y-3">
+          <input
+            type="range"
+            min={0}
+            max={AI_AUTONOMY_LEVELS.length - 1}
+            step={1}
+            value={sliderValue}
+            onChange={handleSliderChange}
+            className="w-full accent-brand-600"
+            aria-label="AI Autonomy level"
+            data-testid="ai-autonomy-slider"
+          />
+          <div className="flex justify-between text-xs text-theme-muted">
+            {AI_AUTONOMY_LEVELS.map((opt) => (
+              <span
+                key={opt.value}
+                className={opt.value === level ? "font-medium text-theme-text" : ""}
+              >
+                {opt.label}
+              </span>
+            ))}
           </div>
-          <select
-            className="input w-48"
-            value={value[cat.key]}
-            onChange={(e) =>
-              onChange({ ...value, [cat.key]: e.target.value as HilNotificationMode })
-            }
-          >
-            <option value="requires_approval">Requires Approval</option>
-            <option value="notify_and_proceed">Notify & Proceed</option>
-            <option value="automated">Automated</option>
-          </select>
         </div>
-      ))}
+      </div>
     </div>
   );
 }
