@@ -76,8 +76,23 @@ export function DisplaySettingsContent() {
   const [savingKey, setSavingKey] = useState<"ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | null>(null);
   const [keyError, setKeyError] = useState<string | null>(null);
 
+  const [databaseUrl, setDatabaseUrl] = useState<string>("");
+  const [databaseUrlLoading, setDatabaseUrlLoading] = useState(true);
+  const [databaseUrlSaving, setDatabaseUrlSaving] = useState(false);
+  const [databaseUrlError, setDatabaseUrlError] = useState<string | null>(null);
+  const [showDatabaseUrl, setShowDatabaseUrl] = useState(false);
+
   useEffect(() => {
     api.env.getKeys().then(setEnvKeys).catch(() => setEnvKeys(null));
+  }, []);
+
+  useEffect(() => {
+    setDatabaseUrlLoading(true);
+    api.globalSettings
+      .get()
+      .then((res) => setDatabaseUrl(res.databaseUrl ?? ""))
+      .catch(() => setDatabaseUrl(""))
+      .finally(() => setDatabaseUrlLoading(false));
   }, []);
 
   const handleSaveKey = async (envKey: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY") => {
@@ -226,6 +241,84 @@ export function DisplaySettingsContent() {
             </p>
           )}
         </div>
+      </div>
+      <div data-testid="database-url-section">
+        <h3 className="text-sm font-semibold text-theme-text">Database URL</h3>
+        <p className="text-xs text-theme-muted mb-3">
+          PostgreSQL connection URL for tasks, feedback, and sessions. Default: local Docker. Use a
+          remote URL (e.g. Supabase) for hosted deployments. Password is hidden in display.
+        </p>
+        <div className="flex gap-2 items-end">
+          <div className="flex-1">
+            <div className="relative flex">
+              <input
+                type={showDatabaseUrl ? "text" : "password"}
+                className="input font-mono text-sm w-full pr-10"
+                placeholder="postgresql://user:password@host:port/database"
+                value={databaseUrl}
+                onChange={(e) => {
+                  setDatabaseUrl(e.target.value);
+                  setDatabaseUrlError(null);
+                }}
+                disabled={databaseUrlLoading}
+                autoComplete="off"
+                data-testid="database-url-input"
+              />
+              <button
+                type="button"
+                onClick={() => setShowDatabaseUrl((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-text p-1"
+                aria-label={showDatabaseUrl ? "Hide database URL" : "Show database URL"}
+              >
+                {showDatabaseUrl ? (
+                  <EyeOffIcon className="w-4 h-4" />
+                ) : (
+                  <EyeIcon className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              const trimmed = databaseUrl.trim();
+              if (!trimmed) {
+                setDatabaseUrlError("Database URL cannot be empty");
+                return;
+              }
+              if (trimmed.includes("***")) {
+                setDatabaseUrlError("Enter the full connection URL to save changes");
+                return;
+              }
+              setDatabaseUrlError(null);
+              setDatabaseUrlSaving(true);
+              try {
+                const res = await api.globalSettings.put({ databaseUrl: trimmed });
+                setDatabaseUrl(res.databaseUrl);
+              } catch (err) {
+                setDatabaseUrlError(
+                  isConnectionError(err)
+                    ? "Unable to connect. Please check your network and try again."
+                    : err instanceof Error
+                      ? err.message
+                      : "Failed to save"
+                );
+              } finally {
+                setDatabaseUrlSaving(false);
+              }
+            }}
+            disabled={databaseUrlLoading || databaseUrlSaving}
+            className="btn-primary text-sm disabled:opacity-50"
+            data-testid="database-url-save"
+          >
+            {databaseUrlSaving ? "Saving…" : "Save"}
+          </button>
+        </div>
+        {databaseUrlError && (
+          <p className="text-sm text-theme-error-text mt-2" role="alert">
+            {databaseUrlError}
+          </p>
+        )}
       </div>
       <div>
         <h3 className="text-sm font-semibold text-theme-text">Theme</h3>

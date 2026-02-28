@@ -114,6 +114,15 @@ export const api = {
       return request<ModelOption[]>(`/models?${params.toString()}`);
     },
   },
+  globalSettings: {
+    get: () =>
+      request<{ databaseUrl: string }>("/global-settings"),
+    put: (updates: { databaseUrl?: string }) =>
+      request<{ databaseUrl: string }>("/global-settings", {
+        method: "PUT",
+        body: JSON.stringify(updates),
+      }),
+  },
   env: {
     getKeys: () =>
       request<{

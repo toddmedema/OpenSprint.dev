@@ -290,6 +290,49 @@ describe("api client", () => {
     });
   });
 
+  describe("globalSettings", () => {
+    it("get returns databaseUrl", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          data: { databaseUrl: "postgresql://user:***@localhost:5432/opensprint" },
+        }),
+      } as Response);
+
+      const result = await api.globalSettings.get();
+      expect(result).toEqual({ databaseUrl: "postgresql://user:***@localhost:5432/opensprint" });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/global-settings"),
+        expect.any(Object)
+      );
+    });
+
+    it("put sends databaseUrl and returns masked", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          data: { databaseUrl: "postgresql://user:***@db.example.com:5432/opensprint" },
+        }),
+      } as Response);
+
+      const result = await api.globalSettings.put({
+        databaseUrl: "postgresql://user:secret@db.example.com:5432/opensprint",
+      });
+      expect(result).toEqual({ databaseUrl: "postgresql://user:***@db.example.com:5432/opensprint" });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/global-settings"),
+        expect.objectContaining({
+          method: "PUT",
+          body: JSON.stringify({
+            databaseUrl: "postgresql://user:secret@db.example.com:5432/opensprint",
+          }),
+        })
+      );
+    });
+  });
+
   describe("isConnectionError", () => {
     it("returns false for ApiError (server responded)", () => {
       expect(isConnectionError(new ApiError("Not found", "PROJECT_NOT_FOUND"))).toBe(false);
