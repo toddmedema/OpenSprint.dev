@@ -111,8 +111,6 @@ function createStore() {
       execute: initialExecuteState,
       websocket: {
         connected: false,
-        hilRequest: null,
-        hilNotification: null,
         deliverToast: null,
       },
       plan: {

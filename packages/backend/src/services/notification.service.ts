@@ -30,7 +30,7 @@ export interface Notification {
   status: "open" | "resolved";
   createdAt: string;
   resolvedAt: string | null;
-  kind?: "open_question" | "api_blocked";
+  kind?: "open_question" | "api_blocked" | "hil_approval";
   errorCode?: ApiBlockedErrorCode;
 }
 
@@ -49,13 +49,21 @@ export interface CreateApiBlockedInput {
   errorCode: ApiBlockedErrorCode;
 }
 
+export interface CreateHilApprovalInput {
+  projectId: string;
+  source: NotificationSource;
+  sourceId: string;
+  description: string;
+  category: string;
+}
+
 function generateId(): string {
   return "oq-" + crypto.randomBytes(4).toString("hex");
 }
 
 function rowToNotification(row: Record<string, unknown>): Notification {
   const questions: OpenQuestionItem[] = JSON.parse((row.questions as string) || "[]");
-  const kind = (row.kind as "open_question" | "api_blocked") || "open_question";
+  const kind = (row.kind as "open_question" | "api_blocked" | "hil_approval") || "open_question";
   const errorCode = row.error_code as ApiBlockedErrorCode | undefined;
   return {
     id: row.id as string,
@@ -170,6 +178,57 @@ export class NotificationService {
       resolvedAt: null,
       kind: "api_blocked",
       errorCode: input.errorCode,
+    };
+  }
+
+  /**
+   * Create an HIL approval notification (scope change, architecture, etc.).
+   * Surfaces in the notification bell; user approves/rejects via Approve/Reject UI.
+   */
+  async createHilApproval(input: CreateHilApprovalInput): Promise<Notification> {
+    const id = "hil-" + crypto.randomBytes(4).toString("hex");
+    const createdAt = new Date().toISOString();
+    const questions: OpenQuestionItem[] = [
+      {
+        id: `q-${id}`,
+        text: input.description,
+        createdAt,
+      },
+    ];
+
+    await taskStore.runWrite(async (db) => {
+      db.run(
+        `INSERT INTO open_questions (id, project_id, source, source_id, questions, status, created_at, kind)
+         VALUES (?, ?, ?, ?, ?, 'open', ?, 'hil_approval')`,
+        [
+          id,
+          input.projectId,
+          input.source,
+          input.sourceId,
+          JSON.stringify(questions),
+          createdAt,
+        ]
+      );
+    });
+
+    log.info("Created HIL approval notification", {
+      id,
+      projectId: input.projectId,
+      source: input.source,
+      sourceId: input.sourceId,
+      category: input.category,
+    });
+
+    return {
+      id,
+      projectId: input.projectId,
+      source: input.source,
+      sourceId: input.sourceId,
+      questions,
+      status: "open",
+      createdAt,
+      resolvedAt: null,
+      kind: "hil_approval",
     };
   }
 

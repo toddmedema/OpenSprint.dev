@@ -1,7 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "http";
 import type { ServerEvent, ClientEvent, AgentOutputBackfillEvent } from "@opensprint/shared";
-import { hilService } from "../services/hil-service.js";
 import { eventRelay } from "../services/event-relay.service.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -124,12 +123,6 @@ function handleClientEvent(ws: WebSocket, event: ClientEvent): void {
       if ("taskId" in event && event.taskId) {
         agentSubscriptions.get(ws)?.delete(event.taskId);
         log.info("Client unsubscribed from agent output", { taskId: event.taskId });
-      }
-      break;
-    }
-    case "hil.respond": {
-      if ("requestId" in event && event.requestId) {
-        hilService.respondToRequest(event.requestId, event.approved, event.notes);
       }
       break;
     }

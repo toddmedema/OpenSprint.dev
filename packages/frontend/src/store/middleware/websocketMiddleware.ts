@@ -11,12 +11,7 @@ import type {
   TaskPriority,
   Notification,
 } from "@opensprint/shared";
-import {
-  setConnected,
-  setHilRequest,
-  setHilNotification,
-  setDeliverToast,
-} from "../slices/websocketSlice";
+import { setConnected, setDeliverToast } from "../slices/websocketSlice";
 import { addNotification, removeNotification } from "../slices/openQuestionsSlice";
 import { setConnectionError } from "../slices/connectionSlice";
 import {
@@ -188,17 +183,6 @@ export const websocketMiddleware: Middleware = (storeApi) => {
   ) {
     const qc = getQueryClient();
     switch (event.type) {
-      case "hil.request":
-        if (event.blocking) {
-          d(setHilRequest(event));
-          d(setHilNotification(null));
-          d(setAwaitingApproval(true));
-        } else {
-          d(setHilNotification(event));
-          d(setHilRequest(null));
-        }
-        break;
-
       case "prd.updated":
         void qc.invalidateQueries({ queryKey: queryKeys.prd.detail(projectId) });
         void qc.invalidateQueries({ queryKey: queryKeys.prd.history(projectId) });

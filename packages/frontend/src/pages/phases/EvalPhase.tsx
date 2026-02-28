@@ -33,6 +33,7 @@ import { api } from "../../api/client";
 import { CONTENT_CONTAINER_CLASS } from "../../lib/constants";
 import { getProjectPhasePath } from "../../lib/phaseRouting";
 import { formatPlanIdAsTitle } from "../../lib/formatting";
+import { HilApprovalBlock } from "../../components/HilApprovalBlock";
 
 /** Reply icon (message turn / corner up-right) */
 function ReplyIcon({ className }: { className?: string }) {
@@ -252,6 +253,8 @@ interface FeedbackCardProps {
   onDismissOpenQuestion?: (feedbackId: string, notificationId: string) => void;
   /** Whether answer/dismiss is in progress */
   answeringOpenQuestion?: boolean;
+  /** Refetch notifications when HIL approval is resolved */
+  onHilResolved?: () => void;
 }
 
 const FADE_OUT_DURATION_MS = 500;
@@ -282,6 +285,7 @@ const FeedbackCard = memo(
     onAnswerOpenQuestion,
     onDismissOpenQuestion,
     answeringOpenQuestion = false,
+    onHilResolved,
   }: FeedbackCardProps) {
     const { item, children } = node;
     const navigate = useNavigate();
@@ -441,8 +445,20 @@ const FeedbackCard = memo(
             </div>
           )}
 
+          {/* HIL approval (scope change) — Approve/Reject via notification system */}
+          {notification?.kind === "hil_approval" && (
+            <div className="mt-3">
+              <HilApprovalBlock
+                notification={notification}
+                projectId={projectId}
+                onResolved={() => onHilResolved?.()}
+              />
+            </div>
+          )}
           {/* Open questions (Analyst needs clarification) — Answer/Dismiss controls */}
-          {notification && notification.questions.length > 0 && (
+          {notification &&
+            notification.kind !== "hil_approval" &&
+            notification.questions.length > 0 && (
             <div
               className="mt-3 p-3 rounded-lg border border-theme-border bg-theme-border-subtle/30"
               data-testid="feedback-open-questions"
@@ -689,6 +705,7 @@ const FeedbackCard = memo(
               onAnswerOpenQuestion={onAnswerOpenQuestion}
               onDismissOpenQuestion={onDismissOpenQuestion}
               answeringOpenQuestion={answeringOpenQuestion}
+              onHilResolved={onHilResolved}
             />
           ))}
       </div>
@@ -707,6 +724,7 @@ const FeedbackCard = memo(
     if (prev.notification !== next.notification) return false;
     if (prev.notificationByFeedbackId !== next.notificationByFeedbackId) return false;
     if (prev.answeringOpenQuestion !== next.answeringOpenQuestion) return false;
+    if (prev.onHilResolved !== next.onHilResolved) return false;
     return true;
   }
 );
@@ -1245,6 +1263,7 @@ export function EvalPhase({
                     onAnswerOpenQuestion={handleAnswerOpenQuestion}
                     onDismissOpenQuestion={handleDismissOpenQuestion}
                     answeringOpenQuestion={answeringOpenQuestion}
+                    onHilResolved={refetchNotifications}
                   />
                 ))}
               </div>

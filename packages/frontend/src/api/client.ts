@@ -415,9 +415,14 @@ export const api = {
     listByProject: (projectId: string) =>
       request<Notification[]>(`/projects/${projectId}/notifications`),
     listGlobal: () => request<Notification[]>("/notifications"),
-    resolve: (projectId: string, notificationId: string) =>
+    resolve: (
+      projectId: string,
+      notificationId: string,
+      body?: { approved?: boolean }
+    ) =>
       request<Notification>(`/projects/${projectId}/notifications/${notificationId}`, {
         method: "PATCH",
+        body: body ? JSON.stringify(body) : undefined,
       }),
   },
 

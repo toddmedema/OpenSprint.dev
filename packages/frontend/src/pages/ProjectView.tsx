@@ -11,23 +11,14 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppDispatch, useAppSelector } from "../store";
 import { resetProject } from "../store/slices/projectSlice";
-import {
-  resetWebsocket,
-  clearHilRequest,
-  clearHilNotification,
-  clearDeliverToast,
-} from "../store/slices/websocketSlice";
+import { resetWebsocket, clearDeliverToast } from "../store/slices/websocketSlice";
 import { resetSketch } from "../store/slices/sketchSlice";
 import {
   resetPlan,
   setSelectedPlanId,
   clearPlanBackgroundError,
 } from "../store/slices/planSlice";
-import {
-  resetExecute,
-  setSelectedTaskId,
-  setAwaitingApproval,
-} from "../store/slices/executeSlice";
+import { resetExecute, setSelectedTaskId } from "../store/slices/executeSlice";
 import { resetEval } from "../store/slices/evalSlice";
 import {
   resetDeliver,
@@ -45,7 +36,7 @@ import {
   setPrdHistory,
   setMessages as setSketchMessages,
 } from "../store/slices/sketchSlice";
-import { wsConnect, wsDisconnect, wsSend } from "../store/middleware/websocketMiddleware";
+import { wsConnect, wsDisconnect } from "../store/middleware/websocketMiddleware";
 import {
   useProject,
   useTasks,
@@ -61,18 +52,11 @@ import {
 } from "../api/hooks";
 import { queryKeys } from "../api/queryKeys";
 import { Layout } from "../components/layout/Layout";
-import { HilApprovalModal } from "../components/HilApprovalModal";
 import { SketchPhase } from "./phases/SketchPhase";
 import { PlanPhase } from "./phases/PlanPhase";
 import { ExecutePhase } from "./phases/ExecutePhase";
 import { EvalPhase } from "./phases/EvalPhase";
 import { DeliverPhase } from "./phases/DeliverPhase";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  scopeChanges: "Scope Changes",
-  architectureDecisions: "Architecture Decisions",
-  dependencyModifications: "Dependency Modifications",
-};
 
 export function ProjectView() {
   const { projectId, phase: phaseSlug } = useParams<{ projectId: string; phase?: string }>();
@@ -102,8 +86,6 @@ export function ProjectView() {
   const { data: prdHistoryData } = usePrdHistory(projectId);
   const { data: sketchChatData } = useSketchChat(projectId);
   const { data: planStatusData } = usePlanStatus(projectId);
-  const hilRequest = useAppSelector((s) => s.websocket.hilRequest);
-
   // Sync TanStack Query → Redux only when data reference changed (avoids flash from refetch returning same ref)
   useEffect(() => {
     if (!projectId || !tasksData) return;
@@ -178,7 +160,6 @@ export function ProjectView() {
     lastSyncedRef.current["planStatus"] = planStatusData;
     dispatch(setPlanStatusPayload(planStatusData));
   }, [projectId, planStatusData, dispatch]);
-  const hilNotification = useAppSelector((s) => s.websocket.hilNotification);
   const deliverToast = useAppSelector((s) => s.websocket.deliverToast);
   const planBackgroundError = useAppSelector((s) => s.plan.backgroundError);
   const connectionError = useAppSelector((s) => s.connection?.connectionError ?? false);
@@ -282,16 +263,6 @@ export function ProjectView() {
     navigate(getProjectPhasePath(projectId, "plan", { plan: planId }));
   };
 
-  const handleRespondToHil = (requestId: string, approved: boolean, notes?: string) => {
-    dispatch(wsSend({ type: "hil.respond", requestId, approved, notes }));
-    dispatch(setAwaitingApproval(false));
-    dispatch(clearHilRequest());
-  };
-
-  const handleDismissNotification = () => {
-    dispatch(clearHilNotification());
-  };
-
   const handleDismissDeliverToast = () => {
     dispatch(clearDeliverToast());
   };
@@ -313,11 +284,6 @@ export function ProjectView() {
             Loading project...
           </div>
         </Layout>
-        {hilRequest && <HilApprovalModal request={hilRequest} onRespond={handleRespondToHil} />}
-        <HilNotificationToast
-          notification={hilNotification}
-          onDismiss={handleDismissNotification}
-        />
         <DeliverToast toast={deliverToast} onDismiss={handleDismissDeliverToast} />
         {!connectionError && (
           <PlanRefreshToast
@@ -341,11 +307,6 @@ export function ProjectView() {
             </Link>
           </div>
         </Layout>
-        {hilRequest && <HilApprovalModal request={hilRequest} onRespond={handleRespondToHil} />}
-        <HilNotificationToast
-          notification={hilNotification}
-          onDismiss={handleDismissNotification}
-        />
         <DeliverToast toast={deliverToast} onDismiss={handleDismissDeliverToast} />
         {!connectionError && (
           <PlanRefreshToast
@@ -416,8 +377,6 @@ export function ProjectView() {
           </div>
         ))}
       </Layout>
-      {hilRequest && <HilApprovalModal request={hilRequest} onRespond={handleRespondToHil} />}
-      <HilNotificationToast notification={hilNotification} onDismiss={handleDismissNotification} />
       <DeliverToast toast={deliverToast} onDismiss={handleDismissDeliverToast} />
       {!connectionError && (
         <PlanRefreshToast
@@ -483,47 +442,6 @@ function DeliverToast({
     >
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium">{toast.message}</p>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="shrink-0 rounded p-1 text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text"
-          aria-label="Dismiss"
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function HilNotificationToast({
-  notification,
-  onDismiss,
-}: {
-  notification: import("@opensprint/shared").HilRequestEvent | null;
-  onDismiss: () => void;
-}) {
-  if (!notification) return null;
-  return (
-    <div className="fixed bottom-4 right-4 z-40 max-w-md rounded-lg border border-theme-border bg-theme-surface p-4 shadow-lg">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-theme-text">
-            {CATEGORY_LABELS[notification.category] ?? notification.category}
-          </p>
-          <p className="mt-1 text-sm text-theme-muted">{notification.description}</p>
-          <p className="mt-2 text-xs text-theme-muted">
-            Proceeding automatically. You can review in the log.
-          </p>
-        </div>
         <button
           type="button"
           onClick={onDismiss}

@@ -697,7 +697,10 @@ export class ChatService {
         { id: "approve", label: "Approve", description: "Apply architecture changes to PRD" },
         { id: "reject", label: "Reject", description: "Skip architecture updates" },
       ],
-      true // default: apply when automated/notify_and_proceed
+      true, // default: apply when automated/notify_and_proceed
+      undefined,
+      "prd",
+      "architecture"
     );
 
     return approved ? prdUpdates : nonArchUpdates;

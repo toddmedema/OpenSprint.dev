@@ -69,14 +69,25 @@ describe("HilService", () => {
 
     await new Promise((r) => setTimeout(r, 10));
 
-    const pending = hilService.getPendingRequests("test-project");
-    expect(pending).toHaveLength(1);
+    expect(broadcastToProject).toHaveBeenCalledWith(
+      "test-project",
+      expect.objectContaining({
+        type: "notification.added",
+        notification: expect.objectContaining({
+          kind: "hil_approval",
+          source: "eval",
+          sourceId: "scope",
+        }),
+      })
+    );
 
-    hilService.respondToRequest(pending[0].id, true, "Approved");
+    const broadcastCall = (broadcastToProject as ReturnType<typeof vi.fn>).mock.calls[0];
+    const notificationId = broadcastCall[1].notification.id;
+
+    hilService.notifyResolved(notificationId, true);
 
     const result = await promise;
     expect(result.approved).toBe(true);
-    expect(result.notes).toBe("Approved");
   });
 
   it("should always treat testFailuresAndRetries as automated (PRD §6.5.1)", async () => {
@@ -95,16 +106,16 @@ describe("HilService", () => {
 
     await new Promise((r) => setTimeout(r, 10));
 
-    const pending = hilService.getPendingRequests("test-project");
-    expect(pending).toHaveLength(1);
-    hilService.respondToRequest(pending[0].id, false, "Too risky");
+    const broadcastCall = (broadcastToProject as ReturnType<typeof vi.fn>).mock.calls[0];
+    const notificationId = broadcastCall[1].notification.id;
+
+    hilService.notifyResolved(notificationId, false);
 
     const result = await promise;
     expect(result.approved).toBe(false);
-    expect(result.notes).toBe("Too risky");
   });
 
-  it("should include scopeChangeMetadata in broadcast when provided", async () => {
+  it("should broadcast notification.added for requires_approval", async () => {
     const promise = hilService.evaluateDecision(
       "test-project",
       "scopeChanges",
@@ -126,19 +137,23 @@ describe("HilService", () => {
     expect(broadcastToProject).toHaveBeenCalledWith(
       "test-project",
       expect.objectContaining({
-        type: "hil.request",
-        category: "scopeChanges",
-        scopeChangeSummary:
-          "• feature_list: Add mobile app\n• technical_architecture: Mobile stack",
-        scopeChangeProposedUpdates: [
-          { section: "feature_list", changeLogEntry: "Add mobile app" },
-          { section: "technical_architecture", changeLogEntry: "Mobile stack" },
-        ],
+        type: "notification.added",
+        notification: expect.objectContaining({
+          kind: "hil_approval",
+          source: "eval",
+          sourceId: "scope",
+          questions: expect.arrayContaining([
+            expect.objectContaining({
+              text: "Add mobile support",
+            }),
+          ]),
+        }),
       })
     );
 
-    const pending = hilService.getPendingRequests("test-project");
-    hilService.respondToRequest(pending[0].id, true);
+    const broadcastCall = (broadcastToProject as ReturnType<typeof vi.fn>).mock.calls[0];
+    const notificationId = broadcastCall[1].notification.id;
+    hilService.notifyResolved(notificationId, true);
     await promise;
   });
 });

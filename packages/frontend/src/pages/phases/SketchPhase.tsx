@@ -25,6 +25,7 @@ import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
 import { useImageAttachment } from "../../hooks/useImageAttachment";
 import { useScrollToQuestion } from "../../hooks/useScrollToQuestion";
 import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotifications";
+import { HilApprovalBlock } from "../../components/HilApprovalBlock";
 import { ImageAttachmentThumbnails, ImageAttachmentButton } from "../../components/ImageAttachment";
 import { SparklesIcon, CommentIcon } from "../../components/icons/PrdIcons";
 import { api } from "../../api/client";
@@ -180,7 +181,15 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   }, []);
 
   useScrollToQuestion();
-  const { notifications: openQuestionNotifications } = useOpenQuestionNotifications(projectId);
+  const { notifications: openQuestionNotifications, refetch: refetchNotifications } =
+    useOpenQuestionNotifications(projectId);
+  const architectureHilNotification = React.useMemo(
+    () =>
+      openQuestionNotifications.find(
+        (n) => n.source === "prd" && n.sourceId === "architecture" && n.kind === "hil_approval"
+      ),
+    [openQuestionNotifications]
+  );
   const questionIdBySection = React.useMemo(() => {
     const map: Record<string, string> = {};
     for (const n of openQuestionNotifications) {
@@ -701,6 +710,15 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
             </div>
           </div>
 
+          {architectureHilNotification && (
+            <div className="mb-4">
+              <HilApprovalBlock
+                notification={architectureHilNotification}
+                projectId={projectId}
+                onResolved={refetchNotifications}
+              />
+            </div>
+          )}
           <PrdViewer
             prdContent={prdContent}
             savingSections={savingSections}

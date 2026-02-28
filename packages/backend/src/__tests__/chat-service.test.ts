@@ -263,7 +263,10 @@ describe("ChatService - Plan phase agent registry", () => {
         "architectureDecisions",
         expect.stringContaining("affect architectural sections"),
         expect.any(Array),
-        true
+        true,
+        undefined,
+        "prd",
+        "architecture"
       );
       const hilDesc = mockHilEvaluate.mock.calls[0][2];
       expect(hilDesc).toContain("Technical Architecture");

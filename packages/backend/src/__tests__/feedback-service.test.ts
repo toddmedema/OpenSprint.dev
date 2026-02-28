@@ -1680,7 +1680,9 @@ describe("FeedbackService", () => {
           scopeChangeProposedUpdates: [
             { section: "feature_list", changeLogEntry: "Add mobile app" },
           ],
-        }
+        },
+        "eval",
+        expect.any(String)
       );
       expect(mockApplyScopeChangeUpdates).toHaveBeenCalledWith(
         projectId,

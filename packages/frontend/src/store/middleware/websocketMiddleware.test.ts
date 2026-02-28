@@ -559,48 +559,6 @@ describe("websocketMiddleware", () => {
       });
     });
 
-    it("dispatches setHilRequest on blocking hil.request", async () => {
-      const store = createStore();
-      store.dispatch(wsConnect({ projectId: "proj-1" }));
-      wsInstance!.simulateOpen();
-      await vi.waitFor(() => store.getState().websocket.connected);
-
-      const hilEvent = {
-        type: "hil.request" as const,
-        requestId: "req-1",
-        category: "approval",
-        description: "Approve?",
-        options: [],
-        blocking: true,
-      };
-      wsInstance!.simulateMessage(hilEvent);
-
-      await vi.waitFor(() => {
-        expect(store.getState().websocket.hilRequest).toEqual(hilEvent);
-      });
-    });
-
-    it("dispatches setHilNotification on non-blocking hil.request", async () => {
-      const store = createStore();
-      store.dispatch(wsConnect({ projectId: "proj-1" }));
-      wsInstance!.simulateOpen();
-      await vi.waitFor(() => store.getState().websocket.connected);
-
-      const hilEvent = {
-        type: "hil.request" as const,
-        requestId: "req-2",
-        category: "notify",
-        description: "FYI",
-        options: [],
-        blocking: false,
-      };
-      wsInstance!.simulateMessage(hilEvent);
-
-      await vi.waitFor(() => {
-        expect(store.getState().websocket.hilNotification).toEqual(hilEvent);
-      });
-    });
-
     it("dispatches updateFeedbackItem on feedback.updated when event includes item (no refetch)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));

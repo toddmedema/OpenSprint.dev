@@ -100,8 +100,6 @@ function createStore(
     preloadedState: {
       websocket: {
         connected: false,
-        hilRequest: null,
-        hilNotification: null,
         deliverToast: null,
         ...websocketOverrides,
       },

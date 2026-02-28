@@ -1,5 +1,6 @@
 import { Router, Request } from "express";
 import { notificationService } from "../services/notification.service.js";
+import { hilService } from "../services/hil-service.js";
 import { taskStore } from "../services/task-store.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import type { ApiResponse } from "@opensprint/shared";
@@ -10,6 +11,7 @@ const globalNotificationsRouter = Router();
 
 type ProjectParams = { projectId: string };
 type NotificationParams = { projectId: string; notificationId: string };
+type ResolveBody = { approved?: boolean };
 
 // GET /projects/:projectId/notifications — List unresolved notifications for project
 projectNotificationsRouter.get("/", async (req: Request<ProjectParams>, res, next) => {
@@ -23,12 +25,19 @@ projectNotificationsRouter.get("/", async (req: Request<ProjectParams>, res, nex
 });
 
 // PATCH /projects/:projectId/notifications/:notificationId — Resolve notification
+// Body: { approved?: boolean } for hil_approval notifications (true=approve, false/dismiss=reject)
 projectNotificationsRouter.patch(
   "/:notificationId",
-  async (req: Request<NotificationParams>, res, next) => {
+  async (req: Request<NotificationParams, unknown, ResolveBody>, res, next) => {
     try {
       const { projectId, notificationId } = req.params;
+      const approved = req.body?.approved;
       const notification = await notificationService.resolve(projectId, notificationId);
+
+      // HIL approval: notify waiting workflow of user's choice
+      if (notification.kind === "hil_approval") {
+        hilService.notifyResolved(notificationId, approved === true);
+      }
 
       broadcastToProject(projectId, {
         type: "notification.resolved",

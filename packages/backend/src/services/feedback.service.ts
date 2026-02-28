@@ -603,7 +603,9 @@ export class FeedbackService {
             scopeChangeDescription,
             scopeChangeOptions,
             true,
-            scopeChangeMetadata
+            scopeChangeMetadata,
+            "eval",
+            item.id
           );
 
           if (!approved) {

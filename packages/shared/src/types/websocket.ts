@@ -131,7 +131,7 @@ export interface NotificationAddedEvent {
     status: "open" | "resolved";
     createdAt: string;
     resolvedAt: string | null;
-    kind?: "open_question" | "api_blocked";
+    kind?: "open_question" | "api_blocked" | "hil_approval";
     errorCode?: "rate_limit" | "auth" | "out_of_credit";
   };
 }

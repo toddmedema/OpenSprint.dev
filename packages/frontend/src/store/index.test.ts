@@ -23,8 +23,6 @@ describe("store", () => {
     const state = store.getState() as RootState;
     expect(state.websocket).toMatchObject({
       connected: false,
-      hilRequest: null,
-      hilNotification: null,
     });
   });
 

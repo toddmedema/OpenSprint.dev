@@ -126,7 +126,7 @@ function createStore(executeTasks: Task[] = []) {
         archivingPlanId: null,
         error: null,
       },
-      websocket: { connected: false, hilRequest: null, hilNotification: null, deliverToast: null },
+      websocket: { connected: false, deliverToast: null },
     },
   });
 }
