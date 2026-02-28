@@ -450,4 +450,22 @@ describe("BuildEpicCard", () => {
     expect(screen.getByTitle("Done")).toBeInTheDocument();
     expect(screen.getByTitle("Blocked")).toBeInTheDocument();
   });
+
+  it("uses virtualized task list when expanded with many tasks (11+)", async () => {
+    const user = userEvent.setup();
+    const tasks = Array.from({ length: 15 }, (_, i) =>
+      createMockTask({
+        id: `epic-1.${i}`,
+        title: `Task ${i}`,
+        kanbanColumn: i === 0 ? "in_progress" : "backlog",
+      })
+    );
+    const { container } = renderWithStore(
+      <BuildEpicCard epicId="epic-1" epicTitle="Large Epic" tasks={tasks} onTaskSelect={vi.fn()} />
+    );
+    await user.click(screen.getByRole("button", { name: "+12 more" }));
+    const scrollContainer = container.querySelector(".overflow-auto");
+    expect(scrollContainer).toBeInTheDocument();
+    expect(scrollContainer).toHaveStyle({ maxHeight: "320px" });
+  });
 });

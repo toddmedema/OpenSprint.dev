@@ -1,3 +1,5 @@
+import { useRef, useEffect, useMemo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Task } from "@opensprint/shared";
 import type { Plan } from "@opensprint/shared";
 import {
@@ -12,6 +14,9 @@ import { PriorityIcon } from "../PriorityIcon";
 import { ComplexityIcon } from "../ComplexityIcon";
 import type { StatusFilter } from "../../lib/executeTaskFilter";
 
+const ROW_HEIGHT = 44;
+const HEADER_HEIGHT = 52;
+
 export interface TimelineListProps {
   tasks: Task[];
   plans: Plan[];
@@ -20,6 +25,10 @@ export interface TimelineListProps {
   taskIdToStartedAt?: Record<string, string>;
   /** When "all", a Blocked section is shown at top when blocked tasks exist. */
   statusFilter?: StatusFilter;
+  /** Optional scroll container ref for virtualization. When not provided, renders non-virtualized (for tests). */
+  scrollRef?: React.RefObject<HTMLDivElement | null>;
+  /** When provided, scrolls the selected task into view. */
+  selectedTaskId?: string | null;
 }
 
 const SECTION_LABELS: Record<string, string> = {
@@ -86,6 +95,16 @@ function TimelineRow({
   );
 }
 
+type TimelineItem =
+  | { type: "header"; key: string; label: string }
+  | {
+      type: "row";
+      task: Task;
+      epicName: string;
+      relativeTime: string;
+      onUnblock?: (taskId: string) => void;
+    };
+
 export function TimelineList({
   tasks,
   plans,
@@ -93,21 +112,22 @@ export function TimelineList({
   onUnblock,
   taskIdToStartedAt = {},
   statusFilter = "all",
+  scrollRef,
+  selectedTaskId,
 }: TimelineListProps) {
   if (tasks.length === 0) {
     return null;
   }
 
-  const epicIdToTitle = new Map<string, string>();
-  plans.forEach((p) => {
-    epicIdToTitle.set(p.metadata.epicId, getEpicTitleFromPlan(p));
-  });
+  const epicIdToTitle = useMemo(() => {
+    const m = new Map<string, string>();
+    plans.forEach((p) => m.set(p.metadata.epicId, getEpicTitleFromPlan(p)));
+    return m;
+  }, [plans]);
 
-  const sorted = sortTasksForTimeline(tasks);
+  const sorted = useMemo(() => sortTasksForTimeline(tasks), [tasks]);
   const blockedTasks =
-    statusFilter === "all"
-      ? sorted.filter((t) => t.kanbanColumn === "blocked")
-      : [];
+    statusFilter === "all" ? sorted.filter((t) => t.kanbanColumn === "blocked") : [];
   const showBlockedSection = blockedTasks.length > 0;
 
   const queueFilter = (t: Task) => {
@@ -116,23 +136,29 @@ export function TimelineList({
     return inQueue;
   };
 
-  const bySection = {
-    [TIMELINE_SECTION.active]: sorted.filter(
-      (t) => getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.active
-    ),
-    [TIMELINE_SECTION.queue]: sorted.filter(queueFilter),
-    [TIMELINE_SECTION.completed]: sorted.filter(
-      (t) => getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.completed
-    ),
-    blocked: blockedTasks,
-  };
+  const bySection = useMemo(
+    () => ({
+      [TIMELINE_SECTION.active]: sorted.filter(
+        (t) => getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.active
+      ),
+      [TIMELINE_SECTION.queue]: sorted.filter(queueFilter),
+      [TIMELINE_SECTION.completed]: sorted.filter(
+        (t) => getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.completed
+      ),
+      blocked: blockedTasks,
+    }),
+    [sorted, showBlockedSection, blockedTasks]
+  );
 
-  const sections = [
-    ...(showBlockedSection ? [{ key: "blocked" as const, tasks: bySection.blocked }] : []),
-    { key: TIMELINE_SECTION.active, tasks: bySection[TIMELINE_SECTION.active] },
-    { key: TIMELINE_SECTION.queue, tasks: bySection[TIMELINE_SECTION.queue] },
-    { key: TIMELINE_SECTION.completed, tasks: bySection[TIMELINE_SECTION.completed] },
-  ];
+  const sections = useMemo(
+    () => [
+      ...(showBlockedSection ? [{ key: "blocked" as const, tasks: bySection.blocked }] : []),
+      { key: TIMELINE_SECTION.active, tasks: bySection[TIMELINE_SECTION.active] },
+      { key: TIMELINE_SECTION.queue, tasks: bySection[TIMELINE_SECTION.queue] },
+      { key: TIMELINE_SECTION.completed, tasks: bySection[TIMELINE_SECTION.completed] },
+    ],
+    [showBlockedSection, bySection]
+  );
 
   const getRelativeTime = (task: Task): string => {
     const isActive = task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review";
@@ -141,6 +167,112 @@ export function TimelineList({
     }
     return formatTimestamp(task.updatedAt || task.createdAt || "");
   };
+
+  const items = useMemo((): TimelineItem[] => {
+    const result: TimelineItem[] = [];
+    for (const { key, tasks: sectionTasks } of sections) {
+      if (sectionTasks.length === 0) continue;
+      result.push({ type: "header", key, label: SECTION_LABELS[key] });
+      for (const task of sectionTasks) {
+        result.push({
+          type: "row",
+          task,
+          epicName: task.epicId ? (epicIdToTitle.get(task.epicId) ?? task.epicId) : "—",
+          relativeTime: getRelativeTime(task),
+          onUnblock: task.kanbanColumn === "blocked" ? onUnblock : undefined,
+        });
+      }
+    }
+    return result;
+  }, [sections, epicIdToTitle, onUnblock, taskIdToStartedAt]);
+
+  const taskIdToIndex = useMemo(() => {
+    const m = new Map<string, number>();
+    items.forEach((item, i) => {
+      if (item.type === "row") m.set(item.task.id, i);
+    });
+    return m;
+  }, [items]);
+
+  const useVirtualization = Boolean(scrollRef);
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef?.current ?? null,
+    estimateSize: (i) => (items[i]?.type === "header" ? HEADER_HEIGHT : ROW_HEIGHT),
+    overscan: 5,
+  });
+
+  useEffect(() => {
+    if (selectedTaskId && useVirtualization) {
+      const index = taskIdToIndex.get(selectedTaskId);
+      if (index != null) {
+        virtualizer.scrollToIndex(index, { align: "center", behavior: "smooth" });
+      }
+    }
+  }, [selectedTaskId, taskIdToIndex, useVirtualization, virtualizer]);
+
+  if (useVirtualization) {
+    const virtualItems = virtualizer.getVirtualItems();
+    return (
+      <div
+        data-testid="timeline-list"
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: "100%",
+          position: "relative",
+        }}
+      >
+        {virtualItems.map((virtualRow) => {
+          const item = items[virtualRow.index];
+          if (!item) return null;
+          if (item.type === "header") {
+            return (
+              <div
+                key={`header-${item.key}`}
+                data-testid={`timeline-section-${item.key}`}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualRow.start - virtualizer.options.scrollMargin}px)`,
+                }}
+              >
+                <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase px-4 pt-4 pb-2 border-b border-theme-border-subtle">
+                  {item.label}
+                </h3>
+              </div>
+            );
+          }
+          return (
+            <div
+              key={item.task.id}
+              data-index={virtualRow.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${virtualRow.start - virtualizer.options.scrollMargin}px)`,
+              }}
+              className="border-b border-theme-border-subtle"
+            >
+              <ul>
+                <TimelineRow
+                  task={item.task}
+                  epicName={item.epicName}
+                  relativeTime={item.relativeTime}
+                  onTaskSelect={onTaskSelect}
+                  onUnblock={item.onUnblock}
+                />
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div data-testid="timeline-list">
@@ -156,7 +288,9 @@ export function TimelineList({
                   <TimelineRow
                     key={task.id}
                     task={task}
-                    epicName={task.epicId ? (epicIdToTitle.get(task.epicId) ?? task.epicId) : "—"}
+                    epicName={
+                      task.epicId ? (epicIdToTitle.get(task.epicId) ?? task.epicId) : "—"
+                    }
                     relativeTime={getRelativeTime(task)}
                     onTaskSelect={onTaskSelect}
                     onUnblock={task.kanbanColumn === "blocked" ? onUnblock : undefined}

@@ -1,4 +1,5 @@
-import { useState, useMemo, memo } from "react";
+import { useState, useMemo, memo, useRef, useEffect } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Task } from "@opensprint/shared";
 import { shallowEqual } from "react-redux";
 import { useAppSelector } from "../../store";
@@ -9,6 +10,10 @@ import { TaskStatusBadge, COLUMN_LABELS } from "./TaskStatusBadge";
 import { formatUptime } from "../../lib/formatting";
 
 const VISIBLE_SUBTASKS = 3;
+/** Virtualize when expanded and task count exceeds this (avoids virtualization for small lists; improves testability in jsdom). */
+const VIRTUALIZE_THRESHOLD = 10;
+const TASK_ROW_HEIGHT = 44;
+const EPIC_TASK_LIST_MAX_HEIGHT = 320;
 
 /** Task row: subscribes to single task for granular re-renders when task.updated fires. When task prop is provided (e.g. tests), use it instead of Redux. */
 const EpicTaskRow = memo(function EpicTaskRow({
@@ -96,6 +101,8 @@ export interface BuildEpicCardProps {
   onViewPlan?: () => void;
   /** Map of task ID to startedAt for active tasks (elapsed time display) */
   taskIdToStartedAt?: Record<string, string>;
+  /** When provided, scrolls the selected task into view when expanded. */
+  selectedTaskId?: string | null;
 }
 
 export function BuildEpicCard({
@@ -109,8 +116,10 @@ export function BuildEpicCard({
   onUnblock,
   onViewPlan,
   taskIdToStartedAt = {},
+  selectedTaskId,
 }: BuildEpicCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const taskListRef = useRef<HTMLDivElement>(null);
   const tasksFromRedux = useAppSelector(
     (s) => selectTasksForEpic(s, epicId),
     shallowEqual
@@ -132,6 +141,31 @@ export function BuildEpicCard({
   const hiddenCount = sortedTasks.length - VISIBLE_SUBTASKS;
   const allTasksDone = totalCount > 0 && sortedTasks.every((t) => t.kanbanColumn === "done");
   const useTaskProp = tasksProp != null;
+  const useVirtualization = expanded && sortedTasks.length > VIRTUALIZE_THRESHOLD;
+
+  const virtualizer = useVirtualizer({
+    count: sortedTasks.length,
+    getScrollElement: () => taskListRef.current,
+    estimateSize: () => TASK_ROW_HEIGHT,
+    overscan: 3,
+  });
+
+  const selectedIndex =
+    selectedTaskId != null
+      ? sortedTasks.findIndex((t) => t.id === selectedTaskId)
+      : -1;
+
+  useEffect(() => {
+    if (selectedTaskId && selectedIndex >= 0 && !expanded && selectedIndex >= VISIBLE_SUBTASKS) {
+      setExpanded(true);
+    }
+  }, [selectedTaskId, selectedIndex, expanded]);
+
+  useEffect(() => {
+    if (expanded && selectedIndex >= 0 && useVirtualization) {
+      virtualizer.scrollToIndex(selectedIndex, { align: "center", behavior: "smooth" });
+    }
+  }, [expanded, selectedIndex, useVirtualization, virtualizer]);
 
   return (
     <div
@@ -201,20 +235,67 @@ export function BuildEpicCard({
       {/* Nested subtasks: each row subscribes to its task for granular re-renders (or uses task prop when provided) */}
       {sortedTasks.length > 0 && (
         <div className="border-t border-theme-border-subtle">
-          <ul className="divide-y divide-theme-border-subtle">
-            {visibleTasks.map((t) => (
-              <EpicTaskRow
-                key={t.id}
-                taskId={t.id}
-                task={useTaskProp ? t : undefined}
-                elapsed={
-                  taskIdToStartedAt[t.id] ? formatUptime(taskIdToStartedAt[t.id]) : null
-                }
-                onTaskSelect={onTaskSelect}
-                onUnblock={onUnblock}
-              />
-            ))}
-          </ul>
+          {useVirtualization ? (
+            <div
+              ref={taskListRef}
+              className="overflow-auto divide-y divide-theme-border-subtle"
+              style={{ maxHeight: EPIC_TASK_LIST_MAX_HEIGHT }}
+            >
+              <div
+                style={{
+                  height: `${virtualizer.getTotalSize()}px`,
+                  width: "100%",
+                  position: "relative",
+                }}
+              >
+                {virtualizer.getVirtualItems().map((virtualRow) => {
+                  const t = sortedTasks[virtualRow.index];
+                  if (!t) return null;
+                  return (
+                    <div
+                      key={t.id}
+                      data-index={virtualRow.index}
+                      ref={virtualizer.measureElement}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        transform: `translateY(${virtualRow.start - virtualizer.options.scrollMargin}px)`,
+                      }}
+                    >
+                      <ul className="divide-y divide-theme-border-subtle">
+                        <EpicTaskRow
+                          taskId={t.id}
+                          task={useTaskProp ? t : undefined}
+                          elapsed={
+                            taskIdToStartedAt[t.id] ? formatUptime(taskIdToStartedAt[t.id]) : null
+                          }
+                          onTaskSelect={onTaskSelect}
+                          onUnblock={onUnblock}
+                        />
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <ul className="divide-y divide-theme-border-subtle">
+              {visibleTasks.map((t) => (
+                <EpicTaskRow
+                  key={t.id}
+                  taskId={t.id}
+                  task={useTaskProp ? t : undefined}
+                  elapsed={
+                    taskIdToStartedAt[t.id] ? formatUptime(taskIdToStartedAt[t.id]) : null
+                  }
+                  onTaskSelect={onTaskSelect}
+                  onUnblock={onUnblock}
+                />
+              ))}
+            </ul>
+          )}
           {hasMore && !expanded && hiddenCount > 0 && (
             <button
               type="button"

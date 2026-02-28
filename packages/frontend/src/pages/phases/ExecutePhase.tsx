@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppDispatch, useAppSelector } from "../../store";
 import {
@@ -82,6 +82,7 @@ export function ExecutePhase({
   const [artifactsSectionExpanded, setArtifactsSectionExpanded] = useState(true);
   const [descriptionSectionExpanded, setDescriptionSectionExpanded] = useState(true);
   const [sourceFeedbackExpanded, setSourceFeedbackExpanded] = useState<Record<string, boolean>>({});
+  const executeScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     localStorage.setItem("opensprint.executeView", viewMode);
@@ -264,7 +265,7 @@ export function ExecutePhase({
           onViewModeChange={setViewMode}
         />
 
-        <div className="flex-1 min-h-0 overflow-auto p-6">
+        <div ref={executeScrollRef} className="flex-1 min-h-0 overflow-auto p-6">
           {loading ? (
             <TaskListLoadingSkeleton />
           ) : implTasks.length === 0 ? (
@@ -299,6 +300,7 @@ export function ExecutePhase({
                           : undefined
                       }
                       taskIdToStartedAt={taskIdToStartedAt}
+                      selectedTaskId={effectiveSelectedTask}
                     />
                   ))}
                 </div>
@@ -321,6 +323,8 @@ export function ExecutePhase({
                 onUnblock={(taskId) => unblockMutation.mutate({ taskId })}
                 taskIdToStartedAt={taskIdToStartedAt}
                 statusFilter={statusFilter}
+                scrollRef={executeScrollRef}
+                selectedTaskId={effectiveSelectedTask}
               />
             </>
           )}
