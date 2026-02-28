@@ -158,7 +158,7 @@ describe("PRD REST API", () => {
   });
 
   it("GET /projects/:id/prd/:section should return 400 for invalid section key", async () => {
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/invalid_section`);
+    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/InvalidSection`);
 
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("INVALID_SECTION");
@@ -204,7 +204,7 @@ describe("PRD REST API", () => {
 
   it("PUT /projects/:id/prd/:section should return 400 for invalid section key", async () => {
     const res = await request(app)
-      .put(`${API_PREFIX}/projects/${projectId}/prd/invalid_section`)
+      .put(`${API_PREFIX}/projects/${projectId}/prd/InvalidSection`)
       .send({ content: "Some content" });
 
     expect(res.status).toBe(400);

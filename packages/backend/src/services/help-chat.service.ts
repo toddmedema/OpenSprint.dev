@@ -74,6 +74,11 @@ export class HelpChatService {
   private prdService = new PrdService();
   private planService = new PlanService();
 
+  /** Clear project list cache (for tests that overwrite projects.json). */
+  clearProjectListCacheForTesting(): void {
+    this.projectService.clearListCacheForTesting();
+  }
+
   /** Path for per-project help chat (in .opensprint/conversations/) */
   private async getProjectHelpChatPath(projectId: string): Promise<string> {
     const project = await this.projectService.getProject(projectId);

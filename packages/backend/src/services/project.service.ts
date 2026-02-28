@@ -192,6 +192,11 @@ export class ProjectService {
     this.listCache = null;
   }
 
+  /** Clear list cache (for tests that overwrite projects.json directly). */
+  clearListCacheForTesting(): void {
+    this.listCache = null;
+  }
+
   /** List all projects (cached; invalidated on create/update/delete). Settings are in global DB. */
   async listProjects(): Promise<Project[]> {
     if (this.listCache !== null) {

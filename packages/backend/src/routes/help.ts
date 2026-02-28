@@ -9,7 +9,7 @@ import { HelpChatService } from "../services/help-chat.service.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("help-route");
-const helpChatService = new HelpChatService();
+export const helpChatService = new HelpChatService();
 
 export const helpRouter = Router();
 

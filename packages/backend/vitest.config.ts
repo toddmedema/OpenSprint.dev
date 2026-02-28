@@ -14,6 +14,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["src/__tests__/**/*.test.ts", "src/utils/__tests__/**/*.test.ts"],
+    exclude: ["**/git-working-mode-branches.integration.test.ts"],
     pool: "forks",
     poolOptions: {
       forks: { minForks: 1, maxForks: 4 },

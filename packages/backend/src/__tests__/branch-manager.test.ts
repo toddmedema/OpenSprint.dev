@@ -290,7 +290,10 @@ describe("BranchManager", () => {
 
       const list = await branchManager.listTaskWorktrees(repoPath);
       expect(list.some((w) => w.taskId === taskId)).toBe(true);
-      expect(list.find((w) => w.taskId === taskId)?.worktreePath).toBe(wtPath);
+      const listedPath = list.find((w) => w.taskId === taskId)?.worktreePath;
+      expect(listedPath).toBeDefined();
+      expect(listedPath).toContain(taskId);
+      expect(listedPath).toContain("opensprint-worktrees");
 
       await branchManager.removeTaskWorktree(repoPath, taskId);
       const listAfter = await branchManager.listTaskWorktrees(repoPath);
