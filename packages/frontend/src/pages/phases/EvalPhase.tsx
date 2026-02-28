@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect, memo } from "react";
+import { useNavigate } from "react-router-dom";
 import type { FeedbackItem, Notification } from "@opensprint/shared";
 import { PRIORITY_LABELS } from "@opensprint/shared";
 import {
@@ -30,6 +31,8 @@ import { useScrollToQuestion } from "../../hooks/useScrollToQuestion";
 import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotifications";
 import { api } from "../../api/client";
 import { CONTENT_CONTAINER_CLASS } from "../../lib/constants";
+import { getProjectPhasePath } from "../../lib/phaseRouting";
+import { formatPlanIdAsTitle } from "../../lib/formatting";
 
 /** Reply icon (message turn / corner up-right) */
 function ReplyIcon({ className }: { className?: string }) {
@@ -281,6 +284,7 @@ const FeedbackCard = memo(
     answeringOpenQuestion = false,
   }: FeedbackCardProps) {
     const { item, children } = node;
+    const navigate = useNavigate();
     const [replyText, setReplyText] = useState("");
     const [answerText, setAnswerText] = useState("");
     const replyImages = useImageAttachment();
@@ -496,18 +500,46 @@ const FeedbackCard = memo(
             className="mt-1 flex flex-wrap items-center justify-between gap-2"
             data-testid="feedback-card-actions-row"
           >
-            {item.createdTaskIds.length > 0 && (
-              <div className="flex gap-1 flex-wrap min-w-0" data-testid="feedback-card-ticket-info">
-                {item.createdTaskIds.map((taskId) => (
-                  <FeedbackTaskChip
-                    key={taskId}
-                    taskId={taskId}
-                    projectId={projectId}
-                    onNavigateToBuildTask={onNavigateToBuildTask}
-                  />
-                ))}
-              </div>
-            )}
+            {(() => {
+              const taskIds = item.createdTaskIds ?? [];
+              const isPlanLinked =
+                item.mappedPlanId != null && item.mappedPlanId !== "" && taskIds.length === 0;
+              if (isPlanLinked) {
+                return (
+                  <div
+                    className="flex gap-1 flex-wrap min-w-0"
+                    data-testid="feedback-card-plan-link"
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(getProjectPhasePath(projectId, "plan", { plan: item.mappedPlanId! }))
+                      }
+                      className="inline-flex items-center gap-1.5 rounded bg-theme-border-subtle px-1.5 py-0.5 text-xs font-mono text-brand-600 hover:bg-theme-info-bg hover:text-theme-info-text underline transition-colors"
+                      title={`View plan: ${formatPlanIdAsTitle(item.mappedPlanId!)}`}
+                      aria-label={`View plan ${formatPlanIdAsTitle(item.mappedPlanId!)}`}
+                    >
+                      Plan: {formatPlanIdAsTitle(item.mappedPlanId!)}
+                    </button>
+                  </div>
+                );
+              }
+              if (taskIds.length > 0) {
+                return (
+                  <div className="flex gap-1 flex-wrap min-w-0" data-testid="feedback-card-ticket-info">
+                    {taskIds.map((taskId) => (
+                      <FeedbackTaskChip
+                        key={taskId}
+                        taskId={taskId}
+                        projectId={projectId}
+                        onNavigateToBuildTask={onNavigateToBuildTask}
+                      />
+                    ))}
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <div className="flex gap-2 flex-shrink-0 ml-auto">
               {item.status === "pending" && !isCategorizing(item) && (
                 <>

@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
 import { EvalPhase, EVALUATE_FEEDBACK_FILTER_KEY } from "./EvalPhase";
 import { FEEDBACK_FORM_DRAFT_KEY_PREFIX } from "../../lib/feedbackFormStorage";
@@ -20,6 +21,7 @@ import executeReducer, {
 import evalReducer, { updateFeedbackItem } from "../../store/slices/evalSlice";
 import deliverReducer from "../../store/slices/deliverSlice";
 import notificationReducer from "../../store/slices/notificationSlice";
+import type { ReactElement } from "react";
 import type { FeedbackItem, Task } from "@opensprint/shared";
 
 vi.mock("../../api/client", () => ({
@@ -189,6 +191,16 @@ function createStore(overrides?: { evalFeedback?: FeedbackItem[]; executeTasks?:
   });
 }
 
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+function renderWithProviders(ui: ReactElement) {
+  return render(
+    <QueryClientProvider client={queryClient}>
+      {ui}
+    </QueryClientProvider>
+  );
+}
+
 const mockFeedbackItems: FeedbackItem[] = [
   {
     id: "fb-1",
@@ -267,7 +279,7 @@ describe("EvalPhase feedback form", () => {
 
   it("feedback content uses CONTENT_CONTAINER_CLASS", () => {
     const store = createStore();
-    render(
+    renderWithProviders(
       <MemoryRouter>
         <Provider store={store}>
           <EvalPhase projectId="proj-1" />
@@ -282,7 +294,7 @@ describe("EvalPhase feedback form", () => {
 
   it("focuses feedback input when Evaluate tab activates", async () => {
     const store = createStore();
-    render(
+    renderWithProviders(
       <MemoryRouter>
         <Provider store={store}>
           <EvalPhase projectId="proj-1" />
@@ -309,7 +321,7 @@ describe("EvalPhase feedback form", () => {
     });
 
     const store = createStore();
-    render(
+    renderWithProviders(
       <MemoryRouter>
         <Provider store={store}>
           <EvalPhase projectId="proj-1" />
@@ -344,7 +356,7 @@ describe("EvalPhase feedback form", () => {
     });
 
     const store = createStore();
-    render(
+    renderWithProviders(
       <MemoryRouter>
         <Provider store={store}>
           <EvalPhase projectId="proj-1" />
@@ -368,7 +380,7 @@ describe("EvalPhase feedback form", () => {
   it("renders priority dropdown with placeholder and options", async () => {
     const store = createStore();
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <MemoryRouter>
         <Provider store={store}>
           <EvalPhase projectId="proj-1" />
@@ -400,7 +412,7 @@ describe("EvalPhase feedback form", () => {
   it("closes priority dropdown on Escape key", async () => {
     const store = createStore();
     const user = userEvent.setup();
-    render(
+    renderWithProviders(
       <MemoryRouter>
         <Provider store={store}>
           <EvalPhase projectId="proj-1" />
@@ -422,7 +434,7 @@ describe("EvalPhase feedback form", () => {
   it("passes selected priority when submitting feedback", async () => {
     const { api } = await import("../../api/client");
     const store = createStore();
-    render(
+    renderWithProviders(
       <MemoryRouter>
         <Provider store={store}>
           <EvalPhase projectId="proj-1" />
@@ -464,7 +476,7 @@ describe("EvalPhase feedback form", () => {
     });
 
     const store = createStore();
-    render(
+    renderWithProviders(
       <MemoryRouter>
         <Provider store={store}>
           <EvalPhase projectId="proj-1" />
@@ -495,7 +507,7 @@ describe("EvalPhase feedback form", () => {
   it("omits priority from submission when none selected", async () => {
     const { api } = await import("../../api/client");
     const store = createStore();
-    render(
+    renderWithProviders(
       <MemoryRouter>
         <Provider store={store}>
           <EvalPhase projectId="proj-1" />
@@ -533,7 +545,7 @@ describe("EvalPhase feedback form", () => {
     );
 
     const store = createStore();
-    render(
+    renderWithProviders(
       <MemoryRouter>
         <Provider store={store}>
           <EvalPhase projectId="proj-1" />
@@ -587,7 +599,7 @@ describe("EvalPhase feedback form", () => {
       vi.mocked(api.notifications.listByProject).mockResolvedValue([openQuestionNotification]);
 
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -612,7 +624,7 @@ describe("EvalPhase feedback form", () => {
 
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -640,7 +652,7 @@ describe("EvalPhase feedback form", () => {
 
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -675,7 +687,7 @@ describe("EvalPhase feedback form", () => {
       );
 
       const store = createStore();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -697,7 +709,7 @@ describe("EvalPhase feedback form", () => {
     it("persists text to localStorage on change", async () => {
       const store = createStore();
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -717,7 +729,7 @@ describe("EvalPhase feedback form", () => {
     it("persists priority to localStorage when selected", async () => {
       const store = createStore();
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -755,7 +767,7 @@ describe("EvalPhase feedback form", () => {
 
       const store = createStore();
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -778,7 +790,7 @@ describe("EvalPhase feedback form", () => {
   describe("feedback form control heights", () => {
     it("applies consistent h-10 height to priority select and both buttons", async () => {
       const store = createStore();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -802,7 +814,7 @@ describe("EvalPhase feedback form", () => {
 
     it("priority select has equal left and right padding", async () => {
       const store = createStore();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -820,7 +832,7 @@ describe("EvalPhase feedback form", () => {
 
     it("status filter select has chevron right padding (pl-3, pr from select.input)", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -839,7 +851,7 @@ describe("EvalPhase feedback form", () => {
 
     it("actions row uses items-stretch so all controls share the same height", async () => {
       const store = createStore();
-      const { container } = render(
+      const { container } = renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -859,7 +871,7 @@ describe("EvalPhase feedback form", () => {
 
     it("actions row has flex-wrap to prevent overflow at narrow viewports", async () => {
       const store = createStore();
-      const { container } = render(
+      const { container } = renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -880,7 +892,7 @@ describe("EvalPhase feedback form", () => {
     it("reply form applies consistent h-10 height to Cancel, Attach, and Submit buttons", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -927,7 +939,7 @@ describe("EvalPhase feedback form", () => {
       });
 
       const store = createStore();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -959,7 +971,7 @@ describe("EvalPhase feedback form", () => {
       });
 
       const store = createStore();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -991,7 +1003,7 @@ describe("EvalPhase feedback form", () => {
       });
 
       const store = createStore();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1027,7 +1039,7 @@ describe("EvalPhase feedback form", () => {
 
     it("shows Attach image(s) tooltip on main feedback form after hover delay", async () => {
       const store = createStore();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1053,7 +1065,7 @@ describe("EvalPhase feedback form", () => {
 
     it("dismisses attach image tooltip when cursor leaves button", async () => {
       const store = createStore();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1080,7 +1092,7 @@ describe("EvalPhase feedback form", () => {
 
     it("dismisses attach image tooltip on Escape key", async () => {
       const store = createStore();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1108,7 +1120,7 @@ describe("EvalPhase feedback form", () => {
     it("shows Attach image(s) tooltip on reply form after hover delay", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1138,7 +1150,7 @@ describe("EvalPhase feedback form", () => {
     it("shows Submit keyboard shortcut tooltip on reply form after hover delay", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1174,7 +1186,7 @@ describe("EvalPhase feedback form", () => {
 
     it("defaults to Pending when no localStorage key exists", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1192,7 +1204,7 @@ describe("EvalPhase feedback form", () => {
 
     it("title does not display a count", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1211,7 +1223,7 @@ describe("EvalPhase feedback form", () => {
 
     it("each dropdown option displays its count (All, Pending = pending+mapped, Resolved)", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1230,7 +1242,7 @@ describe("EvalPhase feedback form", () => {
 
     it("dropdown shows All first, then Pending and Resolved options", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1250,7 +1262,7 @@ describe("EvalPhase feedback form", () => {
     it("writes filter selection to localStorage on change", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1278,7 +1290,7 @@ describe("EvalPhase feedback form", () => {
       localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "resolved");
 
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1298,7 +1310,7 @@ describe("EvalPhase feedback form", () => {
       localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "all");
 
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1318,7 +1330,7 @@ describe("EvalPhase feedback form", () => {
       localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "mapped");
 
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1338,7 +1350,7 @@ describe("EvalPhase feedback form", () => {
       localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "invalid");
 
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1357,7 +1369,7 @@ describe("EvalPhase feedback form", () => {
     it("Pending filter shows both pending and mapped items", async () => {
       localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "pending");
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1382,7 +1394,7 @@ describe("EvalPhase feedback form", () => {
     it("All filter shows all feedback items", async () => {
       localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "all");
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1407,7 +1419,7 @@ describe("EvalPhase feedback form", () => {
     it("Resolved filter shows only resolved items", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1426,7 +1438,7 @@ describe("EvalPhase feedback form", () => {
 
     it("does not show Cancelled option when no feedback has status cancelled", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1444,7 +1456,7 @@ describe("EvalPhase feedback form", () => {
 
     it("shows Cancelled option when at least one feedback has status cancelled", async () => {
       const store = createStore({ evalFeedback: mockFeedbackWithCancelled });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1463,7 +1475,7 @@ describe("EvalPhase feedback form", () => {
     it("Cancelled filter shows only cancelled items", async () => {
       const store = createStore({ evalFeedback: mockFeedbackWithCancelled });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1483,7 +1495,7 @@ describe("EvalPhase feedback form", () => {
     it("Resolved filter excludes cancelled items", async () => {
       const store = createStore({ evalFeedback: mockFeedbackWithCancelled });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1502,7 +1514,7 @@ describe("EvalPhase feedback form", () => {
     it("resets to Pending when cancelled is selected but no cancelled items exist", async () => {
       const store = createStore({ evalFeedback: mockFeedbackWithCancelled });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1529,7 +1541,7 @@ describe("EvalPhase feedback form", () => {
     it("writes and restores cancelled filter to localStorage", async () => {
       const store = createStore({ evalFeedback: mockFeedbackWithCancelled });
       const user = userEvent.setup();
-      const { rerender } = render(
+      const { rerender } = renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase key="first" projectId="proj-1" />
@@ -1544,11 +1556,13 @@ describe("EvalPhase feedback form", () => {
 
       // Re-mount with new key to force fresh mount and verify restore from localStorage
       rerender(
-        <MemoryRouter>
-          <Provider store={store}>
-            <EvalPhase key="second" projectId="proj-1" />
-          </Provider>
-        </MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <Provider store={store}>
+              <EvalPhase key="second" projectId="proj-1" />
+            </Provider>
+          </MemoryRouter>
+        </QueryClientProvider>
       );
 
       await waitFor(() => {
@@ -1559,7 +1573,7 @@ describe("EvalPhase feedback form", () => {
 
     it("default Pending filter shows both pending and mapped items on first load", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1613,7 +1627,7 @@ describe("EvalPhase feedback form", () => {
         },
       ];
       const store = createStore({ evalFeedback: feedbackWithReplies });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1671,7 +1685,7 @@ describe("EvalPhase feedback form", () => {
         },
       ];
       const store = createStore({ evalFeedback: feedbackDeepNesting });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1709,7 +1723,7 @@ describe("EvalPhase feedback form", () => {
         },
       ];
       const store = createStore({ evalFeedback: feedbackSingleReply });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1746,7 +1760,7 @@ describe("EvalPhase feedback form", () => {
         },
       ];
       const store = createStore({ evalFeedback: initialFeedback });
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1802,7 +1816,7 @@ describe("EvalPhase feedback form", () => {
         executeTasks,
       });
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1836,7 +1850,7 @@ describe("EvalPhase feedback form", () => {
         executeTasks: [],
       });
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1872,7 +1886,7 @@ describe("EvalPhase feedback form", () => {
         executeTasks,
       });
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1907,7 +1921,7 @@ describe("EvalPhase feedback form", () => {
         executeTasks,
       });
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1942,7 +1956,7 @@ describe("EvalPhase feedback form", () => {
         executeTasks,
       });
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -1985,7 +1999,7 @@ describe("EvalPhase feedback form", () => {
         executeTasks,
       });
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2042,7 +2056,7 @@ describe("EvalPhase feedback form", () => {
       const { api } = await import("../../api/client");
       vi.mocked(api.feedback.list).mockClear();
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2113,7 +2127,7 @@ describe("EvalPhase feedback form", () => {
         updatedAt: "",
       } as Task);
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2169,7 +2183,7 @@ describe("EvalPhase feedback form", () => {
       const { api } = await import("../../api/client");
       vi.mocked(api.feedback.list).mockClear();
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2206,7 +2220,7 @@ describe("EvalPhase feedback form", () => {
     it("preserves scroll position when clicking Resolve", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2231,7 +2245,7 @@ describe("EvalPhase feedback form", () => {
     it("collapses height during resolve fade-out animation (no empty gap)", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2261,7 +2275,7 @@ describe("EvalPhase feedback form", () => {
       const formSubmit = vi.fn();
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -2305,7 +2319,7 @@ describe("EvalPhase feedback form", () => {
           executeTasks,
         });
 
-        render(
+        renderWithProviders(
           <MemoryRouter>
             <Provider store={store}>
               <EvalPhase projectId="proj-1" />
@@ -2339,7 +2353,7 @@ describe("EvalPhase feedback form", () => {
           executeTasks,
         });
 
-        render(
+        renderWithProviders(
           <MemoryRouter>
             <Provider store={store}>
               <EvalPhase projectId="proj-1" />
@@ -2368,7 +2382,7 @@ describe("EvalPhase feedback form", () => {
         ];
         const store = createStore({ evalFeedback: feedbackNoTasks });
 
-        render(
+        renderWithProviders(
           <MemoryRouter>
             <Provider store={store}>
               <EvalPhase projectId="proj-1" />
@@ -2402,7 +2416,7 @@ describe("EvalPhase feedback form", () => {
           executeTasks,
         });
 
-        render(
+        renderWithProviders(
           <MemoryRouter>
             <Provider store={store}>
               <EvalPhase projectId="proj-1" />
@@ -2425,6 +2439,119 @@ describe("EvalPhase feedback form", () => {
       });
     });
 
+    it("shows plan link when mappedPlanId is set and feedback is plan-linked (no created tasks)", async () => {
+      const planLinkedFeedback: FeedbackItem[] = [
+        {
+          id: "fb-plan-linked",
+          text: "This relates to the auth plan",
+          category: "feature",
+          mappedPlanId: "auth-feature-plan",
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+      ];
+      const store = createStore({ evalFeedback: planLinkedFeedback, executeTasks: [] });
+
+      renderWithProviders(
+        <MemoryRouter>
+          <Provider store={store}>
+            <EvalPhase projectId="proj-1" />
+          </Provider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-card-plan-link")).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole("button", { name: /View plan Auth Feature Plan/i })).toBeInTheDocument();
+      expect(screen.getByText(/Plan: Auth Feature Plan/)).toBeInTheDocument();
+      expect(screen.queryByTestId("feedback-card-ticket-info")).not.toBeInTheDocument();
+    });
+
+    it("does not show plan link when feedback has created tasks (task-linked)", async () => {
+      const taskLinkedFeedback: FeedbackItem[] = [
+        {
+          id: "fb-task-linked",
+          text: "Auth bug",
+          category: "bug",
+          mappedPlanId: "auth-feature-plan",
+          createdTaskIds: ["task-1"],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+      ];
+      const executeTasks: Task[] = [createMockTask({ id: "task-1" })];
+      const store = createStore({
+        evalFeedback: taskLinkedFeedback,
+        executeTasks,
+      });
+
+      renderWithProviders(
+        <MemoryRouter>
+          <Provider store={store}>
+            <EvalPhase projectId="proj-1" />
+          </Provider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId("feedback-card-plan-link")).not.toBeInTheDocument();
+    });
+
+    it("plan link navigates to plan view when clicked", async () => {
+      function LocationCapture() {
+        const loc = useLocation();
+        return (
+          <div
+            data-testid="location-capture"
+            data-pathname={loc.pathname}
+            data-search={loc.search}
+          />
+        );
+      }
+
+      const planLinkedFeedback: FeedbackItem[] = [
+        {
+          id: "fb-plan-linked",
+          text: "Plan-related feedback",
+          category: "feature",
+          mappedPlanId: "my-feature-plan",
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+      ];
+      const store = createStore({ evalFeedback: planLinkedFeedback, executeTasks: [] });
+
+      renderWithProviders(
+        <MemoryRouter initialEntries={["/projects/proj-1/eval"]}>
+          <Provider store={store}>
+            <LocationCapture />
+            <EvalPhase projectId="proj-1" />
+          </Provider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-card-plan-link")).toBeInTheDocument();
+      });
+
+      const user = userEvent.setup();
+      const planLink = screen.getByRole("button", { name: /View plan My Feature Plan/i });
+      await user.click(planLink);
+
+      await waitFor(() => {
+        const capture = screen.getByTestId("location-capture");
+        expect(capture.getAttribute("data-pathname")).toBe("/projects/proj-1/plan");
+        expect(capture.getAttribute("data-search")).toContain("plan=my-feature-plan");
+      });
+    });
+
     it("navigates to correct task when link is clicked", async () => {
       const onNavigateToBuildTask = vi.fn();
       const feedbackWithTasks: FeedbackItem[] = [
@@ -2444,7 +2571,7 @@ describe("EvalPhase feedback form", () => {
         executeTasks,
       });
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" onNavigateToBuildTask={onNavigateToBuildTask} />
@@ -2482,7 +2609,7 @@ describe("EvalPhase feedback form", () => {
         executeTasks,
       });
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2525,7 +2652,7 @@ describe("EvalPhase feedback form", () => {
         executeTasks,
       });
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2573,7 +2700,7 @@ describe("EvalPhase feedback form", () => {
         executeTasks,
       });
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2638,7 +2765,7 @@ describe("EvalPhase feedback form", () => {
         executeTasks,
       });
 
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2670,7 +2797,7 @@ describe("EvalPhase feedback form", () => {
     it("shows Attach icon button in reply composer to the left of Submit", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2706,7 +2833,7 @@ describe("EvalPhase feedback form", () => {
       const { api } = await import("../../api/client");
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2757,7 +2884,7 @@ describe("EvalPhase feedback form", () => {
   describe("image drag targets", () => {
     it("renders main feedback drop zone", async () => {
       const store = createStore();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2773,7 +2900,7 @@ describe("EvalPhase feedback form", () => {
     it("renders reply drop zone when reply form is open", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2794,7 +2921,7 @@ describe("EvalPhase feedback form", () => {
     it("main and reply drop zones are valid drop targets with drag handlers", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
@@ -2820,7 +2947,7 @@ describe("EvalPhase feedback form", () => {
 
     it("drop target hides immediately when image is dropped onto it", async () => {
       const store = createStore();
-      render(
+      renderWithProviders(
         <MemoryRouter>
           <Provider store={store}>
             <EvalPhase projectId="proj-1" />
