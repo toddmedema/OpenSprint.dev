@@ -192,6 +192,36 @@ describe("ResizableSidebar", () => {
     expect(innerWrapper).toHaveClass("overflow-hidden");
   });
 
+  it("applies overlay-on-mobile classes when overlayOnMobile is true (right side)", () => {
+    render(
+      <ResizableSidebar storageKey={STORAGE_KEY} overlayOnMobile>
+        <span>Content</span>
+      </ResizableSidebar>
+    );
+
+    const container = screen.getByText("Content").closest(".relative");
+    expect(container).toHaveClass("fixed");
+    expect(container).toHaveClass("md:static");
+    expect(container).toHaveClass("inset-y-0");
+    expect(container).toHaveClass("right-0");
+    expect(container).toHaveClass("z-50");
+    expect(container).toHaveClass("animate-slide-in-right");
+  });
+
+  it("shows resize handle when overlayOnMobile is true (Execute sidebar pattern)", () => {
+    render(
+      <ResizableSidebar
+        storageKey={STORAGE_KEY}
+        overlayOnMobile
+        resizeHandleLabel="Resize task detail sidebar"
+      >
+        <span>Content</span>
+      </ResizableSidebar>
+    );
+
+    expect(screen.getByRole("separator", { name: "Resize task detail sidebar" })).toBeInTheDocument();
+  });
+
   it("clamps persisted width when above max (80% viewport)", () => {
     const originalInnerWidth = window.innerWidth;
     Object.defineProperty(window, "innerWidth", { value: 1000, writable: true });
