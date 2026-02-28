@@ -358,13 +358,6 @@ export class MergeCoordinatorService {
           reason: `Blocked after ${cumulativeAttempts} merge failures`,
           cumulativeAttempts,
         });
-        broadcastToProject(projectId, {
-          type: "task.updated",
-          taskId: task.id,
-          status: "blocked",
-          assignee: null,
-          blockReason: "Merge Failure",
-        });
         return;
       }
 
@@ -384,13 +377,6 @@ export class MergeCoordinatorService {
           data: { reason: mergeErr.message?.slice(0, 500) },
         })
         .catch(() => {});
-
-      broadcastToProject(projectId, {
-        type: "task.updated",
-        taskId: task.id,
-        status: "open",
-        assignee: null,
-      });
 
       this.host.nudge(projectId);
     } catch (err) {
@@ -469,12 +455,6 @@ export class MergeCoordinatorService {
     if (result === null) {
       // No plan (deploy-fix epic) or agent failed — close epic and deploy
       await this.host.taskStore.close(projectId, epicId, "All tasks done");
-      broadcastToProject(projectId, {
-        type: "task.updated",
-        taskId: epicId,
-        status: "closed",
-        assignee: null,
-      });
       triggerDeployForEvent(projectId, "each_epic").catch((err) => {
         log.warn("Auto-deploy on epic completion failed", { projectId, err });
       });
@@ -483,12 +463,6 @@ export class MergeCoordinatorService {
 
     if (result.status === "pass") {
       await this.host.taskStore.close(projectId, epicId, "All tasks done; final review passed");
-      broadcastToProject(projectId, {
-        type: "task.updated",
-        taskId: epicId,
-        status: "closed",
-        assignee: null,
-      });
       triggerDeployForEvent(projectId, "each_epic").catch((err) => {
         log.warn("Auto-deploy on epic completion failed", { projectId, err });
       });
@@ -501,14 +475,6 @@ export class MergeCoordinatorService {
       epicId,
       result.proposedTasks
     );
-    for (const id of createdIds) {
-      broadcastToProject(projectId, {
-        type: "task.updated",
-        taskId: id,
-        status: "open",
-        assignee: null,
-      });
-    }
     log.info("Final review found issues, created tasks", {
       projectId,
       epicId,

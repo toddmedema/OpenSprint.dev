@@ -931,18 +931,10 @@ describe("PlanService createWithRetry usage", () => {
     );
     expect(mockTaskStoreAddDependencies).toHaveBeenCalled();
 
-    // AC4: Task generation results reflected in UI via WebSocket updates
+    // AC4: Task generation results reflected in UI via WebSocket updates.
+    // task.created events are emitted from TaskStoreService (tested in plan-route.test).
+    // Plan service broadcasts plan.updated.
     const broadcastCalls = mockBroadcastToProject.mock.calls;
-    const taskUpdatedCalls = broadcastCalls.filter((c) => c[1]?.type === "task.updated");
-    expect(taskUpdatedCalls.length).toBe(2);
-    expect(taskUpdatedCalls).toContainEqual([
-      projectId,
-      expect.objectContaining({ type: "task.updated", taskId: "epic-456.1", status: "open" }),
-    ]);
-    expect(taskUpdatedCalls).toContainEqual([
-      projectId,
-      expect.objectContaining({ type: "task.updated", taskId: "epic-456.2", status: "open" }),
-    ]);
     expect(broadcastCalls).toContainEqual([
       projectId,
       expect.objectContaining({ type: "plan.updated", planId }),

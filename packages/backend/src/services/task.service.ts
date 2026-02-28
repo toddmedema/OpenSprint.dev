@@ -8,7 +8,6 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { SessionManager } from "./session-manager.js";
 import { orchestratorService } from "./orchestrator.service.js";
-import { broadcastToProject } from "../websocket/index.js";
 import { triggerDeployForEvent } from "./deploy-trigger.service.js";
 import { ContextAssembler } from "./context-assembler.js";
 import { BranchManager } from "./branch-manager.js";
@@ -428,14 +427,6 @@ export class TaskService {
       }
     }
 
-    broadcastToProject(projectId, {
-      type: "task.updated",
-      taskId,
-      status: "open",
-      assignee: null,
-      blockReason: null,
-    });
-
     return { taskUnblocked: true };
   }
 
@@ -446,15 +437,7 @@ export class TaskService {
     }
     await this.projectService.getProject(projectId);
     await this.taskStore.update(projectId, taskId, { priority });
-    const task = await this.getTask(projectId, taskId);
-    broadcastToProject(projectId, {
-      type: "task.updated",
-      taskId,
-      status: task.status,
-      assignee: task.assignee,
-      priority: task.priority,
-    });
-    return task;
+    return this.getTask(projectId, taskId);
   }
 
   /** Manually mark a task as done. If it was the last task in its epic, closes the epic too. */
@@ -483,12 +466,6 @@ export class TaskService {
     }
 
     await this.taskStore.close(projectId, taskId, "Manually marked done", true);
-    broadcastToProject(projectId, {
-      type: "task.updated",
-      taskId,
-      status: "closed",
-      assignee: null,
-    });
 
     // PRD §10.2: Auto-resolve feedback when all its created tasks are Done
     this.feedbackService.checkAutoResolveOnTaskDone(projectId, taskId).catch((err) => {
@@ -512,12 +489,6 @@ export class TaskService {
         const epicIssue = allIssues.find((i) => i.id === epicId);
         if (epicIssue && (epicIssue.status as string) !== "closed") {
           await this.taskStore.close(projectId, epicId, "All tasks done", true);
-          broadcastToProject(projectId, {
-            type: "task.updated",
-            taskId: epicId,
-            status: "closed",
-            assignee: null,
-          });
           epicClosed = true;
 
           // PRD §7.5.3: Auto-deploy on epic completion when user manually marks last task done

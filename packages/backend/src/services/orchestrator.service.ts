@@ -284,12 +284,6 @@ export class OrchestratorService {
       case "start_task": {
         state.slots.set(t.taskId, t.slot);
         broadcastToProject(projectId, {
-          type: "task.updated",
-          taskId: t.taskId,
-          status: "in_progress",
-          assignee: t.slot.assignee ?? getAgentName(0),
-        });
-        broadcastToProject(projectId, {
           type: "execute.status",
           activeTasks: this.buildActiveTasks(state),
           queueDepth: t.queueDepth,
@@ -320,12 +314,6 @@ export class OrchestratorService {
       case "complete":
         state.status.totalDone += 1;
         this.removeSlot(state, t.taskId);
-        broadcastToProject(projectId, {
-          type: "task.updated",
-          taskId: t.taskId,
-          status: "closed",
-          assignee: null,
-        });
         broadcastToProject(projectId, {
           type: "execute.status",
           activeTasks: this.buildActiveTasks(state),
@@ -1360,13 +1348,6 @@ export class OrchestratorService {
           assignee: "",
           status: "blocked",
           block_reason: OPEN_QUESTION_BLOCK_REASON,
-        });
-        broadcastToProject(projectId, {
-          type: "task.updated",
-          taskId: task.id,
-          status: "blocked",
-          assignee: null,
-          blockReason: OPEN_QUESTION_BLOCK_REASON,
         });
         const wtPath = slot.worktreePath ?? repoPath;
         await heartbeatService.deleteHeartbeat(wtPath, task.id).catch(() => {});

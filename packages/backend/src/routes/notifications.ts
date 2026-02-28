@@ -55,12 +55,6 @@ projectNotificationsRouter.patch(
             status: "open",
             block_reason: null,
           });
-          broadcastToProject(projectId, {
-            type: "task.updated",
-            taskId,
-            status: "open",
-            blockReason: null,
-          });
         } catch {
           // Task may not exist or already unblocked
         }

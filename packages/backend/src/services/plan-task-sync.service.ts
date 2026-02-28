@@ -64,14 +64,6 @@ export async function syncPlanTasksFromContent(
       if (needsDesc) updates.description = parsed.description;
       await taskStore.update(projectId, task.id, updates);
       updated++;
-      broadcastToProject(projectId, {
-        type: "task.updated",
-        taskId: task.id,
-        status: task.status,
-        assignee: task.assignee ?? null,
-        ...(needsTitle && { title: parsed.title }),
-        ...(needsDesc && { description: parsed.description }),
-      });
     } catch (err) {
       log.warn("syncPlanTasksFromContent: failed to update task", {
         planId,

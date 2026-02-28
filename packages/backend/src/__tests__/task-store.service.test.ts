@@ -82,6 +82,61 @@ describe("TaskStoreService", () => {
     });
   });
 
+  describe("onTaskChange callback", () => {
+    it("invokes callback on create with changeType create", async () => {
+      const calls: Array<[string, "create" | "update" | "close", unknown]> = [];
+      store.setOnTaskChange((projectId, changeType, task) => {
+        calls.push([projectId, changeType, task]);
+      });
+
+      const result = await store.create(TEST_PROJECT_ID, "New Task", { type: "task" });
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toBe(TEST_PROJECT_ID);
+      expect(calls[0][1]).toBe("create");
+      expect((calls[0][2] as { id: string; title: string }).id).toBe(result.id);
+      expect((calls[0][2] as { id: string; title: string }).title).toBe("New Task");
+    });
+
+    it("invokes callback on update with changeType update", async () => {
+      const task = await store.create(TEST_PROJECT_ID, "Task", { type: "task" });
+      const calls: Array<[string, "create" | "update" | "close", unknown]> = [];
+      store.setOnTaskChange((projectId, changeType, t) => {
+        calls.push([projectId, changeType, t]);
+      });
+
+      await store.update(TEST_PROJECT_ID, task.id, { status: "in_progress", assignee: "agent-1" });
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0][1]).toBe("update");
+      expect((calls[0][2] as { status: string }).status).toBe("in_progress");
+    });
+
+    it("invokes callback on close with changeType close", async () => {
+      const task = await store.create(TEST_PROJECT_ID, "Task", { type: "task" });
+      const calls: Array<[string, "create" | "update" | "close", unknown]> = [];
+      store.setOnTaskChange((projectId, changeType, t) => {
+        calls.push([projectId, changeType, t]);
+      });
+
+      await store.close(TEST_PROJECT_ID, task.id, "Done");
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0][1]).toBe("close");
+      expect((calls[0][2] as { status: string }).status).toBe("closed");
+    });
+
+    it("does not invoke when callback is null", async () => {
+      store.setOnTaskChange(null);
+      await store.create(TEST_PROJECT_ID, "Task", { type: "task" });
+      store.setOnTaskChange(() => {
+        throw new Error("Should not be called");
+      });
+      store.setOnTaskChange(null);
+      await store.create(TEST_PROJECT_ID, "Another Task", { type: "task" });
+    });
+  });
+
   describe("createWithRetry", () => {
     it("should return task on first-try success", async () => {
       const result = await store.createWithRetry(TEST_PROJECT_ID, "Task", {

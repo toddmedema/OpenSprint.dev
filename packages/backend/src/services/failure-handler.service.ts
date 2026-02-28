@@ -311,12 +311,6 @@ export class FailureHandlerService {
         await this.host.persistCounters(projectId, repoPath);
 
         broadcastToProject(projectId, {
-          type: "task.updated",
-          taskId: task.id,
-          status: "open",
-          assignee: null,
-        });
-        broadcastToProject(projectId, {
           type: "agent.completed",
           taskId: task.id,
           status: "failed",
@@ -382,13 +376,6 @@ export class FailureHandlerService {
       taskId: task.id,
       reason: `Blocked after ${cumulativeAttempts} failed attempts: ${reason.slice(0, 300)}`,
       cumulativeAttempts,
-    });
-    broadcastToProject(projectId, {
-      type: "task.updated",
-      taskId: task.id,
-      status: "blocked",
-      assignee: null,
-      blockReason: "Coding Failure",
     });
     broadcastToProject(projectId, {
       type: "agent.completed",

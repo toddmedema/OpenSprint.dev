@@ -10,10 +10,11 @@ config({ path: path.resolve(process.cwd(), "../.env") });
 config({ path: path.resolve(process.cwd(), "../../.env") });
 
 import { exec } from "child_process";
-import { setupWebSocket, closeWebSocket, hasClientConnected } from "./websocket/index.js";
+import { setupWebSocket, closeWebSocket, hasClientConnected, broadcastToProject } from "./websocket/index.js";
 import { DEFAULT_API_PORT } from "@opensprint/shared";
 import { ProjectService } from "./services/project.service.js";
 import { taskStore } from "./services/task-store.service.js";
+import { wireTaskStoreEvents } from "./task-store-events.js";
 import { FeedbackService } from "./services/feedback.service.js";
 import { orchestratorService } from "./services/orchestrator.service.js";
 import { watchdogService } from "./services/watchdog.service.js";
@@ -115,6 +116,9 @@ const server = createServer(app);
 setupWebSocket(server, {
   getLiveOutput: (projectId, taskId) => orchestratorService.getLiveOutput(projectId, taskId),
 });
+
+// Wire TaskStoreService to emit task create/update/close events via WebSocket
+wireTaskStoreEvents(broadcastToProject);
 
 // Warm task store so first request (e.g. task list) doesn't pay init cost
 taskStore.init().catch((err) => {

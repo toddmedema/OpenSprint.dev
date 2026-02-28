@@ -18,6 +18,34 @@ export interface TaskUpdatedEvent {
   description?: string;
 }
 
+/** Minimal task payload for create/close events (relevant task data) */
+export interface TaskEventPayload {
+  id: string;
+  title: string;
+  description?: string | null;
+  issue_type: string;
+  status: string;
+  priority: number;
+  assignee?: string | null;
+  labels?: string[];
+  created_at: string;
+  updated_at: string;
+  close_reason?: string | null;
+  parentId?: string | null;
+}
+
+export interface TaskCreatedEvent {
+  type: "task.created";
+  taskId: string;
+  task: TaskEventPayload;
+}
+
+export interface TaskClosedEvent {
+  type: "task.closed";
+  taskId: string;
+  task: TaskEventPayload;
+}
+
 export interface AgentOutputEvent {
   type: "agent.output";
   taskId: string;
@@ -186,6 +214,8 @@ export interface DeliverOutputEvent {
 /** All server-to-client WebSocket event types */
 export type ServerEvent =
   | TaskUpdatedEvent
+  | TaskCreatedEvent
+  | TaskClosedEvent
   | AgentOutputEvent
   | AgentOutputBackfillEvent
   | AgentStartedEvent

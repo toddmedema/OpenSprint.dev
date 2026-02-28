@@ -208,6 +208,11 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
         break;
 
+      case "task.created":
+      case "task.closed":
+        void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+        break;
+
       case "task.updated": {
         d(
           taskUpdated({

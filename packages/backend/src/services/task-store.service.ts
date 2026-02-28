@@ -285,6 +285,13 @@ export interface PlanInsertData {
  */
 const SAVE_DEBOUNCE_MS = 80;
 
+/** Callback invoked when a task is created, updated, or closed. Used to emit WebSocket events. */
+export type TaskChangeCallback = (
+  projectId: string,
+  changeType: "create" | "update" | "close",
+  task: StoredTask
+) => void;
+
 export class TaskStoreService {
   private db: Database | null = null;
   private writeLock: Promise<void> = Promise.resolve();
@@ -296,12 +303,23 @@ export class TaskStoreService {
   private saveTimeout: ReturnType<typeof setTimeout> | null = null;
   /** One-time registration of beforeExit so we flush on process shutdown. */
   private beforeExitRegistered = false;
+  /** Optional callback to emit WebSocket events on task create/update/close. */
+  private onTaskChange: TaskChangeCallback | null = null;
 
   constructor(injectedDb?: Database) {
     this.dbPath = getDbPath();
     if (injectedDb) {
       this.injectedDb = injectedDb;
     }
+  }
+
+  /** Register callback to emit WebSocket events on task create/update/close. */
+  setOnTaskChange(cb: TaskChangeCallback | null): void {
+    this.onTaskChange = cb;
+  }
+
+  private emitTaskChange(projectId: string, changeType: "create" | "update" | "close", task: StoredTask): void {
+    this.onTaskChange?.(projectId, changeType, task);
   }
 
   async init(_repoPath?: string): Promise<void> {
@@ -1057,7 +1075,9 @@ export class TaskStoreService {
       }
 
       this.scheduleSave();
-      return this.show(projectId, id);
+      const task = this.show(projectId, id);
+      this.emitTaskChange(projectId, "create", task);
+      return task;
     });
   }
 
@@ -1166,7 +1186,11 @@ export class TaskStoreService {
         throw err;
       }
       this.scheduleSave();
-      return ids.map((id) => this.show(projectId, id));
+      const tasks = ids.map((id) => this.show(projectId, id));
+      for (const task of tasks) {
+        this.emitTaskChange(projectId, "create", task);
+      }
+      return tasks;
     });
   }
 
@@ -1291,7 +1315,9 @@ export class TaskStoreService {
         });
       }
       this.scheduleSave();
-      return this.show(projectId, id);
+      const task = this.show(projectId, id);
+      this.emitTaskChange(projectId, "update", task);
+      return task;
     });
   }
 
@@ -1352,7 +1378,11 @@ export class TaskStoreService {
         throw err;
       }
       this.scheduleSave();
-      return updates.map((u) => this.show(projectId, u.id));
+      const tasks = updates.map((u) => this.show(projectId, u.id));
+      for (const task of tasks) {
+        this.emitTaskChange(projectId, "update", task);
+      }
+      return tasks;
     });
   }
 
@@ -1371,7 +1401,9 @@ export class TaskStoreService {
         });
       }
       this.scheduleSave();
-      return this.show(projectId, id);
+      const task = this.show(projectId, id);
+      this.emitTaskChange(projectId, "close", task);
+      return task;
     });
   }
 
@@ -1397,7 +1429,11 @@ export class TaskStoreService {
         throw err;
       }
       this.scheduleSave();
-      return items.map((item) => this.show(projectId, item.id));
+      const tasks = items.map((item) => this.show(projectId, item.id));
+      for (const task of tasks) {
+        this.emitTaskChange(projectId, "close", task);
+      }
+      return tasks;
     });
   }
 

@@ -95,6 +95,9 @@ describe("Plan REST endpoints - task decomposition", () => {
     };
     mod._resetSharedDb?.();
 
+    const { wireTaskStoreEvents } = await import("../task-store-events.js");
+    wireTaskStoreEvents(mockBroadcastToProject);
+
     app = createApp();
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-plan-route-test-"));
     originalHome = process.env.HOME;
@@ -492,14 +495,15 @@ Updated description for task two.`;
     expect(invokeArgs.messages[0].content).toContain("Feature to test plan-tasks");
     expect(invokeArgs.tracking.role).toBe("planner");
 
-    // WebSocket real-time updates: task.updated per task, plan.updated at end
-    const taskUpdatedCalls = mockBroadcastToProject.mock.calls.filter(
-      (c: unknown[]) => (c[1] as { type?: string })?.type === "task.updated"
+    // WebSocket real-time updates: task.created per task (from TaskStoreService), plan.updated at end.
+    // plan-tasks creates epic (if missing) + 2 child tasks = 3 task.created events
+    const taskCreatedCalls = mockBroadcastToProject.mock.calls.filter(
+      (c: unknown[]) => (c[1] as { type?: string })?.type === "task.created"
     );
     const planUpdatedCalls = mockBroadcastToProject.mock.calls.filter(
       (c: unknown[]) => (c[1] as { type?: string })?.type === "plan.updated"
     );
-    expect(taskUpdatedCalls.length).toBe(2);
+    expect(taskCreatedCalls.length).toBeGreaterThanOrEqual(2);
     expect(planUpdatedCalls.length).toBeGreaterThanOrEqual(1);
     expect(
       planUpdatedCalls.every((c) => (c[1] as { planId?: string }).planId === createdPlanId)

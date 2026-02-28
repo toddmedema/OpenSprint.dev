@@ -19,7 +19,6 @@ vi.mock("../services/orchestrator.service.js", () => ({
 }));
 
 import { taskStore } from "../services/task-store.service.js";
-import { broadcastToProject } from "../websocket/index.js";
 import { orchestratorService } from "../services/orchestrator.service.js";
 
 describe("BlockedAutoRetryService", () => {
@@ -51,13 +50,7 @@ describe("BlockedAutoRetryService", () => {
         block_reason: null,
         last_auto_retry_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       });
-      expect(broadcastToProject).toHaveBeenCalledWith("proj-1", {
-        type: "task.updated",
-        taskId: "os-abc.1",
-        status: "open",
-        assignee: null,
-        blockReason: null,
-      });
+      // task.updated is emitted from TaskStoreService callback (not from this service)
       expect(orchestratorService.nudge).toHaveBeenCalledWith("proj-1");
     });
 

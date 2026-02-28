@@ -874,15 +874,6 @@ export class PlanService {
       await this.taskStore.addDependencies(projectId, interDeps);
     }
 
-    // Broadcast each task as created for real-time UI updates (AC4)
-    for (const t of created) {
-      broadcastToProject(projectId, {
-        type: "task.updated",
-        taskId: t.id,
-        status: "open",
-        assignee: null,
-      });
-    }
     broadcastToProject(projectId, { type: "plan.updated", planId: plan.metadata.planId });
 
     log.info("Generated tasks for plan", {
@@ -1185,15 +1176,6 @@ ${planNew}`;
           }
         }
       }
-    }
-
-    for (const [, taskId] of taskIdMap) {
-      broadcastToProject(projectId, {
-        type: "task.updated",
-        taskId,
-        status: "open",
-        assignee: null,
-      });
     }
 
     return this.getPlan(projectId, planId);
@@ -1539,14 +1521,6 @@ ${planNew}`;
         projectId,
         toClose.map((task) => ({ id: task.id, reason: "Archived plan" }))
       );
-      for (const task of toClose) {
-        broadcastToProject(projectId, {
-          type: "task.updated",
-          taskId: task.id,
-          status: "closed",
-          assignee: null,
-        });
-      }
     }
 
     return this.getPlan(projectId, planId);
@@ -1724,12 +1698,6 @@ ${planNew}`;
       for (const taskId of toClose) {
         try {
           await this.taskStore.close(projectId, taskId, "Already implemented (auto-review)");
-          broadcastToProject(projectId, {
-            type: "task.updated",
-            taskId,
-            status: "closed",
-            assignee: null,
-          });
         } catch (err) {
           log.warn("Auto-review: failed to close task", { taskId, err });
         }

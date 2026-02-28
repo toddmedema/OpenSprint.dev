@@ -9,7 +9,6 @@
 import { AUTO_RETRY_BLOCKED_INTERVAL_MS } from "@opensprint/shared";
 import { taskStore } from "./task-store.service.js";
 import { orchestratorService } from "./orchestrator.service.js";
-import { broadcastToProject } from "../websocket/index.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("blocked-auto-retry");
@@ -49,13 +48,6 @@ export async function runBlockedAutoRetryPass(
             projectId: target.projectId,
             taskId: task.id,
             blockReason: task.block_reason,
-          });
-          broadcastToProject(target.projectId, {
-            type: "task.updated",
-            taskId: task.id,
-            status: "open",
-            assignee: null,
-            blockReason: null,
           });
           orchestratorService.nudge(target.projectId);
         } catch (err) {

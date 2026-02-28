@@ -408,6 +408,61 @@ describe("websocketMiddleware", () => {
       });
     });
 
+    it("invalidates tasks list on task.created", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      wsInstance!.simulateMessage({
+        type: "task.created",
+        taskId: "os-ab12.1",
+        task: {
+          id: "os-ab12.1",
+          title: "New Task",
+          status: "open",
+          priority: 2,
+          assignee: null,
+          created_at: "2025-01-01T00:00:00Z",
+          updated_at: "2025-01-01T00:00:00Z",
+        },
+      });
+
+      await vi.waitFor(() => {
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({
+          queryKey: queryKeys.tasks.list("proj-1"),
+        });
+      });
+    });
+
+    it("invalidates tasks list on task.closed", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      wsInstance!.simulateMessage({
+        type: "task.closed",
+        taskId: "os-ab12.1",
+        task: {
+          id: "os-ab12.1",
+          title: "Done Task",
+          status: "closed",
+          priority: 2,
+          assignee: null,
+          close_reason: "Completed",
+          created_at: "2025-01-01T00:00:00Z",
+          updated_at: "2025-01-01T00:00:00Z",
+        },
+      });
+
+      await vi.waitFor(() => {
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({
+          queryKey: queryKeys.tasks.list("proj-1"),
+        });
+      });
+    });
+
     it("dispatches appendAgentOutput on agent.output", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
