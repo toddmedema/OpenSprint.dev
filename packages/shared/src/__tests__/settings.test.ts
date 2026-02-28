@@ -13,6 +13,7 @@ import {
   API_KEY_PROVIDERS,
   validateApiKeyEntry,
   validateDatabaseUrl,
+  maskDatabaseUrl,
   sanitizeApiKeys,
   isLimitHitExpired,
   maskApiKeysForResponse,
@@ -717,6 +718,28 @@ describe("validateDatabaseUrl", () => {
 
   it("throws when URL is malformed (missing host)", () => {
     expect(() => validateDatabaseUrl("postgresql://")).toThrow("databaseUrl must have a host");
+  });
+});
+
+describe("maskDatabaseUrl", () => {
+  it("redacts password, keeps host and port visible", () => {
+    const url = "postgresql://user:secret@localhost:5432/db";
+    expect(maskDatabaseUrl(url)).toBe("postgresql://user:***@localhost:5432/db");
+  });
+
+  it("handles URL without password", () => {
+    const url = "postgresql://user@localhost:5432/db";
+    expect(maskDatabaseUrl(url)).toContain("localhost");
+    expect(maskDatabaseUrl(url)).toContain("5432");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(maskDatabaseUrl("")).toBe("");
+    expect(maskDatabaseUrl("   ")).toBe("");
+  });
+
+  it("returns *** for invalid URL", () => {
+    expect(maskDatabaseUrl("not-a-url")).toBe("***");
   });
 });
 

@@ -1,0 +1,184 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import request from "supertest";
+import express from "express";
+import fs from "fs";
+import path from "path";
+import os from "os";
+import { globalSettingsRouter } from "../routes/global-settings.js";
+import { API_PREFIX } from "@opensprint/shared";
+import { errorHandler } from "../middleware/error-handler.js";
+import { setGlobalSettings } from "../services/global-settings.service.js";
+
+vi.mock("../services/task-store.service.js", () => ({
+  taskStore: {
+    init: vi.fn().mockResolvedValue(undefined),
+    show: vi.fn().mockResolvedValue(null),
+    create: vi.fn().mockResolvedValue(undefined),
+    update: vi.fn().mockResolvedValue(undefined),
+    listAll: vi.fn().mockResolvedValue([]),
+    listInProgressWithAgentAssignee: vi.fn().mockResolvedValue([]),
+    close: vi.fn().mockResolvedValue(undefined),
+    comment: vi.fn().mockResolvedValue(undefined),
+    ready: vi.fn().mockResolvedValue([]),
+    addDependency: vi.fn().mockResolvedValue(undefined),
+    syncForPush: vi.fn().mockResolvedValue(undefined),
+  },
+  TaskStoreService: vi.fn(),
+  SCHEMA_SQL: "",
+}));
+
+function createGlobalSettingsApp() {
+  const app = express();
+  app.use(express.json());
+  app.use(`${API_PREFIX}/global-settings`, globalSettingsRouter);
+  app.use(errorHandler);
+  return app;
+}
+
+describe("Global Settings API", () => {
+  let app: ReturnType<typeof createGlobalSettingsApp>;
+  let tmpDir: string;
+  let originalHome: string | undefined;
+
+  beforeEach(() => {
+    app = createGlobalSettingsApp();
+    tmpDir = path.join(
+      os.tmpdir(),
+      `global-settings-route-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
+    fs.mkdirSync(tmpDir, { recursive: true });
+    originalHome = process.env.HOME;
+    process.env.HOME = tmpDir;
+  });
+
+  afterEach(() => {
+    process.env.HOME = originalHome;
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  describe("GET /global-settings", () => {
+    it("returns masked default databaseUrl when not configured", async () => {
+      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toBeDefined();
+      expect(res.body.data.databaseUrl).toBe(
+        "postgresql://opensprint:***@localhost:5432/opensprint"
+      );
+    });
+
+    it("returns masked databaseUrl with password redacted", async () => {
+      await setGlobalSettings({
+        databaseUrl: "postgresql://user:secret123@db.example.com:5432/mydb",
+      });
+
+      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.databaseUrl).toBe(
+        "postgresql://user:***@db.example.com:5432/mydb"
+      );
+      expect(res.body.data.databaseUrl).not.toContain("secret123");
+    });
+
+    it("returns host and port visible in masked URL", async () => {
+      await setGlobalSettings({
+        databaseUrl: "postgresql://admin:xyz@remote.host:15432/prod",
+      });
+
+      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.databaseUrl).toContain("remote.host");
+      expect(res.body.data.databaseUrl).toContain("15432");
+      expect(res.body.data.databaseUrl).toContain("admin");
+      expect(res.body.data.databaseUrl).not.toContain("xyz");
+    });
+  });
+
+  describe("PUT /global-settings", () => {
+    it("updates databaseUrl and returns masked value", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          databaseUrl: "postgresql://myuser:mypass@supabase.example.com:5432/db",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.databaseUrl).toBe(
+        "postgresql://myuser:***@supabase.example.com:5432/db"
+      );
+
+      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
+      expect(getRes.body.data.databaseUrl).toBe(
+        "postgresql://myuser:***@supabase.example.com:5432/db"
+      );
+    });
+
+    it("accepts postgres:// scheme", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          databaseUrl: "postgres://u:secret@localhost:5432/test",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.databaseUrl).toContain("localhost");
+      expect(res.body.data.databaseUrl).toContain("5432");
+      expect(res.body.data.databaseUrl).toBe("postgres://u:***@localhost:5432/test");
+      expect(res.body.data.databaseUrl).not.toContain("secret");
+    });
+
+    it("returns current masked value when body has no databaseUrl", async () => {
+      await setGlobalSettings({
+        databaseUrl: "postgresql://a:b@host:5432/db",
+      });
+
+      const res = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({});
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.databaseUrl).toBe("postgresql://a:***@host:5432/db");
+    });
+
+    it("returns 400 when databaseUrl is not a string", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({ databaseUrl: 123 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+      expect(res.body.error?.message).toContain("string");
+    });
+
+    it("returns 400 when databaseUrl is empty", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({ databaseUrl: "   " });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+      expect(res.body.error?.message).toContain("empty");
+    });
+
+    it("returns 400 when databaseUrl has invalid scheme", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({ databaseUrl: "mysql://localhost/db" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+    });
+
+    it("returns 400 when databaseUrl has no host", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({ databaseUrl: "postgresql://" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+    });
+  });
+});

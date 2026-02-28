@@ -335,6 +335,23 @@ export function validateDatabaseUrl(url: string): string {
   }
 }
 
+/**
+ * Mask a database URL for API responses: host/port visible, password redacted.
+ * Returns e.g. postgresql://user:***@localhost:5432/dbname
+ */
+export function maskDatabaseUrl(url: string): string {
+  if (typeof url !== "string" || !url.trim()) return "";
+  try {
+    const parsed = new URL(url);
+    if (parsed.password) {
+      parsed.password = "***";
+    }
+    return parsed.toString();
+  } catch {
+    return "***";
+  }
+}
+
 /** Masked API key entry for API responses (never exposes raw value) */
 export interface MaskedApiKeyEntry {
   id: string;

@@ -18,6 +18,7 @@ import {
 import { fsRouter } from "./routes/fs.js";
 import { modelsRouter } from "./routes/models.js";
 import { envRouter } from "./routes/env.js";
+import { globalSettingsRouter } from "./routes/global-settings.js";
 import { helpRouter } from "./routes/help.js";
 import { API_PREFIX } from "@opensprint/shared";
 
@@ -35,6 +36,7 @@ export function createApp() {
   // API routes
   app.use(`${API_PREFIX}/models`, modelsRouter);
   app.use(`${API_PREFIX}/env`, envRouter);
+  app.use(`${API_PREFIX}/global-settings`, globalSettingsRouter);
   app.use(`${API_PREFIX}/help`, helpRouter);
   app.use(`${API_PREFIX}/projects`, projectsRouter);
   app.use(`${API_PREFIX}/projects/:projectId/prd`, prdRouter);
