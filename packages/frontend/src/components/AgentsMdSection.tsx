@@ -1,11 +1,23 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import MDEditor from "@uiw/react-md-editor";
 import * as prettier from "prettier";
 import parserMarkdown from "prettier/plugins/markdown";
 import { api } from "../api/client";
 import { useTheme } from "../contexts/ThemeContext";
+
+const MDEditor = lazy(() =>
+  import("@uiw/react-md-editor").then((m) => ({ default: m.default }))
+);
+
+function EditorLoadingFallback() {
+  return (
+    <div className="flex items-center gap-2 py-4" data-testid="agents-md-editor-loading">
+      <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+      <span className="text-sm text-theme-muted">Loading editor...</span>
+    </div>
+  );
+}
 
 interface AgentsMdSectionProps {
   projectId: string;
@@ -139,34 +151,36 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
                 data-testid="agents-md-textarea"
               />
             ) : (
-              <MDEditor
-                value={editValue}
-                onChange={(v) => setEditValue(v ?? "")}
-                height={280}
-                visibleDragbar={false}
-                preview="edit"
-                textareaProps={{
-                  placeholder: "# Agent Instructions\n\nAdd instructions for your agents...",
-                }}
-                extraCommands={[
-                  {
-                    name: "prettify",
-                    keyCommand: "prettify",
-                    buttonProps: { "aria-label": "Prettify markdown" },
-                    icon: (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M4 6h16M4 12h10M4 18h16" />
-                      </svg>
-                    ),
-                    execute: () => {
-                      handlePrettify();
+              <Suspense fallback={<EditorLoadingFallback />}>
+                <MDEditor
+                  value={editValue}
+                  onChange={(v) => setEditValue(v ?? "")}
+                  height={280}
+                  visibleDragbar={false}
+                  preview="edit"
+                  textareaProps={{
+                    placeholder: "# Agent Instructions\n\nAdd instructions for your agents...",
+                  }}
+                  extraCommands={[
+                    {
+                      name: "prettify",
+                      keyCommand: "prettify",
+                      buttonProps: { "aria-label": "Prettify markdown" },
+                      icon: (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M4 6h16M4 12h10M4 18h16" />
+                        </svg>
+                      ),
+                      execute: () => {
+                        handlePrettify();
+                      },
                     },
-                  },
-                ]}
-                previewOptions={{
-                  remarkPlugins: [remarkGfm],
-                }}
-              />
+                  ]}
+                  previewOptions={{
+                    remarkPlugins: [remarkGfm],
+                  }}
+                />
+              </Suspense>
             )}
           </div>
           <div className="flex items-center gap-2">

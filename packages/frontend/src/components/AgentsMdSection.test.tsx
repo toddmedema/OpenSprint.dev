@@ -12,6 +12,32 @@ vi.mock("prettier", () => ({
 }));
 vi.mock("prettier/plugins/markdown", () => ({ default: {} }));
 
+vi.mock("@uiw/react-md-editor", () => ({
+  default: function MockMDEditor({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (v: string | undefined) => void;
+  }) {
+    return (
+      <div data-testid="mock-md-editor">
+        <button type="button" aria-label="Bold" onClick={() => onChange(value)}>
+          Bold
+        </button>
+        <button type="button" aria-label="Italic" onClick={() => onChange(value)}>
+          Italic
+        </button>
+        <textarea
+          data-testid="mock-md-editor-textarea"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </div>
+    );
+  },
+}));
+
 vi.mock("../api/client", () => ({
   api: {
     projects: {
@@ -162,16 +188,16 @@ describe("AgentsMdSection", () => {
     expect(textarea).toHaveValue("#  Title\n\n- item1\n- item2");
   });
 
-  it("shows MDEditor with toolbar when not in test mode", async () => {
+  it("shows MDEditor with toolbar when not in test mode (lazy-loaded)", async () => {
     const user = userEvent.setup();
     renderSection();
 
     await screen.findByTestId("agents-md-view");
     await user.click(screen.getByTestId("agents-md-edit"));
 
-    const editor = screen.getByTestId("agents-md-editor");
+    const editor = await screen.findByTestId("agents-md-editor");
     expect(editor).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /bold/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /bold/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /italic/i })).toBeInTheDocument();
   });
 });
