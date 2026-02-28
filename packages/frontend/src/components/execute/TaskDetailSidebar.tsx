@@ -644,7 +644,7 @@ export function TaskDetailSidebar({
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {agentOutput.length > 0
                           ? agentOutput.join("")
-                          : completionState && archivedSessions.length > 0
+                          : archivedSessions.length > 0
                             ? filterAgentOutput(
                                 archivedSessions[archivedSessions.length - 1]?.outputLog ?? ""
                               ) || "Waiting for agent output..."

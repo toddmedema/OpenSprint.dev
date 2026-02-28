@@ -488,7 +488,7 @@ describe("TaskDetailSidebar", () => {
     expect(container).toHaveClass("prose-pre:text-theme-code-text");
   });
 
-  it("filters archived outputLog when showing fallback (agentOutput empty, completionState set)", () => {
+  it("filters archived outputLog when showing fallback (agentOutput empty, archivedSessions present)", () => {
     const props = createMinimalProps({
       wsConnected: true,
       isDoneTask: false,
@@ -517,6 +517,52 @@ describe("TaskDetailSidebar", () => {
     const container = screen.getByTestId("live-agent-output");
     expect(container).toHaveTextContent("Visible content");
     expect(container).not.toHaveTextContent("tool_use");
+  });
+
+  it("shows archived output for blocked task (merge failure) when agentOutput empty", () => {
+    const props = createMinimalProps({
+      wsConnected: true,
+      isDoneTask: false,
+      isBlockedTask: true,
+      agentOutput: [],
+      completionState: null,
+      selectedTaskData: {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "blocked" as const,
+        priority: 0,
+        assignee: null,
+        type: "task" as const,
+        status: "blocked" as const,
+        labels: [],
+        dependencies: [],
+        description: "",
+        createdAt: "",
+        updatedAt: "",
+      },
+      archivedSessions: [
+        {
+          attempt: 1,
+          status: "failed",
+          agentType: "coder",
+          outputLog: "Merge conflict output from failed run",
+          gitDiff: null,
+          testResults: null,
+          failureReason: "Merge Failure",
+        },
+      ],
+    });
+
+    render(
+      <Provider store={createStore()}>
+        <TaskDetailSidebar {...props} />
+      </Provider>
+    );
+
+    const container = screen.getByTestId("live-agent-output");
+    expect(container).toHaveTextContent("Merge conflict output from failed run");
+    expect(container).not.toHaveTextContent("Waiting for agent output");
   });
 
   it("shows Jump to bottom button when user scrolls up in live agent output", async () => {

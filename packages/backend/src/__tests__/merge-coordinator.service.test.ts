@@ -263,6 +263,37 @@ describe("MergeCoordinatorService", () => {
     expect(callOrder[1]).toBeLessThan(callOrder[2]);
   });
 
+  it("archives session when merge fails so task detail sidebar can show output", async () => {
+    const slotWithOutput = makeSlot();
+    slotWithOutput.agent.outputLog = ["Agent output line 1\n", "Agent output line 2\n"];
+    mockHost.getState = vi.fn().mockReturnValue({
+      slots: new Map([[taskId, slotWithOutput]]),
+      status: { totalDone: 0, queueDepth: 0 },
+      globalTimers: {},
+    });
+    mockHost.branchManager.rebaseOntoMain = vi.fn().mockRejectedValue(new Error("merge conflict"));
+    mockHost.branchManager.rebaseAbort = vi.fn().mockResolvedValue(undefined);
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(mockHost.sessionManager.createSession).toHaveBeenCalledWith(
+      repoPath,
+      expect.objectContaining({
+        taskId,
+        status: "failed",
+        outputLog: "Agent output line 1\nAgent output line 2\n",
+        failureReason: "merge conflict",
+      })
+    );
+    expect(mockHost.sessionManager.archiveSession).toHaveBeenCalledWith(
+      repoPath,
+      taskId,
+      1,
+      expect.anything(),
+      "/tmp/worktree"
+    );
+  });
+
   it("requeues task when rebaseOntoMain fails with non-conflict error", async () => {
     mockHost.branchManager.rebaseOntoMain = vi.fn().mockRejectedValue(new Error("rebase conflict"));
     const rebaseAbort = vi.fn().mockResolvedValue(undefined);

@@ -321,8 +321,8 @@ export class MergeCoordinatorService {
   }
 
   /**
-   * Handle merge failure: abort any in-progress merge, track attempts, requeue or block.
-   * Branch is preserved so the next agent run can rebase and retry.
+   * Handle merge failure: abort any in-progress merge, archive session (so output is visible),
+   * track attempts, requeue or block. Branch is preserved so the next agent run can rebase and retry.
    */
   private async requeueTaskAfterMergeFailure(
     projectId: string,
@@ -332,6 +332,37 @@ export class MergeCoordinatorService {
   ): Promise<void> {
     if (await this.host.branchManager.isMergeInProgress(repoPath)) {
       await this.host.branchManager.mergeAbort(repoPath);
+    }
+
+    // Archive session so task detail sidebar can show agent output when task is blocked/failed
+    try {
+      const state = this.host.getState(projectId);
+      const slot = state.slots.get(task.id);
+      if (slot) {
+        const settings = await this.host.projectService.getSettings(projectId);
+        const agentConfig = settings.simpleComplexityAgent;
+        const wtPath = slot.worktreePath ?? repoPath;
+        const session = await this.host.sessionManager.createSession(repoPath, {
+          taskId: task.id,
+          attempt: slot.attempt,
+          agentType: agentConfig.type,
+          agentModel: agentConfig.model || "",
+          gitBranch: slot.branchName,
+          status: "failed",
+          outputLog: slot.agent.outputLog.join(""),
+          failureReason: mergeErr.message ?? "Merge failed",
+          startedAt: slot.agent.startedAt,
+        });
+        await this.host.sessionManager.archiveSession(
+          repoPath,
+          task.id,
+          slot.attempt,
+          session,
+          wtPath
+        );
+      }
+    } catch (archiveErr) {
+      log.warn("Failed to archive session on merge failure", { taskId: task.id, archiveErr });
     }
 
     try {
