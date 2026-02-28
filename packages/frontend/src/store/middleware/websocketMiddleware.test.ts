@@ -408,35 +408,62 @@ describe("websocketMiddleware", () => {
       });
     });
 
-    it("invalidates tasks list on task.created", async () => {
+    it("dispatches taskCreated on task.created for live-update (no refetch)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
+      const taskPayload = {
+        id: "os-ab12.1",
+        title: "New Task",
+        issue_type: "task",
+        status: "open",
+        priority: 2,
+        assignee: null,
+        created_at: "2025-01-01T00:00:00Z",
+        updated_at: "2025-01-01T00:00:00Z",
+      };
+
       wsInstance!.simulateMessage({
         type: "task.created",
         taskId: "os-ab12.1",
-        task: {
-          id: "os-ab12.1",
-          title: "New Task",
-          status: "open",
-          priority: 2,
-          assignee: null,
-          created_at: "2025-01-01T00:00:00Z",
-          updated_at: "2025-01-01T00:00:00Z",
-        },
+        task: taskPayload,
       });
 
       await vi.waitFor(() => {
-        expect(mockInvalidateQueries).toHaveBeenCalledWith({
-          queryKey: queryKeys.tasks.list("proj-1"),
-        });
+        const tasks = store.getState().execute.tasksById;
+        expect(tasks["os-ab12.1"]).toBeDefined();
+        expect(tasks["os-ab12.1"].title).toBe("New Task");
+        expect(tasks["os-ab12.1"].kanbanColumn).toBe("backlog");
       });
+      expect(mockInvalidateQueries).not.toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: queryKeys.tasks.list("proj-1") })
+      );
     });
 
-    it("invalidates tasks list on task.closed", async () => {
+    it("dispatches taskClosed on task.closed for live-update (no refetch)", async () => {
       const store = createStore();
+      const { setTasks } = await import("../slices/executeSlice");
+      store.dispatch(
+        setTasks([
+          {
+            id: "os-ab12.1",
+            title: "In Progress Task",
+            description: "",
+            type: "task",
+            status: "in_progress",
+            priority: 2,
+            assignee: "agent-1",
+            labels: [],
+            dependencies: [],
+            epicId: "os-ab12",
+            kanbanColumn: "in_progress",
+            createdAt: "2025-01-01T00:00:00Z",
+            updatedAt: "2025-01-01T00:00:00Z",
+          },
+        ])
+      );
       store.dispatch(wsConnect({ projectId: "proj-1" }));
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
@@ -447,13 +474,35 @@ describe("websocketMiddleware", () => {
         task: {
           id: "os-ab12.1",
           title: "Done Task",
+          issue_type: "task",
           status: "closed",
           priority: 2,
-          assignee: null,
+          assignee: "agent-1",
           close_reason: "Completed",
           created_at: "2025-01-01T00:00:00Z",
-          updated_at: "2025-01-01T00:00:00Z",
+          updated_at: "2025-01-01T01:00:00Z",
         },
+      });
+
+      await vi.waitFor(() => {
+        const task = store.getState().execute.tasksById["os-ab12.1"];
+        expect(task?.kanbanColumn).toBe("done");
+        expect(task?.status).toBe("closed");
+      });
+      expect(mockInvalidateQueries).not.toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: queryKeys.tasks.list("proj-1") })
+      );
+    });
+
+    it("invalidates tasks list on task.created when task payload is missing", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      wsInstance!.simulateMessage({
+        type: "task.created",
+        taskId: "os-ab12.1",
       });
 
       await vi.waitFor(() => {
@@ -1130,6 +1179,34 @@ describe("websocketMiddleware", () => {
         });
         expect(mockInvalidateQueries).toHaveBeenCalledWith({
           queryKey: queryKeys.plans.status("proj-1"),
+        });
+      });
+      vi.useRealTimers();
+    });
+
+    it("invalidates tasks and plans on reconnect for Execute page live-update", async () => {
+      vi.useFakeTimers();
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      mockInvalidateQueries.mockClear();
+      const firstWs = wsInstance;
+      wsInstance!.simulateClose();
+      await vi.waitFor(() => !store.getState().websocket.connected);
+
+      vi.advanceTimersByTime(1000);
+      await vi.waitFor(() => wsInstance !== firstWs);
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      await vi.waitFor(() => {
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({
+          queryKey: queryKeys.tasks.list("proj-1"),
+        });
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({
+          queryKey: queryKeys.plans.list("proj-1"),
         });
       });
       vi.useRealTimers();

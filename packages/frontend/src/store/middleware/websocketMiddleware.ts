@@ -8,6 +8,7 @@ import type {
   FeedbackMappedEvent,
   FeedbackUpdatedEvent,
   FeedbackResolvedEvent,
+  TaskEventPayload,
   TaskPriority,
   Notification,
 } from "@opensprint/shared";
@@ -22,6 +23,8 @@ import {
   setActiveTasks,
   setCompletionState,
   taskUpdated,
+  taskCreated,
+  taskClosed,
 } from "../slices/executeSlice";
 import { updateFeedbackItem, updateFeedbackItemResolved } from "../slices/evalSlice";
 import {
@@ -52,6 +55,8 @@ export const websocketMiddleware: Middleware = (storeApi) => {
   let reconnectAttempt = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let intentionalClose = false;
+  /** True after first successful connect; used to invalidate queries on reconnect (graceful recovery) */
+  let hadConnection = false;
 
   /** Pending agent.subscribe messages to replay when connection opens (fixes stuck live output) */
   const pendingSubscribes: Array<{ type: "agent.subscribe"; taskId: string }> = [];
@@ -91,6 +96,17 @@ export const websocketMiddleware: Middleware = (storeApi) => {
       reconnectAttempt = 0;
       dispatch(setConnected(true));
       dispatch(setConnectionError(false));
+      // On reconnect: invalidate tasks and plans so Execute page gets fresh data
+      if (hadConnection) {
+        try {
+          const qc = getQueryClient();
+          void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+          void qc.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+        } catch {
+          // QueryClient may not be set in tests
+        }
+      }
+      hadConnection = true;
       // Replay pending agent.subscribe so live output loads after reconnect
       for (const msg of pendingSubscribes) {
         if (ws?.readyState === WebSocket.OPEN) {
@@ -208,10 +224,24 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
         break;
 
-      case "task.created":
-      case "task.closed":
-        void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+      case "task.created": {
+        const created = event as { type: "task.created"; task: TaskEventPayload };
+        if (created.task) {
+          d(taskCreated(created.task));
+        } else {
+          void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+        }
         break;
+      }
+      case "task.closed": {
+        const closed = event as { type: "task.closed"; task: TaskEventPayload };
+        if (closed.task) {
+          d(taskClosed(closed.task));
+        } else {
+          void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+        }
+        break;
+      }
 
       case "task.updated": {
         d(

@@ -19,6 +19,8 @@ import executeReducer, {
   setAwaitingApproval,
   setCompletionState,
   taskUpdated,
+  taskCreated,
+  taskClosed,
   setTasks,
   setExecuteError,
   resetExecute,
@@ -333,6 +335,97 @@ describe("executeSlice", () => {
       const task = selectTasks(store.getState())[0];
       expect(task?.title).toBe("Updated title");
       expect(task?.description).toBe("Updated description");
+    });
+
+    it("taskCreated adds task from WebSocket payload (live-update)", () => {
+      const store = createStore();
+      store.dispatch(
+        taskCreated({
+          id: "os-new.1",
+          title: "New Task",
+          issue_type: "task",
+          status: "open",
+          priority: 2,
+          assignee: null,
+          created_at: "2025-01-01T00:00:00Z",
+          updated_at: "2025-01-01T00:00:00Z",
+          parentId: "os-new",
+        })
+      );
+      const tasks = selectTasks(store.getState());
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].id).toBe("os-new.1");
+      expect(tasks[0].title).toBe("New Task");
+      expect(tasks[0].kanbanColumn).toBe("backlog");
+      expect(tasks[0].epicId).toBe("os-new");
+    });
+
+    it("taskCreated does not duplicate when task already exists", () => {
+      const store = createStore();
+      store.dispatch(setTasks([mockTask]));
+      store.dispatch(
+        taskCreated({
+          id: mockTask.id,
+          title: "Updated",
+          issue_type: "task",
+          status: "open",
+          priority: 2,
+          assignee: null,
+          created_at: "2025-01-01T00:00:00Z",
+          updated_at: "2025-01-01T00:00:00Z",
+        })
+      );
+      expect(selectTasks(store.getState())).toHaveLength(1);
+      expect(store.getState().execute.taskIdsOrder).toHaveLength(1);
+    });
+
+    it("taskClosed merges task from WebSocket payload (live-update)", () => {
+      const store = createStore();
+      store.dispatch(
+        setTasks([
+          {
+            ...mockTask,
+            id: "os-1.1",
+            status: "in_progress",
+            kanbanColumn: "in_progress",
+          },
+        ])
+      );
+      store.dispatch(
+        taskClosed({
+          id: "os-1.1",
+          title: "Done",
+          issue_type: "task",
+          status: "closed",
+          priority: 2,
+          assignee: "agent-1",
+          close_reason: "Completed",
+          created_at: "2025-01-01T00:00:00Z",
+          updated_at: "2025-01-01T01:00:00Z",
+        })
+      );
+      const task = store.getState().execute.tasksById["os-1.1"];
+      expect(task?.kanbanColumn).toBe("done");
+      expect(task?.status).toBe("closed");
+    });
+
+    it("taskClosed adds task when not in state (e.g. closed before list load)", () => {
+      const store = createStore();
+      store.dispatch(
+        taskClosed({
+          id: "os-1.1",
+          title: "Already Done",
+          issue_type: "task",
+          status: "closed",
+          priority: 2,
+          assignee: null,
+          created_at: "2025-01-01T00:00:00Z",
+          updated_at: "2025-01-01T01:00:00Z",
+        })
+      );
+      const tasks = selectTasks(store.getState());
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].kanbanColumn).toBe("done");
     });
 
     it("setTasks replaces tasks", () => {

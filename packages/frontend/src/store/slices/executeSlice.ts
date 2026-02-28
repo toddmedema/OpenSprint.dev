@@ -11,8 +11,10 @@ import type {
   Task,
   TaskPriority,
   TaskSummary,
+  TaskType,
 } from "@opensprint/shared";
 import { mapStatusToKanban } from "@opensprint/shared";
+import type { TaskEventPayload } from "@opensprint/shared";
 import { api } from "../../api/client";
 import { filterAgentOutput } from "../../utils/agentOutputFilter";
 import { DEDUP_SKIP } from "../dedup";
@@ -263,6 +265,29 @@ export const unblockTask = createAsyncThunk(
 
 const MAX_AGENT_OUTPUT = 5000;
 
+/** Convert TaskEventPayload (WebSocket) to Task shape for Redux. */
+function taskEventPayloadToTask(p: TaskEventPayload): Task {
+  const issueType = (p.issue_type ?? "task") as TaskType;
+  const isEpic = issueType === "epic";
+  return {
+    id: p.id,
+    title: p.title,
+    description: p.description ?? "",
+    type: issueType,
+    status: p.status as Task["status"],
+    priority: (p.priority ?? 2) as TaskPriority,
+    assignee: p.assignee ?? null,
+    labels: p.labels ?? [],
+    dependencies: [],
+    epicId: isEpic ? null : (p.parentId ?? null),
+    kanbanColumn: mapStatusToKanban(p.status),
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+    startedAt: null,
+    completedAt: p.status === "closed" ? p.updated_at : null,
+  };
+}
+
 /** Converts task array to tasksById + taskIdsOrder (deduped by id). Exported for tests. */
 export function toTasksByIdAndOrder(tasks: Task[]): {
   tasksById: Record<string, Task>;
@@ -379,6 +404,25 @@ const executeSlice = createSlice({
         if (blockReason !== undefined) task.blockReason = blockReason;
         if (title !== undefined) task.title = title;
         if (description !== undefined) task.description = description;
+      }
+    },
+    /** Live-update: add task from WebSocket task.created event. */
+    taskCreated(state, action: PayloadAction<TaskEventPayload>) {
+      ensureTasksState(state);
+      const task = taskEventPayloadToTask(action.payload);
+      if (task.id in state.tasksById) return;
+      state.tasksById[task.id] = task;
+      state.taskIdsOrder.push(task.id);
+    },
+    /** Live-update: merge task from WebSocket task.closed event. */
+    taskClosed(state, action: PayloadAction<TaskEventPayload>) {
+      ensureTasksState(state);
+      const task = taskEventPayloadToTask(action.payload);
+      if (task.id in state.tasksById) {
+        state.tasksById[task.id] = { ...state.tasksById[task.id], ...task };
+      } else {
+        state.tasksById[task.id] = task;
+        state.taskIdsOrder.push(task.id);
       }
     },
     setTasks(state, action: PayloadAction<Task[]>) {
@@ -676,6 +720,8 @@ export const {
   setActiveTasks,
   setCompletionState,
   taskUpdated,
+  taskCreated,
+  taskClosed,
   setTasks,
   setExecuteError,
   setExecuteStatusPayload,
