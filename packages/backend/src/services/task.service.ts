@@ -421,6 +421,7 @@ export class TaskService {
       }
     }
 
+    orchestratorService.nudge(projectId);
     return { taskUnblocked: true };
   }
 

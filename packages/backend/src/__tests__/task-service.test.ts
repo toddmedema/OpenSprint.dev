@@ -67,6 +67,7 @@ vi.mock("../services/orchestrator.service.js", () => ({
   orchestratorService: {
     stopTaskAndFreeSlot: vi.fn().mockResolvedValue(undefined),
     getStatus: vi.fn().mockResolvedValue({ activeTasks: [], queueDepth: 0 }),
+    nudge: vi.fn(),
   },
 }));
 
@@ -575,10 +576,32 @@ describe("TaskService", () => {
 
     expect(result.taskUnblocked).toBe(true);
     expect(orchestratorService.stopTaskAndFreeSlot).toHaveBeenCalledWith("proj-1", "task-1");
+    expect(orchestratorService.nudge).toHaveBeenCalledWith("proj-1");
     expect(mockBranchManagerInstance.revertAndReturnToMain).toHaveBeenCalledWith(
       "/tmp/test-repo",
       "opensprint/task-1"
     );
+  });
+
+  it("unblock nudges orchestrator so it processes the task promptly", async () => {
+    const { taskStore } = await import("../services/task-store.service.js");
+    const { orchestratorService } = await import("../services/orchestrator.service.js");
+
+    vi.mocked(taskStore.show).mockResolvedValue({
+      id: "task-1",
+      title: "Blocked Task",
+      status: "blocked",
+      issue_type: "task",
+      dependencies: [],
+    } as StoredTask);
+    vi.mocked(taskStore.update).mockResolvedValue(undefined as never);
+    vi.mocked(taskStore.syncForPush).mockResolvedValue(undefined as never);
+    vi.mocked(orchestratorService.nudge).mockClear();
+
+    const result = await taskService.unblock("proj-1", "task-1");
+
+    expect(result.taskUnblocked).toBe(true);
+    expect(orchestratorService.nudge).toHaveBeenCalledWith("proj-1");
   });
 
   it("unblock removes worktree when in worktree mode", async () => {
