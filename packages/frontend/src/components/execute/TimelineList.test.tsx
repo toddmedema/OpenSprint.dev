@@ -128,6 +128,40 @@ describe("TimelineList", () => {
     expect(screen.getByText("Authentication")).toBeInTheDocument();
   });
 
+  it("tasks with epic show epic name in epic column", () => {
+    const tasks = [
+      createMockTask({
+        id: "task-1",
+        title: "Task with epic",
+        kanbanColumn: "ready",
+        epicId: "epic-1",
+      }),
+    ];
+    const plans = [createMockPlan("epic-1", "Auth Epic")];
+
+    render(<TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} />);
+
+    expect(screen.getByText("Auth Epic")).toBeInTheDocument();
+  });
+
+  it("tasks without epic show no placeholder in epic column (blank)", () => {
+    const tasks = [
+      createMockTask({
+        id: "task-1",
+        title: "Task without epic",
+        kanbanColumn: "ready",
+        epicId: null,
+        assignee: "dev",
+      }),
+    ];
+    const plans: Plan[] = [];
+
+    render(<TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} />);
+
+    expect(screen.getByText("Task without epic")).toBeInTheDocument();
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
+  });
+
   it("displays complexity icon when task has complexity", () => {
     const tasks = [
       createMockTask({

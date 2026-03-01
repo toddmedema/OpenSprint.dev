@@ -177,7 +177,7 @@ export function TimelineList({
         result.push({
           type: "row",
           task,
-          epicName: task.epicId ? (epicIdToTitle.get(task.epicId) ?? task.epicId) : "—",
+          epicName: task.epicId ? (epicIdToTitle.get(task.epicId) ?? task.epicId) : "",
           relativeTime: getRelativeTime(task),
           onUnblock: task.kanbanColumn === "blocked" ? onUnblock : undefined,
         });
@@ -289,7 +289,7 @@ export function TimelineList({
                     key={task.id}
                     task={task}
                     epicName={
-                      task.epicId ? (epicIdToTitle.get(task.epicId) ?? task.epicId) : "—"
+                      task.epicId ? (epicIdToTitle.get(task.epicId) ?? task.epicId) : ""
                     }
                     relativeTime={getRelativeTime(task)}
                     onTaskSelect={onTaskSelect}
