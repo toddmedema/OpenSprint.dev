@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Provider } from "react-redux";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -216,7 +216,7 @@ describe("ProjectView upfront loading and mount-all", () => {
     vi.clearAllMocks();
   });
 
-  it("dispatches wsConnect and fetches only sketch-phase data when on sketch", async () => {
+  it("dispatches wsConnect and fetches tasks, plans, feedback on sketch (load on navigation)", async () => {
     renderWithRouter("/projects/proj-1/sketch");
 
     await waitFor(() => {
@@ -224,19 +224,19 @@ describe("ProjectView upfront loading and mount-all", () => {
     });
 
     const { api: mockedApi } = await import("../api/client");
-    // Phase-specific: only sketch-related queries run when on sketch
+    // Tasks, plans, feedback always fetch when project loads (fixes navigation-from-homepage bug)
     await waitFor(() => {
       expect(mockedApi.projects.get).toHaveBeenCalledWith("proj-1");
       expect(mockedApi.prd.get).toHaveBeenCalledWith("proj-1");
       expect(mockedApi.prd.getHistory).toHaveBeenCalledWith("proj-1");
       expect(mockedApi.plans.list).toHaveBeenCalledWith("proj-1");
+      expect(mockedApi.tasks.list).toHaveBeenCalledWith("proj-1");
+      expect(mockedApi.feedback.list).toHaveBeenCalledWith("proj-1");
       expect(mockedApi.projects.getPlanStatus).toHaveBeenCalledWith("proj-1");
       expect(mockedApi.chat.history).toHaveBeenCalledWith("proj-1", "sketch");
     });
-    // Sketch phase does NOT fetch tasks, execute status, feedback, deliver
-    expect(mockedApi.tasks.list).not.toHaveBeenCalled();
+    // Phase-specific: execute status, deliver stay gated (not needed on sketch)
     expect(mockedApi.execute.status).not.toHaveBeenCalled();
-    expect(mockedApi.feedback.list).not.toHaveBeenCalled();
     expect(mockedApi.deliver.status).not.toHaveBeenCalled();
     expect(mockedApi.deliver.history).not.toHaveBeenCalled();
   });
@@ -254,6 +254,63 @@ describe("ProjectView upfront loading and mount-all", () => {
       expect(mockedApi.tasks.list).toHaveBeenCalledWith("proj-1");
       expect(mockedApi.execute.status).toHaveBeenCalledWith("proj-1");
       expect(mockedApi.plans.list).toHaveBeenCalledWith("proj-1");
+    });
+  });
+
+  it("syncs tasks, plans, feedback to Redux when navigating to project (no refresh required)", async () => {
+    const mockTasks = [
+      {
+        id: "t1",
+        title: "Task 1",
+        description: "",
+        type: "task" as const,
+        status: "open" as const,
+        priority: 1,
+        assignee: null,
+        labels: [],
+        dependencies: [],
+        epicId: null,
+        kanbanColumn: "backlog" as const,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ];
+    const mockPlan = {
+      metadata: { planId: "p1", epicId: "e1", shippedAt: null, complexity: "low" as const },
+      content: "# Plan 1",
+      status: "planning" as const,
+      taskCount: 1,
+      doneTaskCount: 0,
+      dependencyCount: 0,
+    };
+    const mockPlansData = { plans: [mockPlan], edges: [] };
+    const mockFeedback = [
+      {
+        id: "f1",
+        text: "Bug report",
+        category: "bug" as const,
+        mappedPlanId: null,
+        createdTaskIds: [],
+        status: "pending" as const,
+        createdAt: "2025-01-01T00:00:00Z",
+      },
+    ];
+    vi.mocked(api.tasks.list).mockResolvedValue(mockTasks as never);
+    vi.mocked(api.plans.list).mockResolvedValue(mockPlansData as never);
+    vi.mocked(api.feedback.list).mockResolvedValue(mockFeedback as never);
+
+    const store = createStore();
+    renderWithRouter("/projects/proj-1/sketch", store);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Project")).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      const state = store.getState();
+      expect(state.execute.tasksById["t1"]).toBeDefined();
+      expect(state.plan.plans).toHaveLength(1);
+      expect(state.eval.feedback).toHaveLength(1);
     });
   });
 
@@ -454,8 +511,10 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
       expect(store.getState().execute.selectedTaskId).toBe("opensprint.dev-xyz.1");
     });
 
-    // User clicks Plan in navbar — selection is preserved
-    const planButton = screen.getByRole("button", { name: /^plan$/i });
+    // User clicks Plan in navbar — selection is preserved (phase tab)
+    const planButton = within(screen.getByRole("navigation")).getByRole("button", {
+      name: /^plan$/i,
+    });
     planButton.click();
 
     await waitFor(() => {
@@ -466,8 +525,10 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
     // selectedTaskId should still be in Redux (preserved)
     expect(store.getState().execute.selectedTaskId).toBe("opensprint.dev-xyz.1");
 
-    // User clicks Build in navbar — should land with task param
-    const executeButton = screen.getByRole("button", { name: /^execute$/i });
+    // User clicks Build in navbar — should land with task param (phase tab, not plan Execute button)
+    const executeButton = within(screen.getByRole("navigation")).getByRole("button", {
+      name: /^execute$/i,
+    });
     executeButton.click();
 
     await waitFor(() => {
@@ -522,8 +583,10 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
       expect(screen.getByText("Test Project")).toBeInTheDocument();
     });
 
-    // User clicks Build in navbar — selection is preserved
-    const executeButton = screen.getByRole("button", { name: /^execute$/i });
+    // User clicks Build in navbar — selection is preserved (phase tab, not plan Execute button)
+    const executeButton = within(screen.getByRole("navigation")).getByRole("button", {
+      name: /^execute$/i,
+    });
     executeButton.click();
 
     await waitFor(() => {
@@ -534,8 +597,10 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
     // selectedPlanId should still be in Redux (preserved)
     expect(store.getState().plan.selectedPlanId).toBe("opensprint.dev-abc");
 
-    // User clicks Plan in navbar — should land with plan param
-    const planButton = screen.getByRole("button", { name: /^plan$/i });
+    // User clicks Plan in navbar — should land with plan param (phase tab)
+    const planButton = within(screen.getByRole("navigation")).getByRole("button", {
+      name: /^plan$/i,
+    });
     planButton.click();
 
     await waitFor(() => {

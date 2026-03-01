@@ -87,20 +87,16 @@ export function ProjectView() {
   const queryClient = useQueryClient();
   const { data: project, isLoading: projectLoading, error: projectError } = useProject(projectId);
   // Phase-specific queries: only fetch when phase is active. Cached data persists when switching phases.
+  // Tasks, plans, feedback: always fetch when projectId is set so they load on navigation from homepage/top bar
+  // (not just on refresh). Phase-specific queries (execute status, deliver, etc.) stay phase-gated.
   const isSketch = currentPhase === "sketch";
   const isPlan = currentPhase === "plan";
   const isExecute = currentPhase === "execute";
   const isEval = currentPhase === "eval";
   const isDeliver = currentPhase === "deliver";
-  const { data: tasksData } = useTasks(projectId, {
-    enabled: isExecute || isEval,
-  });
-  const { data: plansData } = usePlans(projectId, {
-    enabled: isSketch || isPlan || isExecute,
-  });
-  const { data: feedbackData } = useFeedback(projectId, {
-    enabled: isEval,
-  });
+  const { data: tasksData } = useTasks(projectId);
+  const { data: plansData } = usePlans(projectId);
+  const { data: feedbackData } = useFeedback(projectId);
   const { data: executeStatusData } = useExecuteStatus(projectId, {
     enabled: isExecute,
   });
