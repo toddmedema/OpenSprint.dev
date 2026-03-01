@@ -1159,7 +1159,14 @@ ${planNew}`;
           description: task.description || "",
           priority,
           parentId: epicId,
-          complexity: task.complexity ?? planTaskComplexity,
+          complexity:
+            (typeof task.complexity === "number"
+              ? task.complexity
+              : task.complexity === "simple"
+                ? 3
+                : task.complexity === "complex"
+                  ? 7
+                  : undefined) ?? planTaskComplexity,
         },
         { fallbackToStandalone: true }
       );

@@ -14,6 +14,7 @@ import {
   validateApiKeyEntry,
   validateDatabaseUrl,
   maskDatabaseUrl,
+  isLocalDatabaseUrl,
   sanitizeApiKeys,
   isLimitHitExpired,
   maskApiKeysForResponse,
@@ -740,6 +741,31 @@ describe("maskDatabaseUrl", () => {
 
   it("returns *** for invalid URL", () => {
     expect(maskDatabaseUrl("not-a-url")).toBe("***");
+  });
+});
+
+describe("isLocalDatabaseUrl", () => {
+  it("returns true for localhost", () => {
+    expect(isLocalDatabaseUrl("postgresql://opensprint:opensprint@localhost:5432/opensprint")).toBe(
+      true
+    );
+    expect(isLocalDatabaseUrl("postgres://localhost/db")).toBe(true);
+    expect(isLocalDatabaseUrl("postgresql://user:pass@localhost:5433/mydb")).toBe(true);
+  });
+
+  it("returns true for 127.0.0.1", () => {
+    expect(isLocalDatabaseUrl("postgresql://opensprint@127.0.0.1:5432/opensprint")).toBe(true);
+    expect(isLocalDatabaseUrl("postgres://127.0.0.1/db")).toBe(true);
+  });
+
+  it("returns false for remote hosts", () => {
+    expect(isLocalDatabaseUrl("postgresql://user:pass@remote.example.com:5432/mydb")).toBe(false);
+    expect(isLocalDatabaseUrl("postgresql://user@db.supabase.com:5432/postgres")).toBe(false);
+  });
+
+  it("returns false for invalid URL", () => {
+    expect(isLocalDatabaseUrl("")).toBe(false);
+    expect(isLocalDatabaseUrl("not-a-url")).toBe(false);
   });
 });
 

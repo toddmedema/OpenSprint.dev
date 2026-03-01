@@ -33,17 +33,28 @@ Traditional AI development is broken. Open Sprint fixes it.
 
 ## Quick Start
 
+**Mac:** Install [Node.js](https://nodejs.org/) ≥20 (e.g. `brew install node`), then:
+
 ```bash
-brew install node   # or install Node.js ≥20 from nodejs.org
 git clone https://github.com/toddmedema/opensprint.dev.git
 cd opensprint.dev
-npm run setup       # installs deps, ensures ~/.opensprint, starts Docker Postgres, writes default databaseUrl
+npm run setup       # installs deps, PostgreSQL (if needed), creates user/database; writes default databaseUrl
 npm run dev
 ```
 
-Then open **http://localhost:5173**.
+Then open **http://localhost:5173**. On Mac, setup is that simple — one `npm run setup` can install PostgreSQL via Homebrew and create the `opensprint` user and database.
 
-Setup runs `docker compose up -d` to start PostgreSQL. If Docker is not installed, configure a remote `databaseUrl` in `~/.opensprint/global-settings.json`.
+**Windows / Linux:** Same steps (`npm run setup` then `npm run dev`). On Linux, setup installs PostgreSQL via apt or yum/dnf and creates the user and database. On Windows, install [PostgreSQL](https://www.postgresql.org/download/windows/) yourself (or use Chocolatey: `choco install postgresql`), create user `opensprint` with password `opensprint` and database `opensprint`, or use a remote Postgres and set `databaseUrl` in `~/.opensprint/global-settings.json`.
+
+#### What `npm run setup` does (all platforms)
+
+- Installs npm dependencies and ensures `~/.opensprint` exists with a default `databaseUrl`.
+- **Mac:** Installs PostgreSQL via Homebrew (`brew install postgresql@16` or `postgresql`), starts the service, creates role `opensprint` with password `opensprint` and database `opensprint`.
+- **Linux:** Installs PostgreSQL via apt or yum/dnf, starts the service, creates the same user and database.
+- **Windows:** Prints instructions to install PostgreSQL and create the user/database manually, or use a remote `databaseUrl`.
+- Applies the database schema so the backend can start without errors.
+
+**`npm run dev`** ensures local PostgreSQL is running (starts the service on Mac/Linux if needed), then starts the backend and frontend.
 
 ### Integrations (BYO-AI)
 
@@ -111,20 +122,12 @@ opensprint.dev/
 
 **Task store:** PostgreSQL at `~/.opensprint` (or configured `databaseUrl` in `~/.opensprint/global-settings.json`). See [AGENTS.md](AGENTS.md) for orchestrator and task workflow.
 
-**Migrating from SQLite:** If you have existing data in `~/.opensprint/tasks.db`, run:
-
-```bash
-npx tsx scripts/migrate-sqlite-to-postgres.ts
-```
-
-Then remove the old file: `rm ~/.opensprint/tasks.db`
-
 ### Scripts (from repo root)
 
 | Command         | Description                                      |
 | --------------- | ------------------------------------------------ |
-| `npm run setup` | Install dependencies (idempotent)                |
-| `npm run dev`   | Start backend + frontend                         |
+| `npm run setup` | Install deps, PostgreSQL (if needed), create user/DB, apply schema (idempotent) |
+| `npm run dev`   | Ensure Postgres is running, then start backend + frontend |
 | `npm run build` | Build all packages (shared → backend → frontend) |
 | `npm run test`  | Run tests                                        |
 | `npm run lint`  | Lint all packages                                |
@@ -134,23 +137,18 @@ Then remove the old file: `rm ~/.opensprint/tasks.db`
 
 **Backend:** Node.js, Express, WebSocket (ws), TypeScript, Vitest · **Frontend:** React 19, React Router, Vite, Tailwind, TypeScript · **Task store:** PostgreSQL (node-postgres) at `~/.opensprint` or configured URL in `~/.opensprint/global-settings.json`
 
-### Docker Postgres
+### PostgreSQL
 
-OpenSprint uses PostgreSQL. A Docker Compose setup is provided; `npm run setup` starts it automatically:
-
-```bash
-docker compose up -d
-```
-
-This starts Postgres 16 (Alpine) on port 5432 with:
+OpenSprint uses PostgreSQL. **`npm run setup`** installs PostgreSQL locally (Homebrew on Mac, apt/yum on Linux), starts the service, and creates:
 
 - **User:** `opensprint`
 - **Password:** `opensprint`
 - **Database:** `opensprint`
-- **Volume:** `opensprint-postgres-data` for persistence
-- **Health check:** `pg_isready` every 5s
+- **Port:** 5432 (default)
 
 Connection URL: `postgresql://opensprint:opensprint@localhost:5432/opensprint`
+
+To use a remote database (e.g. Supabase), set `databaseUrl` in `~/.opensprint/global-settings.json`. To stop local Postgres on Mac: `brew services stop postgresql@16` (or `postgresql`). On Linux: `sudo systemctl stop postgresql`.
 
 ### Environment variables
 

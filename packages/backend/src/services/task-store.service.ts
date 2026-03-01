@@ -138,7 +138,6 @@ export class TaskStoreService {
     if (this.injectedClient) {
       this.client = this.injectedClient;
       // Caller is responsible for schema when using injected client (e.g. tests)
-      await this.migratePlansWithGateTasks();
       return;
     }
 
@@ -152,10 +151,14 @@ export class TaskStoreService {
       await this.initPromise;
     } catch (err) {
       this.initPromise = null;
+      const msg =
+        err instanceof Error
+          ? err.message || (err as NodeJS.ErrnoException).code || err.stack || String(err)
+          : String(err);
       throw new AppError(
         500,
         ErrorCodes.TASK_STORE_INIT_FAILED,
-        `Failed to initialize task store: ${err instanceof Error ? err.message : String(err)}`
+        `Failed to initialize task store: ${msg}`
       );
     }
   }
@@ -167,125 +170,7 @@ export class TaskStoreService {
     this.client = createPostgresDbClient(pool);
 
     await runSchema(this.client);
-    await this.migrateTaskDurationColumns();
-    await this.migrateTaskComplexityColumn();
-    await this.migrateOpenQuestionsKind();
-    await this.migratePlansWithGateTasks();
     log.info("Task store initialized with Postgres");
-  }
-
-  /** Migration: Add started_at and completed_at columns (information_schema check). */
-  private async migrateTaskDurationColumns(): Promise<void> {
-    const client = this.ensureClient();
-    const rows = await client.query(
-      "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'tasks' AND column_name IN ('started_at', 'completed_at')"
-    );
-    const existing = new Set(rows.map((r) => r.column_name as string));
-    if (!existing.has("started_at")) {
-      await client.execute("ALTER TABLE tasks ADD COLUMN started_at TEXT");
-      log.info("Added started_at column to tasks");
-    }
-    if (!existing.has("completed_at")) {
-      await client.execute("ALTER TABLE tasks ADD COLUMN completed_at TEXT");
-      log.info("Added completed_at column to tasks");
-    }
-  }
-
-  /** Migration: Add complexity column (information_schema check). */
-  private async migrateTaskComplexityColumn(): Promise<void> {
-    const client = this.ensureClient();
-    const rows = await client.query(
-      "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'tasks' AND column_name = 'complexity'"
-    );
-    if (rows.length === 0) {
-      await client.execute("ALTER TABLE tasks ADD COLUMN complexity INTEGER");
-      log.info("Added complexity column to tasks");
-    }
-  }
-
-  /** Migration: Add kind and error_code to open_questions (information_schema check). */
-  private async migrateOpenQuestionsKind(): Promise<void> {
-    const client = this.ensureClient();
-    const rows = await client.query(
-      "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'open_questions' AND column_name IN ('kind', 'error_code')"
-    );
-    const existing = new Set(rows.map((r) => r.column_name as string));
-    if (!existing.has("kind")) {
-      await client.execute("ALTER TABLE open_questions ADD COLUMN kind TEXT NOT NULL DEFAULT 'open_question'");
-      log.info("Added kind column to open_questions");
-    }
-    if (!existing.has("error_code")) {
-      await client.execute("ALTER TABLE open_questions ADD COLUMN error_code TEXT");
-      log.info("Added error_code column to open_questions");
-    }
-  }
-
-  /** Migration: Epic-blocked model. Plans with gate_task_id migrated to remove gate tasks. */
-  private async migratePlansWithGateTasks(): Promise<void> {
-    const client = this.ensureClient();
-    const rows = await client.query(
-      "SELECT project_id, plan_id, epic_id, gate_task_id, re_execute_gate_task_id FROM plans WHERE (gate_task_id IS NOT NULL AND gate_task_id != '') OR (re_execute_gate_task_id IS NOT NULL AND re_execute_gate_task_id != '')"
-    );
-    if (rows.length === 0) return;
-
-    const planRows = rows.map((r) => ({
-      project_id: r.project_id as string,
-      plan_id: r.plan_id as string,
-      epic_id: r.epic_id as string,
-      gate_task_id: (r.gate_task_id as string) || null,
-      re_execute_gate_task_id: (r.re_execute_gate_task_id as string) || null,
-    }));
-
-    const gateIds = new Set<string>();
-    for (const r of planRows) {
-      if (r.gate_task_id) gateIds.add(r.gate_task_id);
-      if (r.re_execute_gate_task_id) gateIds.add(r.re_execute_gate_task_id);
-    }
-
-    for (const r of planRows) {
-      const epicId = r.epic_id;
-      if (!epicId) continue;
-      let epicStatus: "open" | "blocked" = "blocked";
-      for (const gateId of [r.gate_task_id, r.re_execute_gate_task_id]) {
-        if (!gateId) continue;
-        try {
-          const gateTask = await this.show(r.project_id, gateId);
-          if ((gateTask.status as string) === "closed") epicStatus = "open";
-        } catch {
-          // Gate task missing — treat as not approved
-        }
-      }
-      await client.execute(toPgParams("UPDATE tasks SET status = ? WHERE id = ? AND project_id = ?"), [
-        epicStatus,
-        epicId,
-        r.project_id,
-      ]);
-    }
-
-    for (const gateId of gateIds) {
-      const planRow = planRows.find(
-        (r) => r.gate_task_id === gateId || r.re_execute_gate_task_id === gateId
-      );
-      if (!planRow) continue;
-      await client.execute(toPgParams("DELETE FROM task_dependencies WHERE task_id = ? OR depends_on_id = ?"), [
-        gateId,
-        gateId,
-      ]);
-      await client.execute(toPgParams("DELETE FROM tasks WHERE id = ? AND project_id = ?"), [
-        gateId,
-        planRow.project_id,
-      ]);
-    }
-
-    for (const r of planRows) {
-      await client.execute(
-        toPgParams(
-          "UPDATE plans SET gate_task_id = NULL, re_execute_gate_task_id = NULL WHERE project_id = ? AND plan_id = ?"
-        ),
-        [r.project_id, r.plan_id]
-      );
-    }
-    log.info("Migrated plans with gate tasks to epic-blocked model", { count: planRows.length });
   }
 
   protected ensureClient(): DbClient {
@@ -778,8 +663,8 @@ export class TaskStoreService {
       claim?: boolean;
       /** Merge into extra JSON (e.g. sourceFeedbackIds) */
       extra?: Record<string, unknown>;
-      /** Task-level complexity (1-10). Stored in complexity column. */
-      complexity?: number;
+      /** Task-level complexity (1-10). Stored in complexity column. Pass null to clear. */
+      complexity?: number | null;
       /** Reason task was blocked. Persisted when status becomes blocked; cleared when unblocked. */
       block_reason?: string | null;
       /** ISO timestamp of last auto-retry. Stored in extra. */

@@ -1,6 +1,6 @@
 # Agent Instructions — OpenSprint
 
-Task tracking is handled internally by `TaskStoreService` backed by an embedded sql.js database at `~/.opensprint/tasks.db`. There is no external CLI for task management.
+Task tracking is handled internally by `TaskStoreService` backed by PostgreSQL (connection URL in `~/.opensprint/global-settings.json`). There is no external CLI for task management.
 
 ## Project Overview
 
@@ -19,7 +19,7 @@ Work state is persisted before agent spawn via `assignment.json` in `.opensprint
 
 ## Task Store
 
-Tasks are stored in `~/.opensprint/tasks.db` (SQLite via sql.js WASM). The `TaskStoreService` provides:
+Tasks are stored in PostgreSQL. The `TaskStoreService` provides:
 
 - `create()` / `createMany()` — Create tasks with optional parent IDs
 - `update()` / `updateMany()` — Update task fields (status, assignee, priority, etc.)

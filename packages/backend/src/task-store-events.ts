@@ -2,7 +2,7 @@
  * Wires TaskStoreService to emit task create/update/close events via a broadcast callback.
  * Called from index.ts at startup; tests can call with mock broadcast to verify events.
  */
-import type { TaskEventPayload } from "@opensprint/shared";
+import type { TaskEventPayload, ServerEvent } from "@opensprint/shared";
 import { taskStore, type StoredTask } from "./services/task-store.service.js";
 
 function storedTaskToPayload(task: StoredTask): TaskEventPayload {
@@ -24,7 +24,7 @@ function storedTaskToPayload(task: StoredTask): TaskEventPayload {
   };
 }
 
-export type BroadcastFn = (projectId: string, event: unknown) => void;
+export type BroadcastFn = (projectId: string, event: ServerEvent) => void;
 
 export function wireTaskStoreEvents(broadcast: BroadcastFn): void {
   taskStore.setOnTaskChange((projectId, changeType, task) => {

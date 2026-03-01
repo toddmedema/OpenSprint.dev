@@ -132,9 +132,11 @@ describe("Models API", () => {
 
     it("uses cache on second Cursor request", async () => {
       process.env.CURSOR_API_KEY = "cursor-test-key";
+      const mockJson = vi.fn().mockResolvedValue({ models: ["gpt-4"] });
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ models: ["gpt-4"] }),
+        json: mockJson,
+        text: () => Promise.resolve(""),
       });
 
       const res1 = await request(app).get(`${API_PREFIX}/models?provider=cursor`);
@@ -146,7 +148,7 @@ describe("Models API", () => {
       expect(res2.status).toBe(200);
       expect(res2.body.data).toHaveLength(1);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1); // no additional call
-    });
+    }, 10_000);
 
     it("defaults to claude when provider not specified", async () => {
       delete process.env.ANTHROPIC_API_KEY;

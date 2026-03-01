@@ -18,7 +18,7 @@ export default defineConfig({
     exclude: ["**/git-working-mode-branches.integration.test.ts"],
     pool: "forks",
     poolOptions: {
-      forks: { minForks: 1, maxForks: 4 },
+      forks: { minForks: 1, maxForks: 1 },
     },
     globalSetup: ["./src/__tests__/global-setup.ts"],
     globalTeardown: ["./src/__tests__/global-teardown.ts"],

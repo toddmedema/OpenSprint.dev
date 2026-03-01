@@ -175,7 +175,7 @@ ${testOutput.slice(0, 15000)}
   for (const task of tasks) {
     const idx = task.index ?? tasks.indexOf(task);
     const priority = Math.min(4, Math.max(0, task.priority ?? 2));
-    const raw = task.complexity;
+    const raw = task.complexity as number | string | undefined;
     const taskComplexity =
       clampTaskComplexity(raw) ??
       (raw === "simple" || raw === "low" ? 3 : raw === "complex" || raw === "high" ? 7 : 3);

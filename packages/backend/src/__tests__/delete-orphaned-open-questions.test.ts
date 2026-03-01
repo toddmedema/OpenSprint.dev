@@ -47,8 +47,9 @@ async function insertOpenQuestion(
 }
 
 async function countOpenQuestions(client: DbClient): Promise<number> {
-  const row = await client.queryOne("SELECT COUNT(*) as cnt FROM open_questions");
-  return (row?.cnt as number) ?? 0;
+  const row = await client.queryOne("SELECT COUNT(*)::int as cnt FROM open_questions");
+  const cnt = row?.cnt;
+  return typeof cnt === "number" ? cnt : Number(cnt ?? 0);
 }
 
 const deleteOrphanedTaskStoreMod = await import("../services/task-store.service.js");

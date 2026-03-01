@@ -118,9 +118,9 @@ describe.skipIf(!agentIdentityPostgresOk)("AgentIdentityService", () => {
     const { taskStore } = await import("../services/task-store.service.js");
     const client = await taskStore.getDb();
     const row = await client.queryOne(
-      "SELECT COUNT(*) as c FROM agent_stats WHERE project_id LIKE 'repo:%'"
+      "SELECT COUNT(*)::int as c FROM agent_stats WHERE project_id LIKE 'repo:%'"
     );
-    const count = (row?.c as number) ?? 0;
+    const count = Number(row?.c ?? 0);
     expect(count).toBeLessThanOrEqual(500);
   });
 

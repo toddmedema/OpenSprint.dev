@@ -1,7 +1,4 @@
 import { describe, it, expect, beforeEach, beforeAll, afterAll, afterEach } from "vitest";
-import fs from "fs/promises";
-import os from "os";
-import path from "path";
 import type { Pool } from "pg";
 import { runSchema, toPgParams, type DbClient } from "../db/index.js";
 import { TaskStoreService } from "../services/task-store.service.js";
@@ -1211,118 +1208,11 @@ suite("TaskStoreService", () => {
     });
   });
 
-  describe("migration: plans with gate tasks to epic-blocked", () => {
-    let tempDir: string;
-    let originalHome: string | undefined;
-
-    beforeEach(async () => {
-      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-migration-test-"));
-      originalHome = process.env.HOME;
-      process.env.HOME = tempDir;
-    });
-
-    afterEach(async () => {
-      process.env.HOME = originalHome;
-      await fs.rm(tempDir, { recursive: true, force: true });
-    });
-
-    it("migrates plan with closed gate: epic set open, gate task and deps removed", async () => {
-      const store1 = new TaskStoreService(client!);
-      await store1.init();
-
-      const now = new Date().toISOString();
-      const projectId = "proj-mig";
-      const epicId = "os-auth";
-      const gateId = "os-auth.0";
-
-      await store1.runWrite(async (client) => {
-        await client.execute(
-          toPgParams(`INSERT INTO tasks (id, project_id, title, description, issue_type, status, priority, assignee, labels, created_at, updated_at, extra)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', ?, ?, '{}')`),
-          [epicId, projectId, "Auth Epic", null, "epic", "blocked", 2, now, now]
-        );
-        await client.execute(
-          toPgParams(`INSERT INTO tasks (id, project_id, title, description, issue_type, status, priority, assignee, labels, created_at, updated_at, extra)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', ?, ?, '{}')`),
-          [gateId, projectId, "Plan approval gate", null, "task", "closed", 2, now, now]
-        );
-        await client.execute(
-          toPgParams(`INSERT INTO plans (project_id, plan_id, epic_id, gate_task_id, re_execute_gate_task_id, content, metadata, shipped_content, updated_at)
-           VALUES (?, ?, ?, ?, NULL, ?, ?, NULL, ?)`),
-          [
-            projectId,
-            "auth-plan",
-            epicId,
-            gateId,
-            "# Auth\n\nContent.",
-            JSON.stringify({ planId: "auth-plan", epicId, shippedAt: null, complexity: "medium" }),
-            now,
-          ]
-        );
-      });
-
-      const store2 = new TaskStoreService(client!);
-      await store2.init();
-
-      const epic = await store2.show(projectId, epicId);
-      expect((epic as { status?: string }).status).toBe("open");
-
-      await expect(store2.show(projectId, gateId)).rejects.toThrow();
-
-      const row = await store2.planGet(projectId, "auth-plan");
-      expect(row).not.toBeNull();
-      expect((row!.metadata as { gateTaskId?: string }).gateTaskId).toBeUndefined();
-    });
-
-    it("migrates plan with open gate: epic set blocked", async () => {
-      const store1 = new TaskStoreService(client!);
-      await store1.init();
-
-      const now = new Date().toISOString();
-      const projectId = "proj-mig2";
-      const epicId = "os-dash";
-      const gateId = "os-dash.0";
-
-      await store1.runWrite(async (client) => {
-        await client.execute(
-          toPgParams(`INSERT INTO tasks (id, project_id, title, description, issue_type, status, priority, assignee, labels, created_at, updated_at, extra)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', ?, ?, '{}')`),
-          [epicId, projectId, "Dashboard Epic", null, "epic", "blocked", 2, now, now]
-        );
-        await client.execute(
-          toPgParams(`INSERT INTO tasks (id, project_id, title, description, issue_type, status, priority, assignee, labels, created_at, updated_at, extra)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', ?, ?, '{}')`),
-          [gateId, projectId, "Plan approval gate", null, "task", "open", 2, now, now]
-        );
-        await client.execute(
-          toPgParams(`INSERT INTO plans (project_id, plan_id, epic_id, gate_task_id, re_execute_gate_task_id, content, metadata, shipped_content, updated_at)
-           VALUES (?, ?, ?, ?, NULL, ?, ?, NULL, ?)`),
-          [
-            projectId,
-            "dash-plan",
-            epicId,
-            gateId,
-            "# Dashboard\n\nContent.",
-            JSON.stringify({ planId: "dash-plan", epicId, shippedAt: null, complexity: "low" }),
-            now,
-          ]
-        );
-      });
-
-      const store2 = new TaskStoreService(client!);
-      await store2.init();
-
-      const epic = await store2.show(projectId, epicId);
-      expect((epic as { status?: string }).status).toBe("blocked");
-
-      await expect(store2.show(projectId, gateId)).rejects.toThrow();
-    });
-  });
-
   describe("pruneAgentSessions", () => {
     beforeEach(async () => {
       await store.runWrite(async (db) => {
         await db.execute("DELETE FROM agent_sessions");
+        await db.execute("ALTER SEQUENCE agent_sessions_id_seq RESTART WITH 1");
       });
     });
 

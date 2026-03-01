@@ -352,6 +352,19 @@ export function maskDatabaseUrl(url: string): string {
   }
 }
 
+/**
+ * Returns true if the database URL host is local (localhost or 127.0.0.1).
+ */
+export function isLocalDatabaseUrl(databaseUrl: string): boolean {
+  try {
+    const parsed = new URL(databaseUrl);
+    const host = (parsed.hostname || "").toLowerCase();
+    return host === "localhost" || host === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
 /** Masked API key entry for API responses (never exposes raw value) */
 export interface MaskedApiKeyEntry {
   id: string;

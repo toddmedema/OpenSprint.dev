@@ -34,10 +34,7 @@ import {
 } from "./services/agent-process-registry.js";
 import { createLogger } from "./utils/logger.js";
 import { getGlobalSettings } from "./services/global-settings.service.js";
-import {
-  ensureDockerPostgresRunning,
-  isLocalDatabaseUrl,
-} from "./services/postgres-bootstrap.service.js";
+import { isLocalDatabaseUrl } from "@opensprint/shared";
 
 const logStartup = createLogger("startup");
 const logOrchestrator = createLogger("orchestrator");
@@ -130,9 +127,6 @@ const settings = await getGlobalSettings();
 const databaseUrl = settings.databaseUrl ?? DEFAULT_DATABASE_URL;
 const dbSource = isLocalDatabaseUrl(databaseUrl) ? "local" : "remote";
 logStartup.info("Database source", { source: dbSource });
-
-// Ensure local Docker Postgres is running before connecting (skips for remote URLs)
-await ensureDockerPostgresRunning(databaseUrl);
 
 // Initialize task store with databaseUrl before server handles requests
 await taskStore.init(databaseUrl);

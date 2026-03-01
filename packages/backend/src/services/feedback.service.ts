@@ -970,7 +970,7 @@ export class FeedbackService {
             ? await this.resolvePlanComplexityForEpic(projectId, parentEpicId)
             : undefined;
           // Reply-derived tasks: always complex (default agent could not resolve)
-          const raw = task.complexity;
+          const raw = task.complexity as number | string | undefined;
           const taskComplexity = item.parent_id
             ? 7
             : clampTaskComplexity(raw) ??

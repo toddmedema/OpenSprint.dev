@@ -9,7 +9,7 @@
     "packages/frontend"
   ],
   "scripts": {
-    "dev": "npm run build -w packages/shared && concurrently \"npm run dev -w packages/shared\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "npm run build -w packages/shared && bash scripts/ensure-postgres-running.sh && concurrently \"npm run dev -w packages/shared\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "npm run dev -w packages/backend",
     "dev:frontend": "npm run dev -w packages/frontend",
     "build": "npm run build -w packages/shared && npm run build -w packages/backend && npm run build -w packages/frontend",
@@ -28,8 +28,7 @@
     "perf": "npx tsx scripts/perf.ts",
     "perf:baseline": "npx tsx scripts/perf.ts --baseline",
     "perf:compare": "npx tsx scripts/perf.ts --compare",
-    "delete-hil-notifications": "npx tsx scripts/delete-hil-notifications.ts",
-    "migrate-sqlite-to-postgres": "npx tsx scripts/migrate-sqlite-to-postgres.ts"
+    "delete-hil-notifications": "npx tsx scripts/delete-hil-notifications.ts"
   },
   "engines": {
     "node": ">=20.0.0"

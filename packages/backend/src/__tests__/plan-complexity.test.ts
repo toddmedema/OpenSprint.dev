@@ -13,7 +13,8 @@ import {
   type TaskStoreService,
 } from "../services/task-store.service.js";
 
-const TEST_PROJECT_ID = "test-project";
+/** Unique project ID so other test files (e.g. task-store) don't wipe our data. */
+const TEST_PROJECT_ID = "plan-complexity-test-project";
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/task-store.service.js")>();
@@ -25,9 +26,13 @@ vi.mock("../services/task-store.service.js", async (importOriginal) => {
   const store = new actual.TaskStoreService(dbResult.client);
   await store.init();
   const reset = async () => {
-    await dbResult.client.execute("DELETE FROM task_dependencies");
-    await dbResult.client.execute("DELETE FROM tasks");
-    await dbResult.client.execute("DELETE FROM plans");
+    const pid = TEST_PROJECT_ID;
+    await dbResult.client.execute(
+      "DELETE FROM task_dependencies WHERE task_id IN (SELECT id FROM tasks WHERE project_id = $1) OR depends_on_id IN (SELECT id FROM tasks WHERE project_id = $2)",
+      [pid, pid]
+    );
+    await dbResult.client.execute("DELETE FROM tasks WHERE project_id = $1", [pid]);
+    await dbResult.client.execute("DELETE FROM plans WHERE project_id = $1", [pid]);
   };
   return {
     ...actual,

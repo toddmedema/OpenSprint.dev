@@ -149,7 +149,7 @@ CREATE TABLE IF NOT EXISTS deployments (
 );
 CREATE INDEX IF NOT EXISTS idx_deployments_project_id ON deployments(project_id);
 
--- Plans (SQL-only; content and metadata moved from .opensprint/plans/)
+-- Plans (SQL-only: content and metadata moved from .opensprint/plans/)
 -- gate_task_id nullable for epic-blocked model (no gate tasks)
 CREATE TABLE IF NOT EXISTS plans (
     project_id              TEXT NOT NULL,
@@ -183,13 +183,28 @@ CREATE INDEX IF NOT EXISTS idx_open_questions_project_id ON open_questions(proje
 CREATE INDEX IF NOT EXISTS idx_open_questions_status ON open_questions(status);
 `;
 
+/** Strip leading comment-only and empty lines so statements starting with "-- Comment\nCREATE ..." are executed. */
+function stripLeadingCommentLines(s: string): string {
+  const lines = s.split("\n");
+  let i = 0;
+  while (i < lines.length) {
+    const trimmed = lines[i].trim();
+    if (trimmed.length === 0 || trimmed.startsWith("--")) {
+      i++;
+      continue;
+    }
+    break;
+  }
+  return lines.slice(i).join("\n").trim();
+}
+
 /** Run schema SQL against a client. Splits by semicolon and executes each statement. */
 export async function runSchema(client: {
   query(sql: string, params?: unknown[]): Promise<unknown[]>;
 }): Promise<void> {
   const statements = SCHEMA_SQL.split(";")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith("--"));
+    .map((s) => stripLeadingCommentLines(s.trim()))
+    .filter((s) => s.length > 0);
   for (const stmt of statements) {
     await client.query(stmt);
   }
