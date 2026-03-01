@@ -8,25 +8,7 @@ import {
   clearLimitHit,
   ENV_FALLBACK_KEY_ID,
 } from "../services/api-key-resolver.service.js";
-import { setSettingsInStore } from "../services/settings-store.service.js";
 import { setGlobalSettings, getGlobalSettings } from "../services/global-settings.service.js";
-import type { ProjectSettings } from "@opensprint/shared";
-import { DEFAULT_HIL_CONFIG, DEFAULT_DEPLOYMENT_CONFIG, DEFAULT_REVIEW_MODE } from "@opensprint/shared";
-
-function makeSettings(overrides?: Partial<ProjectSettings>): ProjectSettings {
-  const defaultAgent = { type: "cursor" as const, model: null as string | null, cliCommand: null as string | null };
-  return {
-    simpleComplexityAgent: defaultAgent,
-    complexComplexityAgent: defaultAgent,
-    deployment: { ...DEFAULT_DEPLOYMENT_CONFIG },
-    hilConfig: { ...DEFAULT_HIL_CONFIG },
-    testFramework: null,
-    testCommand: null,
-    reviewMode: DEFAULT_REVIEW_MODE,
-    gitWorkingMode: "worktree",
-    ...overrides,
-  };
-}
 
 describe("ApiKeyResolver", () => {
   let tempDir: string;
@@ -55,8 +37,6 @@ describe("ApiKeyResolver", () => {
           ANTHROPIC_API_KEY: [{ id: "g1", value: "sk-ant-global" }],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       const result = await getNextKey(projectId, "ANTHROPIC_API_KEY");
       expect(result).toEqual({ key: "sk-ant-global", keyId: "g1", source: "global" });
@@ -70,8 +50,6 @@ describe("ApiKeyResolver", () => {
         },
       });
       process.env.ANTHROPIC_API_KEY = "env-key-value";
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       const result = await getNextKey(projectId, "ANTHROPIC_API_KEY");
       expect(result).toBeNull();
@@ -80,8 +58,6 @@ describe("ApiKeyResolver", () => {
     it("falls back to env when no global keys exist", async () => {
       process.env.ANTHROPIC_API_KEY = "env-key-value";
       await setGlobalSettings({});
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       const result = await getNextKey(projectId, "ANTHROPIC_API_KEY");
       expect(result).toEqual({ key: "env-key-value", keyId: ENV_FALLBACK_KEY_ID, source: "env" });
@@ -95,17 +71,12 @@ describe("ApiKeyResolver", () => {
           ANTHROPIC_API_KEY: [{ id: "g1", value: "sk-ant-global", limitHitAt: recent }],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       const result = await getNextKey(projectId, "ANTHROPIC_API_KEY");
       expect(result).toBeNull();
     });
 
     it("returns null when nothing configured at all", async () => {
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
-
       const result = await getNextKey(projectId, "ANTHROPIC_API_KEY");
       expect(result).toBeNull();
     });
@@ -117,8 +88,6 @@ describe("ApiKeyResolver", () => {
           ANTHROPIC_API_KEY: [{ id: "g1", value: "sk-ant-global", limitHitAt: old }],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       const result = await getNextKey(projectId, "ANTHROPIC_API_KEY");
       expect(result).toEqual({ key: "sk-ant-global", keyId: "g1", source: "global" });
@@ -133,8 +102,6 @@ describe("ApiKeyResolver", () => {
           ],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       const result = await getNextKey(projectId, "ANTHROPIC_API_KEY");
       expect(result).toEqual({ key: "sk-ant-valid", keyId: "g2", source: "global" });
@@ -150,11 +117,22 @@ describe("ApiKeyResolver", () => {
           ],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       const result = await getNextKey(projectId, "ANTHROPIC_API_KEY");
       expect(result).toEqual({ key: "sk-ant-second", keyId: "k2", source: "global" });
+    });
+
+    it("ignores projectId (global-only; projectId kept for backward compatibility)", async () => {
+      await setGlobalSettings({
+        apiKeys: {
+          ANTHROPIC_API_KEY: [{ id: "g1", value: "sk-ant-global" }],
+        },
+      });
+
+      const resultEmpty = await getNextKey("", "ANTHROPIC_API_KEY");
+      const resultAny = await getNextKey("any-project-id", "ANTHROPIC_API_KEY");
+      expect(resultEmpty).toEqual({ key: "sk-ant-global", keyId: "g1", source: "global" });
+      expect(resultAny).toEqual({ key: "sk-ant-global", keyId: "g1", source: "global" });
     });
   });
 
@@ -168,8 +146,6 @@ describe("ApiKeyResolver", () => {
           ],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       await recordLimitHit(projectId, "ANTHROPIC_API_KEY", "g1", "global");
 
@@ -190,8 +166,6 @@ describe("ApiKeyResolver", () => {
           ],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       await recordLimitHit(projectId, "ANTHROPIC_API_KEY", "g1");
 
@@ -200,14 +174,10 @@ describe("ApiKeyResolver", () => {
     });
 
     it("is no-op when keyId is ENV_FALLBACK_KEY_ID", async () => {
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
       await recordLimitHit(projectId, "ANTHROPIC_API_KEY", ENV_FALLBACK_KEY_ID, "env");
     });
 
     it("is no-op when source is 'env'", async () => {
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
       await recordLimitHit(projectId, "ANTHROPIC_API_KEY", "k1", "env");
     });
 
@@ -236,8 +206,6 @@ describe("ApiKeyResolver", () => {
           ],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       await clearLimitHit(projectId, "ANTHROPIC_API_KEY", "g1", "global");
 
@@ -255,8 +223,6 @@ describe("ApiKeyResolver", () => {
           ],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       await clearLimitHit(projectId, "ANTHROPIC_API_KEY", "g1");
 
@@ -289,8 +255,6 @@ describe("ApiKeyResolver", () => {
           ],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       await Promise.all([
         recordLimitHit(projectId, "ANTHROPIC_API_KEY", "g1", "global"),
@@ -312,8 +276,6 @@ describe("ApiKeyResolver", () => {
           ],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       const r1 = await getNextKey(projectId, "ANTHROPIC_API_KEY");
       expect(r1).toEqual({ key: "sk-ant-g1", keyId: "g1", source: "global" });
@@ -335,8 +297,6 @@ describe("ApiKeyResolver", () => {
           CURSOR_API_KEY: [{ id: "c1", value: "cursor-key-123" }],
         },
       });
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       const result = await getNextKey(projectId, "CURSOR_API_KEY");
       expect(result).toEqual({ key: "cursor-key-123", keyId: "c1", source: "global" });
@@ -345,8 +305,6 @@ describe("ApiKeyResolver", () => {
     it("falls back to env for CURSOR_API_KEY when global has none", async () => {
       process.env.CURSOR_API_KEY = "cursor-env-key";
       await setGlobalSettings({});
-      const settings = makeSettings();
-      await setSettingsInStore(projectId, settings);
 
       const result = await getNextKey(projectId, "CURSOR_API_KEY");
       expect(result).toEqual({ key: "cursor-env-key", keyId: ENV_FALLBACK_KEY_ID, source: "env" });
