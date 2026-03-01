@@ -50,6 +50,7 @@ export const ErrorCodes = {
   AGENT_INVOKE_FAILED: "AGENT_INVOKE_FAILED",
   ANTHROPIC_API_KEY_MISSING: "ANTHROPIC_API_KEY_MISSING",
   CURSOR_API_ERROR: "CURSOR_API_ERROR",
+  OPENAI_API_ERROR: "OPENAI_API_ERROR",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

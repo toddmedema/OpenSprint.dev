@@ -36,6 +36,7 @@ describe("Models API", () => {
   let app: ReturnType<typeof createMinimalModelsApp>;
   let originalAnthropicKey: string | undefined;
   let originalCursorKey: string | undefined;
+  let originalOpenAIKey: string | undefined;
 
   beforeEach(() => {
     app = createMinimalModelsApp();
@@ -43,6 +44,7 @@ describe("Models API", () => {
     clearInFlightFetches();
     originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
     originalCursorKey = process.env.CURSOR_API_KEY;
+    originalOpenAIKey = process.env.OPENAI_API_KEY;
     vi.clearAllMocks();
     mockGetNextKey.mockImplementation(async (_projectId: string, provider: string) => {
       const key = process.env[provider];
@@ -54,6 +56,7 @@ describe("Models API", () => {
   afterEach(() => {
     process.env.ANTHROPIC_API_KEY = originalAnthropicKey;
     process.env.CURSOR_API_KEY = originalCursorKey;
+    process.env.OPENAI_API_KEY = originalOpenAIKey;
     globalThis.fetch = originalFetch;
   });
 
@@ -69,6 +72,14 @@ describe("Models API", () => {
     it("returns empty array when provider is cursor and no API key", async () => {
       delete process.env.CURSOR_API_KEY;
       const res = await request(app).get(`${API_PREFIX}/models?provider=cursor`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+    });
+
+    it("returns empty array when provider is openai and no API key", async () => {
+      delete process.env.OPENAI_API_KEY;
+      mockGetNextKey.mockResolvedValue(null);
+      const res = await request(app).get(`${API_PREFIX}/models?provider=openai`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
@@ -149,6 +160,60 @@ describe("Models API", () => {
       expect(res2.body.data).toHaveLength(1);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1); // no additional call
     }, 10_000);
+
+    it("fetches and returns OpenAI models when API key is set", async () => {
+      process.env.OPENAI_API_KEY = "sk-openai-test";
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            data: [
+              { id: "gpt-4o", object: "model" },
+              { id: "gpt-4o-mini", object: "model" },
+              { id: "o1-preview", object: "model" },
+              { id: "o3-mini", object: "model" },
+              { id: "text-embedding-3-small", object: "model" },
+            ],
+          }),
+      });
+
+      const res = await request(app).get(`${API_PREFIX}/models?provider=openai`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([
+        { id: "gpt-4o", displayName: "gpt-4o" },
+        { id: "gpt-4o-mini", displayName: "gpt-4o-mini" },
+        { id: "o1-preview", displayName: "o1-preview" },
+        { id: "o3-mini", displayName: "o3-mini" },
+      ]);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "https://api.openai.com/v1/models",
+        expect.objectContaining({
+          headers: { Authorization: "Bearer sk-openai-test" },
+        })
+      );
+    });
+
+    it("uses cache on second OpenAI request", async () => {
+      process.env.OPENAI_API_KEY = "sk-openai-test";
+      const mockJson = vi.fn().mockResolvedValue({
+        data: [{ id: "gpt-4o", object: "model" }],
+      });
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: mockJson,
+        text: () => Promise.resolve(""),
+      });
+
+      const res1 = await request(app).get(`${API_PREFIX}/models?provider=openai`);
+      expect(res1.status).toBe(200);
+      expect(res1.body.data).toHaveLength(1);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+      const res2 = await request(app).get(`${API_PREFIX}/models?provider=openai`);
+      expect(res2.status).toBe(200);
+      expect(res2.body.data).toHaveLength(1);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
 
     it("defaults to claude when provider not specified", async () => {
       delete process.env.ANTHROPIC_API_KEY;
@@ -347,6 +412,35 @@ describe("Models API", () => {
     it("returns valid: false for unknown provider", async () => {
       const result = await validateApiKey("unknown" as "claude", "key");
       expect(result).toEqual({ valid: false, error: "Unknown provider: unknown" });
+    });
+
+    it("returns valid: true for OpenAI when fetch succeeds", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: [{ id: "gpt-4o" }] }),
+      });
+
+      const result = await validateApiKey("openai", "sk-openai-key");
+      expect(result).toEqual({ valid: true });
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "https://api.openai.com/v1/models",
+        expect.objectContaining({
+          headers: { Authorization: "Bearer sk-openai-key" },
+        })
+      );
+    });
+
+    it("returns valid: false with error for OpenAI when fetch fails with 401", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: () => Promise.resolve("Invalid API key"),
+      });
+
+      const result = await validateApiKey("openai", "bad-key");
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("401");
+      expect(result.error).toContain("API key");
     });
   });
 });

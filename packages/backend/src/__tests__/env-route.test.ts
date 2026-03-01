@@ -88,14 +88,26 @@ describe("Env API", () => {
       expect(mockValidateApiKey).not.toHaveBeenCalled();
     });
 
-    it("returns 400 when provider is not claude or cursor", async () => {
+    it("returns 400 when provider is not claude, cursor, or openai", async () => {
       const res = await request(app)
         .post(`${API_PREFIX}/env/keys/validate`)
-        .send({ provider: "openai", value: "sk-test" });
+        .send({ provider: "unknown", value: "sk-test" });
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("INVALID_INPUT");
       expect(res.body.error?.message).toContain("provider must be");
       expect(mockValidateApiKey).not.toHaveBeenCalled();
+    });
+
+    it("returns valid: true when validation succeeds for OpenAI", async () => {
+      mockValidateApiKey.mockResolvedValue({ valid: true });
+
+      const res = await request(app)
+        .post(`${API_PREFIX}/env/keys/validate`)
+        .send({ provider: "openai", value: "sk-openai-test" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({ valid: true });
+      expect(mockValidateApiKey).toHaveBeenCalledWith("openai", "sk-openai-test");
     });
 
     it("returns valid: true when validation succeeds for Claude", async () => {
@@ -139,12 +151,13 @@ describe("Env API", () => {
   });
 
   describe("GET /env/keys", () => {
-    it("returns shape with anthropic, cursor, claudeCli, useCustomCli booleans", async () => {
+    it("returns shape with anthropic, cursor, openai, claudeCli, useCustomCli booleans", async () => {
       const res = await request(app).get(`${API_PREFIX}/env/keys`);
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
       expect(typeof res.body.data.anthropic).toBe("boolean");
       expect(typeof res.body.data.cursor).toBe("boolean");
+      expect(typeof res.body.data.openai).toBe("boolean");
       expect(typeof res.body.data.claudeCli).toBe("boolean");
       expect(typeof res.body.data.useCustomCli).toBe("boolean");
     });
@@ -196,6 +209,31 @@ describe("Env API", () => {
         expect(res.body.data.cursor).toBe(true);
       } finally {
         process.env.CURSOR_API_KEY = original;
+      }
+    });
+
+    it("openai true when global store has OPENAI_API_KEY", async () => {
+      await setGlobalSettings({
+        apiKeys: {
+          OPENAI_API_KEY: [{ id: "k3", value: "sk-openai-xxx" }],
+        },
+      });
+
+      const res = await request(app).get(`${API_PREFIX}/env/keys`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.openai).toBe(true);
+    });
+
+    it("openai true when process.env has OPENAI_API_KEY", async () => {
+      const original = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = "sk-openai-test";
+
+      try {
+        const res = await request(app).get(`${API_PREFIX}/env/keys`);
+        expect(res.status).toBe(200);
+        expect(res.body.data.openai).toBe(true);
+      } finally {
+        process.env.OPENAI_API_KEY = original;
       }
     });
 
@@ -306,6 +344,21 @@ describe("Env API", () => {
       expect(settings.apiKeys?.CURSOR_API_KEY).toHaveLength(1);
       expect(settings.apiKeys?.CURSOR_API_KEY![0].value).toBe("cursor-new");
     });
+
+    it("saves OPENAI_API_KEY to .env and global store", async () => {
+      const res = await request(app)
+        .post(`${API_PREFIX}/env/keys`)
+        .send({ key: "OPENAI_API_KEY", value: "sk-openai-test-value" });
+      expect(res.status).toBe(200);
+      expect(res.body.data?.saved).toBe(true);
+
+      const content = fs.readFileSync(path.join(tmpDir, ".env"), "utf-8");
+      expect(content).toMatch(/OPENAI_API_KEY=.*sk-openai-test-value/);
+
+      const settings = await getGlobalSettings();
+      expect(settings.apiKeys?.OPENAI_API_KEY).toHaveLength(1);
+      expect(settings.apiKeys?.OPENAI_API_KEY![0].value).toBe("sk-openai-test-value");
+    });
   });
 
   describe("GET /env/global-status", () => {
@@ -352,6 +405,19 @@ describe("Env API", () => {
         expect(res.body.data.hasAnyKey).toBe(true);
       } finally {
         process.env.CURSOR_API_KEY = original;
+      }
+    });
+
+    it("hasAnyKey true when process.env has OPENAI_API_KEY", async () => {
+      const original = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = "sk-openai-test";
+
+      try {
+        const res = await request(app).get(`${API_PREFIX}/env/global-status`);
+        expect(res.status).toBe(200);
+        expect(res.body.data.hasAnyKey).toBe(true);
+      } finally {
+        process.env.OPENAI_API_KEY = original;
       }
     });
 
