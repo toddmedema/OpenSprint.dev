@@ -612,7 +612,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
               onPaste={imageAttachment.handlePaste}
               disabled={sending}
               rows={4}
-              className="w-full rounded-2xl border-0 py-5 px-6 text-lg text-theme-input-text bg-theme-input-bg shadow-lg ring-1 ring-inset ring-theme-ring placeholder:text-theme-input-placeholder focus:ring-2 focus:ring-inset focus:ring-brand-500 resize-none transition-shadow hover:shadow-xl disabled:opacity-60"
+              className="w-full rounded-2xl border-0 py-5 px-6 text-lg text-theme-input-text bg-theme-input-bg shadow-lg ring-1 ring-inset ring-theme-ring placeholder:text-theme-input-placeholder focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 resize-none transition-shadow hover:shadow-xl disabled:opacity-60"
             />
             <div className="absolute bottom-4 right-4 flex items-center gap-2">
               <ImageAttachmentButton

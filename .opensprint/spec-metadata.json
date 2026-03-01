@@ -1,0 +1,213 @@
+{
+  "version": 8,
+  "changeLog": [
+    {
+      "section": "executive_summary",
+      "version": 1,
+      "source": "sketch",
+      "timestamp": "2026-02-25T00:03:38.391Z",
+      "diff": "[Initial content added]"
+    },
+    {
+      "section": "problem_statement",
+      "version": 1,
+      "source": "sketch",
+      "timestamp": "2026-02-25T00:03:38.391Z",
+      "diff": "[Initial content added]"
+    },
+    {
+      "section": "user_personas",
+      "version": 1,
+      "source": "sketch",
+      "timestamp": "2026-02-25T00:03:38.391Z",
+      "diff": "[Initial content added]"
+    },
+    {
+      "section": "goals_and_metrics",
+      "version": 1,
+      "source": "sketch",
+      "timestamp": "2026-02-25T00:03:38.391Z",
+      "diff": "[Initial content added]"
+    },
+    {
+      "section": "feature_list",
+      "version": 1,
+      "source": "sketch",
+      "timestamp": "2026-02-25T00:03:38.391Z",
+      "diff": "[Initial content added]"
+    },
+    {
+      "section": "technical_architecture",
+      "version": 1,
+      "source": "sketch",
+      "timestamp": "2026-02-25T00:03:38.391Z",
+      "diff": "[Initial content added]"
+    },
+    {
+      "section": "data_model",
+      "version": 1,
+      "source": "sketch",
+      "timestamp": "2026-02-25T00:03:38.391Z",
+      "diff": "[Initial content added]"
+    },
+    {
+      "section": "api_contracts",
+      "version": 1,
+      "source": "sketch",
+      "timestamp": "2026-02-25T00:03:38.391Z",
+      "diff": "[Initial content added]"
+    },
+    {
+      "section": "non_functional_requirements",
+      "version": 1,
+      "source": "sketch",
+      "timestamp": "2026-02-25T00:03:38.391Z",
+      "diff": "[Initial content added]"
+    },
+    {
+      "section": "open_questions",
+      "version": 1,
+      "source": "sketch",
+      "timestamp": "2026-02-25T00:03:38.391Z",
+      "diff": "[Initial content added]"
+    },
+    {
+      "section": "feature_list",
+      "version": 2,
+      "source": "plan",
+      "timestamp": "2026-02-25T05:10:52.879Z",
+      "diff": "[+1 lines, +217 chars]"
+    },
+    {
+      "section": "technical_architecture",
+      "version": 2,
+      "source": "plan",
+      "timestamp": "2026-02-25T05:10:52.879Z",
+      "diff": "[+0 lines, +120 chars]"
+    },
+    {
+      "section": "data_model",
+      "version": 2,
+      "source": "plan",
+      "timestamp": "2026-02-25T05:10:52.879Z",
+      "diff": "[+1 lines, +135 chars]"
+    },
+    {
+      "section": "feature_list",
+      "version": 3,
+      "source": "eval",
+      "timestamp": "2026-02-25T22:47:28.376Z",
+      "diff": "[-41 lines, -1376 chars]"
+    },
+    {
+      "section": "data_model",
+      "version": 3,
+      "source": "plan",
+      "timestamp": "2026-02-25T23:47:10.307Z",
+      "diff": "[+0 lines, +157 chars]"
+    },
+    {
+      "section": "technical_architecture",
+      "version": 3,
+      "source": "plan",
+      "timestamp": "2026-02-25T23:47:10.307Z",
+      "diff": "[+0 lines, +89 chars]"
+    },
+    {
+      "section": "feature_list",
+      "version": 4,
+      "source": "plan",
+      "timestamp": "2026-02-25T23:47:10.307Z",
+      "diff": "[+4 lines, +323 chars]"
+    },
+    {
+      "section": "api_contracts",
+      "version": 2,
+      "source": "plan",
+      "timestamp": "2026-02-25T23:47:10.307Z",
+      "diff": "[+0 lines, +134 chars]"
+    },
+    {
+      "section": "data_model",
+      "version": 4,
+      "source": "eval",
+      "timestamp": "2026-02-26T00:13:16.368Z",
+      "diff": "[+64 lines, +5891 chars]"
+    },
+    {
+      "section": "feature_list",
+      "version": 5,
+      "source": "plan",
+      "timestamp": "2026-02-27T21:24:16.792Z",
+      "diff": "[No changes]"
+    },
+    {
+      "section": "api_contracts",
+      "version": 3,
+      "source": "plan",
+      "timestamp": "2026-02-27T21:24:16.792Z",
+      "diff": "[No changes]"
+    },
+    {
+      "section": "data_model",
+      "version": 5,
+      "source": "plan",
+      "timestamp": "2026-02-27T21:24:16.792Z",
+      "diff": "[No changes]"
+    },
+    {
+      "section": "data_model",
+      "version": 6,
+      "source": "plan",
+      "timestamp": "2026-03-01T17:59:55.413Z",
+      "diff": "[+6 lines, +723 chars]"
+    },
+    {
+      "section": "api_contracts",
+      "version": 4,
+      "source": "plan",
+      "timestamp": "2026-03-01T17:59:55.413Z",
+      "diff": "[+4 lines, +498 chars]"
+    },
+    {
+      "section": "feature_list",
+      "version": 6,
+      "source": "plan",
+      "timestamp": "2026-03-01T17:59:55.413Z",
+      "diff": "[+2 lines, +612 chars]"
+    },
+    {
+      "section": "technical_architecture",
+      "version": 4,
+      "source": "eval",
+      "timestamp": "2026-03-01T23:29:28.481Z",
+      "diff": "[-37 lines, -1588 chars]"
+    },
+    {
+      "section": "data_model",
+      "version": 7,
+      "source": "eval",
+      "timestamp": "2026-03-01T23:29:28.481Z",
+      "diff": "[-97 lines, -7537 chars]"
+    },
+    {
+      "section": "feature_list",
+      "version": 7,
+      "source": "eval",
+      "timestamp": "2026-03-01T23:29:28.481Z",
+      "diff": "[-8 lines, -1531 chars]"
+    }
+  ],
+  "sectionVersions": {
+    "executive_summary": 1,
+    "problem_statement": 1,
+    "user_personas": 1,
+    "goals_and_metrics": 1,
+    "feature_list": 7,
+    "technical_architecture": 4,
+    "data_model": 7,
+    "api_contracts": 4,
+    "non_functional_requirements": 1,
+    "open_questions": 1
+  }
+}

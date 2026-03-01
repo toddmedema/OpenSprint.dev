@@ -231,7 +231,7 @@ html[data-theme="dark"] {
   .input {
     @apply block w-full rounded-lg border-0 py-2.5 px-3 shadow-sm sm:text-sm
       bg-theme-input-bg text-theme-input-text placeholder:text-theme-input-placeholder
-      ring-1 ring-inset ring-theme-ring focus:ring-2 focus:ring-inset focus:ring-brand-600;
+      ring-1 ring-inset ring-theme-ring focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-600;
   }
 
   /* Shared dropdown styles — equal left/right padding for consistency (feedback wo3oqk) */

@@ -7,7 +7,7 @@ const MAX_LINES = 5;
 const MAX_HEIGHT = LINE_HEIGHT * MAX_LINES;
 
 const INPUT_CLASS =
-  "flex-1 rounded-xl border-0 py-2.5 px-3.5 text-sm text-theme-input-text bg-theme-input-bg shadow-sm ring-1 ring-inset ring-theme-ring placeholder:text-theme-input-placeholder focus:ring-2 focus:ring-inset focus:ring-brand-500 resize-none overflow-y-auto min-h-[2.5rem]";
+  "flex-1 rounded-xl border-0 py-2.5 px-3.5 text-sm text-theme-input-text bg-theme-input-bg shadow-sm ring-1 ring-inset ring-theme-ring placeholder:text-theme-input-placeholder focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 resize-none overflow-y-auto min-h-[2.5rem]";
 
 const SEND_BUTTON_CLASS =
   "w-9 min-w-9 h-[2.5rem] rounded-xl bg-brand-600 text-white flex items-center justify-center hover:bg-brand-700 disabled:opacity-40 transition-colors shrink-0";
