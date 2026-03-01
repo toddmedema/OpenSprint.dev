@@ -70,6 +70,31 @@ export function ProjectSetup() {
     openai: boolean;
     claudeCli: boolean;
   } | null>(null);
+
+  const needsAnthropic =
+    envKeys &&
+    !envKeys.anthropic &&
+    (simpleComplexityAgent.type === "claude" || complexComplexityAgent.type === "claude");
+  const needsCursor =
+    envKeys &&
+    !envKeys.cursor &&
+    (simpleComplexityAgent.type === "cursor" || complexComplexityAgent.type === "cursor");
+  const needsOpenai =
+    envKeys &&
+    !envKeys.openai &&
+    (simpleComplexityAgent.type === "openai" || complexComplexityAgent.type === "openai");
+  const usesClaudeCli =
+    simpleComplexityAgent.type === "claude-cli" || complexComplexityAgent.type === "claude-cli";
+  const claudeCliMissing = envKeys && !envKeys.claudeCli && usesClaudeCli;
+
+  const canProceedFromAgents =
+    envKeys !== null &&
+    !needsAnthropic &&
+    !needsCursor &&
+    !needsOpenai &&
+    !claudeCliMissing &&
+    (simpleComplexityAgent.type !== "custom" || simpleComplexityAgent.cliCommand.trim()) &&
+    (complexComplexityAgent.type !== "custom" || complexComplexityAgent.cliCommand.trim());
   const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
   const [createError, setCreateError] = useState<string | null>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
@@ -345,13 +370,7 @@ export function ProjectSetup() {
             ) : (
               <button
                 onClick={() => setStep(steps[currentStepIndex + 1]?.key ?? "confirm")}
-                disabled={
-                  step === "agents" &&
-                  ((simpleComplexityAgent.type === "custom" &&
-                    !simpleComplexityAgent.cliCommand.trim()) ||
-                    (complexComplexityAgent.type === "custom" &&
-                      !complexComplexityAgent.cliCommand.trim()))
-                }
+                disabled={step === "agents" && !canProceedFromAgents}
                 className="btn-primary disabled:opacity-50"
               >
                 Next

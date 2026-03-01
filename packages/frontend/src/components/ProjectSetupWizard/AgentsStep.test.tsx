@@ -116,6 +116,16 @@ describe("AgentsStep", () => {
     expect(screen.getByText(/Configure API keys in Settings/)).toBeInTheDocument();
   });
 
+  it("shows configure-in-settings message when openai is selected and key is missing", () => {
+    renderAgentsStep({
+      simpleComplexityAgent: { type: "openai", model: "", cliCommand: "" },
+      envKeys: { anthropic: true, cursor: true, openai: false, claudeCli: true },
+    });
+
+    expect(screen.getByText(/API key required/)).toBeInTheDocument();
+    expect(screen.getByText(/Configure API keys in Settings/)).toBeInTheDocument();
+  });
+
   it("does not show API key section when envKeys is null", () => {
     renderAgentsStep({ envKeys: null });
 

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
+import { api } from "../api/client";
 import { ProjectSetup } from "./ProjectSetup";
 
 function LocationDisplay() {
@@ -187,6 +188,45 @@ describe("ProjectSetup - Add Existing flow (no Delivery step)", () => {
     expect(screen.getByTestId("confirm-step")).toBeInTheDocument();
     expect(screen.queryByTestId("deployment-step")).not.toBeInTheDocument();
     expect(screen.queryByText("Deliver")).not.toBeInTheDocument();
+  });
+});
+
+describe("ProjectSetup - Agents step API key validation", () => {
+  it("disables Next when openai is selected and OPENAI_API_KEY is missing", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.globalSettings.get).mockResolvedValue({
+      databaseUrl: "",
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "a", masked: "••••••••" }],
+        CURSOR_API_KEY: [{ id: "b", masked: "••••••••" }],
+        OPENAI_API_KEY: [],
+      },
+    });
+    vi.mocked(api.env.getKeys).mockResolvedValue({
+      anthropic: true,
+      cursor: true,
+      openai: false,
+      claudeCli: true,
+      useCustomCli: false,
+    });
+
+    renderProjectSetup();
+    await user.type(screen.getByLabelText(/project name/i), "My Project");
+    await user.type(screen.getByPlaceholderText("/Users/you/projects/my-app"), "/path/to/repo");
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    expect(screen.getByTestId("agents-step")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /next/i })).toBeEnabled();
+    });
+
+    const selects = screen.getAllByRole("combobox");
+    const simpleProviderSelect = selects[0];
+    await user.selectOptions(simpleProviderSelect, "openai");
+
+    const nextButton = screen.getByRole("button", { name: /next/i });
+    expect(nextButton).toBeDisabled();
   });
 });
 
