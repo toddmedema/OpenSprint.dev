@@ -21,6 +21,7 @@ import {
   maskApiKeysForResponse,
   getProvidersInUse,
   getProvidersRequiringApiKeys,
+  getProviderForAgentType,
 } from "../types/settings.js";
 import type { ProjectSettings, AgentConfig, DeploymentConfig, ApiKeys } from "../types/settings.js";
 
@@ -455,6 +456,22 @@ describe("getDeploymentTargetsForUi", () => {
     const config: DeploymentConfig = { mode: "custom" };
     const targets = getDeploymentTargetsForUi(config);
     expect(targets).toEqual([]);
+  });
+});
+
+describe("getProviderForAgentType", () => {
+  it("returns ANTHROPIC_API_KEY for claude", () => {
+    expect(getProviderForAgentType("claude")).toBe("ANTHROPIC_API_KEY");
+  });
+  it("returns CURSOR_API_KEY for cursor", () => {
+    expect(getProviderForAgentType("cursor")).toBe("CURSOR_API_KEY");
+  });
+  it("returns OPENAI_API_KEY for openai", () => {
+    expect(getProviderForAgentType("openai")).toBe("OPENAI_API_KEY");
+  });
+  it("returns null for claude-cli and custom", () => {
+    expect(getProviderForAgentType("claude-cli")).toBe(null);
+    expect(getProviderForAgentType("custom")).toBe(null);
   });
 });
 

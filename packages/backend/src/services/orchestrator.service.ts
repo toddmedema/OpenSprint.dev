@@ -16,6 +16,8 @@ import {
   getAgentForPlanningRole,
   getAgentName,
   getAgentNameForRole,
+  getAgentForComplexity,
+  getProviderForAgentType,
   AGENT_NAMES,
   AGENT_NAMES_BY_ROLE,
   OPEN_QUESTION_BLOCK_REASON,
@@ -55,6 +57,12 @@ import {
 } from "./task-phase-coordinator.js";
 import { validateTransition } from "./task-state-machine.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
+import { getNextKey } from "./api-key-resolver.service.js";
+import {
+  isExhausted,
+  clearExhausted,
+} from "./api-key-exhausted.service.js";
+import { getComplexityForAgent } from "./plan-complexity.js";
 
 const log = createLogger("orchestrator");
 
@@ -203,6 +211,8 @@ export class OrchestratorService {
     handleReviewDone: (a, b, c, d, e) => this.handleReviewDone(a, b, c, d, e),
     handleTaskFailure: (a, b, c, d, e, f, g, h) =>
       this.failureHandler.handleTaskFailure(a, b, c, d, e, f, g as FailureType | undefined, h),
+    handleApiKeysExhausted: (a, b, c, d, provider) =>
+      this.handleApiKeysExhausted(a, b, c, d, provider),
   });
 
   private getState(projectId: string): OrchestratorState {
@@ -1121,17 +1131,50 @@ export class OrchestratorService {
         }
       );
 
-      const dispatchBatch = selected.slice(0, MAX_NEW_TASKS_PER_LOOP);
-      if (selected.length > dispatchBatch.length) {
+      // Re-check exhausted providers: if getNextKey returns a key now, clear exhausted
+      for (const provider of ["ANTHROPIC_API_KEY", "CURSOR_API_KEY", "OPENAI_API_KEY"] as const) {
+        if (isExhausted(projectId, provider)) {
+          const resolved = await getNextKey(projectId, provider);
+          if (resolved?.key?.trim()) {
+            clearExhausted(projectId, provider);
+            log.info("API keys available again, cleared exhausted", { projectId, provider });
+          }
+        }
+      }
+
+      // Filter out tasks whose required provider is exhausted
+      const dispatchableTasks: typeof selected = [];
+      for (const st of selected) {
+        const complexity = await getComplexityForAgent(
+          projectId,
+          repoPath,
+          st.task,
+          this.taskStore
+        );
+        const agentConfig = getAgentForComplexity(settings, complexity);
+        const provider = getProviderForAgentType(agentConfig.type);
+        if (provider && isExhausted(projectId, provider)) {
+          log.info("Skipping task: provider exhausted", {
+            projectId,
+            taskId: st.task.id,
+            provider,
+          });
+          continue;
+        }
+        dispatchableTasks.push(st);
+      }
+
+      const dispatchBatch = dispatchableTasks.slice(0, MAX_NEW_TASKS_PER_LOOP);
+      if (dispatchableTasks.length > dispatchBatch.length) {
         log.info("Dispatch capped for stability; deferring additional ready tasks", {
           projectId,
-          selectedTasks: selected.length,
+          selectedTasks: dispatchableTasks.length,
           dispatchingNow: dispatchBatch.length,
         });
       }
 
-      if (selected.length === 0) {
-        log.info("No dispatchable tasks after conflict-aware scheduling", {
+      if (dispatchableTasks.length === 0) {
+        log.info("No dispatchable tasks after conflict-aware scheduling or provider exhaustion", {
           projectId,
           readyTasks: readyTasks.length,
           activeSlots: state.slots.size,
@@ -1214,6 +1257,82 @@ export class OrchestratorService {
     retryContext?: RetryContext
   ): Promise<void> {
     return this.phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot, retryContext);
+  }
+
+  private async handleApiKeysExhausted(
+    projectId: string,
+    repoPath: string,
+    task: StoredTask,
+    branchName: string,
+    provider: import("@opensprint/shared").ApiKeyProvider
+  ): Promise<void> {
+    const state = this.getState(projectId);
+    const slot = state.slots.get(task.id);
+    if (!slot) return;
+
+    const providerDisplay =
+      provider === "ANTHROPIC_API_KEY"
+        ? "Anthropic"
+        : provider === "CURSOR_API_KEY"
+          ? "Cursor"
+          : "OpenAI";
+    const message = `Your API key(s) for ${providerDisplay} have hit their limit. Please increase your budget or add another key.`;
+
+    // Avoid duplicate notifications for same project+provider
+    const existing = await notificationService.listByProject(projectId);
+    const alreadyNotified = existing.some(
+      (n) => n.kind === "api_blocked" && n.sourceId === `api-keys-${provider}`
+    );
+    let notification: Awaited<
+      ReturnType<typeof notificationService.createApiBlocked>
+    > | null = null;
+    if (!alreadyNotified) {
+      notification = await notificationService.createApiBlocked({
+        projectId,
+        source: "execute",
+        sourceId: `api-keys-${provider}`,
+        message,
+        errorCode: "rate_limit",
+      });
+    } else {
+      log.info("Skipping duplicate API-blocked notification", { projectId, provider });
+    }
+    if (notification) {
+      broadcastToProject(projectId, {
+        type: "notification.added",
+        notification: {
+          id: notification.id,
+          projectId: notification.projectId,
+          source: notification.source,
+          sourceId: notification.sourceId,
+          questions: notification.questions,
+          status: notification.status,
+          createdAt: notification.createdAt,
+          resolvedAt: notification.resolvedAt,
+          kind: "api_blocked",
+          errorCode: notification.errorCode,
+        },
+      });
+    }
+
+    await this.taskStore.update(projectId, task.id, { status: "open", assignee: "" });
+    const wtPath = slot.worktreePath ?? repoPath;
+    await heartbeatService.deleteHeartbeat(wtPath, task.id).catch(() => {});
+    if (slot.worktreePath && slot.worktreePath !== repoPath) {
+      try {
+        await this.branchManager.removeTaskWorktree(repoPath, task.id, slot.worktreePath);
+      } catch {
+        // Best effort
+      }
+    }
+    await this.deleteAssignmentAt(repoPath, task.id, slot.worktreePath ?? undefined);
+    this.removeSlot(state, task.id);
+    broadcastToProject(projectId, {
+      type: "execute.status",
+      activeTasks: this.buildActiveTasks(state),
+      queueDepth: state.status.queueDepth,
+    });
+    await this.persistCounters(projectId, repoPath);
   }
 
   private async handleCodingDone(

@@ -16,6 +16,9 @@ import {
   ENV_FALLBACK_KEY_ID,
   type KeySource,
 } from "./api-key-resolver.service.js";
+import { markExhausted } from "./api-key-exhausted.service.js";
+import { notificationService } from "./notification.service.js";
+import { broadcastToProject } from "../websocket/index.js";
 import { registerAgentProcess, unregisterAgentProcess } from "./agent-process-registry.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -246,6 +249,30 @@ export class AgentClient {
       const resolved = await getNextKey(projectId, "CURSOR_API_KEY");
       if (!resolved || !resolved.key.trim()) {
         log.error("No Cursor API key available for spawn");
+        markExhausted(projectId, "CURSOR_API_KEY");
+        const notification = await notificationService.createApiBlocked({
+          projectId,
+          source: "execute",
+          sourceId: "api-keys-CURSOR_API_KEY",
+          message:
+            "Your API key(s) for Cursor have hit their limit. Please increase your budget or add another key.",
+          errorCode: "rate_limit",
+        });
+        broadcastToProject(projectId, {
+          type: "notification.added",
+          notification: {
+            id: notification.id,
+            projectId: notification.projectId,
+            source: notification.source,
+            sourceId: notification.sourceId,
+            questions: notification.questions,
+            status: notification.status,
+            createdAt: notification.createdAt,
+            resolvedAt: notification.resolvedAt,
+            kind: "api_blocked",
+            errorCode: notification.errorCode,
+          },
+        });
         Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
         return;
       }
@@ -277,6 +304,30 @@ export class AgentClient {
           if (next) {
             return trySpawn();
           }
+          markExhausted(projectId, "CURSOR_API_KEY");
+          const notification = await notificationService.createApiBlocked({
+            projectId,
+            source: "execute",
+            sourceId: "api-keys-CURSOR_API_KEY",
+            message:
+              "Your API key(s) for Cursor have hit their limit. Please increase your budget or add another key.",
+            errorCode: "rate_limit",
+          });
+          broadcastToProject(projectId, {
+            type: "notification.added",
+            notification: {
+              id: notification.id,
+              projectId: notification.projectId,
+              source: notification.source,
+              sourceId: notification.sourceId,
+              questions: notification.questions,
+              status: notification.status,
+              createdAt: notification.createdAt,
+              resolvedAt: notification.resolvedAt,
+              kind: "api_blocked",
+              errorCode: notification.errorCode,
+            },
+          });
         }
         return Promise.resolve(onExit(code));
       };
@@ -374,6 +425,36 @@ export class AgentClient {
         if (!resolved || !resolved.key.trim()) {
           const msg = lastError ? getErrorMessage(lastError) : "No OpenAI API key available";
           emit(`[Agent error: ${msg}]\n`);
+          if (projectId) {
+            markExhausted(projectId, "OPENAI_API_KEY");
+            notificationService
+              .createApiBlocked({
+                projectId,
+                source: "execute",
+                sourceId: "api-keys-OPENAI_API_KEY",
+                message:
+                  "Your API key(s) for OpenAI have hit their limit. Please increase your budget or add another key.",
+                errorCode: "rate_limit",
+              })
+              .then((notification) => {
+                broadcastToProject(projectId, {
+                  type: "notification.added",
+                  notification: {
+                    id: notification.id,
+                    projectId: notification.projectId,
+                    source: notification.source,
+                    sourceId: notification.sourceId,
+                    questions: notification.questions,
+                    status: notification.status,
+                    createdAt: notification.createdAt,
+                    resolvedAt: notification.resolvedAt,
+                    kind: "api_blocked",
+                    errorCode: notification.errorCode,
+                  },
+                });
+              })
+              .catch((e) => log.error("Failed to create API-blocked notification", { err: e }));
+          }
           return Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
         }
 
@@ -381,6 +462,36 @@ export class AgentClient {
         if (triedKeyIds.has(keyId)) {
           const msg = getErrorMessage(lastError);
           emit(`[Agent error: ${msg}]\n`);
+          if (projectId) {
+            markExhausted(projectId, "OPENAI_API_KEY");
+            notificationService
+              .createApiBlocked({
+                projectId,
+                source: "execute",
+                sourceId: "api-keys-OPENAI_API_KEY",
+                message:
+                  "Your API key(s) for OpenAI have hit their limit. Please increase your budget or add another key.",
+                errorCode: "rate_limit",
+              })
+              .then((notification) => {
+                broadcastToProject(projectId, {
+                  type: "notification.added",
+                  notification: {
+                    id: notification.id,
+                    projectId: notification.projectId,
+                    source: notification.source,
+                    sourceId: notification.sourceId,
+                    questions: notification.questions,
+                    status: notification.status,
+                    createdAt: notification.createdAt,
+                    resolvedAt: notification.resolvedAt,
+                    kind: "api_blocked",
+                    errorCode: notification.errorCode,
+                  },
+                });
+              })
+              .catch((e) => log.error("Failed to create API-blocked notification", { err: e }));
+          }
           return Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
         }
         triedKeyIds.add(keyId);

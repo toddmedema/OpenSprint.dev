@@ -4,7 +4,7 @@
  */
 
 import type { StoredTask } from "./task-store.service.js";
-import type { AgentConfig, TestResults } from "@opensprint/shared";
+import type { AgentConfig, ApiKeyProvider, TestResults } from "@opensprint/shared";
 
 export type FailureType =
   | "test_failure"
@@ -68,6 +68,14 @@ export interface PhaseExecutorCallbacks {
     testResults?: TestResults | null,
     failureType?: FailureType,
     reviewFeedback?: string
+  ): Promise<void>;
+  /** Called when API keys are exhausted for a provider; orchestrator reverts task, frees slot, emits notification */
+  handleApiKeysExhausted?(
+    projectId: string,
+    repoPath: string,
+    task: StoredTask,
+    branchName: string,
+    provider: ApiKeyProvider
   ): Promise<void>;
 }
 

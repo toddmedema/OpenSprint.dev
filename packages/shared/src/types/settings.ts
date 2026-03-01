@@ -667,6 +667,24 @@ export function getProvidersInUse(settings: ProjectSettings): ApiKeyProvider[] {
 }
 
 /**
+ * Map agent type to API key provider. Returns null for claude-cli/custom (CLI uses local auth).
+ */
+export function getProviderForAgentType(
+  agentType: AgentConfig["type"]
+): ApiKeyProvider | null {
+  switch (agentType) {
+    case "claude":
+      return "ANTHROPIC_API_KEY";
+    case "cursor":
+      return "CURSOR_API_KEY";
+    case "openai":
+      return "OPENAI_API_KEY";
+    default:
+      return null;
+  }
+}
+
+/**
  * Get API key providers required when using Claude API, Cursor, or OpenAI (validation only).
  * claude → ANTHROPIC_API_KEY; cursor → CURSOR_API_KEY; openai → OPENAI_API_KEY.
  * claude-cli and custom do not require API keys (CLI uses local auth).

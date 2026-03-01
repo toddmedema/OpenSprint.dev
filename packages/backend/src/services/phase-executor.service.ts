@@ -10,6 +10,7 @@ import {
   OPENSPRINT_PATHS,
   resolveTestCommand,
   getAgentForComplexity,
+  getProviderForAgentType,
   type PlanComplexity,
 } from "@opensprint/shared";
 import type { StoredTask } from "./task-store.service.js";
@@ -24,6 +25,8 @@ import { getComplexityForAgent } from "./plan-complexity.js";
 import { agentIdentityService } from "./agent-identity.service.js";
 import { eventLogService } from "./event-log.service.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { getNextKey } from "./api-key-resolver.service.js";
+import { markExhausted } from "./api-key-exhausted.service.js";
 import type {
   AgentSlotLike,
   PhaseExecutorCallbacks,
@@ -79,6 +82,37 @@ export class PhaseExecutorService {
     const settings = await this.host.projectService.getSettings(projectId);
     const branchName = slot.branchName;
     const gitWorkingMode = settings.gitWorkingMode ?? "worktree";
+
+    // Pre-flight: ensure API key available before any heavy work
+    const complexity = await getComplexityForAgent(
+      projectId,
+      repoPath,
+      task,
+      this.host.taskStore
+    );
+    const agentConfig = getAgentForComplexity(settings, complexity);
+    const provider = getProviderForAgentType(agentConfig.type);
+    if (provider) {
+      const resolved = await getNextKey(projectId, provider);
+      if (!resolved || !resolved.key.trim()) {
+        log.warn("No API key available for provider, stopping queue", {
+          projectId,
+          taskId: task.id,
+          provider,
+        });
+        markExhausted(projectId, provider);
+        if (this.callbacks.handleApiKeysExhausted) {
+          await this.callbacks.handleApiKeysExhausted(
+            projectId,
+            repoPath,
+            task,
+            branchName,
+            provider
+          );
+        }
+        return;
+      }
+    }
 
     try {
       let wtPath: string;
@@ -315,6 +349,30 @@ export class PhaseExecutorService {
         this.host.taskStore
       );
       const agentConfig = getAgentForComplexity(settings, complexity);
+
+      // Pre-flight: ensure API key available before spawning review agent
+      const provider = getProviderForAgentType(agentConfig.type);
+      if (provider) {
+        const resolved = await getNextKey(projectId, provider);
+        if (!resolved || !resolved.key.trim()) {
+          log.warn("No API key available for review agent, stopping queue", {
+            projectId,
+            taskId: task.id,
+            provider,
+          });
+          markExhausted(projectId, provider);
+          if (this.callbacks.handleApiKeysExhausted) {
+            await this.callbacks.handleApiKeysExhausted(
+              projectId,
+              repoPath,
+              task,
+              branchName,
+              provider
+            );
+          }
+          return;
+        }
+      }
 
       const assignment: TaskAssignmentLike = {
         taskId: task.id,
