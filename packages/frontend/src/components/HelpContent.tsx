@@ -15,6 +15,8 @@ import { ASSET_BASE } from "../lib/constants";
 export interface HelpContentProps {
   /** Optional project context (per-project view vs homepage) */
   project?: { id: string; name: string } | null;
+  /** Optional close button for modal context (no standalone title/back) */
+  onClose?: () => void;
 }
 
 type TabId = "ask" | "meet";
@@ -23,55 +25,80 @@ type TabId = "ask" | "meet";
  * Shared Help content with two tabs: Ask a Question and Meet your Team.
  * Used by HelpModal (legacy) and HelpPage (full-screen).
  */
-export function HelpContent({ project }: HelpContentProps) {
+export function HelpContent({ project, onClose }: HelpContentProps) {
   const [activeTab, setActiveTab] = useState<TabId>("ask");
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      {/* Second title bar for navigation tabs — matches Execute filter bar pattern */}
       <div
-        className="flex gap-1 shrink-0"
+        className="px-6 py-4 border-b border-theme-border bg-theme-surface shrink-0"
         role="tablist"
         aria-label="Help sections"
       >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "ask"}
-          aria-controls="help-tabpanel-ask"
-          id="help-tab-ask"
-          onClick={() => setActiveTab("ask")}
-          className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
-            activeTab === "ask"
-              ? "bg-theme-surface text-theme-text border border-theme-border border-b-theme-surface"
-              : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle"
-          }`}
-        >
-          Ask a Question
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "meet"}
-          aria-controls="help-tabpanel-meet"
-          id="help-tab-meet"
-          onClick={() => setActiveTab("meet")}
-          className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
-            activeTab === "meet"
-              ? "bg-theme-surface text-theme-text border border-theme-border border-b-theme-surface"
-              : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle"
-          }`}
-        >
-          Meet your Team
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "ask"}
+            aria-controls="help-tabpanel-ask"
+            id="help-tab-ask"
+            onClick={() => setActiveTab("ask")}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              activeTab === "ask"
+                ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
+                : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
+            }`}
+            aria-pressed={activeTab === "ask"}
+          >
+            Ask a Question
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "meet"}
+            aria-controls="help-tabpanel-meet"
+            id="help-tab-meet"
+            onClick={() => setActiveTab("meet")}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              activeTab === "meet"
+                ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
+                : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
+            }`}
+            aria-pressed={activeTab === "meet"}
+          >
+            Meet your Team
+          </button>
+        </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors shrink-0"
+              aria-label="Close help"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto border border-theme-border border-t-0 rounded-b-lg">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <div
           id="help-tabpanel-ask"
           role="tabpanel"
           aria-labelledby="help-tab-ask"
           hidden={activeTab !== "ask"}
-          className="px-6 py-4"
+          className="px-6 py-4 h-full"
         >
           <AskQuestionContent project={project} isActive={activeTab === "ask"} />
         </div>
@@ -80,7 +107,7 @@ export function HelpContent({ project }: HelpContentProps) {
           role="tabpanel"
           aria-labelledby="help-tab-meet"
           hidden={activeTab !== "meet"}
-          className="px-6 py-4"
+          className="px-6 py-4 h-full"
         >
           <MeetYourTeamContent />
         </div>

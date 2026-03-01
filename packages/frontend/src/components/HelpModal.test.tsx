@@ -23,7 +23,6 @@ describe("HelpModal", () => {
     renderWithProviders(<HelpModal onClose={vi.fn()} />);
 
     expect(screen.getByRole("dialog", { name: /help/i })).toBeInTheDocument();
-    expect(screen.getByText("Help")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Ask a Question" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Meet your Team" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Ask a Question" })).toHaveAttribute(
@@ -107,7 +106,7 @@ describe("HelpModal", () => {
 
     const dialog = screen.getByRole("dialog", { name: /help/i });
     expect(dialog).toHaveAttribute("aria-modal", "true");
-    expect(dialog).toHaveAttribute("aria-labelledby", "help-modal-title");
+    expect(dialog).toHaveAttribute("aria-label", "Help");
   });
 
   it("has max-height 90vh for viewport-relative sizing on large screens", () => {
