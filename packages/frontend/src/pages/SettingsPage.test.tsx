@@ -73,11 +73,11 @@ describe("SettingsPage", () => {
     expect(page).toHaveClass("flex-1");
   });
 
-  it("renders display settings content", async () => {
+  it("renders global settings content", async () => {
     renderSettingsPage();
 
     await waitFor(() => {
-      expect(screen.getByTestId("display-section")).toBeInTheDocument();
+      expect(screen.getByTestId("global-settings-content")).toBeInTheDocument();
     });
   });
 

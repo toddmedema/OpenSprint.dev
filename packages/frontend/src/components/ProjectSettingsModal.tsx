@@ -3,7 +3,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import { FolderBrowser } from "./FolderBrowser";
 import { CloseButton } from "./CloseButton";
 import { ModelSelect } from "./ModelSelect";
-import { DisplaySettingsContent } from "./DisplaySettingsContent";
+import { GlobalSettingsContent } from "./GlobalSettingsContent";
 import { AgentsMdSection } from "./AgentsMdSection";
 import { api } from "../api/client";
 import type {
@@ -373,7 +373,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
           data-testid="settings-modal-content"
         >
           {mode === "display" ? (
-            <DisplaySettingsContent showApiKeysSection={false} />
+            <GlobalSettingsContent />
           ) : loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />

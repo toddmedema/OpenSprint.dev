@@ -519,7 +519,7 @@ describe("Navbar", () => {
     await user.click(settingsLink);
 
     expect(screen.getByTestId("settings-page")).toBeInTheDocument();
-    expect(screen.getByTestId("display-section")).toBeInTheDocument();
+    expect(screen.getByTestId("global-settings-content")).toBeInTheDocument();
     expect(screen.getByTestId("theme-option-light")).toBeInTheDocument();
   });
 
@@ -605,7 +605,7 @@ describe("Navbar", () => {
       </ThemeProvider>
     );
 
-    await screen.findByTestId("display-section");
+    await screen.findByTestId("global-settings-content");
     await user.click(screen.getByTestId("theme-option-dark"));
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
     expect(localStorage.getItem("opensprint.theme")).toBe("dark");

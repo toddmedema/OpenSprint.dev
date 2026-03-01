@@ -237,7 +237,7 @@ describe("ProjectSettingsModal", () => {
     expect(screen.queryByTestId("api-key-add-ANTHROPIC_API_KEY")).not.toBeInTheDocument();
   });
 
-  it("Display mode does not show ApiKeysSection (keys managed at /settings only)", async () => {
+  it("Display mode shows full global settings including API keys (same as homepage)", async () => {
     mockGlobalSettingsGet.mockResolvedValue({
       databaseUrl: "postgresql://user:***@localhost:5432/opensprint",
       apiKeys: undefined,
@@ -248,9 +248,10 @@ describe("ProjectSettingsModal", () => {
 
     await userEvent.click(screen.getByTestId("display-mode-button"));
 
-    expect(screen.queryByTestId("api-keys-section")).not.toBeInTheDocument();
-    expect(screen.queryByText("API Keys")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("api-key-add-ANTHROPIC_API_KEY")).not.toBeInTheDocument();
+    expect(screen.getByTestId("api-keys-section")).toBeInTheDocument();
+    expect(screen.getByText("API Keys")).toBeInTheDocument();
+    expect(screen.getByTestId("api-key-add-ANTHROPIC_API_KEY")).toBeInTheDocument();
+    expect(screen.getByText("Database URL")).toBeInTheDocument();
   });
 
   it("shows Code Review section with updated helptext and default review mode", async () => {
@@ -440,7 +441,7 @@ describe("ProjectSettingsModal", () => {
     );
   });
 
-  it("Display mode shows theme picker and running agents display mode", async () => {
+  it("Display mode shows global settings (API keys, database URL, theme, running agents)", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await screen.findByText("Settings");
 
@@ -448,8 +449,10 @@ describe("ProjectSettingsModal", () => {
     expect(displayButton).toBeInTheDocument();
     await userEvent.click(displayButton);
 
-    const displaySection = screen.getByTestId("display-section");
-    expect(displaySection).toBeInTheDocument();
+    const globalSettings = screen.getByTestId("global-settings-content");
+    expect(globalSettings).toBeInTheDocument();
+    expect(screen.getByTestId("api-keys-section-wrapper")).toBeInTheDocument();
+    expect(screen.getByText("Database URL")).toBeInTheDocument();
     expect(screen.getByText("Theme")).toBeInTheDocument();
     expect(screen.getByTestId("theme-option-light")).toBeInTheDocument();
     expect(screen.getByTestId("theme-option-dark")).toBeInTheDocument();

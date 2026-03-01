@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { DisplaySettingsContent } from "./DisplaySettingsContent";
+import { GlobalSettingsContent } from "./GlobalSettingsContent";
 
 vi.mock("../contexts/ThemeContext", () => ({
   useTheme: () => ({
@@ -29,7 +29,7 @@ vi.mock("../api/client", () => ({
   isConnectionError: () => false,
 }));
 
-describe("DisplaySettingsContent", () => {
+describe("GlobalSettingsContent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGlobalSettingsGet.mockResolvedValue({
@@ -38,17 +38,8 @@ describe("DisplaySettingsContent", () => {
     });
   });
 
-  it("hides ApiKeysSection when showApiKeysSection is false", async () => {
-    render(<DisplaySettingsContent showApiKeysSection={false} />);
-
-    await screen.findByTestId("display-section");
-    expect(screen.queryByTestId("api-keys-section-wrapper")).not.toBeInTheDocument();
-    expect(screen.queryByText("API Keys")).not.toBeInTheDocument();
-    expect(screen.getByTestId("database-url-section")).toBeInTheDocument();
-  });
-
   it("renders ApiKeysSection with both providers when keys not configured", async () => {
-    render(<DisplaySettingsContent />);
+    render(<GlobalSettingsContent />);
 
     await screen.findByTestId("api-keys-section-wrapper");
     expect(screen.getByTestId("api-keys-section")).toBeInTheDocument();
@@ -69,7 +60,7 @@ describe("DisplaySettingsContent", () => {
       },
     });
 
-    render(<DisplaySettingsContent />);
+    render(<GlobalSettingsContent />);
 
     await screen.findByTestId("api-keys-section");
     const anthropicInputs = screen.getAllByTestId(/api-key-input-ANTHROPIC_API_KEY-/);
@@ -88,7 +79,7 @@ describe("DisplaySettingsContent", () => {
       },
     });
 
-    render(<DisplaySettingsContent />);
+    render(<GlobalSettingsContent />);
 
     await screen.findByTestId("api-keys-section");
     expect(screen.getByText(/Limit hit at/)).toBeInTheDocument();
@@ -96,7 +87,7 @@ describe("DisplaySettingsContent", () => {
   });
 
   it("renders Theme section", async () => {
-    render(<DisplaySettingsContent />);
+    render(<GlobalSettingsContent />);
 
     await screen.findByText("Theme");
     expect(screen.getByText(/Choose how Open Sprint looks/)).toBeInTheDocument();
@@ -106,7 +97,7 @@ describe("DisplaySettingsContent", () => {
   });
 
   it("renders Running agents display mode section", async () => {
-    render(<DisplaySettingsContent />);
+    render(<GlobalSettingsContent />);
 
     await screen.findByText("Running agents display mode");
     expect(screen.getByTestId("running-agents-display-mode")).toBeInTheDocument();
@@ -120,7 +111,7 @@ describe("DisplaySettingsContent", () => {
       },
     });
 
-    render(<DisplaySettingsContent />);
+    render(<GlobalSettingsContent />);
 
     await screen.findByTestId("api-key-add-ANTHROPIC_API_KEY");
     const addBtn = screen.getByTestId("api-key-add-ANTHROPIC_API_KEY");
@@ -150,7 +141,7 @@ describe("DisplaySettingsContent", () => {
   });
 
   it("renders Database URL section with masked value", async () => {
-    render(<DisplaySettingsContent />);
+    render(<GlobalSettingsContent />);
 
     await screen.findByTestId("database-url-section");
     expect(screen.getByText("Database URL")).toBeInTheDocument();
@@ -168,7 +159,7 @@ describe("DisplaySettingsContent", () => {
       databaseUrl: "postgresql://user:***@db.example.com:5432/opensprint",
     });
 
-    render(<DisplaySettingsContent />);
+    render(<GlobalSettingsContent />);
 
     await screen.findByTestId("database-url-input");
     const input = screen.getByTestId("database-url-input");
@@ -192,7 +183,7 @@ describe("DisplaySettingsContent", () => {
   });
 
   it("shows error when blurring masked URL", async () => {
-    render(<DisplaySettingsContent />);
+    render(<GlobalSettingsContent />);
 
     const input = await screen.findByTestId("database-url-input");
     fireEvent.blur(input);

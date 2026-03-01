@@ -1,5 +1,5 @@
 import { CloseButton } from "./CloseButton";
-import { DisplaySettingsContent } from "./DisplaySettingsContent";
+import { GlobalSettingsContent } from "./GlobalSettingsContent";
 
 interface DisplaySettingsModalProps {
   onClose: () => void;
@@ -23,7 +23,7 @@ export function DisplaySettingsModal({ onClose }: DisplaySettingsModalProps) {
           <CloseButton onClick={onClose} ariaLabel="Close settings modal" />
         </div>
         <div className="px-5 py-4">
-          <DisplaySettingsContent />
+          <GlobalSettingsContent />
         </div>
       </div>
     </div>
