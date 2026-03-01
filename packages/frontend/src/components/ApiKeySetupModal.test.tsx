@@ -45,7 +45,7 @@ describe("ApiKeySetupModal", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows provider dropdown with Claude, Cursor, Custom/CLI", () => {
+  it("shows provider dropdown with Claude, Cursor, OpenAI, Custom/CLI", () => {
     render(
       <ApiKeySetupModal
         onComplete={onComplete}
@@ -59,10 +59,11 @@ describe("ApiKeySetupModal", () => {
     expect(select).toHaveValue("claude");
     expect(screen.getByRole("option", { name: "Claude" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Cursor" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "OpenAI" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Custom/CLI" })).toBeInTheDocument();
   });
 
-  it("shows password input when Claude or Cursor selected", () => {
+  it("shows password input when Claude, Cursor, or OpenAI selected", () => {
     render(
       <ApiKeySetupModal
         onComplete={onComplete}

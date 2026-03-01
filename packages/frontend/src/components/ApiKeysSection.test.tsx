@@ -24,6 +24,12 @@ const mockSettingsCursor: ApiKeysSectionSettings = {
   complexComplexityAgent: { type: "cursor", model: "gpt-4", cliCommand: null },
 };
 
+const mockSettingsOpenAI: ApiKeysSectionSettings = {
+  ...mockSettingsClaude,
+  simpleComplexityAgent: { type: "openai", model: "gpt-4o", cliCommand: null },
+  complexComplexityAgent: { type: "openai", model: "gpt-4o", cliCommand: null },
+};
+
 const mockSettingsWithKeys: ApiKeysSectionSettings = {
   ...mockSettingsClaude,
   apiKeys: {
@@ -65,6 +71,12 @@ describe("ApiKeysSection", () => {
   it("renders CURSOR_API_KEY when cursor is selected", () => {
     render(<ApiKeysSection settings={mockSettingsCursor} onApiKeysChange={onApiKeysChange} />);
     expect(screen.getByText("CURSOR_API_KEY")).toBeInTheDocument();
+  });
+
+  it("renders OPENAI_API_KEY when openai is selected", () => {
+    render(<ApiKeysSection settings={mockSettingsOpenAI} onApiKeysChange={onApiKeysChange} />);
+    expect(screen.getByText("OPENAI_API_KEY (OpenAI API)")).toBeInTheDocument();
+    expect(screen.getByTestId("api-key-add-OPENAI_API_KEY")).toBeInTheDocument();
   });
 
   it("shows existing keys with masked placeholder and limitHitAt sub-label", () => {

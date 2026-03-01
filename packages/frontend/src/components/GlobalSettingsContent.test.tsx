@@ -38,7 +38,7 @@ describe("GlobalSettingsContent", () => {
     });
   });
 
-  it("renders ApiKeysSection with both providers when keys not configured", async () => {
+  it("renders ApiKeysSection with all providers when keys not configured", async () => {
     render(<GlobalSettingsContent />);
 
     await screen.findByTestId("api-keys-section-wrapper");
@@ -47,8 +47,10 @@ describe("GlobalSettingsContent", () => {
     expect(screen.getByText(/Keys are stored globally and used across all projects/)).toBeInTheDocument();
     expect(screen.getByText("ANTHROPIC_API_KEY (Claude API)")).toBeInTheDocument();
     expect(screen.getByText("CURSOR_API_KEY")).toBeInTheDocument();
+    expect(screen.getByText("OPENAI_API_KEY (OpenAI API)")).toBeInTheDocument();
     expect(screen.getByTestId("api-key-add-ANTHROPIC_API_KEY")).toBeInTheDocument();
     expect(screen.getByTestId("api-key-add-CURSOR_API_KEY")).toBeInTheDocument();
+    expect(screen.getByTestId("api-key-add-OPENAI_API_KEY")).toBeInTheDocument();
   });
 
   it("shows existing keys when apiKeys from global settings", async () => {
