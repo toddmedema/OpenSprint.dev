@@ -1983,6 +1983,119 @@ describe("ExecutePhase Redux integration", () => {
     expect(scrollContainer.scrollTop).toBe(200);
   });
 
+  it("main task list scrolls when sidebar is open at mobile viewport (375px)", async () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { value: 375, writable: true });
+
+    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+
+    await vi.waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
+    });
+
+    const scrollContainer = screen.getByTestId("execute-main-scroll");
+    expect(scrollContainer).toHaveClass("overflow-auto");
+    Object.defineProperty(scrollContainer, "scrollHeight", { value: 800, configurable: true });
+    Object.defineProperty(scrollContainer, "clientHeight", { value: 300, configurable: true });
+
+    act(() => {
+      scrollContainer.scrollTop = 150;
+    });
+    expect(scrollContainer.scrollTop).toBe(150);
+
+    Object.defineProperty(window, "innerWidth", { value: originalInnerWidth, writable: true });
+  });
+
+  it("main task list scrolls when sidebar is open at desktop viewport (1024px)", async () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { value: 1024, writable: true });
+
+    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+
+    await vi.waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
+    });
+
+    const scrollContainer = screen.getByTestId("execute-main-scroll");
+    expect(scrollContainer).toHaveClass("overflow-auto");
+    Object.defineProperty(scrollContainer, "scrollHeight", { value: 1200, configurable: true });
+    Object.defineProperty(scrollContainer, "clientHeight", { value: 600, configurable: true });
+
+    act(() => {
+      scrollContainer.scrollTop = 300;
+    });
+    expect(scrollContainer.scrollTop).toBe(300);
+
+    Object.defineProperty(window, "innerWidth", { value: originalInnerWidth, writable: true });
+  });
+
+  it("has no overlay or backdrop when sidebar is open (no tap-to-close)", async () => {
+    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+
+    await vi.waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
+    });
+
+    const overlay = document.querySelector(".bg-theme-overlay");
+    const backdrop = document.querySelector("[aria-label='Dismiss task detail']");
+    expect(overlay).toBeNull();
+    expect(backdrop).toBeNull();
+  });
+
   it("has root with flex flex-1 min-h-0 min-w-0 for proper fill and independent page/sidebar scroll", () => {
     const tasks = [
       {
