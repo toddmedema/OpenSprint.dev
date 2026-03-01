@@ -1850,39 +1850,6 @@ describe("ExecutePhase Redux integration", () => {
     });
   });
 
-  it("closes task detail panel when backdrop is clicked (narrow screens)", async () => {
-    const user = userEvent.setup();
-    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    // Backdrop is md:hidden (hidden at 768px+); use hidden: true for default viewport
-    const backdrop = screen.getByRole("button", { name: "Dismiss task detail", hidden: true });
-    await user.click(backdrop);
-
-    expect(store.getState().execute.selectedTaskId).toBeNull();
-  });
-
   it("closes task detail panel when X close button is clicked", async () => {
     const user = userEvent.setup();
     mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });

@@ -409,64 +409,55 @@ export function ExecutePhase({
       </div>
 
       {effectiveSelectedTask && (
-        <>
-          <button
-            type="button"
-            className="md:hidden fixed inset-0 bg-theme-overlay z-40 animate-fade-in"
-            onClick={handleClose}
-            aria-label="Dismiss task detail"
+        <ResizableSidebar
+          storageKey="execute"
+          defaultWidth={420}
+          resizeHandleLabel="Resize task detail sidebar"
+        >
+          <TaskDetailSidebar
+            projectId={projectId}
+            selectedTask={effectiveSelectedTask}
+            taskDetail={{
+              selectedTaskData: selectedTaskData ?? null,
+              taskDetailLoading,
+              taskDetailError,
+            }}
+            openQuestionNotification={
+              taskNotification && typeof taskNotification === "object"
+                ? taskNotification
+                : undefined
+            }
+            agentOutput={selectedAgentOutput}
+            completionState={completionState}
+            archivedSessions={archivedSessions}
+            archivedLoading={archivedLoading}
+            markDoneLoading={markDoneLoading}
+            unblockLoading={unblockLoading}
+            taskIdToStartedAt={taskIdToStartedAt}
+            plans={plans}
+            tasks={tasks}
+            activeTasks={activeTasks}
+            wsConnected={wsConnected}
+            isDoneTask={isDoneTask}
+            isBlockedTask={isBlockedTask}
+            sections={{
+              descriptionSectionExpanded,
+              setDescriptionSectionExpanded,
+              artifactsSectionExpanded,
+              setArtifactsSectionExpanded,
+              sourceFeedbackExpanded,
+              setSourceFeedbackExpanded,
+            }}
+            callbacks={{
+              onClose: handleClose,
+              onMarkDone: handleMarkDone,
+              onUnblock: handleUnblock,
+              onSelectTask: (taskId) => dispatch(setSelectedTaskId(taskId)),
+              onNavigateToPlan,
+              onOpenQuestionResolved: refetchNotifications,
+            }}
           />
-          <ResizableSidebar
-            storageKey="execute"
-            defaultWidth={420}
-            resizeHandleLabel="Resize task detail sidebar"
-            overlayOnMobile
-          >
-            <TaskDetailSidebar
-              projectId={projectId}
-              selectedTask={effectiveSelectedTask}
-              taskDetail={{
-                selectedTaskData: selectedTaskData ?? null,
-                taskDetailLoading,
-                taskDetailError,
-              }}
-              openQuestionNotification={
-                taskNotification && typeof taskNotification === "object"
-                  ? taskNotification
-                  : undefined
-              }
-              agentOutput={selectedAgentOutput}
-              completionState={completionState}
-              archivedSessions={archivedSessions}
-              archivedLoading={archivedLoading}
-              markDoneLoading={markDoneLoading}
-              unblockLoading={unblockLoading}
-              taskIdToStartedAt={taskIdToStartedAt}
-              plans={plans}
-              tasks={tasks}
-              activeTasks={activeTasks}
-              wsConnected={wsConnected}
-              isDoneTask={isDoneTask}
-              isBlockedTask={isBlockedTask}
-              sections={{
-                descriptionSectionExpanded,
-                setDescriptionSectionExpanded,
-                artifactsSectionExpanded,
-                setArtifactsSectionExpanded,
-                sourceFeedbackExpanded,
-                setSourceFeedbackExpanded,
-              }}
-              callbacks={{
-                onClose: handleClose,
-                onMarkDone: handleMarkDone,
-                onUnblock: handleUnblock,
-                onSelectTask: (taskId) => dispatch(setSelectedTaskId(taskId)),
-                onNavigateToPlan,
-                onOpenQuestionResolved: refetchNotifications,
-              }}
-            />
-          </ResizableSidebar>
-        </>
+        </ResizableSidebar>
       )}
     </div>
   );

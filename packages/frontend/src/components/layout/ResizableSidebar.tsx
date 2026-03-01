@@ -33,12 +33,6 @@ export interface ResizableSidebarProps {
   resizeHandleLabel?: string;
   /** When true, no border is rendered (e.g. for minimal Sketch TOC) */
   noBorder?: boolean;
-  /**
-   * When true, on mobile the sidebar is a fixed overlay (inset-y-0, z-50, slide-in).
-   * On md+ it is static (in flow) for normal flex layout. Use for conditionally-shown
-   * sidebars (e.g. Execute task detail) that overlay on small screens.
-   */
-  overlayOnMobile?: boolean;
 }
 
 function loadPersistedWidth(
@@ -101,7 +95,6 @@ export function ResizableSidebar({
   responsive = false,
   resizeHandleLabel = "Resize sidebar",
   noBorder = false,
-  overlayOnMobile = false,
 }: ResizableSidebarProps) {
   const viewportWidth = useViewportWidth();
   const maxWidth = maxWidthProp ?? Math.max(minWidth, Math.round(viewportWidth * maxWidthPercent));
@@ -172,15 +165,8 @@ export function ResizableSidebar({
     ? "w-full max-w-[var(--sidebar-mobile-max,420px)] md:max-w-none md:w-[var(--sidebar-width)]"
     : "";
 
-  const overlayOnMobileClasses =
-    overlayOnMobile && side === "right"
-      ? "fixed md:static inset-y-0 right-0 z-50 md:border-l border-theme-border shadow-xl md:shadow-none animate-slide-in-right md:animate-none max-w-[100vw] md:max-w-none"
-      : overlayOnMobile && side === "left"
-        ? "fixed md:static inset-y-0 left-0 z-50 md:border-r border-theme-border shadow-xl md:shadow-none animate-slide-in-left md:animate-none max-w-[100vw] md:max-w-none"
-        : "";
-
   const borderClass =
-    noBorder || responsive || overlayOnMobile
+    noBorder || responsive
       ? ""
       : side === "left"
         ? "border-r border-theme-border"
@@ -193,7 +179,7 @@ export function ResizableSidebar({
 
   return (
     <div
-      className={`relative flex flex-col min-h-0 bg-theme-bg shrink-0 overflow-hidden ${borderClass} ${responsiveClasses} ${overlayOnMobileClasses} ${className}`}
+      className={`relative flex flex-col min-h-0 bg-theme-bg shrink-0 overflow-hidden ${borderClass} ${responsiveClasses} ${className}`}
       style={widthStyle}
     >
       {visible && (
