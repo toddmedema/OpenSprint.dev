@@ -443,7 +443,7 @@ describe("ExecutePhase top bar", () => {
 
     expect(screen.queryByRole("heading", { name: "Execute" })).not.toBeInTheDocument();
     // Top bar (filter chips area) has no progress bar; epic cards have their own
-    const topBar = container.querySelector(".px-6.py-4.border-b");
+    const topBar = screen.getByTestId("execute-filter-toolbar");
     expect(topBar?.querySelector('[role="progressbar"]')).not.toBeInTheDocument();
   });
 

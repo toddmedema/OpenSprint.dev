@@ -72,7 +72,10 @@ export function ExecuteFilterToolbar({
   onViewModeChange,
 }: ExecuteFilterToolbarProps) {
   return (
-    <div className="px-6 py-4 border-b border-theme-border bg-theme-surface shrink-0">
+    <div
+      className="px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0"
+      data-testid="execute-filter-toolbar"
+    >
       <div className="flex items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
           {chipConfig.map(({ label, filter, count }) => {

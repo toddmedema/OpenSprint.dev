@@ -32,7 +32,7 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
     <div className="flex flex-col h-full min-h-0">
       {/* Second title bar for navigation tabs — matches Execute filter bar pattern */}
       <div
-        className="px-6 py-4 border-b border-theme-border bg-theme-surface shrink-0"
+        className="px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0"
         role="tablist"
         aria-label="Help sections"
       >

@@ -6,7 +6,10 @@
 export const ASSET_BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/*$/, "/");
 
 /** Navbar height in px — used for fixed positioning (e.g. NotificationBar) and layout consistency. */
-export const NAVBAR_HEIGHT = 56;
+export const NAVBAR_HEIGHT = 48;
+
+/** Phase toolbar (second-level nav) height in px — matches top nav for consistency. */
+export const PHASE_TOOLBAR_HEIGHT = 48;
 
 /** OpenSprint GitHub repository URL. */
 export const GITHUB_REPO_URL = "https://github.com/toddmedema/opensprint.dev";

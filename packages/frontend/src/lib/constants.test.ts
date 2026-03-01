@@ -4,6 +4,7 @@ import {
   GITHUB_REPO_URL,
   HOMEPAGE_CONTAINER_CLASS,
   NAVBAR_HEIGHT,
+  PHASE_TOOLBAR_HEIGHT,
   PRD_SECTION_ORDER,
   PRD_SOURCE_COLORS,
   PRD_SOURCE_LABELS,
@@ -12,8 +13,14 @@ import {
 
 describe("constants", () => {
   describe("NAVBAR_HEIGHT", () => {
-    it("is 56px for consistent navbar height across home and project pages", () => {
-      expect(NAVBAR_HEIGHT).toBe(56);
+    it("is 48px for consistent navbar height across home and project pages", () => {
+      expect(NAVBAR_HEIGHT).toBe(48);
+    });
+  });
+
+  describe("PHASE_TOOLBAR_HEIGHT", () => {
+    it("matches NAVBAR_HEIGHT for consistent second-level nav bar", () => {
+      expect(PHASE_TOOLBAR_HEIGHT).toBe(NAVBAR_HEIGHT);
     });
   });
 
