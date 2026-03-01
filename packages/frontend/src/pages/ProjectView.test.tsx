@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { Provider } from "react-redux";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { DisplayPreferencesProvider } from "../contexts/DisplayPreferencesContext";
 import { ProjectView } from "./ProjectView";
+import { ProjectShell } from "./ProjectShell";
 import { api } from "../api/client";
 import projectReducer from "../store/slices/projectSlice";
 import websocketReducer, { setDeliverToast } from "../store/slices/websocketSlice";
@@ -140,7 +141,10 @@ function renderWithRouter(initialPath: string, store = createStore(), queryClien
             <MemoryRouter initialEntries={[initialPath]}>
               <LocationDisplay />
               <Routes>
-                <Route path="/projects/:projectId/:phase?" element={<ProjectView />} />
+                <Route path="/projects/:projectId" element={<ProjectShell />}>
+                  <Route index element={<Navigate to="sketch" replace />} />
+                  <Route path=":phase" element={<ProjectView />} />
+                </Route>
               </Routes>
             </MemoryRouter>
           </DisplayPreferencesProvider>
@@ -344,7 +348,10 @@ describe("ProjectView upfront loading and mount-all", () => {
                 <LocationDisplay />
                 <NavToProj2 />
                 <Routes>
-                  <Route path="/projects/:projectId/:phase?" element={<ProjectView />} />
+                  <Route path="/projects/:projectId" element={<ProjectShell />}>
+                    <Route index element={<Navigate to="sketch" replace />} />
+                    <Route path=":phase" element={<ProjectView />} />
+                  </Route>
                 </Routes>
               </MemoryRouter>
             </DisplayPreferencesProvider>

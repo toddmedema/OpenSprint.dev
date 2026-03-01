@@ -1,8 +1,8 @@
 import type { ReactElement } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Provider } from "react-redux";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
@@ -17,6 +17,11 @@ import planReducer from "../../store/slices/planSlice";
 import websocketReducer from "../../store/slices/websocketSlice";
 import openQuestionsReducer from "../../store/slices/openQuestionsSlice";
 import notificationReducer from "../../store/slices/notificationSlice";
+import projectReducer from "../../store/slices/projectSlice";
+import connectionReducer from "../../store/slices/connectionSlice";
+import sketchReducer from "../../store/slices/sketchSlice";
+import evalReducer from "../../store/slices/evalSlice";
+import deliverReducer from "../../store/slices/deliverSlice";
 
 const mockGetSettings = vi.fn();
 const mockProjectsList = vi.fn();
@@ -33,6 +38,8 @@ vi.mock("../../api/client", () => ({
       updateSettings: vi.fn().mockResolvedValue({}),
       getAgentsInstructions: vi.fn().mockResolvedValue({ content: "" }),
       updateAgentsInstructions: vi.fn().mockResolvedValue({ saved: true }),
+      getPlanStatus: vi.fn().mockResolvedValue({ status: "idle" }),
+      getSketchContext: vi.fn().mockResolvedValue({ hasExistingCode: false }),
     },
     env: {
       getKeys: (...args: unknown[]) => mockGetKeys(...args),
@@ -41,6 +48,16 @@ vi.mock("../../api/client", () => ({
     models: {
       list: (...args: unknown[]) => mockModelsList(...args),
     },
+    prd: { get: vi.fn().mockResolvedValue({}), getHistory: vi.fn().mockResolvedValue([]) },
+    plans: { list: vi.fn().mockResolvedValue({ plans: [], edges: [] }) },
+    tasks: { list: vi.fn().mockResolvedValue([]) },
+    feedback: { list: vi.fn().mockResolvedValue([]) },
+    execute: { status: vi.fn().mockResolvedValue({}) },
+    deliver: {
+      status: vi.fn().mockResolvedValue({ activeDeployId: null, currentDeploy: null }),
+      history: vi.fn().mockResolvedValue([]),
+    },
+    chat: { history: vi.fn().mockResolvedValue({ messages: [] }) },
     agents: { active: vi.fn().mockResolvedValue([]) },
     notifications: {
       listByProject: vi.fn().mockResolvedValue([]),
@@ -55,6 +72,14 @@ vi.mock("../../api/client", () => ({
       chat: vi.fn(),
     },
   },
+}));
+
+vi.mock("../../store/middleware/websocketMiddleware", () => ({
+  wsConnect: (payload: unknown) => ({ type: "ws/connect", payload }),
+  wsDisconnect: () => ({ type: "ws/disconnect" }),
+  wsConnectHome: () => ({ type: "ws/connectHome" }),
+  wsSend: (payload: unknown) => ({ type: "ws/send", payload }),
+  websocketMiddleware: () => (next: (a: unknown) => unknown) => (action: unknown) => next(action),
 }));
 
 const storage: Record<string, string> = {};
@@ -121,9 +146,14 @@ function renderNavbar(ui: ReactElement, store = createStore()) {
 function createStore(executeTasks: Task[] = []) {
   return configureStore({
     reducer: {
+      project: projectReducer,
+      connection: connectionReducer,
       execute: executeReducer,
       plan: planReducer,
       websocket: websocketReducer,
+      sketch: sketchReducer,
+      eval: evalReducer,
+      deliver: deliverReducer,
       openQuestions: openQuestionsReducer,
       notification: notificationReducer,
     },
@@ -357,7 +387,9 @@ describe("Navbar", () => {
 
     it("project view (project set): Help link navigates to project Help page with project context", async () => {
       const user = userEvent.setup();
-      const { HelpPage } = await import("../../pages/HelpPage");
+      const { ProjectShell } = await import("../../pages/ProjectShell");
+      const { ProjectView } = await import("../../pages/ProjectView");
+      const { ProjectHelpContent } = await import("../../pages/ProjectHelpContent");
       const mockProject = {
         id: "proj-1",
         name: "Test",
@@ -374,8 +406,11 @@ describe("Navbar", () => {
               <QueryClientProvider client={queryClient}>
                 <MemoryRouter initialEntries={["/projects/proj-1/sketch"]}>
                   <Routes>
-                    <Route path="/projects/:projectId/:phase?" element={<Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />} />
-                    <Route path="/projects/:projectId/help" element={<HelpPage />} />
+                    <Route path="/projects/:projectId" element={<ProjectShell />}>
+                      <Route index element={<Navigate to="sketch" replace />} />
+                      <Route path=":phase" element={<ProjectView />} />
+                      <Route path="help" element={<ProjectHelpContent />} />
+                    </Route>
                   </Routes>
                 </MemoryRouter>
               </QueryClientProvider>
@@ -384,6 +419,9 @@ describe("Navbar", () => {
         </ThemeProvider>
       );
 
+      await waitFor(() => {
+        expect(screen.getByText("Test")).toBeInTheDocument();
+      });
       const helpLink = screen.getByRole("link", { name: "Help" });
       expect(helpLink).toHaveAttribute("href", "/projects/proj-1/help");
       await user.click(helpLink);
@@ -394,7 +432,8 @@ describe("Navbar", () => {
     });
 
     it("project Help page shows SPEED nav buttons in header", async () => {
-      const { HelpPage } = await import("../../pages/HelpPage");
+      const { ProjectShell } = await import("../../pages/ProjectShell");
+      const { ProjectHelpContent } = await import("../../pages/ProjectHelpContent");
       const mockProject = {
         id: "proj-1",
         name: "Test Project",
@@ -411,7 +450,10 @@ describe("Navbar", () => {
               <QueryClientProvider client={queryClient}>
                 <MemoryRouter initialEntries={["/projects/proj-1/help"]}>
                   <Routes>
-                    <Route path="/projects/:projectId/help" element={<HelpPage />} />
+                    <Route path="/projects/:projectId" element={<ProjectShell />}>
+                      <Route index element={<Navigate to="sketch" replace />} />
+                      <Route path="help" element={<ProjectHelpContent />} />
+                    </Route>
                   </Routes>
                 </MemoryRouter>
               </QueryClientProvider>

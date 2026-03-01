@@ -2,11 +2,23 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { Provider } from "react-redux";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { configureStore } from "@reduxjs/toolkit";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { DisplayPreferencesProvider } from "../contexts/DisplayPreferencesContext";
-import { ProjectSettingsPage } from "./ProjectSettingsPage";
+import { ProjectShell } from "./ProjectShell";
+import { ProjectSettingsContent } from "./ProjectSettingsContent";
+import projectReducer from "../store/slices/projectSlice";
+import websocketReducer from "../store/slices/websocketSlice";
+import connectionReducer from "../store/slices/connectionSlice";
+import sketchReducer from "../store/slices/sketchSlice";
+import planReducer from "../store/slices/planSlice";
+import executeReducer from "../store/slices/executeSlice";
+import evalReducer from "../store/slices/evalSlice";
+import deliverReducer from "../store/slices/deliverSlice";
+import notificationReducer from "../store/slices/notificationSlice";
 
 const mockGetSettings = vi.fn();
 const mockGetKeys = vi.fn();
@@ -24,11 +36,23 @@ vi.mock("../api/client", () => ({
         updatedAt: "2025-01-01T00:00:00Z",
       }),
       getSettings: (...args: unknown[]) => mockGetSettings(...args),
+      getPlanStatus: vi.fn().mockResolvedValue({ status: "idle" }),
       update: vi.fn().mockResolvedValue({}),
       updateSettings: vi.fn().mockResolvedValue({}),
       getAgentsInstructions: vi.fn().mockResolvedValue({ content: "" }),
       updateAgentsInstructions: vi.fn().mockResolvedValue({ saved: true }),
     },
+    prd: { get: vi.fn().mockResolvedValue({}), getHistory: vi.fn().mockResolvedValue([]) },
+    plans: { list: vi.fn().mockResolvedValue({ plans: [], edges: [] }) },
+    tasks: { list: vi.fn().mockResolvedValue([]) },
+    feedback: { list: vi.fn().mockResolvedValue([]) },
+    execute: { status: vi.fn().mockResolvedValue({}) },
+    deliver: {
+      status: vi.fn().mockResolvedValue({ activeDeployId: null, currentDeploy: null }),
+      history: vi.fn().mockResolvedValue([]),
+    },
+    chat: { history: vi.fn().mockResolvedValue({ messages: [] }) },
+    notifications: { listByProject: vi.fn().mockResolvedValue([]), listGlobal: vi.fn().mockResolvedValue([]) },
     env: {
       getKeys: (...args: unknown[]) => mockGetKeys(...args),
     },
@@ -51,6 +75,14 @@ vi.mock("../components/layout/Layout", () => ({
   ),
 }));
 
+// Mock websocket middleware so ProjectShell does not attempt real connection
+vi.mock("../store/middleware/websocketMiddleware", () => ({
+  wsConnect: (payload: unknown) => ({ type: "ws/connect", payload }),
+  wsDisconnect: () => ({ type: "ws/disconnect" }),
+  wsSend: (payload: unknown) => ({ type: "ws/send", payload }),
+  websocketMiddleware: () => (next: (a: unknown) => unknown) => (action: unknown) => next(action),
+}));
+
 function LocationCapture() {
   const loc = useLocation();
   return <div data-testid="location">{loc.pathname + loc.search}</div>;
@@ -63,30 +95,51 @@ const mockSettings = {
   aiAutonomyLevel: "confirm_all" as const,
 };
 
+function createStore() {
+  return configureStore({
+    reducer: {
+      project: projectReducer,
+      websocket: websocketReducer,
+      connection: connectionReducer,
+      sketch: sketchReducer,
+      plan: planReducer,
+      execute: executeReducer,
+      eval: evalReducer,
+      deliver: deliverReducer,
+      notification: notificationReducer,
+    },
+  });
+}
+
 function renderProjectSettingsPage() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <DisplayPreferencesProvider>
-          <MemoryRouter initialEntries={["/projects/proj-1/settings"]}>
-            <Routes>
-              <Route
-              path="/projects/:projectId/settings"
-              element={
-                <>
-                  <ProjectSettingsPage />
-                  <LocationCapture />
-                </>
-              }
-            />
-            </Routes>
-          </MemoryRouter>
-        </DisplayPreferencesProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <Provider store={createStore()}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <DisplayPreferencesProvider>
+            <MemoryRouter initialEntries={["/projects/proj-1/settings"]}>
+              <Routes>
+                <Route path="/projects/:projectId" element={<ProjectShell />}>
+                  <Route index element={<Navigate to="sketch" replace />} />
+                  <Route
+                    path="settings"
+                    element={
+                      <>
+                        <ProjectSettingsContent />
+                        <LocationCapture />
+                      </>
+                    }
+                  />
+                </Route>
+              </Routes>
+            </MemoryRouter>
+          </DisplayPreferencesProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </Provider>
   );
 }
 
