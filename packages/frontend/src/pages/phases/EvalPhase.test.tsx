@@ -1791,7 +1791,7 @@ describe("EvalPhase feedback form", () => {
           text: "Parent with replies",
           category: "bug",
           mappedPlanId: null,
-          createdTaskIds: [],
+          createdTaskIds: ["task-1"],
           taskTitles: ["Fix something"],
           status: "pending",
           createdAt: "2024-01-01T00:00:01Z",
@@ -1807,7 +1807,13 @@ describe("EvalPhase feedback form", () => {
           parent_id: "fb-order-parent",
         },
       ];
-      const store = createStore({ evalFeedback: feedbackWithReplies });
+      const executeTasks: Task[] = [
+        createMockTask({ id: "task-1", kanbanColumn: "in_progress" }),
+      ];
+      const store = createStore({
+        evalFeedback: feedbackWithReplies,
+        executeTasks,
+      });
       renderWithProviders(
         <MemoryRouter>
           <EvalPhase projectId="proj-1" />
@@ -2323,43 +2329,11 @@ describe("EvalPhase feedback form", () => {
     });
 
     describe("Cancel button", () => {
-      it("shows Cancel button when no linked tasks are in progress, in review, or done", async () => {
+      it("shows Cancel button when linked task is in progress or in review", async () => {
         const feedbackWithTasks: FeedbackItem[] = [
           {
             id: "fb-cancel-1",
             text: "Cancel me",
-            category: "bug",
-            mappedPlanId: null,
-            createdTaskIds: ["task-1"],
-            status: "pending",
-            createdAt: "2024-01-01T00:00:01Z",
-          },
-        ];
-        const executeTasks: Task[] = [
-          createMockTask({ id: "task-1", kanbanColumn: "backlog" }),
-        ];
-        const store = createStore({
-          evalFeedback: feedbackWithTasks,
-          executeTasks,
-        });
-
-        renderWithProviders(
-          <MemoryRouter>
-            <EvalPhase projectId="proj-1" />
-          </MemoryRouter>
-        );
-
-        await waitFor(() => {
-          expect(screen.getByTestId("feedback-cancel-button")).toBeInTheDocument();
-        });
-        expect(screen.getByRole("button", { name: /^Cancel$/ })).toBeInTheDocument();
-      });
-
-      it("hides Cancel button when linked task is in progress", async () => {
-        const feedbackWithTasks: FeedbackItem[] = [
-          {
-            id: "fb-cancel-2",
-            text: "In progress",
             category: "bug",
             mappedPlanId: null,
             createdTaskIds: ["task-1"],
@@ -2378,47 +2352,21 @@ describe("EvalPhase feedback form", () => {
         renderWithProviders(
           <MemoryRouter>
             <EvalPhase projectId="proj-1" />
-          </MemoryRouter>
-        );
-
-        await waitFor(() => {
-          expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
-        });
-        expect(screen.queryByTestId("feedback-cancel-button")).not.toBeInTheDocument();
-      });
-
-      it("shows Cancel button for feedback with no linked tasks", async () => {
-        const feedbackNoTasks: FeedbackItem[] = [
-          {
-            id: "fb-cancel-3",
-            text: "No tasks yet",
-            category: "bug",
-            mappedPlanId: null,
-            createdTaskIds: [],
-            status: "pending",
-            taskTitles: ["Fix something"],
-            createdAt: "2024-01-01T00:00:01Z",
-          },
-        ];
-        const store = createStore({ evalFeedback: feedbackNoTasks });
-
-        renderWithProviders(
-          <MemoryRouter>
-            <EvalPhase projectId="proj-1" />
-          </MemoryRouter>
+          </MemoryRouter>,
+          { store }
         );
 
         await waitFor(() => {
           expect(screen.getByTestId("feedback-cancel-button")).toBeInTheDocument();
         });
+        expect(screen.getByRole("button", { name: /^Cancel$/ })).toBeInTheDocument();
       });
 
-      it("calls cancel API and updates state when Cancel is clicked", async () => {
-        const { api } = await import("../../api/client");
+      it("hides Cancel button when linked tasks are only in backlog or ready", async () => {
         const feedbackWithTasks: FeedbackItem[] = [
           {
-            id: "fb-cancel-4",
-            text: "Cancel this",
+            id: "fb-cancel-2",
+            text: "In backlog",
             category: "bug",
             mappedPlanId: null,
             createdTaskIds: ["task-1"],
@@ -2437,7 +2385,70 @@ describe("EvalPhase feedback form", () => {
         renderWithProviders(
           <MemoryRouter>
             <EvalPhase projectId="proj-1" />
-          </MemoryRouter>
+          </MemoryRouter>,
+          { store }
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
+        });
+        expect(screen.queryByTestId("feedback-cancel-button")).not.toBeInTheDocument();
+      });
+
+      it("hides Cancel button for feedback with no linked tasks", async () => {
+        const feedbackNoTasks: FeedbackItem[] = [
+          {
+            id: "fb-cancel-3",
+            text: "No tasks yet",
+            category: "bug",
+            mappedPlanId: null,
+            createdTaskIds: [],
+            status: "pending",
+            taskTitles: ["Fix something"],
+            createdAt: "2024-01-01T00:00:01Z",
+          },
+        ];
+        const store = createStore({ evalFeedback: feedbackNoTasks });
+
+        renderWithProviders(
+          <MemoryRouter>
+            <EvalPhase projectId="proj-1" />
+          </MemoryRouter>,
+          { store }
+        );
+
+        await waitFor(() => {
+          expect(screen.getByText("No tasks yet")).toBeInTheDocument();
+        });
+        expect(screen.queryByTestId("feedback-cancel-button")).not.toBeInTheDocument();
+      });
+
+      it("calls cancel API and updates state when Cancel is clicked", async () => {
+        const { api } = await import("../../api/client");
+        const feedbackWithTasks: FeedbackItem[] = [
+          {
+            id: "fb-cancel-4",
+            text: "Cancel this",
+            category: "bug",
+            mappedPlanId: null,
+            createdTaskIds: ["task-1"],
+            status: "pending",
+            createdAt: "2024-01-01T00:00:01Z",
+          },
+        ];
+        const executeTasks: Task[] = [
+          createMockTask({ id: "task-1", kanbanColumn: "in_progress" }),
+        ];
+        const store = createStore({
+          evalFeedback: feedbackWithTasks,
+          executeTasks,
+        });
+
+        renderWithProviders(
+          <MemoryRouter>
+            <EvalPhase projectId="proj-1" />
+          </MemoryRouter>,
+          { store }
         );
 
         await waitFor(() => {

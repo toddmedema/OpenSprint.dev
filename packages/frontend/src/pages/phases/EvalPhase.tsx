@@ -207,20 +207,23 @@ function buildFeedbackTree(items: FeedbackItem[]): FeedbackTreeNode[] {
   return build(null);
 }
 
-/** Task columns that block Cancel (feedback has work in progress). */
-const ACTIVE_TASK_COLUMNS = ["in_progress", "in_review", "done"] as const;
+/** Task columns that indicate feedback is in progress (agent may be working). */
+const IN_PROGRESS_TASK_COLUMNS = ["in_progress", "in_review"] as const;
 
+/** Show Cancel when feedback is in progress: Analyst has created tasks and an agent may be working. */
 function canShowCancelButton(
   item: FeedbackItem,
   tasks: Array<{ id: string; kanbanColumn: string }>
 ): boolean {
   if (item.status !== "pending") return false;
   const taskIds = item.createdTaskIds ?? [];
-  if (taskIds.length === 0) return true;
-  return taskIds.every((tid) => {
+  if (taskIds.length === 0) return false;
+  return taskIds.some((tid) => {
     const t = tasks.find((x) => x.id === tid);
     if (!t) return false;
-    return !ACTIVE_TASK_COLUMNS.includes(t.kanbanColumn as (typeof ACTIVE_TASK_COLUMNS)[number]);
+    return IN_PROGRESS_TASK_COLUMNS.includes(
+      t.kanbanColumn as (typeof IN_PROGRESS_TASK_COLUMNS)[number]
+    );
   });
 }
 

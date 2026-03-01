@@ -413,6 +413,29 @@ export class FeedbackStoreService {
     );
     return rows.map((r) => r.feedback_id as string);
   }
+
+  /**
+   * Permanently delete a feedback item from the database and remove its asset images.
+   * Call after cancelling feedback to fully remove it.
+   */
+  async deleteFeedback(projectId: string, feedbackId: string): Promise<void> {
+    await taskStore.runWrite(async (client) => {
+      await client.execute(
+        "DELETE FROM feedback WHERE id = $1 AND project_id = $2",
+        [feedbackId, projectId]
+      );
+    });
+    await this.removeFromInbox(projectId, feedbackId);
+    const dir = getFeedbackAssetsDir(projectId, feedbackId);
+    try {
+      await fs.rm(dir, { recursive: true, force: true });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        log.warn("Failed to delete feedback assets", { projectId, feedbackId, err });
+      }
+    }
+    log.info("Deleted feedback", { projectId, feedbackId });
+  }
 }
 
 export const feedbackStore = new FeedbackStoreService();

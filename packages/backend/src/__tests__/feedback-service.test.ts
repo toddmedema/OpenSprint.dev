@@ -84,6 +84,13 @@ vi.mock("../websocket/index.js", () => ({
   broadcastToProject: vi.fn(),
 }));
 
+const mockStopTaskAndFreeSlot = vi.fn().mockResolvedValue(undefined);
+vi.mock("../services/orchestrator.service.js", () => ({
+  orchestratorService: {
+    stopTaskAndFreeSlot: (...args: unknown[]) => mockStopTaskAndFreeSlot(...args),
+  },
+}));
+
 const mockTriggerDeployForEvent = vi.fn().mockResolvedValue([]);
 vi.mock("../services/deploy-trigger.service.js", () => ({
   triggerDeployForEvent: (...args: unknown[]) => mockTriggerDeployForEvent(...args),
@@ -1900,7 +1907,7 @@ describe.skipIf(!feedbackServicePostgresOk)("FeedbackService", () => {
   });
 
   describe("cancelFeedback", () => {
-    it("should set status to cancelled and delete associated tasks", async () => {
+    it("should stop agents, delete tasks, delete feedback, and broadcast", async () => {
       await feedbackStore.insertFeedback(
         projectId,
         {
@@ -1921,9 +1928,14 @@ describe.skipIf(!feedbackServicePostgresOk)("FeedbackService", () => {
       const result = await feedbackService.cancelFeedback(projectId, "fb-cancel-1");
 
       expect(result.status).toBe("cancelled");
-      const stored = await feedbackService.getFeedback(projectId, "fb-cancel-1");
-      expect(stored.status).toBe("cancelled");
+      expect(result.id).toBe("fb-cancel-1");
 
+      await expect(feedbackService.getFeedback(projectId, "fb-cancel-1")).rejects.toMatchObject({
+        message: expect.stringContaining("fb-cancel-1"),
+      });
+
+      expect(mockStopTaskAndFreeSlot).toHaveBeenCalledWith(projectId, "task-a");
+      expect(mockStopTaskAndFreeSlot).toHaveBeenCalledWith(projectId, "task-b");
       expect(taskStore.deleteMany).toHaveBeenCalledWith(projectId, ["task-a", "task-b"]);
 
       expect(broadcastToProject).toHaveBeenCalledWith(
@@ -1961,7 +1973,7 @@ describe.skipIf(!feedbackServicePostgresOk)("FeedbackService", () => {
       expect(taskStore.deleteMany).not.toHaveBeenCalled();
     });
 
-    it("should not call deleteMany when feedback has no linked tasks", async () => {
+    it("should delete feedback and not call deleteMany when feedback has no linked tasks", async () => {
       await feedbackStore.insertFeedback(
         projectId,
         {
@@ -1981,9 +1993,12 @@ describe.skipIf(!feedbackServicePostgresOk)("FeedbackService", () => {
 
       expect(result.status).toBe("cancelled");
       expect(taskStore.deleteMany).not.toHaveBeenCalled();
+      await expect(feedbackService.getFeedback(projectId, "fb-cancel-3")).rejects.toMatchObject({
+        message: expect.stringContaining("fb-cancel-3"),
+      });
     });
 
-    it("should delete feedbackSourceTaskId when present", async () => {
+    it("should stop agents and delete feedbackSourceTaskId when present", async () => {
       await feedbackStore.insertFeedback(
         projectId,
         {
@@ -2003,10 +2018,18 @@ describe.skipIf(!feedbackServicePostgresOk)("FeedbackService", () => {
       const result = await feedbackService.cancelFeedback(projectId, "fb-cancel-4");
 
       expect(result.status).toBe("cancelled");
+      expect(mockStopTaskAndFreeSlot).toHaveBeenCalledWith(projectId, "task-x");
+      expect(mockStopTaskAndFreeSlot).toHaveBeenCalledWith(
+        projectId,
+        "chore-feedback-source"
+      );
       expect(taskStore.deleteMany).toHaveBeenCalledWith(projectId, [
         "task-x",
         "chore-feedback-source",
       ]);
+      await expect(feedbackService.getFeedback(projectId, "fb-cancel-4")).rejects.toMatchObject({
+        message: expect.stringContaining("fb-cancel-4"),
+      });
     });
   });
 

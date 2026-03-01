@@ -299,7 +299,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
     expect(savedChild.status).toBe("resolved");
   });
 
-  it("POST /projects/:id/feedback/:feedbackId/cancel should set status to cancelled", async () => {
+  it("POST /projects/:id/feedback/:feedbackId/cancel should delete feedback and return cancelled item", async () => {
     await feedbackStore.insertFeedback(
       projectId,
       {
@@ -322,8 +322,9 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
     expect(res.body.data.id).toBe("fb-cancel-1");
     expect(res.body.data.status).toBe("cancelled");
 
-    const saved = await feedbackStore.getFeedback(projectId, "fb-cancel-1");
-    expect(saved.status).toBe("cancelled");
+    await expect(feedbackStore.getFeedback(projectId, "fb-cancel-1")).rejects.toMatchObject({
+      message: expect.stringContaining("fb-cancel-1"),
+    });
   });
 
   it("POST /projects/:id/feedback/:feedbackId/cancel should return 404 when not found", async () => {

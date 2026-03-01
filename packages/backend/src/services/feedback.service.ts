@@ -19,6 +19,7 @@ import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { planComplexityToTask } from "./plan-complexity.js";
 import { feedbackStore } from "./feedback-store.service.js";
 import { writeFeedbackImages } from "./feedback-store.service.js";
+import { orchestratorService } from "./orchestrator.service.js";
 import { notificationService } from "./notification.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
@@ -1234,33 +1235,48 @@ export class FeedbackService {
   }
 
   /**
-   * Cancel a feedback item (status -> cancelled).
-   * Deletes all linked tasks (createdTaskIds and feedbackSourceTaskId). Does not cascade to child feedback.
-   * Intended for feedback where no linked tasks are in progress, in review, or done.
+   * Cancel in-progress feedback: stop any active agent, delete linked tasks, delete feedback item.
+   * Used when feedback has created tasks and an agent may be working. Signals orchestrator to abort
+   * the agent, deletes tasks, removes from inbox, and permanently deletes the feedback record.
    */
   async cancelFeedback(projectId: string, feedbackId: string): Promise<FeedbackItem> {
     const item = await this.getFeedback(projectId, feedbackId);
     if (item.status !== "pending") {
       return item;
     }
-    item.status = "cancelled";
-    await this.saveFeedback(projectId, item);
-
-    broadcastToProject(projectId, {
-      type: "feedback.resolved",
-      feedbackId: item.id,
-      item,
-    });
 
     const taskIdsToDelete: string[] = [...(item.createdTaskIds ?? [])];
     if (item.feedbackSourceTaskId) {
       taskIdsToDelete.push(item.feedbackSourceTaskId);
     }
+
+    // Signal orchestrator to stop any agent currently working on these tasks
+    for (const taskId of taskIdsToDelete) {
+      try {
+        await orchestratorService.stopTaskAndFreeSlot(projectId, taskId);
+      } catch (err) {
+        log.warn("stopTaskAndFreeSlot on cancel (may not have active agent)", {
+          projectId,
+          taskId,
+          err,
+        });
+      }
+    }
+
     if (taskIdsToDelete.length > 0) {
       await this.taskStore.deleteMany(projectId, taskIdsToDelete);
     }
 
-    return item;
+    await feedbackStore.deleteFeedback(projectId, feedbackId);
+
+    const cancelledItem: FeedbackItem = { ...item, status: "cancelled" };
+    broadcastToProject(projectId, {
+      type: "feedback.resolved",
+      feedbackId: item.id,
+      item: cancelledItem,
+    });
+
+    return cancelledItem;
   }
 
   async getFeedback(projectId: string, feedbackId: string): Promise<FeedbackItem> {
