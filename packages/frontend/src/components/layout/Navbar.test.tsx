@@ -22,26 +22,29 @@ const mockGetSettings = vi.fn();
 const mockProjectsList = vi.fn();
 const mockProjectsGet = vi.fn();
 const mockGetGlobalStatus = vi.fn();
+const mockGetKeys = vi.fn();
+const mockModelsList = vi.fn();
 vi.mock("../../api/client", () => ({
   api: {
     projects: {
       list: (...args: unknown[]) => mockProjectsList(...args),
       get: (...args: unknown[]) => mockProjectsGet(...args),
       getSettings: (...args: unknown[]) => mockGetSettings(...args),
+      updateSettings: vi.fn().mockResolvedValue({}),
+      getAgentsInstructions: vi.fn().mockResolvedValue({ content: "" }),
+      updateAgentsInstructions: vi.fn().mockResolvedValue({ saved: true }),
+    },
+    env: {
+      getKeys: (...args: unknown[]) => mockGetKeys(...args),
+      getGlobalStatus: (...args: unknown[]) => mockGetGlobalStatus(...args),
+    },
+    models: {
+      list: (...args: unknown[]) => mockModelsList(...args),
     },
     agents: { active: vi.fn().mockResolvedValue([]) },
     notifications: {
       listByProject: vi.fn().mockResolvedValue([]),
       listGlobal: vi.fn().mockResolvedValue([]),
-    },
-    env: {
-      getKeys: vi.fn().mockResolvedValue({
-        anthropic: true,
-        cursor: true,
-        claudeCli: true,
-        useCustomCli: false,
-      }),
-      getGlobalStatus: (...args: unknown[]) => mockGetGlobalStatus(...args),
     },
     globalSettings: {
       get: vi.fn().mockResolvedValue({ databaseUrl: "" }),
@@ -55,10 +58,25 @@ vi.mock("../../api/client", () => ({
 }));
 
 const storage: Record<string, string> = {};
+const mockSettings = {
+  simpleComplexityAgent: { type: "cursor" as const, model: null, cliCommand: null },
+  complexComplexityAgent: { type: "cursor" as const, model: null, cliCommand: null },
+  deployment: { mode: "custom" as const },
+  aiAutonomyLevel: "confirm_all" as const,
+};
+
 beforeEach(() => {
   mockProjectsList.mockResolvedValue([]);
   mockProjectsGet.mockResolvedValue(undefined);
   mockGetGlobalStatus.mockResolvedValue({ hasAnyKey: true, useCustomCli: false });
+  mockGetSettings.mockResolvedValue(mockSettings);
+  mockGetKeys.mockResolvedValue({
+    anthropic: true,
+    cursor: true,
+    claudeCli: true,
+    useCustomCli: false,
+  });
+  mockModelsList.mockResolvedValue([]);
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => storage[key] ?? null,
     setItem: (key: string, value: string) => {
@@ -632,5 +650,75 @@ describe("Navbar", () => {
 
     const settingsLink = screen.getByRole("link", { name: "Settings" });
     expect(settingsLink).toHaveClass("phase-tab-active");
+  });
+
+  it("project settings page: only Settings icon has active state, not Sketch phase tab", async () => {
+    const { ProjectSettingsPage } = await import("../../pages/ProjectSettingsPage");
+    const mockProject = {
+      id: "proj-1",
+      name: "Test",
+      repoPath: "/path",
+      currentPhase: "sketch" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
+    mockProjectsGet.mockResolvedValue(mockProject);
+    render(
+      <ThemeProvider>
+        <DisplayPreferencesProvider>
+          <Provider store={createStore()}>
+            <QueryClientProvider client={queryClient}>
+              <MemoryRouter initialEntries={["/projects/proj-1/settings"]}>
+                <Routes>
+                  <Route path="/projects/:projectId/settings" element={<ProjectSettingsPage />} />
+                </Routes>
+              </MemoryRouter>
+            </QueryClientProvider>
+          </Provider>
+        </DisplayPreferencesProvider>
+      </ThemeProvider>
+    );
+
+    await screen.findByTestId("project-settings-page");
+    const settingsLink = screen.getByRole("link", { name: "Project settings" });
+    const sketchTab = screen.getByRole("button", { name: "Sketch" });
+    expect(settingsLink).toHaveClass("phase-tab-active");
+    expect(sketchTab).toHaveClass("phase-tab-inactive");
+    expect(sketchTab).not.toHaveClass("phase-tab-active");
+  });
+
+  it("project help page: only Help icon has active state, not Sketch phase tab", async () => {
+    const { ProjectHelpPage } = await import("../../pages/ProjectHelpPage");
+    const mockProject = {
+      id: "proj-1",
+      name: "Test",
+      repoPath: "/path",
+      currentPhase: "sketch" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
+    mockProjectsGet.mockResolvedValue(mockProject);
+    render(
+      <ThemeProvider>
+        <DisplayPreferencesProvider>
+          <Provider store={createStore()}>
+            <QueryClientProvider client={queryClient}>
+              <MemoryRouter initialEntries={["/projects/proj-1/help"]}>
+                <Routes>
+                  <Route path="/projects/:projectId/help" element={<ProjectHelpPage />} />
+                </Routes>
+              </MemoryRouter>
+            </QueryClientProvider>
+          </Provider>
+        </DisplayPreferencesProvider>
+      </ThemeProvider>
+    );
+
+    await screen.findByTestId("help-page");
+    const helpLink = screen.getByRole("link", { name: "Help" });
+    const sketchTab = screen.getByRole("button", { name: "Sketch" });
+    expect(helpLink).toHaveClass("phase-tab-active");
+    expect(sketchTab).toHaveClass("phase-tab-inactive");
+    expect(sketchTab).not.toHaveClass("phase-tab-active");
   });
 });

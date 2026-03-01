@@ -219,7 +219,11 @@ export function Navbar({
               <button
                 key={phase.key}
                 onClick={() => onPhaseChange(phase.key)}
-                className={`phase-tab ${currentPhase === phase.key ? "phase-tab-active" : "phase-tab-inactive"}`}
+                className={`phase-tab ${
+                  currentPhase === phase.key && !isSettingsActive && !isHelpActive
+                    ? "phase-tab-active"
+                    : "phase-tab-inactive"
+                }`}
               >
                 {phase.label}
               </button>
