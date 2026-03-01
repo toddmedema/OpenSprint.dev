@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { FolderBrowser } from "./FolderBrowser";
 import { CloseButton } from "./CloseButton";
 import { ModelSelect } from "./ModelSelect";
@@ -447,8 +447,14 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                         {(needsAnthropic || needsCursor) && (
                           <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
                             <p className="text-sm text-theme-warning-text">
-                              <strong>API key required:</strong> Configure API keys in Settings (gear
-                              icon on the homepage).
+                              <strong>API key required:</strong>{" "}
+                              <Link
+                                to="/settings"
+                                className="underline hover:opacity-80"
+                                data-testid="configure-api-keys-link"
+                              >
+                                Configure API keys in Settings
+                              </Link>
                             </p>
                           </div>
                         )}

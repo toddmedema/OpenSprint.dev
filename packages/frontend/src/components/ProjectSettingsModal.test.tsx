@@ -196,7 +196,7 @@ describe("ProjectSettingsModal", () => {
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
   });
 
-  it("shows configure-in-settings message when claude is selected and key is missing", async () => {
+  it("shows configure-in-settings link when claude is selected and key is missing", async () => {
     mockGetKeys.mockResolvedValue({
       anthropic: false,
       cursor: true,
@@ -211,7 +211,9 @@ describe("ProjectSettingsModal", () => {
     await userEvent.click(agentConfigTab);
 
     await screen.findByText(/API key required/);
-    expect(screen.getByText(/Configure API keys in Settings/)).toBeInTheDocument();
+    const link = screen.getByTestId("configure-api-keys-link");
+    expect(link).toHaveTextContent("Configure API keys in Settings");
+    expect(link).toHaveAttribute("href", "/settings");
     expect(screen.queryByPlaceholderText("sk-ant-...")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
   });
