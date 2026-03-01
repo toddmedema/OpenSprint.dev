@@ -563,6 +563,53 @@ export function validateApiKeyEntry(entry: unknown): ApiKeyEntry {
 }
 
 /**
+ * Merge incoming apiKeys with current. When an entry has id but no value (frontend
+ * sends masked data), use the existing value from current so we can persist unchanged keys.
+ * Providers in incoming replace/merge; providers not in incoming are removed (replace semantics).
+ */
+export function mergeApiKeysWithCurrent(
+  incoming: unknown,
+  current: ApiKeys | undefined
+): ApiKeys | undefined {
+  if (incoming == null || typeof incoming !== "object" || Array.isArray(incoming)) {
+    return current;
+  }
+  const obj = incoming as Record<string, unknown>;
+  const result: ApiKeys = {};
+  for (const provider of API_KEY_PROVIDERS) {
+    const arr = obj[provider];
+    if (arr == null) continue;
+    if (!Array.isArray(arr)) continue;
+    if (arr.length === 0) continue;
+    const currentEntries = current?.[provider] ?? [];
+    const merged: ApiKeyEntry[] = [];
+    for (const item of arr) {
+      if (!item || typeof item !== "object") continue;
+      const e = item as Record<string, unknown>;
+      const id = typeof e.id === "string" ? e.id.trim() : "";
+      if (!id) continue;
+      let value: string;
+      if (typeof e.value === "string" && e.value.trim()) {
+        value = e.value;
+      } else {
+        const existing = currentEntries.find((x) => x.id === id);
+        value = existing?.value ?? "";
+      }
+      if (!value) continue;
+      merged.push({
+        id,
+        value,
+        ...(e.limitHitAt != null && typeof e.limitHitAt === "string" && { limitHitAt: e.limitHitAt }),
+      });
+    }
+    if (merged.length > 0) {
+      result[provider] = merged;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+/**
  * Sanitize raw apiKeys into valid ApiKeys. Returns undefined if input is empty/invalid.
  * Backward compat: ignores unknown provider keys; validates entries for known providers.
  */

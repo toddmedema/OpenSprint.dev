@@ -9,6 +9,7 @@ import path from "path";
 import type { GlobalSettings, ApiKeys } from "@opensprint/shared";
 import {
   sanitizeApiKeys,
+  mergeApiKeysWithCurrent,
   DEFAULT_DATABASE_URL,
   validateDatabaseUrl,
 } from "@opensprint/shared";
@@ -114,7 +115,8 @@ export async function updateGlobalSettings(
   const merged: GlobalSettings = { ...current };
 
   if (updates.apiKeys !== undefined) {
-    const sanitized = sanitizeApiKeys(updates.apiKeys);
+    const mergedKeys = mergeApiKeysWithCurrent(updates.apiKeys, current.apiKeys);
+    const sanitized = sanitizeApiKeys(mergedKeys);
     merged.apiKeys = sanitized ?? undefined;
   }
   if (updates.useCustomCli !== undefined) {

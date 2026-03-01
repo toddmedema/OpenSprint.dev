@@ -1,4 +1,5 @@
 import type {
+  MaskedApiKeys,
   Project,
   CreateProjectRequest,
   ScaffoldProjectRequest,
@@ -117,9 +118,9 @@ export const api = {
   },
   globalSettings: {
     get: () =>
-      request<{ databaseUrl: string }>("/global-settings"),
-    put: (updates: { databaseUrl?: string }) =>
-      request<{ databaseUrl: string }>("/global-settings", {
+      request<{ databaseUrl: string; apiKeys?: MaskedApiKeys }>("/global-settings"),
+    put: (updates: { databaseUrl?: string; apiKeys?: unknown }) =>
+      request<{ databaseUrl: string; apiKeys?: MaskedApiKeys }>("/global-settings", {
         method: "PUT",
         body: JSON.stringify(updates),
       }),

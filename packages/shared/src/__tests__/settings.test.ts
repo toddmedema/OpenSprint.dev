@@ -16,6 +16,7 @@ import {
   maskDatabaseUrl,
   isLocalDatabaseUrl,
   sanitizeApiKeys,
+  mergeApiKeysWithCurrent,
   isLimitHitExpired,
   maskApiKeysForResponse,
   getProvidersInUse,
@@ -501,6 +502,70 @@ describe("validateApiKeyEntry", () => {
 
   it("throws when value is not a string", () => {
     expect(() => validateApiKeyEntry({ id: "x", value: 123 })).toThrow("string value");
+  });
+});
+
+describe("mergeApiKeysWithCurrent", () => {
+  it("returns current when incoming is null or invalid", () => {
+    const current: ApiKeys = {
+      ANTHROPIC_API_KEY: [{ id: "k1", value: "secret" }],
+    };
+    expect(mergeApiKeysWithCurrent(null, current)).toEqual(current);
+    expect(mergeApiKeysWithCurrent("string", current)).toEqual(current);
+    expect(mergeApiKeysWithCurrent([], current)).toEqual(current);
+  });
+
+  it("preserves value when id exists and value omitted (masked)", () => {
+    const current: ApiKeys = {
+      ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-secret" }],
+    };
+    const incoming = {
+      ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••" }],
+    };
+    const result = mergeApiKeysWithCurrent(incoming, current);
+    expect(result?.ANTHROPIC_API_KEY).toEqual([{ id: "k1", value: "sk-ant-secret" }]);
+  });
+
+  it("replaces value when new value provided", () => {
+    const current: ApiKeys = {
+      ANTHROPIC_API_KEY: [{ id: "k1", value: "old" }],
+    };
+    const incoming = {
+      ANTHROPIC_API_KEY: [{ id: "k1", value: "new-secret" }],
+    };
+    const result = mergeApiKeysWithCurrent(incoming, current);
+    expect(result?.ANTHROPIC_API_KEY).toEqual([{ id: "k1", value: "new-secret" }]);
+  });
+
+  it("removes providers not in incoming (replace semantics)", () => {
+    const current: ApiKeys = {
+      ANTHROPIC_API_KEY: [{ id: "a1", value: "anth" }],
+      CURSOR_API_KEY: [{ id: "c1", value: "cursor" }],
+    };
+    const incoming = {
+      ANTHROPIC_API_KEY: [{ id: "a1", value: "anth-updated" }],
+    };
+    const result = mergeApiKeysWithCurrent(incoming, current);
+    expect(result?.ANTHROPIC_API_KEY).toEqual([{ id: "a1", value: "anth-updated" }]);
+    expect(result?.CURSOR_API_KEY).toBeUndefined();
+  });
+
+  it("adds new entry with new id", () => {
+    const current: ApiKeys = {
+      ANTHROPIC_API_KEY: [{ id: "k1", value: "v1" }],
+    };
+    const incoming = {
+      ANTHROPIC_API_KEY: [
+        { id: "k1", value: "v1" },
+        { id: "k2", value: "v2" },
+      ],
+    };
+    const result = mergeApiKeysWithCurrent(incoming, current);
+    expect(result?.ANTHROPIC_API_KEY).toHaveLength(2);
+    expect(result?.ANTHROPIC_API_KEY).toEqual([
+      { id: "k1", value: "v1" },
+      { id: "k2", value: "v2" },
+    ]);
   });
 });
 

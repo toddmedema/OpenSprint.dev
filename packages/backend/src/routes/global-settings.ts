@@ -1,8 +1,15 @@
 import { Router, Request } from "express";
 import type { ApiResponse } from "@opensprint/shared";
-import { maskDatabaseUrl, validateDatabaseUrl, DEFAULT_DATABASE_URL } from "@opensprint/shared";
+import {
+  maskDatabaseUrl,
+  maskApiKeysForResponse,
+  validateDatabaseUrl,
+  DEFAULT_DATABASE_URL,
+  type MaskedApiKeys,
+} from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
+import type { GlobalSettings } from "@opensprint/shared";
 import {
   getGlobalSettings,
   updateGlobalSettings,
@@ -13,28 +20,34 @@ export const globalSettingsRouter = Router();
 /** Response shape for GET /global-settings */
 export interface GlobalSettingsResponse {
   databaseUrl: string;
+  apiKeys?: MaskedApiKeys;
 }
 
-// GET /global-settings — Returns databaseUrl masked (host/port visible, password redacted).
+function buildResponse(settings: GlobalSettings) {
+  const effectiveUrl = settings.databaseUrl ?? DEFAULT_DATABASE_URL;
+  return {
+    databaseUrl: maskDatabaseUrl(effectiveUrl),
+    ...(settings.apiKeys && { apiKeys: maskApiKeysForResponse(settings.apiKeys) }),
+  };
+}
+
+// GET /global-settings — Returns databaseUrl masked (host/port visible, password redacted), apiKeys masked.
 globalSettingsRouter.get("/", async (_req, res, next) => {
   try {
     const settings = await getGlobalSettings();
-    const effectiveUrl = settings.databaseUrl ?? DEFAULT_DATABASE_URL;
-    const masked = maskDatabaseUrl(effectiveUrl);
-
     res.json({
-      data: { databaseUrl: masked },
+      data: buildResponse(settings),
     } as ApiResponse<GlobalSettingsResponse>);
   } catch (err) {
     next(err);
   }
 });
 
-// PUT /global-settings — Accepts databaseUrl, validates format, writes to global-settings.json.
+// PUT /global-settings — Accepts databaseUrl, apiKeys. Validates and sanitizes. Merge apiKeys with existing (preserve value when id exists and value omitted).
 globalSettingsRouter.put("/", async (req: Request, res, next) => {
   try {
-    const body = req.body as { databaseUrl?: string };
-    const updates: { databaseUrl?: string } = {};
+    const body = req.body as { databaseUrl?: string; apiKeys?: unknown };
+    const updates: { databaseUrl?: string; apiKeys?: unknown } = {};
 
     if (body.databaseUrl !== undefined) {
       if (typeof body.databaseUrl !== "string") {
@@ -60,19 +73,20 @@ globalSettingsRouter.put("/", async (req: Request, res, next) => {
       }
     }
 
+    if (body.apiKeys !== undefined) {
+      updates.apiKeys = body.apiKeys;
+    }
+
     if (Object.keys(updates).length === 0) {
       const current = await getGlobalSettings();
-      const effectiveUrl = current.databaseUrl ?? DEFAULT_DATABASE_URL;
       return res.json({
-        data: { databaseUrl: maskDatabaseUrl(effectiveUrl) },
+        data: buildResponse(current),
       } as ApiResponse<GlobalSettingsResponse>);
     }
 
     const updated = await updateGlobalSettings(updates);
-    const effectiveUrl = updated.databaseUrl ?? DEFAULT_DATABASE_URL;
-
     res.json({
-      data: { databaseUrl: maskDatabaseUrl(effectiveUrl) },
+      data: buildResponse(updated),
     } as ApiResponse<GlobalSettingsResponse>);
   } catch (err) {
     next(err);

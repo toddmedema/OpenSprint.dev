@@ -181,4 +181,100 @@ describe("Global Settings API", () => {
       expect(res.body.error?.code).toBe("INVALID_INPUT");
     });
   });
+
+  describe("GET /global-settings with apiKeys", () => {
+    it("returns masked apiKeys when configured", async () => {
+      await setGlobalSettings({
+        apiKeys: {
+          ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-secret123" }],
+          CURSOR_API_KEY: [{ id: "k2", value: "cursor-key-xyz" }],
+        },
+      });
+
+      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.apiKeys).toBeDefined();
+      expect(res.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([
+        { id: "k1", masked: "••••••••" },
+      ]);
+      expect(res.body.data.apiKeys.CURSOR_API_KEY).toEqual([
+        { id: "k2", masked: "••••••••" },
+      ]);
+      expect(res.body.data.apiKeys.ANTHROPIC_API_KEY[0]).not.toHaveProperty("value");
+      expect(res.body.data.apiKeys.ANTHROPIC_API_KEY[0]).not.toContain("secret");
+    });
+
+    it("omits apiKeys when not configured", async () => {
+      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.databaseUrl).toBeDefined();
+      expect(res.body.data.apiKeys).toBeUndefined();
+    });
+  });
+
+  describe("PUT /global-settings with apiKeys", () => {
+    it("accepts and persists apiKeys, returns masked", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          apiKeys: {
+            ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-new-key" }],
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.apiKeys).toEqual({
+        ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••" }],
+      });
+      expect(res.body.data.apiKeys.ANTHROPIC_API_KEY[0]).not.toContain("sk-ant-new-key");
+
+      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
+      expect(getRes.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([
+        { id: "k1", masked: "••••••••" },
+      ]);
+    });
+
+    it("merges apiKeys with existing, preserves value when omitted", async () => {
+      await setGlobalSettings({
+        apiKeys: {
+          ANTHROPIC_API_KEY: [{ id: "k1", value: "original-secret" }],
+        },
+      });
+
+      const res = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          apiKeys: {
+            ANTHROPIC_API_KEY: [{ id: "k1" }],
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([
+        { id: "k1", masked: "••••••••" },
+      ]);
+
+      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
+      expect(getRes.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([
+        { id: "k1", masked: "••••••••" },
+      ]);
+    });
+
+    it("accepts databaseUrl and apiKeys together", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          databaseUrl: "postgresql://u:p@localhost:5432/db",
+          apiKeys: {
+            CURSOR_API_KEY: [{ id: "c1", value: "cursor-key" }],
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.databaseUrl).toContain("localhost");
+      expect(res.body.data.apiKeys.CURSOR_API_KEY).toEqual([
+        { id: "c1", masked: "••••••••" },
+      ]);
+    });
+  });
 });
