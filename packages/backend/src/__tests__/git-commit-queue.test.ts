@@ -155,6 +155,7 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
     await gitCommitQueue.enqueueAndWait({
       type: "worktree_merge",
       repoPath,
+      worktreePath: repoPath,
       branchName: "opensprint/task-1",
       taskId: "opensprint.dev-abc.1",
       taskTitle: "Test task",
@@ -187,6 +188,7 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
     await gitCommitQueue.enqueueAndWait({
       type: "worktree_merge",
       repoPath,
+      worktreePath: repoPath,
       branchName: "opensprint/task-2",
       taskId: "opensprint.dev-abc.2",
       taskTitle: "Retry merge",
@@ -213,6 +215,7 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
         gitCommitQueue.enqueueAndWait({
           type: "worktree_merge",
           repoPath,
+          worktreePath: repoPath,
           branchName: "another-branch",
           taskId: "opensprint.dev-abc.3",
           taskTitle: "test merge",
@@ -253,6 +256,7 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
     await gitCommitQueue.enqueueAndWait({
       type: "worktree_merge",
       repoPath,
+      worktreePath: repoPath,
       branchName: "opensprint/task-long",
       taskId: "opensprint.dev-zar.3",
       taskTitle: "Add agent heartbeat monitoring and reporting",
@@ -296,6 +300,7 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
       await gitCommitQueue.enqueueAndWait({
         type: "worktree_merge",
         repoPath,
+        worktreePath: repoPath,
         branchName: "opensprint/task-store-test",
         taskId: task.id,
         taskTitle: "Fallback title (should be ignored)",
@@ -318,6 +323,7 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
     await gitCommitQueue.enqueueAndWait({
       type: "worktree_merge",
       repoPath,
+      worktreePath: repoPath,
       branchName: "opensprint/task-fallback",
       taskId: "opensprint.dev-nonexistent.1",
       taskTitle: "Fallback when task not in store",

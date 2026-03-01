@@ -21,6 +21,10 @@ const { mockOpenAICreate } = vi.hoisted(() => ({
   mockOpenAICreate: vi.fn(),
 }));
 
+const { mockShellExec } = vi.hoisted(() => ({
+  mockShellExec: vi.fn(),
+}));
+
 vi.mock("../services/agent-client.js", () => ({
   AgentClient: vi.fn().mockImplementation(() => ({
     spawnWithTaskFile: mockSpawnWithTaskFile,
@@ -53,12 +57,17 @@ vi.mock("openai", () => ({
   })),
 }));
 
+vi.mock("../utils/shell-exec.js", () => ({
+  shellExec: (...args: unknown[]) => mockShellExec(...args),
+}));
+
 describe("AgentService", () => {
   let service: AgentService;
 
   beforeEach(() => {
     service = new AgentService();
     vi.clearAllMocks();
+    mockShellExec.mockResolvedValue({ stdout: "", stderr: "" });
   });
 
   describe("invokeReviewAgent", () => {
@@ -127,7 +136,16 @@ describe("AgentService", () => {
       );
 
       const config: AgentConfig = { type: "cursor", model: null, cliCommand: null };
-      const result = await service.runMergerAgentAndWait("proj-123", "/tmp/repo", config);
+      const result = await service.runMergerAgentAndWait({
+        projectId: "proj-123",
+        cwd: "/tmp/repo",
+        config,
+        phase: "merge_to_main",
+        taskId: "os-1",
+        branchName: "opensprint/os-1",
+        conflictedFiles: ["src/conflict.ts"],
+        testCommand: "npm test",
+      });
 
       expect(result).toBe(true);
       expect(mockSpawnWithTaskFile).toHaveBeenCalledWith(
@@ -140,6 +158,10 @@ describe("AgentService", () => {
         undefined,
         "proj-123"
       );
+      expect(mockShellExec).toHaveBeenCalledWith("git diff --check", {
+        cwd: "/tmp/repo",
+        timeout: 10_000,
+      });
     });
 
     it("returns false when merger agent exits with non-zero code", async () => {
@@ -151,7 +173,15 @@ describe("AgentService", () => {
       );
 
       const config: AgentConfig = { type: "claude", model: "claude-sonnet-4", cliCommand: null };
-      const result = await service.runMergerAgentAndWait("proj-123", "/tmp/repo", config);
+      const result = await service.runMergerAgentAndWait({
+        projectId: "proj-123",
+        cwd: "/tmp/repo",
+        config,
+        phase: "rebase_before_merge",
+        taskId: "os-2",
+        branchName: "opensprint/os-2",
+        conflictedFiles: ["src/conflict.ts"],
+      });
 
       expect(result).toBe(false);
     });

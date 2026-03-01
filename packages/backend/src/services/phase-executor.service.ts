@@ -83,10 +83,16 @@ export class PhaseExecutorService {
     try {
       let wtPath: string;
       if (gitWorkingMode === "branches") {
+        if (!retryContext?.useExistingBranch) {
+          await this.host.branchManager.syncMainWithOrigin(repoPath);
+        }
         await this.host.branchManager.createOrCheckoutBranch(repoPath, branchName);
         wtPath = repoPath;
         await this.host.branchManager.ensureRepoNodeModules(repoPath);
       } else {
+        if (!retryContext?.useExistingBranch) {
+          await this.host.branchManager.syncMainWithOrigin(repoPath);
+        }
         wtPath = await this.host.branchManager.createTaskWorktree(repoPath, task.id);
       }
       (slot as { worktreePath: string | null }).worktreePath = wtPath;
@@ -97,9 +103,15 @@ export class PhaseExecutorService {
           await this.host.branchManager.rebaseOntoMain(wtPath);
           log.info("Rebased existing branch onto main before retry", { taskId: task.id });
         } catch {
+          const conflictedFiles = await this.host.branchManager.getConflictedFiles(wtPath).catch(
+            () => []
+          );
           await this.host.branchManager.rebaseAbort(wtPath);
+          await this.host.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
+          await this.host.taskStore.setMergeStage(projectId, task.id, "rebase_before_merge");
           log.info("Rebase onto main had conflicts, agent will work from diverged state", {
             taskId: task.id,
+            conflictedFiles,
           });
         }
       }

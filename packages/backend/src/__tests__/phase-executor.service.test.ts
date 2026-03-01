@@ -12,6 +12,7 @@ import type { AgentSlotLike } from "../services/orchestrator-phase-context.js";
 const mockCreateTaskWorktree = vi.fn();
 const mockCreateOrCheckoutBranch = vi.fn();
 const mockEnsureRepoNodeModules = vi.fn();
+const mockSyncMainWithOrigin = vi.fn();
 const mockGetSettings = vi.fn();
 const mockPreflightCheck = vi.fn();
 const mockBuildContext = vi.fn();
@@ -31,9 +32,11 @@ vi.mock("../services/branch-manager.js", () => ({
     createTaskWorktree: mockCreateTaskWorktree,
     createOrCheckoutBranch: mockCreateOrCheckoutBranch,
     ensureRepoNodeModules: mockEnsureRepoNodeModules,
+    syncMainWithOrigin: mockSyncMainWithOrigin,
     waitForGitReady: vi.fn().mockResolvedValue(undefined),
     rebaseOntoMain: vi.fn().mockResolvedValue(undefined),
     rebaseAbort: vi.fn().mockResolvedValue(undefined),
+    getConflictedFiles: vi.fn().mockResolvedValue([]),
   })),
 }));
 
@@ -129,6 +132,7 @@ describe("PhaseExecutorService", () => {
     mockCreateTaskWorktree.mockResolvedValue(wtPath);
     mockCreateOrCheckoutBranch.mockResolvedValue(undefined);
     mockEnsureRepoNodeModules.mockResolvedValue(true);
+    mockSyncMainWithOrigin.mockResolvedValue("up_to_date");
     mockPreflightCheck.mockResolvedValue(undefined);
     mockBuildContext.mockResolvedValue({
       prdExcerpt: "",
@@ -161,9 +165,11 @@ describe("PhaseExecutorService", () => {
         createTaskWorktree: mockCreateTaskWorktree,
         createOrCheckoutBranch: mockCreateOrCheckoutBranch,
         ensureRepoNodeModules: mockEnsureRepoNodeModules,
+        syncMainWithOrigin: mockSyncMainWithOrigin,
         waitForGitReady: vi.fn().mockResolvedValue(undefined),
         rebaseOntoMain: vi.fn().mockResolvedValue(undefined),
         rebaseAbort: vi.fn().mockResolvedValue(undefined),
+        getConflictedFiles: vi.fn().mockResolvedValue([]),
       } as PhaseExecutorHost["branchManager"],
       contextAssembler: {
         buildContext: mockBuildContext,

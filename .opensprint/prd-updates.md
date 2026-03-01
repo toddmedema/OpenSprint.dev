@@ -9,7 +9,7 @@ OpenSprint is a web application that guides users through the complete software 
 
 The platform pairs a browser-based interface with a background agent CLI, enabling AI to autonomously execute development tasks while keeping the user in control of strategy and direction. The core philosophy is that humans should focus on _what_ to build and _why_, while AI handles _how_ to build it.
 
-OpenSprint supports multiple agent backends (Claude, Cursor, and custom CLI agents), comprehensive automated testing including end-to-end and integration tests, configurable human-in-the-loop thresholds, and full offline operation for users with local agent setups.
+OpenSprint supports multiple agent backends (Claude, Cursor, OpenAI, and custom CLI agents), comprehensive automated testing including end-to-end and integration tests, configurable human-in-the-loop thresholds, and full offline operation for users with local agent setups.
 [/PRD_UPDATE]
 
 [PRD_UPDATE:problem_statement]
@@ -132,7 +132,7 @@ Three primary layers: web frontend, backend API server, and background agent CLI
 | ------------------- | ---------------------------------------------------------------------------- |
 | Web Frontend        | UI for all five phases; real-time agent monitoring                           |
 | Backend API         | Project state, WebSocket relay, PRD versioning, agent orchestration          |
-| Agent CLI           | Code generation, testing, debugging (Claude/Cursor/Custom)                   |
+| Agent CLI           | Code generation, testing, debugging (Claude/Cursor/OpenAI/Custom)           |
 | Orchestration Layer | Deterministic Node.js; agent lifecycle; git/task ops; commit queue; watchdog |
 | TaskService         | Issue CRUD, dependencies, `ready()`, assignee, hierarchical IDs              |
 | Test Runner         | Jest, Playwright, etc. — auto-detected from `package.json`                   |

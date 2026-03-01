@@ -24,6 +24,7 @@ const {
   mockTaskStoreExport,
   mockTaskStoreGetStatusMap,
   mockTaskStoreListAll,
+  mockTaskStoreGetBlockersFromIssue,
   mockGetProject,
   mockGetRepoPath,
   mockGetProjectByRepoPath,
@@ -31,6 +32,7 @@ const {
   mockCreateTaskWorktree,
   mockCreateOrCheckoutBranch,
   mockEnsureRepoNodeModules,
+  mockSyncMainWithOrigin,
   mockRemoveTaskWorktree,
   mockDeleteBranch,
   mockGetCommitCountAhead,
@@ -82,6 +84,7 @@ const {
   mockTaskStoreExport: vi.fn().mockResolvedValue(undefined),
   mockTaskStoreGetStatusMap: vi.fn(),
   mockTaskStoreListAll: vi.fn(),
+  mockTaskStoreGetBlockersFromIssue: vi.fn().mockReturnValue([]),
   mockGetProject: vi.fn(),
   mockGetRepoPath: vi.fn(),
   mockGetProjectByRepoPath: vi.fn().mockResolvedValue({ id: "proj-1", repoPath: "/tmp/repo" }),
@@ -89,6 +92,7 @@ const {
   mockCreateTaskWorktree: vi.fn(),
   mockCreateOrCheckoutBranch: vi.fn(),
   mockEnsureRepoNodeModules: vi.fn(),
+  mockSyncMainWithOrigin: vi.fn(),
   mockRemoveTaskWorktree: vi.fn(),
   mockDeleteBranch: vi.fn(),
   mockGetCommitCountAhead: vi.fn(),
@@ -162,9 +166,12 @@ vi.mock("../services/task-store.service.js", async () => {
     setCumulativeAttempts: mockTaskStoreSetCumulativeAttempts,
     addLabel: mockTaskStoreAddLabel,
     removeLabel: mockTaskStoreRemoveLabel,
+    setConflictFiles: vi.fn().mockResolvedValue(undefined),
+    setMergeStage: vi.fn().mockResolvedValue(undefined),
     export: mockTaskStoreExport,
     getStatusMap: mockTaskStoreGetStatusMap,
     listAll: mockTaskStoreListAll,
+    getBlockersFromIssue: mockTaskStoreGetBlockersFromIssue,
   };
   return {
     TaskStoreService: vi.fn().mockImplementation(() => mockInstance),
@@ -196,6 +203,7 @@ vi.mock("../services/branch-manager.js", () => {
       createTaskWorktree: mockCreateTaskWorktree,
       createOrCheckoutBranch: mockCreateOrCheckoutBranch,
       ensureRepoNodeModules: mockEnsureRepoNodeModules,
+      syncMainWithOrigin: mockSyncMainWithOrigin,
       removeTaskWorktree: mockRemoveTaskWorktree,
       deleteBranch: mockDeleteBranch,
       getCommitCountAhead: mockGetCommitCountAhead,
@@ -404,6 +412,7 @@ describe("OrchestratorService (slot-based model)", () => {
     mockRunFullRecovery.mockResolvedValue({ reattached: [], requeued: [], cleaned: [] });
     mockTaskStoreGetStatusMap.mockResolvedValue(new Map());
     mockTaskStoreListAll.mockResolvedValue([]);
+    mockTaskStoreGetBlockersFromIssue.mockReturnValue([]);
     mockCaptureBranchDiff.mockResolvedValue("");
     mockCommitWip.mockResolvedValue(undefined);
     mockRemoveTaskWorktree.mockResolvedValue(undefined);

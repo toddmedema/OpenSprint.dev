@@ -52,6 +52,7 @@ describe("TaskScheduler", () => {
     areAllBlockersClosed: ReturnType<typeof vi.fn>;
     show: ReturnType<typeof vi.fn>;
     getBlockers: ReturnType<typeof vi.fn>;
+    getBlockersFromIssue: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -60,6 +61,7 @@ describe("TaskScheduler", () => {
       areAllBlockersClosed: vi.fn().mockResolvedValue(true),
       show: vi.fn().mockResolvedValue(makeTask("dep")),
       getBlockers: vi.fn().mockResolvedValue([]),
+      getBlockersFromIssue: vi.fn().mockReturnValue([]),
     };
     scheduler = new TaskScheduler(mockTaskStore as TaskStoreService);
   });
@@ -141,6 +143,43 @@ describe("TaskScheduler", () => {
       const result = await scheduler.selectTasks("proj", "/repo", [taskB, taskC], slots, 3);
       expect(result).toHaveLength(1);
       expect(result[0].task.id).toBe("c");
+    });
+
+    it("serializes heuristic tasks in conservative mode when another slot is active", async () => {
+      const activeScope = {
+        taskId: "active",
+        files: new Set(["src/shared/config.ts"]),
+        directories: new Set(["src/shared"]),
+        confidence: "explicit" as const,
+      };
+      const slots = new Map([["active", makeSlot("active", activeScope)]]);
+      const heuristicTask = makeTask("heuristic");
+
+      const result = await scheduler.selectTasks("proj", "/repo", [heuristicTask], slots, 2, {
+        unknownScopeStrategy: "conservative",
+      });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("allows heuristic tasks in optimistic mode when they do not overlap known scopes", async () => {
+      const explicitTask = makeTask("explicit", 2, ['files:{"modify":["src/frontend/A.tsx"]}']);
+      const heuristicTask = {
+        ...makeTask("heuristic"),
+        description: "Touch packages/backend/src/services only",
+      };
+
+      const result = await scheduler.selectTasks(
+        "proj",
+        "/repo",
+        [explicitTask, heuristicTask],
+        new Map(),
+        2,
+        { unknownScopeStrategy: "optimistic" }
+      );
+
+      expect(result).toHaveLength(2);
+      expect(result[1].task.id).toBe("heuristic");
     });
 
     it("maxConcurrentCoders: 1 dispatches one at a time", async () => {

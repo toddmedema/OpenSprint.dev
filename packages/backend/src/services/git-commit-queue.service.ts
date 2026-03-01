@@ -5,11 +5,12 @@
  * commits (PRD update, worktree merge). Task state lives on the central server only.
  */
 
-import type { AgentConfig } from "@opensprint/shared";
+import { resolveTestCommand, type AgentConfig } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
-import { BranchManager, MergeConflictError } from "./branch-manager.js";
+import { BranchManager, MergeConflictError, RebaseConflictError } from "./branch-manager.js";
 import { ProjectService } from "./project.service.js";
 import { agentService } from "./agent.service.js";
+import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
 import { waitForGitReady } from "../utils/git-lock.js";
 import { shellExec } from "../utils/shell-exec.js";
@@ -22,6 +23,18 @@ export class RepoConflictError extends Error {
       `Cannot proceed: repo has ${unmergedFiles.length} unmerged file(s): ${unmergedFiles.join(", ")}`
     );
     this.name = "RepoConflictError";
+  }
+}
+
+export class MergeJobError extends Error {
+  constructor(
+    message: string,
+    public readonly stage: "rebase_before_merge" | "merge_to_main",
+    public readonly conflictedFiles: string[],
+    public readonly resolvedBy: "requeued" | "blocked" = "requeued"
+  ) {
+    super(message);
+    this.name = "MergeJobError";
   }
 }
 
@@ -43,6 +56,7 @@ export interface PrdUpdateJob {
 export interface WorktreeMergeJob {
   type: "worktree_merge";
   repoPath: string;
+  worktreePath: string;
   branchName: string;
   taskId: string;
   /** Fallback when task store show fails; queue fetches title via taskStore.show(taskId) */
@@ -143,6 +157,23 @@ class GitCommitQueueImpl implements GitCommitQueueService {
     }
   }
 
+  private async getMergeAgentConfig(repoPath: string, _taskId: string): Promise<{
+    projectId: string;
+    config: AgentConfig;
+    testCommand?: string;
+  }> {
+    const project = await this.projectService.getProjectByRepoPath(repoPath);
+    if (!project) {
+      throw new Error(`Cannot resolve project for repo path: ${repoPath}`);
+    }
+    const settings = await this.projectService.getSettings(project.id);
+    return {
+      projectId: project.id,
+      config: settings.simpleComplexityAgent as AgentConfig,
+      testCommand: resolveTestCommand(settings),
+    };
+  }
+
   // ─── Job execution ───
 
   private async processNext(): Promise<void> {
@@ -169,7 +200,12 @@ class GitCommitQueueImpl implements GitCommitQueueService {
         break;
       } catch (err) {
         log.warn("Job failed", { jobType: job.type, attempt: attempt + 1, maxRetries, err });
-        if (err instanceof MergeConflictError || err instanceof RepoConflictError) {
+        if (
+          err instanceof MergeConflictError ||
+          err instanceof RepoConflictError ||
+          err instanceof RebaseConflictError ||
+          err instanceof MergeJobError
+        ) {
           item.reject?.(err);
           break;
         }
@@ -178,6 +214,11 @@ class GitCommitQueueImpl implements GitCommitQueueService {
             await this.branchManager.mergeAbort(job.repoPath);
           } catch {
             /* no merge in progress — fine */
+          }
+          try {
+            await this.branchManager.rebaseAbort(job.worktreePath);
+          } catch {
+            /* no rebase in progress — fine */
           }
         }
         if (attempt === maxRetries - 1) {
@@ -218,9 +259,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           branchName: job.branchName,
           taskTitle,
         });
-        // Ensure main matches origin so we never merge into stale main (prevents
-        // overwriting recent work from other tasks).
-        await this.branchManager.updateMainFromOrigin(repoPath);
+        await this.branchManager.syncMainWithOrigin(repoPath);
         await this.branchManager.ensureOnMain(repoPath);
 
         // Skip merge when branch is already merged (e.g. previous run or manual merge).
@@ -231,34 +270,132 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           break;
         }
 
+        const sharedRepoPath = job.worktreePath === repoPath;
+        if (sharedRepoPath) {
+          await this.branchManager.checkout(repoPath, job.branchName);
+        }
         try {
-          await this.branchManager.mergeToMainNoCommit(repoPath, job.branchName);
+          await this.branchManager.rebaseOntoMain(job.worktreePath);
+        } catch (rebaseErr) {
+          if (rebaseErr instanceof RebaseConflictError) {
+            const { projectId, config, testCommand } = await this.getMergeAgentConfig(
+              repoPath,
+              job.taskId
+            );
+            log.info("Rebase conflict detected, invoking merger agent", {
+              branchName: job.branchName,
+              conflictedFiles: rebaseErr.conflictedFiles,
+            });
+            const resolved = await agentService.runMergerAgentAndWait({
+              projectId,
+              cwd: job.worktreePath,
+              config,
+              phase: "rebase_before_merge",
+              taskId: job.taskId,
+              branchName: job.branchName,
+              conflictedFiles: rebaseErr.conflictedFiles,
+              testCommand,
+            });
+            if (!resolved) {
+              await this.branchManager.rebaseAbort(job.worktreePath);
+              throw new MergeJobError(
+                `Rebase conflict in ${rebaseErr.conflictedFiles.length} file(s): ${rebaseErr.conflictedFiles.join(", ")}`,
+                "rebase_before_merge",
+                rebaseErr.conflictedFiles
+              );
+            }
+            await this.branchManager.rebaseContinue(job.worktreePath);
+            eventLogService
+              .append(repoPath, {
+                timestamp: new Date().toISOString(),
+                projectId,
+                taskId: job.taskId,
+                event: "merge.resolved",
+                data: {
+                  stage: "rebase_before_merge",
+                  branchName: job.branchName,
+                  conflictedFiles: rebaseErr.conflictedFiles,
+                  resolvedBy: "merger",
+                },
+              })
+              .catch(() => {});
+          } else {
+            throw rebaseErr;
+          }
+        }
+        if (sharedRepoPath) {
+          await this.branchManager.ensureOnMain(repoPath);
+        }
+
+        try {
+          const mergeResult = await this.branchManager.mergeToMainNoCommit(repoPath, job.branchName);
+          if (mergeResult.autoResolvedFiles.length > 0) {
+            const project = await this.projectService.getProjectByRepoPath(repoPath);
+            if (project) {
+              eventLogService
+                .append(repoPath, {
+                  timestamp: new Date().toISOString(),
+                  projectId: project.id,
+                  taskId: job.taskId,
+                  event: "merge.resolved",
+                  data: {
+                    stage: "merge_to_main",
+                    branchName: job.branchName,
+                    conflictedFiles: mergeResult.autoResolvedFiles,
+                    resolvedBy: "auto",
+                  },
+                })
+                .catch(() => {});
+            }
+          }
         } catch (mergeErr) {
           if (mergeErr instanceof MergeConflictError) {
             log.info("Merge conflict detected, invoking merger agent", {
               branchName: job.branchName,
               conflictedFiles: mergeErr.conflictedFiles,
             });
-            const project = await this.projectService.getProjectByRepoPath(repoPath);
-            if (!project) {
-              log.warn("Cannot invoke merger: no project for repo path", { repoPath });
-              await this.branchManager.mergeAbort(repoPath);
-              throw mergeErr;
-            }
-            const settings = await this.projectService.getSettings(project.id);
-            const config = settings.simpleComplexityAgent as AgentConfig;
-            const resolved = await agentService.runMergerAgentAndWait(project.id, repoPath, config);
+            const { projectId, config, testCommand } = await this.getMergeAgentConfig(
+              repoPath,
+              job.taskId
+            );
+            const resolved = await agentService.runMergerAgentAndWait({
+              projectId,
+              cwd: repoPath,
+              config,
+              phase: "merge_to_main",
+              taskId: job.taskId,
+              branchName: job.branchName,
+              conflictedFiles: mergeErr.conflictedFiles,
+              testCommand,
+            });
             if (resolved) {
               try {
                 const msg = formatMergeCommitMessage(job.taskId, taskTitle);
                 await waitForGitReady(repoPath);
-                await shellExec(`git add -A && git -c core.hooksPath=/dev/null commit -m "${msg.replace(/"/g, '\\"')}"`, {
-                  cwd: repoPath,
-                  timeout: 30_000,
-                });
+                await shellExec(
+                  `git add -A && git -c core.hooksPath=/dev/null commit -m "${msg.replace(/"/g, '\\"')}"`,
+                  {
+                    cwd: repoPath,
+                    timeout: 30_000,
+                  }
+                );
                 log.info("Merger resolved conflicts, merge commit created", {
                   branchName: job.branchName,
                 });
+                eventLogService
+                  .append(repoPath, {
+                    timestamp: new Date().toISOString(),
+                    projectId,
+                    taskId: job.taskId,
+                    event: "merge.resolved",
+                    data: {
+                      stage: "merge_to_main",
+                      branchName: job.branchName,
+                      conflictedFiles: mergeErr.conflictedFiles,
+                      resolvedBy: "merger",
+                    },
+                  })
+                  .catch(() => {});
               } catch (continueErr) {
                 log.warn("merge commit failed after merger", {
                   branchName: job.branchName,
@@ -270,7 +407,11 @@ class GitCommitQueueImpl implements GitCommitQueueService {
             } else {
               log.warn("Merger agent failed to resolve merge conflicts", { branchName: job.branchName });
               await this.branchManager.mergeAbort(repoPath);
-              throw mergeErr;
+              throw new MergeJobError(
+                `Merge conflict in ${mergeErr.conflictedFiles.length} file(s): ${mergeErr.conflictedFiles.join(", ")}`,
+                "merge_to_main",
+                mergeErr.conflictedFiles
+              );
             }
           } else {
             throw mergeErr;

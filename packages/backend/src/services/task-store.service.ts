@@ -1153,7 +1153,9 @@ export class TaskStoreService {
     return Array.isArray(issue.labels) && issue.labels.includes(label);
   }
 
-  getFileScopeLabels(issue: StoredTask): { modify?: string[]; create?: string[] } | null {
+  getFileScopeLabels(
+    issue: StoredTask
+  ): { modify?: string[]; create?: string[]; test?: string[] } | null {
     const labels = (issue.labels ?? []) as string[];
     const label = labels.find((l) => l.startsWith("files:"));
     if (!label) return null;
@@ -1173,6 +1175,48 @@ export class TaskStoreService {
     }
     if (files.length > 0) {
       await this.addLabel(projectId, id, `actual_files:${JSON.stringify(files)}`);
+    }
+  }
+
+  getConflictFilesFromIssue(issue: StoredTask): string[] {
+    const labels = (issue.labels ?? []) as string[];
+    const label = labels.find((l) => l.startsWith("conflict_files:"));
+    if (!label) return [];
+    try {
+      const parsed = JSON.parse(label.slice("conflict_files:".length));
+      return Array.isArray(parsed) ? parsed.filter((f): f is string => typeof f === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async setConflictFiles(projectId: string, id: string, files: string[]): Promise<void> {
+    const issue = await this.show(projectId, id);
+    const labels = (issue.labels ?? []) as string[];
+    const existing = labels.find((l) => l.startsWith("conflict_files:"));
+    if (existing) {
+      await this.removeLabel(projectId, id, existing);
+    }
+    if (files.length > 0) {
+      await this.addLabel(projectId, id, `conflict_files:${JSON.stringify(files)}`);
+    }
+  }
+
+  getMergeStageFromIssue(issue: StoredTask): string | null {
+    const labels = (issue.labels ?? []) as string[];
+    const label = labels.find((l) => l.startsWith("merge_stage:"));
+    return label ? label.slice("merge_stage:".length) : null;
+  }
+
+  async setMergeStage(projectId: string, id: string, stage: string | null): Promise<void> {
+    const issue = await this.show(projectId, id);
+    const labels = (issue.labels ?? []) as string[];
+    const existing = labels.find((l) => l.startsWith("merge_stage:"));
+    if (existing) {
+      await this.removeLabel(projectId, id, existing);
+    }
+    if (stage && stage.trim()) {
+      await this.addLabel(projectId, id, `merge_stage:${stage.trim()}`);
     }
   }
 

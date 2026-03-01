@@ -47,6 +47,12 @@ export class WorktreeBranchInUseError extends Error {
   }
 }
 
+export type MainSyncResult = "up_to_date" | "fast_forwarded" | "local_ahead" | "fetch_failed";
+
+export interface MergeToMainResult {
+  autoResolvedFiles: string[];
+}
+
 /** Max time (ms) for npm install when ensuring node_modules exists */
 const NPM_INSTALL_TIMEOUT_MS = 120_000;
 
@@ -476,25 +482,50 @@ export class BranchManager {
    * and overwrite recent work (e.g. a previous task's rename that hadn't been pushed yet).
    * No-op if origin/main does not exist (e.g. empty remote).
    */
-  async updateMainFromOrigin(repoPath: string): Promise<void> {
+  async syncMainWithOrigin(repoPath: string): Promise<MainSyncResult> {
     await this.waitForGitReady(repoPath);
     try {
       await this.git(repoPath, "fetch origin main");
     } catch (error) {
-      log.warn("updateMainFromOrigin: fetch failed", { error });
-      return;
+      log.warn("syncMainWithOrigin: fetch failed", { error });
+      return "fetch_failed";
     }
     const hasOriginMain = await this.hasRemoteBranch(repoPath, "origin/main");
     if (!hasOriginMain) {
-      log.info("updateMainFromOrigin: origin/main not present, skipping");
-      return;
+      log.info("syncMainWithOrigin: origin/main not present, skipping");
+      return "up_to_date";
     }
     const currentBranch = await this.getCurrentBranch(repoPath).catch(() => "");
     if (currentBranch !== "main") {
       await this.git(repoPath, "checkout main");
     }
-    await this.git(repoPath, "reset --hard origin/main");
-    log.info("updateMainFromOrigin: main now matches origin/main");
+    const { stdout } = await shellExec("git rev-list --left-right --count main...origin/main", {
+      cwd: repoPath,
+      timeout: 5000,
+    });
+    const [localAheadRaw = "0", localBehindRaw = "0"] = stdout.trim().split(/\s+/);
+    const localAhead = parseInt(localAheadRaw, 10) || 0;
+    const localBehind = parseInt(localBehindRaw, 10) || 0;
+
+    if (localAhead > 0) {
+      log.info("syncMainWithOrigin: local main is ahead of origin/main, preserving local commits", {
+        localAhead,
+        localBehind,
+      });
+      return "local_ahead";
+    }
+
+    if (localBehind > 0) {
+      await this.git(repoPath, "merge --ff-only origin/main");
+      log.info("syncMainWithOrigin: fast-forwarded main to origin/main", { localBehind });
+      return "fast_forwarded";
+    }
+
+    return "up_to_date";
+  }
+
+  async updateMainFromOrigin(repoPath: string): Promise<void> {
+    await this.syncMainWithOrigin(repoPath);
   }
 
   /**
@@ -967,7 +998,8 @@ export class BranchManager {
    * Merge a branch into main without committing. Leaves the merge result staged.
    * Used when combining merge + task metadata into a single commit.
    */
-  async mergeToMainNoCommit(repoPath: string, branchName: string): Promise<void> {
+  async mergeToMainNoCommit(repoPath: string, branchName: string): Promise<MergeToMainResult> {
+    let autoResolvedFiles: string[] = [];
     try {
       await this.git(repoPath, `merge --no-commit --no-ff ${branchName}`);
     } catch (mergeErr) {
@@ -996,6 +1028,7 @@ export class BranchManager {
           timeout: 5000,
         });
       }
+      autoResolvedFiles = infraFiles;
 
       if (codeConflicts.length > 0) {
         log.warn("Code conflicts remain after infra auto-resolve", { branchName, codeConflicts });
@@ -1015,6 +1048,7 @@ export class BranchManager {
       ].join("; "),
       { cwd: repoPath, timeout: 10000 }
     ).catch(() => {});
+    return { autoResolvedFiles };
   }
 
   /**

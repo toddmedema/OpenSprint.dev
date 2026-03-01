@@ -14,9 +14,11 @@ export interface FileScope {
 /**
  * Predicts and records the file scope of tasks for conflict-aware scheduling.
  * Uses a layered approach:
- * 1. Explicit: `files:` label from Planner output
- * 2. Inferred: `actual_files:` labels from completed dependency tasks
- * 3. Heuristic: directory guesses from task title/description
+ * 1. Conflict labels from prior failed merge attempts
+ * 2. Current task actual_files from prior attempts
+ * 3. Explicit: `files:` label from Planner output
+ * 4. Inferred: `actual_files:` labels from completed dependency tasks
+ * 5. Heuristic: directory guesses from task title/description
  */
 export class FileScopeAnalyzer {
   /**
@@ -38,12 +40,38 @@ export class FileScopeAnalyzer {
       confidence: "heuristic",
     };
 
-    // Layer 1: Explicit file scope from Planner annotations
+    // Layer 1: conflict files from prior failed merge attempts
+    const conflictFiles = this.getArrayLabel(task, "conflict_files:");
+    if (conflictFiles.length > 0) {
+      for (const f of conflictFiles) {
+        scope.files.add(f);
+        scope.directories.add(path.dirname(f));
+      }
+      scope.confidence = "explicit";
+      return scope;
+    }
+
+    // Layer 2: current task actual files from prior attempts
+    const actualFiles = this.getArrayLabel(task, "actual_files:");
+    if (actualFiles.length > 0) {
+      for (const f of actualFiles) {
+        scope.files.add(f);
+        scope.directories.add(path.dirname(f));
+      }
+      scope.confidence = "explicit";
+      return scope;
+    }
+
+    // Layer 3: Explicit file scope from Planner annotations
     const filesLabel = this.getFileScopeLabel(task);
     if (filesLabel) {
       try {
-        const parsed = JSON.parse(filesLabel) as { modify?: string[]; create?: string[] };
-        const allFiles = [...(parsed.modify ?? []), ...(parsed.create ?? [])];
+        const parsed = JSON.parse(filesLabel) as {
+          modify?: string[];
+          create?: string[];
+          test?: string[];
+        };
+        const allFiles = [...(parsed.modify ?? []), ...(parsed.create ?? []), ...(parsed.test ?? [])];
         for (const f of allFiles) {
           scope.files.add(f);
           scope.directories.add(path.dirname(f));
@@ -57,7 +85,7 @@ export class FileScopeAnalyzer {
       }
     }
 
-    // Layer 2: Inferred from dependency tasks' actual files
+    // Layer 4: Inferred from dependency tasks' actual files
     const depFiles = await this.inferFromDependencies(
       projectId,
       repoPath,
@@ -74,7 +102,7 @@ export class FileScopeAnalyzer {
       return scope;
     }
 
-    // Layer 3: Heuristic from task title/description
+    // Layer 5: Heuristic from task title/description
     const heuristicDirs = this.extractDirectoriesFromText(
       `${task.title ?? ""} ${task.description ?? ""}`
     );
@@ -95,9 +123,8 @@ export class FileScopeAnalyzer {
     taskStore: TaskStoreService
   ): Promise<void> {
     if (changedFiles.length === 0) return;
-    const label = `actual_files:${JSON.stringify(changedFiles)}`;
     try {
-      await taskStore.addLabel(projectId, taskId, label);
+      await taskStore.setActualFiles(projectId, taskId, changedFiles);
     } catch (err) {
       log.warn("Failed to record actual files", { taskId, err });
     }
@@ -134,6 +161,18 @@ export class FileScopeAnalyzer {
     const prefix = "files:";
     const label = labels.find((l) => l.startsWith(prefix));
     return label ? label.slice(prefix.length) : null;
+  }
+
+  private getArrayLabel(task: StoredTask, prefix: string): string[] {
+    const labels = (task.labels ?? []) as string[];
+    const label = labels.find((l) => l.startsWith(prefix));
+    if (!label) return [];
+    try {
+      const parsed = JSON.parse(label.slice(prefix.length));
+      return Array.isArray(parsed) ? parsed.filter((f): f is string => typeof f === "string") : [];
+    } catch {
+      return [];
+    }
   }
 
   /** Look at completed dependency tasks for actual_files labels. When idToIssue is provided, avoids show() calls. */

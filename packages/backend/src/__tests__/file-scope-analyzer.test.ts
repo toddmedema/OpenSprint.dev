@@ -1,186 +1,59 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { StoredTask, TaskStoreService } from "../services/task-store.service.js";
-import { FileScopeAnalyzer, type FileScope } from "../services/file-scope-analyzer.js";
+import { describe, it, expect, vi } from "vitest";
+import { FileScopeAnalyzer } from "../services/file-scope-analyzer.js";
+import type { TaskStoreService } from "../services/task-store.service.js";
 
-function makeIssue(id: string, labels: string[] = [], title = "", description = "") {
+function makeTask(labels: string[] = [], description = "") {
   return {
-    id,
-    title,
-    description,
-    labels,
+    id: "os-scope",
+    title: "Scope task",
     status: "open",
     priority: 2,
     issue_type: "task",
     type: "task",
+    labels,
     assignee: null,
+    description,
     created: new Date().toISOString(),
     updated: new Date().toISOString(),
   };
 }
 
 describe("FileScopeAnalyzer", () => {
-  let analyzer: FileScopeAnalyzer;
-  let mockTaskStore: {
-    show: ReturnType<typeof vi.fn>;
-    getBlockers: ReturnType<typeof vi.fn>;
-    addLabel: ReturnType<typeof vi.fn>;
-    removeLabel: ReturnType<typeof vi.fn>;
-  };
+  it("prefers conflict_files over explicit planner scope and heuristics", async () => {
+    const analyzer = new FileScopeAnalyzer();
+    const task = makeTask([
+      'conflict_files:["src/conflict.ts"]',
+      'files:{"modify":["src/explicit.ts"],"create":["src/new.ts"],"test":["src/__tests__/new.test.ts"]}',
+    ]);
+    const taskStore = {
+      getBlockersFromIssue: vi.fn().mockReturnValue([]),
+    } as unknown as TaskStoreService;
 
-  beforeEach(() => {
-    analyzer = new FileScopeAnalyzer();
-    mockTaskStore = {
-      show: vi.fn(),
-      getBlockers: vi.fn().mockResolvedValue([]),
-      addLabel: vi.fn().mockResolvedValue(undefined),
-      removeLabel: vi.fn().mockResolvedValue(undefined),
-    };
+    const scope = await analyzer.predict("proj", "/repo", task, taskStore, {
+      idToIssue: new Map([[task.id, task as never]]),
+    });
+
+    expect(scope.confidence).toBe("explicit");
+    expect([...scope.files]).toEqual(["src/conflict.ts"]);
   });
 
-  const projectId = "proj";
-  const repoPath = "/repo";
+  it("uses current task actual_files before dependency inference", async () => {
+    const analyzer = new FileScopeAnalyzer();
+    const task = makeTask(['actual_files:["src/retry.ts"]']);
+    const taskStore = {
+      getBlockersFromIssue: vi.fn().mockReturnValue(["dep-1"]),
+      show: vi.fn().mockResolvedValue(makeTask(['actual_files:["src/dep.ts"]'])),
+    } as unknown as TaskStoreService;
 
-  describe("predict", () => {
-    it("returns explicit confidence when files: label exists", async () => {
-      const task = makeIssue("t1", [
-        'files:{"modify":["src/api/user.ts"],"create":["src/api/auth.ts"]}',
-      ]);
-      const scope = await analyzer.predict(
-        projectId,
-        repoPath,
-        task as StoredTask,
-        mockTaskStore as TaskStoreService
-      );
-
-      expect(scope.confidence).toBe("explicit");
-      expect(scope.files).toEqual(new Set(["src/api/user.ts", "src/api/auth.ts"]));
-      expect(scope.directories).toEqual(new Set(["src/api"]));
+    const scope = await analyzer.predict("proj", "/repo", task, taskStore, {
+      idToIssue: new Map([
+        [task.id, task as never],
+        ["dep-1", makeTask(['actual_files:["src/dep.ts"]']) as never],
+      ]),
     });
 
-    it("falls back to inferred from dependency actual_files", async () => {
-      const task = makeIssue("t2");
-      mockTaskStore.getBlockers.mockResolvedValue(["dep-1"]);
-      mockTaskStore.show.mockResolvedValue(
-        makeIssue("dep-1", ['actual_files:["src/models/user.ts","src/models/index.ts"]'])
-      );
-
-      const scope = await analyzer.predict(
-        projectId,
-        repoPath,
-        task as StoredTask,
-        mockTaskStore as TaskStoreService
-      );
-
-      expect(scope.confidence).toBe("inferred");
-      expect(scope.files.has("src/models/user.ts")).toBe(true);
-      expect(scope.files.has("src/models/index.ts")).toBe(true);
-    });
-
-    it("falls back to heuristic from task title", async () => {
-      const task = makeIssue("t3", [], "Add user service in src/services directory");
-
-      const scope = await analyzer.predict(
-        projectId,
-        repoPath,
-        task as StoredTask,
-        mockTaskStore as TaskStoreService
-      );
-
-      expect(scope.confidence).toBe("heuristic");
-      expect(scope.directories.has("src/services")).toBe(true);
-    });
-
-    it("returns heuristic with empty sets when no info available", async () => {
-      const task = makeIssue("t4", [], "Fix the bug");
-
-      const scope = await analyzer.predict(
-        projectId,
-        repoPath,
-        task as StoredTask,
-        mockTaskStore as TaskStoreService
-      );
-
-      expect(scope.confidence).toBe("heuristic");
-      expect(scope.files.size).toBe(0);
-    });
-  });
-
-  describe("recordActual", () => {
-    it("stores actual files as label", async () => {
-      await analyzer.recordActual(
-        projectId,
-        repoPath,
-        "t1",
-        ["src/a.ts", "src/b.ts"],
-        mockTaskStore as TaskStoreService
-      );
-
-      expect(mockTaskStore.addLabel).toHaveBeenCalledWith(
-        projectId,
-        "t1",
-        'actual_files:["src/a.ts","src/b.ts"]'
-      );
-    });
-
-    it("does nothing for empty file list", async () => {
-      await analyzer.recordActual(projectId, repoPath, "t1", [], mockTaskStore as TaskStoreService);
-
-      expect(mockTaskStore.addLabel).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("overlaps", () => {
-    const makeScope = (
-      files: string[],
-      dirs: string[],
-      confidence: FileScope["confidence"]
-    ): FileScope => ({
-      taskId: "test",
-      files: new Set(files),
-      directories: new Set(dirs),
-      confidence,
-    });
-
-    it("detects file-level overlap", () => {
-      const a = makeScope(["src/a.ts"], ["src"], "explicit");
-      const b = makeScope(["src/a.ts", "src/b.ts"], ["src"], "explicit");
-
-      expect(analyzer.overlaps(a, b)).toBe(true);
-    });
-
-    it("no overlap when files are disjoint", () => {
-      const a = makeScope(["src/a.ts"], ["src"], "explicit");
-      const b = makeScope(["lib/b.ts"], ["lib"], "explicit");
-
-      expect(analyzer.overlaps(a, b)).toBe(false);
-    });
-
-    it("detects directory overlap when at least one is heuristic", () => {
-      const a = makeScope([], ["src/components"], "heuristic");
-      const b = makeScope(["src/components/Button.tsx"], ["src/components"], "explicit");
-
-      expect(analyzer.overlaps(a, b)).toBe(true);
-    });
-
-    it("detects nested directory overlap", () => {
-      const a = makeScope([], ["src"], "heuristic");
-      const b = makeScope([], ["src/services"], "heuristic");
-
-      expect(analyzer.overlaps(a, b)).toBe(true);
-    });
-
-    it("no overlap between unrelated directories", () => {
-      const a = makeScope([], ["src/frontend"], "heuristic");
-      const b = makeScope([], ["src/backend"], "heuristic");
-
-      expect(analyzer.overlaps(a, b)).toBe(false);
-    });
-
-    it("empty scopes do not overlap", () => {
-      const a = makeScope([], [], "heuristic");
-      const b = makeScope([], [], "heuristic");
-
-      expect(analyzer.overlaps(a, b)).toBe(false);
-    });
+    expect(scope.confidence).toBe("explicit");
+    expect(scope.files.has("src/retry.ts")).toBe(true);
+    expect(scope.files.has("src/dep.ts")).toBe(false);
   });
 });

@@ -39,10 +39,22 @@ vi.mock("../websocket/index.js", () => ({
   broadcastToProject: vi.fn(),
 }));
 
+vi.mock("../services/deploy-trigger.service.js", () => ({
+  triggerDeployForEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../services/final-review.service.js", () => ({
+  finalReviewService: {
+    runFinalReview: vi.fn(),
+    createTasksFromReview: vi.fn(),
+  },
+}));
+
 describe("Git working mode Branches — full Execute flow integration", () => {
   let repoPath: string;
   let branchManager: BranchManager;
   let removeTaskWorktreeSpy: ReturnType<typeof vi.spyOn>;
+  let pushMainSpy: ReturnType<typeof vi.spyOn>;
   const projectId = "proj-branches";
   const taskId = "os-branches-1";
   const branchName = `opensprint/${taskId}`;
@@ -76,6 +88,7 @@ describe("Git working mode Branches — full Execute flow integration", () => {
 
     branchManager = new BranchManager();
     removeTaskWorktreeSpy = vi.spyOn(branchManager, "removeTaskWorktree");
+    pushMainSpy = vi.spyOn(branchManager, "pushMain").mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
@@ -133,6 +146,8 @@ describe("Git working mode Branches — full Execute flow integration", () => {
         show: vi.fn().mockResolvedValue(makeTask()),
         setCumulativeAttempts: vi.fn().mockResolvedValue(undefined),
         getCumulativeAttemptsFromIssue: vi.fn().mockReturnValue(0),
+        setConflictFiles: vi.fn().mockResolvedValue(undefined),
+        setMergeStage: vi.fn().mockResolvedValue(undefined),
       },
       branchManager,
       sessionManager: {
@@ -158,6 +173,9 @@ describe("Git working mode Branches — full Execute flow integration", () => {
 
     // 4. Post-agent: merge and done (MergeCoordinator.performMergeAndDone)
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+    await vi.waitFor(() => {
+      expect(pushMainSpy).toHaveBeenCalledWith(repoPath);
+    });
 
     // 5. Assertions
     expect(removeTaskWorktreeSpy).not.toHaveBeenCalled();

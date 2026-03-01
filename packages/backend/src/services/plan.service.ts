@@ -82,6 +82,7 @@ interface NormalizedPlannerTask {
   dependsOn: string[];
   /** Task-level complexity (integer 1-10). When absent, inferred from plan. */
   complexity?: number;
+  files?: { modify?: string[]; create?: string[]; test?: string[] };
 }
 
 /**
@@ -108,7 +109,26 @@ function normalizePlannerTask(
     if (raw === "simple") complexity = 3;
     else if (raw === "complex") complexity = 7;
   }
-  return { title, description, priority, dependsOn, complexity };
+  const rawFiles = task.files;
+  const files =
+    rawFiles && typeof rawFiles === "object"
+      ? {
+          modify: Array.isArray((rawFiles as { modify?: unknown }).modify)
+            ? (rawFiles as { modify: unknown[] }).modify.filter(
+                (f): f is string => typeof f === "string"
+              )
+            : undefined,
+          create: Array.isArray((rawFiles as { create?: unknown }).create)
+            ? (rawFiles as { create: unknown[] }).create.filter(
+                (f): f is string => typeof f === "string"
+              )
+            : undefined,
+          test: Array.isArray((rawFiles as { test?: unknown }).test)
+            ? (rawFiles as { test: unknown[] }).test.filter((f): f is string => typeof f === "string")
+            : undefined,
+        }
+      : undefined;
+  return { title, description, priority, dependsOn, complexity, files };
 }
 
 /**
@@ -237,13 +257,13 @@ const DECOMPOSE_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint
         {"title": "Main Screen", "content": "+------------------+\\n| Header           |\\n+------------------+\\n| Content area     |\\n|                  |\\n+------------------+"}
       ],
       "tasks": [
-        {"title": "Task title", "description": "Task spec", "priority": 1, "dependsOn": [], "complexity": 3}
+        {"title": "Task title", "description": "Task spec", "priority": 1, "dependsOn": [], "complexity": 3, "files": {"modify": ["src/existing.ts"], "create": ["src/new.ts"], "test": ["src/__tests__/new.test.ts"]}}
       ]
     }
   ]
 }
 
-complexity: low, medium, high, or very_high (plan-level). Task-level complexity: integer 1-10 (1=simplest, 10=most complex) — assign per task based on implementation difficulty (1-3: routine, isolated; 4-6: moderate; 7-10: challenging, many integrations). priority: 0=highest. dependsOn: array of task titles this task depends on (blocked by) — use exact titles from your own output. dependsOnPlans: array of slugified plan titles (lowercase, hyphens) that match other plan titles in your output; e.g. if Plan A is "User Authentication", another plan depending on it uses dependsOnPlans: ["user-authentication"]. mockups: array of {title, content} — ASCII wireframes; at least one required per plan.
+complexity: low, medium, high, or very_high (plan-level). Task-level complexity: integer 1-10 (1=simplest, 10=most complex) — assign per task based on implementation difficulty (1-3: routine, isolated; 4-6: moderate; 7-10: challenging, many integrations). priority: 0=highest. dependsOn: array of task titles this task depends on (blocked by) — use exact titles from your own output. dependsOnPlans: array of slugified plan titles (lowercase, hyphens) that match other plan titles in your output; e.g. if Plan A is "User Authentication", another plan depending on it uses dependsOnPlans: ["user-authentication"]. mockups: array of {title, content} — ASCII wireframes; at least one required per plan. Every task MUST include a files object with the expected file scope: { modify?: string[], create?: string[], test?: string[] }.
 
 **Task:** Given the full PRD, produce a feature decomposition. For each feature:
 1. Create a Plan with a clear title and full markdown specification
@@ -272,6 +292,7 @@ For each task:
 2. Description: Detailed spec with acceptance criteria, which files to create/modify, and how to verify. Include the test command or verification step (e.g., "Run npm test to verify"). For tasks that modify existing files, specify which files.
 3. Priority: 0 (highest — foundational/blocking) to 4 (lowest — polish/optional)
 4. dependsOn: Array of other task titles this task is blocked by — use exact titles from your own output, copy them verbatim
+5. files: Required object with { modify?: string[], create?: string[], test?: string[] } describing the task's expected file scope
 
 Guidelines:
 - Tasks must be atomic: one coding session, one concern
@@ -280,11 +301,11 @@ Guidelines:
 - Be specific about file paths and technology choices based on the plan
 
 Respond with ONLY valid JSON (you may wrap in a markdown json code block):
-{
-  "tasks": [
-    {"title": "Task title", "description": "Detailed implementation spec with acceptance criteria", "priority": 1, "dependsOn": [], "complexity": 3}
-  ]
-}
+  {
+    "tasks": [
+    {"title": "Task title", "description": "Detailed implementation spec with acceptance criteria", "priority": 1, "dependsOn": [], "complexity": 3, "files": {"modify": ["src/existing.ts"], "create": ["src/new.ts"], "test": ["src/__tests__/new.test.ts"]}}
+    ]
+  }
 
 Task-level complexity: integer 1-10 (1=simplest, 10=most complex) — assign per task based on implementation difficulty (1-3: routine, isolated; 4-6: moderate; 7-10: challenging, many integrations).`;
 
@@ -711,8 +732,8 @@ export class PlanService {
       // File-scope labels for parallel scheduling (preserve from raw task)
       for (let i = 0; i < rawTasks.length; i++) {
         const task = rawTasks[i]!;
-        const files = task.files as { modify?: string[]; create?: string[] } | undefined;
-        if (files && (files.modify?.length || files.create?.length)) {
+        const files = tasks[i]!.files;
+        if (files && (files.modify?.length || files.create?.length || files.test?.length)) {
           const filesJson = JSON.stringify(files);
           await this.taskStore.addLabel(projectId, created[i]!.id, `files:${filesJson}`);
         }
@@ -875,6 +896,14 @@ export class PlanService {
     }
     if (interDeps.length > 0) {
       await this.taskStore.addDependencies(projectId, interDeps);
+    }
+
+    for (let i = 0; i < tasks.length; i++) {
+      const files = tasks[i]!.files;
+      if (files && (files.modify?.length || files.create?.length || files.test?.length)) {
+        const filesJson = JSON.stringify(files);
+        await this.taskStore.addLabel(projectId, created[i]!.id, `files:${filesJson}`);
+      }
     }
 
     broadcastToProject(projectId, { type: "plan.updated", planId: plan.metadata.planId });

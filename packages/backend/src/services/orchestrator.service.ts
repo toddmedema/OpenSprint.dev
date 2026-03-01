@@ -41,6 +41,7 @@ import { TimerRegistry } from "./timer-registry.js";
 import { AgentLifecycleManager, type AgentRunState } from "./agent-lifecycle.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { FileScopeAnalyzer, type FileScope } from "./file-scope-analyzer.js";
+import { TaskScheduler } from "./task-scheduler.js";
 import { normalizeCodingStatus, normalizeReviewStatus } from "./result-normalizers.js";
 import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
@@ -187,6 +188,7 @@ export class OrchestratorService {
   private feedbackService = new FeedbackService();
   private lifecycleManager = new AgentLifecycleManager();
   private fileScopeAnalyzer = new FileScopeAnalyzer();
+  private taskScheduler = new TaskScheduler(this.taskStore);
   /** Cached repoPath per project (avoids async lookup in synchronous transition()) */
   private repoPathCache = new Map<string, string>();
   /** Cached effective maxSlots per project (branches mode forces 1; avoids async lookup in nudge()) */
@@ -965,6 +967,54 @@ export class OrchestratorService {
 
   // ─── Main Orchestrator Loop ───
 
+  private async dispatchTask(
+    projectId: string,
+    repoPath: string,
+    task: StoredTask,
+    slotQueueDepth: number
+  ): Promise<void> {
+    const state = this.getState(projectId);
+    log.info("Picking task", { projectId, taskId: task.id, title: task.title });
+
+    const assignee = getAgentName(state.nextCoderIndex);
+    state.nextCoderIndex += 1;
+
+    await this.taskStore.update(projectId, task.id, {
+      status: "in_progress",
+      assignee,
+    });
+    const cumulativeAttempts = this.taskStore.getCumulativeAttemptsFromIssue(task);
+    const branchName = `opensprint/${task.id}`;
+
+    const slot = this.createSlot(
+      task.id,
+      task.title ?? null,
+      branchName,
+      cumulativeAttempts + 1,
+      assignee
+    );
+    slot.fileScope = await this.fileScopeAnalyzer.predict(
+      projectId,
+      repoPath,
+      task,
+      this.taskStore
+    );
+
+    this.transition(projectId, {
+      to: "start_task",
+      taskId: task.id,
+      taskTitle: task.title ?? null,
+      branchName,
+      attempt: cumulativeAttempts + 1,
+      queueDepth: slotQueueDepth,
+      slot,
+    });
+
+    await this.persistCounters(projectId, repoPath);
+    await this.branchManager.ensureOnMain(repoPath);
+    await this.executeCodingPhase(projectId, repoPath, task, slot, undefined);
+  }
+
   private async runLoop(projectId: string): Promise<void> {
     const state = this.getState(projectId);
 
@@ -991,8 +1041,6 @@ export class OrchestratorService {
       LOOP_STUCK_GUARD_MS
     );
 
-    let task: StoredTask | undefined;
-    let slot: AgentSlot | undefined;
     try {
       // Gastown-style mailbox: process one queued feedback (Analyst) before coding work
       // Atomic claim prevents duplicate processing when multiple loop runs race
@@ -1059,84 +1107,88 @@ export class OrchestratorService {
         return;
       }
 
-      // readyWithStatusMap already filtered to tasks with all blockers closed; pick first by priority
-      task = readyTasks[0]!;
-      log.info("Picking task", { projectId, taskId: task.id, title: task.title });
-
-      const assignee = getAgentName(state.nextCoderIndex);
-      state.nextCoderIndex += 1;
-
-      // Assign the task
-      await this.taskStore.update(projectId, task.id, {
-        status: "in_progress",
-        assignee,
-      });
-      const cumulativeAttempts = this.taskStore.getCumulativeAttemptsFromIssue(task);
-      const branchName = `opensprint/${task.id}`;
-
-      // Create a slot for this task (transition adds it to state after validation so currentPhase stays "idle")
-      slot = this.createSlot(
-        task.id,
-        task.title ?? null,
-        branchName,
-        cumulativeAttempts + 1,
-        assignee
+      const selected = await this.taskScheduler.selectTasks(
+        projectId,
+        repoPath,
+        readyTasks,
+        state.slots,
+        maxSlots,
+        {
+          allIssues: readyTasksRaw,
+          unknownScopeStrategy: settings.unknownScopeStrategy ?? "conservative",
+        }
       );
 
-      this.transition(projectId, {
-        to: "start_task",
-        taskId: task.id,
-        taskTitle: task.title ?? null,
-        branchName,
-        attempt: cumulativeAttempts + 1,
-        queueDepth: readyTasks.length - 1,
-        slot,
-      });
-
-      await this.persistCounters(projectId, repoPath);
-
-      await this.branchManager.ensureOnMain(repoPath);
-
-      await this.executeCodingPhase(projectId, repoPath, task, slot, undefined);
-
-      // Mark loop as idle so nudge can fire again for additional slots
-      if (state.loopRunId === myRunId) state.loopActive = false;
-    } catch (error) {
-      if (error instanceof WorktreeBranchInUseError && task != null) {
-        // Branch is in use by another worktree with an active agent; free our slot and report failure
-        const failedTask = task;
-        log.warn("Worktree branch in use by active agent, failing task and freeing slot", {
+      if (selected.length === 0) {
+        log.info("No dispatchable tasks after conflict-aware scheduling", {
           projectId,
-          taskId: failedTask.id,
-          otherPath: error.otherPath,
-          otherTaskId: error.otherTaskId,
+          readyTasks: readyTasks.length,
+          activeSlots: state.slots.size,
         });
-        this.removeSlot(state, failedTask.id);
-        try {
-          await this.taskStore.update(projectId, failedTask.id, { status: "open", assignee: "" });
-        } catch (revertErr) {
-          log.warn("Failed to revert task status", { taskId: failedTask.id, err: revertErr });
-        }
-        broadcastToProject(projectId, {
-          type: "agent.completed",
-          taskId: failedTask.id,
-          status: "failed",
-          testResults: null,
-          reason: error.message.slice(0, 500),
-        });
+        if (state.loopRunId === myRunId) state.loopActive = false;
         broadcastToProject(projectId, {
           type: "execute.status",
           activeTasks: this.buildActiveTasks(state),
           queueDepth: state.status.queueDepth,
         });
-        if (state.loopRunId === myRunId) state.loopActive = false;
-        this.nudge(projectId);
-      } else {
-        log.error(`Orchestrator loop error for project ${projectId}`, { error });
-        if (state.loopRunId === myRunId) {
-          state.loopActive = false;
-          state.globalTimers.setTimeout("loop", () => this.runLoop(projectId), 10000);
+        return;
+      }
+
+      for (let i = 0; i < selected.length; i++) {
+        const selectedTask = selected[i]!;
+        try {
+          await this.dispatchTask(
+            projectId,
+            repoPath,
+            selectedTask.task,
+            Math.max(0, readyTasks.length - (i + 1))
+          );
+        } catch (error) {
+          if (error instanceof WorktreeBranchInUseError) {
+            const failedTask = selectedTask.task;
+            log.warn("Worktree branch in use by active agent, failing task and freeing slot", {
+              projectId,
+              taskId: failedTask.id,
+              otherPath: error.otherPath,
+              otherTaskId: error.otherTaskId,
+            });
+            this.removeSlot(state, failedTask.id);
+            try {
+              await this.taskStore.update(projectId, failedTask.id, {
+                status: "open",
+                assignee: "",
+              });
+            } catch (revertErr) {
+              log.warn("Failed to revert task status", {
+                taskId: failedTask.id,
+                err: revertErr,
+              });
+            }
+            broadcastToProject(projectId, {
+              type: "agent.completed",
+              taskId: failedTask.id,
+              status: "failed",
+              testResults: null,
+              reason: error.message.slice(0, 500),
+            });
+            broadcastToProject(projectId, {
+              type: "execute.status",
+              activeTasks: this.buildActiveTasks(state),
+              queueDepth: state.status.queueDepth,
+            });
+            continue;
+          }
+          throw error;
         }
+      }
+
+      // Mark loop as idle so nudge can fire again for additional slots
+      if (state.loopRunId === myRunId) state.loopActive = false;
+    } catch (error) {
+      log.error(`Orchestrator loop error for project ${projectId}`, { error });
+      if (state.loopRunId === myRunId) {
+        state.loopActive = false;
+        state.globalTimers.setTimeout("loop", () => this.runLoop(projectId), 10000);
       }
     } finally {
       state.globalTimers.clear("loopStuckGuard");
@@ -1702,10 +1754,17 @@ export class OrchestratorService {
   }
 
   /** MergeCoordinatorHost: run merger agent to resolve conflicts; returns true if agent exited 0 */
-  async runMergerAgentAndWait(projectId: string, cwd: string): Promise<boolean> {
-    const settings = await this.projectService.getSettings(projectId);
-    const config = settings.simpleComplexityAgent as AgentConfig;
-    return agentService.runMergerAgentAndWait(projectId, cwd, config);
+  async runMergerAgentAndWait(options: {
+    projectId: string;
+    cwd: string;
+    config: AgentConfig;
+    phase: "rebase_before_merge" | "merge_to_main" | "push_rebase";
+    taskId: string;
+    branchName: string;
+    conflictedFiles: string[];
+    testCommand?: string;
+  }): Promise<boolean> {
+    return agentService.runMergerAgentAndWait(options);
   }
 }
 

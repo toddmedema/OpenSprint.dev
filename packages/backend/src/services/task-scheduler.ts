@@ -1,3 +1,4 @@
+import type { UnknownScopeStrategy } from "@opensprint/shared";
 import type { TaskStoreService, StoredTask } from "./task-store.service.js";
 import type { AgentSlot } from "./orchestrator.service.js";
 import { FileScopeAnalyzer, type FileScope } from "./file-scope-analyzer.js";
@@ -32,10 +33,14 @@ export class TaskScheduler {
     readyTasks: StoredTask[],
     activeSlots: Map<string, AgentSlot>,
     maxSlots: number,
-    options?: { allIssues?: StoredTask[] }
+    options?: {
+      allIssues?: StoredTask[];
+      unknownScopeStrategy?: UnknownScopeStrategy;
+    }
   ): Promise<SchedulerResult[]> {
     const slotsAvailable = maxSlots - activeSlots.size;
     if (slotsAvailable <= 0) return [];
+    const unknownScopeStrategy = options?.unknownScopeStrategy ?? "conservative";
 
     const candidates = readyTasks
       .filter((t) => (t.issue_type ?? t.type) !== "epic")
@@ -82,18 +87,30 @@ export class TaskScheduler {
       }
 
       const predictOptions = idToIssue ? { idToIssue } : undefined;
+      const scope = await this.analyzer.predict(
+        projectId,
+        repoPath,
+        task,
+        this.taskStore,
+        predictOptions
+      );
+
+      const existingScopes = [...activeScopes, ...results.map((r) => r.fileScope)];
+      if (
+        maxSlots > 1 &&
+        unknownScopeStrategy === "conservative" &&
+        scope.confidence === "heuristic" &&
+        existingScopes.length > 0
+      ) {
+        log.info("Skipping task (heuristic scope serialized by conservative strategy)", {
+          taskId: task.id,
+        });
+        continue;
+      }
 
       // File-overlap detection (only when parallel dispatch is active)
       if (maxSlots > 1 && (activeScopes.length > 0 || results.length > 0)) {
-        const scope = await this.analyzer.predict(
-          projectId,
-          repoPath,
-          task,
-          this.taskStore,
-          predictOptions
-        );
-
-        const overlapping = [...activeScopes, ...results.map((r) => r.fileScope)].some((s) =>
+        const overlapping = existingScopes.some((s) =>
           this.analyzer.overlaps(scope, s)
         );
 
@@ -110,13 +127,6 @@ export class TaskScheduler {
       }
 
       // Single-dispatch or first task: no overlap check needed
-      const scope = await this.analyzer.predict(
-        projectId,
-        repoPath,
-        task,
-        this.taskStore,
-        predictOptions
-      );
       results.push({ task, fileScope: scope });
     }
 

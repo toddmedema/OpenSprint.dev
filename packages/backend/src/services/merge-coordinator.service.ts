@@ -9,11 +9,10 @@
  * - Push failures: try merger agent once; if resolution fails, abort and retry on next completion
  */
 
-import type { TestResults } from "@opensprint/shared";
-import { BACKOFF_FAILURE_THRESHOLD } from "@opensprint/shared";
+import { BACKOFF_FAILURE_THRESHOLD, resolveTestCommand, type AgentConfig, type TestResults } from "@opensprint/shared";
 import type { StoredTask } from "./task-store.service.js";
 import { RebaseConflictError } from "./branch-manager.js";
-import { gitCommitQueue } from "./git-commit-queue.service.js";
+import { gitCommitQueue, MergeJobError } from "./git-commit-queue.service.js";
 import { agentIdentityService } from "./agent-identity.service.js";
 import { eventLogService } from "./event-log.service.js";
 import { triggerDeployForEvent } from "./deploy-trigger.service.js";
@@ -46,6 +45,13 @@ export interface MergeSlot {
   agent: { outputLog: string[]; startedAt: string };
 }
 
+interface CleanupTarget {
+  taskId: string;
+  branchName: string;
+  worktreePath: string | null;
+  gitWorkingMode: "worktree" | "branches";
+}
+
 export interface MergeCoordinatorHost {
   getState(projectId: string): {
     slots: Map<string, MergeSlot>;
@@ -67,11 +73,13 @@ export interface MergeCoordinatorHost {
       options?: { currentLabels?: string[] }
     ): Promise<void>;
     getCumulativeAttemptsFromIssue(issue: StoredTask): number;
+    setConflictFiles(projectId: string, id: string, files: string[]): Promise<void>;
+    setMergeStage(projectId: string, id: string, stage: string | null): Promise<void>;
   };
   branchManager: {
     waitForGitReady(wtPath: string): Promise<void>;
     commitWip(wtPath: string, taskId: string): Promise<void>;
-    removeTaskWorktree(repoPath: string, taskId: string): Promise<void>;
+    removeTaskWorktree(repoPath: string, taskId: string, actualPath?: string): Promise<void>;
     deleteBranch(repoPath: string, branchName: string): Promise<void>;
     getChangedFiles(repoPath: string, branchName: string): Promise<string[]>;
     pushMain(repoPath: string): Promise<void>;
@@ -81,10 +89,17 @@ export interface MergeCoordinatorHost {
     mergeContinue(repoPath: string): Promise<void>;
     rebaseAbort(repoPath: string): Promise<void>;
     rebaseContinue(repoPath: string): Promise<void>;
-    updateMainFromOrigin(repoPath: string): Promise<void>;
-    rebaseOntoMain(wtPath: string): Promise<void>;
   };
-  runMergerAgentAndWait(projectId: string, cwd: string): Promise<boolean>;
+  runMergerAgentAndWait(options: {
+    projectId: string;
+    cwd: string;
+    config: AgentConfig;
+    phase: "rebase_before_merge" | "merge_to_main" | "push_rebase";
+    taskId: string;
+    branchName: string;
+    conflictedFiles: string[];
+    testCommand?: string;
+  }): Promise<boolean>;
   sessionManager: {
     createSession(repoPath: string, data: Record<string, unknown>): Promise<{ id: string }>;
     archiveSession(
@@ -112,7 +127,10 @@ export interface MergeCoordinatorHost {
       simpleComplexityAgent: { type: string; model?: string | null };
       complexComplexityAgent: { type: string; model?: string | null };
       deployment: { targets?: Array<{ name: string; autoDeployTrigger?: string }> };
+      testCommand?: string | null;
+      testFramework?: string | null;
       gitWorkingMode?: "worktree" | "branches";
+      unknownScopeStrategy?: "conservative" | "optimistic";
     }>;
   };
   transition(projectId: string, t: { to: "complete"; taskId: string }): void;
@@ -125,8 +143,66 @@ export class MergeCoordinatorService {
   private pushInProgress = new Set<string>();
   /** Promise per project that resolves when the current push completes */
   private pushCompletion = new Map<string, { promise: Promise<void>; resolve: () => void }>();
+  /** Branch/worktree cleanup deferred until push succeeds. */
+  private pendingCleanup = new Map<string, Map<string, CleanupTarget>>();
 
   constructor(private host: MergeCoordinatorHost) {}
+
+  private registerPendingCleanup(projectId: string, target: CleanupTarget): void {
+    let perProject = this.pendingCleanup.get(projectId);
+    if (!perProject) {
+      perProject = new Map<string, CleanupTarget>();
+      this.pendingCleanup.set(projectId, perProject);
+    }
+    perProject.set(target.taskId, target);
+  }
+
+  private async cleanupAfterSuccessfulPush(projectId: string, repoPath: string): Promise<void> {
+    const perProject = this.pendingCleanup.get(projectId);
+    if (!perProject || perProject.size === 0) return;
+
+    for (const target of perProject.values()) {
+      log.info("Push succeeded, cleaning up merged branch/worktree", {
+        taskId: target.taskId,
+        branchName: target.branchName,
+      });
+      try {
+        if (target.gitWorkingMode !== "branches") {
+          await this.host.branchManager.removeTaskWorktree(
+            repoPath,
+            target.taskId,
+            target.worktreePath ?? undefined
+          );
+        }
+        await this.host.branchManager.deleteBranch(repoPath, target.branchName);
+        perProject.delete(target.taskId);
+      } catch (err) {
+        log.warn("Deferred cleanup failed", {
+          taskId: target.taskId,
+          branchName: target.branchName,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (perProject.size === 0) {
+      this.pendingCleanup.delete(projectId);
+    }
+  }
+
+  private getScopeConfidence(issue: StoredTask): "explicit" | "inferred" | "heuristic" {
+    const labels = (issue.labels ?? []) as string[];
+    if (
+      labels.some((l) => l.startsWith("conflict_files:")) ||
+      labels.some((l) => l.startsWith("files:"))
+    ) {
+      return "explicit";
+    }
+    if (labels.some((l) => l.startsWith("actual_files:"))) {
+      return "inferred";
+    }
+    return "heuristic";
+  }
 
   /**
    * Merge to main, then close task, archive session, clean up.
@@ -153,73 +229,15 @@ export class MergeCoordinatorService {
     await this.host.branchManager.waitForGitReady(wtPath);
     await this.host.branchManager.commitWip(wtPath, task.id);
     await this.waitForPushComplete(projectId);
+    const settings = await this.host.projectService.getSettings(projectId);
 
-    // 2. Sync main with origin and rebase task branch onto main so we never merge
-    //    into stale main (which can overwrite recent work from other tasks).
-    try {
-      await this.host.branchManager.updateMainFromOrigin(repoPath);
-      await this.host.branchManager.rebaseOntoMain(wtPath);
-    } catch (rebaseErr) {
-      const isRebaseConflict =
-        rebaseErr instanceof RebaseConflictError ||
-        (rebaseErr as Error)?.name === "RebaseConflictError";
-      if (isRebaseConflict) {
-        log.info("Rebase conflict detected, invoking merger agent", { taskId: task.id, branchName });
-        const resolved = await this.host.runMergerAgentAndWait(projectId, wtPath);
-        if (resolved) {
-          try {
-            await this.host.branchManager.rebaseContinue(wtPath);
-            log.info("Merger resolved rebase conflicts, continuing", { taskId: task.id });
-          } catch (continueErr) {
-            log.warn("rebase --continue failed after merger", {
-              taskId: task.id,
-              continueErr,
-            });
-            try {
-              await this.host.branchManager.rebaseAbort(wtPath);
-            } catch {
-              /* best-effort */
-            }
-            await this.requeueTaskAfterMergeFailure(
-              projectId,
-              repoPath,
-              task,
-              continueErr instanceof Error ? continueErr : new Error(String(continueErr))
-            );
-            return;
-          }
-        } else {
-          log.warn("Merger agent failed to resolve rebase conflicts", { taskId: task.id });
-          try {
-            await this.host.branchManager.rebaseAbort(wtPath);
-          } catch {
-            /* best-effort */
-          }
-          await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, rebaseErr as Error);
-          return;
-        }
-      } else {
-        log.warn("Rebase onto main failed before merge", {
-          taskId: task.id,
-          branchName,
-          rebaseErr,
-        });
-        try {
-          await this.host.branchManager.rebaseAbort(wtPath);
-        } catch {
-          /* best-effort */
-        }
-        await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, rebaseErr as Error);
-        return;
-      }
-    }
-
-    // 3. Attempt merge (the only step that can conflict)
+    // 2. Attempt merge inside the serialized queue. Rebase now happens there.
     try {
       await gitCommitQueue.drain();
       await gitCommitQueue.enqueueAndWait({
         type: "worktree_merge",
         repoPath,
+        worktreePath: wtPath,
         branchName,
         taskId: task.id,
         taskTitle: task.title || task.id,
@@ -235,7 +253,6 @@ export class MergeCoordinatorService {
 
     await this.host.taskStore.close(projectId, task.id, closeReason);
 
-    const settings = await this.host.projectService.getSettings(projectId);
     const agentConfig = settings.simpleComplexityAgent;
     agentIdentityService
       .recordAttempt(repoPath, {
@@ -297,22 +314,14 @@ export class MergeCoordinatorService {
       testResults: slot.phaseResult.testResults,
     });
 
-    // 5. Cleanup worktree + branch
-    log.info("Merge to main succeeded, cleaning up", { taskId: task.id, branchName });
-    try {
-      if (settings.gitWorkingMode !== "branches") {
-        await this.host.branchManager.removeTaskWorktree(repoPath, task.id);
-      }
-      await this.host.branchManager.deleteBranch(repoPath, branchName);
-    } catch (err) {
-      log.warn("Worktree/branch cleanup failed (will be pruned by recovery)", {
-        taskId: task.id,
-        branchName,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    }
+    this.registerPendingCleanup(projectId, {
+      taskId: task.id,
+      branchName,
+      worktreePath: wtPath,
+      gitWorkingMode: settings.gitWorkingMode === "branches" ? "branches" : "worktree",
+    });
 
-    // 6. Async push + post-completion
+    // 5. Async push + post-completion
     this.host.nudge(projectId);
 
     this.postCompletionAsync(projectId, repoPath, task.id).catch((err) => {
@@ -330,6 +339,20 @@ export class MergeCoordinatorService {
     task: StoredTask,
     mergeErr: Error
   ): Promise<void> {
+    const slot = this.host.getState(projectId).slots.get(task.id);
+    const failedBranchName = slot?.branchName ?? `opensprint/${task.id}`;
+    const stage =
+      mergeErr instanceof MergeJobError
+        ? mergeErr.stage
+        : mergeErr instanceof RebaseConflictError
+          ? "push_rebase"
+          : "merge_to_main";
+    const conflictedFiles =
+      mergeErr instanceof MergeJobError
+        ? mergeErr.conflictedFiles
+        : mergeErr instanceof RebaseConflictError
+          ? mergeErr.conflictedFiles
+          : [];
     if (await this.host.branchManager.isMergeInProgress(repoPath)) {
       await this.host.branchManager.mergeAbort(repoPath);
     }
@@ -369,6 +392,9 @@ export class MergeCoordinatorService {
       const freshIssue = await this.host.taskStore.show(projectId, task.id);
       const cumulativeAttempts = this.host.taskStore.getCumulativeAttemptsFromIssue(freshIssue) + 1;
       await this.host.taskStore.setCumulativeAttempts(projectId, task.id, cumulativeAttempts);
+      await this.host.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
+      await this.host.taskStore.setMergeStage(projectId, task.id, stage);
+      const scopeConfidence = this.getScopeConfidence(freshIssue);
 
       const maxMergeFailures = BACKOFF_FAILURE_THRESHOLD * 2;
       if (cumulativeAttempts >= maxMergeFailures) {
@@ -389,6 +415,23 @@ export class MergeCoordinatorService {
           reason: `Blocked after ${cumulativeAttempts} merge failures`,
           cumulativeAttempts,
         });
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: task.id,
+            event: "merge.failed",
+            data: {
+              reason: mergeErr.message?.slice(0, 500),
+              stage,
+              branchName: failedBranchName,
+              conflictedFiles,
+              attempt: cumulativeAttempts,
+              resolvedBy: "blocked",
+              scopeConfidence,
+            },
+          })
+          .catch(() => {});
         return;
       }
 
@@ -405,7 +448,15 @@ export class MergeCoordinatorService {
           projectId,
           taskId: task.id,
           event: "merge.failed",
-          data: { reason: mergeErr.message?.slice(0, 500) },
+          data: {
+            reason: mergeErr.message?.slice(0, 500),
+            stage,
+            branchName: failedBranchName,
+            conflictedFiles,
+            attempt: cumulativeAttempts,
+            resolvedBy: "requeued",
+            scopeConfidence,
+          },
         })
         .catch(() => {});
 
@@ -416,6 +467,7 @@ export class MergeCoordinatorService {
   }
 
   async postCompletionAsync(projectId: string, repoPath: string, taskId: string): Promise<void> {
+    let pushed = false;
     if (!this.pushInProgress.has(projectId)) {
       let resolvePush!: () => void;
       const pushPromise = new Promise<void>((r) => {
@@ -424,7 +476,10 @@ export class MergeCoordinatorService {
       this.pushCompletion.set(projectId, { promise: pushPromise, resolve: resolvePush });
       this.pushInProgress.add(projectId);
       try {
-        await this.pushMainSafe(projectId, repoPath);
+        pushed = await this.pushMainSafe(projectId, repoPath);
+        if (pushed) {
+          await this.cleanupAfterSuccessfulPush(projectId, repoPath);
+        }
       } finally {
         this.pushInProgress.delete(projectId);
         const entry = this.pushCompletion.get(projectId);
@@ -524,7 +579,7 @@ export class MergeCoordinatorService {
   /**
    * Push main to origin. On rebase conflict: try merger agent once; if resolution fails, abort and retry on next completion.
    */
-  private async pushMainSafe(projectId: string, repoPath: string): Promise<void> {
+  private async pushMainSafe(projectId: string, repoPath: string): Promise<boolean> {
     await gitCommitQueue.drain();
     await this.host.taskStore.syncForPush(projectId);
 
@@ -539,13 +594,24 @@ export class MergeCoordinatorService {
           event: "push.succeeded",
         })
         .catch(() => {});
+      return true;
     } catch (err) {
       if (err instanceof RebaseConflictError) {
         log.info("Push rebase conflict, invoking merger agent", {
           projectId,
           files: err.conflictedFiles,
         });
-        const resolved = await this.host.runMergerAgentAndWait(projectId, repoPath);
+        const settings = await this.host.projectService.getSettings(projectId);
+        const resolved = await this.host.runMergerAgentAndWait({
+          projectId,
+          cwd: repoPath,
+          config: settings.simpleComplexityAgent as AgentConfig,
+          phase: "push_rebase",
+          taskId: "",
+          branchName: "main",
+          conflictedFiles: err.conflictedFiles,
+          testCommand: resolveTestCommand(settings),
+        });
         if (resolved) {
           try {
             await this.host.branchManager.rebaseContinue(repoPath);
@@ -559,6 +625,7 @@ export class MergeCoordinatorService {
                 event: "push.succeeded",
               })
               .catch(() => {});
+            return true;
           } catch (continueErr) {
             log.warn("rebase --continue or push failed after merger", {
               projectId,
@@ -573,6 +640,20 @@ export class MergeCoordinatorService {
       } else {
         log.warn("Push failed, will retry on next task completion", { projectId, err });
       }
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: "",
+          event: "push.failed",
+          data: {
+            reason: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
+            conflictedFiles: err instanceof RebaseConflictError ? err.conflictedFiles : [],
+            stage: err instanceof RebaseConflictError ? "push_rebase" : "push",
+          },
+        })
+        .catch(() => {});
+      return false;
     }
   }
 }

@@ -162,6 +162,65 @@ describe("BranchManager", () => {
     });
   });
 
+  describe("syncMainWithOrigin", () => {
+    it("fast-forwards main when origin/main is ahead", async () => {
+      const remotePath = path.join(os.tmpdir(), `opensprint-branch-remote-${Date.now()}`);
+      await fs.mkdir(remotePath, { recursive: true });
+      await execAsync("git init --bare", { cwd: remotePath });
+
+      const clonePath = path.join(os.tmpdir(), `opensprint-branch-clone-${Date.now()}`);
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await execAsync("git checkout -b main", { cwd: repoPath });
+      await execAsync(`git remote add origin ${remotePath}`, { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+      await execAsync("git push -u origin main", { cwd: repoPath });
+
+      await execAsync(`git clone ${remotePath} ${clonePath}`);
+      await execAsync('git config user.email "test@test.com"', { cwd: clonePath });
+      await execAsync('git config user.name "Test"', { cwd: clonePath });
+      await execAsync("git checkout main", { cwd: clonePath });
+      await fs.writeFile(path.join(clonePath, "remote.txt"), "from remote");
+      await execAsync('git add remote.txt && git commit -m "remote change"', { cwd: clonePath });
+      await execAsync("git push origin main", { cwd: clonePath });
+
+      const result = await branchManager.syncMainWithOrigin(repoPath);
+
+      expect(result).toBe("fast_forwarded");
+      const { stdout } = await execAsync("git ls-tree -r HEAD --name-only", { cwd: repoPath });
+      expect(stdout).toContain("remote.txt");
+
+      await fs.rm(remotePath, { recursive: true, force: true });
+      await fs.rm(clonePath, { recursive: true, force: true });
+    });
+
+    it("preserves local main commits when local main is ahead", async () => {
+      const remotePath = path.join(os.tmpdir(), `opensprint-branch-remote-${Date.now()}`);
+      await fs.mkdir(remotePath, { recursive: true });
+      await execAsync("git init --bare", { cwd: remotePath });
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync(`git remote add origin ${remotePath}`, { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+      await execAsync("git push -u origin main", { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "local.txt"), "only local");
+      await execAsync('git add local.txt && git commit -m "local ahead"', { cwd: repoPath });
+
+      const result = await branchManager.syncMainWithOrigin(repoPath);
+
+      expect(result).toBe("local_ahead");
+      const { stdout } = await execAsync("git log --format=%s -1", { cwd: repoPath });
+      expect(stdout.trim()).toBe("local ahead");
+
+      await fs.rm(remotePath, { recursive: true, force: true });
+    });
+  });
+
   describe("captureUncommittedDiff", () => {
     it("should capture uncommitted changes in working tree", async () => {
       await execAsync("git init", { cwd: repoPath });

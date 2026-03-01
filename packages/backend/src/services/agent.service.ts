@@ -8,6 +8,7 @@ import { AgentClient } from "./agent-client.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { getErrorMessage, isLimitError } from "../utils/error-utils.js";
+import { shellExec } from "../utils/shell-exec.js";
 import { activeAgentsService } from "./active-agents.service.js";
 import {
   getNextKey,
@@ -89,6 +90,19 @@ export interface CodingAgentHandle {
   pid: number | null;
 }
 
+export type MergerPhase = "rebase_before_merge" | "merge_to_main" | "push_rebase";
+
+export interface RunMergerAgentOptions {
+  projectId: string;
+  cwd: string;
+  config: AgentConfig;
+  phase: MergerPhase;
+  taskId: string;
+  branchName: string;
+  conflictedFiles: string[];
+  testCommand?: string;
+}
+
 /** Create a handle for an existing process by PID (used when re-attaching after backend restart). */
 export function createPidHandle(pid: number): CodingAgentHandle {
   return {
@@ -111,6 +125,7 @@ export function createPidHandle(pid: number): CodingAgentHandle {
  */
 export class AgentService {
   private agentClient = new AgentClient();
+  private static readonly MERGER_MAIN_LOG_LIMIT = 5;
 
   /**
    * Invoke the planning agent with messages.
@@ -264,32 +279,84 @@ export class AgentService {
     });
   }
 
-  /**
-   * Default prompt for the merger agent. Instructs the agent to resolve
-   * merge/rebase conflict markers in the working directory.
-   */
-  private static readonly MERGER_PROMPT = `# Merger Agent: Resolve Git Conflicts
+  private async buildMergerPrompt(options: RunMergerAgentOptions): Promise<string> {
+    const [statusShort, diffFilterU, mainLog, branchDiffStat] = await Promise.all([
+      this.captureGitOutput(options.cwd, "git status --short"),
+      this.captureGitOutput(options.cwd, "git diff --name-only --diff-filter=U"),
+      this.captureGitOutput(
+        options.cwd,
+        `git log --oneline -${AgentService.MERGER_MAIN_LOG_LIMIT} main`
+      ),
+      this.captureGitOutput(options.cwd, `git diff --stat main...${options.branchName}`),
+    ]);
 
-You are the Merger agent. Your job is to resolve merge or rebase conflicts in this repository.
+    const conflictedFiles =
+      options.conflictedFiles.length > 0 ? options.conflictedFiles.join("\n") : "(none reported)";
+    const testCommand = options.testCommand?.trim() ? options.testCommand.trim() : "(not provided)";
 
-## Context
+    return `# Merger Agent: Resolve Git Conflicts
 
-A git merge or rebase has encountered conflicts. The working directory contains files with conflict markers (\`<<<<<<<\`, \`=======\`, \`>>>>>>>\`).
+You are the Merger agent. Your job is to resolve ${options.phase} conflicts for task ${options.taskId} on branch ${options.branchName}.
+
+## Conflict Context
+
+- Stage: ${options.phase}
+- Task ID: ${options.taskId}
+- Branch: ${options.branchName}
+- Test command: ${testCommand}
+
+### Conflicted files
+${conflictedFiles}
+
+### git status --short
+${statusShort || "(no output)"}
+
+### git diff --name-only --diff-filter=U
+${diffFilterU || "(no output)"}
+
+### Recent main commits
+${mainLog || "(no output)"}
+
+### Branch diff stat vs main
+${branchDiffStat || "(no output)"}
 
 ## Your Task
 
-1. **Identify conflicted files** — Run \`git diff --name-only --diff-filter=U\` or \`git status\` to find unmerged paths.
-2. **Resolve each conflict** — Edit each conflicted file to remove conflict markers and produce a correct merged result. Preserve intended behavior from both sides where appropriate.
-3. **Stage resolved files** — Run \`git add <file>\` for each resolved file.
-4. **Verify** — Ensure no conflict markers remain. Run \`git diff --check\` to confirm.
+1. Resolve every unmerged file and stage the resolved files.
+2. Prefer preserving both sides when they are compatible.
+3. Verify there are no remaining conflict markers or unmerged paths.
 
 ## Rules
 
-- Do NOT run \`git rebase --continue\` or \`git commit\` — the orchestrator will do that after you exit.
-- Resolve conflicts by editing files; do not delete entire files unless that is clearly correct.
-- Prefer keeping both sides' changes when they are compatible; otherwise choose the most correct resolution.
-- Exit with code 0 when all conflicts are resolved and staged. Exit non-zero if you cannot resolve.
+- Do NOT run \`git rebase --continue\`, \`git commit\`, or \`git merge --continue\`.
+- Resolve conflicts by editing files; do not delete files unless that is clearly correct.
+- Run \`git diff --check\` before exiting.
+- Exit with code 0 only when all conflicted files are resolved and staged.
+- Exit non-zero if you cannot produce a correct resolution.
 `;
+  }
+
+  private async captureGitOutput(cwd: string, command: string): Promise<string> {
+    try {
+      const { stdout } = await shellExec(command, { cwd, timeout: 10_000 });
+      return stdout.trim();
+    } catch {
+      return "";
+    }
+  }
+
+  private async verifyMergerResult(cwd: string): Promise<boolean> {
+    const unmerged = await this.captureGitOutput(cwd, "git diff --name-only --diff-filter=U");
+    if (unmerged.trim().length > 0) {
+      return false;
+    }
+    try {
+      await shellExec("git diff --check", { cwd, timeout: 10_000 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   /**
    * Run the merger agent and wait for it to complete.
@@ -297,18 +364,22 @@ A git merge or rebase has encountered conflicts. The working directory contains 
    * Used when merge/rebase fails with conflicts — the agent resolves them;
    * the caller then runs rebase --continue or merge --continue.
    */
-  async runMergerAgentAndWait(projectId: string, cwd: string, config: AgentConfig): Promise<boolean> {
+  async runMergerAgentAndWait(options: RunMergerAgentOptions): Promise<boolean> {
     const promptPath = path.join(os.tmpdir(), `opensprint-merger-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.md`);
-    await fs.writeFile(promptPath, AgentService.MERGER_PROMPT);
+    await fs.writeFile(promptPath, await this.buildMergerPrompt(options));
     try {
-      return await new Promise<boolean>((resolve) => {
-        this.invokeMergerAgent(promptPath, config, {
-          cwd,
+      const exitedCleanly = await new Promise<boolean>((resolve) => {
+        this.invokeMergerAgent(promptPath, options.config, {
+          cwd: options.cwd,
           onOutput: () => {},
           onExit: (code) => resolve(code === 0),
-          projectId,
+          projectId: options.projectId,
         });
       });
+      if (!exitedCleanly) {
+        return false;
+      }
+      return this.verifyMergerResult(options.cwd);
     } finally {
       await fs.unlink(promptPath).catch(() => {});
     }

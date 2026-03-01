@@ -58,7 +58,7 @@ Then open **http://localhost:5173**. On Mac, setup is that simple — one `npm r
 
 ### Integrations (BYO-AI)
 
-Use your preferred AI — **Claude**, **Cursor**, or a **custom CLI**. Open Sprint orchestrates the workflow. Set `ANTHROPIC_API_KEY` or `CURSOR_API_KEY` (see [Environment variables](#environment-variables)); for custom providers, see the repo for CLI integration.
+Use your preferred AI — **Claude**, **Cursor**, **OpenAI**, or a **custom CLI**. Open Sprint orchestrates the workflow. Set `ANTHROPIC_API_KEY`, `CURSOR_API_KEY`, or `OPENAI_API_KEY` (see [Environment variables](#environment-variables)); for custom providers, see the repo for CLI integration.
 
 ## SPEED lifecycle
 
@@ -157,6 +157,7 @@ To use a remote database (e.g. Supabase), set **`DATABASE_URL`** (env) or **`dat
 | `DATABASE_URL`               | —       | PostgreSQL connection URL; overrides `databaseUrl` in global settings (12-factor).            |
 | `ANTHROPIC_API_KEY`          | —       | Claude integration                                                                           |
 | `CURSOR_API_KEY`             | —       | Cursor integration                                                                           |
+| `OPENAI_API_KEY`             | —       | OpenAI integration                                                                           |
 | `PORT`                       | `3100`  | Backend port                                                                                 |
 | `OPENSPRINT_PRESERVE_AGENTS` | unset   | Set to `1` in dev so agent processes survive backend restarts; do **not** set in production. |
 | `NODE_ENV`                   | unset   | Optional: set to `test` when running tests; prod should not run test-only logic.             |

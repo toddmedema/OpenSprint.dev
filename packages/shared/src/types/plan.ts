@@ -82,7 +82,7 @@ export interface CreatePlanRequest {
     task_priority?: number;
     dependsOn?: string[];
     depends_on?: (string | number)[];
-    files?: { modify?: string[]; create?: string[] };
+    files?: { modify?: string[]; create?: string[]; test?: string[] };
   }>;
   task_list?: Array<{
     title?: string;
@@ -93,7 +93,7 @@ export interface CreatePlanRequest {
     task_priority?: number;
     dependsOn?: string[];
     depends_on?: (string | number)[];
-    files?: { modify?: string[]; create?: string[] };
+    files?: { modify?: string[]; create?: string[]; test?: string[] };
   }>;
 }
 
@@ -106,6 +106,7 @@ export interface UpdatePlanRequest {
 export interface TaskFileScope {
   modify?: string[];
   create?: string[];
+  test?: string[];
 }
 
 /** Suggested task from AI decomposition (before creation) */
