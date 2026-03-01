@@ -150,6 +150,7 @@ describe("ProjectSettingsPage", () => {
     mockGetKeys.mockResolvedValue({
       anthropic: true,
       cursor: true,
+      openai: true,
       claudeCli: true,
       useCustomCli: false,
     });

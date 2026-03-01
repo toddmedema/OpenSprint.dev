@@ -47,13 +47,17 @@ export function CreateNewProjectPage() {
   const [envKeys, setEnvKeys] = useState<{
     anthropic: boolean;
     cursor: boolean;
+    openai: boolean;
     claudeCli: boolean;
   } | null>(null);
-  const [keyInput, setKeyInput] = useState<{ anthropic: string; cursor: string }>({
+  const [keyInput, setKeyInput] = useState<{ anthropic: string; cursor: string; openai: string }>({
     anthropic: "",
     cursor: "",
+    openai: "",
   });
-  const [savingKey, setSavingKey] = useState<"ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | null>(null);
+  const [savingKey, setSavingKey] = useState<
+    "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | "OPENAI_API_KEY" | null
+  >(null);
   const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
 
   const [scaffolding, setScaffolding] = useState(false);
@@ -71,23 +75,32 @@ export function CreateNewProjectPage() {
         const apiKeys = global.apiKeys;
         const anthropic = (apiKeys?.ANTHROPIC_API_KEY?.length ?? 0) > 0;
         const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
-        setEnvKeys({ anthropic, cursor, claudeCli: env.claudeCli });
+        const openai = (apiKeys?.OPENAI_API_KEY?.length ?? 0) > 0;
+        setEnvKeys({ anthropic, cursor, openai, claudeCli: env.claudeCli });
       })
       .catch(() => setEnvKeys(null));
   }, [step]);
 
-  const handleSaveKey = async (envKey: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY") => {
-    const value = envKey === "ANTHROPIC_API_KEY" ? keyInput.anthropic : keyInput.cursor;
+  const handleSaveKey = async (
+    envKey: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | "OPENAI_API_KEY"
+  ) => {
+    const keyToInput =
+      envKey === "ANTHROPIC_API_KEY"
+        ? "anthropic"
+        : envKey === "CURSOR_API_KEY"
+          ? "cursor"
+          : "openai";
+    const value = keyInput[keyToInput];
     if (!value.trim()) return;
     setSavingKey(envKey);
     try {
       await api.env.saveKey(envKey, value.trim());
       setEnvKeys((prev) =>
-        prev ? { ...prev, [envKey === "ANTHROPIC_API_KEY" ? "anthropic" : "cursor"]: true } : null
+        prev ? { ...prev, [keyToInput]: true } : null
       );
       setKeyInput((prev) => ({
         ...prev,
-        [envKey === "ANTHROPIC_API_KEY" ? "anthropic" : "cursor"]: "",
+        [keyToInput]: "",
       }));
       setModelRefreshTrigger((n) => n + 1);
     } catch {
@@ -265,6 +278,10 @@ export function CreateNewProjectPage() {
     envKeys &&
     !envKeys.cursor &&
     (simpleComplexityAgent.type === "cursor" || complexComplexityAgent.type === "cursor");
+  const needsOpenai =
+    envKeys &&
+    !envKeys.openai &&
+    (simpleComplexityAgent.type === "openai" || complexComplexityAgent.type === "openai");
   const usesClaudeCli =
     simpleComplexityAgent.type === "claude-cli" || complexComplexityAgent.type === "claude-cli";
   const claudeCliMissing = envKeys && !envKeys.claudeCli && usesClaudeCli;
@@ -273,6 +290,7 @@ export function CreateNewProjectPage() {
     envKeys !== null &&
     !needsAnthropic &&
     !needsCursor &&
+    !needsOpenai &&
     !claudeCliMissing &&
     (simpleComplexityAgent.type !== "custom" || simpleComplexityAgent.cliCommand.trim()) &&
     (complexComplexityAgent.type !== "custom" || complexComplexityAgent.cliCommand.trim());

@@ -97,6 +97,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
   const [envKeys, setEnvKeys] = useState<{
     anthropic: boolean;
     cursor: boolean;
+    openai: boolean;
     claudeCli: boolean;
   } | null>(null);
   const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
@@ -134,7 +135,8 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
         const apiKeys = global.apiKeys;
         const anthropic = (apiKeys?.ANTHROPIC_API_KEY?.length ?? 0) > 0;
         const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
-        setEnvKeys({ anthropic, cursor, claudeCli: env.claudeCli });
+        const openai = (apiKeys?.OPENAI_API_KEY?.length ?? 0) > 0;
+        setEnvKeys({ anthropic, cursor, openai, claudeCli: env.claudeCli });
       })
       .catch(() => setEnvKeys(null));
   }, [activeTab]);
@@ -492,11 +494,13 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                     const needsAnthropic =
                       envKeys && !envKeys.anthropic && selectedTypes.has("claude");
                     const needsCursor = envKeys && !envKeys.cursor && selectedTypes.has("cursor");
+                    const needsOpenai =
+                      envKeys && !envKeys.openai && selectedTypes.has("openai");
                     const claudeCliMissing =
                       envKeys && !envKeys.claudeCli && selectedTypes.has("claude-cli");
                     return (
                       <>
-                        {(needsAnthropic || needsCursor) && (
+                        {(needsAnthropic || needsCursor || needsOpenai) && (
                           <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
                             <p className="text-sm text-theme-warning-text">
                               <strong>API key required:</strong>{" "}
@@ -559,6 +563,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                             <option value="claude">Claude (API)</option>
                             <option value="claude-cli">Claude (CLI)</option>
                             <option value="cursor">Cursor</option>
+                            <option value="openai">OpenAI</option>
                             <option value="custom">Custom CLI</option>
                           </select>
                         </div>
@@ -617,6 +622,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                             <option value="claude">Claude (API)</option>
                             <option value="claude-cli">Claude (CLI)</option>
                             <option value="cursor">Cursor</option>
+                            <option value="openai">OpenAI</option>
                             <option value="custom">Custom CLI</option>
                           </select>
                         </div>

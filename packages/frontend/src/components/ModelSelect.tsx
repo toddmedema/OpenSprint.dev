@@ -31,7 +31,12 @@ export function ModelSelect({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (provider !== "claude" && provider !== "claude-cli" && provider !== "cursor") {
+    if (
+      provider !== "claude" &&
+      provider !== "claude-cli" &&
+      provider !== "cursor" &&
+      provider !== "openai"
+    ) {
       setModels([]);
       setError(null);
       return;
@@ -90,7 +95,9 @@ export function ModelSelect({
           ? "Ensure claude CLI is installed"
           : provider === "cursor"
             ? "Check CURSOR_API_KEY in .env"
-            : "";
+            : provider === "openai"
+              ? "Check OPENAI_API_KEY in .env"
+              : "";
     return (
       <div className="space-y-1" role="group" aria-label="Model selection">
         <select className={className} disabled aria-label="Model selection" aria-invalid="true">

@@ -8,10 +8,10 @@ export interface SimplifiedAgentsStepProps {
   onSimpleComplexityAgentChange: (config: AgentConfig) => void;
   onComplexComplexityAgentChange: (config: AgentConfig) => void;
   envKeys: EnvKeys | null;
-  keyInput: { anthropic: string; cursor: string };
-  onKeyInputChange: (key: "anthropic" | "cursor", value: string) => void;
-  savingKey: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | null;
-  onSaveKey: (key: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY") => void;
+  keyInput: { anthropic: string; cursor: string; openai: string };
+  onKeyInputChange: (key: "anthropic" | "cursor" | "openai", value: string) => void;
+  savingKey: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | "OPENAI_API_KEY" | null;
+  onSaveKey: (key: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | "OPENAI_API_KEY") => void;
   modelRefreshTrigger: number;
 }
 
@@ -35,21 +35,41 @@ export function SimplifiedAgentsStep({
     envKeys &&
     !envKeys.cursor &&
     (simpleComplexityAgent.type === "cursor" || complexComplexityAgent.type === "cursor");
+  const needsOpenai =
+    envKeys &&
+    !envKeys.openai &&
+    (simpleComplexityAgent.type === "openai" || complexComplexityAgent.type === "openai");
   const usesClaudeCli =
     simpleComplexityAgent.type === "claude-cli" || complexComplexityAgent.type === "claude-cli";
   const claudeCliMissing = envKeys && !envKeys.claudeCli && usesClaudeCli;
 
   return (
     <div className="space-y-6" data-testid="simplified-agents-step">
-      {(needsAnthropic || needsCursor) && (
+      {(needsAnthropic || needsCursor || needsOpenai) && (
         <>
           <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
             <p className="text-sm text-theme-warning-text">
               <strong>API key required:</strong>{" "}
-              {needsAnthropic && needsCursor ? (
+              {needsAnthropic && needsCursor && needsOpenai ? (
+                <>
+                  Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code>,{" "}
+                  <code className="font-mono text-xs">CURSOR_API_KEY</code>, and{" "}
+                  <code className="font-mono text-xs">OPENAI_API_KEY</code> to continue.
+                </>
+              ) : needsAnthropic && needsCursor ? (
                 <>
                   Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and{" "}
                   <code className="font-mono text-xs">CURSOR_API_KEY</code> to continue.
+                </>
+              ) : needsAnthropic && needsOpenai ? (
+                <>
+                  Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and{" "}
+                  <code className="font-mono text-xs">OPENAI_API_KEY</code> to continue.
+                </>
+              ) : needsCursor && needsOpenai ? (
+                <>
+                  Add your <code className="font-mono text-xs">CURSOR_API_KEY</code> and{" "}
+                  <code className="font-mono text-xs">OPENAI_API_KEY</code> to continue.
                 </>
               ) : needsAnthropic ? (
                 <>
@@ -62,6 +82,20 @@ export function SimplifiedAgentsStep({
                     className="underline hover:opacity-80"
                   >
                     Anthropic Console
+                  </a>
+                  .
+                </>
+              ) : needsOpenai ? (
+                <>
+                  Add your <code className="font-mono text-xs">OPENAI_API_KEY</code> to use OpenAI.
+                  Get one from{" "}
+                  <a
+                    href="https://platform.openai.com/api-keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:opacity-80"
+                  >
+                    OpenAI Platform
                   </a>
                   .
                 </>
@@ -133,6 +167,31 @@ export function SimplifiedAgentsStep({
                 </button>
               </div>
             )}
+            {needsOpenai && (
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-theme-muted mb-1">
+                    OPENAI_API_KEY
+                  </label>
+                  <input
+                    type="password"
+                    className="input font-mono text-sm"
+                    placeholder="sk-..."
+                    value={keyInput.openai}
+                    onChange={(e) => onKeyInputChange("openai", e.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onSaveKey("OPENAI_API_KEY")}
+                  disabled={!keyInput.openai.trim() || savingKey !== null}
+                  className="btn-primary text-sm disabled:opacity-50"
+                >
+                  {savingKey === "OPENAI_API_KEY" ? "Saving…" : "Save"}
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -184,6 +243,7 @@ export function SimplifiedAgentsStep({
                 <option value="claude">Claude (API)</option>
                 <option value="claude-cli">Claude (CLI)</option>
                 <option value="cursor">Cursor</option>
+                <option value="openai">OpenAI</option>
                 <option value="custom">Custom CLI</option>
               </select>
             </div>
@@ -235,6 +295,7 @@ export function SimplifiedAgentsStep({
                 <option value="claude">Claude (API)</option>
                 <option value="claude-cli">Claude (CLI)</option>
                 <option value="cursor">Cursor</option>
+                <option value="openai">OpenAI</option>
                 <option value="custom">Custom CLI</option>
               </select>
             </div>

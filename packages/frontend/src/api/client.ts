@@ -130,17 +130,21 @@ export const api = {
       request<{
         anthropic: boolean;
         cursor: boolean;
+        openai: boolean;
         claudeCli: boolean;
         useCustomCli: boolean;
       }>("/env/keys"),
     getGlobalStatus: () =>
       request<{ hasAnyKey: boolean; useCustomCli: boolean }>("/env/global-status"),
-    validateKey: (provider: "claude" | "cursor", value: string) =>
+    validateKey: (provider: "claude" | "cursor" | "openai", value: string) =>
       request<{ valid: boolean; error?: string }>("/env/keys/validate", {
         method: "POST",
         body: JSON.stringify({ provider, value }),
       }),
-    saveKey: (key: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY", value: string) =>
+    saveKey: (
+      key: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | "OPENAI_API_KEY",
+      value: string
+    ) =>
       request<{ saved: boolean }>("/env/keys", {
         method: "POST",
         body: JSON.stringify({ key, value }),

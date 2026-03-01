@@ -237,7 +237,9 @@ export function ApiKeysSection({
                     ? (isNew
                         ? provider === "ANTHROPIC_API_KEY"
                           ? "sk-ant-..."
-                          : "key_..."
+                          : provider === "OPENAI_API_KEY"
+                            ? "sk-..."
+                            : "key_..."
                         : MASKED_PLACEHOLDER)
                     : undefined;
                   return (

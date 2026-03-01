@@ -51,7 +51,7 @@ function renderSimplifiedAgentsStep(
       onSimpleComplexityAgentChange={() => {}}
       onComplexComplexityAgentChange={() => {}}
       envKeys={null}
-      keyInput={{ anthropic: "", cursor: "" }}
+      keyInput={{ anthropic: "", cursor: "", openai: "" }}
       onKeyInputChange={() => {}}
       savingKey={null}
       onSaveKey={() => {}}
@@ -101,7 +101,7 @@ describe("SimplifiedAgentsStep", () => {
 
   it("hides API key banner when all keys for selected providers are configured", () => {
     renderSimplifiedAgentsStep({
-      envKeys: { anthropic: true, cursor: true, claudeCli: true },
+      envKeys: { anthropic: true, cursor: true, openai: true, claudeCli: true },
     });
 
     expect(screen.queryByText(/API key required/)).not.toBeInTheDocument();
@@ -111,7 +111,7 @@ describe("SimplifiedAgentsStep", () => {
 
   it("shows cursor key input when cursor is selected and key is missing", () => {
     renderSimplifiedAgentsStep({
-      envKeys: { anthropic: true, cursor: false, claudeCli: true },
+      envKeys: { anthropic: true, cursor: false, openai: true, claudeCli: true },
     });
 
     expect(screen.getByText(/API key required/)).toBeInTheDocument();
@@ -122,7 +122,7 @@ describe("SimplifiedAgentsStep", () => {
   it("shows anthropic key input when an agent uses claude provider and key is missing", () => {
     renderSimplifiedAgentsStep({
       simpleComplexityAgent: { type: "claude", model: "", cliCommand: "" },
-      envKeys: { anthropic: false, cursor: true, claudeCli: true },
+      envKeys: { anthropic: false, cursor: true, openai: true, claudeCli: true },
     });
 
     expect(screen.getByText(/API key required/)).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe("SimplifiedAgentsStep", () => {
   it("shows CLI warning when claude-cli is selected and CLI is not available", () => {
     renderSimplifiedAgentsStep({
       simpleComplexityAgent: { type: "claude-cli", model: "", cliCommand: "" },
-      envKeys: { anthropic: false, cursor: true, claudeCli: false },
+      envKeys: { anthropic: false, cursor: true, openai: true, claudeCli: false },
     });
 
     expect(screen.getByText(/Claude CLI not found/)).toBeInTheDocument();
@@ -181,8 +181,8 @@ describe("SimplifiedAgentsStep", () => {
     const onSaveKey = vi.fn();
     renderSimplifiedAgentsStep({
       simpleComplexityAgent: { type: "claude", model: "", cliCommand: "" },
-      envKeys: { anthropic: false, cursor: true, claudeCli: true },
-      keyInput: { anthropic: "sk-ant-test", cursor: "" },
+      envKeys: { anthropic: false, cursor: true, openai: true, claudeCli: true },
+      keyInput: { anthropic: "sk-ant-test", cursor: "", openai: "" },
       onSaveKey,
     });
 
@@ -196,7 +196,7 @@ describe("SimplifiedAgentsStep", () => {
     const onKeyInputChange = vi.fn();
     renderSimplifiedAgentsStep({
       simpleComplexityAgent: { type: "claude", model: "", cliCommand: "" },
-      envKeys: { anthropic: false, cursor: true, claudeCli: true },
+      envKeys: { anthropic: false, cursor: true, openai: true, claudeCli: true },
       onKeyInputChange,
     });
 

@@ -258,6 +258,31 @@ describe("ApiKeySetupModal", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it("OpenAI Save validates then saves and calls onComplete", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.env.validateKey).mockResolvedValue({ valid: true });
+    vi.mocked(api.env.saveKey).mockResolvedValue({ saved: true });
+
+    render(
+      <ApiKeySetupModal
+        onComplete={onComplete}
+        onCancel={onCancel}
+        intendedRoute={intendedRoute}
+      />
+    );
+
+    await user.selectOptions(
+      screen.getByTestId("api-key-provider-select"),
+      "OpenAI"
+    );
+    await user.type(screen.getByTestId("api-key-input"), "sk-openai-test-key");
+    await user.click(screen.getByTestId("api-key-save-button"));
+
+    expect(api.env.validateKey).toHaveBeenCalledWith("openai", "sk-openai-test-key");
+    expect(api.env.saveKey).toHaveBeenCalledWith("OPENAI_API_KEY", "sk-openai-test-key");
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
   it("shows error inline below input when validation fails", async () => {
     const user = userEvent.setup();
     vi.mocked(api.env.validateKey).mockResolvedValue({

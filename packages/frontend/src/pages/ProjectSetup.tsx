@@ -67,6 +67,7 @@ export function ProjectSetup() {
   const [envKeys, setEnvKeys] = useState<{
     anthropic: boolean;
     cursor: boolean;
+    openai: boolean;
     claudeCli: boolean;
   } | null>(null);
   const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
@@ -111,7 +112,8 @@ export function ProjectSetup() {
         const apiKeys = global.apiKeys;
         const anthropic = (apiKeys?.ANTHROPIC_API_KEY?.length ?? 0) > 0;
         const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
-        setEnvKeys({ anthropic, cursor, claudeCli: env.claudeCli });
+        const openai = (apiKeys?.OPENAI_API_KEY?.length ?? 0) > 0;
+        setEnvKeys({ anthropic, cursor, openai, claudeCli: env.claudeCli });
       })
       .catch(() => setEnvKeys(null));
   }, [step]);

@@ -57,6 +57,7 @@ describe("SettingsPage", () => {
     mockGetKeys.mockResolvedValue({
       anthropic: true,
       cursor: true,
+      openai: true,
       claudeCli: true,
       useCustomCli: false,
     });

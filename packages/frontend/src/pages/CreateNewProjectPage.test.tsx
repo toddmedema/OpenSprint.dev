@@ -78,6 +78,7 @@ describe("CreateNewProjectPage", () => {
     mockGetKeys.mockResolvedValue({
       anthropic: true,
       cursor: true,
+      openai: true,
       claudeCli: true,
       useCustomCli: false,
     });
@@ -92,6 +93,7 @@ describe("CreateNewProjectPage", () => {
     mockGetKeys.mockResolvedValue({
         anthropic: true,
         cursor: true,
+        openai: true,
         claudeCli: true,
         useCustomCli: false,
       });
@@ -317,6 +319,7 @@ describe("CreateNewProjectPage", () => {
     let resolveGetKeys: (value: {
       anthropic: boolean;
       cursor: boolean;
+      openai: boolean;
       claudeCli: boolean;
       useCustomCli: boolean;
     }) => void;
@@ -352,6 +355,7 @@ describe("CreateNewProjectPage", () => {
     resolveGetKeys!({
       anthropic: true,
       cursor: true,
+      openai: true,
       claudeCli: true,
       useCustomCli: false,
     });
@@ -369,6 +373,7 @@ describe("CreateNewProjectPage", () => {
     mockGetKeys.mockResolvedValue({
       anthropic: true,
       cursor: false,
+      openai: true,
       claudeCli: true,
       useCustomCli: false,
     });
@@ -392,6 +397,7 @@ describe("CreateNewProjectPage", () => {
     mockGetKeys.mockResolvedValue({
       anthropic: false,
       cursor: true,
+      openai: true,
       claudeCli: true,
       useCustomCli: false,
     });
@@ -411,6 +417,7 @@ describe("CreateNewProjectPage", () => {
     mockGetKeys.mockResolvedValue({
       anthropic: true,
       cursor: true,
+      openai: true,
       claudeCli: false,
       useCustomCli: false,
     });
@@ -430,6 +437,7 @@ describe("CreateNewProjectPage", () => {
     mockGetKeys.mockResolvedValue({
         anthropic: true,
         cursor: true,
+        openai: true,
         claudeCli: true,
         useCustomCli: false,
       });
@@ -449,6 +457,7 @@ describe("CreateNewProjectPage", () => {
     mockGetKeys.mockResolvedValue({
         anthropic: true,
         cursor: true,
+        openai: true,
         claudeCli: true,
         useCustomCli: false,
       });

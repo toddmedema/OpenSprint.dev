@@ -28,6 +28,7 @@ vi.mock("../api/client", () => ({
       getKeys: vi.fn().mockResolvedValue({
         anthropic: true,
         cursor: true,
+        openai: true,
         claudeCli: true,
         useCustomCli: false,
       }),

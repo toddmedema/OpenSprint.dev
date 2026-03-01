@@ -182,12 +182,18 @@ describe("api client", () => {
   });
 
   describe("env", () => {
-    it("getKeys returns anthropic, cursor, claudeCli, useCustomCli", async () => {
+    it("getKeys returns anthropic, cursor, openai, claudeCli, useCustomCli", async () => {
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
         status: 200,
         json: vi.fn().mockResolvedValue({
-          data: { anthropic: true, cursor: false, claudeCli: true, useCustomCli: false },
+          data: {
+            anthropic: true,
+            cursor: false,
+            openai: true,
+            claudeCli: true,
+            useCustomCli: false,
+          },
         }),
       } as Response);
 
@@ -195,6 +201,7 @@ describe("api client", () => {
       expect(result).toEqual({
         anthropic: true,
         cursor: false,
+        openai: true,
         claudeCli: true,
         useCustomCli: false,
       });
@@ -285,6 +292,41 @@ describe("api client", () => {
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({ key: "ANTHROPIC_API_KEY", value: "sk-secret" }),
+        })
+      );
+    });
+
+    it("validateKey accepts openai provider", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { valid: true } }),
+      } as Response);
+
+      const result = await api.env.validateKey("openai", "sk-openai-key");
+      expect(result).toEqual({ valid: true });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/env/keys/validate"),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ provider: "openai", value: "sk-openai-key" }),
+        })
+      );
+    });
+
+    it("saveKey accepts OPENAI_API_KEY", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { saved: true } }),
+      } as Response);
+
+      await api.env.saveKey("OPENAI_API_KEY", "sk-openai-key");
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/env/keys"),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ key: "OPENAI_API_KEY", value: "sk-openai-key" }),
         })
       );
     });

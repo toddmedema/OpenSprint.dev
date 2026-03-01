@@ -24,6 +24,7 @@ export interface AgentConfig {
 export interface EnvKeys {
   anthropic: boolean;
   cursor: boolean;
+  openai: boolean;
   claudeCli: boolean;
 }
 
@@ -66,6 +67,10 @@ export function AgentsStep({
     envKeys &&
     !envKeys.cursor &&
     (simpleComplexityAgent.type === "cursor" || complexComplexityAgent.type === "cursor");
+  const needsOpenai =
+    envKeys &&
+    !envKeys.openai &&
+    (simpleComplexityAgent.type === "openai" || complexComplexityAgent.type === "openai");
   const usesClaudeCli =
     simpleComplexityAgent.type === "claude-cli" || complexComplexityAgent.type === "claude-cli";
   const claudeCliMissing = envKeys && !envKeys.claudeCli && usesClaudeCli;
@@ -97,7 +102,7 @@ export function AgentsStep({
 
       {agentReferenceOpen && <AgentReferenceModal onClose={() => setAgentReferenceOpen(false)} />}
 
-      {(needsAnthropic || needsCursor) && (
+      {(needsAnthropic || needsCursor || needsOpenai) && (
         <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
           <p className="text-sm text-theme-warning-text">
             <strong>API key required:</strong> Configure API keys in Settings (gear icon on the
@@ -153,6 +158,7 @@ export function AgentsStep({
                 <option value="claude">Claude (API)</option>
                 <option value="claude-cli">Claude (CLI)</option>
                 <option value="cursor">Cursor</option>
+                <option value="openai">OpenAI</option>
                 <option value="custom">Custom CLI</option>
               </select>
             </div>
@@ -204,6 +210,7 @@ export function AgentsStep({
                 <option value="claude">Claude (API)</option>
                 <option value="claude-cli">Claude (CLI)</option>
                 <option value="cursor">Cursor</option>
+                <option value="openai">OpenAI</option>
                 <option value="custom">Custom CLI</option>
               </select>
             </div>
