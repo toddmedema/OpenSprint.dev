@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { DisplayPreferencesProvider } from "../contexts/DisplayPreferencesContext";
 import { ProjectSettingsModal } from "./ProjectSettingsModal";
@@ -108,9 +109,11 @@ describe("ProjectSettingsModal", () => {
 
   function renderModal(ui: ReactElement) {
     return render(
-      <ThemeProvider>
-        <DisplayPreferencesProvider>{ui}</DisplayPreferencesProvider>
-      </ThemeProvider>
+      <MemoryRouter>
+        <ThemeProvider>
+          <DisplayPreferencesProvider>{ui}</DisplayPreferencesProvider>
+        </ThemeProvider>
+      </MemoryRouter>
     );
   }
 

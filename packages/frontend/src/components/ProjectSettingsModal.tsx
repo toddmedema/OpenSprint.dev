@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { FolderBrowser } from "./FolderBrowser";
 import { CloseButton } from "./CloseButton";
 import { ModelSelect } from "./ModelSelect";
@@ -43,9 +44,27 @@ const TABS: { key: Tab; label: string }[] = [
 
 type SettingsMode = "project" | "display";
 
+const TAB_PARAM = "tab";
+
+function parseTabFromSearch(search: string): Tab | null {
+  const params = new URLSearchParams(search);
+  const t = params.get(TAB_PARAM);
+  if (t && TABS.some((x) => x.key === t)) return t as Tab;
+  return null;
+}
+
 export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: ProjectSettingsModalProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [mode, setMode] = useState<SettingsMode>("project");
-  const [activeTab, setActiveTab] = useState<Tab>("basics");
+  const tabFromUrl = fullScreen ? parseTabFromSearch(searchParams.toString()) : null;
+  const [activeTab, setActiveTab] = useState<Tab>(tabFromUrl ?? "basics");
+
+  // Sync URL -> state when fullScreen (e.g. browser back/forward)
+  useEffect(() => {
+    if (fullScreen && tabFromUrl && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [fullScreen, tabFromUrl, activeTab]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,79 +132,83 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
   const aiAutonomyLevel = settings?.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL;
   const gitWorkingMode = settings?.gitWorkingMode ?? "worktree";
 
-  const persistSettings = useCallback(async () => {
-    if (loading || !settings) return;
-    if (
-      simpleComplexityAgent.type === "custom" &&
-      !(simpleComplexityAgent.cliCommand ?? "").trim()
-    )
-      return;
-    if (
-      complexComplexityAgent.type === "custom" &&
-      !(complexComplexityAgent.cliCommand ?? "").trim()
-    )
-      return;
-    setSaving(true);
-    setError(null);
-    try {
-      await Promise.all([
-        api.projects.update(project.id, { name, repoPath }),
-        api.projects.updateSettings(project.id, {
-          simpleComplexityAgent: {
-            type: simpleComplexityAgent.type,
-            model: simpleComplexityAgent.model || null,
-            cliCommand: simpleComplexityAgent.cliCommand || null,
-          },
-          complexComplexityAgent: {
-            type: complexComplexityAgent.type,
-            model: complexComplexityAgent.model || null,
-            cliCommand: complexComplexityAgent.cliCommand || null,
-          },
-          deployment: {
-            mode: deployment.mode,
-            expoConfig:
-              deployment.mode === "expo"
-                ? { channel: deployment.expoConfig?.channel ?? "preview" }
-                : undefined,
-            customCommand: deployment.customCommand ?? undefined,
-            webhookUrl: deployment.webhookUrl ?? undefined,
-            rollbackCommand: deployment.rollbackCommand ?? undefined,
-            targets: deployment.targets,
-            envVars: deployment.envVars,
-            autoResolveFeedbackOnTaskCompletion:
-              deployment.autoResolveFeedbackOnTaskCompletion ?? false,
-          },
-          aiAutonomyLevel,
-          testCommand: settings?.testCommand ?? undefined,
-          reviewMode: settings?.reviewMode ?? DEFAULT_REVIEW_MODE,
-          maxConcurrentCoders:
-            gitWorkingMode === "branches" ? 1 : (settings?.maxConcurrentCoders ?? 1),
-          unknownScopeStrategy: settings?.unknownScopeStrategy ?? "optimistic",
-          gitWorkingMode,
-        }),
-      ]);
-      onSaved?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save settings");
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    project.id,
-    name,
-    repoPath,
-    settings,
-    simpleComplexityAgent,
-    complexComplexityAgent,
-    deployment,
-    aiAutonomyLevel,
-    gitWorkingMode,
-    loading,
-  ]);
+  const persistSettings = useCallback(
+    async (notifyOnComplete?: boolean) => {
+      if (loading || !settings) return;
+      if (
+        simpleComplexityAgent.type === "custom" &&
+        !(simpleComplexityAgent.cliCommand ?? "").trim()
+      )
+        return;
+      if (
+        complexComplexityAgent.type === "custom" &&
+        !(complexComplexityAgent.cliCommand ?? "").trim()
+      )
+        return;
+      setSaving(true);
+      setError(null);
+      try {
+        await Promise.all([
+          api.projects.update(project.id, { name, repoPath }),
+          api.projects.updateSettings(project.id, {
+            simpleComplexityAgent: {
+              type: simpleComplexityAgent.type,
+              model: simpleComplexityAgent.model || null,
+              cliCommand: simpleComplexityAgent.cliCommand || null,
+            },
+            complexComplexityAgent: {
+              type: complexComplexityAgent.type,
+              model: complexComplexityAgent.model || null,
+              cliCommand: complexComplexityAgent.cliCommand || null,
+            },
+            deployment: {
+              mode: deployment.mode,
+              expoConfig:
+                deployment.mode === "expo"
+                  ? { channel: deployment.expoConfig?.channel ?? "preview" }
+                  : undefined,
+              customCommand: deployment.customCommand ?? undefined,
+              webhookUrl: deployment.webhookUrl ?? undefined,
+              rollbackCommand: deployment.rollbackCommand ?? undefined,
+              targets: deployment.targets,
+              envVars: deployment.envVars,
+              autoResolveFeedbackOnTaskCompletion:
+                deployment.autoResolveFeedbackOnTaskCompletion ?? false,
+            },
+            aiAutonomyLevel,
+            testCommand: settings?.testCommand ?? undefined,
+            reviewMode: settings?.reviewMode ?? DEFAULT_REVIEW_MODE,
+            maxConcurrentCoders:
+              gitWorkingMode === "branches" ? 1 : (settings?.maxConcurrentCoders ?? 1),
+            unknownScopeStrategy: settings?.unknownScopeStrategy ?? "optimistic",
+            gitWorkingMode,
+          }),
+        ]);
+        if (notifyOnComplete) onSaved?.();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to save settings");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [
+      project.id,
+      name,
+      repoPath,
+      settings,
+      simpleComplexityAgent,
+      complexComplexityAgent,
+      deployment,
+      aiAutonomyLevel,
+      gitWorkingMode,
+      loading,
+      onSaved,
+    ]
+  );
 
   const handleClose = useCallback(async () => {
     if (mode === "project" && settings && !loading) {
-      await persistSettings();
+      await persistSettings(true);
     }
     onClose();
   }, [mode, settings, loading, persistSettings, onClose]);
@@ -203,8 +226,15 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
     (tab: Tab) => {
       if (mode === "project" && settings) void persistSettings();
       setActiveTab(tab);
+      if (fullScreen) {
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.set(TAB_PARAM, tab);
+          return next;
+        }, { replace: true });
+      }
     },
-    [mode, settings, persistSettings]
+    [mode, settings, persistSettings, fullScreen, setSearchParams]
   );
 
   const switchMode = useCallback(

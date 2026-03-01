@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { DisplayPreferencesProvider } from "../contexts/DisplayPreferencesContext";
@@ -51,6 +51,11 @@ vi.mock("../components/layout/Layout", () => ({
   ),
 }));
 
+function LocationCapture() {
+  const loc = useLocation();
+  return <div data-testid="location">{loc.pathname + loc.search}</div>;
+}
+
 const mockSettings = {
   simpleComplexityAgent: { type: "cursor" as const, model: null, cliCommand: null },
   complexComplexityAgent: { type: "cursor" as const, model: null, cliCommand: null },
@@ -68,7 +73,15 @@ function renderProjectSettingsPage() {
         <DisplayPreferencesProvider>
           <MemoryRouter initialEntries={["/projects/proj-1/settings"]}>
             <Routes>
-              <Route path="/projects/:projectId/settings" element={<ProjectSettingsPage />} />
+              <Route
+              path="/projects/:projectId/settings"
+              element={
+                <>
+                  <ProjectSettingsPage />
+                  <LocationCapture />
+                </>
+              }
+            />
             </Routes>
           </MemoryRouter>
         </DisplayPreferencesProvider>
@@ -159,5 +172,60 @@ describe("ProjectSettingsPage", () => {
     const contentArea = screen.getByTestId("settings-modal-content");
     expect(contentArea).toHaveClass("overflow-y-auto");
     expect(contentArea).toHaveClass("min-h-0");
+  });
+
+  it("navigating between settings tabs does not redirect to sketch", async () => {
+    const user = userEvent.setup();
+    renderProjectSettingsPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+    });
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await user.click(agentConfigTab);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+      expect(screen.getByText("Task Complexity")).toBeInTheDocument();
+    });
+
+    const deploymentTab = screen.getByRole("button", { name: "Deliver" });
+    await user.click(deploymentTab);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+      expect(screen.getByText("Delivery Mode")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("project-settings-page")).toBeInTheDocument();
+  });
+
+  it("updates URL with tab param when switching settings tabs", async () => {
+    const user = userEvent.setup();
+    renderProjectSettingsPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("location")).toHaveTextContent("/projects/proj-1/settings");
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await user.click(agentConfigTab);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/projects/proj-1/settings?tab=agents"
+      );
+    });
+
+    const deploymentTab = screen.getByRole("button", { name: "Deliver" });
+    await user.click(deploymentTab);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/projects/proj-1/settings?tab=deployment"
+      );
+    });
   });
 });
