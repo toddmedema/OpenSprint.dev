@@ -5,7 +5,7 @@ import {
   maskApiKeysForResponse,
   validateDatabaseUrl,
   DEFAULT_DATABASE_URL,
-  type MaskedApiKeys,
+  type GlobalSettingsResponse,
 } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
@@ -16,12 +16,6 @@ import {
 } from "../services/global-settings.service.js";
 
 export const globalSettingsRouter = Router();
-
-/** Response shape for GET /global-settings */
-export interface GlobalSettingsResponse {
-  databaseUrl: string;
-  apiKeys?: MaskedApiKeys;
-}
 
 function buildResponse(settings: GlobalSettings) {
   const effectiveUrl = settings.databaseUrl ?? DEFAULT_DATABASE_URL;

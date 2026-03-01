@@ -308,6 +308,29 @@ describe("api client", () => {
       );
     });
 
+    it("get returns apiKeys (masked) when present", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          data: {
+            databaseUrl: "postgresql://user:***@localhost:5432/opensprint",
+            apiKeys: {
+              ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••" }],
+              CURSOR_API_KEY: [{ id: "k2", masked: "••••••••", limitHitAt: "2025-01-01T00:00:00Z" }],
+            },
+          },
+        }),
+      } as Response);
+
+      const result = await api.globalSettings.get();
+      expect(result.databaseUrl).toBe("postgresql://user:***@localhost:5432/opensprint");
+      expect(result.apiKeys).toEqual({
+        ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••" }],
+        CURSOR_API_KEY: [{ id: "k2", masked: "••••••••", limitHitAt: "2025-01-01T00:00:00Z" }],
+      });
+    });
+
     it("put sends databaseUrl and returns masked", async () => {
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
@@ -327,6 +350,41 @@ describe("api client", () => {
           method: "PUT",
           body: JSON.stringify({
             databaseUrl: "postgresql://user:secret@db.example.com:5432/opensprint",
+          }),
+        })
+      );
+    });
+
+    it("put accepts apiKeys and sends them in body", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          data: {
+            databaseUrl: "postgresql://user:***@localhost:5432/opensprint",
+            apiKeys: {
+              ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••" }],
+            },
+          },
+        }),
+      } as Response);
+
+      const result = await api.globalSettings.put({
+        apiKeys: {
+          ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-secret" }],
+        },
+      });
+      expect(result.apiKeys).toEqual({
+        ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••" }],
+      });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/global-settings"),
+        expect.objectContaining({
+          method: "PUT",
+          body: JSON.stringify({
+            apiKeys: {
+              ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-secret" }],
+            },
           }),
         })
       );

@@ -305,6 +305,18 @@ export interface GlobalSettings {
   databaseUrl?: string;
 }
 
+/** Response shape for GET /global-settings (apiKeys masked) */
+export interface GlobalSettingsResponse {
+  databaseUrl: string;
+  apiKeys?: MaskedApiKeys;
+}
+
+/** Request body for PUT /global-settings */
+export interface GlobalSettingsPutRequest {
+  databaseUrl?: string;
+  apiKeys?: ApiKeys;
+}
+
 /**
  * Validate that a string is a valid PostgreSQL URL format.
  * Accepts postgres:// or postgresql:// schemes.

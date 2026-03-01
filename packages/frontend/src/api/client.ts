@@ -1,5 +1,6 @@
 import type {
-  MaskedApiKeys,
+  GlobalSettingsPutRequest,
+  GlobalSettingsResponse,
   Project,
   CreateProjectRequest,
   ScaffoldProjectRequest,
@@ -117,10 +118,9 @@ export const api = {
     },
   },
   globalSettings: {
-    get: () =>
-      request<{ databaseUrl: string; apiKeys?: MaskedApiKeys }>("/global-settings"),
-    put: (updates: { databaseUrl?: string; apiKeys?: unknown }) =>
-      request<{ databaseUrl: string; apiKeys?: MaskedApiKeys }>("/global-settings", {
+    get: () => request<GlobalSettingsResponse>("/global-settings"),
+    put: (updates: GlobalSettingsPutRequest) =>
+      request<GlobalSettingsResponse>("/global-settings", {
         method: "PUT",
         body: JSON.stringify(updates),
       }),
