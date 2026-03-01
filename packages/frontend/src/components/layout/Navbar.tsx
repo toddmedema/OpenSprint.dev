@@ -124,7 +124,7 @@ export function Navbar({
       <div className="flex w-full items-center justify-between">
         {/* Left: Logo + Project Selector */}
         <div className="flex items-center gap-4">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2" data-testid="navbar-logo-link">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 80 80"
@@ -135,11 +135,11 @@ export function Navbar({
               <polygon points="22,10 54,40 22,70" fill="#818cf8" />
               <polygon points="40,10 72,40 40,70" fill="#4f46e5" />
             </svg>
-            <span className="font-sans font-semibold text-lg text-theme-text">Open Sprint</span>
+            <span className="hidden md:inline font-sans font-semibold text-lg text-theme-text">Open Sprint</span>
           </Link>
 
           <div className="relative flex items-center" ref={dropdownRef}>
-            <span className="text-theme-muted">/</span>
+            <span className="hidden md:inline text-theme-muted">/</span>
             <button
               type="button"
               onClick={() => setDropdownOpen((o) => !o)}

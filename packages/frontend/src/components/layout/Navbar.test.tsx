@@ -160,6 +160,25 @@ const baseTask: Partial<Task> = {
 };
 
 describe("Navbar", () => {
+  it("always shows logo icon in header (visible at all viewport widths)", () => {
+    renderNavbar(<Navbar project={null} />);
+    const logoLink = screen.getByTestId("navbar-logo-link");
+    expect(logoLink).toBeInTheDocument();
+    const svg = logoLink.querySelector("svg");
+    expect(svg).toBeInTheDocument();
+    expect(svg).toHaveAttribute("viewBox", "0 0 80 80");
+  });
+
+  it("hides Open Sprint title and spacer below md breakpoint (uses hidden md:inline)", () => {
+    renderNavbar(<Navbar project={null} />);
+    const titleSpan = screen.getByText("Open Sprint");
+    expect(titleSpan).toHaveClass("hidden");
+    expect(titleSpan).toHaveClass("md:inline");
+    const spacer = screen.getByText("/");
+    expect(spacer).toHaveClass("hidden");
+    expect(spacer).toHaveClass("md:inline");
+  });
+
   it("has fixed height matching NAVBAR_HEIGHT on homepage (project=null)", () => {
     renderNavbar(<Navbar project={null} />);
     const nav = screen.getByRole("navigation");
