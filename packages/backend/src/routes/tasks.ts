@@ -150,12 +150,6 @@ type SessionParams = { projectId: string; taskId: string; attempt: string };
     const task = await taskService.getTask(req.params.projectId, req.params.taskId);
     const durationMs = Math.round(performance.now() - start);
     res.set("Server-Timing", `task-detail;dur=${durationMs};desc="Task detail load"`);
-    log.info("GET /:taskId", {
-      requestId: req.requestId,
-      projectId: req.params.projectId,
-      taskId: req.params.taskId,
-      durationMs,
-    });
     if (durationMs > 500) {
       log.warn("GET /:taskId slow", {
         requestId: req.requestId,
