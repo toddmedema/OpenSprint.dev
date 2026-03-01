@@ -15,6 +15,15 @@ vi.mock("../api/client", () => ({
       create: vi.fn(),
       list: vi.fn().mockResolvedValue([]),
     },
+    globalSettings: {
+      get: vi.fn().mockResolvedValue({
+        databaseUrl: "",
+        apiKeys: {
+          ANTHROPIC_API_KEY: [{ id: "a", masked: "••••••••" }],
+          CURSOR_API_KEY: [{ id: "b", masked: "••••••••" }],
+        },
+      }),
+    },
     env: {
       getKeys: vi.fn().mockResolvedValue({
         anthropic: true,

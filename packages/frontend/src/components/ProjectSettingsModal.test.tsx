@@ -72,7 +72,13 @@ describe("ProjectSettingsModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSettings.mockResolvedValue(mockSettings);
-    mockGlobalSettingsGet.mockResolvedValue({ databaseUrl: "" });
+    mockGlobalSettingsGet.mockResolvedValue({
+      databaseUrl: "",
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "a", masked: "••••••••" }],
+        CURSOR_API_KEY: [{ id: "b", masked: "••••••••" }],
+      },
+    });
     mockGetAgentsInstructions.mockResolvedValue({ content: "# Agent Instructions\n\nUse bd for tasks." });
     mockUpdateAgentsInstructions.mockResolvedValue({ saved: true });
     mockGetKeys.mockResolvedValue({
@@ -176,11 +182,12 @@ describe("ProjectSettingsModal", () => {
   });
 
   it("hides API key banner when all keys for selected providers are configured", async () => {
-    mockGetKeys.mockResolvedValue({
-      anthropic: true,
-      cursor: true,
-      claudeCli: true,
-      useCustomCli: false,
+    mockGlobalSettingsGet.mockResolvedValue({
+      databaseUrl: "",
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "a", masked: "••••••••" }],
+        CURSOR_API_KEY: [{ id: "b", masked: "••••••••" }],
+      },
     });
 
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
@@ -197,11 +204,11 @@ describe("ProjectSettingsModal", () => {
   });
 
   it("shows configure-in-settings link when claude is selected and key is missing", async () => {
-    mockGetKeys.mockResolvedValue({
-      anthropic: false,
-      cursor: true,
-      claudeCli: true,
-      useCustomCli: false,
+    mockGlobalSettingsGet.mockResolvedValue({
+      databaseUrl: "",
+      apiKeys: {
+        CURSOR_API_KEY: [{ id: "b", masked: "••••••••" }],
+      },
     });
 
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);

@@ -12,16 +12,24 @@ function LocationDisplay() {
 
 const mockScaffold = vi.fn();
 const mockGetKeys = vi.fn();
+const mockGlobalSettingsGet = vi.fn();
 
 vi.mock("../api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api/client")>();
   return {
     ...actual,
     api: {
+      ...actual.api,
       projects: {
+        ...actual.api.projects,
         scaffold: (...args: unknown[]) => mockScaffold(...args),
       },
+      globalSettings: {
+        ...actual.api.globalSettings,
+        get: () => mockGlobalSettingsGet(),
+      },
       env: {
+        ...actual.api.env,
         getKeys: (...args: unknown[]) => mockGetKeys(...args),
         saveKey: vi.fn().mockResolvedValue({ saved: true }),
       },
@@ -60,12 +68,19 @@ describe("CreateNewProjectPage", () => {
   beforeEach(() => {
     mockScaffold.mockReset();
     mockScaffold.mockResolvedValue(defaultScaffoldResponse);
+    mockGlobalSettingsGet.mockResolvedValue({
+      databaseUrl: "",
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "a", masked: "••••••••" }],
+        CURSOR_API_KEY: [{ id: "b", masked: "••••••••" }],
+      },
+    });
     mockGetKeys.mockResolvedValue({
-        anthropic: true,
-        cursor: true,
-        claudeCli: true,
-        useCustomCli: false,
-      });
+      anthropic: true,
+      cursor: true,
+      claudeCli: true,
+      useCustomCli: false,
+    });
   });
 
   it("renders Create New Project title", () => {
@@ -293,16 +308,24 @@ describe("CreateNewProjectPage", () => {
     await user.click(screen.getByTestId("next-button"));
 
     expect(screen.getByTestId("simplified-agents-step")).toBeInTheDocument();
+    expect(mockGlobalSettingsGet).toHaveBeenCalled();
     expect(mockGetKeys).toHaveBeenCalled();
   });
 
   it("disables Next on agents step when env keys are loading", async () => {
+    let resolveGlobalSettings: (value: { databaseUrl: string; apiKeys?: unknown }) => void;
     let resolveGetKeys: (value: {
       anthropic: boolean;
       cursor: boolean;
       claudeCli: boolean;
       useCustomCli: boolean;
     }) => void;
+    mockGlobalSettingsGet.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveGlobalSettings = resolve;
+        })
+    );
     mockGetKeys.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -319,6 +342,13 @@ describe("CreateNewProjectPage", () => {
     const nextButton = screen.getByTestId("next-button");
     expect(nextButton).toBeDisabled();
 
+    resolveGlobalSettings!({
+      databaseUrl: "",
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "a", masked: "••••••••" }],
+        CURSOR_API_KEY: [{ id: "b", masked: "••••••••" }],
+      },
+    });
     resolveGetKeys!({
       anthropic: true,
       cursor: true,
@@ -330,6 +360,12 @@ describe("CreateNewProjectPage", () => {
   });
 
   it("disables Next on agents step when cursor selected but API key missing", async () => {
+    mockGlobalSettingsGet.mockResolvedValue({
+      databaseUrl: "",
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "a", masked: "••••••••" }],
+      },
+    });
     mockGetKeys.mockResolvedValue({
       anthropic: true,
       cursor: false,
@@ -347,6 +383,12 @@ describe("CreateNewProjectPage", () => {
   });
 
   it("disables Next on agents step when claude selected but API key missing", async () => {
+    mockGlobalSettingsGet.mockResolvedValue({
+      databaseUrl: "",
+      apiKeys: {
+        CURSOR_API_KEY: [{ id: "b", masked: "••••••••" }],
+      },
+    });
     mockGetKeys.mockResolvedValue({
       anthropic: false,
       cursor: true,

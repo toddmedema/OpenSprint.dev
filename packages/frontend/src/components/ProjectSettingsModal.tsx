@@ -78,6 +78,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
   const [settings, setSettings] = useState<ProjectSettings | null>(null);
 
   // API key status (for agents tab - to show "configure in Settings" when keys missing)
+  // anthropic/cursor derived from global store only; claudeCli from env (CLI binary availability)
   const [envKeys, setEnvKeys] = useState<{
     anthropic: boolean;
     cursor: boolean;
@@ -109,12 +110,17 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
     };
   }, [project.id]);
 
-  // Fetch env key status when agents tab is active
+  // Fetch API key status when agents tab is active.
+  // API key warning (claude/cursor) uses global store only; claudeCli uses env for CLI availability.
   useEffect(() => {
     if (activeTab !== "agents") return;
-    api.env
-      .getKeys()
-      .then(setEnvKeys)
+    Promise.all([api.globalSettings.get(), api.env.getKeys()])
+      .then(([global, env]) => {
+        const apiKeys = global.apiKeys;
+        const anthropic = (apiKeys?.ANTHROPIC_API_KEY?.length ?? 0) > 0;
+        const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
+        setEnvKeys({ anthropic, cursor, claudeCli: env.claudeCli });
+      })
       .catch(() => setEnvKeys(null));
   }, [activeTab]);
 
@@ -367,7 +373,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
           data-testid="settings-modal-content"
         >
           {mode === "display" ? (
-            <DisplaySettingsContent showApiKeysSection={false} />
+            <DisplaySettingsContent showApiKeysSection={true} />
           ) : loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />

@@ -106,9 +106,13 @@ export function ProjectSetup() {
 
   useEffect(() => {
     if (step !== "agents") return;
-    api.env
-      .getKeys()
-      .then(setEnvKeys)
+    Promise.all([api.globalSettings.get(), api.env.getKeys()])
+      .then(([global, env]) => {
+        const apiKeys = global.apiKeys;
+        const anthropic = (apiKeys?.ANTHROPIC_API_KEY?.length ?? 0) > 0;
+        const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
+        setEnvKeys({ anthropic, cursor, claudeCli: env.claudeCli });
+      })
       .catch(() => setEnvKeys(null));
   }, [step]);
 
