@@ -28,6 +28,18 @@ describe("agent-config schema", () => {
       });
     });
 
+    it("should accept openai agent type", () => {
+      const config = parseAgentConfig(
+        { type: "openai", model: "gpt-4o", cliCommand: null },
+        "simpleComplexityAgent"
+      );
+      expect(config).toEqual({
+        type: "openai",
+        model: "gpt-4o",
+        cliCommand: null,
+      });
+    });
+
     it("should reject invalid type", () => {
       expect(() =>
         parseAgentConfig({ type: "invalid", model: null, cliCommand: null }, "simpleComplexityAgent")

@@ -1,5 +1,5 @@
 /** Supported agent backends */
-export type AgentType = "claude" | "claude-cli" | "cursor" | "custom";
+export type AgentType = "claude" | "claude-cli" | "cursor" | "custom" | "openai";
 
 /** Named agent roles (PRD §6.3, §12). Planning slot: dreamer–auditor. Coding slot: coder, reviewer. */
 export type AgentRole =

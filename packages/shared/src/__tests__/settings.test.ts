@@ -459,10 +459,11 @@ describe("getDeploymentTargetsForUi", () => {
 });
 
 describe("API_KEY_PROVIDERS", () => {
-  it("includes ANTHROPIC_API_KEY and CURSOR_API_KEY", () => {
+  it("includes ANTHROPIC_API_KEY, CURSOR_API_KEY, and OPENAI_API_KEY", () => {
     expect(API_KEY_PROVIDERS).toContain("ANTHROPIC_API_KEY");
     expect(API_KEY_PROVIDERS).toContain("CURSOR_API_KEY");
-    expect(API_KEY_PROVIDERS).toHaveLength(2);
+    expect(API_KEY_PROVIDERS).toContain("OPENAI_API_KEY");
+    expect(API_KEY_PROVIDERS).toHaveLength(3);
   });
 });
 
@@ -568,6 +569,17 @@ describe("mergeApiKeysWithCurrent", () => {
       { id: "k2", value: "v2" },
     ]);
   });
+
+  it("merges OPENAI_API_KEY entries", () => {
+    const current: ApiKeys = {
+      OPENAI_API_KEY: [{ id: "o1", value: "sk-old" }],
+    };
+    const incoming = {
+      OPENAI_API_KEY: [{ id: "o1", masked: "••••••••" }],
+    };
+    const result = mergeApiKeysWithCurrent(incoming, current);
+    expect(result?.OPENAI_API_KEY).toEqual([{ id: "o1", value: "sk-old" }]);
+  });
 });
 
 describe("sanitizeApiKeys", () => {
@@ -588,10 +600,12 @@ describe("sanitizeApiKeys", () => {
     const raw = {
       ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-xxx" }],
       CURSOR_API_KEY: [{ id: "k2", value: "cursor-key" }],
+      OPENAI_API_KEY: [{ id: "k3", value: "sk-xxx" }],
     };
     const result = sanitizeApiKeys(raw) as ApiKeys;
     expect(result?.ANTHROPIC_API_KEY).toEqual([{ id: "k1", value: "sk-ant-xxx" }]);
     expect(result?.CURSOR_API_KEY).toEqual([{ id: "k2", value: "cursor-key" }]);
+    expect(result?.OPENAI_API_KEY).toEqual([{ id: "k3", value: "sk-xxx" }]);
   });
 
   it("ignores unknown provider keys", () => {
@@ -826,6 +840,25 @@ describe("getProvidersInUse", () => {
     });
     expect(getProvidersInUse(settings)).toEqual(["ANTHROPIC_API_KEY"]);
   });
+
+  it("returns OPENAI_API_KEY when openai in use", () => {
+    const settings = makeSettings({
+      simpleComplexityAgent: { type: "openai", model: "gpt-4o", cliCommand: null },
+      complexComplexityAgent: { type: "openai", model: "gpt-4o", cliCommand: null },
+    });
+    expect(getProvidersInUse(settings)).toEqual(["OPENAI_API_KEY"]);
+  });
+
+  it("returns OPENAI_API_KEY with other providers when mixed", () => {
+    const settings = makeSettings({
+      simpleComplexityAgent: { type: "openai", model: "gpt-4o", cliCommand: null },
+      complexComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+    });
+    const result = getProvidersInUse(settings);
+    expect(result).toHaveLength(2);
+    expect(result).toContain("OPENAI_API_KEY");
+    expect(result).toContain("CURSOR_API_KEY");
+  });
 });
 
 describe("getProvidersRequiringApiKeys", () => {
@@ -859,5 +892,24 @@ describe("getProvidersRequiringApiKeys", () => {
       { type: "custom" as const, model: null, cliCommand: "my-agent" },
     ];
     expect(getProvidersRequiringApiKeys(agents)).toEqual([]);
+  });
+
+  it("returns OPENAI_API_KEY when openai in use", () => {
+    const agents = [
+      { type: "openai" as const, model: "gpt-4o", cliCommand: null },
+      { type: "openai" as const, model: "gpt-4o-mini", cliCommand: null },
+    ];
+    expect(getProvidersRequiringApiKeys(agents)).toEqual(["OPENAI_API_KEY"]);
+  });
+
+  it("returns OPENAI_API_KEY with other providers when mixed", () => {
+    const agents = [
+      { type: "openai" as const, model: "gpt-4o", cliCommand: null },
+      { type: "claude" as const, model: "x", cliCommand: null },
+    ];
+    const result = getProvidersRequiringApiKeys(agents);
+    expect(result).toHaveLength(2);
+    expect(result).toContain("ANTHROPIC_API_KEY");
+    expect(result).toContain("OPENAI_API_KEY");
   });
 });

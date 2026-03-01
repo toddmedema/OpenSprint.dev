@@ -17,13 +17,14 @@ export interface ApiKeysSectionSettings {
   apiKeys?: ApiKeys;
 }
 
-/** Providers that use API keys in the UI (claude API and cursor; excludes claude-cli) */
+/** Providers that use API keys in the UI (claude API, cursor, openai; excludes claude-cli) */
 function getApiKeyProvidersForSection(settings: ApiKeysSectionSettings): ApiKeyProvider[] {
   const providers: ApiKeyProvider[] = [];
   const agents = [settings.simpleComplexityAgent, settings.complexComplexityAgent];
   for (const a of agents) {
     if (a.type === "claude") providers.push("ANTHROPIC_API_KEY");
     if (a.type === "cursor") providers.push("CURSOR_API_KEY");
+    if (a.type === "openai") providers.push("OPENAI_API_KEY");
   }
   return [...new Set(providers)];
 }
@@ -47,6 +48,7 @@ function formatLimitHitAt(limitHitAt: string): string {
 const PROVIDER_LABELS: Record<ApiKeyProvider, string> = {
   ANTHROPIC_API_KEY: "ANTHROPIC_API_KEY (Claude API)",
   CURSOR_API_KEY: "CURSOR_API_KEY",
+  OPENAI_API_KEY: "OPENAI_API_KEY (OpenAI API)",
 };
 
 export type ApiKeysSectionVariant = "project" | "global";
