@@ -26,6 +26,20 @@ const { mockGetNextKey, mockRecordLimitHit, mockClearLimitHit } = vi.hoisted(() 
   mockClearLimitHit: vi.fn(),
 }));
 
+const { mockOpenAICreate } = vi.hoisted(() => ({
+  mockOpenAICreate: vi.fn(),
+}));
+
+vi.mock("openai", () => ({
+  default: vi.fn().mockImplementation(() => ({
+    chat: {
+      completions: {
+        create: (...args: unknown[]) => mockOpenAICreate(...args),
+      },
+    },
+  })),
+}));
+
 vi.mock("../services/api-key-resolver.service.js", () => ({
   getNextKey: (...args: unknown[]) => mockGetNextKey(...args),
   recordLimitHit: (...args: unknown[]) => mockRecordLimitHit(...args),
@@ -244,6 +258,74 @@ describe("AgentClient", () => {
       expect(result.content).toContain("Success");
     });
 
+    it("should route openai config to OpenAI API", async () => {
+      process.env.OPENAI_API_KEY = "sk-openai-test";
+      mockOpenAICreate.mockResolvedValue({
+        choices: [{ message: { content: "OpenAI coding response" } }],
+      });
+
+      const result = await client.invoke({
+        config: { type: "openai", model: "gpt-4o", cliCommand: null },
+        prompt: "Implement login",
+        cwd: "/tmp",
+      });
+
+      expect(mockSpawn).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
+      expect(mockOpenAICreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: "gpt-4o",
+          messages: expect.arrayContaining([
+            expect.objectContaining({ role: "user", content: "Implement login" }),
+          ]),
+          max_tokens: 8192,
+        })
+      );
+      expect(result.content).toBe("OpenAI coding response");
+      delete process.env.OPENAI_API_KEY;
+    });
+
+    it("should use ApiKeyResolver when projectId provided for openai", async () => {
+      mockGetNextKey.mockResolvedValue({ key: "sk-openai-key", keyId: "k1", source: "global" });
+      mockOpenAICreate.mockResolvedValue({
+        choices: [{ message: { content: "OpenAI response" } }],
+      });
+
+      const result = await client.invoke({
+        config: { type: "openai", model: "gpt-4o-mini", cliCommand: null },
+        prompt: "Hello",
+        cwd: "/tmp",
+        projectId: "proj-456",
+      });
+
+      expect(mockGetNextKey).toHaveBeenCalledWith("proj-456", "OPENAI_API_KEY");
+      expect(mockClearLimitHit).toHaveBeenCalledWith("proj-456", "OPENAI_API_KEY", "k1", "global");
+      expect(result.content).toBe("OpenAI response");
+    });
+
+    it("should recordLimitHit and retry on limit error for openai", async () => {
+      mockGetNextKey
+        .mockResolvedValueOnce({ key: "sk-key1", keyId: "k1", source: "global" })
+        .mockResolvedValueOnce({ key: "sk-key2", keyId: "k2", source: "global" });
+      mockOpenAICreate
+        .mockRejectedValueOnce(new Error("rate_limit_exceeded"))
+        .mockResolvedValueOnce({
+          choices: [{ message: { content: "Retry success" } }],
+        });
+
+      const result = await client.invoke({
+        config: { type: "openai", model: "gpt-4o", cliCommand: null },
+        prompt: "Hello",
+        cwd: "/tmp",
+        projectId: "proj-789",
+      });
+
+      expect(mockGetNextKey).toHaveBeenCalledTimes(2);
+      expect(mockRecordLimitHit).toHaveBeenCalledWith("proj-789", "OPENAI_API_KEY", "k1", "global");
+      expect(mockClearLimitHit).toHaveBeenCalledWith("proj-789", "OPENAI_API_KEY", "k2", "global");
+      expect(result.content).toBe("Retry success");
+    });
+
     it("should route custom config to Custom CLI", async () => {
       mockExec.mockImplementation(
         (_cmd: string, _opts: unknown, cb: (err: null, stdout: string) => void) => {
@@ -353,6 +435,57 @@ describe("AgentClient", () => {
       expect(() => client.spawnWithTaskFile(config, taskFilePath, cwd, onOutput, onExit)).toThrow(
         "Custom agent requires a CLI command"
       );
+    });
+
+    it("should run OpenAI in-process for spawnWithTaskFile (no subprocess)", async () => {
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const os = await import("os");
+      const tmpDir = path.join(os.tmpdir(), `agent-client-openai-${Date.now()}`);
+      const taskDir = path.join(tmpDir, ".opensprint/active/os-abc.1");
+      await fs.mkdir(taskDir, { recursive: true });
+      const taskFilePath = path.join(taskDir, "prompt.md");
+      await fs.writeFile(taskFilePath, "# Task\n\nAdd a button", "utf-8");
+
+      mockGetNextKey.mockResolvedValue({ key: "sk-openai-spawn", keyId: "k1", source: "global" });
+      mockOpenAICreate.mockImplementation(async () => {
+        async function* stream() {
+          yield { choices: [{ delta: { content: "Here " } }] };
+          yield { choices: [{ delta: { content: "is " } }] };
+          yield { choices: [{ delta: { content: "the code." } }] };
+        }
+        return stream();
+      });
+
+      const onOutput = vi.fn();
+      const onExit = vi.fn();
+      const config: AgentConfig = { type: "openai", model: "gpt-4o-mini", cliCommand: null };
+
+      const { kill, pid } = client.spawnWithTaskFile(
+        config,
+        taskFilePath,
+        tmpDir,
+        onOutput,
+        onExit,
+        "coder",
+        undefined,
+        "proj-openai"
+      );
+
+      expect(mockSpawn).not.toHaveBeenCalled();
+      expect(pid).toBeNull();
+      expect(kill).toBeDefined();
+
+      await vi.waitFor(
+        () => {
+          expect(onExit).toHaveBeenCalledWith(0);
+        },
+        { timeout: 2000 }
+      );
+      expect(onOutput).toHaveBeenCalled();
+      expect(mockClearLimitHit).toHaveBeenCalledWith("proj-openai", "OPENAI_API_KEY", "k1", "global");
+
+      await fs.rm(tmpDir, { recursive: true, force: true });
     });
 
     it("should use outputLogPath and pass file fd to spawn for streaming to file", async () => {

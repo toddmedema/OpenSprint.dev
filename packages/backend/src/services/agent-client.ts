@@ -1,8 +1,9 @@
 import { spawn, exec } from "child_process";
-import { readFileSync, openSync, closeSync, mkdirSync } from "fs";
+import { readFileSync, openSync, closeSync, mkdirSync, appendFileSync } from "fs";
 import { open as fsOpen, stat as fsStat, readFile } from "fs/promises";
 import path from "path";
 import { promisify } from "util";
+import OpenAI from "openai";
 import type { AgentConfig } from "@opensprint/shared";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
@@ -57,7 +58,7 @@ function buildFullPrompt(options: {
 
 /** Format raw agent errors into user-friendly messages with remediation hints */
 function formatAgentError(
-  agentType: "claude" | "claude-cli" | "cursor" | "custom",
+  agentType: "claude" | "claude-cli" | "cursor" | "custom" | "openai",
   raw: string
 ): string {
   const lower = raw.toLowerCase();
@@ -99,6 +100,9 @@ function formatAgentError(
 
   // API key / 401
   if (lower.includes("api key") || lower.includes("401") || lower.includes("unauthorized")) {
+    if (agentType === "openai") {
+      return `${raw} Check that OPENAI_API_KEY is set in .env or Settings. Get a key from https://platform.openai.com/.`;
+    }
     return `${raw} Check that your API key is set in .env and valid.`;
   }
 
@@ -142,6 +146,8 @@ export class AgentClient {
         return this.invokeClaudeCli(options);
       case "cursor":
         return this.invokeCursorCli(options);
+      case "openai":
+        return this.invokeOpenAIApi(options);
       case "custom":
         return this.invokeCustomCli(options);
       default:
@@ -176,6 +182,18 @@ export class AgentClient {
     outputLogPath?: string,
     projectId?: string
   ): { kill: () => void; pid: number | null } {
+    if (config.type === "openai") {
+      return this.spawnOpenAIWithTaskFile(
+        config,
+        taskFilePath,
+        cwd,
+        onOutput,
+        onExit,
+        agentRole,
+        outputLogPath,
+        projectId
+      );
+    }
     if (config.type === "cursor" && projectId) {
       return this.spawnCursorWithTaskFileAsync(
         config,
@@ -278,6 +296,139 @@ export class AgentClient {
 
     trySpawn().catch((err) => {
       log.error("spawnCursorWithTaskFileAsync failed", { err });
+      Promise.resolve(onExit(1)).catch(() => {});
+    });
+
+    return handle;
+  }
+
+  /**
+   * OpenAI with task file: run API call in-process, stream to onOutput, simulate exit code.
+   * No subprocess spawn; uses getNextKey/recordLimitHit/clearLimitHit for key rotation.
+   */
+  private spawnOpenAIWithTaskFile(
+    config: AgentConfig,
+    taskFilePath: string,
+    cwd: string,
+    onOutput: (chunk: string) => void,
+    onExit: (code: number | null) => void | Promise<void>,
+    agentRole?: string,
+    outputLogPath?: string,
+    projectId?: string
+  ): { kill: () => void; pid: number | null } {
+    let aborted = false;
+    const handle: { kill: () => void; pid: number | null } = {
+      pid: null,
+      kill() {
+        aborted = true;
+      },
+    };
+
+    if (outputLogPath) {
+      mkdirSync(path.dirname(outputLogPath), { recursive: true });
+    }
+
+    const emit = (chunk: string) => {
+      onOutput(chunk);
+      if (outputLogPath) {
+        try {
+          appendFileSync(outputLogPath, chunk);
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    const run = async (): Promise<void> => {
+      let taskContent: string;
+      try {
+        taskContent = await readFile(taskFilePath, "utf-8");
+      } catch (readErr) {
+        const msg = getErrorMessage(readErr);
+        log.error("OpenAI task file read failed", { taskFilePath, err: msg });
+        emit(`[Agent error: Could not read task file: ${msg}]\n`);
+        return Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
+      }
+
+      const model = config.model ?? "gpt-4o-mini";
+      const systemPrompt = `You are a coding agent. Execute the task described in the user message. Output your work directly.`;
+      const openaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: taskContent },
+      ];
+
+      const triedKeyIds = new Set<string>();
+      let lastError: unknown;
+
+      const tryCall = async (): Promise<void> => {
+        if (aborted) return;
+
+        const resolved = projectId
+          ? await getNextKey(projectId, "OPENAI_API_KEY")
+          : {
+              key: process.env.OPENAI_API_KEY || "",
+              keyId: ENV_FALLBACK_KEY_ID,
+              source: "env" as KeySource,
+            };
+
+        if (!resolved || !resolved.key.trim()) {
+          const msg = lastError ? getErrorMessage(lastError) : "No OpenAI API key available";
+          emit(`[Agent error: ${msg}]\n`);
+          return Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
+        }
+
+        const { key, keyId, source } = resolved;
+        if (triedKeyIds.has(keyId)) {
+          const msg = getErrorMessage(lastError);
+          emit(`[Agent error: ${msg}]\n`);
+          return Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
+        }
+        triedKeyIds.add(keyId);
+
+        const client = new OpenAI({ apiKey: key });
+        try {
+          const stream = await client.chat.completions.create({
+            model,
+            messages: openaiMessages,
+            max_tokens: 16384,
+            stream: true,
+          });
+
+          let fullContent = "";
+          for await (const chunk of stream) {
+            if (aborted) return;
+            const delta = chunk.choices[0]?.delta?.content;
+            if (delta) {
+              fullContent += delta;
+              emit(delta);
+            }
+          }
+
+          if (aborted) return;
+
+          if (projectId && keyId !== ENV_FALLBACK_KEY_ID) {
+            await clearLimitHit(projectId, "OPENAI_API_KEY", keyId, source);
+          }
+
+          log.info("OpenAI coding agent completed", { outputLen: fullContent.length });
+          return Promise.resolve(onExit(0)).catch((e) => log.error("onExit failed", { err: e }));
+        } catch (error: unknown) {
+          lastError = error;
+          if (isLimitError(error) && keyId !== ENV_FALLBACK_KEY_ID) {
+            await recordLimitHit(projectId!, "OPENAI_API_KEY", keyId, source);
+            return tryCall();
+          }
+          const msg = getErrorMessage(error);
+          emit(`[Agent error: ${msg}]\n`);
+          return Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
+        }
+      };
+
+      return tryCall();
+    };
+
+    run().catch((err) => {
+      log.error("spawnOpenAIWithTaskFile failed", { err });
       Promise.resolve(onExit(1)).catch(() => {});
     });
 
@@ -909,6 +1060,112 @@ export class AgentClient {
         reject(err);
       });
     });
+  }
+
+  private async invokeOpenAIApi(options: AgentInvokeOptions): Promise<AgentResponse> {
+    const { config, prompt, systemPrompt, conversationHistory, projectId } = options;
+    const model = config.model ?? "gpt-4o-mini";
+
+    const openaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+    if (systemPrompt?.trim()) {
+      openaiMessages.push({ role: "system", content: systemPrompt.trim() });
+    }
+    if (conversationHistory) {
+      for (const m of conversationHistory) {
+        openaiMessages.push({ role: m.role, content: m.content });
+      }
+    }
+    openaiMessages.push({ role: "user", content: prompt });
+
+    const triedKeyIds = new Set<string>();
+    let lastError: unknown;
+
+    for (;;) {
+      const resolved = projectId
+        ? await getNextKey(projectId, "OPENAI_API_KEY")
+        : {
+            key: process.env.OPENAI_API_KEY || "",
+            keyId: ENV_FALLBACK_KEY_ID,
+            source: "env" as KeySource,
+          };
+
+      if (!resolved || !resolved.key.trim()) {
+        const msg = lastError ? getErrorMessage(lastError) : "No OpenAI API key available";
+        throw new AppError(
+          400,
+          ErrorCodes.AGENT_INVOKE_FAILED,
+          lastError && isLimitError(lastError)
+            ? `All OpenAI API keys hit rate limits. ${msg} Add more keys in Settings, or retry after 24h.`
+            : "OPENAI_API_KEY is not set. Add it to your .env file or Settings. Get a key from https://platform.openai.com/.",
+          lastError ? { agentType: "openai", raw: msg, isLimitError: isLimitError(lastError) } : undefined
+        );
+      }
+
+      const { key, keyId, source } = resolved;
+      if (triedKeyIds.has(keyId)) {
+        const msg = getErrorMessage(lastError);
+        throw new AppError(
+          502,
+          ErrorCodes.AGENT_INVOKE_FAILED,
+          `OpenAI API error: ${msg}. Check Settings (API key, model).`,
+          { agentType: "openai", raw: msg, isLimitError: true }
+        );
+      }
+      triedKeyIds.add(keyId);
+
+      const client = new OpenAI({ apiKey: key });
+
+      try {
+        let content: string;
+        if (options.onChunk) {
+          const stream = await client.chat.completions.create({
+            model,
+            messages: openaiMessages,
+            max_tokens: 8192,
+            stream: true,
+          });
+          let fullContent = "";
+          for await (const chunk of stream) {
+            const delta = chunk.choices[0]?.delta?.content;
+            if (delta) {
+              fullContent += delta;
+              options.onChunk(delta);
+            }
+          }
+          content = fullContent;
+        } else {
+          const response = await client.chat.completions.create({
+            model,
+            messages: openaiMessages,
+            max_tokens: 8192,
+          });
+          content = response.choices[0]?.message?.content ?? "";
+        }
+
+        if (projectId && keyId !== ENV_FALLBACK_KEY_ID) {
+          await clearLimitHit(projectId, "OPENAI_API_KEY", keyId, source);
+        }
+
+        return { content };
+      } catch (error: unknown) {
+        lastError = error;
+        if (isLimitError(error) && keyId !== ENV_FALLBACK_KEY_ID) {
+          await recordLimitHit(projectId!, "OPENAI_API_KEY", keyId, source);
+          continue;
+        }
+        const msg = getErrorMessage(error);
+        throw new AppError(
+          502,
+          ErrorCodes.AGENT_INVOKE_FAILED,
+          formatAgentError("openai", msg),
+          {
+            agentType: "openai",
+            raw: msg,
+            isLimitError: isLimitError(error),
+          }
+        );
+      }
+    }
   }
 
   private async invokeCustomCli(options: AgentInvokeOptions): Promise<AgentResponse> {
