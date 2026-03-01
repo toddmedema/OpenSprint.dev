@@ -16,7 +16,10 @@ import {
   useActiveAgents,
   useMarkTaskDone,
   useUnblockTask,
+  useTasks,
 } from "../../api/hooks";
+import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
+import { PhaseLoadingSpinner } from "../../components/PhaseLoadingSpinner";
 import { queryKeys } from "../../api/queryKeys";
 import { filterAgentOutput } from "../../utils/agentOutputFilter";
 import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
@@ -31,36 +34,6 @@ import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotific
 import { ExecuteFilterToolbar } from "../../components/execute/ExecuteFilterToolbar";
 import { TaskDetailSidebar } from "../../components/execute/TaskDetailSidebar";
 import { TimelineList } from "../../components/execute/TimelineList";
-
-/** Skeleton cards matching the kanban grid so layout is visible while tasks load. */
-function TaskListLoadingSkeleton() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="task-list-loading">
-      {[1, 2, 3].map((i) => (
-        <div
-          key={i}
-          className="rounded-xl border border-theme-border bg-theme-surface overflow-hidden"
-          style={{ minHeight: 160 }}
-        >
-          <div className="p-4 border-b border-theme-border-subtle">
-            <div className="h-4 w-3/4 rounded bg-theme-surface-muted animate-pulse" />
-            <div className="h-2 w-1/2 rounded bg-theme-surface-muted/70 animate-pulse mt-2" />
-          </div>
-          <ul className="divide-y divide-theme-border-subtle">
-            {[1, 2, 3].map((j) => (
-              <li key={j} className="px-4 py-2.5">
-                <div className="flex items-center gap-2">
-                  <div className="h-5 w-16 rounded bg-theme-surface-muted/70 animate-pulse" />
-                  <div className="h-4 flex-1 rounded bg-theme-surface-muted animate-pulse" />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 interface ExecutePhaseProps {
   projectId: string;
@@ -232,6 +205,13 @@ export function ExecutePhase({
     chipConfig,
   } = useExecuteSwimlanes(tasks, plans, statusFilter, searchQuery);
 
+  const tasksQuery = useTasks(projectId);
+  const tasksEmpty = implTasks.length === 0;
+  const { showSpinner: showTasksSpinner, showEmptyState: showTasksEmptyState } = usePhaseLoadingState(
+    tasksQuery.isLoading,
+    tasksEmpty
+  );
+
   const useReadyInLineSections =
     showReadyInLineSections(statusFilter) && implTasks.length > 0;
 
@@ -274,9 +254,12 @@ export function ExecutePhase({
         />
 
         <div ref={executeScrollRef} className="flex-1 min-h-0 overflow-auto p-6" data-testid="execute-main-scroll">
-          {loading ? (
-            <TaskListLoadingSkeleton />
-          ) : implTasks.length === 0 ? (
+          {showTasksSpinner ? (
+            <PhaseLoadingSpinner
+              data-testid="execute-phase-loading-spinner"
+              aria-label="Loading tasks"
+            />
+          ) : showTasksEmptyState ? (
             <div className="text-center py-10 text-theme-muted">
               No tasks yet. Ship a Plan to start generating tasks.
             </div>

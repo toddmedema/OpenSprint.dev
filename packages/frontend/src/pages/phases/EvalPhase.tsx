@@ -17,7 +17,9 @@ import {
   recategorizeFeedback,
 } from "../../store/slices/evalSlice";
 import { selectTasks } from "../../store/slices/executeSlice";
-import { useTasks } from "../../api/hooks";
+import { useTasks, useFeedback } from "../../api/hooks";
+import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
+import { PhaseLoadingSpinner } from "../../components/PhaseLoadingSpinner";
 import { queryKeys } from "../../api/queryKeys";
 import { FeedbackTaskChip } from "../../components/FeedbackTaskChip";
 import { KeyboardShortcutTooltip } from "../../components/KeyboardShortcutTooltip";
@@ -743,6 +745,7 @@ export function EvalPhase({
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
   const { data: tasksList = [] } = useTasks(projectId);
+  const feedbackQuery = useFeedback(projectId);
 
   /* ── Redux state ── */
   const feedback = useAppSelector((s) => s.eval.feedback);
@@ -751,19 +754,14 @@ export function EvalPhase({
     selectTasks(s).map((t) => ({ id: t.id, kanbanColumn: t.kanbanColumn }))
   );
   const tasksCount = tasks.length;
-  const loading = useAppSelector((s) => s.eval?.async?.feedback?.loading ?? false);
   const submitting = useAppSelector((s) => s.eval?.async?.submit?.loading ?? false);
 
-  /* Debounce loading indicator to avoid flicker when fetch completes quickly */
-  const [showLoadingIndicator, setShowLoadingIndicator] = useState(false);
-  useEffect(() => {
-    if (!loading) {
-      setShowLoadingIndicator(false);
-      return;
-    }
-    const id = setTimeout(() => setShowLoadingIndicator(true), FEEDBACK_LOADING_DEBOUNCE_MS);
-    return () => clearTimeout(id);
-  }, [loading]);
+  const feedbackEmpty = feedback.length === 0;
+  const { showSpinner: showFeedbackSpinner, showEmptyState: showFeedbackEmptyState } = usePhaseLoadingState(
+    feedbackQuery.isLoading,
+    feedbackEmpty,
+    FEEDBACK_LOADING_DEBOUNCE_MS
+  );
 
   /* Fetch missing tasks for feedback cards (createdTaskIds) and merge into query cache so list stays in sync */
   const taskIdsFromFeedback = useMemo(() => {
@@ -982,7 +980,7 @@ export function EvalPhase({
 
   // When navigating with ?feedback=id (e.g. from Analyst dropdown), ensure visibility, expand ancestors, and scroll
   useEffect(() => {
-    if (!feedbackIdFromUrl || loading || feedback.length === 0) return;
+    if (!feedbackIdFromUrl || feedbackQuery.isLoading || feedback.length === 0) return;
     const targetItem = feedback.find((f) => f.id === feedbackIdFromUrl);
     if (!targetItem) return;
     if (hasScrolledToFeedbackRef.current) return;
@@ -1023,7 +1021,7 @@ export function EvalPhase({
     }, ancestorIds.length > 0 ? 150 : 0);
 
     return () => clearTimeout(timer);
-  }, [feedbackIdFromUrl, feedback, loading, projectId, statusFilter]);
+  }, [feedbackIdFromUrl, feedback, feedbackQuery.isLoading, projectId, statusFilter]);
 
   const filteredFeedback = useMemo(
     () =>
@@ -1233,21 +1231,12 @@ export function EvalPhase({
             )}
           </div>
 
-          {loading && showLoadingIndicator ? (
-            <div
-              className="flex flex-col items-center justify-center gap-3 py-10"
+          {showFeedbackSpinner ? (
+            <PhaseLoadingSpinner
               data-testid="feedback-loading-spinner"
-            >
-              <div
-                className="w-8 h-8 border-2 border-brand-600 border-t-transparent rounded-full animate-spin"
-                role="status"
-                aria-label="Loading feedback"
-              />
-              <span className="text-sm text-theme-muted">Loading feedback...</span>
-            </div>
-          ) : loading ? (
-            <div className="text-center py-10" aria-hidden="true" />
-          ) : feedback.length === 0 ? (
+              aria-label="Loading feedback"
+            />
+          ) : showFeedbackEmptyState ? (
             <div className="text-center py-10 text-theme-muted text-sm">
               No feedback submitted yet. Test your app and report findings above.
             </div>

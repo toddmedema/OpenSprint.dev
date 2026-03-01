@@ -24,7 +24,9 @@ import {
   setSinglePlan,
 } from "../../store/slices/planSlice";
 import { addNotification } from "../../store/slices/notificationSlice";
-import { usePlanChat, useSinglePlan } from "../../api/hooks";
+import { usePlanChat, useSinglePlan, usePlans } from "../../api/hooks";
+import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
+import { PhaseLoadingSpinner } from "../../components/PhaseLoadingSpinner";
 import { queryKeys } from "../../api/queryKeys";
 import { api } from "../../api/client";
 import { CloseButton } from "../../components/CloseButton";
@@ -80,6 +82,9 @@ interface PlanPhaseProps {
 export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) {
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
+
+  /* ── TanStack Query for loading state (data synced to Redux by ProjectShell) ── */
+  const plansQuery = usePlans(projectId);
 
   /* ── Redux state (needed for hook args) ── */
   const selectedPlanId = useAppSelector((s) => s.plan.selectedPlanId);
@@ -177,6 +182,12 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     }
     return sortPlansByStatus(filtered);
   }, [plans, statusFilter, searchQuery]);
+
+  const plansEmpty = plans.length === 0 && optimisticPlans.length === 0;
+  const { showSpinner: showPlansSpinner, showEmptyState: showPlansEmptyState } = usePhaseLoadingState(
+    plansQuery.isLoading,
+    plansEmpty
+  );
 
   /** Process the generate-plan queue sequentially (one at a time). */
   const processGenerateQueue = useCallback(async () => {
@@ -581,7 +592,12 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
             </div>
           )}
 
-          {viewMode === "graph" ? (
+          {showPlansSpinner ? (
+            <PhaseLoadingSpinner
+              data-testid="plan-phase-loading-spinner"
+              aria-label="Loading plans"
+            />
+          ) : viewMode === "graph" ? (
             /* Graph Mode: dependency graph full screen */
             <div className="h-full min-h-[400px]" data-testid="plan-graph-view">
               {filteredDependencyGraph && filteredDependencyGraph.plans.length === 0 ? (
@@ -606,9 +622,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           <h2 className="text-lg font-semibold text-theme-text">Feature Plans</h2>
         </div>
 
-        {loading ? (
-          <div className="text-center py-10 text-theme-muted">Loading plans...</div>
-        ) : plans.length === 0 && optimisticPlans.length === 0 ? (
+        {showPlansEmptyState ? (
           <div className="text-center py-10">
             <p className="text-theme-muted">
               No plans yet. Click &ldquo;Add Plan&rdquo; in the topbar to generate a plan, or use

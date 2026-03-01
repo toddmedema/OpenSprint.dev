@@ -12,6 +12,8 @@ import {
   setSketchError,
 } from "../../store/slices/sketchSlice";
 import { usePrd, usePrdHistory, useSketchChat, usePlanStatus, useDecomposePlans, usePlans } from "../../api/hooks";
+import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
+import { PhaseLoadingSpinner } from "../../components/PhaseLoadingSpinner";
 import { queryKeys } from "../../api/queryKeys";
 import {
   PrdViewer,
@@ -125,7 +127,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   const queryClient = useQueryClient();
 
   /* ── TanStack Query (server state) ── */
-  const { data: prdData } = usePrd(projectId);
+  const { data: prdData, isLoading: prdLoading } = usePrd(projectId);
   const { data: prdHistoryData } = usePrdHistory(projectId);
   const { data: chatMessagesData } = useSketchChat(projectId);
   const hasPrdContentFromQuery = Object.values(prdData ?? {}).some(
@@ -210,6 +212,11 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   /* ── Derived ── */
   // Show empty-state prompt when no section has substantive content (new projects get prd.json with all sections empty)
   const hasPrdContent = Object.values(prdContent).some((c) => String(c ?? "").trim().length > 0);
+  const prdEmpty = !Object.values(prdData ?? {}).some((c) => String(c ?? "").trim().length > 0);
+  const { showSpinner: showPrdSpinner, showEmptyState: showPrdEmptyState } = usePhaseLoadingState(
+    prdLoading,
+    prdEmpty
+  );
 
   /* ── Fetch sketch-context when in empty state (for "Generate from codebase" visibility) ── */
   useEffect(() => {
@@ -518,11 +525,22 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   };
 
   /* ══════════════════════════════════════════════════════════
+   *  RENDER: Loading spinner during fetch
+   * ══════════════════════════════════════════════════════════ */
+  if (showPrdSpinner) {
+    return (
+      <div className="flex flex-1 min-h-0 items-center justify-center bg-theme-bg" data-testid="sketch-phase-loading">
+        <PhaseLoadingSpinner data-testid="sketch-phase-loading-spinner" aria-label="Loading" />
+      </div>
+    );
+  }
+
+  /* ══════════════════════════════════════════════════════════
    *  RENDER: Initial Prompt View (No PRD yet)
    * ══════════════════════════════════════════════════════════ */
   const showGeneratingOverlay = sending || generatingFromCodebase;
 
-  if (!hasPrdContent) {
+  if (showPrdEmptyState) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-4 relative bg-theme-bg">
         {/* Generating overlay */}
