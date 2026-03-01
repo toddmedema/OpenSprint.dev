@@ -2,9 +2,11 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
+import { ThemeProvider } from "../contexts/ThemeContext";
+import { DisplayPreferencesProvider } from "../contexts/DisplayPreferencesContext";
 import { HomeScreen } from "./HomeScreen";
 import { GITHUB_REPO_URL, HOMEPAGE_CONTAINER_CLASS } from "../lib/constants";
 import notificationReducer from "../store/slices/notificationSlice";
@@ -27,6 +29,10 @@ vi.mock("../api/client", () => ({
       getGlobalStatus: (...args: unknown[]) => mockGetGlobalStatus(...args),
       validateKey: (...args: unknown[]) => mockValidateKey(...args),
       saveKey: (...args: unknown[]) => mockSaveKey(...args),
+    },
+    globalSettings: {
+      get: vi.fn().mockResolvedValue({ databaseUrl: "", apiKeys: undefined }),
+      put: vi.fn(),
     },
   },
 }));
@@ -176,70 +182,62 @@ describe("HomeScreen", () => {
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/add-existing");
   });
 
-  it("shows ApiKeySetupModal when Create New clicked and no API keys", async () => {
+  it("navigates to /settings when Create New clicked and no API keys", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
     mockProjectsList.mockResolvedValue([]);
     mockGetGlobalStatus.mockResolvedValue({ hasAnyKey: false, useCustomCli: false });
     const user = userEvent.setup();
 
-    renderHomeScreen();
-    await screen.findByTestId("create-new-button");
-    await user.click(screen.getByTestId("create-new-button"));
-
-    expect(screen.getByTestId("api-key-setup-modal")).toBeInTheDocument();
-    expect(screen.getByText("Enter agent API key")).toBeInTheDocument();
-  });
-
-  it("shows ApiKeySetupModal when Add Existing clicked and no API keys", async () => {
-    mockProjectsList.mockResolvedValue([]);
-    mockGetGlobalStatus.mockResolvedValue({ hasAnyKey: false, useCustomCli: false });
-    const user = userEvent.setup();
-
-    renderHomeScreen();
-    await screen.findByTestId("add-existing-button");
-    await user.click(screen.getByTestId("add-existing-button"));
-
-    expect(screen.getByTestId("api-key-setup-modal")).toBeInTheDocument();
-  });
-
-  it("E2E: Create New with no keys → modal → add key → redirect to Create New", async () => {
-    mockProjectsList.mockResolvedValue([]);
-    mockGetGlobalStatus.mockResolvedValue({ hasAnyKey: false, useCustomCli: false });
-    mockValidateKey.mockResolvedValue({ valid: true });
-    mockSaveKey.mockResolvedValue({ saved: true });
-    const user = userEvent.setup();
-
-    function LocationDisplay() {
-      return <div data-testid="location">{useLocation().pathname}</div>;
-    }
-
+    const { SettingsPage } = await import("../pages/SettingsPage");
     const store = configureStore({ reducer: { notification: notificationReducer } });
     render(
-      <Provider store={store}>
-        <MemoryRouter>
-          <HomeScreen />
-          <LocationDisplay />
-        </MemoryRouter>
-      </Provider>
+      <ThemeProvider>
+        <DisplayPreferencesProvider>
+          <Provider store={store}>
+            <MemoryRouter initialEntries={["/"]}>
+              <Routes>
+                <Route path="/" element={<HomeScreen />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Routes>
+            </MemoryRouter>
+          </Provider>
+        </DisplayPreferencesProvider>
+      </ThemeProvider>
     );
 
     await screen.findByTestId("create-new-button");
     await user.click(screen.getByTestId("create-new-button"));
 
-    expect(screen.getByTestId("api-key-setup-modal")).toBeInTheDocument();
-    expect(screen.getByText("Enter agent API key")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+  });
 
-    await user.type(screen.getByTestId("api-key-input"), "sk-ant-test-key");
-    await user.click(screen.getByTestId("api-key-save-button"));
+  it("navigates to /settings when Add Existing clicked and no API keys", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    mockProjectsList.mockResolvedValue([]);
+    mockGetGlobalStatus.mockResolvedValue({ hasAnyKey: false, useCustomCli: false });
+    const user = userEvent.setup();
 
-    await waitFor(() => {
-      expect(mockValidateKey).toHaveBeenCalledWith("claude", "sk-ant-test-key");
-      expect(mockSaveKey).toHaveBeenCalledWith("ANTHROPIC_API_KEY", "sk-ant-test-key");
-    });
+    const { SettingsPage } = await import("../pages/SettingsPage");
+    const store = configureStore({ reducer: { notification: notificationReducer } });
+    render(
+      <ThemeProvider>
+        <DisplayPreferencesProvider>
+          <Provider store={store}>
+            <MemoryRouter initialEntries={["/"]}>
+              <Routes>
+                <Route path="/" element={<HomeScreen />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Routes>
+            </MemoryRouter>
+          </Provider>
+        </DisplayPreferencesProvider>
+      </ThemeProvider>
+    );
 
-    await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/projects/create-new");
-      expect(screen.queryByTestId("api-key-setup-modal")).not.toBeInTheDocument();
-    });
+    await screen.findByTestId("add-existing-button");
+    await user.click(screen.getByTestId("add-existing-button"));
+
+    expect(screen.getByTestId("settings-page")).toBeInTheDocument();
   });
 
   it("clicking project card navigates to project sketch", async () => {

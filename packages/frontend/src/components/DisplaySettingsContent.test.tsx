@@ -38,6 +38,15 @@ describe("DisplaySettingsContent", () => {
     });
   });
 
+  it("hides ApiKeysSection when showApiKeysSection is false", async () => {
+    render(<DisplaySettingsContent showApiKeysSection={false} />);
+
+    await screen.findByTestId("display-section");
+    expect(screen.queryByTestId("api-keys-section-wrapper")).not.toBeInTheDocument();
+    expect(screen.queryByText("API Keys")).not.toBeInTheDocument();
+    expect(screen.getByTestId("database-url-section")).toBeInTheDocument();
+  });
+
   it("renders ApiKeysSection with both providers when keys not configured", async () => {
     render(<DisplaySettingsContent />);
 

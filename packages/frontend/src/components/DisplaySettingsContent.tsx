@@ -56,12 +56,17 @@ function EyeOffIcon({ className }: { className?: string }) {
   );
 }
 
+export interface DisplaySettingsContentProps {
+  /** When false, hide API keys section (e.g. in ProjectSettingsModal; keys managed at /settings) */
+  showApiKeysSection?: boolean;
+}
+
 /**
  * Shared display settings content: theme and running agents display mode.
  * Used in DisplaySettingsModal (global) and ProjectSettingsModal (Display mode).
  * All settings are stored globally (localStorage at opensprint.theme, opensprint.runningAgentsDisplayMode).
  */
-export function DisplaySettingsContent() {
+export function DisplaySettingsContent({ showApiKeysSection = true }: DisplaySettingsContentProps = {}) {
   const { preference: themePreference, setTheme } = useTheme();
   const { runningAgentsDisplayMode, setRunningAgentsDisplayMode } = useDisplayPreferences();
 
@@ -113,19 +118,21 @@ export function DisplaySettingsContent() {
 
   return (
     <div className="space-y-6" data-testid="display-section">
-      <div data-testid="api-keys-section-wrapper">
-        <ApiKeysSection
-          apiKeys={apiKeys}
-          providers={API_KEY_PROVIDERS}
-          variant="global"
-          onApiKeysChange={handleApiKeysChange}
-        />
-        {apiKeysError && (
-          <p className="text-sm text-theme-error-text mt-2" role="alert">
-            {apiKeysError}
-          </p>
-        )}
-      </div>
+      {showApiKeysSection && (
+        <div data-testid="api-keys-section-wrapper">
+          <ApiKeysSection
+            apiKeys={apiKeys}
+            providers={API_KEY_PROVIDERS}
+            variant="global"
+            onApiKeysChange={handleApiKeysChange}
+          />
+          {apiKeysError && (
+            <p className="text-sm text-theme-error-text mt-2" role="alert">
+              {apiKeysError}
+            </p>
+          )}
+        </div>
+      )}
       <div data-testid="database-url-section">
         <h3 className="text-sm font-semibold text-theme-text">Database URL</h3>
         <p className="text-xs text-theme-muted mb-3">

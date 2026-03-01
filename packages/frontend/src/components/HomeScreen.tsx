@@ -7,7 +7,6 @@ import { getProjectPhasePath } from "../lib/phaseRouting";
 import { useAppDispatch } from "../store";
 import { addNotification } from "../store/slices/notificationSlice";
 import { CloseButton } from "./CloseButton";
-import { ApiKeySetupModal } from "./ApiKeySetupModal";
 import { GITHUB_REPO_URL, HOMEPAGE_CONTAINER_CLASS } from "../lib/constants";
 import type { Project } from "@opensprint/shared";
 
@@ -91,7 +90,6 @@ export function HomeScreen() {
   const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null);
   const [archiveModal, setArchiveModal] = useState<Project | null>(null);
   const [deleteModal, setDeleteModal] = useState<Project | null>(null);
-  const [apiKeyModalRoute, setApiKeyModalRoute] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -102,7 +100,7 @@ export function HomeScreen() {
       if (hasAnyKey || useCustomCli) {
         navigate(route);
       } else {
-        setApiKeyModalRoute(route);
+        navigate("/settings");
       }
     } catch {
       navigate(route);
@@ -351,17 +349,6 @@ export function HomeScreen() {
           onConfirm={handleDelete}
           onCancel={() => setDeleteModal(null)}
           confirming={confirming}
-        />
-      )}
-
-      {apiKeyModalRoute && (
-        <ApiKeySetupModal
-          onComplete={() => {
-            setApiKeyModalRoute(null);
-            navigate(apiKeyModalRoute);
-          }}
-          onCancel={() => setApiKeyModalRoute(null)}
-          intendedRoute={apiKeyModalRoute}
         />
       )}
 

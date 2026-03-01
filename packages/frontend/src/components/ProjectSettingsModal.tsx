@@ -367,7 +367,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
           data-testid="settings-modal-content"
         >
           {mode === "display" ? (
-            <DisplaySettingsContent />
+            <DisplaySettingsContent showApiKeysSection={false} />
           ) : loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />

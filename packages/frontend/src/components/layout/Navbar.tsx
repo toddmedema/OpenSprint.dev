@@ -12,8 +12,6 @@ import { GlobalActiveAgentsList } from "../GlobalActiveAgentsList";
 import { NotificationBell } from "../NotificationBell";
 import { GlobalNotificationBell } from "../GlobalNotificationBell";
 import { ConnectionIndicator } from "../ConnectionIndicator";
-import { ApiKeySetupModal } from "../ApiKeySetupModal";
-
 interface NavbarProps {
   project?: Project | null;
   currentPhase?: ProjectPhase;
@@ -39,7 +37,6 @@ export function Navbar({
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [apiKeyModalRoute, setApiKeyModalRoute] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const isSettingsActive =
@@ -112,7 +109,7 @@ export function Navbar({
       if (hasAnyKey || useCustomCli) {
         navigate(route);
       } else {
-        setApiKeyModalRoute(route);
+        navigate("/settings");
       }
     } catch {
       navigate(route);
@@ -360,17 +357,6 @@ export function Navbar({
           )}
         </div>
       </div>
-
-      {apiKeyModalRoute && (
-        <ApiKeySetupModal
-          onComplete={() => {
-            setApiKeyModalRoute(null);
-            navigate(apiKeyModalRoute);
-          }}
-          onCancel={() => setApiKeyModalRoute(null)}
-          intendedRoute={apiKeyModalRoute}
-        />
-      )}
     </nav>
   );
 }

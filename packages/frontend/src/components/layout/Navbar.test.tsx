@@ -523,11 +523,27 @@ describe("Navbar", () => {
     expect(screen.getByTestId("theme-option-light")).toBeInTheDocument();
   });
 
-  it("shows ApiKeySetupModal when Create New Project clicked and no API keys", async () => {
+  it("navigates to /settings when Create New Project clicked and no API keys", async () => {
     mockProjectsList.mockResolvedValue([]);
     mockGetGlobalStatus.mockResolvedValue({ hasAnyKey: false, useCustomCli: false });
     const user = userEvent.setup();
-    renderNavbar(<Navbar project={null} />);
+    const { SettingsPage } = await import("../../pages/SettingsPage");
+    render(
+      <ThemeProvider>
+        <DisplayPreferencesProvider>
+          <Provider store={createStore()}>
+            <QueryClientProvider client={queryClient}>
+              <MemoryRouter initialEntries={["/"]}>
+                <Routes>
+                  <Route path="/" element={<Navbar project={null} />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Routes>
+              </MemoryRouter>
+            </QueryClientProvider>
+          </Provider>
+        </DisplayPreferencesProvider>
+      </ThemeProvider>
+    );
 
     const trigger = screen.getByRole("button", { name: /All Projects/i });
     await user.click(trigger);
@@ -535,15 +551,30 @@ describe("Navbar", () => {
     const createNewButton = screen.getByRole("button", { name: /Create New Project/i });
     await user.click(createNewButton);
 
-    expect(screen.getByTestId("api-key-setup-modal")).toBeInTheDocument();
-    expect(screen.getByText("Enter agent API key")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-page")).toBeInTheDocument();
   });
 
-  it("shows ApiKeySetupModal when Add Existing Project clicked and no API keys", async () => {
+  it("navigates to /settings when Add Existing Project clicked and no API keys", async () => {
     mockProjectsList.mockResolvedValue([]);
     mockGetGlobalStatus.mockResolvedValue({ hasAnyKey: false, useCustomCli: false });
     const user = userEvent.setup();
-    renderNavbar(<Navbar project={null} />);
+    const { SettingsPage } = await import("../../pages/SettingsPage");
+    render(
+      <ThemeProvider>
+        <DisplayPreferencesProvider>
+          <Provider store={createStore()}>
+            <QueryClientProvider client={queryClient}>
+              <MemoryRouter initialEntries={["/"]}>
+                <Routes>
+                  <Route path="/" element={<Navbar project={null} />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Routes>
+              </MemoryRouter>
+            </QueryClientProvider>
+          </Provider>
+        </DisplayPreferencesProvider>
+      </ThemeProvider>
+    );
 
     const trigger = screen.getByRole("button", { name: /All Projects/i });
     await user.click(trigger);
@@ -551,7 +582,7 @@ describe("Navbar", () => {
     const addExistingButton = screen.getByRole("button", { name: /Add Existing Project/i });
     await user.click(addExistingButton);
 
-    expect(screen.getByTestId("api-key-setup-modal")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-page")).toBeInTheDocument();
   });
 
   it("theme is configurable from settings page", async () => {
