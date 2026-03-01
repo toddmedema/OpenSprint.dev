@@ -109,7 +109,7 @@ function globalStoreHasProvider(
 }
 
 // GET /env/global-status — Returns { hasAnyKey, useCustomCli } for modal flow.
-// hasAnyKey = global store has keys OR process.env has ANTHROPIC/CURSOR (per spec: API keys only).
+// hasAnyKey = global store has keys OR process.env has ANTHROPIC/CURSOR/OPENAI (per spec: API keys only).
 envRouter.get("/global-status", async (_req, res, next) => {
   try {
     const settings = await getGlobalSettings();

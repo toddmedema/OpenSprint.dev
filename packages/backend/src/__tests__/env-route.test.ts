@@ -382,6 +382,18 @@ describe("Env API", () => {
       expect(res.body.data.hasAnyKey).toBe(true);
     });
 
+    it("hasAnyKey true when global store has OPENAI_API_KEY", async () => {
+      await setGlobalSettings({
+        apiKeys: {
+          OPENAI_API_KEY: [{ id: "k3", value: "sk-openai-xxx" }],
+        },
+      });
+
+      const res = await request(app).get(`${API_PREFIX}/env/global-status`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.hasAnyKey).toBe(true);
+    });
+
     it("hasAnyKey true when process.env has ANTHROPIC_API_KEY", async () => {
       const original = process.env.ANTHROPIC_API_KEY;
       process.env.ANTHROPIC_API_KEY = "sk-ant-test";
