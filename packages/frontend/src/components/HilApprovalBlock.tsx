@@ -1,6 +1,9 @@
 import { useState, useCallback } from "react";
 import type { Notification } from "@opensprint/shared";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
+import { queryKeys } from "../api/queryKeys";
+import { PrdDiffView } from "./prd/PrdDiffView";
 
 export interface HilApprovalBlockProps {
   /** HIL approval notification (kind: hil_approval) */
@@ -12,6 +15,7 @@ export interface HilApprovalBlockProps {
 
 /**
  * Renders Approve/Reject buttons for HIL approval notifications.
+ * When scopeChangeMetadata is present, shows a PRD diff for review before accepting/rejecting.
  * Surfaces in eval (scope change) and sketch (architecture) contexts.
  */
 export function HilApprovalBlock({
@@ -21,10 +25,19 @@ export function HilApprovalBlock({
 }: HilApprovalBlockProps) {
   const [loading, setLoading] = useState(false);
 
+  const { data: currentPrd } = useQuery({
+    queryKey: queryKeys.prd.detail(projectId),
+    queryFn: () => api.prd.get(projectId),
+    enabled:
+      !!notification.scopeChangeMetadata?.scopeChangeProposedUpdates?.length,
+  });
+
   const handleApprove = useCallback(async () => {
     setLoading(true);
     try {
-      await api.notifications.resolve(projectId, notification.id, { approved: true });
+      await api.notifications.resolve(projectId, notification.id, {
+        approved: true,
+      });
       onResolved();
     } finally {
       setLoading(false);
@@ -34,7 +47,9 @@ export function HilApprovalBlock({
   const handleReject = useCallback(async () => {
     setLoading(true);
     try {
-      await api.notifications.resolve(projectId, notification.id, { approved: false });
+      await api.notifications.resolve(projectId, notification.id, {
+        approved: false,
+      });
       onResolved();
     } finally {
       setLoading(false);
@@ -42,6 +57,8 @@ export function HilApprovalBlock({
   }, [projectId, notification.id, onResolved]);
 
   const description = notification.questions?.[0]?.text ?? "Approval required";
+  const hasPrdDiff =
+    notification.scopeChangeMetadata?.scopeChangeProposedUpdates?.length > 0;
 
   return (
     <div
@@ -53,6 +70,17 @@ export function HilApprovalBlock({
         Approval required
       </h4>
       <p className="text-sm text-theme-text mb-3">{description}</p>
+      {hasPrdDiff && notification.scopeChangeMetadata && (
+        <div className="mb-4 rounded-lg border border-theme-border bg-theme-surface p-3">
+          <h5 className="text-xs font-medium text-theme-muted uppercase tracking-wide mb-2">
+            Proposed PRD changes
+          </h5>
+          <PrdDiffView
+            currentPrd={currentPrd ?? null}
+            scopeChangeMetadata={notification.scopeChangeMetadata}
+          />
+        </div>
+      )}
       <div className="flex gap-2">
         <button
           type="button"

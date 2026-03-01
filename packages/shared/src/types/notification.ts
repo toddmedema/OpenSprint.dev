@@ -13,6 +13,19 @@ export interface OpenQuestionItem {
   createdAt: string;
 }
 
+/** Proposed PRD section update with content for diff display */
+export interface ScopeChangeProposedUpdate {
+  section: string;
+  changeLogEntry?: string;
+  content: string;
+}
+
+/** Metadata for scope-change HIL (proposed PRD updates for diff) */
+export interface ScopeChangeMetadata {
+  scopeChangeSummary: string;
+  scopeChangeProposedUpdates: ScopeChangeProposedUpdate[];
+}
+
 /** Open question / notification (agent clarification request or API-blocked human notification) */
 export interface Notification {
   id: string;
@@ -27,4 +40,6 @@ export interface Notification {
   kind?: NotificationKind;
   /** For api_blocked: rate_limit | auth | out_of_credit — distinguishes failure type */
   errorCode?: ApiBlockedErrorCode;
+  /** For hil_approval + scopeChanges: proposed PRD updates for diff display */
+  scopeChangeMetadata?: ScopeChangeMetadata;
 }

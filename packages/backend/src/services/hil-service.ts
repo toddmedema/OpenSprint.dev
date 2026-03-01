@@ -10,10 +10,17 @@ type HilCategory = keyof HilConfig;
 /** Internal HIL category for test failures — always automated, never configurable (PRD §6.5.1) */
 export type HilDecisionCategory = HilCategory | "testFailuresAndRetries";
 
-/** Optional metadata for scope-change HIL requests (AI-generated summary) */
+/** Proposed PRD section update with content for diff display */
+export interface ScopeChangeProposedUpdate {
+  section: string;
+  changeLogEntry?: string;
+  content: string;
+}
+
+/** Optional metadata for scope-change HIL requests (AI-generated summary + proposed content for diff) */
 export interface ScopeChangeHilMetadata {
   scopeChangeSummary: string;
-  scopeChangeProposedUpdates: Array<{ section: string; changeLogEntry?: string }>;
+  scopeChangeProposedUpdates: ScopeChangeProposedUpdate[];
 }
 
 /** Max age for unanswered HIL notifications before auto-resolve (1 hour) */
@@ -85,6 +92,12 @@ export class HilService {
           sourceId: sourceId || (source === "eval" ? "scope" : "architecture"),
           description,
           category,
+          scopeChangeMetadata: scopeChangeMetadata
+            ? {
+                scopeChangeSummary: scopeChangeMetadata.scopeChangeSummary,
+                scopeChangeProposedUpdates: scopeChangeMetadata.scopeChangeProposedUpdates,
+              }
+            : undefined,
         });
         broadcastToProject(projectId, {
           type: "notification.added",
@@ -98,6 +111,7 @@ export class HilService {
             createdAt: notification.createdAt,
             resolvedAt: notification.resolvedAt,
             kind: "hil_approval",
+            scopeChangeMetadata: notification.scopeChangeMetadata,
           },
         });
         log.info("Notify-and-proceed", { category, description });
@@ -112,6 +126,12 @@ export class HilService {
           sourceId: sourceId || (source === "eval" ? "scope" : "architecture"),
           description,
           category,
+          scopeChangeMetadata: scopeChangeMetadata
+            ? {
+                scopeChangeSummary: scopeChangeMetadata.scopeChangeSummary,
+                scopeChangeProposedUpdates: scopeChangeMetadata.scopeChangeProposedUpdates,
+              }
+            : undefined,
         });
 
         broadcastToProject(projectId, {
@@ -126,6 +146,7 @@ export class HilService {
             createdAt: notification.createdAt,
             resolvedAt: notification.resolvedAt,
             kind: "hil_approval",
+            scopeChangeMetadata: notification.scopeChangeMetadata,
           },
         });
 

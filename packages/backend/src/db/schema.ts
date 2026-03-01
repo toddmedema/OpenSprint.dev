@@ -177,10 +177,13 @@ CREATE TABLE IF NOT EXISTS open_questions (
     created_at   TEXT NOT NULL,
     resolved_at  TEXT,
     kind         TEXT NOT NULL DEFAULT 'open_question',
-    error_code   TEXT
+    error_code   TEXT,
+    scope_change_metadata TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_open_questions_project_id ON open_questions(project_id);
 CREATE INDEX IF NOT EXISTS idx_open_questions_status ON open_questions(status);
+-- Add scope_change_metadata for existing tables (no-op if column exists)
+ALTER TABLE open_questions ADD COLUMN IF NOT EXISTS scope_change_metadata TEXT;
 `;
 
 /** Strip leading comment-only and empty lines so statements starting with "-- Comment\nCREATE ..." are executed. */

@@ -1709,7 +1709,11 @@ describe.skipIf(!feedbackServicePostgresOk)("FeedbackService", () => {
         {
           scopeChangeSummary: "• feature_list: Add mobile app",
           scopeChangeProposedUpdates: [
-            { section: "feature_list", changeLogEntry: "Add mobile app" },
+            {
+              section: "feature_list",
+              changeLogEntry: "Add mobile app",
+              content: "New content",
+            },
           ],
         },
         "eval",

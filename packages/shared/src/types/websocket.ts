@@ -1,5 +1,9 @@
 import type { AgentPhase, TestResults } from "./agent.js";
 import type { FeedbackItem } from "./feedback.js";
+import type {
+  ScopeChangeMetadata,
+  ScopeChangeProposedUpdate,
+} from "./notification.js";
 
 // ─── Server → Client Events ───
 
@@ -95,12 +99,6 @@ export interface ExecuteStatusEvent {
   pendingFeedbackCategorizations?: Array<{ feedbackId: string; category?: string }>;
 }
 
-/** Scope-change-specific metadata for HIL approval modal (AI-generated summary of proposed PRD updates) */
-export interface ScopeChangeProposedUpdate {
-  section: string;
-  changeLogEntry?: string;
-}
-
 export interface HilRequestEvent {
   type: "hil.request";
   requestId: string;
@@ -161,6 +159,7 @@ export interface NotificationAddedEvent {
     resolvedAt: string | null;
     kind?: "open_question" | "api_blocked" | "hil_approval";
     errorCode?: "rate_limit" | "auth" | "out_of_credit";
+    scopeChangeMetadata?: ScopeChangeMetadata;
   };
 }
 

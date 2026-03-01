@@ -85,6 +85,40 @@ describe.skipIf(!notifPostgresOk)("NotificationService", () => {
     });
   });
 
+  describe("createHilApproval", () => {
+    it("creates HIL approval with scopeChangeMetadata and persists for diff display", async () => {
+      const scopeChangeMetadata = {
+        scopeChangeSummary: "• feature_list: Add mobile app",
+        scopeChangeProposedUpdates: [
+          {
+            section: "feature_list",
+            changeLogEntry: "Add mobile app",
+            content: "1. Web dashboard\n2. Mobile app",
+          },
+        ],
+      };
+      const result = await service.createHilApproval({
+        projectId: "proj-hil",
+        source: "eval",
+        sourceId: "fb-1",
+        description: "Approve scope change?",
+        category: "scopeChanges",
+        scopeChangeMetadata,
+      });
+
+      expect(result.id).toMatch(/^hil-[0-9a-f]{8}$/);
+      expect(result.kind).toBe("hil_approval");
+      expect(result.scopeChangeMetadata).toEqual(scopeChangeMetadata);
+
+      const list = await service.listByProject("proj-hil");
+      expect(list).toHaveLength(1);
+      expect(list[0]!.scopeChangeMetadata).toEqual(scopeChangeMetadata);
+      expect(list[0]!.scopeChangeMetadata!.scopeChangeProposedUpdates[0]!.content).toBe(
+        "1. Web dashboard\n2. Mobile app"
+      );
+    });
+  });
+
   describe("createApiBlocked", () => {
     it("creates API-blocked notification with error code", async () => {
       const result = await service.createApiBlocked({

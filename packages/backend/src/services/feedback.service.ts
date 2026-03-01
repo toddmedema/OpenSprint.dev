@@ -656,6 +656,7 @@ export class FeedbackService {
                 scopeChangeProposedUpdates: proposal.prdUpdates.map((u) => ({
                   section: u.section,
                   changeLogEntry: u.changeLogEntry,
+                  content: u.content,
                 })),
               }
             : undefined;

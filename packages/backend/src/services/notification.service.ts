@@ -32,6 +32,8 @@ export interface Notification {
   resolvedAt: string | null;
   kind?: "open_question" | "api_blocked" | "hil_approval";
   errorCode?: ApiBlockedErrorCode;
+  /** For hil_approval + scopeChanges: proposed PRD updates for diff display */
+  scopeChangeMetadata?: ScopeChangeMetadata;
 }
 
 export interface CreateNotificationInput {
@@ -49,12 +51,24 @@ export interface CreateApiBlockedInput {
   errorCode: ApiBlockedErrorCode;
 }
 
+export interface ScopeChangeProposedUpdate {
+  section: string;
+  changeLogEntry?: string;
+  content: string;
+}
+
+export interface ScopeChangeMetadata {
+  scopeChangeSummary: string;
+  scopeChangeProposedUpdates: ScopeChangeProposedUpdate[];
+}
+
 export interface CreateHilApprovalInput {
   projectId: string;
   source: NotificationSource;
   sourceId: string;
   description: string;
   category: string;
+  scopeChangeMetadata?: ScopeChangeMetadata;
 }
 
 function generateId(): string {
@@ -65,6 +79,10 @@ function rowToNotification(row: Record<string, unknown>): Notification {
   const questions: OpenQuestionItem[] = JSON.parse((row.questions as string) || "[]");
   const kind = (row.kind as "open_question" | "api_blocked" | "hil_approval") || "open_question";
   const errorCode = row.error_code as ApiBlockedErrorCode | undefined;
+  const scopeChangeMetadataRaw = row.scope_change_metadata as string | undefined;
+  const scopeChangeMetadata = scopeChangeMetadataRaw
+    ? (JSON.parse(scopeChangeMetadataRaw) as ScopeChangeMetadata)
+    : undefined;
   return {
     id: row.id as string,
     projectId: row.project_id as string,
@@ -76,6 +94,7 @@ function rowToNotification(row: Record<string, unknown>): Notification {
     resolvedAt: (row.resolved_at as string) ?? null,
     kind,
     errorCode,
+    scopeChangeMetadata,
   };
 }
 
@@ -184,6 +203,7 @@ export class NotificationService {
   /**
    * Create an HIL approval notification (scope change, architecture, etc.).
    * Surfaces in the notification bell; user approves/rejects via Approve/Reject UI.
+   * When scopeChangeMetadata is provided, it is persisted for diff display in the frontend.
    */
   async createHilApproval(input: CreateHilApprovalInput): Promise<Notification> {
     const id = "hil-" + crypto.randomBytes(4).toString("hex");
@@ -195,11 +215,14 @@ export class NotificationService {
         createdAt,
       },
     ];
+    const scopeChangeMetadataJson = input.scopeChangeMetadata
+      ? JSON.stringify(input.scopeChangeMetadata)
+      : null;
 
     await taskStore.runWrite(async (client) => {
       await client.execute(
-        `INSERT INTO open_questions (id, project_id, source, source_id, questions, status, created_at, kind)
-         VALUES ($1, $2, $3, $4, $5, 'open', $6, 'hil_approval')`,
+        `INSERT INTO open_questions (id, project_id, source, source_id, questions, status, created_at, kind, scope_change_metadata)
+         VALUES ($1, $2, $3, $4, $5, 'open', $6, 'hil_approval', $7)`,
         [
           id,
           input.projectId,
@@ -207,6 +230,7 @@ export class NotificationService {
           input.sourceId,
           JSON.stringify(questions),
           createdAt,
+          scopeChangeMetadataJson,
         ]
       );
     });
@@ -229,6 +253,7 @@ export class NotificationService {
       createdAt,
       resolvedAt: null,
       kind: "hil_approval",
+      scopeChangeMetadata: input.scopeChangeMetadata,
     };
   }
 
