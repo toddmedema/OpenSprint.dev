@@ -211,6 +211,11 @@ export function ProjectView() {
       dispatch(resetDeliver());
       dispatch(resetProject());
       dispatch(resetWebsocket());
+      // Invalidate new project's queries so TanStack Query refetches (ensures state loads on nav from homepage/dropdown)
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.feedback.list(projectId) });
     }
     prevProjectIdRef.current = projectId;
 
@@ -359,9 +364,10 @@ export function ProjectView() {
         onProjectSaved={handleProjectSaved}
       >
         {/* Mount only active phase; lazy-load phase content. Layout and phase shell render eagerly.
-            Phase data stays in global store (Redux + TanStack Query) so switching phases shows cached data. */}
+            Phase data stays in global store (Redux + TanStack Query) so switching phases shows cached data.
+            key includes projectId so switching projects remounts phase content and loads new project state. */}
         <div
-          key={currentPhase}
+          key={`${projectId}-${currentPhase}`}
           data-testid={`phase-${currentPhase}`}
           className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col"
         >

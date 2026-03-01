@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { Provider } from "react-redux";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
@@ -214,6 +214,15 @@ describe("ProjectView URL behavior", () => {
 describe("ProjectView upfront loading and mount-all", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Restore default API mocks (some tests override with mockImplementation)
+    vi.mocked(api.projects.get).mockResolvedValue({
+      id: "proj-1",
+      name: "Test Project",
+      currentPhase: "sketch",
+    } as never);
+    vi.mocked(api.tasks.list).mockResolvedValue([]);
+    vi.mocked(api.plans.list).mockResolvedValue({ plans: [], edges: [] });
+    vi.mocked(api.feedback.list).mockResolvedValue([]);
   });
 
   it("dispatches wsConnect and fetches tasks, plans, feedback on sketch (load on navigation)", async () => {
@@ -254,6 +263,109 @@ describe("ProjectView upfront loading and mount-all", () => {
       expect(mockedApi.tasks.list).toHaveBeenCalledWith("proj-1");
       expect(mockedApi.execute.status).toHaveBeenCalledWith("proj-1");
       expect(mockedApi.plans.list).toHaveBeenCalledWith("proj-1");
+    });
+  });
+
+  it("loads full project state when switching projects via dropdown (no refresh required)", async () => {
+    const proj1Tasks = [
+      {
+        id: "t1",
+        title: "Task 1",
+        description: "",
+        type: "task" as const,
+        status: "open" as const,
+        priority: 1,
+        assignee: null,
+        labels: [],
+        dependencies: [],
+        epicId: null,
+        kanbanColumn: "backlog" as const,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ];
+    const proj2Tasks = [
+      {
+        id: "t2",
+        title: "Task 2",
+        description: "",
+        type: "task" as const,
+        status: "open" as const,
+        priority: 1,
+        assignee: null,
+        labels: [],
+        dependencies: [],
+        epicId: null,
+        kanbanColumn: "backlog" as const,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ];
+    vi.mocked(api.projects.get).mockImplementation((id: string) =>
+      Promise.resolve(
+        id === "proj-1"
+          ? { id: "proj-1", name: "Project 1", currentPhase: "sketch" }
+          : { id: "proj-2", name: "Project 2", currentPhase: "sketch" }
+      ) as never
+    );
+    vi.mocked(api.tasks.list).mockImplementation((id: string) =>
+      Promise.resolve(id === "proj-1" ? proj1Tasks : proj2Tasks) as never
+    );
+    vi.mocked(api.plans.list).mockImplementation((id: string) =>
+      Promise.resolve({
+        plans: id === "proj-1" ? [{ metadata: { planId: "p1", epicId: "e1", shippedAt: null, complexity: "low" as const }, content: "# P1", status: "planning" as const, taskCount: 1, doneTaskCount: 0, dependencyCount: 0 }] : [{ metadata: { planId: "p2", epicId: "e2", shippedAt: null, complexity: "low" as const }, content: "# P2", status: "planning" as const, taskCount: 1, doneTaskCount: 0, dependencyCount: 0 }],
+        edges: [],
+      }) as never
+    );
+    vi.mocked(api.feedback.list).mockImplementation((id: string) =>
+      Promise.resolve(
+        id === "proj-1"
+          ? [{ id: "f1", text: "Feedback 1", category: "bug" as const, mappedPlanId: null, createdTaskIds: [], status: "pending" as const, createdAt: "2025-01-01" }]
+          : [{ id: "f2", text: "Feedback 2", category: "feature" as const, mappedPlanId: null, createdTaskIds: [], status: "pending" as const, createdAt: "2025-01-01" }]
+      ) as never
+    );
+
+    function NavToProj2() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate("/projects/proj-2/sketch")} data-testid="nav-to-proj2">
+          Go to proj-2
+        </button>
+      );
+    }
+
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <QueryClientProvider client={createQueryClient()}>
+          <ThemeProvider>
+            <DisplayPreferencesProvider>
+              <MemoryRouter initialEntries={["/projects/proj-1/sketch"]}>
+                <LocationDisplay />
+                <NavToProj2 />
+                <Routes>
+                  <Route path="/projects/:projectId/:phase?" element={<ProjectView />} />
+                </Routes>
+              </MemoryRouter>
+            </DisplayPreferencesProvider>
+          </ThemeProvider>
+        </QueryClientProvider>
+      </Provider>
+    );
+
+    await waitFor(() => expect(screen.getByText("Project 1")).toBeInTheDocument());
+    await waitFor(() => expect(store.getState().execute.tasksById["t1"]).toBeDefined());
+
+    screen.getByTestId("nav-to-proj2").click();
+
+    await waitFor(() => expect(screen.getByText("Project 2")).toBeInTheDocument());
+    await waitFor(() => {
+      const state = store.getState();
+      expect(state.execute.tasksById["t2"]).toBeDefined();
+      expect(state.plan.plans).toHaveLength(1);
+      expect(state.plan.plans[0].metadata.planId).toBe("p2");
+      expect(state.eval.feedback).toHaveLength(1);
+      expect(state.eval.feedback[0].id).toBe("f2");
     });
   });
 
