@@ -884,25 +884,52 @@ export class BranchManager {
     actualPath?: string
   ): Promise<void> {
     const wtPath = actualPath ?? this.getWorktreePath(taskId);
+    const registeredPath = await this.resolveRegisteredWorktreePath(repoPath, taskId, wtPath);
+    if (!registeredPath) {
+      await fs.rm(wtPath, { recursive: true, force: true }).catch(() => {});
+      return;
+    }
+
     try {
-      await this.git(repoPath, `worktree remove ${wtPath} --force`);
+      await this.git(repoPath, `worktree remove ${registeredPath} --force`);
     } catch (err) {
       log.warn("worktree remove failed, attempting manual cleanup", {
         taskId,
-        wtPath,
+        wtPath: registeredPath,
         err: err instanceof Error ? err.message : String(err),
       });
       try {
-        await fs.rm(wtPath, { recursive: true, force: true });
+        await fs.rm(registeredPath, { recursive: true, force: true });
         await this.git(repoPath, "worktree prune");
       } catch (cleanupErr) {
         log.warn("Manual worktree cleanup failed", {
           taskId,
-          wtPath,
+          wtPath: registeredPath,
           err: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
         });
       }
     }
+  }
+
+  private async resolveRegisteredWorktreePath(
+    repoPath: string,
+    taskId: string,
+    candidatePath: string
+  ): Promise<string | null> {
+    const worktrees = await this.listTaskWorktrees(repoPath);
+    const candidateResolved = await fs.realpath(candidatePath).catch(() => path.resolve(candidatePath));
+
+    for (const worktree of worktrees) {
+      if (worktree.taskId !== taskId) continue;
+      const listedResolved = await fs
+        .realpath(worktree.worktreePath)
+        .catch(() => path.resolve(worktree.worktreePath));
+      if (listedResolved === candidateResolved) {
+        return worktree.worktreePath;
+      }
+    }
+
+    return worktrees.find((worktree) => worktree.taskId === taskId)?.worktreePath ?? null;
   }
 
   /**

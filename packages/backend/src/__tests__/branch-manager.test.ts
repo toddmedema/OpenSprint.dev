@@ -354,6 +354,24 @@ describe("BranchManager", () => {
       await branchManager.removeTaskWorktree(repoPath, "nonexistent-task");
     });
 
+    it("should treat an unregistered task worktree as a no-op cleanup", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const taskId = `wt-unregistered-${Date.now()}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+
+      await execAsync(`git worktree remove ${wtPath} --force`, { cwd: repoPath });
+
+      await branchManager.removeTaskWorktree(repoPath, taskId, wtPath);
+
+      await expect(fs.access(wtPath)).rejects.toThrow();
+    });
+
     it("listTaskWorktrees returns worktrees under base path", async () => {
       await execAsync("git init", { cwd: repoPath });
       await execAsync("git branch -M main", { cwd: repoPath });

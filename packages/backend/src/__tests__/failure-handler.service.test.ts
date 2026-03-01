@@ -273,5 +273,42 @@ describe("FailureHandlerService", () => {
         "Attempt 1 failed [test_failure]: Tests failed: 2 failed, 1 passed"
       );
     });
+
+    it("blocks diagnosed no_result startup failures without blind retries", async () => {
+      const slot = makeSlot("/tmp/worktree");
+      slot.agent.outputLog = [
+        "[Agent error: Cursor agent not found. Install: curl https://cursor.com/install -fsS | bash]\n",
+      ];
+      const mockUpdate = vi.fn().mockResolvedValue(undefined);
+      const mockDeleteAssignment = vi.fn().mockResolvedValue(undefined);
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+      mockHost.taskStore = {
+        ...mockHost.taskStore,
+        update: mockUpdate,
+      };
+      mockHost.deleteAssignment = mockDeleteAssignment;
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        "Agent exited with code 1 without producing a result",
+        null,
+        "no_result"
+      );
+
+      expect(mockExecuteCodingPhase).not.toHaveBeenCalled();
+      expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, taskId, "/tmp/worktree");
+      expect(mockDeleteAssignment).toHaveBeenCalledWith(repoPath, taskId);
+      expect(mockUpdate).toHaveBeenCalledWith(
+        projectId,
+        taskId,
+        expect.objectContaining({ status: "blocked", block_reason: "Coding Failure" })
+      );
+    });
   });
 });

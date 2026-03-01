@@ -570,6 +570,39 @@ describe("OrchestratorService (slot-based model)", () => {
       expect(mockSymlinkNodeModules).not.toHaveBeenCalled();
       expect(mockEnsureRepoNodeModules).toHaveBeenCalledWith(repoPath);
     });
+
+    it("caps dispatch to one new coder per loop even when multiple slots are available", async () => {
+      const task1 = makeTask("task-1");
+      const task2 = makeTask("task-2");
+
+      mockGetSettings.mockResolvedValue({
+        ...defaultSettings,
+        gitWorkingMode: "worktree",
+        maxConcurrentCoders: 3,
+      });
+      mockTaskStoreReady.mockResolvedValue([task1, task2]);
+      mockCreateTaskWorktree.mockImplementation(async (_repo: string, taskId: string) => {
+        return `/tmp/opensprint-worktrees/${taskId}`;
+      });
+      mockGetActiveDir.mockImplementation((base: string, tid: string) =>
+        path.join(base, ".opensprint", "active", tid)
+      );
+      mockWriteJsonAtomic.mockResolvedValue(undefined);
+      mockInvokeCodingAgent.mockImplementation(
+        (_prompt: string, _config: unknown, _opts: { onExit: (code: number | null) => void }) => {
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      await orchestrator.ensureRunning(projectId);
+
+      await vi.waitFor(() => {
+        expect(mockCreateTaskWorktree).toHaveBeenCalledTimes(1);
+      });
+
+      expect(mockCreateTaskWorktree).toHaveBeenCalledTimes(1);
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, "task-1");
+    });
   });
 
   describe("branches mode maxSlots=1", () => {

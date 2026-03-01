@@ -65,6 +65,8 @@ const LOOP_KICKER_INTERVAL_MS = 60 * 1000;
 
 /** If runLoop is blocked in an await longer than this, force recovery so nudge can start a fresh loop (avoids agents "hanging" for hours). */
 const LOOP_STUCK_GUARD_MS = 5 * 60 * 1000;
+/** Temporary throttle: start at most one new coder per loop pass while no_result failures are under investigation. */
+const MAX_NEW_TASKS_PER_LOOP = 1;
 
 /**
  * GUPP-style assignment file: everything an agent needs to self-start.
@@ -1119,6 +1121,15 @@ export class OrchestratorService {
         }
       );
 
+      const dispatchBatch = selected.slice(0, MAX_NEW_TASKS_PER_LOOP);
+      if (selected.length > dispatchBatch.length) {
+        log.info("Dispatch capped for stability; deferring additional ready tasks", {
+          projectId,
+          selectedTasks: selected.length,
+          dispatchingNow: dispatchBatch.length,
+        });
+      }
+
       if (selected.length === 0) {
         log.info("No dispatchable tasks after conflict-aware scheduling", {
           projectId,
@@ -1134,14 +1145,14 @@ export class OrchestratorService {
         return;
       }
 
-      for (let i = 0; i < selected.length; i++) {
-        const selectedTask = selected[i]!;
+      for (let i = 0; i < dispatchBatch.length; i++) {
+        const selectedTask = dispatchBatch[i]!;
         try {
           await this.dispatchTask(
             projectId,
             repoPath,
             selectedTask.task,
-            Math.max(0, readyTasks.length - (i + 1))
+            Math.max(0, selected.length - (i + 1))
           );
         } catch (error) {
           if (error instanceof WorktreeBranchInUseError) {

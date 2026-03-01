@@ -25,6 +25,8 @@ const log = createLogger("failure-handler");
 
 const INFRA_FAILURE_TYPES: FailureType[] = ["agent_crash", "timeout", "merge_conflict"];
 const MAX_INFRA_RETRIES = 2;
+const NO_RESULT_TAIL_LINES = 8;
+const NO_RESULT_REASON_LIMIT = 1200;
 
 export interface FailureHandlerHost {
   getState(projectId: string): {
@@ -101,6 +103,46 @@ export interface FailureSlot {
 export class FailureHandlerService {
   constructor(private host: FailureHandlerHost) {}
 
+  private enrichNoResultReason(reason: string, outputLog: string[]): string {
+    const output = outputLog.join("").replace(/\r/g, "").trim();
+    if (!output) return reason;
+
+    const agentErrorMatches = [...output.matchAll(/\[Agent error:\s*([^\]]+)\]/gi)];
+    const latestAgentError = agentErrorMatches.at(-1)?.[1]?.trim();
+    if (latestAgentError) {
+      return `${reason}. Agent error: ${latestAgentError}`.slice(0, NO_RESULT_REASON_LIMIT);
+    }
+
+    const lines = output
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length === 0) return reason;
+
+    const tail = lines.slice(-NO_RESULT_TAIL_LINES).join(" | ");
+    return `${reason}. Recent agent output: ${tail}`.slice(0, NO_RESULT_REASON_LIMIT);
+  }
+
+  private isDiagnosedNoResultFailure(failureType: FailureType, reason: string): boolean {
+    if (failureType !== "no_result") return false;
+
+    const fatalPatterns = [
+      /agent error:/i,
+      /requires authentication/i,
+      /run `?agent login`?/i,
+      /no cursor api key available/i,
+      /cursor agent not found/i,
+      /claude cli was not found/i,
+      /command not found/i,
+      /could not read task file/i,
+      /api key/i,
+      /unauthorized/i,
+      /rate limit/i,
+      /timed out after 5 minutes/i,
+    ];
+    return fatalPatterns.some((pattern) => pattern.test(reason));
+  }
+
   async handleTaskFailure(
     projectId: string,
     repoPath: string,
@@ -120,20 +162,28 @@ export class FailureHandlerService {
     const cumulativeAttempts = slot.attempt;
     const wtPath = slot.worktreePath;
     const isInfraFailure = INFRA_FAILURE_TYPES.includes(failureType);
+    const effectiveReason =
+      failureType === "no_result"
+        ? this.enrichNoResultReason(reason, slot.agent.outputLog)
+        : reason;
+    const diagnosedNoResultFailure = this.isDiagnosedNoResultFailure(
+      failureType,
+      effectiveReason
+    );
 
     log.error(`Task ${task.id} failed [${failureType}] (attempt ${cumulativeAttempts})`, {
-      reason,
+      reason: effectiveReason,
     });
 
     // Surface API-related failures (rate limit, auth, out of credit) as human-blocked notifications
-    const apiErrorKind = classifyAgentApiError(new Error(reason));
+    const apiErrorKind = classifyAgentApiError(new Error(effectiveReason));
     if (apiErrorKind) {
       try {
         const notification = await notificationService.createApiBlocked({
           projectId,
           source: "execute",
           sourceId: task.id,
-          message: reason.slice(0, 500),
+          message: effectiveReason.slice(0, 500),
           errorCode: apiErrorKind,
         });
         broadcastToProject(projectId, {
@@ -166,7 +216,11 @@ export class FailureHandlerService {
         projectId,
         taskId: task.id,
         event: `task.failed`,
-        data: { failureType, attempt: cumulativeAttempts, reason: reason.slice(0, 500) },
+        data: {
+          failureType,
+          attempt: cumulativeAttempts,
+          reason: effectiveReason.slice(0, 500),
+        },
       })
       .catch(() => {});
 
@@ -210,7 +264,7 @@ export class FailureHandlerService {
       gitBranch: branchName,
       status: "failed",
       outputLog: slot.agent.outputLog.join(""),
-      failureReason: reason,
+      failureReason: effectiveReason,
       testResults: testResults ?? undefined,
       gitDiff: gitDiff || undefined,
       startedAt: slot.agent.startedAt,
@@ -229,10 +283,23 @@ export class FailureHandlerService {
         ? `Attempt ${cumulativeAttempts} failed [timeout]: Agent stopped responding (${inactivityMinutes} min inactivity); task requeued.`
         : failureType === "review_rejection" && reviewFeedback
           ? `Review rejected (attempt ${cumulativeAttempts}):\n\n${reviewFeedback.slice(0, 2000)}`
-          : `Attempt ${cumulativeAttempts} failed [${failureType}]: ${reason.slice(0, 500)}`;
+          : `Attempt ${cumulativeAttempts} failed [${failureType}]: ${effectiveReason.slice(0, 500)}`;
     await this.host.taskStore
       .comment(projectId, task.id, commentText)
       .catch((err) => log.warn("Failed to add failure comment", { err }));
+
+    if (diagnosedNoResultFailure) {
+      log.warn("Diagnosed no_result startup/config failure; blocking without blind retries", {
+        taskId: task.id,
+      });
+      await this.host.taskStore.setCumulativeAttempts(projectId, task.id, cumulativeAttempts, {
+        currentLabels: (task.labels ?? []) as string[],
+      });
+      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode);
+      await this.host.deleteAssignment(repoPath, task.id);
+      await this.blockTask(projectId, repoPath, task, cumulativeAttempts, effectiveReason);
+      return;
+    }
 
     if (isInfraFailure && slot.infraRetries < MAX_INFRA_RETRIES) {
       slot.infraRetries += 1;
@@ -245,7 +312,7 @@ export class FailureHandlerService {
 
       await this.host.persistCounters(projectId, repoPath);
       await this.host.executeCodingPhase(projectId, repoPath, task, slot, {
-        previousFailure: reason,
+        previousFailure: effectiveReason,
         reviewFeedback,
         useExistingBranch: true,
         previousDiff,
@@ -274,7 +341,7 @@ export class FailureHandlerService {
       await this.host.persistCounters(projectId, repoPath);
 
       await this.host.executeCodingPhase(projectId, repoPath, task, slot, {
-        previousFailure: reason,
+        previousFailure: effectiveReason,
         reviewFeedback,
         useExistingBranch: true,
         previousDiff,
@@ -290,7 +357,7 @@ export class FailureHandlerService {
       const currentPriority = task.priority ?? 2;
 
       if (currentPriority >= MAX_PRIORITY_BEFORE_BLOCK) {
-        await this.blockTask(projectId, repoPath, task, cumulativeAttempts, reason);
+        await this.blockTask(projectId, repoPath, task, cumulativeAttempts, effectiveReason);
       } else {
         const newPriority = currentPriority + 1;
         log.info(
@@ -315,7 +382,7 @@ export class FailureHandlerService {
           taskId: task.id,
           status: "failed",
           testResults: null,
-          reason: reason.slice(0, 500),
+          reason: effectiveReason.slice(0, 500),
         });
 
         this.host.nudge(projectId);
