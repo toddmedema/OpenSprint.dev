@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { DisplaySettingsContent } from "./DisplaySettingsContent";
 
 vi.mock("../contexts/ThemeContext", () => ({
@@ -124,10 +124,9 @@ describe("DisplaySettingsContent", () => {
     const input = screen.getByTestId("database-url-input");
     expect(input).toHaveAttribute("placeholder", "postgresql://user:password@host:port/database");
     expect(input).toHaveValue("postgresql://user:***@localhost:5432/opensprint");
-    expect(screen.getByTestId("database-url-save")).toBeInTheDocument();
   });
 
-  it("saves database URL on Save click", async () => {
+  it("saves database URL on blur", async () => {
     mockGlobalSettingsPut.mockResolvedValue({
       databaseUrl: "postgresql://user:***@db.example.com:5432/opensprint",
     });
@@ -136,24 +135,30 @@ describe("DisplaySettingsContent", () => {
 
     await screen.findByTestId("database-url-input");
     const input = screen.getByTestId("database-url-input");
-    fireEvent.change(input, {
-      target: { value: "postgresql://user:secret@db.example.com:5432/opensprint" },
+    await act(async () => {
+      fireEvent.change(input, {
+        target: { value: "postgresql://user:secret@db.example.com:5432/opensprint" },
+      });
     });
-    fireEvent.click(screen.getByTestId("database-url-save"));
+    await act(async () => {
+      fireEvent.blur(input);
+    });
 
-    expect(mockGlobalSettingsPut).toHaveBeenCalledWith({
-      databaseUrl: "postgresql://user:secret@db.example.com:5432/opensprint",
-    });
+    await waitFor(() =>
+      expect(mockGlobalSettingsPut).toHaveBeenCalledWith({
+        databaseUrl: "postgresql://user:secret@db.example.com:5432/opensprint",
+      })
+    );
     await waitFor(() => {
       expect(input).toHaveValue("postgresql://user:***@db.example.com:5432/opensprint");
     });
   });
 
-  it("shows error when saving masked URL", async () => {
+  it("shows error when blurring masked URL", async () => {
     render(<DisplaySettingsContent />);
 
-    const saveBtn = await screen.findByTestId("database-url-save");
-    fireEvent.click(saveBtn);
+    const input = await screen.findByTestId("database-url-input");
+    fireEvent.blur(input);
 
     expect(mockGlobalSettingsPut).not.toHaveBeenCalled();
     expect(screen.getByText("Enter the full connection URL to save changes")).toBeInTheDocument();

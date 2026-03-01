@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { DisplayPreferencesProvider } from "../contexts/DisplayPreferencesContext";
@@ -17,6 +17,9 @@ const mockUpdateAgentsInstructions = vi.fn();
 const mockGetKeys = vi.fn();
 const mockModelsList = vi.fn();
 
+const mockGlobalSettingsGet = vi.fn();
+const mockGlobalSettingsPut = vi.fn();
+
 vi.mock("../api/client", () => ({
   api: {
     projects: {
@@ -31,6 +34,10 @@ vi.mock("../api/client", () => ({
     },
     models: {
       list: (...args: unknown[]) => mockModelsList(...args),
+    },
+    globalSettings: {
+      get: () => mockGlobalSettingsGet(),
+      put: (...args: unknown[]) => mockGlobalSettingsPut(...args),
     },
   },
 }));
@@ -64,6 +71,7 @@ describe("ProjectSettingsModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSettings.mockResolvedValue(mockSettings);
+    mockGlobalSettingsGet.mockResolvedValue({ databaseUrl: "" });
     mockGetAgentsInstructions.mockResolvedValue({ content: "# Agent Instructions\n\nUse bd for tasks." });
     mockUpdateAgentsInstructions.mockResolvedValue({ saved: true });
     mockGetKeys.mockResolvedValue({
@@ -238,7 +246,7 @@ describe("ProjectSettingsModal", () => {
     expect(reviewModeSelect).toHaveValue("always");
   });
 
-  it("saves reviewMode when changed and Save is clicked", async () => {
+  it("saves reviewMode when changed on blur", async () => {
     mockGetSettings.mockResolvedValue({ ...mockSettings, reviewMode: "always" });
 
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
@@ -250,15 +258,15 @@ describe("ProjectSettingsModal", () => {
     await screen.findByText("Code Review");
     const reviewModeSelect = screen.getByTestId("review-mode-select");
     await userEvent.selectOptions(reviewModeSelect, "never");
+    fireEvent.blur(reviewModeSelect);
 
-    const saveButton = screen.getByRole("button", { name: "Save Changes" });
-    await userEvent.click(saveButton);
-
-    expect(mockUpdateSettings).toHaveBeenCalledWith(
-      "proj-1",
-      expect.objectContaining({
-        reviewMode: "never",
-      })
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          reviewMode: "never",
+        })
+      )
     );
   });
 
@@ -294,7 +302,7 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByTestId("auto-deploy-trigger-production")).toHaveValue("none");
   });
 
-  it("saves auto-deploy trigger when changed and Save is clicked", async () => {
+  it("saves auto-deploy trigger when changed on blur", async () => {
     mockGetSettings.mockResolvedValueOnce({
       ...mockSettings,
       deployment: { mode: "expo" as const },
@@ -307,20 +315,20 @@ describe("ProjectSettingsModal", () => {
 
     const stagingSelect = screen.getByTestId("auto-deploy-trigger-staging");
     await userEvent.selectOptions(stagingSelect, "each_epic");
+    fireEvent.blur(stagingSelect);
 
-    const saveButton = screen.getByRole("button", { name: "Save Changes" });
-    await userEvent.click(saveButton);
-
-    expect(mockUpdateSettings).toHaveBeenCalledWith(
-      "proj-1",
-      expect.objectContaining({
-        deployment: expect.objectContaining({
-          targets: expect.arrayContaining([
-            expect.objectContaining({ name: "staging", autoDeployTrigger: "each_epic" }),
-            expect.objectContaining({ name: "production", autoDeployTrigger: "none" }),
-          ]),
-        }),
-      })
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          deployment: expect.objectContaining({
+            targets: expect.arrayContaining([
+              expect.objectContaining({ name: "staging", autoDeployTrigger: "each_epic" }),
+              expect.objectContaining({ name: "production", autoDeployTrigger: "none" }),
+            ]),
+          }),
+        })
+      )
     );
   });
 
@@ -348,7 +356,7 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByTestId("auto-deploy-trigger-production")).toHaveValue("nightly");
   });
 
-  it("saves auto-deploy triggers for Custom mode targets", async () => {
+  it("saves auto-deploy triggers for Custom mode targets on blur", async () => {
     mockGetSettings.mockResolvedValueOnce({
       ...mockSettings,
       deployment: {
@@ -367,28 +375,28 @@ describe("ProjectSettingsModal", () => {
 
     const stagingSelect = screen.getByTestId("auto-deploy-trigger-staging");
     await userEvent.selectOptions(stagingSelect, "eval_resolution");
+    fireEvent.blur(stagingSelect);
 
-    const saveButton = screen.getByRole("button", { name: "Save Changes" });
-    await userEvent.click(saveButton);
-
-    expect(mockUpdateSettings).toHaveBeenCalledWith(
-      "proj-1",
-      expect.objectContaining({
-        deployment: expect.objectContaining({
-          targets: expect.arrayContaining([
-            expect.objectContaining({
-              name: "staging",
-              command: "./deploy-staging.sh",
-              autoDeployTrigger: "eval_resolution",
-            }),
-            expect.objectContaining({
-              name: "production",
-              command: "./deploy-prod.sh",
-              autoDeployTrigger: "none",
-            }),
-          ]),
-        }),
-      })
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          deployment: expect.objectContaining({
+            targets: expect.arrayContaining([
+              expect.objectContaining({
+                name: "staging",
+                command: "./deploy-staging.sh",
+                autoDeployTrigger: "eval_resolution",
+              }),
+              expect.objectContaining({
+                name: "production",
+                command: "./deploy-prod.sh",
+                autoDeployTrigger: "none",
+              }),
+            ]),
+          }),
+        })
+      )
     );
   });
 
@@ -470,7 +478,7 @@ describe("ProjectSettingsModal", () => {
     expect(screen.queryByText("API Keys")).not.toBeInTheDocument();
   });
 
-  it("saves simpleComplexityAgent and complexComplexityAgent when Save is clicked", async () => {
+  it("saves simpleComplexityAgent and complexComplexityAgent on blur", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
     await screen.findByText("Settings");
 
@@ -478,18 +486,21 @@ describe("ProjectSettingsModal", () => {
     await userEvent.click(agentConfigTab);
 
     await screen.findByText("Task Complexity");
-    const saveButton = screen.getByRole("button", { name: "Save Changes" });
-    await userEvent.click(saveButton);
+    const section = screen.getByTestId("task-complexity-section");
+    const firstSelect = within(section).getAllByRole("combobox")[0];
+    fireEvent.blur(firstSelect);
 
-    expect(mockUpdateSettings).toHaveBeenCalledWith(
-      "proj-1",
-      expect.objectContaining({
-        simpleComplexityAgent: expect.objectContaining({ type: "claude", model: "claude-3-5-sonnet" }),
-        complexComplexityAgent: expect.objectContaining({
-          type: "claude",
-          model: "claude-3-5-sonnet",
-        }),
-      })
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          simpleComplexityAgent: expect.objectContaining({ type: "claude", model: "claude-3-5-sonnet" }),
+          complexComplexityAgent: expect.objectContaining({
+            type: "claude",
+            model: "claude-3-5-sonnet",
+          }),
+        })
+      )
     );
   });
 
@@ -507,7 +518,7 @@ describe("ProjectSettingsModal", () => {
     expect(screen.queryByTestId("unknown-scope-strategy-select")).not.toBeInTheDocument();
   });
 
-  it("saves maxConcurrentCoders and unknownScopeStrategy when changed", async () => {
+  it("saves maxConcurrentCoders and unknownScopeStrategy on blur", async () => {
     mockGetSettings.mockResolvedValue({
       ...mockSettings,
       maxConcurrentCoders: 3,
@@ -521,16 +532,17 @@ describe("ProjectSettingsModal", () => {
     await userEvent.click(agentConfigTab);
 
     await screen.findByText("Parallelism");
+    const slider = screen.getByTestId("max-concurrent-coders-slider");
+    fireEvent.blur(slider);
 
-    const saveButton = screen.getByRole("button", { name: "Save Changes" });
-    await userEvent.click(saveButton);
-
-    expect(mockUpdateSettings).toHaveBeenCalledWith(
-      "proj-1",
-      expect.objectContaining({
-        maxConcurrentCoders: 3,
-        unknownScopeStrategy: "conservative",
-      })
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          maxConcurrentCoders: 3,
+          unknownScopeStrategy: "conservative",
+        })
+      )
     );
   });
 
@@ -578,7 +590,7 @@ describe("ProjectSettingsModal", () => {
     expect(screen.queryByTestId("max-concurrent-coders-slider")).not.toBeInTheDocument();
   });
 
-  it("saves gitWorkingMode when changed", async () => {
+  it("saves gitWorkingMode when changed on blur", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
     await screen.findByText("Settings");
 
@@ -587,16 +599,16 @@ describe("ProjectSettingsModal", () => {
 
     const select = screen.getByTestId("git-working-mode-select");
     await userEvent.selectOptions(select, "branches");
+    fireEvent.blur(select);
 
-    const saveButton = screen.getByRole("button", { name: "Save Changes" });
-    await userEvent.click(saveButton);
-
-    expect(mockUpdateSettings).toHaveBeenCalledWith(
-      "proj-1",
-      expect.objectContaining({
-        gitWorkingMode: "branches",
-        maxConcurrentCoders: 1,
-      })
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          gitWorkingMode: "branches",
+          maxConcurrentCoders: 1,
+        })
+      )
     );
   });
 });

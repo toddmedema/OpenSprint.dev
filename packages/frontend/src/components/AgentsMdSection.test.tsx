@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { AgentsMdSection } from "./AgentsMdSection";
@@ -117,11 +117,10 @@ describe("AgentsMdSection", () => {
     const textarea = screen.getByTestId("agents-md-textarea");
     expect(textarea).toBeInTheDocument();
     expect(textarea).toHaveValue("# Agent Instructions\n\nUse bd for tasks.");
-    expect(screen.getByTestId("agents-md-save")).toBeInTheDocument();
-    expect(screen.getByTestId("agents-md-cancel")).toBeInTheDocument();
+    expect(screen.getByTestId("agents-md-prettify")).toBeInTheDocument();
   });
 
-  it("calls PUT and returns to view mode on Save", async () => {
+  it("calls PUT and returns to view mode on blur", async () => {
     const user = userEvent.setup();
     renderSection({ testMode: true });
 
@@ -131,10 +130,11 @@ describe("AgentsMdSection", () => {
     const textarea = screen.getByTestId("agents-md-textarea");
     await user.clear(textarea);
     await user.type(textarea, "# Updated\n\nNew content.");
+    fireEvent.blur(textarea);
 
-    await user.click(screen.getByTestId("agents-md-save"));
-
-    expect(mockUpdateAgentsInstructions).toHaveBeenCalledWith(projectId, "# Updated\n\nNew content.");
+    await waitFor(() =>
+      expect(mockUpdateAgentsInstructions).toHaveBeenCalledWith(projectId, "# Updated\n\nNew content.")
+    );
 
     expect(screen.getByTestId("agents-md-saved")).toHaveTextContent("Saved");
     await screen.findByTestId("agents-md-view");
@@ -142,7 +142,7 @@ describe("AgentsMdSection", () => {
     expect(screen.getByText("New content.")).toBeInTheDocument();
   });
 
-  it("discards changes and returns to view mode on Cancel", async () => {
+  it("saves changes on blur (no cancel - changes persist)", async () => {
     const user = userEvent.setup();
     renderSection({ testMode: true });
 
@@ -152,22 +152,24 @@ describe("AgentsMdSection", () => {
     const textarea = screen.getByTestId("agents-md-textarea");
     await user.clear(textarea);
     await user.type(textarea, "Discarded content");
+    fireEvent.blur(textarea);
 
-    await user.click(screen.getByTestId("agents-md-cancel"));
-
-    expect(mockUpdateAgentsInstructions).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mockUpdateAgentsInstructions).toHaveBeenCalledWith(projectId, "Discarded content")
+    );
     await screen.findByTestId("agents-md-view");
-    expect(screen.getByText("Use bd for tasks.")).toBeInTheDocument();
+    expect(screen.getByText("Discarded content")).toBeInTheDocument();
   });
 
-  it("shows error feedback when save fails", async () => {
+  it("shows error feedback when save fails on blur", async () => {
     mockUpdateAgentsInstructions.mockRejectedValue(new Error("Save failed"));
     const user = userEvent.setup();
     renderSection({ testMode: true });
 
     await screen.findByTestId("agents-md-view");
     await user.click(screen.getByTestId("agents-md-edit"));
-    await user.click(screen.getByTestId("agents-md-save"));
+    const textarea = screen.getByTestId("agents-md-textarea");
+    fireEvent.blur(textarea);
 
     expect(await screen.findByText(/Save failed/)).toBeInTheDocument();
   });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import * as prettier from "prettier";
@@ -77,11 +77,15 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
     }
   }, [editValue]);
 
-  const handleSave = async () => {
+  const editValueRef = useRef(editValue);
+  editValueRef.current = editValue;
+
+  const handleSave = useCallback(async () => {
+    const value = editValueRef.current;
     setSaving(true);
     setSaveFeedback(null);
     try {
-      const toSave = await prettifyMarkdown(editValue);
+      const toSave = await prettifyMarkdown(value);
       await api.projects.updateAgentsInstructions(projectId, toSave);
       setContent(toSave);
       setEditValue(toSave);
@@ -94,13 +98,7 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleCancel = () => {
-    setEditValue(content ?? "");
-    setEditing(false);
-    setError(null);
-  };
+  }, [projectId]);
 
   if (loading) {
     return (
@@ -147,6 +145,7 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
                 className="input w-full font-mono text-sm min-h-[200px] resize-y"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
+                onBlur={() => void handleSave()}
                 placeholder="# Agent Instructions\n\nAdd instructions for your agents..."
                 data-testid="agents-md-textarea"
               />
@@ -160,6 +159,7 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
                   preview="edit"
                   textareaProps={{
                     placeholder: "# Agent Instructions\n\nAdd instructions for your agents...",
+                    onBlur: () => void handleSave(),
                   }}
                   extraCommands={[
                     {
@@ -186,30 +186,12 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="btn-primary disabled:opacity-50"
-              data-testid="agents-md-save"
-            >
-              {saving ? "Saving..." : "Save"}
-            </button>
-            <button
-              type="button"
               onClick={handlePrettify}
               disabled={saving}
               className="btn-secondary text-sm"
               data-testid="agents-md-prettify"
             >
               Prettify
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={saving}
-              className="btn-secondary text-sm"
-              data-testid="agents-md-cancel"
-            >
-              Cancel
             </button>
             {saveFeedback === "saved" && (
               <span className="text-sm text-theme-success-muted" data-testid="agents-md-saved">

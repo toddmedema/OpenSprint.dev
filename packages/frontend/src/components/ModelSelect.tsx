@@ -12,6 +12,8 @@ interface ModelSelectProps {
   projectId?: string;
   /** Increment to trigger a refetch of models (e.g. after saving an API key) */
   refreshTrigger?: number;
+  /** Called when the control loses focus */
+  onBlur?: () => void;
 }
 
 export function ModelSelect({
@@ -22,6 +24,7 @@ export function ModelSelect({
   className = "input",
   projectId,
   refreshTrigger,
+  onBlur,
 }: ModelSelectProps) {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,6 +66,7 @@ export function ModelSelect({
         className={className}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
+        onBlur={onBlur}
         placeholder="CLI command handles model"
         disabled={disabled}
         aria-label="Custom CLI command"
@@ -115,6 +119,7 @@ export function ModelSelect({
       className={className}
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value || null)}
+      onBlur={onBlur}
       disabled={disabled}
       aria-label="Model selection"
     >

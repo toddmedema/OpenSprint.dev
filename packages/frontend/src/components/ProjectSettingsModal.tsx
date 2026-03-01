@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { FolderBrowser } from "./FolderBrowser";
 import { CloseButton } from "./CloseButton";
 import { ModelSelect } from "./ModelSelect";
@@ -113,15 +113,23 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
   const aiAutonomyLevel = settings?.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL;
   const gitWorkingMode = settings?.gitWorkingMode ?? "worktree";
 
-  const handleSave = async () => {
+  const persistSettings = useCallback(async () => {
+    if (loading || !settings) return;
+    if (
+      simpleComplexityAgent.type === "custom" &&
+      !(simpleComplexityAgent.cliCommand ?? "").trim()
+    )
+      return;
+    if (
+      complexComplexityAgent.type === "custom" &&
+      !(complexComplexityAgent.cliCommand ?? "").trim()
+    )
+      return;
     setSaving(true);
     setError(null);
     try {
       await Promise.all([
-        api.projects.update(project.id, {
-          name,
-          repoPath,
-        }),
+        api.projects.update(project.id, { name, repoPath }),
         api.projects.updateSettings(project.id, {
           simpleComplexityAgent: {
             type: simpleComplexityAgent.type,
@@ -157,13 +165,55 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
         }),
       ]);
       onSaved?.();
-      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save settings");
     } finally {
       setSaving(false);
     }
-  };
+  }, [
+    project.id,
+    name,
+    repoPath,
+    settings,
+    simpleComplexityAgent,
+    complexComplexityAgent,
+    deployment,
+    aiAutonomyLevel,
+    gitWorkingMode,
+    loading,
+  ]);
+
+  const handleClose = useCallback(async () => {
+    if (mode === "project" && settings && !loading) {
+      await persistSettings();
+    }
+    onClose();
+  }, [mode, settings, loading, persistSettings, onClose]);
+
+  const saveOnBlurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleSaveOnBlur = useCallback(() => {
+    if (saveOnBlurRef.current) clearTimeout(saveOnBlurRef.current);
+    saveOnBlurRef.current = setTimeout(() => {
+      saveOnBlurRef.current = null;
+      void persistSettings();
+    }, 100);
+  }, [persistSettings]);
+
+  const switchTab = useCallback(
+    (tab: Tab) => {
+      if (mode === "project" && settings) void persistSettings();
+      setActiveTab(tab);
+    },
+    [mode, settings, persistSettings]
+  );
+
+  const switchMode = useCallback(
+    (newMode: SettingsMode) => {
+      if (mode === "project" && settings) void persistSettings();
+      setMode(newMode);
+    },
+    [mode, settings, persistSettings]
+  );
 
   const defaultAgent = { type: "cursor" as AgentType, model: null, cliCommand: null };
 
@@ -213,7 +263,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
   return (
     <div className={wrapperClass}>
       {!fullScreen && (
-        <div className="absolute inset-0 bg-theme-overlay backdrop-blur-sm" onClick={onClose} />
+        <div className="absolute inset-0 bg-theme-overlay backdrop-blur-sm" onClick={() => void handleClose()} />
       )}
 
       <div
@@ -226,7 +276,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
           data-testid="settings-modal-header"
         >
           <h2 className="text-lg font-semibold text-theme-text">Settings</h2>
-          <CloseButton onClick={onClose} ariaLabel="Close settings modal" />
+          <CloseButton onClick={() => void handleClose()} ariaLabel="Close settings modal" />
         </div>
 
         {/* Mode switcher: Project (per-project) vs Global */}
@@ -236,7 +286,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
         >
           <button
             type="button"
-            onClick={() => setMode("project")}
+            onClick={() => switchMode("project")}
             className={`px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
               mode === "project"
                 ? "bg-brand-600 text-white"
@@ -247,7 +297,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
           </button>
           <button
             type="button"
-            onClick={() => setMode("display")}
+            onClick={() => switchMode("display")}
             className={`px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
               mode === "display"
                 ? "bg-brand-600 text-white"
@@ -268,7 +318,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
             {TABS.map((tab) => (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => switchTab(tab.key)}
                 className={`px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
                   activeTab === tab.key
                     ? "bg-brand-600 text-white"
@@ -305,6 +355,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                       className="input"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
+                      onBlur={scheduleSaveOnBlur}
                       placeholder="My Awesome App"
                     />
                   </div>
@@ -318,6 +369,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                         className="input font-mono text-sm flex-1"
                         value={repoPath}
                         onChange={(e) => setRepoPath(e.target.value)}
+                        onBlur={scheduleSaveOnBlur}
                         placeholder="/Users/you/projects/my-app"
                       />
                       <button
@@ -414,6 +466,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                                 type: e.target.value as AgentType,
                               })
                             }
+                            onBlur={scheduleSaveOnBlur}
                           >
                             <option value="claude">Claude (API)</option>
                             <option value="claude-cli">Claude (CLI)</option>
@@ -430,6 +483,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                               provider={simpleComplexityAgent.type}
                               value={simpleComplexityAgent.model}
                               onChange={(id) => updateSimpleComplexityAgent({ model: id })}
+                              onBlur={scheduleSaveOnBlur}
                               projectId={project.id}
                               refreshTrigger={modelRefreshTrigger}
                             />
@@ -447,6 +501,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                               onChange={(e) =>
                                 updateSimpleComplexityAgent({ cliCommand: e.target.value || null })
                               }
+                              onBlur={scheduleSaveOnBlur}
                             />
                           </div>
                         )}
@@ -466,6 +521,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                             onChange={(e) =>
                               updateComplexComplexityAgent({ type: e.target.value as AgentType })
                             }
+                            onBlur={scheduleSaveOnBlur}
                           >
                             <option value="claude">Claude (API)</option>
                             <option value="claude-cli">Claude (CLI)</option>
@@ -482,6 +538,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                               provider={complexComplexityAgent.type}
                               value={complexComplexityAgent.model}
                               onChange={(id) => updateComplexComplexityAgent({ model: id })}
+                              onBlur={scheduleSaveOnBlur}
                               projectId={project.id}
                               refreshTrigger={modelRefreshTrigger}
                             />
@@ -499,6 +556,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                               onChange={(e) =>
                                 updateComplexComplexityAgent({ cliCommand: e.target.value || null })
                               }
+                              onBlur={scheduleSaveOnBlur}
                             />
                           </div>
                         )}
@@ -522,6 +580,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                           s ? { ...s, testCommand: e.target.value.trim() || null } : null
                         )
                       }
+                      onBlur={scheduleSaveOnBlur}
                     />
                   </div>
                   <hr />
@@ -544,6 +603,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                           s ? { ...s, reviewMode: e.target.value as ReviewMode } : null
                         )
                       }
+                      onBlur={scheduleSaveOnBlur}
                     >
                       <option value="never">Never</option>
                       <option value="always">Always</option>
@@ -568,6 +628,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                           s ? { ...s, gitWorkingMode: e.target.value as GitWorkingMode } : null
                         )
                       }
+                      onBlur={scheduleSaveOnBlur}
                       data-testid="git-working-mode-select"
                     >
                       <option value="worktree">Worktree</option>
@@ -603,6 +664,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                                 s ? { ...s, maxConcurrentCoders: Number(e.target.value) } : null
                               )
                             }
+                            onBlur={scheduleSaveOnBlur}
                             className="w-full accent-brand-600"
                             data-testid="max-concurrent-coders-slider"
                           />
@@ -634,6 +696,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                                     : null
                                 )
                               }
+                              onBlur={scheduleSaveOnBlur}
                               data-testid="unknown-scope-strategy-select"
                             >
                               <option value="optimistic">
@@ -680,6 +743,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                             });
                             updateDeployment({ targets: updated });
                           }}
+                          onBlur={scheduleSaveOnBlur}
                           className="rounded border border-theme-border bg-theme-surface px-2 py-1 text-sm"
                           data-testid={`auto-deploy-trigger-${target.name}`}
                         >
@@ -703,6 +767,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                             autoResolveFeedbackOnTaskCompletion: e.target.checked,
                           })
                         }
+                        onBlur={scheduleSaveOnBlur}
                         className="rounded"
                         data-testid="auto-resolve-feedback-toggle"
                       />
@@ -778,6 +843,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                                   next[i] = { ...t, name: e.target.value };
                                   updateDeployment({ targets: next });
                                 }}
+                                onBlur={scheduleSaveOnBlur}
                               />
                               <label className="flex items-center gap-1 text-xs">
                                 <input
@@ -815,6 +881,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                                 next[i] = { ...t, command: e.target.value || undefined };
                                 updateDeployment({ targets: next });
                               }}
+                              onBlur={scheduleSaveOnBlur}
                             />
                             <input
                               type="url"
@@ -826,6 +893,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                                 next[i] = { ...t, webhookUrl: e.target.value || undefined };
                                 updateDeployment({ targets: next });
                               }}
+                              onBlur={scheduleSaveOnBlur}
                             />
                             <input
                               type="text"
@@ -837,6 +905,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                                 next[i] = { ...t, rollbackCommand: e.target.value || undefined };
                                 updateDeployment({ targets: next });
                               }}
+                              onBlur={scheduleSaveOnBlur}
                             />
                           </div>
                         ))}
@@ -944,6 +1013,7 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
                           const opt = AI_AUTONOMY_LEVELS[i];
                           if (opt) updateAiAutonomyLevel(opt.value);
                         }}
+                        onBlur={scheduleSaveOnBlur}
                         className="w-full accent-brand-600"
                         aria-label="AI Autonomy level"
                         data-testid="ai-autonomy-slider"
@@ -976,34 +1046,6 @@ export function ProjectSettingsModal({ project, onClose, onSaved, fullScreen }: 
           </div>
         )}
 
-        {/* Footer */}
-        <div className="flex-shrink-0 flex justify-end gap-2 px-5 py-4 border-t border-theme-border bg-theme-bg rounded-b-xl">
-          {mode === "display" ? (
-            <button onClick={onClose} className="btn-primary">
-              Close
-            </button>
-          ) : (
-            <>
-              <button onClick={onClose} className="btn-secondary">
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={
-                  saving ||
-                  loading ||
-                  (simpleComplexityAgent.type === "custom" &&
-                    !(simpleComplexityAgent.cliCommand ?? "").trim()) ||
-                  (complexComplexityAgent.type === "custom" &&
-                    !(complexComplexityAgent.cliCommand ?? "").trim())
-                }
-                className="btn-primary disabled:opacity-50"
-              >
-                {saving ? "Saving..." : "Save Changes"}
-              </button>
-            </>
-          )}
-        </div>
       </div>
 
       {showFolderBrowser && (

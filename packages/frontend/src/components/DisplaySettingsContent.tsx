@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useDisplayPreferences } from "../contexts/DisplayPreferencesContext";
 import type { RunningAgentsDisplayMode } from "../lib/displayPrefs";
@@ -77,6 +77,8 @@ export function DisplaySettingsContent() {
   const [keyError, setKeyError] = useState<string | null>(null);
 
   const [databaseUrl, setDatabaseUrl] = useState<string>("");
+  const databaseUrlRef = useRef(databaseUrl);
+  databaseUrlRef.current = databaseUrl;
   const [databaseUrlLoading, setDatabaseUrlLoading] = useState(true);
   const [databaseUrlSaving, setDatabaseUrlSaving] = useState(false);
   const [databaseUrlError, setDatabaseUrlError] = useState<string | null>(null);
@@ -260,6 +262,30 @@ export function DisplaySettingsContent() {
                   setDatabaseUrl(e.target.value);
                   setDatabaseUrlError(null);
                 }}
+                onBlur={async () => {
+                  const trimmed = databaseUrlRef.current.trim();
+                  if (!trimmed) return;
+                  if (trimmed.includes("***")) {
+                    setDatabaseUrlError("Enter the full connection URL to save changes");
+                    return;
+                  }
+                  setDatabaseUrlError(null);
+                  setDatabaseUrlSaving(true);
+                  try {
+                    const res = await api.globalSettings.put({ databaseUrl: trimmed });
+                    setDatabaseUrl(res.databaseUrl);
+                  } catch (err) {
+                    setDatabaseUrlError(
+                      isConnectionError(err)
+                        ? "Unable to connect. Please check your network and try again."
+                        : err instanceof Error
+                          ? err.message
+                          : "Failed to save"
+                    );
+                  } finally {
+                    setDatabaseUrlSaving(false);
+                  }
+                }}
                 disabled={databaseUrlLoading}
                 autoComplete="off"
                 data-testid="database-url-input"
@@ -278,41 +304,6 @@ export function DisplaySettingsContent() {
               </button>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={async () => {
-              const trimmed = databaseUrl.trim();
-              if (!trimmed) {
-                setDatabaseUrlError("Database URL cannot be empty");
-                return;
-              }
-              if (trimmed.includes("***")) {
-                setDatabaseUrlError("Enter the full connection URL to save changes");
-                return;
-              }
-              setDatabaseUrlError(null);
-              setDatabaseUrlSaving(true);
-              try {
-                const res = await api.globalSettings.put({ databaseUrl: trimmed });
-                setDatabaseUrl(res.databaseUrl);
-              } catch (err) {
-                setDatabaseUrlError(
-                  isConnectionError(err)
-                    ? "Unable to connect. Please check your network and try again."
-                    : err instanceof Error
-                      ? err.message
-                      : "Failed to save"
-                );
-              } finally {
-                setDatabaseUrlSaving(false);
-              }
-            }}
-            disabled={databaseUrlLoading || databaseUrlSaving}
-            className="btn-primary text-sm disabled:opacity-50"
-            data-testid="database-url-save"
-          >
-            {databaseUrlSaving ? "Saving…" : "Save"}
-          </button>
         </div>
         {databaseUrlError && (
           <p className="text-sm text-theme-error-text mt-2" role="alert">
