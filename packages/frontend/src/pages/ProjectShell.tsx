@@ -12,6 +12,7 @@ import { resetDeliver } from "../store/slices/deliverSlice";
 import {
   setTasks,
   setExecuteStatusPayload,
+  setActiveAgentsPayload,
 } from "../store/slices/executeSlice";
 import { setPlansAndGraph, setPlanStatusPayload } from "../store/slices/planSlice";
 import { setFeedback } from "../store/slices/evalSlice";
@@ -34,12 +35,15 @@ import {
   usePrdHistory,
   useSketchChat,
   usePlanStatus,
+  useActiveAgents,
 } from "../api/hooks";
 import { queryKeys } from "../api/queryKeys";
 import { Layout } from "../components/layout/Layout";
 import { getProjectPhasePath } from "../lib/phaseRouting";
 import { VALID_PHASE_SLUGS } from "../lib/phaseRouting";
 import type { ProjectPhase } from "@opensprint/shared";
+import { ACTIVE_AGENTS_POLL_INTERVAL_MS } from "../lib/constants";
+import { fetchProjectNotifications } from "../store/slices/openQuestionsSlice";
 
 /** Derives current view from pathname: "help" | "settings" | phase slug. */
 function getViewFromPathname(pathname: string): "help" | "settings" | string {
@@ -106,6 +110,11 @@ export function ProjectShell() {
   const { data: planStatusData } = usePlanStatus(projectId, {
     enabled: isSketch || isPlan,
   });
+  const activeAgentsQuery = useActiveAgents(projectId, {
+    refetchInterval: ACTIVE_AGENTS_POLL_INTERVAL_MS,
+  });
+  const wsConnected = useAppSelector((s) => s.websocket.connected);
+  const prevWsConnectedRef = useRef<boolean | null>(null);
 
   // Project lifecycle: reset slices before query-to-Redux syncs run, then connect WS.
   useEffect(() => {
@@ -227,6 +236,43 @@ export function ProjectShell() {
     lastSyncedRef.current["planStatus"] = { projectId, data: planStatusData };
     dispatch(setPlanStatusPayload(planStatusData));
   }, [projectId, planStatusData, dispatch]);
+  useEffect(() => {
+    if (!projectId) return;
+    dispatch(fetchProjectNotifications(projectId));
+  }, [projectId, dispatch]);
+  useEffect(() => {
+    if (!projectId || !activeAgentsQuery.data) return;
+    const previous = lastSyncedRef.current["activeAgents"];
+    if (previous?.projectId === projectId && previous.data === activeAgentsQuery.data) return;
+    lastSyncedRef.current["activeAgents"] = { projectId, data: activeAgentsQuery.data };
+    dispatch(setActiveAgentsPayload(activeAgentsQuery.data));
+  }, [projectId, activeAgentsQuery.data, dispatch]);
+  useEffect(() => {
+    if (
+      !projectId ||
+      activeAgentsQuery.data ||
+      activeAgentsQuery.isFetching ||
+      !activeAgentsQuery.isError
+    ) {
+      return;
+    }
+    dispatch(setActiveAgentsPayload({ agents: [], taskIdToStartedAt: {} }));
+  }, [
+    projectId,
+    activeAgentsQuery.data,
+    activeAgentsQuery.isError,
+    activeAgentsQuery.isFetching,
+    dispatch,
+  ]);
+  useEffect(() => {
+    const prev = prevWsConnectedRef.current;
+    prevWsConnectedRef.current = wsConnected;
+    if (prev == null || !projectId) return;
+    if (!prev && wsConnected) {
+      void activeAgentsQuery.refetch();
+      dispatch(fetchProjectNotifications(projectId));
+    }
+  }, [projectId, wsConnected, activeAgentsQuery, dispatch]);
 
   const handlePhaseChange = (phase: ProjectPhase) => {
     if (projectId) navigate(getProjectPhasePath(projectId, phase));
@@ -288,15 +334,25 @@ export function ProjectShell() {
     );
   }
 
+  if (!project) {
+    return null;
+  }
+
+  const resolvedProject = project;
+
   return (
     <>
       <Layout
-        project={project}
+        project={resolvedProject}
         currentPhase={currentPhase}
         onPhaseChange={handlePhaseChange}
         onProjectSaved={handleProjectSaved}
       >
-        <Outlet context={{ projectId, project, currentPhase } satisfies ProjectShellContext} />
+        <Outlet
+          context={
+            { projectId, project: resolvedProject, currentPhase } satisfies ProjectShellContext
+          }
+        />
       </Layout>
       <DeliverToast toast={deliverToast} onDismiss={handleDismissDeliverToast} />
       {!connectionError && (

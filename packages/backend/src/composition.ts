@@ -5,6 +5,7 @@ import { SessionManager } from "./services/session-manager.js";
 import { ContextAssembler } from "./services/context-assembler.js";
 import { BranchManager } from "./services/branch-manager.js";
 import { TaskService } from "./services/task.service.js";
+import { orchestratorService } from "./services/orchestrator.service.js";
 
 export interface AppServices {
   taskService: TaskService;
@@ -28,7 +29,8 @@ export function createAppServices(): AppServices {
     feedbackService,
     sessionManager,
     contextAssembler,
-    branchManager
+    branchManager,
+    orchestratorService
   );
 
   return {

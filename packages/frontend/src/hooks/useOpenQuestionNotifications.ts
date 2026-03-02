@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
 import type { Notification } from "@opensprint/shared";
-import { api } from "../api/client";
-
-const POLL_INTERVAL_MS = 5000;
+import { useAppDispatch, useAppSelector } from "../store";
+import {
+  fetchProjectNotifications,
+  selectProjectNotifications,
+} from "../store/slices/openQuestionsSlice";
 
 /**
  * Fetches open-question notifications for a project.
@@ -12,19 +14,15 @@ export function useOpenQuestionNotifications(projectId: string | null): {
   notifications: Notification[];
   refetch: () => void;
 } {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const dispatch = useAppDispatch();
+  const notifications = useAppSelector((state) =>
+    selectProjectNotifications(state, projectId)
+  );
 
   const fetchNotifications = useCallback(() => {
     if (!projectId) return;
-    api.notifications.listByProject(projectId).then(setNotifications).catch(() => setNotifications([]));
-  }, [projectId]);
-
-  useEffect(() => {
-    fetchNotifications();
-    if (!projectId) return;
-    const interval = setInterval(fetchNotifications, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [fetchNotifications, projectId]);
+    void dispatch(fetchProjectNotifications(projectId));
+  }, [dispatch, projectId]);
 
   return { notifications, refetch: fetchNotifications };
 }

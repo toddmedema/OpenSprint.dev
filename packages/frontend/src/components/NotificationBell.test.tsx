@@ -41,6 +41,16 @@ function renderNotificationBell(
       plan: planReducer,
       openQuestions: openQuestionsReducer,
     },
+    preloadedState: {
+      openQuestions: {
+        byProject: { "proj-1": notifications },
+        global: [],
+        async: {
+          project: {},
+          global: { loading: false },
+        },
+      },
+    },
   });
   return render(
     <Provider store={store}>
@@ -52,14 +62,9 @@ function renderNotificationBell(
 }
 
 describe("NotificationBell", () => {
-  it("renders nothing when no notifications", async () => {
+  it("renders nothing when no notifications", () => {
     const { container } = renderNotificationBell([]);
-    await waitFor(() => {
-      expect(mockListByProject).toHaveBeenCalledWith("proj-1");
-    });
-    await waitFor(() => {
-      expect(container.firstChild).toBeNull();
-    });
+    expect(container.firstChild).toBeNull();
   });
 
   it("shows bell with red dot when notifications exist", async () => {

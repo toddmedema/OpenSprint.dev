@@ -51,6 +51,7 @@ describe("FailureHandlerService", () => {
   const makeSlot = (worktreePath: string | null = "/tmp/worktree"): FailureSlot => ({
     taskId,
     attempt: 1,
+    phase: "coding",
     infraRetries: 0,
     worktreePath,
     branchName,
@@ -308,6 +309,38 @@ describe("FailureHandlerService", () => {
         projectId,
         taskId,
         expect.objectContaining({ status: "blocked", block_reason: "Coding Failure" })
+      );
+    });
+
+    it("persists last_execution_summary when requeuing after a coding failure", async () => {
+      const mockUpdate = vi.fn().mockResolvedValue(undefined);
+      mockHost.taskStore = {
+        ...mockHost.taskStore,
+        update: mockUpdate,
+      };
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        "Tests failed: 2 failed, 1 passed",
+        null,
+        "test_failure"
+      );
+
+      expect(mockUpdate).toHaveBeenCalledWith(
+        projectId,
+        taskId,
+        expect.objectContaining({
+          extra: expect.objectContaining({
+            last_execution_summary: expect.objectContaining({
+              outcome: "requeued",
+              phase: "coding",
+              failureType: "test_failure",
+            }),
+          }),
+        })
       );
     });
   });

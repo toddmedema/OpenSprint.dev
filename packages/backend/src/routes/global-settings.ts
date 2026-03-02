@@ -159,7 +159,7 @@ globalSettingsRouter.put("/", async (req: Request, res, next) => {
       } as ApiResponse<GlobalSettingsResponse>);
     }
 
-    const updated = await updateGlobalSettings(updates);
+    const updated = await updateGlobalSettings(updates as Partial<GlobalSettings>);
     res.json({
       data: buildResponse(updated),
     } as ApiResponse<GlobalSettingsResponse>);

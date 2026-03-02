@@ -16,6 +16,7 @@ import type {
 import { mapStatusToKanban } from "@opensprint/shared";
 import type { TaskEventPayload } from "@opensprint/shared";
 import { api } from "../../api/client";
+import { normalizeTaskListResponse } from "../../api/taskList";
 import { filterAgentOutput } from "../../utils/agentOutputFilter";
 import { DEDUP_SKIP } from "../dedup";
 import { createInitialAsyncStates, createAsyncHandlers, type AsyncStates } from "../asyncHelpers";
@@ -71,11 +72,11 @@ export interface ExecuteState {
   queueDepth: number;
   selectedTaskId: string | null;
   agentOutput: Record<string, string[]>;
-  completionState: {
+  completionStateByTaskId: Record<string, {
     status: string;
     testResults: { passed: number; failed: number; skipped: number; total: number } | null;
     reason?: string | null;
-  } | null;
+  }>;
   archivedSessions: AgentSession[];
   async: AsyncStates<ExecuteAsyncKey>;
   /** Last error from any async operation (for backward compat / display) */
@@ -97,7 +98,7 @@ export const initialExecuteState: ExecuteState = {
   queueDepth: 0,
   selectedTaskId: null,
   agentOutput: {},
-  completionState: null,
+  completionStateByTaskId: {},
   archivedSessions: [],
   async: createInitialAsyncStates(EXECUTE_ASYNC_KEYS),
   error: null,
@@ -113,7 +114,7 @@ export const fetchTasks = createAsyncThunk<Task[], FetchTasksArg>(
     if (inFlight > 1) {
       return rejectWithValue(DEDUP_SKIP);
     }
-    return api.tasks.list(projectId);
+    return normalizeTaskListResponse(await api.tasks.list(projectId));
   }
 );
 
@@ -188,9 +189,7 @@ export const markTaskDone = createAsyncThunk(
       api.plans.list(projectId),
     ]);
     dispatch(setPlansAndGraph({ plans: plansGraph.plans, dependencyGraph: plansGraph }));
-    const tasks = Array.isArray(tasksData)
-      ? tasksData
-      : (tasksData as { items: Task[] })?.items ?? [];
+    const tasks = normalizeTaskListResponse(tasksData);
     return { tasks };
   }
 );
@@ -256,9 +255,7 @@ export const unblockTask = createAsyncThunk(
       api.plans.list(projectId),
     ]);
     dispatch(setPlansAndGraph({ plans: plansGraph.plans, dependencyGraph: plansGraph }));
-    const tasks = Array.isArray(tasksData)
-      ? tasksData
-      : (tasksData as { items: Task[] })?.items ?? [];
+    const tasks = normalizeTaskListResponse(tasksData);
     return { tasks, taskId };
   }
 );
@@ -329,7 +326,6 @@ const executeSlice = createSlice({
       const prev = state.selectedTaskId;
       const changed = prev !== next;
       state.selectedTaskId = next;
-      state.completionState = null;
       state.archivedSessions = [];
       if (changed) state.async.taskDetail.error = null;
       // Clear agentOutput for previous task when closing sidebar to free memory
@@ -349,7 +345,7 @@ const executeSlice = createSlice({
         }
       }
       if (taskId === state.selectedTaskId) {
-        state.completionState = null;
+        delete state.completionStateByTaskId[taskId];
       }
     },
     /** Replace agent output for a task (e.g. backfill on subscribe). */
@@ -374,13 +370,11 @@ const executeSlice = createSlice({
         reason?: string | null;
       }>
     ) {
-      if (action.payload.taskId === state.selectedTaskId) {
-        state.completionState = {
-          status: action.payload.status,
-          testResults: action.payload.testResults,
-          reason: action.payload.reason ?? null,
-        };
-      }
+      state.completionStateByTaskId[action.payload.taskId] = {
+        status: action.payload.status,
+        testResults: action.payload.testResults,
+        reason: action.payload.reason ?? null,
+      };
     },
     taskUpdated(
       state,
@@ -739,6 +733,12 @@ export const {
 /** State shape for selectors (execute may be missing in tests). */
 export type ExecuteRootState = { execute?: ExecuteState };
 
+const EMPTY_AGENT_OUTPUT: string[] = [];
+const EMPTY_FEEDBACK_TASK_SUMMARIES: Array<{
+  id: string;
+  kanbanColumn: Task["kanbanColumn"];
+}> = [];
+
 /** Ordered tasks derived from tasksById + taskIdsOrder (no duplicates). Applies in_review from activeTasks so list API can skip getStatus. */
 export const selectTasks = createSelector(
   [
@@ -772,6 +772,33 @@ export const selectTaskSummaries = createSelector(
       ])
     )
 );
+
+export const selectSelectedTaskOutput = createSelector(
+  [
+    (state: ExecuteRootState) => state.execute?.agentOutput ?? {},
+    (_state: ExecuteRootState, taskId: string | null | undefined) => taskId ?? null,
+  ],
+  (agentOutput, taskId): string[] => {
+    if (!taskId) return EMPTY_AGENT_OUTPUT;
+    return agentOutput[taskId] ?? EMPTY_AGENT_OUTPUT;
+  }
+);
+
+export const selectCompletionState = createSelector(
+  [
+    (state: ExecuteRootState) => state.execute?.completionStateByTaskId ?? {},
+    (_state: ExecuteRootState, taskId: string | null | undefined) => taskId ?? null,
+  ],
+  (completionStateByTaskId, taskId) => {
+    if (!taskId) return null;
+    return completionStateByTaskId[taskId] ?? null;
+  }
+);
+
+export const selectTaskSummariesForFeedback = createSelector([selectTasks], (tasks) => {
+  if (tasks.length === 0) return EMPTY_FEEDBACK_TASK_SUMMARIES;
+  return tasks.map((task) => ({ id: task.id, kanbanColumn: task.kanbanColumn }));
+});
 
 /** Task by id. Use for granular subscription so only components using this task re-render on update. Applies in_review from activeTasks. */
 export function selectTaskById(state: ExecuteRootState, taskId: string): Task | undefined {

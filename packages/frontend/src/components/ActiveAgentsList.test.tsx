@@ -4,9 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { configureStore } from "@reduxjs/toolkit";
+import { useEffect } from "react";
 import { DisplayPreferencesProvider } from "../contexts/DisplayPreferencesContext";
 import { ActiveAgentsList } from "./ActiveAgentsList";
-import executeReducer from "../store/slices/executeSlice";
+import executeReducer, { setActiveAgentsPayload } from "../store/slices/executeSlice";
 import planReducer from "../store/slices/planSlice";
 
 const mockAgentsActive = vi.fn().mockResolvedValue([]);
@@ -28,10 +29,43 @@ function createStore() {
 }
 
 function renderActiveAgentsList() {
+  const store = createStore();
+
+  function ActiveAgentsFetcher() {
+    useEffect(() => {
+      let cancelled = false;
+      void mockAgentsActive("proj-1")
+        .then((agents) => {
+          if (cancelled) return;
+          const taskIdToStartedAt = Object.fromEntries(
+            (agents as Array<{ id: string; phase?: string; startedAt?: string }>)
+              .filter((agent) => (agent.phase === "coding" || agent.phase === "review") && agent.startedAt)
+              .map((agent) => [agent.id, agent.startedAt as string])
+          );
+          store.dispatch(
+            setActiveAgentsPayload({
+              agents: agents as Parameters<typeof setActiveAgentsPayload>[0]["agents"],
+              taskIdToStartedAt,
+            })
+          );
+        })
+        .catch(() => {
+          if (cancelled) return;
+          store.dispatch(setActiveAgentsPayload({ agents: [], taskIdToStartedAt: {} }));
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []);
+
+    return null;
+  }
+
   return render(
-    <Provider store={createStore()}>
+    <Provider store={store}>
       <DisplayPreferencesProvider>
         <MemoryRouter>
+          <ActiveAgentsFetcher />
           <ActiveAgentsList projectId="proj-1" />
         </MemoryRouter>
       </DisplayPreferencesProvider>
@@ -164,7 +198,7 @@ describe("ActiveAgentsList", () => {
     vi.useRealTimers();
   });
 
-  it("fetches agents when dropdown opens so elapsed time is correct from first frame", async () => {
+  it("shows elapsed time from the project-scoped active-agent fetch", async () => {
     const startedAt = "2026-02-16T11:57:00.000Z"; // 3 min ago from 12:00
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-16T12:00:00.000Z"));
@@ -183,7 +217,6 @@ describe("ActiveAgentsList", () => {
       vi.advanceTimersByTime(100);
     });
 
-    // fetchAgents is called on open — ensures fresh startedAt from list response
     expect(mockAgentsActive).toHaveBeenCalledWith("proj-1");
     // Elapsed time from startedAt (3m) — correct from first frame
     expect(screen.getByText("3m 0s")).toBeInTheDocument();
@@ -220,15 +253,6 @@ describe("ActiveAgentsList", () => {
       expect(screen.getByText("1 agent running")).toBeInTheDocument();
     });
 
-    // Stagger the next fetch so it is in-flight when dropdown opens
-    let resolveSecondFetch: (value: unknown) => void;
-    mockAgentsActive.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveSecondFetch = resolve;
-        })
-    );
-
     const user = userEvent.setup();
     await user.click(screen.getByTitle("Active agents"));
 
@@ -241,16 +265,6 @@ describe("ActiveAgentsList", () => {
     expect(within(listbox).getByText("Task 1")).toBeInTheDocument();
     const button = screen.getByTitle("Active agents");
     expect(within(button).queryByRole("status", { name: "Loading" })).not.toBeInTheDocument();
-
-    resolveSecondFetch!([
-      {
-        id: "task-1",
-        phase: "coding",
-        role: "coder",
-        label: "Task 1",
-        startedAt: "2026-02-16T12:00:00.000Z",
-      },
-    ]);
   });
 
   it("shows em dash when agent has no startedAt", async () => {
@@ -473,10 +487,23 @@ describe("ActiveAgentsList", () => {
       return <div data-testid="location">{pathname + search}</div>;
     }
 
+    const store = createStore();
+
+    function ActiveAgentsFetcher() {
+      useEffect(() => {
+        void mockAgentsActive("proj-1").then((agents) => {
+          store.dispatch(setActiveAgentsPayload({ agents, taskIdToStartedAt: {} }));
+        });
+      }, []);
+
+      return null;
+    }
+
     render(
-      <Provider store={createStore()}>
+      <Provider store={store}>
         <DisplayPreferencesProvider>
           <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
+            <ActiveAgentsFetcher />
             <ActiveAgentsList projectId="proj-1" />
             <LocationDisplay />
           </MemoryRouter>

@@ -20,6 +20,11 @@ import { broadcastToProject } from "../websocket/index.js";
 import { createLogger } from "../utils/logger.js";
 import { classifyAgentApiError } from "../utils/error-utils.js";
 import { notificationService } from "./notification.service.js";
+import {
+  buildTaskLastExecutionSummary,
+  compactExecutionText,
+  persistTaskLastExecutionSummary,
+} from "./task-execution-summary.js";
 
 const log = createLogger("failure-handler");
 
@@ -88,6 +93,7 @@ export interface FailureHandlerHost {
 export interface FailureSlot {
   taskId: string;
   attempt: number;
+  phase: "coding" | "review";
   infraRetries: number;
   worktreePath: string | null;
   branchName: string;
@@ -102,6 +108,28 @@ export interface FailureSlot {
 
 export class FailureHandlerService {
   constructor(private host: FailureHandlerHost) {}
+
+  private nextActionForFailure(params: {
+    diagnosedNoResultFailure: boolean;
+    isInfraFailure: boolean;
+    infraRetries: number;
+    currentPriority: number;
+    cumulativeAttempts: number;
+  }): string {
+    if (params.diagnosedNoResultFailure) {
+      return "Blocked pending investigation";
+    }
+    if (params.isInfraFailure && params.infraRetries < MAX_INFRA_RETRIES) {
+      return `Infrastructure retry ${params.infraRetries + 1}/${MAX_INFRA_RETRIES}`;
+    }
+    if (params.cumulativeAttempts % BACKOFF_FAILURE_THRESHOLD !== 0) {
+      return "Requeued for retry";
+    }
+    if (params.currentPriority >= MAX_PRIORITY_BEFORE_BLOCK) {
+      return `Blocked after ${params.cumulativeAttempts} failed attempts`;
+    }
+    return `Demoted to priority ${params.currentPriority + 1}`;
+  }
 
   private enrichNoResultReason(reason: string, outputLog: string[]): string {
     const output = outputLog.join("").replace(/\r/g, "").trim();
@@ -170,6 +198,18 @@ export class FailureHandlerService {
       failureType,
       effectiveReason
     );
+    const currentPriority = task.priority ?? 2;
+    const nextAction = this.nextActionForFailure({
+      diagnosedNoResultFailure,
+      isInfraFailure,
+      infraRetries: slot.infraRetries,
+      currentPriority,
+      cumulativeAttempts,
+    });
+    const failureSummary = compactExecutionText(
+      `${slot.phase === "review" ? "Review" : "Coding"} failed: ${effectiveReason}`,
+      500
+    );
 
     log.error(`Task ${task.id} failed [${failureType}] (attempt ${cumulativeAttempts})`, {
       reason: effectiveReason,
@@ -210,22 +250,29 @@ export class FailureHandlerService {
       }
     }
 
-    eventLogService
-      .append(repoPath, {
-        timestamp: new Date().toISOString(),
-        projectId,
-        taskId: task.id,
-        event: `task.failed`,
-        data: {
-          failureType,
-          attempt: cumulativeAttempts,
-          reason: effectiveReason.slice(0, 500),
-        },
-      })
-      .catch(() => {});
-
     const failSettings = await this.host.projectService.getSettings(projectId);
     const agentConfig = failSettings.simpleComplexityAgent;
+
+    if (failureType !== "review_rejection") {
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: task.id,
+          event: "task.failed",
+          data: {
+            attempt: cumulativeAttempts,
+            phase: slot.phase,
+            failureType,
+            model: agentConfig.model ?? null,
+            reason: effectiveReason.slice(0, 500),
+            summary: failureSummary,
+            nextAction,
+          },
+        })
+        .catch(() => {});
+    }
+
     const gitWorkingMode = failSettings.gitWorkingMode ?? "worktree";
     agentIdentityService
       .recordAttempt(repoPath, {
@@ -256,26 +303,28 @@ export class FailureHandlerService {
       // Branch may not exist
     }
 
-    const session = await this.host.sessionManager.createSession(repoPath, {
-      taskId: task.id,
-      attempt: cumulativeAttempts,
-      agentType: agentConfig.type,
-      agentModel: agentConfig.model || "",
-      gitBranch: branchName,
-      status: "failed",
-      outputLog: slot.agent.outputLog.join(""),
-      failureReason: effectiveReason,
-      testResults: testResults ?? undefined,
-      gitDiff: gitDiff || undefined,
-      startedAt: slot.agent.startedAt,
-    });
-    await this.host.sessionManager.archiveSession(
-      repoPath,
-      task.id,
-      cumulativeAttempts,
-      session,
-      wtPath ?? undefined
-    );
+    if (failureType !== "review_rejection") {
+      const session = await this.host.sessionManager.createSession(repoPath, {
+        taskId: task.id,
+        attempt: cumulativeAttempts,
+        agentType: agentConfig.type,
+        agentModel: agentConfig.model || "",
+        gitBranch: branchName,
+        status: "failed",
+        outputLog: slot.agent.outputLog.join(""),
+        failureReason: effectiveReason,
+        testResults: testResults ?? undefined,
+        gitDiff: gitDiff || undefined,
+        startedAt: slot.agent.startedAt,
+      });
+      await this.host.sessionManager.archiveSession(
+        repoPath,
+        task.id,
+        cumulativeAttempts,
+        session,
+        wtPath ?? undefined
+      );
+    }
 
     const inactivityMinutes = Math.round(AGENT_INACTIVITY_TIMEOUT_MS / (60 * 1000));
     const commentText =
@@ -297,11 +346,44 @@ export class FailureHandlerService {
       });
       await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode);
       await this.host.deleteAssignment(repoPath, task.id);
-      await this.blockTask(projectId, repoPath, task, cumulativeAttempts, effectiveReason);
+      await this.blockTask(
+        projectId,
+        repoPath,
+        task,
+        cumulativeAttempts,
+        effectiveReason,
+        failureType,
+        slot.phase,
+        agentConfig.model ?? null
+      );
       return;
     }
 
     if (isInfraFailure && slot.infraRetries < MAX_INFRA_RETRIES) {
+      const retrySummary = buildTaskLastExecutionSummary({
+        attempt: cumulativeAttempts,
+        outcome: "requeued",
+        phase: slot.phase,
+        failureType,
+        summary: `${failureSummary}. ${nextAction}`,
+      });
+      await persistTaskLastExecutionSummary(this.host.taskStore, projectId, task.id, retrySummary);
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: task.id,
+          event: "task.requeued",
+          data: {
+            attempt: cumulativeAttempts,
+            phase: slot.phase,
+            failureType,
+            model: agentConfig.model ?? null,
+            summary: retrySummary.summary,
+            nextAction,
+          },
+        })
+        .catch(() => {});
       slot.infraRetries += 1;
       slot.attempt = cumulativeAttempts + 1;
       log.info(`Infrastructure retry ${slot.infraRetries}/${MAX_INFRA_RETRIES} for ${task.id}`, {
@@ -333,6 +415,30 @@ export class FailureHandlerService {
     const isDemotionPoint = cumulativeAttempts % BACKOFF_FAILURE_THRESHOLD === 0;
 
     if (!isDemotionPoint) {
+      const retrySummary = buildTaskLastExecutionSummary({
+        attempt: cumulativeAttempts,
+        outcome: "requeued",
+        phase: slot.phase,
+        failureType,
+        summary: `${failureSummary}. ${nextAction}`,
+      });
+      await persistTaskLastExecutionSummary(this.host.taskStore, projectId, task.id, retrySummary);
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: task.id,
+          event: "task.requeued",
+          data: {
+            attempt: cumulativeAttempts,
+            phase: slot.phase,
+            failureType,
+            model: agentConfig.model ?? null,
+            summary: retrySummary.summary,
+            nextAction,
+          },
+        })
+        .catch(() => {});
       await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode);
 
       slot.attempt = cumulativeAttempts + 1;
@@ -354,25 +460,58 @@ export class FailureHandlerService {
       });
       await this.host.deleteAssignment(repoPath, task.id);
 
-      const currentPriority = task.priority ?? 2;
-
       if (currentPriority >= MAX_PRIORITY_BEFORE_BLOCK) {
-        await this.blockTask(projectId, repoPath, task, cumulativeAttempts, effectiveReason);
+          await this.blockTask(
+            projectId,
+            repoPath,
+            task,
+            cumulativeAttempts,
+            effectiveReason,
+            failureType,
+            slot.phase,
+            agentConfig.model ?? null
+          );
       } else {
         const newPriority = currentPriority + 1;
         log.info(
           `Demoting ${task.id} priority ${currentPriority} → ${newPriority} after ${cumulativeAttempts} failures`
         );
+        const demoteSummary = buildTaskLastExecutionSummary({
+          attempt: cumulativeAttempts,
+          outcome: "demoted",
+          phase: slot.phase,
+          failureType,
+          summary: `${failureSummary}. ${nextAction}`,
+        });
 
         try {
           await this.host.taskStore.update(projectId, task.id, {
             status: "open",
             assignee: "",
             priority: newPriority,
+            extra: {
+              last_execution_summary: demoteSummary,
+            },
           });
         } catch {
           // Task may already be in the right state
         }
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: task.id,
+            event: "task.demoted",
+            data: {
+              attempt: cumulativeAttempts,
+              phase: slot.phase,
+              failureType,
+              model: agentConfig.model ?? null,
+              summary: demoteSummary.summary,
+              nextAction,
+            },
+          })
+          .catch(() => {});
 
         this.host.transition(projectId, { to: "fail", taskId: task.id });
         await this.host.persistCounters(projectId, repoPath);
@@ -421,19 +560,53 @@ export class FailureHandlerService {
     repoPath: string,
     task: StoredTask,
     cumulativeAttempts: number,
-    reason: string
+    reason: string,
+    failureType: FailureType,
+    phase: "coding" | "review",
+    model?: string | null
   ): Promise<void> {
     log.info(`Blocking ${task.id} after ${cumulativeAttempts} cumulative failures at max priority`);
+    const blockSummary = buildTaskLastExecutionSummary({
+      attempt: cumulativeAttempts,
+      outcome: "blocked",
+      phase,
+      failureType,
+      blockReason: "Coding Failure",
+      summary: compactExecutionText(
+        `${phase === "review" ? "Review" : "Coding"} blocked after ${cumulativeAttempts} failed attempts: ${reason}`,
+        500
+      ),
+    });
 
     try {
       await this.host.taskStore.update(projectId, task.id, {
         status: "blocked",
         assignee: "",
         block_reason: "Coding Failure",
+        extra: {
+          last_execution_summary: blockSummary,
+        },
       });
     } catch (err) {
       log.warn("Failed to block task", { err });
     }
+    eventLogService
+      .append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId: task.id,
+        event: "task.blocked",
+        data: {
+          attempt: cumulativeAttempts,
+          phase,
+          failureType,
+          model: model ?? null,
+          blockReason: "Coding Failure",
+          summary: blockSummary.summary,
+          nextAction: "Blocked pending investigation",
+        },
+      })
+      .catch(() => {});
 
     this.host.transition(projectId, { to: "fail", taskId: task.id });
     await this.host.persistCounters(projectId, repoPath);

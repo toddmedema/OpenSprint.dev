@@ -1,19 +1,21 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppDispatch, useAppSelector } from "../../store";
 import {
   setSelectedTaskId,
   setAgentOutputBackfill,
   setArchivedSessions,
-  setActiveAgentsPayload,
   selectTasks,
+  selectTaskById,
+  selectSelectedTaskOutput,
+  selectCompletionState,
 } from "../../store/slices/executeSlice";
 import { wsSend } from "../../store/middleware/websocketMiddleware";
 import {
   useTaskDetail,
   useArchivedSessions,
   useLiveOutputBackfill,
-  useActiveAgents,
+  useTaskExecutionDiagnostics,
   useMarkTaskDone,
   useUnblockTask,
   useTasks,
@@ -21,7 +23,6 @@ import {
 import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
 import { PhaseLoadingSpinner } from "../../components/PhaseLoadingSpinner";
 import { queryKeys } from "../../api/queryKeys";
-import { filterAgentOutput } from "../../utils/agentOutputFilter";
 import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
 import { BuildEpicCard } from "../../components/kanban";
 import { useTaskFilter } from "../../hooks/useTaskFilter";
@@ -85,11 +86,19 @@ export function ExecutePhase({
   const selectedTask = useAppSelector((s) => s.execute.selectedTaskId);
   /** Resolve selection from Redux or URL so sidebar shows on first paint when opening with ?task= */
   const effectiveSelectedTask = selectedTask ?? initialTaskIdFromUrl ?? null;
-  const agentOutput = useAppSelector((s) => s.execute?.agentOutput ?? {});
-  const completionState = useAppSelector((s) => s.execute?.completionState ?? null);
   const loading = useAppSelector((s) => s.execute?.async?.tasks?.loading ?? false);
   const activeTasks = useAppSelector((s) => s.execute.activeTasks);
+  const taskIdToStartedAt = useAppSelector((s) => s.execute.taskIdToStartedAt);
   const wsConnected = useAppSelector((s) => s.websocket?.connected ?? false);
+  const selectedTaskFromStore = useAppSelector((s) =>
+    effectiveSelectedTask ? (selectTaskById(s, effectiveSelectedTask) ?? null) : null
+  );
+  const selectedAgentOutput = useAppSelector((s) =>
+    selectSelectedTaskOutput(s, effectiveSelectedTask)
+  );
+  const completionState = useAppSelector((s) =>
+    selectCompletionState(s, effectiveSelectedTask)
+  );
 
   const taskDetailQuery = useTaskDetail(projectId, effectiveSelectedTask ?? undefined);
   const archivedQuery = useArchivedSessions(
@@ -102,10 +111,8 @@ export function ExecutePhase({
     effectiveSelectedTask ?? undefined,
     {
       enabled: Boolean(effectiveSelectedTask),
-      refetchInterval: effectiveSelectedTask ? 1000 : undefined,
     }
   );
-  const activeAgentsQuery = useActiveAgents(projectId, { refetchInterval: 5000 });
   const markDoneMutation = useMarkTaskDone(projectId);
   const unblockMutation = useUnblockTask(projectId);
 
@@ -118,15 +125,20 @@ export function ExecutePhase({
   const archivedLoading = archivedQuery.isFetching;
   const markDoneLoading = markDoneMutation.isPending;
   const unblockLoading = unblockMutation.isPending;
-  const taskIdToStartedAt = activeAgentsQuery.data?.taskIdToStartedAt ?? {};
   const selectedTaskData = effectiveSelectedTask
-    ? (taskDetailData ?? tasks.find((t) => t.id === effectiveSelectedTask) ?? null)
+    ? (taskDetailData ?? selectedTaskFromStore ?? null)
     : null;
   const isDoneTask = selectedTaskData?.kanbanColumn === "done";
   const isBlockedTask = selectedTaskData?.kanbanColumn === "blocked";
-  const selectedAgentOutput = effectiveSelectedTask
-    ? (agentOutput[effectiveSelectedTask] ?? [])
-    : [];
+  const diagnosticsQuery = useTaskExecutionDiagnostics(
+    projectId,
+    effectiveSelectedTask ?? undefined,
+    {
+      enabled: Boolean(effectiveSelectedTask),
+      refetchInterval: effectiveSelectedTask && !isDoneTask ? 1000 : false,
+    }
+  );
+  const prevWsConnectedRef = useRef<boolean | null>(null);
 
   // Merge task detail into list cache so Redux sync gets it
   useEffect(() => {
@@ -144,21 +156,25 @@ export function ExecutePhase({
   }, [archivedQuery.data, dispatch]);
 
   useEffect(() => {
-    if (activeAgentsQuery.data)
-      dispatch(setActiveAgentsPayload(activeAgentsQuery.data));
-  }, [activeAgentsQuery.data, dispatch]);
-
-  useEffect(() => {
-    if (effectiveSelectedTask && liveOutputQuery.data !== undefined) {
-      const raw = typeof liveOutputQuery.data === "string" ? liveOutputQuery.data : "";
+    if (effectiveSelectedTask && typeof liveOutputQuery.data === "string") {
       dispatch(
         setAgentOutputBackfill({
           taskId: effectiveSelectedTask,
-          output: filterAgentOutput(raw),
+          output: liveOutputQuery.data,
         })
       );
     }
   }, [effectiveSelectedTask, liveOutputQuery.data, dispatch]);
+
+  useEffect(() => {
+    const prev = prevWsConnectedRef.current;
+    prevWsConnectedRef.current = wsConnected;
+    if (prev == null) return;
+    if (!effectiveSelectedTask || isDoneTask) return;
+    if (!prev && wsConnected) {
+      void liveOutputQuery.refetch();
+    }
+  }, [effectiveSelectedTask, isDoneTask, liveOutputQuery, wsConnected]);
 
   useEffect(() => {
     if (effectiveSelectedTask && !isDoneTask && archivedQuery.data?.length === 0 && !archivedLoading) {
@@ -214,6 +230,23 @@ export function ExecutePhase({
 
   const useReadyInLineSections =
     showReadyInLineSections(statusFilter) && implTasks.length > 0;
+
+  const planByEpicId = useMemo(
+    () =>
+      plans.reduce<Record<string, (typeof plans)[number]>>((acc, plan) => {
+        acc[plan.metadata.epicId] = plan;
+        return acc;
+      }, {}),
+    [plans]
+  );
+  const taskById = useMemo(
+    () =>
+      tasks.reduce<Record<string, (typeof tasks)[number]>>((acc, task) => {
+        acc[task.id] = task;
+        return acc;
+      }, {}),
+    [tasks]
+  );
 
   // Default to "All" when selected filter has no visible tasks (e.g. user navigated with "Blocked" selected but no blocked tasks)
   useEffect(() => {
@@ -422,13 +455,15 @@ export function ExecutePhase({
             }
             agentOutput={selectedAgentOutput}
             completionState={completionState}
+            diagnostics={diagnosticsQuery.data ?? null}
+            diagnosticsLoading={diagnosticsQuery.isFetching}
             archivedSessions={archivedSessions}
             archivedLoading={archivedLoading}
             markDoneLoading={markDoneLoading}
             unblockLoading={unblockLoading}
             taskIdToStartedAt={taskIdToStartedAt}
-            plans={plans}
-            tasks={tasks}
+            planByEpicId={planByEpicId}
+            taskById={taskById}
             activeTasks={activeTasks}
             wsConnected={wsConnected}
             isDoneTask={isDoneTask}

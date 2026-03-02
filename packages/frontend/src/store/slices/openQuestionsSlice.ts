@@ -22,6 +22,8 @@ const initialState: OpenQuestionsState = {
   },
 };
 
+const EMPTY_NOTIFICATIONS: Notification[] = [];
+
 export const fetchProjectNotifications = createAsyncThunk(
   "openQuestions/fetchProject",
   async (projectId: string): Promise<Notification[]> => {
@@ -98,4 +100,20 @@ const openQuestionsSlice = createSlice({
 });
 
 export const { addNotification, removeNotification } = openQuestionsSlice.actions;
+export const selectProjectNotifications = (
+  state: { openQuestions?: OpenQuestionsState },
+  projectId: string | null | undefined
+): Notification[] => {
+  if (!projectId) return EMPTY_NOTIFICATIONS;
+  return state.openQuestions?.byProject?.[projectId] ?? EMPTY_NOTIFICATIONS;
+};
+
+export const selectProjectNotificationsLoading = (
+  state: { openQuestions?: OpenQuestionsState },
+  projectId: string | null | undefined
+): boolean => {
+  if (!projectId) return false;
+  return state.openQuestions?.async.project?.[projectId]?.loading ?? false;
+};
+
 export default openQuestionsSlice.reducer;

@@ -20,6 +20,7 @@ import { finalReviewService } from "./final-review.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import type { TimerRegistry } from "./timer-registry.js";
 import { createLogger } from "../utils/logger.js";
+import { buildTaskLastExecutionSummary, compactExecutionText } from "./task-execution-summary.js";
 
 const log = createLogger("merge-coordinator");
 
@@ -55,7 +56,7 @@ interface CleanupTarget {
 export interface MergeCoordinatorHost {
   getState(projectId: string): {
     slots: Map<string, MergeSlot>;
-    status: { totalDone: number; queueDepth: number };
+    status: { totalDone: number; totalFailed: number; queueDepth: number };
     globalTimers: TimerRegistry;
   };
   taskStore: {
@@ -133,7 +134,7 @@ export interface MergeCoordinatorHost {
       unknownScopeStrategy?: "conservative" | "optimistic";
     }>;
   };
-  transition(projectId: string, t: { to: "complete"; taskId: string }): void;
+  transition(projectId: string, t: { to: "complete" | "fail"; taskId: string }): void;
   persistCounters(projectId: string, repoPath: string): Promise<void>;
   nudge(projectId: string): void;
 }
@@ -204,6 +205,20 @@ export class MergeCoordinatorService {
     return "heuristic";
   }
 
+  private async releaseMergeSlot(
+    projectId: string,
+    repoPath: string,
+    outcome: "complete" | "fail",
+    taskId: string
+  ): Promise<void> {
+    const state = this.host.getState(projectId);
+    if (!state.slots.has(taskId)) {
+      return;
+    }
+    this.host.transition(projectId, { to: outcome, taskId });
+    await this.host.persistCounters(projectId, repoPath);
+  }
+
   /**
    * Merge to main, then close task, archive session, clean up.
    * Merge happens FIRST — task is only closed after a successful merge.
@@ -224,8 +239,7 @@ export class MergeCoordinatorService {
     }
     const wtPath = slot.worktreePath ?? repoPath;
 
-    // 1. Prepare: transition slot, commit any WIP, wait for push
-    this.host.transition(projectId, { to: "complete", taskId: task.id });
+    // 1. Prepare: commit any WIP, then wait for any in-flight push to finish
     await this.host.branchManager.waitForGitReady(wtPath);
     await this.host.branchManager.commitWip(wtPath, task.id);
     await this.waitForPushComplete(projectId);
@@ -305,8 +319,6 @@ export class MergeCoordinatorService {
       })
       .catch(() => {});
 
-    await this.host.persistCounters(projectId, repoPath);
-
     broadcastToProject(projectId, {
       type: "agent.completed",
       taskId: task.id,
@@ -320,6 +332,7 @@ export class MergeCoordinatorService {
       worktreePath: wtPath,
       gitWorkingMode: settings.gitWorkingMode === "branches" ? "branches" : "worktree",
     });
+    await this.releaseMergeSlot(projectId, repoPath, "complete", task.id);
 
     // 5. Async push + post-completion
     this.host.nudge(projectId);
@@ -388,6 +401,7 @@ export class MergeCoordinatorService {
       log.warn("Failed to archive session on merge failure", { taskId: task.id, archiveErr });
     }
 
+    let shouldNudge = false;
     try {
       const freshIssue = await this.host.taskStore.show(projectId, task.id);
       const cumulativeAttempts = this.host.taskStore.getCumulativeAttemptsFromIssue(freshIssue) + 1;
@@ -395,14 +409,28 @@ export class MergeCoordinatorService {
       await this.host.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
       await this.host.taskStore.setMergeStage(projectId, task.id, stage);
       const scopeConfidence = this.getScopeConfidence(freshIssue);
+      const mergeFailureReason = mergeErr.message?.slice(0, 500) ?? "Merge failed";
 
       const maxMergeFailures = BACKOFF_FAILURE_THRESHOLD * 2;
       if (cumulativeAttempts >= maxMergeFailures) {
         log.info(`Blocking ${task.id} after ${cumulativeAttempts} merge failures`);
+        const blockedSummary = buildTaskLastExecutionSummary({
+          attempt: cumulativeAttempts,
+          outcome: "blocked",
+          phase: "merge",
+          blockReason: "Merge Failure",
+          summary: compactExecutionText(
+            `Attempt ${cumulativeAttempts} merge failed during ${stage}: ${mergeFailureReason}`,
+            500
+          ),
+        });
         await this.host.taskStore.update(projectId, task.id, {
           status: "blocked",
           assignee: "",
           block_reason: "Merge Failure",
+          extra: {
+            last_execution_summary: blockedSummary,
+          },
         });
         await this.host.taskStore.comment(
           projectId,
@@ -422,13 +450,33 @@ export class MergeCoordinatorService {
             taskId: task.id,
             event: "merge.failed",
             data: {
-              reason: mergeErr.message?.slice(0, 500),
+              reason: mergeFailureReason,
               stage,
               branchName: failedBranchName,
               conflictedFiles,
               attempt: cumulativeAttempts,
               resolvedBy: "blocked",
+              blockReason: "Merge Failure",
               scopeConfidence,
+              summary: blockedSummary.summary,
+              nextAction: "Blocked pending investigation",
+            },
+          })
+          .catch(() => {});
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: task.id,
+            event: "task.blocked",
+            data: {
+              attempt: cumulativeAttempts,
+              phase: "merge",
+              blockReason: "Merge Failure",
+              mergeStage: stage,
+              conflictedFiles,
+              summary: blockedSummary.summary,
+              nextAction: "Blocked pending investigation",
             },
           })
           .catch(() => {});
@@ -436,7 +484,22 @@ export class MergeCoordinatorService {
       }
 
       log.info("Reopening task after merge failure", { taskId: task.id, cumulativeAttempts });
-      await this.host.taskStore.update(projectId, task.id, { status: "open", assignee: "" });
+      const requeuedSummary = buildTaskLastExecutionSummary({
+        attempt: cumulativeAttempts,
+        outcome: "requeued",
+        phase: "merge",
+        summary: compactExecutionText(
+          `Attempt ${cumulativeAttempts} merge failed during ${stage}: ${mergeFailureReason}`,
+          500
+        ),
+      });
+      await this.host.taskStore.update(projectId, task.id, {
+        status: "open",
+        assignee: "",
+        extra: {
+          last_execution_summary: requeuedSummary,
+        },
+      });
       await this.host.taskStore.comment(
         projectId,
         task.id,
@@ -449,20 +512,43 @@ export class MergeCoordinatorService {
           taskId: task.id,
           event: "merge.failed",
           data: {
-            reason: mergeErr.message?.slice(0, 500),
+            reason: mergeFailureReason,
             stage,
             branchName: failedBranchName,
             conflictedFiles,
             attempt: cumulativeAttempts,
             resolvedBy: "requeued",
             scopeConfidence,
+            summary: requeuedSummary.summary,
+            nextAction: "Requeued for retry",
           },
         })
         .catch(() => {});
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: task.id,
+          event: "task.requeued",
+          data: {
+            attempt: cumulativeAttempts,
+            phase: "merge",
+            mergeStage: stage,
+            conflictedFiles,
+            summary: requeuedSummary.summary,
+            nextAction: "Requeued for retry",
+          },
+          })
+          .catch(() => {});
 
-      this.host.nudge(projectId);
+      shouldNudge = true;
     } catch (err) {
       log.warn("Failed to requeue task after merge failure", { taskId: task.id, err });
+    } finally {
+      await this.releaseMergeSlot(projectId, repoPath, "fail", task.id);
+      if (shouldNudge) {
+        this.host.nudge(projectId);
+      }
     }
   }
 

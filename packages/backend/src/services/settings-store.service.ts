@@ -41,12 +41,12 @@ async function loadStore(): Promise<SettingsStore> {
           const v = val as Record<string, unknown>;
           if ("settings" in v && typeof v.settings === "object") {
             normalized[id] = {
-              settings: stripApiKeys(v.settings as Record<string, unknown>) as ProjectSettings,
+              settings: stripApiKeys(v.settings as Record<string, unknown>) as unknown as ProjectSettings,
               updatedAt: (v.updatedAt as string) ?? new Date().toISOString(),
             };
           } else {
             normalized[id] = {
-              settings: stripApiKeys(val as Record<string, unknown>) as ProjectSettings,
+              settings: stripApiKeys(val as Record<string, unknown>) as unknown as ProjectSettings,
               updatedAt: new Date().toISOString(),
             };
           }
@@ -78,7 +78,7 @@ export async function getSettingsFromStore(
   const store = await loadStore();
   const entry = store[projectId];
   if (entry?.settings) {
-    return stripApiKeys(entry.settings as Record<string, unknown>) as ProjectSettings;
+    return stripApiKeys(entry.settings as unknown as Record<string, unknown>) as unknown as ProjectSettings;
   }
   return defaults;
 }
@@ -95,7 +95,7 @@ export async function getSettingsWithMetaFromStore(
   const entry = store[projectId];
   if (entry?.settings) {
     return {
-      settings: stripApiKeys(entry.settings as Record<string, unknown>) as ProjectSettings,
+      settings: stripApiKeys(entry.settings as unknown as Record<string, unknown>) as unknown as ProjectSettings,
       updatedAt: entry.updatedAt ?? null,
     };
   }
@@ -111,7 +111,7 @@ export async function setSettingsInStore(
 ): Promise<void> {
   const store = await loadStore();
   const now = new Date().toISOString();
-  const toStore = stripApiKeys(settings as Record<string, unknown>) as ProjectSettings;
+  const toStore = stripApiKeys(settings as unknown as Record<string, unknown>) as unknown as ProjectSettings;
   store[projectId] = { settings: toStore, updatedAt: now };
   await saveStore(store);
 }
@@ -141,7 +141,7 @@ export async function updateSettingsInStore(
     const current = entry?.settings ?? defaults;
     const updated = updater(current);
     const now = new Date().toISOString();
-    const toStore = stripApiKeys(updated as Record<string, unknown>) as ProjectSettings;
+    const toStore = stripApiKeys(updated as unknown as Record<string, unknown>) as unknown as ProjectSettings;
     store[projectId] = { settings: toStore, updatedAt: now };
     await saveStore(store);
   } finally {

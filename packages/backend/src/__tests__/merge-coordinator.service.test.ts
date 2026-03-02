@@ -91,6 +91,7 @@ vi.mock("../services/final-review.service.js", () => ({
 describe("MergeCoordinatorService", () => {
   let coordinator: MergeCoordinatorService;
   let mockHost: MergeCoordinatorHost;
+  let hostState: ReturnType<MergeCoordinatorHost["getState"]>;
   const projectId = "proj-1";
   const repoPath = "/tmp/repo";
   const taskId = "os-abc1";
@@ -135,12 +136,14 @@ describe("MergeCoordinatorService", () => {
       gitWorkingMode: "worktree",
     });
 
+    hostState = {
+      slots: new Map([[taskId, makeSlot()]]),
+      status: { totalDone: 0, totalFailed: 0, queueDepth: 0 },
+      globalTimers: {} as never,
+    };
+
     mockHost = {
-      getState: vi.fn().mockReturnValue({
-        slots: new Map([[taskId, makeSlot()]]),
-        status: { totalDone: 0, queueDepth: 0 },
-        globalTimers: {},
-      }),
+      getState: vi.fn().mockImplementation(() => hostState),
       taskStore: {
         close: vi.fn().mockResolvedValue(undefined),
         update: vi.fn().mockResolvedValue(undefined),
@@ -182,7 +185,14 @@ describe("MergeCoordinatorService", () => {
       projectService: {
         getSettings: mockGetSettings,
       },
-      transition: vi.fn(),
+      transition: vi.fn().mockImplementation((_projectId, transition) => {
+        if (transition.to === "complete") {
+          hostState.status.totalDone += 1;
+        } else {
+          hostState.status.totalFailed += 1;
+        }
+        hostState.slots.delete(transition.taskId);
+      }),
       persistCounters: vi.fn().mockResolvedValue(undefined),
       nudge: vi.fn(),
     };
@@ -251,6 +261,10 @@ describe("MergeCoordinatorService", () => {
         gitWorkingMode: mode,
       });
 
+      // Reset slot so second iteration has a slot (transition removes it each run)
+      hostState.slots = new Map([[taskId, makeSlot()]]);
+      mockHost.getState = vi.fn().mockImplementation(() => hostState);
+
       await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
 
       await vi.waitFor(() => {
@@ -261,11 +275,12 @@ describe("MergeCoordinatorService", () => {
 
   it("enqueues merge job with worktreePath so rebase happens inside the serialized queue", async () => {
     const slot = makeSlot("/tmp/worktree");
-    mockHost.getState = vi.fn().mockReturnValue({
+    hostState = {
       slots: new Map([[taskId, slot]]),
-      status: { totalDone: 0, queueDepth: 0 },
-      globalTimers: {},
-    });
+      status: { totalDone: 0, totalFailed: 0, queueDepth: 0 },
+      globalTimers: {} as never,
+    };
+    mockHost.getState = vi.fn().mockImplementation(() => hostState);
 
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
 
@@ -283,11 +298,12 @@ describe("MergeCoordinatorService", () => {
   it("archives session when merge fails so task detail sidebar can show output", async () => {
     const slotWithOutput = makeSlot();
     slotWithOutput.agent.outputLog = ["Agent output line 1\n", "Agent output line 2\n"];
-    mockHost.getState = vi.fn().mockReturnValue({
+    hostState = {
       slots: new Map([[taskId, slotWithOutput]]),
-      status: { totalDone: 0, queueDepth: 0 },
-      globalTimers: {},
-    });
+      status: { totalDone: 0, totalFailed: 0, queueDepth: 0 },
+      globalTimers: {} as never,
+    };
+    mockHost.getState = vi.fn().mockImplementation(() => hostState);
     mockGitQueueEnqueueAndWait.mockRejectedValue(new Error("merge conflict"));
 
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
@@ -308,6 +324,10 @@ describe("MergeCoordinatorService", () => {
       expect.anything(),
       "/tmp/worktree"
     );
+    expect(mockHost.transition).toHaveBeenCalledWith(projectId, {
+      to: "fail",
+      taskId,
+    });
   });
 
   it("requeues task when merge job fails", async () => {

@@ -565,7 +565,7 @@ describe("websocketMiddleware", () => {
       });
 
       await vi.waitFor(() => {
-        const state = store.getState().execute.completionState;
+        const state = store.getState().execute.completionStateByTaskId["task-1"];
         expect(state?.status).toBe("done");
         expect(state?.testResults?.passed).toBe(5);
       });
@@ -590,7 +590,7 @@ describe("websocketMiddleware", () => {
       });
 
       await vi.waitFor(() => {
-        const state = store.getState().execute.completionState;
+        const state = store.getState().execute.completionStateByTaskId["task-1"];
         expect(state?.status).toBe("failed");
         expect(state?.reason).toBe(failureReason);
       });

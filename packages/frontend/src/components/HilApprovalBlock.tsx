@@ -18,18 +18,13 @@ export interface HilApprovalBlockProps {
  * When scopeChangeMetadata is present, shows a PRD diff for review before accepting/rejecting.
  * Surfaces in eval (scope change) and sketch (architecture) contexts.
  */
-export function HilApprovalBlock({
-  notification,
-  projectId,
-  onResolved,
-}: HilApprovalBlockProps) {
+export function HilApprovalBlock({ notification, projectId, onResolved }: HilApprovalBlockProps) {
   const [loading, setLoading] = useState(false);
 
   const { data: currentPrd } = useQuery({
     queryKey: queryKeys.prd.detail(projectId),
     queryFn: () => api.prd.get(projectId),
-    enabled:
-      !!notification.scopeChangeMetadata?.scopeChangeProposedUpdates?.length,
+    enabled: !!notification.scopeChangeMetadata?.scopeChangeProposedUpdates?.length,
   });
 
   const handleApprove = useCallback(async () => {
@@ -57,8 +52,8 @@ export function HilApprovalBlock({
   }, [projectId, notification.id, onResolved]);
 
   const description = notification.questions?.[0]?.text ?? "Approval required";
-  const hasPrdDiff =
-    notification.scopeChangeMetadata?.scopeChangeProposedUpdates?.length > 0;
+  const proposedUpdates = notification.scopeChangeMetadata?.scopeChangeProposedUpdates ?? [];
+  const hasPrdDiff = proposedUpdates.length > 0;
 
   return (
     <div

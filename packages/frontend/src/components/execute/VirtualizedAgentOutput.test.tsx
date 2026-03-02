@@ -4,12 +4,12 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { VirtualizedAgentOutput } from "./VirtualizedAgentOutput";
 
 describe("VirtualizedAgentOutput", () => {
-  it("renders content with ReactMarkdown when useMarkdown is true", () => {
+  it("renders content with ReactMarkdown in markdown mode", () => {
     const containerRef = { current: null as HTMLDivElement | null };
     render(
       <VirtualizedAgentOutput
         content="**Bold** and `code`"
-        useMarkdown={true}
+        mode="markdown"
         containerRef={containerRef}
         data-testid="output"
       />
@@ -21,12 +21,12 @@ describe("VirtualizedAgentOutput", () => {
     expect(el).toHaveTextContent("code");
   });
 
-  it("renders content as plain text when useMarkdown is false", () => {
+  it("renders content as plain text in stream mode", () => {
     const containerRef = { current: null as HTMLDivElement | null };
     render(
       <VirtualizedAgentOutput
         content="**Bold** and `code`"
-        useMarkdown={false}
+        mode="stream"
         containerRef={containerRef}
         data-testid="output"
       />
@@ -42,7 +42,7 @@ describe("VirtualizedAgentOutput", () => {
     render(
       <VirtualizedAgentOutput
         content=""
-        useMarkdown={true}
+        mode="markdown"
         containerRef={containerRef}
         data-testid="output"
       />
@@ -57,7 +57,7 @@ describe("VirtualizedAgentOutput", () => {
     render(
       <VirtualizedAgentOutput
         content="Hello"
-        useMarkdown={true}
+        mode="markdown"
         containerRef={containerRef}
         data-testid="output"
       />
@@ -73,7 +73,7 @@ describe("VirtualizedAgentOutput", () => {
     render(
       <VirtualizedAgentOutput
         content="Hello"
-        useMarkdown={true}
+        mode="markdown"
         containerRef={containerRef}
         onScroll={onScroll}
         data-testid="output"

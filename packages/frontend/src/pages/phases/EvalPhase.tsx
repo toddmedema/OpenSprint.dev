@@ -16,7 +16,7 @@ import {
   removeFeedbackItem,
   recategorizeFeedback,
 } from "../../store/slices/evalSlice";
-import { selectTasks } from "../../store/slices/executeSlice";
+import { selectTaskSummariesForFeedback } from "../../store/slices/executeSlice";
 import { useTasks, useFeedback } from "../../api/hooks";
 import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
 import { PhaseLoadingSpinner } from "../../components/PhaseLoadingSpinner";
@@ -211,17 +211,18 @@ function buildFeedbackTree(items: FeedbackItem[]): FeedbackTreeNode[] {
 
 /** Task columns that indicate feedback is in progress (agent may be working). */
 const IN_PROGRESS_TASK_COLUMNS = ["in_progress", "in_review"] as const;
+const EMPTY_TASK_SUMMARY_BY_ID: Record<string, { kanbanColumn: string }> = {};
 
 /** Show Cancel when feedback is in progress: Analyst has created tasks and an agent may be working. */
 function canShowCancelButton(
   item: FeedbackItem,
-  tasks: Array<{ id: string; kanbanColumn: string }>
+  taskSummaryById: Record<string, { kanbanColumn: string }>
 ): boolean {
   if (item.status !== "pending") return false;
   const taskIds = item.createdTaskIds ?? [];
   if (taskIds.length === 0) return false;
   return taskIds.some((tid) => {
-    const t = tasks.find((x) => x.id === tid);
+    const t = taskSummaryById[tid];
     if (!t) return false;
     return IN_PROGRESS_TASK_COLUMNS.includes(
       t.kanbanColumn as (typeof IN_PROGRESS_TASK_COLUMNS)[number]
@@ -246,7 +247,7 @@ interface FeedbackCardProps {
   submitting: boolean;
   isDraggingImage: boolean;
   clearDragState: () => void;
-  tasks: Array<{ id: string; kanbanColumn: string }>;
+  taskSummaryById: Record<string, { kanbanColumn: string }>;
   /** Notification ID for scroll-to-question when this feedback has open questions */
   questionId?: string | null;
   /** Map of feedbackId -> notificationId for nested feedback cards */
@@ -285,7 +286,7 @@ const FeedbackCard = memo(
     submitting,
     isDraggingImage,
     clearDragState,
-    tasks,
+    taskSummaryById,
     questionId,
     questionIdByFeedbackId,
     notification,
@@ -579,7 +580,7 @@ const FeedbackCard = memo(
               )}
               {item.status === "pending" && !isCategorizing(item) && (
                 <>
-                  {canShowCancelButton(item, tasks) && (
+                  {canShowCancelButton(item, taskSummaryById) && (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -705,7 +706,7 @@ const FeedbackCard = memo(
               submitting={submitting}
               isDraggingImage={isDraggingImage}
               clearDragState={clearDragState}
-              tasks={tasks}
+              taskSummaryById={taskSummaryById}
               questionId={questionIdByFeedbackId?.[child.item.id]}
               questionIdByFeedbackId={questionIdByFeedbackId}
               notification={notificationByFeedbackId?.[child.item.id]}
@@ -726,7 +727,7 @@ const FeedbackCard = memo(
     if (prev.submitting !== next.submitting) return false;
     if (prev.isDraggingImage !== next.isDraggingImage) return false;
     if (prev.clearDragState !== next.clearDragState) return false;
-    if (prev.tasks !== next.tasks) return false;
+    if (prev.taskSummaryById !== next.taskSummaryById) return false;
     if (prev.questionId !== next.questionId) return false;
     if (prev.questionIdByFeedbackId !== next.questionIdByFeedbackId) return false;
     if (prev.notification !== next.notification) return false;
@@ -750,10 +751,14 @@ export function EvalPhase({
   /* ── Redux state ── */
   const feedback = useAppSelector((s) => s.eval.feedback);
   const tasksById = useAppSelector((s) => s.execute?.tasksById ?? EMPTY_TASKS_BY_ID);
-  const tasks = useAppSelector((s) =>
-    selectTasks(s).map((t) => ({ id: t.id, kanbanColumn: t.kanbanColumn }))
-  );
-  const tasksCount = tasks.length;
+  const taskSummaries = useAppSelector(selectTaskSummariesForFeedback);
+  const taskSummaryById = useMemo(() => {
+    if (taskSummaries.length === 0) return EMPTY_TASK_SUMMARY_BY_ID;
+    return taskSummaries.reduce<Record<string, { kanbanColumn: string }>>((acc, task) => {
+      acc[task.id] = { kanbanColumn: task.kanbanColumn };
+      return acc;
+    }, {});
+  }, [taskSummaries]);
   const submitting = useAppSelector((s) => s.eval?.async?.submit?.loading ?? false);
 
   const feedbackEmpty = feedback.length === 0;
@@ -1283,7 +1288,7 @@ export function EvalPhase({
                     submitting={submitting}
                     isDraggingImage={isDraggingImage}
                     clearDragState={clearDragState}
-                    tasks={tasks}
+                    taskSummaryById={taskSummaryById}
                     questionId={questionIdByFeedbackId[node.item.id]}
                     questionIdByFeedbackId={questionIdByFeedbackId}
                     notification={notificationByFeedbackId[node.item.id]}

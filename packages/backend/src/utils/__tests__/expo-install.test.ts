@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -13,7 +13,7 @@ vi.mock("child_process", () => ({
 }));
 
 const { exec } = await import("child_process");
-const execMock = exec as ReturnType<typeof vi.fn>;
+const execMock = exec as unknown as ReturnType<typeof vi.fn>;
 
 describe("expo-install", () => {
   let tempDir: string;

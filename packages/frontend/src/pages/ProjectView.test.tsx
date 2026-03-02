@@ -19,6 +19,7 @@ import executeReducer from "../store/slices/executeSlice";
 import evalReducer from "../store/slices/evalSlice";
 import deliverReducer from "../store/slices/deliverSlice";
 import notificationReducer from "../store/slices/notificationSlice";
+import openQuestionsReducer from "../store/slices/openQuestionsSlice";
 
 // Mock websocket middleware to prevent connection attempts
 const mockWsConnect = vi.fn((payload: unknown) => ({ type: "ws/connect", payload }));
@@ -46,6 +47,7 @@ vi.mock("../api/client", () => ({
       list: vi.fn().mockResolvedValue([]),
     },
     execute: { status: vi.fn().mockResolvedValue({}) },
+    agents: { active: vi.fn().mockResolvedValue([]) },
     feedback: {
       list: vi.fn().mockResolvedValue([]),
     },
@@ -90,6 +92,7 @@ function createStore() {
       eval: evalReducer,
       deliver: deliverReducer,
       notification: notificationReducer,
+      openQuestions: openQuestionsReducer,
     },
     preloadedState: {
       project: {

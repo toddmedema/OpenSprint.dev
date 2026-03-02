@@ -1,15 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Task } from "@opensprint/shared";
+import type { TaskExecutionDiagnostics } from "@opensprint/shared";
 import { api } from "../client";
 import { queryKeys } from "../queryKeys";
+import { normalizeTaskListResponse } from "../taskList";
 
 export function useTasks(projectId: string | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.tasks.list(projectId ?? ""),
-    queryFn: async () => {
-      const data = await api.tasks.list(projectId!);
-      return Array.isArray(data) ? data : (data as { items?: Task[] })?.items ?? [];
-    },
+    queryFn: async () => normalizeTaskListResponse(await api.tasks.list(projectId!)),
     enabled: Boolean(projectId) && (options?.enabled !== false),
   });
 }
@@ -59,6 +57,22 @@ export function useLiveOutputBackfill(
     queryKey: queryKeys.execute.liveOutput(projectId ?? "", taskId ?? ""),
     queryFn: async () => (await api.execute.liveOutput(projectId!, taskId!)).output,
     enabled: Boolean(projectId) && Boolean(taskId) && (options?.enabled !== false),
+    refetchInterval: options?.refetchInterval,
+  });
+}
+
+export function useTaskExecutionDiagnostics(
+  projectId: string | undefined,
+  taskId: string | undefined,
+  options?: { enabled?: boolean; refetchInterval?: number | false }
+) {
+  return useQuery<TaskExecutionDiagnostics>({
+    queryKey: queryKeys.execute.diagnostics(projectId ?? "", taskId ?? ""),
+    queryFn: () => api.execute.taskDiagnostics(projectId!, taskId!),
+    enabled:
+      Boolean(projectId) &&
+      Boolean(taskId) &&
+      (options?.enabled !== false),
     refetchInterval: options?.refetchInterval,
   });
 }

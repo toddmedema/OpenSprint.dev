@@ -31,6 +31,27 @@ function extractContentFromEvent(obj: unknown): string | null {
   if (obj === null || typeof obj !== "object") return null;
 
   const o = obj as Record<string, unknown>;
+  const nestedError =
+    o.error && typeof o.error === "object"
+      ? (o.error as Record<string, unknown>)
+      : null;
+  const explicitErrorMessage =
+    typeof o.message === "string"
+      ? o.message
+      : typeof o.error === "string"
+        ? o.error
+        : nestedError && typeof nestedError.message === "string"
+          ? nestedError.message
+          : typeof o.detail === "string"
+            ? o.detail
+            : null;
+
+  if (
+    ((o.type === "error" || o.subtype === "error") && explicitErrorMessage) ||
+    (o.status === "error" && explicitErrorMessage)
+  ) {
+    return `[Agent error: ${explicitErrorMessage}]\n`;
+  }
 
   // Cursor/Anthropic: {"type":"text","text":"..."}
   if (o.type === "text" && typeof o.text === "string") {

@@ -5,7 +5,7 @@ import type { RunningAgentsDisplayMode } from "../lib/displayPrefs";
 import { api, isConnectionError } from "../api/client";
 import { ApiKeysSection } from "./ApiKeysSection";
 import { CloseButton } from "./CloseButton";
-import type { ApiKeys, MaskedApiKeys } from "@opensprint/shared";
+import type { ApiKeys, ApiKeyProvider, MaskedApiKeys } from "@opensprint/shared";
 import { API_KEY_PROVIDERS } from "@opensprint/shared";
 import type { SaveStatus } from "./SaveIndicator";
 
@@ -175,10 +175,36 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
   ) => {
     setApiKeysError(null);
     notifySaveState("saving");
-    const merged: ApiKeys = {
-      ...(apiKeys as ApiKeys),
-      ...updates,
-    };
+    const merged: ApiKeys = {};
+    for (const provider of API_KEY_PROVIDERS) {
+      const currentEntries = (apiKeys?.[provider] ?? []).flatMap((entry) =>
+        "value" in entry && entry.value
+          ? [
+              {
+                id: entry.id,
+                value: entry.value,
+                ...(entry.limitHitAt ? { limitHitAt: entry.limitHitAt } : {}),
+              },
+            ]
+          : []
+      );
+      const nextEntries = updates[provider];
+      const sourceEntries = nextEntries ?? currentEntries;
+      const normalizedEntries = sourceEntries.flatMap((entry) =>
+        entry.value
+          ? [
+              {
+                id: entry.id,
+                value: entry.value,
+                ...(entry.limitHitAt ? { limitHitAt: entry.limitHitAt } : {}),
+              },
+            ]
+          : []
+      );
+      if (normalizedEntries.length > 0) {
+        merged[provider] = normalizedEntries;
+      }
+    }
     try {
       const res = await api.globalSettings.put({ apiKeys: merged });
       setApiKeys(res.apiKeys);
@@ -215,8 +241,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
     }
   }, []);
 
-  const showSetupTablesButton =
-    databaseUrl.trim().length > 0 && !databaseUrl.includes("***");
+  const showSetupTablesButton = databaseUrl.trim().length > 0 && !databaseUrl.includes("***");
 
   return (
     <div className="space-y-6" data-testid="global-settings-content">
@@ -300,7 +325,10 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
         )}
       </div>
       {setupTablesDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="setup-tables-dialog">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          data-testid="setup-tables-dialog"
+        >
           <div
             className="absolute inset-0 bg-theme-overlay backdrop-blur-sm"
             onClick={() => !setupTablesLoading && setSetupTablesDialogOpen(false)}
@@ -380,9 +408,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
         </p>
         <select
           value={runningAgentsDisplayMode}
-          onChange={(e) =>
-            setRunningAgentsDisplayMode(e.target.value as RunningAgentsDisplayMode)
-          }
+          onChange={(e) => setRunningAgentsDisplayMode(e.target.value as RunningAgentsDisplayMode)}
           data-testid="running-agents-display-mode"
           className="input w-full max-w-xs"
         >

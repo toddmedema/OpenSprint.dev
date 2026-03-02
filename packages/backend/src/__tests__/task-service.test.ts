@@ -8,12 +8,16 @@ import { ContextAssembler } from "../services/context-assembler.js";
 import { BranchManager } from "../services/branch-manager.js";
 import type { StoredTask } from "../services/task-store.service.js";
 
-const { mockTaskStoreState, mockBranchManagerInstance } = vi.hoisted(() => ({
+const { mockTaskStoreState, mockBranchManagerInstance, mockOrchestrator } = vi.hoisted(() => ({
   mockTaskStoreState: { listAll: [] as StoredTask[], readyCalls: 0 },
   mockBranchManagerInstance: {
     listTaskWorktrees: vi.fn().mockResolvedValue([]),
     removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
     revertAndReturnToMain: vi.fn().mockResolvedValue(undefined),
+  },
+  mockOrchestrator: {
+    stopTaskAndFreeSlot: vi.fn().mockResolvedValue(undefined),
+    nudge: vi.fn(),
   },
 }));
 
@@ -61,14 +65,6 @@ vi.mock("../services/project.service.js", () => ({
     getProjectByRepoPath: vi.fn().mockResolvedValue({ id: "proj-1", repoPath: "/tmp/test-repo" }),
     getSettings: vi.fn().mockResolvedValue({ gitWorkingMode: "branches" }),
   })),
-}));
-
-vi.mock("../services/orchestrator.service.js", () => ({
-  orchestratorService: {
-    stopTaskAndFreeSlot: vi.fn().mockResolvedValue(undefined),
-    getStatus: vi.fn().mockResolvedValue({ activeTasks: [], queueDepth: 0 }),
-    nudge: vi.fn(),
-  },
 }));
 
 vi.mock("../services/branch-manager.js", () => ({
@@ -133,13 +129,19 @@ describe("TaskService", () => {
   beforeEach(() => {
     mockTaskStoreState.listAll = [...defaultIssues];
     mockTaskStoreState.readyCalls = 0;
+    mockOrchestrator.stopTaskAndFreeSlot.mockClear();
+    mockOrchestrator.nudge.mockClear();
+    mockBranchManagerInstance.listTaskWorktrees.mockClear();
+    mockBranchManagerInstance.removeTaskWorktree.mockClear();
+    mockBranchManagerInstance.revertAndReturnToMain.mockClear();
     taskService = new TaskService(
       new ProjectService(),
       taskStore,
       new FeedbackService(),
       new SessionManager(),
       new ContextAssembler(),
-      new BranchManager()
+      new BranchManager(),
+      mockOrchestrator
     );
   });
 
@@ -560,7 +562,6 @@ describe("TaskService", () => {
 
   it("unblock performs full cleanup: stop agent, revert branch, delete active dir", async () => {
     const { taskStore } = await import("../services/task-store.service.js");
-    const { orchestratorService } = await import("../services/orchestrator.service.js");
 
     vi.mocked(taskStore.show).mockResolvedValue({
       id: "task-1",
@@ -575,8 +576,8 @@ describe("TaskService", () => {
     const result = await taskService.unblock("proj-1", "task-1");
 
     expect(result.taskUnblocked).toBe(true);
-    expect(orchestratorService.stopTaskAndFreeSlot).toHaveBeenCalledWith("proj-1", "task-1");
-    expect(orchestratorService.nudge).toHaveBeenCalledWith("proj-1");
+    expect(mockOrchestrator.stopTaskAndFreeSlot).toHaveBeenCalledWith("proj-1", "task-1");
+    expect(mockOrchestrator.nudge).toHaveBeenCalledWith("proj-1");
     expect(mockBranchManagerInstance.revertAndReturnToMain).toHaveBeenCalledWith(
       "/tmp/test-repo",
       "opensprint/task-1"
@@ -585,7 +586,6 @@ describe("TaskService", () => {
 
   it("unblock nudges orchestrator so it processes the task promptly", async () => {
     const { taskStore } = await import("../services/task-store.service.js");
-    const { orchestratorService } = await import("../services/orchestrator.service.js");
 
     vi.mocked(taskStore.show).mockResolvedValue({
       id: "task-1",
@@ -596,12 +596,12 @@ describe("TaskService", () => {
     } as StoredTask);
     vi.mocked(taskStore.update).mockResolvedValue(undefined as never);
     vi.mocked(taskStore.syncForPush).mockResolvedValue(undefined as never);
-    vi.mocked(orchestratorService.nudge).mockClear();
+    mockOrchestrator.nudge.mockClear();
 
     const result = await taskService.unblock("proj-1", "task-1");
 
     expect(result.taskUnblocked).toBe(true);
-    expect(orchestratorService.nudge).toHaveBeenCalledWith("proj-1");
+    expect(mockOrchestrator.nudge).toHaveBeenCalledWith("proj-1");
   });
 
   it("unblock removes worktree when in worktree mode", async () => {
@@ -640,7 +640,8 @@ describe("TaskService", () => {
       new FeedbackService(),
       new SessionManager(),
       new ContextAssembler(),
-      new BranchManager()
+      new BranchManager(),
+      mockOrchestrator
     );
     await svc.unblock("proj-1", "task-1");
 

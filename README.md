@@ -33,6 +33,8 @@ Traditional AI development is broken. Open Sprint fixes it.
 
 ## Quick Start
 
+**PostgreSQL is a setup requirement.** OpenSprint uses it for task storage. If you don’t have Postgres, `npm run setup` can install it for you (Homebrew on Mac, apt/yum on Linux). If you already have an older Postgres version running, setup may conflict (e.g. port 5432, or multiple installs); in that case, you can configure your own database url in the settings.
+
 **Mac:** Install [Node.js](https://nodejs.org/) ≥20 (e.g. `brew install node`), then:
 
 ```bash
@@ -53,6 +55,8 @@ Then open **http://localhost:5173**. On Mac, setup is that simple — one `npm r
 - **Linux:** Installs PostgreSQL via apt or yum/dnf, starts the service, creates the same user and database.
 - **Windows:** Prints instructions to install PostgreSQL and create the user/database manually, or use a remote `databaseUrl`.
 - Applies the database schema so the backend can start without errors.
+
+If you already have an older PostgreSQL installed (e.g. system Postgres or another version), `npm run setup` may hit conflicts (port, multiple installs). Use your existing Postgres and create the `opensprint` user/database manually, or set `databaseUrl` to a remote instance.
 
 **`npm run dev`** ensures local PostgreSQL is running (starts the service on Mac/Linux if needed), then starts the backend and frontend.
 
@@ -125,14 +129,14 @@ opensprint.dev/
 
 ### Scripts (from repo root)
 
-| Command         | Description                                      |
-| --------------- | ------------------------------------------------ |
+| Command         | Description                                                                     |
+| --------------- | ------------------------------------------------------------------------------- |
 | `npm run setup` | Install deps, PostgreSQL (if needed), create user/DB, apply schema (idempotent) |
-| `npm run dev`   | Ensure Postgres is running, then start backend + frontend |
-| `npm run build` | Build all packages (shared → backend → frontend) |
-| `npm run test`  | Run tests                                        |
-| `npm run lint`  | Lint all packages                                |
-| `npm run clean` | Remove build artifacts and node_modules          |
+| `npm run dev`   | Ensure Postgres is running, then start backend + frontend                       |
+| `npm run build` | Build all packages (shared → backend → frontend)                                |
+| `npm run test`  | Run tests                                                                       |
+| `npm run lint`  | Lint all packages                                                               |
+| `npm run clean` | Remove build artifacts and node_modules                                         |
 
 ### Tech stack
 
@@ -140,7 +144,7 @@ opensprint.dev/
 
 ### PostgreSQL
 
-OpenSprint uses PostgreSQL. **`npm run setup`** installs PostgreSQL locally (Homebrew on Mac, apt/yum on Linux), starts the service, and creates:
+PostgreSQL is a **setup requirement** for OpenSprint (task store). **`npm run setup`** can install it locally (Homebrew on Mac, apt/yum on Linux), start the service, and create:
 
 - **User:** `opensprint`
 - **Password:** `opensprint`
@@ -149,20 +153,20 @@ OpenSprint uses PostgreSQL. **`npm run setup`** installs PostgreSQL locally (Hom
 
 Connection URL: `postgresql://opensprint:opensprint@localhost:5432/opensprint`
 
-To use a remote database (e.g. Supabase), set **`DATABASE_URL`** (env) or **`databaseUrl`** in `~/.opensprint/global-settings.json`. `DATABASE_URL` takes precedence for 12-factor deploys. To stop local Postgres on Mac: `brew services stop postgresql@16` (or `postgresql`). On Linux: `sudo systemctl stop postgresql`.
+To use a remote database (e.g. Supabase), set **`DATABASE_URL`** (env) or **`databaseUrl`** in `~/.opensprint/global-settings.json`. `DATABASE_URL` takes precedence for 12-factor deploys. To stop local Postgres on Mac: `brew services stop postgresql@16` (or `postgresql`). On Linux: `sudo systemctl stop postgresql`. If you already run an older Postgres on your system, setup’s installer may conflict; use your existing instance (create the `opensprint` user/database) or a remote `databaseUrl` instead.
 
 ### Environment variables
 
 | Variable                     | Default | Description                                                                                  |
 | ---------------------------- | ------- | -------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`               | —       | PostgreSQL connection URL; overrides `databaseUrl` in global settings (12-factor).            |
+| `DATABASE_URL`               | —       | PostgreSQL connection URL; overrides `databaseUrl` in global settings (12-factor).           |
 | `ANTHROPIC_API_KEY`          | —       | Claude integration                                                                           |
 | `CURSOR_API_KEY`             | —       | Cursor integration                                                                           |
 | `OPENAI_API_KEY`             | —       | OpenAI integration                                                                           |
 | `PORT`                       | `3100`  | Backend port                                                                                 |
 | `OPENSPRINT_PRESERVE_AGENTS` | unset   | Set to `1` in dev so agent processes survive backend restarts; do **not** set in production. |
 | `NODE_ENV`                   | unset   | Optional: set to `test` when running tests; prod should not run test-only logic.             |
-| `VITE_API_BASE`             | (empty) | Frontend: API base URL (e.g. empty for same-origin, or full origin for production/staging). |
+| `VITE_API_BASE`              | (empty) | Frontend: API base URL (e.g. empty for same-origin, or full origin for production/staging).  |
 
 ## Developing on Open Sprint (self-hosting)
 

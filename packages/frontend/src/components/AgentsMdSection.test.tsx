@@ -78,9 +78,9 @@ describe("AgentsMdSection", () => {
     expect(mockGetAgentsInstructions).toHaveBeenCalledWith(projectId);
 
     await screen.findByTestId("agents-md-view");
+    await screen.findByText("Use bd for tasks.");
     expect(screen.getByText("Agent Instructions (AGENTS.md)")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Agent Instructions");
-    expect(screen.getByText("Use bd for tasks.")).toBeInTheDocument();
     expect(screen.getByTestId("agents-md-edit")).toBeInTheDocument();
   });
 

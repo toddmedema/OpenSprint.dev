@@ -63,6 +63,11 @@ import {
   clearExhausted,
 } from "./api-key-exhausted.service.js";
 import { getComplexityForAgent } from "./plan-complexity.js";
+import {
+  buildTaskLastExecutionSummary,
+  compactExecutionText,
+  persistTaskLastExecutionSummary,
+} from "./task-execution-summary.js";
 
 const log = createLogger("orchestrator");
 
@@ -1764,6 +1769,13 @@ export class OrchestratorService {
 
     const reason = `Review rejected: ${result.issues?.join("; ") || result.summary || "No details provided"}`;
     const reviewFeedback = formatReviewFeedback(result);
+    const rejectionSummary = buildTaskLastExecutionSummary({
+      attempt: slot.attempt,
+      outcome: "rejected",
+      phase: "review",
+      failureType: "review_rejection",
+      summary: compactExecutionText(reason, 500),
+    });
 
     let gitDiff = "";
     try {
@@ -1776,11 +1788,12 @@ export class OrchestratorService {
       // Best-effort capture
     }
 
+    const settings = await this.projectService.getSettings(projectId);
     const session = await this.sessionManager.createSession(repoPath, {
       taskId: task.id,
       attempt: slot.attempt,
-      agentType: (await this.projectService.getSettings(projectId)).simpleComplexityAgent.type,
-      agentModel: (await this.projectService.getSettings(projectId)).simpleComplexityAgent.model || "",
+      agentType: settings.simpleComplexityAgent.type,
+      agentModel: settings.simpleComplexityAgent.model || "",
       gitBranch: branchName,
       status: "rejected",
       outputLog: slot.agent.outputLog.join(""),
@@ -1789,6 +1802,29 @@ export class OrchestratorService {
       startedAt: slot.agent.startedAt,
     });
     await this.sessionManager.archiveSession(repoPath, task.id, slot.attempt, session, wtPath);
+    await persistTaskLastExecutionSummary(
+      this.taskStore,
+      projectId,
+      task.id,
+      rejectionSummary
+    );
+    eventLogService
+      .append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId: task.id,
+        event: "review.rejected",
+        data: {
+          attempt: slot.attempt,
+          phase: "review",
+          failureType: "review_rejection",
+          model: settings.simpleComplexityAgent.model ?? null,
+          summary: rejectionSummary.summary,
+          reason,
+          nextAction: "Retry coding with review feedback",
+        },
+      })
+      .catch(() => {});
 
     await this.failureHandler.handleTaskFailure(
       projectId,

@@ -8,16 +8,14 @@ import {
   sortAgentsByCanonicalOrder,
 } from "@opensprint/shared";
 import type { AgentRole } from "@opensprint/shared";
-import { useAppDispatch } from "../store";
+import { useAppDispatch, useAppSelector } from "../store";
 import { setSelectedTaskId } from "../store/slices/executeSlice";
-import { useActiveAgents } from "../api/hooks";
 import { getProjectPhasePath } from "../lib/phaseRouting";
 import { setSelectedPlanId } from "../store/slices/planSlice";
 import { useDisplayPreferences } from "../contexts/DisplayPreferencesContext";
 import { UptimeDisplay } from "./UptimeDisplay";
 import { api } from "../api/client";
 import {
-  ACTIVE_AGENTS_POLL_INTERVAL_MS,
   AGENT_DROPDOWN_ICON_SIZE,
   DROPDOWN_PORTAL_Z_INDEX,
 } from "../lib/constants";
@@ -66,7 +64,7 @@ const AgentDropdownItem = memo(function AgentDropdownItem({
   agent: ActiveAgent;
   projectId: string;
   onClick: (agent: ActiveAgent) => void;
-  onKillSuccess: () => void;
+  onKillSuccess: (agentId: string) => void;
 }) {
   const [killing, setKilling] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -77,7 +75,7 @@ const AgentDropdownItem = memo(function AgentDropdownItem({
     setKilling(true);
     api.agents
       .kill(projectId, agent.id)
-      .then(() => onKillSuccess())
+      .then(() => onKillSuccess(agent.id))
       .finally(() => {
         setKilling(false);
         setShowConfirmDialog(false);
@@ -164,15 +162,12 @@ function LoadingSpinner({ className = "w-4 h-4" }: { className?: string }) {
 
 export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
   const dispatch = useAppDispatch();
-  const { data, isFetching, refetch } = useActiveAgents(projectId, {
-    refetchInterval: ACTIVE_AGENTS_POLL_INTERVAL_MS,
-  });
-  const agents = data?.agents ?? [];
-  /** Only show loading when never loaded; use cached list when refreshing (avoids flash on open) */
-  const loadedOnce = data !== undefined;
-  const showLoading = !loadedOnce && isFetching;
+  const agents = useAppSelector((state) => state.execute.activeAgents);
+  const loadedOnce = useAppSelector((state) => state.execute.activeAgentsLoadedOnce);
+  const showLoading = !loadedOnce;
   const showLoadingInDropdown = !loadedOnce;
   const [open, setOpen] = useState(false);
+  const [hiddenAgentIds, setHiddenAgentIds] = useState<Set<string>>(new Set());
   const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -187,10 +182,18 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
     }
   }, [open]);
 
-  // When dropdown opens: immediately refresh agents so elapsed time is correct from first frame
   useEffect(() => {
-    if (open) void refetch();
-  }, [open, refetch]);
+    setHiddenAgentIds((prev) => {
+      if (prev.size === 0) return prev;
+      const liveIds = new Set(agents.map((agent) => agent.id));
+      const next = new Set([...prev].filter((id) => liveIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [agents]);
+
+  useEffect(() => {
+    setHiddenAgentIds(new Set());
+  }, [projectId]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -230,12 +233,16 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
     [dispatch, navigate, projectId]
   );
 
-  const handleKillSuccess = useCallback(() => {
-    void refetch();
-  }, [refetch]);
+  const handleKillSuccess = useCallback((agentId: string) => {
+    setHiddenAgentIds((prev) => new Set(prev).add(agentId));
+  }, []);
 
   /** Sort agents by canonical README/PRD order for consistent icon display. */
-  const sortedAgents = sortAgentsByCanonicalOrder(agents);
+  const visibleAgents =
+    hiddenAgentIds.size === 0
+      ? agents
+      : agents.filter((agent) => !hiddenAgentIds.has(agent.id));
+  const sortedAgents = sortAgentsByCanonicalOrder(visibleAgents);
 
   const BUTTON_AGENT_ICON_SIZE = "1.5rem";
 
@@ -259,7 +266,7 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
           >
             <LoadingSpinner className="w-4 h-4" />
           </div>
-        ) : agents.length === 0 ? (
+        ) : sortedAgents.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-theme-muted">No agents running</div>
         ) : (
           <ul className="divide-y divide-theme-border-subtle">
@@ -295,11 +302,11 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
         >
           {showLoading ? (
             <LoadingSpinner className="w-4 h-4" />
-          ) : agents.length > 0 ? (
+          ) : sortedAgents.length > 0 ? (
             <>
               {(runningAgentsDisplayMode === "count" || runningAgentsDisplayMode === "both") && (
                 <span>
-                  {agents.length} agent{agents.length === 1 ? "" : "s"} running
+                  {sortedAgents.length} agent{sortedAgents.length === 1 ? "" : "s"} running
                 </span>
               )}
               {(runningAgentsDisplayMode === "icons" || runningAgentsDisplayMode === "both") && (

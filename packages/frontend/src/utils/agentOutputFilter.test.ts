@@ -78,6 +78,12 @@ describe("agentOutputFilter", () => {
       expect(f.filter(chunk)).toBe("");
     });
 
+    it("surfaces explicit error events as agent errors", () => {
+      const f = createAgentOutputFilter();
+      const chunk = '{"type":"error","message":"fatal: no rebase in progress"}\n';
+      expect(f.filter(chunk)).toBe("[Agent error: fatal: no rebase in progress]\n");
+    });
+
     it("extracts actual thinking text from type:thinking JSON", () => {
       const f = createAgentOutputFilter();
       const chunk = '{"type":"thinking","content":"internal reasoning..."}\n';

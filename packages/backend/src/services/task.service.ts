@@ -7,15 +7,20 @@ import type { TaskStoreService } from "./task-store.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { SessionManager } from "./session-manager.js";
-import { orchestratorService } from "./orchestrator.service.js";
 import { triggerDeployForEvent } from "./deploy-trigger.service.js";
 import { ContextAssembler } from "./context-assembler.js";
 import { BranchManager } from "./branch-manager.js";
 import { FeedbackService } from "./feedback.service.js";
 import type { StoredTask } from "./task-store.service.js";
 import { createLogger } from "../utils/logger.js";
+import { parseTaskLastExecutionSummary } from "./task-execution-summary.js";
 
 const log = createLogger("task");
+
+export interface TaskOrchestratorControl {
+  stopTaskAndFreeSlot(projectId: string, taskId: string): Promise<void>;
+  nudge(projectId: string): void;
+}
 
 export class TaskService {
   constructor(
@@ -24,7 +29,8 @@ export class TaskService {
     private feedbackService: FeedbackService,
     private sessionManager: SessionManager,
     private contextAssembler: ContextAssembler,
-    private branchManager: BranchManager
+    private branchManager: BranchManager,
+    private orchestrator: TaskOrchestratorControl
   ) {}
 
   /** List all tasks for a project with computed kanban columns and test results.
@@ -226,6 +232,9 @@ export class TaskService {
 
     const blockReason =
       (issue as { block_reason?: string | null }).block_reason ?? null;
+    const lastExecution = parseTaskLastExecutionSummary(
+      (issue as { last_execution_summary?: unknown }).last_execution_summary
+    );
 
     return {
       id,
@@ -247,6 +256,14 @@ export class TaskService {
       ...(sourceFeedbackIds?.[0] ? { sourceFeedbackId: sourceFeedbackIds[0] } : {}),
       ...(taskComplexity ? { complexity: taskComplexity } : {}),
       ...(blockReason ? { blockReason } : {}),
+      ...(lastExecution
+        ? {
+            lastExecution,
+            lastExecutionSummary: lastExecution.summary,
+            lastFailureType: lastExecution.failureType ?? null,
+            lastExecutionAt: lastExecution.at,
+          }
+        : {}),
     };
   }
 
@@ -367,7 +384,7 @@ export class TaskService {
 
     // 1. Stop any running agent and free slot (removes worktree in worktree mode)
     try {
-      await orchestratorService.stopTaskAndFreeSlot(projectId, taskId);
+      await this.orchestrator.stopTaskAndFreeSlot(projectId, taskId);
     } catch (err) {
       log.warn("Stop-agent-on-unblock failed, continuing cleanup", {
         projectId,
@@ -421,7 +438,7 @@ export class TaskService {
       }
     }
 
-    orchestratorService.nudge(projectId);
+    this.orchestrator.nudge(projectId);
     return { taskUnblocked: true };
   }
 
@@ -471,7 +488,7 @@ export class TaskService {
     // If an agent is actively working on this task, kill it and nudge the orchestrator to pick new work.
     // Best-effort: if this throws (e.g. cleanup), we still close the task below.
     try {
-      await orchestratorService.stopTaskAndFreeSlot(projectId, taskId);
+      await this.orchestrator.stopTaskAndFreeSlot(projectId, taskId);
     } catch (err) {
       log.warn("Stop-agent-on-mark-done failed, continuing to close task", {
         projectId,

@@ -133,7 +133,7 @@ describe("executeSlice", () => {
       expect(state.awaitingApproval).toBe(false);
       expect(state.selectedTaskId).toBeNull();
       expect(state.agentOutput).toEqual({});
-      expect(state.completionState).toBeNull();
+      expect(state.completionStateByTaskId).toEqual({});
       expect(state.archivedSessions).toEqual([]);
       expect(state.async.tasks.loading).toBe(false);
       expect(state.error).toBeNull();
@@ -141,7 +141,7 @@ describe("executeSlice", () => {
   });
 
   describe("reducers", () => {
-    it("setSelectedTaskId sets selected task and clears related state", () => {
+    it("setSelectedTaskId clears selection without discarding per-task completion state", () => {
       const store = createStore();
       store.dispatch(setTasks([mockTask]));
       store.dispatch(setSelectedTaskId("task-1"));
@@ -150,7 +150,7 @@ describe("executeSlice", () => {
       store.dispatch(setCompletionState({ taskId: "task-1", status: "done", testResults: null }));
       store.dispatch(setSelectedTaskId(null));
       expect(store.getState().execute.selectedTaskId).toBeNull();
-      expect(store.getState().execute.completionState).toBeNull();
+      expect(store.getState().execute.completionStateByTaskId["task-1"]?.status).toBe("done");
     });
 
     it("setSelectedTaskId(null) clears agentOutput for previous task to free memory", () => {
@@ -312,8 +312,8 @@ describe("executeSlice", () => {
         })
       );
       const state = store.getState().execute;
-      expect(state.completionState?.status).toBe("approved");
-      expect(state.completionState?.testResults?.passed).toBe(5);
+      expect(state.completionStateByTaskId["task-1"]?.status).toBe("approved");
+      expect(state.completionStateByTaskId["task-1"]?.testResults?.passed).toBe(5);
     });
 
     it("taskUpdated updates task in array", () => {

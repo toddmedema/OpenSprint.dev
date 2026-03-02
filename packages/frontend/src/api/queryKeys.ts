@@ -32,6 +32,8 @@ export const queryKeys = {
     status: (projectId: string) => ["execute", projectId, "status"] as const,
     liveOutput: (projectId: string, taskId: string) =>
       ["execute", projectId, taskId, "liveOutput"] as const,
+    diagnostics: (projectId: string, taskId: string) =>
+      ["execute", projectId, taskId, "diagnostics"] as const,
   },
   feedback: {
     list: (projectId: string) => ["feedback", projectId] as const,

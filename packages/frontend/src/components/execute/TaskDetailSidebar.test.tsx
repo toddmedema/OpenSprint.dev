@@ -13,7 +13,7 @@ import {
   TaskDetailSidebar,
   type TaskDetailSidebarProps,
 } from "./TaskDetailSidebar";
-import type { AgentSession, Plan, Task } from "@opensprint/shared";
+import type { AgentSession, Plan, Task, TaskExecutionDiagnostics } from "@opensprint/shared";
 import type { ActiveTaskInfo } from "../../store/slices/executeSlice";
 import {
   fetchTaskDetail,
@@ -106,13 +106,24 @@ function createMinimalProps(overrides: Record<string, unknown> = {}) {
     },
     agentOutput: (flat.agentOutput as string[]) ?? [],
     completionState: (flat.completionState as TaskDetailSidebarProps["completionState"]) ?? null,
+    diagnostics: (flat.diagnostics as TaskExecutionDiagnostics) ?? null,
+    diagnosticsLoading: (flat.diagnosticsLoading as boolean) ?? false,
     archivedSessions: (flat.archivedSessions as AgentSession[]) ?? [],
     archivedLoading: (flat.archivedLoading as boolean) ?? false,
     markDoneLoading: (flat.markDoneLoading as boolean) ?? false,
     unblockLoading: (flat.unblockLoading as boolean) ?? false,
     taskIdToStartedAt: (flat.taskIdToStartedAt as Record<string, string>) ?? {},
-    plans: (flat.plans as Plan[]) ?? [basePlan],
-    tasks: (flat.tasks as Task[]) ?? [],
+    planByEpicId: ((flat.plans as Plan[]) ?? [basePlan]).reduce<Record<string, Plan>>(
+      (acc, plan) => {
+        acc[plan.metadata.epicId] = plan;
+        return acc;
+      },
+      {}
+    ),
+    taskById: ((flat.tasks as Task[]) ?? []).reduce<Record<string, Task>>((acc, task) => {
+      acc[task.id] = task;
+      return acc;
+    }, {}),
     activeTasks: (flat.activeTasks as ActiveTaskInfo[]) ?? [],
     wsConnected: (flat.wsConnected as boolean) ?? false,
     isDoneTask: flat.isDoneTask as boolean,
@@ -433,7 +444,7 @@ describe("TaskDetailSidebar", () => {
     expect(screen.queryByTestId("sidebar-actions-menu")).not.toBeInTheDocument();
   });
 
-  it("uses scrollable div with ReactMarkdown for live output (not pre)", () => {
+  it("uses plain text rendering while live output is still streaming", () => {
     const props = createMinimalProps({
       wsConnected: true,
       isDoneTask: false,
@@ -448,13 +459,14 @@ describe("TaskDetailSidebar", () => {
     expect(container.tagName).toBe("DIV");
     expect(container).toHaveClass("overflow-y-auto");
     expect(container).toHaveClass("prose-execute-task");
-    expect(container).toHaveTextContent("world");
+    expect(container).toHaveTextContent("Hello **world**");
   });
 
-  it("renders live agent output as markdown with code blocks and formatting", () => {
+  it("upgrades to markdown rendering once the agent has finished", () => {
     const props = createMinimalProps({
       wsConnected: true,
       isDoneTask: false,
+      completionState: { status: "approved", testResults: null },
       agentOutput: ["**Bold text** and `inline code`\n\n```\ncode block\n```"],
     });
 
@@ -469,10 +481,11 @@ describe("TaskDetailSidebar", () => {
     expect(container).toHaveTextContent("code block");
   });
 
-  it("applies prose-execute-task and theme-aware code block classes to live output", () => {
+  it("applies prose classes for completed markdown output", () => {
     const props = createMinimalProps({
       wsConnected: true,
       isDoneTask: false,
+      completionState: { status: "approved", testResults: null },
       agentOutput: ["```\ncode\n```"],
     });
 
@@ -2221,6 +2234,94 @@ describe("TaskDetailSidebar", () => {
 
     expect(screen.getByTestId("completion-failure-reason")).toHaveTextContent(
       "Cursor agent requires authentication. Run agent login."
+    );
+  });
+
+  it("renders execution diagnostics summary and attempt history", () => {
+    const props = createMinimalProps({
+      isBlockedTask: true,
+      selectedTaskData: {
+        ...defaultSelectedTaskData,
+        kanbanColumn: "blocked" as const,
+        status: "blocked" as const,
+        blockReason: "Merge Failure",
+      },
+      diagnostics: {
+        taskId: "epic-1.1",
+        taskStatus: "blocked",
+        blockReason: "Merge Failure",
+        cumulativeAttempts: 6,
+        latestSummary:
+          "Attempt 6 merge failed during merge_to_main: fatal: no rebase in progress",
+        latestFailureType: null,
+        latestOutcome: "blocked" as const,
+        latestNextAction: "Blocked pending investigation",
+        timeline: [],
+        attempts: [
+          {
+            attempt: 6,
+            finalPhase: "merge" as const,
+            finalOutcome: "blocked" as const,
+            finalSummary:
+              "Attempt 6 merge failed during merge_to_main: fatal: no rebase in progress",
+            codingModel: "composer-1.5",
+            reviewModel: "composer-1.5",
+            mergeStage: "merge_to_main",
+            conflictedFiles: ["packages/backend/src/routes/global-settings.ts"],
+            sessionAttemptStatuses: [],
+            startedAt: "2026-03-01T17:02:25.000Z",
+            completedAt: "2026-03-01T17:04:21.000Z",
+          },
+          {
+            attempt: 2,
+            finalPhase: "coding" as const,
+            finalOutcome: "failed" as const,
+            finalSummary:
+              "Attempt 2 failed before coding started because the selected OpenAI model was not supported by chat/completions",
+            codingModel: "gpt-5.3-codex",
+            reviewModel: null,
+            mergeStage: null,
+            conflictedFiles: [],
+            sessionAttemptStatuses: ["failed"],
+            startedAt: "2026-03-01T16:10:24.000Z",
+            completedAt: "2026-03-01T16:10:26.000Z",
+          },
+          {
+            attempt: 1,
+            finalPhase: "coding" as const,
+            finalOutcome: "failed" as const,
+            finalSummary:
+              "Attempt 1 failed before coding started because the selected OpenAI model was not supported by chat/completions",
+            codingModel: "gpt-5.3-codex",
+            reviewModel: null,
+            mergeStage: null,
+            conflictedFiles: [],
+            sessionAttemptStatuses: ["failed"],
+            startedAt: "2026-03-01T16:08:24.000Z",
+            completedAt: "2026-03-01T16:08:26.000Z",
+          },
+        ],
+      },
+    });
+
+    renderWithProviders(<TaskDetailSidebar {...props} />, {
+      preloadedState: defaultPreloadedState,
+    });
+
+    expect(screen.getByTestId("execution-diagnostics-block-reason")).toHaveTextContent(
+      "Blocked: Merge Failure"
+    );
+    expect(screen.getByTestId("execution-diagnostics-latest-summary")).toHaveTextContent(
+      "fatal: no rebase in progress"
+    );
+    expect(screen.getByTestId("execution-diagnostics-earlier-failures")).toHaveTextContent(
+      "Attempts 1-2"
+    );
+    expect(screen.getByTestId("execution-attempt-6")).toHaveTextContent(
+      "Merge · Blocked"
+    );
+    expect(screen.getByTestId("execution-attempt-6")).toHaveTextContent(
+      "packages/backend/src/routes/global-settings.ts"
     );
   });
 

@@ -245,6 +245,9 @@ export const websocketMiddleware: Middleware = (storeApi) => {
       }
 
       case "task.updated": {
+        void qc.invalidateQueries({
+          queryKey: queryKeys.execute.diagnostics(projectId, event.taskId),
+        });
         d(
           taskUpdated({
             taskId: event.taskId,
@@ -271,6 +274,9 @@ export const websocketMiddleware: Middleware = (storeApi) => {
       case "agent.completed": {
         const completed = event as AgentCompletedEvent;
         void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+        void qc.invalidateQueries({
+          queryKey: queryKeys.execute.diagnostics(projectId, completed.taskId),
+        });
         d(
           setCompletionState({
             taskId: completed.taskId,
@@ -281,6 +287,19 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         );
         break;
       }
+
+      case "task.blocked":
+        void qc.invalidateQueries({
+          queryKey: queryKeys.tasks.detail(projectId, event.taskId),
+        });
+        void qc.invalidateQueries({
+          queryKey: queryKeys.tasks.sessions(projectId, event.taskId),
+        });
+        void qc.invalidateQueries({
+          queryKey: queryKeys.execute.diagnostics(projectId, event.taskId),
+        });
+        void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+        break;
 
       case "agent.output":
         d(appendAgentOutput({ taskId: event.taskId, chunk: event.chunk }));

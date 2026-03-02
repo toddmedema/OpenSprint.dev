@@ -2,7 +2,15 @@ import React, { useRef, useEffect, useState, useMemo } from "react";
 import { useAutoScroll } from "../../hooks/useAutoScroll";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { AgentSession, Notification, Plan, Task } from "@opensprint/shared";
+import type {
+  AgentSession,
+  Notification,
+  Plan,
+  Task,
+  TaskExecutionDiagnostics,
+  TaskExecutionOutcome,
+  TaskExecutionPhase,
+} from "@opensprint/shared";
 import { VirtualizedAgentOutput } from "./VirtualizedAgentOutput";
 import {
   PRIORITY_LABELS,
@@ -44,6 +52,37 @@ const DescriptionMarkdown = React.memo(({ content }: { content: string }) => (
   </div>
 ));
 
+const EXECUTION_PHASE_LABELS: Record<TaskExecutionPhase, string> = {
+  coding: "Coding",
+  review: "Review",
+  merge: "Merge",
+  orchestrator: "Orchestrator",
+};
+
+const EXECUTION_OUTCOME_LABELS: Record<TaskExecutionOutcome, string> = {
+  running: "Running",
+  failed: "Failed",
+  rejected: "Rejected",
+  requeued: "Requeued",
+  demoted: "Demoted",
+  blocked: "Blocked",
+  completed: "Completed",
+};
+
+function truncateDiagnosticsText(text: string, limit = 180): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (compact.length <= limit) return compact;
+  return compact.slice(0, Math.max(0, limit - 3)).trimEnd() + "...";
+}
+
+function formatAttemptLabel(attempts: number[]): string {
+  if (attempts.length === 0) return "";
+  if (attempts.length === 1) return `Attempt ${attempts[0]}`;
+  const first = attempts[0];
+  const last = attempts[attempts.length - 1];
+  return first === last ? `Attempt ${first}` : `Attempts ${first}-${last}`;
+}
+
 export interface TaskDetailTaskDetail {
   selectedTaskData: Task | null;
   taskDetailLoading: boolean;
@@ -78,13 +117,15 @@ export interface TaskDetailSidebarProps {
     testResults: { passed: number; failed: number; skipped: number; total: number } | null;
     reason?: string | null;
   } | null;
+  diagnostics: TaskExecutionDiagnostics | null;
+  diagnosticsLoading: boolean;
   archivedSessions: AgentSession[];
   archivedLoading: boolean;
   markDoneLoading: boolean;
   unblockLoading: boolean;
   taskIdToStartedAt: Record<string, string>;
-  plans: Plan[];
-  tasks: Task[];
+  planByEpicId: Record<string, Plan>;
+  taskById: Record<string, Task>;
   activeTasks: ActiveTaskInfo[];
   wsConnected: boolean;
   isDoneTask: boolean;
@@ -119,12 +160,14 @@ function areTaskDetailSidebarPropsEqual(
     prev.markDoneLoading !== next.markDoneLoading ||
     prev.unblockLoading !== next.unblockLoading ||
     prev.taskIdToStartedAt !== next.taskIdToStartedAt ||
-    prev.plans !== next.plans ||
-    prev.tasks !== next.tasks ||
+    prev.planByEpicId !== next.planByEpicId ||
+    prev.taskById !== next.taskById ||
     prev.activeTasks !== next.activeTasks ||
     prev.wsConnected !== next.wsConnected ||
     prev.isDoneTask !== next.isDoneTask ||
     prev.isBlockedTask !== next.isBlockedTask ||
+    prev.diagnostics !== next.diagnostics ||
+    prev.diagnosticsLoading !== next.diagnosticsLoading ||
     sec(prev).sourceFeedbackExpanded !== sec(next).sourceFeedbackExpanded ||
     sec(prev).setSourceFeedbackExpanded !== sec(next).setSourceFeedbackExpanded ||
     sec(prev).descriptionSectionExpanded !== sec(next).descriptionSectionExpanded ||
@@ -153,13 +196,15 @@ function TaskDetailSidebarInner({
   taskDetail,
   agentOutput,
   completionState,
+  diagnostics,
+  diagnosticsLoading,
   archivedSessions,
   archivedLoading,
   markDoneLoading,
   unblockLoading,
   taskIdToStartedAt,
-  plans,
-  tasks,
+  planByEpicId,
+  taskById,
   activeTasks,
   wsConnected,
   isDoneTask,
@@ -168,11 +213,7 @@ function TaskDetailSidebarInner({
   openQuestionNotification,
   callbacks,
 }: TaskDetailSidebarProps) {
-  const {
-    selectedTaskData,
-    taskDetailLoading,
-    taskDetailError,
-  } = taskDetail;
+  const { selectedTaskData, taskDetailLoading, taskDetailError } = taskDetail;
   const {
     sourceFeedbackExpanded,
     setSourceFeedbackExpanded,
@@ -181,14 +222,8 @@ function TaskDetailSidebarInner({
     artifactsSectionExpanded,
     setArtifactsSectionExpanded,
   } = sections;
-  const {
-    onNavigateToPlan,
-    onClose,
-    onOpenQuestionResolved,
-    onMarkDone,
-    onUnblock,
-    onSelectTask,
-  } = callbacks;
+  const { onNavigateToPlan, onClose, onOpenQuestionResolved, onMarkDone, onUnblock, onSelectTask } =
+    callbacks;
   const dispatch = useAppDispatch();
   const roleLabel = activeRoleLabel(selectedTask, activeTasks);
   const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
@@ -205,11 +240,7 @@ function TaskDetailSidebarInner({
       );
     }
     return showLoadingPlaceholder ? "Loading output…" : "Waiting for agent output...";
-  }, [
-    agentOutputText,
-    archivedSessions,
-    showLoadingPlaceholder,
-  ]);
+  }, [agentOutputText, archivedSessions, showLoadingPlaceholder]);
 
   const {
     containerRef: liveOutputRef,
@@ -226,6 +257,7 @@ function TaskDetailSidebarInner({
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const task = selectedTaskData;
   const displayLabel = task ? complexityToDisplay(task.complexity) : null;
+  const allTasks = useMemo(() => Object.values(taskById), [taskById]);
 
   const displayDesc = useMemo(() => {
     if (!task) return "";
@@ -237,10 +269,52 @@ function TaskDetailSidebarInner({
   }, [task?.description, task?.sourceFeedbackIds, task?.sourceFeedbackId]);
 
   const feedbackIds = useMemo(
-    () =>
-      task?.sourceFeedbackIds ?? (task?.sourceFeedbackId ? [task.sourceFeedbackId] : []),
+    () => task?.sourceFeedbackIds ?? (task?.sourceFeedbackId ? [task.sourceFeedbackId] : []),
     [task?.sourceFeedbackIds, task?.sourceFeedbackId]
   );
+  const latestFailedSession = useMemo(
+    () =>
+      [...archivedSessions]
+        .reverse()
+        .find(
+          (session) =>
+            Boolean(session.failureReason) ||
+            session.status === "failed" ||
+            session.status === "rejected"
+        ) ?? null,
+    [archivedSessions]
+  );
+  const earlierFailureSummaries = useMemo(() => {
+    if (!diagnostics || diagnostics.attempts.length < 2) return [];
+
+    const normalizeSummary = (summary: string) =>
+      summary
+        .replace(/\bAttempt \d+\b/gi, "Attempt")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const olderAttempts = [...diagnostics.attempts.slice(1)]
+      .filter((attempt) => attempt.finalOutcome !== "running" && attempt.finalSummary.trim() !== "")
+      .sort((a, b) => a.attempt - b.attempt);
+    const groups: Array<{ attempts: number[]; summary: string }> = [];
+
+    for (const attempt of olderAttempts) {
+      const summary = normalizeSummary(attempt.finalSummary);
+      const previous = groups[groups.length - 1];
+      if (previous && previous.summary === summary) {
+        previous.attempts.push(attempt.attempt);
+        continue;
+      }
+      groups.push({ attempts: [attempt.attempt], summary });
+    }
+
+    return groups
+      .slice(0, 2)
+      .map(
+        (group) =>
+          `${formatAttemptLabel(group.attempts)}: ${truncateDiagnosticsText(group.summary)}`
+      );
+  }, [diagnostics]);
 
   const sourceFeedbackToggleCallbacks = useMemo(() => {
     const map: Record<string, () => void> = {};
@@ -462,11 +536,7 @@ function TaskDetailSidebarInner({
                 <span
                   className="inline-flex items-center gap-1.5 text-theme-muted/80"
                   data-testid="task-complexity"
-                  aria-label={
-                    displayLabel
-                      ? `Complexity: ${displayLabel}`
-                      : "Complexity: not set"
-                  }
+                  aria-label={displayLabel ? `Complexity: ${displayLabel}` : "Complexity: not set"}
                   title={
                     typeof task.complexity === "number" &&
                     task.complexity >= TASK_COMPLEXITY_MIN &&
@@ -478,25 +548,23 @@ function TaskDetailSidebarInner({
                   <ComplexityIcon complexity={task.complexity} size="sm" />
                   {displayLabel ?? "—"}
                 </span>
-                {isDoneTask && (() => {
-                  const duration = formatTaskDuration(task.startedAt, task.completedAt);
-                  return duration ? (
-                    <span
-                      className="inline-flex items-center text-theme-muted/80"
-                      data-testid="task-duration"
-                      aria-label={`Took ${duration}`}
-                    >
-                      Took {duration}
-                    </span>
-                  ) : null;
-                })()}
+                {isDoneTask &&
+                  (() => {
+                    const duration = formatTaskDuration(task.startedAt, task.completedAt);
+                    return duration ? (
+                      <span
+                        className="inline-flex items-center text-theme-muted/80"
+                        data-testid="task-duration"
+                        aria-label={`Took ${duration}`}
+                      >
+                        Took {duration}
+                      </span>
+                    ) : null;
+                  })()}
               </div>
               {/* Block reason: shown below status/priority row when task is blocked */}
               {isBlockedTask && task.blockReason && (
-                <div
-                  className="mb-3 text-xs text-theme-error-text"
-                  data-testid="task-block-reason"
-                >
+                <div className="mb-3 text-xs text-theme-error-text" data-testid="task-block-reason">
                   {task.blockReason}
                 </div>
               )}
@@ -543,17 +611,11 @@ function TaskDetailSidebarInner({
           <div className="p-4" data-section="view-plan-deps-addlink">
             {/* Links: Plan first, then blocked/parent/related */}
             {(() => {
-              const plan =
-                task.epicId && onNavigateToPlan
-                  ? plans.find((p) => p.metadata.epicId === task.epicId)
-                  : null;
+              const plan = task.epicId && onNavigateToPlan ? planByEpicId[task.epicId] : null;
               const planTitle = plan ? getEpicTitleFromPlan(plan) : null;
 
               const nonEpicDeps = (task.dependencies ?? []).filter(
-                (d) =>
-                  d.targetId &&
-                  d.type !== "discovered-from" &&
-                  d.targetId !== task.epicId
+                (d) => d.targetId && d.type !== "discovered-from" && d.targetId !== task.epicId
               );
 
               const TYPE_ORDER: Record<string, number> = {
@@ -567,8 +629,7 @@ function TaskDetailSidebarInner({
                 related: "Related:",
               };
               const sorted = [...nonEpicDeps].sort(
-                (a, b) =>
-                  (TYPE_ORDER[a.type] ?? 3) - (TYPE_ORDER[b.type] ?? 3)
+                (a, b) => (TYPE_ORDER[a.type] ?? 3) - (TYPE_ORDER[b.type] ?? 3)
               );
 
               const hasPlanLink = !!plan && !!planTitle;
@@ -595,7 +656,7 @@ function TaskDetailSidebarInner({
                       </button>
                     )}
                     {sorted.map((d) => {
-                      const depTask = tasks.find((t) => t.id === d.targetId);
+                      const depTask = d.targetId ? taskById[d.targetId] : undefined;
                       const label = depTask?.title ?? d.targetId;
                       const col = depTask?.kanbanColumn ?? "backlog";
                       const typeLabel = TYPE_LABEL[d.type] ?? "Related:";
@@ -606,14 +667,8 @@ function TaskDetailSidebarInner({
                           onClick={() => onSelectTask(d.targetId!)}
                           className="inline-flex items-center gap-1.5 text-left hover:underline text-brand-600 hover:text-brand-500 transition-colors"
                         >
-                          <TaskStatusBadge
-                            column={col}
-                            size="xs"
-                            title={COLUMN_LABELS[col]}
-                          />
-                          <span className="text-theme-muted shrink-0">
-                            {typeLabel}
-                          </span>
+                          <TaskStatusBadge column={col} size="xs" title={COLUMN_LABELS[col]} />
+                          <span className="text-theme-muted shrink-0">{typeLabel}</span>
                           <span className="truncate max-w-[200px]" title={label}>
                             {label}
                           </span>
@@ -630,13 +685,13 @@ function TaskDetailSidebarInner({
               <AddLinkFlow
                 projectId={projectId}
                 childTaskId={selectedTask}
-                tasks={tasks}
-                excludeIds={new Set([
-                  selectedTask,
-                  ...(task.dependencies ?? [])
-                    .filter((d) => d.targetId)
-                    .map((d) => d.targetId!),
-                ])}
+                tasks={allTasks}
+                excludeIds={
+                  new Set([
+                    selectedTask,
+                    ...(task.dependencies ?? []).filter((d) => d.targetId).map((d) => d.targetId!),
+                  ])
+                }
                 onSave={async (parentTaskId, type) => {
                   await dispatch(
                     addTaskDependency({
@@ -693,6 +748,104 @@ function TaskDetailSidebarInner({
             ))
           : null}
 
+        <div className="p-4" data-testid="execution-diagnostics-section">
+          <div className="rounded-lg border border-theme-border bg-theme-surface p-4">
+            <h4 className="text-sm font-medium text-theme-text">Execution diagnostics</h4>
+            {diagnosticsLoading && !diagnostics ? (
+              <div className="mt-3 text-xs text-theme-muted">Loading execution diagnostics...</div>
+            ) : diagnostics &&
+              (diagnostics.latestSummary ||
+                diagnostics.attempts.length > 0 ||
+                diagnostics.timeline.length > 0) ? (
+              <div className="mt-3 space-y-3">
+                <div className="space-y-1 text-xs">
+                  {task?.blockReason && (
+                    <div
+                      className="font-medium text-theme-error-text"
+                      data-testid="execution-diagnostics-block-reason"
+                    >
+                      Blocked: {task.blockReason}
+                    </div>
+                  )}
+                  {diagnostics.latestSummary && (
+                    <div data-testid="execution-diagnostics-latest-summary">
+                      <span className="text-theme-muted">Latest summary:</span>{" "}
+                      <span className="text-theme-text">{diagnostics.latestSummary}</span>
+                    </div>
+                  )}
+                  {earlierFailureSummaries.length > 0 && (
+                    <div data-testid="execution-diagnostics-earlier-failures">
+                      <span className="text-theme-muted">Earlier failures:</span>{" "}
+                      <span className="text-theme-text">{earlierFailureSummaries.join("; ")}</span>
+                    </div>
+                  )}
+                  {diagnostics.latestNextAction && (
+                    <div data-testid="execution-diagnostics-next-action">
+                      <span className="text-theme-muted">Next action:</span>{" "}
+                      <span className="text-theme-text">{diagnostics.latestNextAction}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-theme-muted">Attempts:</span>{" "}
+                    <span className="text-theme-text">{diagnostics.cumulativeAttempts}</span>
+                  </div>
+                  {latestFailedSession?.failureReason && (
+                    <div data-testid="execution-diagnostics-archived-failure">
+                      <span className="text-theme-muted">Latest archived failure:</span>{" "}
+                      <span className="text-theme-text">
+                        Attempt {latestFailedSession.attempt}: {latestFailedSession.failureReason}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="text-xs font-medium text-theme-text">Attempt history</div>
+                  <div className="mt-2 space-y-2">
+                    {diagnostics.attempts.map((attempt) => (
+                      <div
+                        key={attempt.attempt}
+                        className="rounded-md border border-theme-border-subtle bg-theme-code-bg px-3 py-2 text-xs"
+                        data-testid={`execution-attempt-${attempt.attempt}`}
+                      >
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="font-medium text-theme-text">
+                            Attempt {attempt.attempt}
+                          </span>
+                          <span className="text-theme-muted">
+                            {EXECUTION_PHASE_LABELS[attempt.finalPhase]} ·{" "}
+                            {EXECUTION_OUTCOME_LABELS[attempt.finalOutcome]}
+                          </span>
+                        </div>
+                        {(attempt.codingModel || attempt.reviewModel) && (
+                          <div className="mt-1 text-theme-muted">
+                            {attempt.codingModel && `Coder: ${attempt.codingModel}`}
+                            {attempt.codingModel && attempt.reviewModel && " · "}
+                            {attempt.reviewModel && `Reviewer: ${attempt.reviewModel}`}
+                          </div>
+                        )}
+                        {attempt.mergeStage && (
+                          <div className="mt-1 text-theme-muted">
+                            Merge stage: {attempt.mergeStage}
+                          </div>
+                        )}
+                        {(attempt.conflictedFiles?.length ?? 0) > 0 && (
+                          <div className="mt-1 text-theme-muted">
+                            Conflicts: {attempt.conflictedFiles?.join(", ")}
+                          </div>
+                        )}
+                        <div className="mt-1 text-theme-text">{attempt.finalSummary}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 text-xs text-theme-muted">No execution diagnostics yet.</div>
+            )}
+          </div>
+        </div>
+
         <CollapsibleSection
           title={isDoneTask ? "Done Work Artifacts" : "Live agent output"}
           expanded={artifactsSectionExpanded}
@@ -746,7 +899,7 @@ function TaskDetailSidebarInner({
                   <div className="relative flex-1 min-h-0 flex flex-col">
                     <VirtualizedAgentOutput
                       content={liveOutputContent}
-                      useMarkdown={true}
+                      mode={completionState ? "markdown" : "stream"}
                       containerRef={liveOutputRef}
                       onScroll={handleLiveOutputScroll}
                       data-testid="live-agent-output"
@@ -811,7 +964,4 @@ function TaskDetailSidebarInner({
   );
 }
 
-export const TaskDetailSidebar = React.memo(
-  TaskDetailSidebarInner,
-  areTaskDetailSidebarPropsEqual
-);
+export const TaskDetailSidebar = React.memo(TaskDetailSidebarInner, areTaskDetailSidebarPropsEqual);

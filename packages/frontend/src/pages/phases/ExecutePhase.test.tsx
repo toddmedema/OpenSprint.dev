@@ -27,13 +27,14 @@ import projectReducer from "../../store/slices/projectSlice";
 import planReducer from "../../store/slices/planSlice";
 import executeReducer from "../../store/slices/executeSlice";
 import evalReducer from "../../store/slices/evalSlice";
-import websocketReducer from "../../store/slices/websocketSlice";
+import websocketReducer, { setConnected } from "../../store/slices/websocketSlice";
 const mockGet = vi.fn().mockResolvedValue({});
 const mockMarkDone = vi.fn().mockResolvedValue(undefined);
 const mockUnblock = vi.fn().mockResolvedValue({ taskUnblocked: true });
 const mockFeedbackGet = vi.fn().mockResolvedValue(null);
 const mockAgentsActive = vi.fn().mockResolvedValue([]);
 const mockLiveOutput = vi.fn().mockResolvedValue({ output: "" });
+const mockTaskDiagnostics = vi.fn().mockResolvedValue(null);
 
 vi.mock("../../api/client", () => ({
   api: {
@@ -50,6 +51,7 @@ vi.mock("../../api/client", () => ({
     execute: {
       status: vi.fn().mockResolvedValue({}),
       liveOutput: (...args: unknown[]) => mockLiveOutput(...args),
+      taskDiagnostics: (...args: unknown[]) => mockTaskDiagnostics(...args),
     },
     agents: {
       active: (...args: unknown[]) => mockAgentsActive(...args),
@@ -2252,7 +2254,7 @@ describe("ExecutePhase Redux integration", () => {
     });
   });
 
-  it("polls live output every 1s when viewing in-progress task", async () => {
+  it("backfills live output once on mount and once after websocket reconnect", async () => {
     vi.useFakeTimers();
     try {
       mockGet.mockResolvedValue({
@@ -2287,12 +2289,19 @@ describe("ExecutePhase Redux integration", () => {
       await vi.waitFor(() => {
         expect(mockLiveOutput).toHaveBeenCalledWith("proj-1", "epic-1.1");
       });
-      const beforeCalls = mockLiveOutput.mock.calls.length;
+      const initialCalls = mockLiveOutput.mock.calls.length;
 
-      // Advance 2.5 seconds — interval fires at 1s and 2s
       await vi.advanceTimersByTimeAsync(2500);
+      expect(mockLiveOutput.mock.calls.length).toBe(initialCalls);
 
-      expect(mockLiveOutput.mock.calls.length).toBeGreaterThanOrEqual(beforeCalls + 2);
+      act(() => {
+        store.dispatch(setConnected(false));
+        store.dispatch(setConnected(true));
+      });
+
+      await vi.waitFor(() => {
+        expect(mockLiveOutput.mock.calls.length).toBe(initialCalls + 1);
+      });
     } finally {
       vi.useRealTimers();
     }

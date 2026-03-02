@@ -1,20 +1,36 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
-import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import * as prettier from "prettier";
-import parserMarkdown from "prettier/plugins/markdown";
 import { api } from "../api/client";
 import { useTheme } from "../contexts/ThemeContext";
 
 const MDEditor = lazy(() =>
   import("@uiw/react-md-editor").then((m) => ({ default: m.default }))
 );
+const AgentsMdPreview = lazy(() =>
+  import("./AgentsMdPreview").then((module) => ({ default: module.AgentsMdPreview }))
+);
+
+let markdownFormatterPromise:
+  | Promise<{
+      prettier: typeof import("prettier");
+      parserMarkdown: typeof import("prettier/plugins/markdown");
+    }>
+  | null = null;
 
 function EditorLoadingFallback() {
   return (
     <div className="flex items-center gap-2 py-4" data-testid="agents-md-editor-loading">
       <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
       <span className="text-sm text-theme-muted">Loading editor...</span>
+    </div>
+  );
+}
+
+function PreviewLoadingFallback() {
+  return (
+    <div className="flex items-center gap-2 py-4" data-testid="agents-md-preview-loading">
+      <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+      <span className="text-sm text-theme-muted">Loading preview...</span>
     </div>
   );
 }
@@ -26,6 +42,13 @@ interface AgentsMdSectionProps {
 }
 
 async function prettifyMarkdown(content: string): Promise<string> {
+  if (!markdownFormatterPromise) {
+    markdownFormatterPromise = Promise.all([
+      import("prettier"),
+      import("prettier/plugins/markdown"),
+    ]).then(([prettier, parserMarkdown]) => ({ prettier, parserMarkdown }));
+  }
+  const { prettier, parserMarkdown } = await markdownFormatterPromise;
   return prettier.format(content, {
     parser: "markdown",
     plugins: [parserMarkdown],
@@ -210,7 +233,9 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
             data-testid="agents-md-view"
           >
             {content && content.trim() ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+              <Suspense fallback={<PreviewLoadingFallback />}>
+                <AgentsMdPreview content={content} />
+              </Suspense>
             ) : (
               <p className="text-theme-muted text-sm italic">
                 No agent instructions yet. Click Edit to add.

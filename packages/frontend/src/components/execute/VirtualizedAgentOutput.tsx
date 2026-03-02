@@ -12,8 +12,8 @@ const ESTIMATED_LINE_HEIGHT = 20;
 export interface VirtualizedAgentOutputProps {
   /** Full content to display (joined agent output) */
   content: string;
-  /** When true, use plain text for faster streaming; when false, use ReactMarkdown */
-  useMarkdown: boolean;
+  /** Streaming stays plain text; completed output upgrades to markdown rendering. */
+  mode: "stream" | "markdown";
   /** Ref for the scroll container (shared with useAutoScroll) */
   containerRef: React.RefObject<HTMLDivElement | null>;
   /** Callback when user scrolls (for Jump to bottom detection) */
@@ -31,7 +31,7 @@ export interface VirtualizedAgentOutputProps {
  */
 export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput({
   content,
-  useMarkdown,
+  mode,
   containerRef,
   onScroll,
   className = "",
@@ -68,6 +68,7 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
 
   const proseClasses =
     "prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none text-theme-success-muted prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg";
+  const useMarkdown = mode === "markdown";
 
   if (useFallback) {
     return (

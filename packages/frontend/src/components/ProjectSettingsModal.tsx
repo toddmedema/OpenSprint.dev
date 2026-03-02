@@ -1,9 +1,17 @@
-import { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useImperativeHandle,
+  forwardRef,
+  lazy,
+  Suspense,
+} from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { FolderBrowser } from "./FolderBrowser";
 import { CloseButton } from "./CloseButton";
 import { ModelSelect } from "./ModelSelect";
-import { AgentsMdSection } from "./AgentsMdSection";
 import { SaveIndicator } from "./SaveIndicator";
 import { SettingsTopBar } from "./settings/SettingsTopBar";
 import {
@@ -42,6 +50,19 @@ interface ProjectSettingsModalProps {
   activeTab?: SettingsSubTab;
   onTabChange?: (tab: SettingsSubTab) => void;
   onSaveStatusChange?: (status: "saving" | "saved") => void;
+}
+
+const AgentsMdSection = lazy(() =>
+  import("./AgentsMdSection").then((module) => ({ default: module.AgentsMdSection }))
+);
+
+function AgentsSectionFallback() {
+  return (
+    <div className="flex items-center gap-2 py-4" data-testid="agents-md-section-loading">
+      <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+      <span className="text-sm text-theme-muted">Loading agent instructions...</span>
+    </div>
+  );
 }
 
 export interface ProjectSettingsModalRef {
@@ -826,7 +847,9 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                     </div>
                   )}
                   <hr />
-                  <AgentsMdSection projectId={project.id} />
+                  <Suspense fallback={<AgentsSectionFallback />}>
+                    <AgentsMdSection projectId={project.id} />
+                  </Suspense>
                 </div>
               )}
 

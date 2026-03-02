@@ -28,6 +28,7 @@ import type {
   ChatResponse,
   Conversation,
   ActiveAgent,
+  TaskExecutionDiagnostics,
   Notification,
   DeploymentRecord,
   DeploymentConfig,
@@ -35,6 +36,7 @@ import type {
   HelpChatResponse,
   HelpChatHistory,
 } from "@opensprint/shared";
+import type { TaskListResponse } from "./taskList";
 
 /** API base; set VITE_API_BASE for production/staging (e.g. empty for same-origin, or full origin). */
 const BASE_URL = `${(import.meta.env.VITE_API_BASE as string | undefined) ?? ""}/api/v1`;
@@ -300,7 +302,7 @@ export const api = {
   // ─── Tasks ───
   tasks: {
     list: (projectId: string) =>
-      request<Task[]>(`/projects/${projectId}/tasks`),
+      request<TaskListResponse>(`/projects/${projectId}/tasks`),
     ready: (projectId: string) => request<Task[]>(`/projects/${projectId}/tasks/ready`),
     get: (projectId: string, taskId: string) =>
       request<Task>(`/projects/${projectId}/tasks/${taskId}`),
@@ -352,6 +354,10 @@ export const api = {
       request<OrchestratorStatus>(`/projects/${projectId}/execute/status`),
     liveOutput: (projectId: string, taskId: string) =>
       request<{ output: string }>(`/projects/${projectId}/execute/tasks/${taskId}/output`),
+    taskDiagnostics: (projectId: string, taskId: string) =>
+      request<TaskExecutionDiagnostics>(
+        `/projects/${projectId}/execute/tasks/${taskId}/diagnostics`
+      ),
   },
 
   // ─── Deliver (phase API for deployment records) ───

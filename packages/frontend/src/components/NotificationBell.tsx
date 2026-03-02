@@ -9,7 +9,6 @@ import { fetchProjectNotifications } from "../store/slices/openQuestionsSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { DROPDOWN_PORTAL_Z_INDEX } from "../lib/constants";
 import {
-  NOTIFICATION_POLL_INTERVAL_MS,
   NOTIFICATION_SOURCE_LABELS,
   API_BLOCKED_LABELS,
   truncatePreview,
@@ -33,15 +32,6 @@ export function NotificationBell({ projectId }: NotificationBellProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-
-  useEffect(() => {
-    dispatch(fetchProjectNotifications(projectId));
-    const interval = setInterval(
-      () => dispatch(fetchProjectNotifications(projectId)),
-      NOTIFICATION_POLL_INTERVAL_MS
-    );
-    return () => clearInterval(interval);
-  }, [projectId, dispatch]);
 
   useEffect(() => {
     if (open && buttonRef.current) {

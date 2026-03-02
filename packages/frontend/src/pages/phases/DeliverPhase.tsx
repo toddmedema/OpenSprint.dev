@@ -216,45 +216,8 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
           data-testid="deliver-top-bar"
         >
           <div className="flex items-center gap-2 shrink-0">
-              {settings?.deployment?.mode === "expo" ? (
-                isDeploying ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleResetDeliver}
-                      disabled={resetLoading}
-                      className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                      data-testid="cancel-deployment-button"
-                    >
-                      {resetLoading ? "Cancelling…" : "Cancel Deployment"}
-                    </button>
-                    <div
-                      className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin"
-                      data-testid="deploy-spinner"
-                      aria-label="Deploying"
-                    />
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleDeployToBeta}
-                      className="btn-secondary"
-                      data-testid="deploy-beta-button"
-                    >
-                      Deploy to Staging
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleDeployToProd}
-                      className="btn-primary"
-                      data-testid="deploy-prod-button"
-                    >
-                      Deploy to Production
-                    </button>
-                  </>
-                )
-              ) : isDeploying ? (
+            {settings?.deployment?.mode === "expo" ? (
+              isDeploying ? (
                 <>
                   <button
                     type="button"
@@ -268,10 +231,48 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
                   <div
                     className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin"
                     data-testid="deploy-spinner"
-                    aria-label="Delivering"
+                    aria-label="Deploying"
                   />
                 </>
-              ) : (() => {
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleDeployToBeta}
+                    className="btn-secondary"
+                    data-testid="deploy-beta-button"
+                  >
+                    Deploy to Staging
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeployToProd}
+                    className="btn-primary"
+                    data-testid="deploy-prod-button"
+                  >
+                    Deploy to Production
+                  </button>
+                </>
+              )
+            ) : isDeploying ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleResetDeliver}
+                  disabled={resetLoading}
+                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                  data-testid="cancel-deployment-button"
+                >
+                  {resetLoading ? "Cancelling…" : "Cancel Deployment"}
+                </button>
+                <div
+                  className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin"
+                  data-testid="deploy-spinner"
+                  aria-label="Delivering"
+                />
+              </>
+            ) : (
+              (() => {
                 const targets = settings?.deployment?.targets ?? [];
                 const hasTargets = targets.length > 0;
                 if (hasTargets) {
@@ -307,8 +308,8 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
                   );
                 }
                 return null;
-              })()}
-            </div>
+              })()
+            )}
           </div>
         </div>
 
@@ -373,7 +374,13 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
                           </button>
                         ))}
                         {Object.entries(envCounts)
-                          .filter(([k]) => k !== "all" && k !== "staging" && k !== "production" && k !== "unknown")
+                          .filter(
+                            ([k]) =>
+                              k !== "all" &&
+                              k !== "staging" &&
+                              k !== "production" &&
+                              k !== "unknown"
+                          )
                           .map(([key]) => (
                             <button
                               key={key}

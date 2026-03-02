@@ -1,3 +1,5 @@
+import type { TaskLastExecutionSummary } from "./execute-diagnostics.js";
+
 /** Task issue types */
 export type TaskType = "bug" | "feature" | "task" | "epic" | "chore";
 
@@ -92,6 +94,14 @@ export interface Task {
   complexity?: TaskComplexity;
   /** Reason task was blocked (e.g. Coding Failure, Merge Failure). Set when status becomes blocked. */
   blockReason?: string | null;
+  /** Lightweight execution summary for list/detail surfaces. Derived from tasks.extra.last_execution_summary. */
+  lastExecutionSummary?: string | null;
+  /** Failure type from the latest execution summary. */
+  lastFailureType?: string | null;
+  /** Timestamp of the latest execution summary. */
+  lastExecutionAt?: string | null;
+  /** Structured latest execution summary. */
+  lastExecution?: TaskLastExecutionSummary | null;
 }
 
 /** Dependency relationship between tasks */

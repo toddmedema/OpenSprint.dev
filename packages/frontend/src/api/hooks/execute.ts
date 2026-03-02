@@ -1,21 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Task } from "@opensprint/shared";
 import { api } from "../client";
 import { queryKeys } from "../queryKeys";
-
-/** Normalize tasks list to array (API may return { items } in some cases) */
-function toTaskList(data: Task[] | { items: Task[] } | undefined): Task[] {
-  if (Array.isArray(data)) return data;
-  if (data && typeof data === "object" && "items" in data) return (data as { items: Task[] }).items ?? [];
-  return [];
-}
+import { normalizeTaskListResponse } from "../taskList";
 
 export function useTasks(projectId: string | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.tasks.list(projectId ?? ""),
     queryFn: async () => {
       const data = await api.tasks.list(projectId!);
-      return toTaskList(data);
+      return normalizeTaskListResponse(data);
     },
     enabled: Boolean(projectId) && (options?.enabled !== false),
   });

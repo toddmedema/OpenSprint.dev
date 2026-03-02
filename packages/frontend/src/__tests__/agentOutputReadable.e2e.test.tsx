@@ -24,6 +24,7 @@ const mockGet = vi.fn();
 const mockSessions = vi.fn();
 const mockLiveOutput = vi.fn();
 const mockAgentsActive = vi.fn();
+const mockTaskDiagnostics = vi.fn();
 
 vi.mock("../api/client", () => ({
   api: {
@@ -40,6 +41,7 @@ vi.mock("../api/client", () => ({
     execute: {
       status: vi.fn().mockResolvedValue({}),
       liveOutput: (...args: unknown[]) => mockLiveOutput(...args),
+      taskDiagnostics: (...args: unknown[]) => mockTaskDiagnostics(...args),
     },
     agents: {
       active: (...args: unknown[]) => mockAgentsActive(...args),
@@ -152,6 +154,7 @@ describe("E2E: Readable agent output", () => {
     mockSessions.mockResolvedValue([]);
     mockLiveOutput.mockResolvedValue({ output: "" });
     mockAgentsActive.mockResolvedValue([]);
+    mockTaskDiagnostics.mockResolvedValue(null);
   });
 
   it("live output shows formatted text, not raw JSON, when agent emits NDJSON", async () => {
