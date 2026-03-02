@@ -6,12 +6,49 @@ import {
   SPEC_MD,
   prdToSpecMarkdown,
 } from "@opensprint/shared";
-import type { ActiveTaskConfig } from "@opensprint/shared";
+import type { ActiveTaskConfig, ReviewAngle } from "@opensprint/shared";
 import { BranchManager } from "./branch-manager.js";
 import { PrdService } from "./prd.service.js";
 import type { TaskStoreService } from "./task-store.service.js";
 import type { StoredTask } from "./task-store.service.js";
 import { getRuntimePath } from "../utils/runtime-dir.js";
+
+/** Short checklist items per review angle for angle-specific prompts */
+const REVIEW_ANGLE_CHECKLISTS: Record<
+  ReviewAngle,
+  string[]
+> = {
+  security: [
+    "No injection vulnerabilities (SQL, command, XSS)",
+    "Sensitive data is not logged or exposed",
+    "Authentication/authorization is correctly enforced",
+    "Input validation and sanitization where needed",
+  ],
+  performance: [
+    "No N+1 queries or unnecessary loops",
+    "Heavy operations are not on the hot path",
+    "Caching considered where appropriate",
+    "No obvious memory leaks or unbounded growth",
+  ],
+  test_coverage: [
+    "New/changed behavior has tests",
+    "Edge cases and error paths are covered",
+    "Tests are meaningful (not just coverage metrics)",
+    "All tests pass",
+  ],
+  code_quality: [
+    "Code is readable and well-named",
+    "No dead code, unused imports, or commented-out blocks",
+    "Follows existing codebase patterns",
+    "Complex logic has explanatory comments",
+  ],
+  design_ux_accessibility: [
+    "UI is usable and intuitive",
+    "Accessibility: focus order, labels, contrast",
+    "Responsive behavior where applicable",
+    "No obvious UX regressions",
+  ],
+};
 
 /** Build human-readable autonomy description for agent prompts (agent question protocol). Exported for use by chat, feedback, plan services. */
 export function buildAutonomyDescription(
@@ -97,13 +134,30 @@ export class ContextAssembler {
       await fs.writeFile(path.join(contextDir, "implementation.diff"), context.branchDiff);
     }
 
-    // Generate prompt.md
-    const prompt =
-      config.phase === "coding"
-        ? this.generateCodingPrompt(config, context)
-        : this.generateReviewPrompt(config, context);
-
-    await fs.writeFile(path.join(taskDir, "prompt.md"), prompt);
+    // Generate prompt(s)
+    if (config.phase === "coding") {
+      const prompt = this.generateCodingPrompt(config, context);
+      await fs.writeFile(path.join(taskDir, "prompt.md"), prompt);
+    } else {
+      const reviewAngles = config.reviewAngles;
+      if (reviewAngles && reviewAngles.length > 0) {
+        // Angle-specific: create review-angles/<angle>/ per angle
+        for (const angle of reviewAngles) {
+          const angleDir = path.join(taskDir, "review-angles", angle);
+          await fs.mkdir(angleDir, { recursive: true });
+          const prompt = this.generateReviewPromptForAngle(config, context, angle);
+          await fs.writeFile(path.join(angleDir, "prompt.md"), prompt);
+          await fs.writeFile(
+            path.join(angleDir, "config.json"),
+            JSON.stringify({ ...config, reviewAngle: angle }, null, 2)
+          );
+        }
+      } else {
+        // General: single prompt at task dir
+        const prompt = this.generateReviewPrompt(config, context);
+        await fs.writeFile(path.join(taskDir, "prompt.md"), prompt);
+      }
+    }
 
     return taskDir;
   }
@@ -470,22 +524,6 @@ export class ContextAssembler {
     prompt += `1. **Scope compliance** — Does the implementation match the original ticket and meet all acceptance criteria?\n`;
     prompt += `2. **Code quality** — Is the code correct, clear, well-tested, and production-ready?\n\n`;
 
-    const reviewAngles = config.reviewAngles;
-    if (reviewAngles && reviewAngles.length > 0) {
-      const angleLabels = reviewAngles
-        .map(
-          (v) =>
-            REVIEW_ANGLE_OPTIONS.find((o) => o.value === v)?.label ?? v
-        )
-        .filter(Boolean);
-      prompt += `## Focus Areas\n\n`;
-      prompt += `Pay special attention to these review angles:\n\n`;
-      for (const label of angleLabels) {
-        prompt += `- ${label}\n`;
-      }
-      prompt += `\n`;
-    }
-
     prompt += `Approve only if BOTH dimensions pass. Reject with specific, actionable feedback if either fails.\n\n`;
 
     prompt += `## Original Ticket\n\n`;
@@ -572,6 +610,96 @@ export class ContextAssembler {
     prompt += `- In rejection feedback, cite file:line or snippet. Vague feedback like "improve tests" is not actionable.\n`;
     prompt += `- Do NOT approve out of lenience. If acceptance criteria are unmet or tests fail, reject.\n`;
     prompt += `- Do NOT reject for style preferences (e.g., 2-space vs 4-space) unless the project has an explicit style guide in the repo.\n`;
+    prompt += `- Do NOT merge the branch — the orchestrator handles merging after approval.\n`;
+
+    return prompt;
+  }
+
+  /**
+   * Generate a review prompt focused on a single angle.
+   * Used when reviewAngles has 1+ items; each angle gets its own agent.
+   * Result path: review-angles/<angle>/result.json
+   */
+  generateReviewPromptForAngle(
+    config: ActiveTaskConfig,
+    context: TaskContext,
+    angle: ReviewAngle
+  ): string {
+    const angleLabel = REVIEW_ANGLE_OPTIONS.find((o) => o.value === angle)?.label ?? angle;
+    const checklist = REVIEW_ANGLE_CHECKLISTS[angle] ?? [];
+
+    let prompt = `# Review Task: ${context.title} — ${angleLabel}\n\n`;
+
+    prompt += `## Objective\n\n`;
+    prompt += `You are reviewing the implementation of a task **focusing only on this angle: ${angleLabel}**. Approve if the implementation meets this angle's criteria; reject with specific, actionable feedback if it does not.\n\n`;
+
+    prompt += `## Original Ticket\n\n`;
+    prompt += `**Task ID:** ${context.taskId}\n`;
+    prompt += `**Title:** ${context.title}\n\n`;
+    prompt += `${context.description}\n\n`;
+
+    const acceptanceCriteria = this.extractPlanSection(context.planContent, "Acceptance Criteria");
+    if (acceptanceCriteria) {
+      prompt += `## Acceptance Criteria\n\n${acceptanceCriteria}\n\n`;
+    }
+
+    const technicalApproach = this.extractPlanSection(context.planContent, "Technical Approach");
+    if (technicalApproach) {
+      prompt += `## Technical Approach\n\n${technicalApproach}\n\n`;
+    }
+
+    prompt += `## Context\n\n`;
+    prompt += `Review the provided context files for full requirements and design:\n\n`;
+    prompt += `- \`context/plan.md\` — the full feature specification and plan\n`;
+    prompt += `- \`context/spec.md\` — relevant product requirements\n`;
+    prompt += `- \`context/deps/\` — output from dependency tasks this builds on\n\n`;
+
+    if (context.reviewHistory) {
+      prompt += `## Prior Review History\n\n`;
+      prompt += `${context.reviewHistory}\n\n`;
+    }
+
+    const hasProvidedDiff = Boolean(context.branchDiff && context.branchDiff.trim().length > 0);
+    prompt += `## Implementation\n\n`;
+    prompt += `The coding agent has produced changes on branch \`${config.branch}\`. The orchestrator has already committed them before invoking you.\n`;
+    if (hasProvidedDiff) {
+      prompt += `Review the committed changes in \`context/implementation.diff\` (do not run \`git diff\` — the diff is provided from the main repo).\n\n`;
+    } else {
+      prompt += `Run \`git diff main...${config.branch}\` to review the committed changes.\n\n`;
+    }
+
+    prompt += `## Review Checklist — ${angleLabel}\n\n`;
+    for (const item of checklist) {
+      prompt += `- [ ] ${item}\n`;
+    }
+    prompt += `\n`;
+
+    prompt += `## Working directory\n\n`;
+    prompt += `The **repository root** is the directory that contains \`package.json\`, \`packages/backend\`, \`packages/frontend\`, etc. You MUST run the test command and any \`git\` commands from that directory. Its path is in \`.opensprint/active/${config.taskId}/review-angles/${angle}/config.json\` as \`repoPath\`. If your current working directory is the task folder, change to the repo root first, then run \`${config.testCommand}\`.\n\n`;
+
+    prompt += `## Instructions\n\n`;
+    prompt += `1. Read the original ticket and context files above.\n`;
+    if (hasProvidedDiff) {
+      prompt += `2. Review the diff in \`context/implementation.diff\`.\n`;
+    } else {
+      prompt += `2. Review the diff: \`git diff main...${config.branch}\`\n`;
+    }
+    prompt += `3. Walk through the checklist above for ${angleLabel}.\n`;
+    prompt += `4. From the repository root, run the full test suite: \`${config.testCommand}\` — confirm ALL tests pass.\n`;
+    prompt += `5. Write your result to \`.opensprint/active/${config.taskId}/review-angles/${angle}/result.json\` using this exact JSON format:\n`;
+    prompt += `   If approving:\n`;
+    prompt += `   \`\`\`json\n`;
+    prompt += `   { "status": "approved", "summary": "Brief description for ${angleLabel}", "notes": "" }\n`;
+    prompt += `   \`\`\`\n`;
+    prompt += `   If rejecting:\n`;
+    prompt += `   \`\`\`json\n`;
+    prompt += `   { "status": "rejected", "summary": "One-line reason for rejection", "issues": ["Specific issue 1", "Specific issue 2"], "notes": "Additional context" }\n`;
+    prompt += `   \`\`\`\n`;
+    prompt += `   The \`status\` field MUST be exactly \`"approved"\` or \`"rejected"\`. The \`summary\` field is required.\n\n`;
+
+    prompt += `## Important\n\n`;
+    prompt += `- In rejection feedback, cite file:line or snippet. Vague feedback is not actionable.\n`;
+    prompt += `- Do NOT approve out of lenience. If this angle's criteria are unmet, reject.\n`;
     prompt += `- Do NOT merge the branch — the orchestrator handles merging after approval.\n`;
 
     return prompt;

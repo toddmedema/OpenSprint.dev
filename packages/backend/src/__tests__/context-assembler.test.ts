@@ -28,6 +28,19 @@ vi.mock("../services/task-store.service.js", () => ({
   TaskStoreService: vi.fn(),
 }));
 
+vi.mock("../services/branch-manager.js", () => ({
+  BranchManager: vi.fn().mockImplementation(() => ({
+    getDiff: vi.fn().mockResolvedValue(""),
+    captureBranchDiff: vi.fn().mockResolvedValue(""),
+  })),
+}));
+
+vi.mock("../services/prd.service.js", () => ({
+  PrdService: vi.fn().mockImplementation(() => ({
+    migrateFromLegacy: vi.fn().mockResolvedValue(null),
+  })),
+}));
+
 describe("buildAutonomyDescription", () => {
   it("returns confirm_all rule when aiAutonomyLevel is confirm_all", () => {
     const desc = buildAutonomyDescription("confirm_all", undefined);
@@ -586,7 +599,7 @@ User authentication.
     expect(prompt).not.toContain("## Prior Review History");
   });
 
-  it("should include Focus Areas section when reviewAngles are provided", async () => {
+  it("should NOT include Focus Areas when reviewAngles is empty (general prompt)", async () => {
     const plansDir = path.join(repoPath, OPENSPRINT_PATHS.plans);
     await fs.mkdir(plansDir, { recursive: true });
     await fs.writeFile(
@@ -605,7 +618,6 @@ User authentication.
       phase: "review" as const,
       previousFailure: null as string | null,
       reviewFeedback: null as string | null,
-      reviewAngles: ["security", "performance", "test_coverage"],
     };
 
     const context = {
@@ -620,11 +632,84 @@ User authentication.
     const taskDir = await assembler.assembleTaskDirectory(repoPath, config.taskId, config, context);
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
 
-    expect(prompt).toContain("## Focus Areas");
-    expect(prompt).toContain("Pay special attention to these review angles:");
-    expect(prompt).toContain("- Security implications");
-    expect(prompt).toContain("- Performance impact");
-    expect(prompt).toContain("- Validating test coverage");
+    expect(prompt).not.toContain("## Focus Areas");
+    expect(prompt).toContain("Scope compliance");
+    expect(prompt).toContain("Code quality");
+    expect(prompt).toContain(".opensprint/active/bd-a3f8.2/result.json");
+  });
+
+  it("should create angle-specific prompts in review-angles/<angle>/ when reviewAngles has items", async () => {
+    const plansDir = path.join(repoPath, OPENSPRINT_PATHS.plans);
+    await fs.mkdir(plansDir, { recursive: true });
+    await fs.writeFile(
+      path.join(plansDir, "auth.md"),
+      "# Feature: Auth\n\n## Acceptance Criteria\n\n- Login works\n"
+    );
+
+    const config = {
+      invocation_id: "bd-a3f8.2",
+      agent_role: "reviewer" as const,
+      taskId: "bd-a3f8.2",
+      repoPath,
+      branch: "opensprint/bd-a3f8.2",
+      testCommand: "npm test",
+      attempt: 1,
+      phase: "review" as const,
+      previousFailure: null as string | null,
+      reviewFeedback: null as string | null,
+      reviewAngles: ["security", "performance"],
+    };
+
+    const context = {
+      taskId: config.taskId,
+      title: "Implement auth",
+      description: "Add JWT validation",
+      planContent: "# Feature: Auth",
+      prdExcerpt: "# Product Requirements",
+      dependencyOutputs: [] as Array<{ taskId: string; diff: string; summary: string }>,
+    };
+
+    const taskDir = await assembler.assembleTaskDirectory(repoPath, config.taskId, config, context);
+
+    // No general prompt.md at root when angles are used
+    const rootPromptPath = path.join(taskDir, "prompt.md");
+    await expect(fs.access(rootPromptPath)).rejects.toThrow();
+
+    // Angle-specific prompts exist
+    const securityPrompt = await fs.readFile(
+      path.join(taskDir, "review-angles", "security", "prompt.md"),
+      "utf-8"
+    );
+    const perfPrompt = await fs.readFile(
+      path.join(taskDir, "review-angles", "performance", "prompt.md"),
+      "utf-8"
+    );
+
+    // Security angle
+    expect(securityPrompt).toContain("Review Task: Implement auth — Security implications");
+    expect(securityPrompt).toContain("focusing only on this angle: Security implications");
+    expect(securityPrompt).toContain("Review Checklist — Security implications");
+    expect(securityPrompt).toContain("No injection vulnerabilities");
+    expect(securityPrompt).toContain(
+      ".opensprint/active/bd-a3f8.2/review-angles/security/result.json"
+    );
+
+    // Performance angle
+    expect(perfPrompt).toContain("Review Task: Implement auth — Performance impact");
+    expect(perfPrompt).toContain("focusing only on this angle: Performance impact");
+    expect(perfPrompt).toContain("Review Checklist — Performance impact");
+    expect(perfPrompt).toContain("No N+1 queries");
+    expect(perfPrompt).toContain(
+      ".opensprint/active/bd-a3f8.2/review-angles/performance/result.json"
+    );
+
+    // Config per angle
+    const securityConfigRaw = await fs.readFile(
+      path.join(taskDir, "review-angles", "security", "config.json"),
+      "utf-8"
+    );
+    const securityConfig = JSON.parse(securityConfigRaw);
+    expect(securityConfig.reviewAngle).toBe("security");
   });
 
   it("should include prior review history in review prompt when provided", async () => {
