@@ -12,11 +12,7 @@ export function ProjectHelpContent() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden" data-testid="help-page">
-      <div className="max-w-4xl mx-auto w-full flex flex-col min-h-0 h-full">
-        <div className="flex-1 min-h-0 flex flex-col bg-theme-surface rounded-xl border border-theme-border overflow-hidden">
-          <HelpContent project={projectContext} />
-        </div>
-      </div>
+      <HelpContent project={projectContext} />
     </div>
   );
 }

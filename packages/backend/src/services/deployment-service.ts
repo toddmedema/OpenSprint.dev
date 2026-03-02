@@ -3,6 +3,7 @@ import { promisify } from "util";
 import type { DeploymentConfig } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { ensureEasConfig } from "./eas-config.js";
+import { ensureExpoInstalled } from "../utils/expo-install.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 
 const execAsync = promisify(exec);
@@ -69,6 +70,14 @@ export class DeploymentService {
    */
   private async deployExpo(repoPath: string, config: DeploymentConfig): Promise<DeploymentResult> {
     try {
+      const expoOk = await ensureExpoInstalled(repoPath);
+      if (!expoOk.ok) {
+        return {
+          success: false,
+          error: expoOk.error,
+          timestamp: new Date().toISOString(),
+        };
+      }
       await ensureEasConfig(repoPath);
 
       const channel = config.expoConfig?.channel ?? "preview";
@@ -118,6 +127,14 @@ export class DeploymentService {
     profile: string = "preview"
   ): Promise<DeploymentResult> {
     try {
+      const expoOk = await ensureExpoInstalled(repoPath);
+      if (!expoOk.ok) {
+        return {
+          success: false,
+          error: expoOk.error,
+          timestamp: new Date().toISOString(),
+        };
+      }
       const platformArg = platform === "all" ? "--platform all" : `--platform ${platform}`;
       const { stdout } = await execAsync(
         `npx eas-cli build ${platformArg} --profile ${profile} --non-interactive --json`,

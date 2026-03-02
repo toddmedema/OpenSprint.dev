@@ -30,13 +30,13 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Second title bar for navigation tabs — matches Execute filter bar pattern */}
+      {/* Full-width secondary nav bar — matches Plan/Execute filter bar pattern */}
       <div
-        className="px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0"
+        className="w-full px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0"
         role="tablist"
         aria-label="Help sections"
       >
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex w-full items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -98,7 +98,7 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
           role="tabpanel"
           aria-labelledby="help-tab-ask"
           hidden={activeTab !== "ask"}
-          className="flex-1 min-h-0 flex flex-col overflow-hidden px-6 py-4"
+          className="flex-1 min-h-0 flex flex-col overflow-hidden px-6 py-4 max-w-4xl mx-auto w-full"
         >
           <AskQuestionContent project={project} isActive={activeTab === "ask"} />
         </div>
@@ -107,7 +107,7 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
           role="tabpanel"
           aria-labelledby="help-tab-meet"
           hidden={activeTab !== "meet"}
-          className="flex-1 overflow-y-auto min-h-0 px-6 py-4"
+          className="flex-1 overflow-y-auto min-h-0 px-6 py-4 max-w-4xl mx-auto w-full"
         >
           <MeetYourTeamContent />
         </div>

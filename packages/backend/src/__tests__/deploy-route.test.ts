@@ -55,7 +55,11 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     await fs.mkdir(repoPath, { recursive: true });
     await fs.writeFile(
       path.join(repoPath, "package.json"),
-      JSON.stringify({ name: "test", scripts: { test: "echo ok" } })
+      JSON.stringify({
+        name: "test",
+        scripts: { test: "echo ok" },
+        dependencies: { expo: "^52.0.0" },
+      })
     );
     await execAsync("git init && git add -A && git commit -m init", { cwd: repoPath });
     const project = await projectService.createProject({

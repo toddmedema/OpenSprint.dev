@@ -23,6 +23,7 @@ import { testRunner } from "../services/test-runner.js";
 import { createFixEpicFromTestOutput } from "../services/deploy-fix-epic.service.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { getExpoDeployCommand } from "../utils/expo-deploy-command.js";
+import { ensureExpoInstalled } from "../utils/expo-install.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("deliver");
@@ -537,6 +538,18 @@ async function runExpoDeployAsync(
 ): Promise<void> {
   const cmd = getExpoDeployCommand(variant);
   try {
+    emit("Checking Expo installation...\n");
+    const ensureResult = await ensureExpoInstalled(repoPath, emit);
+    if (!ensureResult.ok) {
+      emit(`Expo installation required but failed: ${ensureResult.error}\n`);
+      await deployStorageService.updateRecord(projectId, deployId, {
+        status: "failed",
+        completedAt: new Date().toISOString(),
+        error: ensureResult.error,
+      });
+      broadcastToProject(projectId, { type: "deliver.completed", deployId, success: false });
+      return;
+    }
     await ensureEasConfig(repoPath);
     emit(`Running: ${cmd}\n`);
     await runCommandStreaming("sh", ["-c", cmd], repoPath, emit, envVars);
