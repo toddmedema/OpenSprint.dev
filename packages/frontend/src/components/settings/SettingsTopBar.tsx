@@ -1,21 +1,37 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { SaveIndicator, type SaveStatus } from "../SaveIndicator";
+
+const LEVEL_PARAM = "level";
 
 /**
  * Second-level top bar for Settings pages. Matches Execute/Plan layout pattern:
  * Global | Project navigation on left, save status on right.
  * No "Settings" header - removed per design.
+ *
+ * When in project context (projectId set), Global tab stays within project scope
+ * (/projects/:id/settings?level=global) to preserve project context.
  */
 interface SettingsTopBarProps {
-  /** When set, we're in project context; Project tab is active */
+  /** When set, we're in project context; Project tab is active unless level=global */
   projectId?: string | null;
   saveStatus: SaveStatus;
 }
 
 export function SettingsTopBar({ projectId, saveStatus }: SettingsTopBarProps) {
-  const isGlobal = !projectId;
-  const globalHref = "/settings";
-  const projectHref = projectId ? `/projects/${projectId}/settings` : "/";
+  const [searchParams] = useSearchParams();
+  const level = searchParams.get(LEVEL_PARAM);
+
+  const isGlobal = !projectId || level === "global";
+  const globalHref = projectId ? `/projects/${projectId}/settings?level=global` : "/settings";
+  const projectHref = projectId
+    ? (() => {
+        const tab = searchParams.get("tab") || "basics";
+        const next = new URLSearchParams(searchParams);
+        next.set(LEVEL_PARAM, "project");
+        next.set("tab", tab);
+        return `/projects/${projectId}/settings?${next.toString()}`;
+      })()
+    : "/";
 
   return (
     <div

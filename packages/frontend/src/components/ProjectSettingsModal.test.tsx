@@ -221,7 +221,7 @@ describe("ProjectSettingsModal", () => {
     await screen.findByText(/API key required/);
     const link = screen.getByTestId("configure-api-keys-link");
     expect(link).toHaveTextContent("Configure API keys in Settings");
-    expect(link).toHaveAttribute("href", "/settings");
+    expect(link).toHaveAttribute("href", "/projects/proj-1/settings?level=global");
     expect(screen.queryByPlaceholderText("sk-ant-...")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
   });

@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { useOutletContext, useNavigate, useSearchParams } from "react-router-dom";
 import { ProjectSettingsModal } from "../components/ProjectSettingsModal";
 import type { ProjectSettingsModalRef } from "../components/ProjectSettingsModal";
+import { GlobalSettingsContent } from "../components/GlobalSettingsContent";
 import { SettingsTopBar } from "../components/settings/SettingsTopBar";
 import {
   SettingsSubTabsBar,
@@ -14,6 +15,7 @@ import type { ProjectShellContext } from "./ProjectShell";
 import type { SaveStatus } from "../components/SaveIndicator";
 
 const TAB_PARAM = "tab";
+const LEVEL_PARAM = "level";
 const VALID_SUB_TABS: SettingsSubTab[] = ["basics", "agents", "deployment", "hil"];
 
 function parseTabFromSearch(search: string): SettingsSubTab {
@@ -21,6 +23,12 @@ function parseTabFromSearch(search: string): SettingsSubTab {
   const t = params.get(TAB_PARAM);
   if (t && VALID_SUB_TABS.includes(t as SettingsSubTab)) return t as SettingsSubTab;
   return "basics";
+}
+
+function parseLevelFromSearch(search: string): "global" | "project" {
+  const params = new URLSearchParams(search);
+  const level = params.get(LEVEL_PARAM);
+  return level === "global" ? "global" : "project";
 }
 
 /**
@@ -35,8 +43,10 @@ export function ProjectSettingsContent() {
   const modalRef = useRef<ProjectSettingsModalRef>(null);
 
   const tabFromUrl = parseTabFromSearch(searchParams.toString());
+  const levelFromUrl = parseLevelFromSearch(searchParams.toString());
   const [activeTab, setActiveTab] = useState<SettingsSubTab>(tabFromUrl);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
+  const isGlobalLevel = levelFromUrl === "global";
 
   useEffect(() => {
     if (tabFromUrl !== activeTab) setActiveTab(tabFromUrl);
@@ -75,21 +85,35 @@ export function ProjectSettingsContent() {
         data-testid="settings-topbar-navbar"
       >
         <SettingsTopBar projectId={project.id} saveStatus={saveStatus} />
-        <SettingsSubTabsBar activeTab={activeTab} onTabChange={handleTabChange} />
+        {!isGlobalLevel && (
+          <SettingsSubTabsBar activeTab={activeTab} onTabChange={handleTabChange} />
+        )}
       </div>
 
       {/* Content area: scrollable, no card/modal wrapper */}
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-6 py-6">
-        <ProjectSettingsModal
-          ref={modalRef}
-          project={project}
-          onClose={handleClose}
-          onSaved={handleSaved}
-          fullScreen
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          onSaveStatusChange={setSaveStatus}
-        />
+        {isGlobalLevel ? (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="max-w-2xl mx-auto">
+              <div className="bg-theme-surface rounded-xl border border-theme-border p-6">
+                <GlobalSettingsContent onSaveStateChange={setSaveStatus} />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <ProjectSettingsModal
+              ref={modalRef}
+              project={project}
+              onClose={handleClose}
+              onSaved={handleSaved}
+              fullScreen
+              activeTab={activeTab}
+              onTabChange={handleTabChange}
+              onSaveStatusChange={setSaveStatus}
+            />
+          </>
+        )}
       </div>
     </div>
   );

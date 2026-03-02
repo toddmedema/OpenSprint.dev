@@ -111,7 +111,7 @@ function createStore() {
   });
 }
 
-function renderProjectSettingsPage() {
+function renderProjectSettingsPage(initialEntry = "/projects/proj-1/settings") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -120,7 +120,7 @@ function renderProjectSettingsPage() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <DisplayPreferencesProvider>
-            <MemoryRouter initialEntries={["/projects/proj-1/settings"]}>
+            <MemoryRouter initialEntries={[initialEntry]}>
               <Routes>
                 <Route path="/projects/:projectId" element={<ProjectShell />}>
                   <Route index element={<Navigate to="sketch" replace />} />
@@ -297,6 +297,54 @@ describe("ProjectSettingsPage", () => {
       expect(screen.getByTestId("location")).toHaveTextContent(
         "/projects/proj-1/settings?tab=deployment"
       );
+    });
+  });
+
+  it("switching to Global tab keeps URL within project scope (does not navigate to /settings)", async () => {
+    const user = userEvent.setup();
+    renderProjectSettingsPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+    });
+
+    const globalTab = screen.getByTestId("settings-global-tab");
+    expect(globalTab).toHaveAttribute("href", "/projects/proj-1/settings?level=global");
+
+    await user.click(globalTab);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/projects/proj-1/settings?level=global"
+      );
+    });
+  });
+
+  it("when level=global, shows Global settings content and hides Project sub-tabs", async () => {
+    renderProjectSettingsPage("/projects/proj-1/settings?level=global");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("database-url-section")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("settings-sub-tabs-bar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("settings-modal")).not.toBeInTheDocument();
+  });
+
+  it("switching back to Project tab from Global shows project settings and same project context", async () => {
+    const user = userEvent.setup();
+    renderProjectSettingsPage("/projects/proj-1/settings?level=global");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("database-url-section")).toBeInTheDocument();
+    });
+
+    const projectTab = screen.getByTestId("settings-project-tab");
+    await user.click(projectTab);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+      expect(screen.getByTestId("location")).toHaveTextContent(/\/projects\/proj-1\/settings/);
     });
   });
 });

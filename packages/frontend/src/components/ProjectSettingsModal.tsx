@@ -488,7 +488,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             <p className="text-sm text-theme-warning-text">
                               <strong>API key required:</strong>{" "}
                               <Link
-                                to="/settings"
+                                to={`/projects/${project.id}/settings?level=global`}
                                 className="underline hover:opacity-80"
                                 data-testid="configure-api-keys-link"
                               >
