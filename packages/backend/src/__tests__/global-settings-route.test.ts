@@ -385,4 +385,52 @@ describe("Global Settings API", () => {
       ]);
     });
   });
+
+  describe("POST /global-settings/setup-tables", () => {
+    it("returns 400 when databaseUrl is missing", async () => {
+      const res = await request(app)
+        .post(`${API_PREFIX}/global-settings/setup-tables`)
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+      expect(res.body.error?.message).toContain("string");
+    });
+
+    it("returns 400 when databaseUrl is empty", async () => {
+      const res = await request(app)
+        .post(`${API_PREFIX}/global-settings/setup-tables`)
+        .send({ databaseUrl: "   " });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+      expect(res.body.error?.message).toContain("empty");
+    });
+
+    it("returns 400 when databaseUrl has invalid scheme", async () => {
+      const res = await request(app)
+        .post(`${API_PREFIX}/global-settings/setup-tables`)
+        .send({ databaseUrl: "mysql://localhost/db" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+    });
+
+    it("returns 200 and runs schema when databaseUrl is valid", async () => {
+      const { getTestDatabaseUrl } = await import("./test-db-helper.js");
+      let testUrl: string;
+      try {
+        testUrl = await getTestDatabaseUrl();
+      } catch {
+        return; // Skip if test DB not available
+      }
+
+      const res = await request(app)
+        .post(`${API_PREFIX}/global-settings/setup-tables`)
+        .send({ databaseUrl: testUrl });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({ ok: true });
+    });
+  });
 });

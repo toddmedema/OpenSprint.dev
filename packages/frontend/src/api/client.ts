@@ -130,6 +130,11 @@ export const api = {
       request<GlobalSettingsResponse>(`/global-settings/clear-limit-hit/${encodeURIComponent(provider)}/${encodeURIComponent(id)}`, {
         method: "POST",
       }),
+    setupTables: (databaseUrl: string) =>
+      request<{ ok: boolean }>("/global-settings/setup-tables", {
+        method: "POST",
+        body: JSON.stringify({ databaseUrl }),
+      }),
   },
   env: {
     getKeys: () =>

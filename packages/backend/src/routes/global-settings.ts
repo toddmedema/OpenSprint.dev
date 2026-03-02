@@ -17,6 +17,8 @@ import {
   updateGlobalSettings,
 } from "../services/global-settings.service.js";
 import { clearLimitHit } from "../services/api-key-resolver.service.js";
+import { runSchema } from "../db/schema.js";
+import { createPostgresDbClientFromUrl } from "../db/client.js";
 
 export const globalSettingsRouter = Router();
 
@@ -61,6 +63,44 @@ globalSettingsRouter.post("/clear-limit-hit/:provider/:id", async (req, res, nex
     res.json({
       data: buildResponse(settings),
     } as ApiResponse<GlobalSettingsResponse>);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /global-settings/setup-tables — Runs schema setup against provided databaseUrl. Session-only; does not persist URL.
+globalSettingsRouter.post("/setup-tables", async (req: Request, res, next) => {
+  try {
+    const body = req.body as { databaseUrl?: string };
+    if (body.databaseUrl === undefined || typeof body.databaseUrl !== "string") {
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "databaseUrl must be a string"
+      );
+    }
+    const trimmed = body.databaseUrl.trim();
+    if (!trimmed) {
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "databaseUrl cannot be empty"
+      );
+    }
+    let databaseUrl: string;
+    try {
+      databaseUrl = validateDatabaseUrl(trimmed);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Invalid database URL";
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, msg);
+    }
+    const { client, pool } = await createPostgresDbClientFromUrl(databaseUrl);
+    try {
+      await runSchema(client);
+    } finally {
+      await pool.end();
+    }
+    res.json({ data: { ok: true } } as ApiResponse<{ ok: boolean }>);
   } catch (err) {
     next(err);
   }

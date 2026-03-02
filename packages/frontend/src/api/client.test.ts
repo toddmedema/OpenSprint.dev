@@ -472,6 +472,28 @@ describe("api client", () => {
         expect.objectContaining({ method: "POST" })
       );
     });
+
+    it("setupTables posts databaseUrl and returns ok", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { ok: true } }),
+      } as Response);
+
+      const result = await api.globalSettings.setupTables(
+        "postgresql://user:secret@localhost:5432/opensprint"
+      );
+      expect(result).toEqual({ ok: true });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/global-settings/setup-tables"),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            databaseUrl: "postgresql://user:secret@localhost:5432/opensprint",
+          }),
+        })
+      );
+    });
   });
 
   describe("isConnectionError", () => {

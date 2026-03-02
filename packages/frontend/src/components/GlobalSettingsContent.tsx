@@ -4,6 +4,7 @@ import { useDisplayPreferences } from "../contexts/DisplayPreferencesContext";
 import type { RunningAgentsDisplayMode } from "../lib/displayPrefs";
 import { api, isConnectionError } from "../api/client";
 import { ApiKeysSection } from "./ApiKeysSection";
+import { CloseButton } from "./CloseButton";
 import type { ApiKeys, MaskedApiKeys } from "@opensprint/shared";
 import { API_KEY_PROVIDERS } from "@opensprint/shared";
 import type { SaveStatus } from "./SaveIndicator";
@@ -80,6 +81,9 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
   const [databaseUrlSaving, setDatabaseUrlSaving] = useState(false);
   const [databaseUrlError, setDatabaseUrlError] = useState<string | null>(null);
   const [showDatabaseUrl, setShowDatabaseUrl] = useState(false);
+  const [setupTablesDialogOpen, setSetupTablesDialogOpen] = useState(false);
+  const [setupTablesLoading, setSetupTablesLoading] = useState(false);
+  const [setupTablesError, setSetupTablesError] = useState<string | null>(null);
   const initialLoadRef = useRef(true);
 
   const notifySaveState = useCallback(
@@ -190,6 +194,30 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
     }
   };
 
+  const handleSetupTablesConfirm = useCallback(async () => {
+    const trimmed = databaseUrlRef.current.trim();
+    if (!trimmed || trimmed.includes("***")) return;
+    setSetupTablesError(null);
+    setSetupTablesLoading(true);
+    try {
+      await api.globalSettings.setupTables(trimmed);
+      setSetupTablesDialogOpen(false);
+    } catch (err) {
+      setSetupTablesError(
+        isConnectionError(err)
+          ? "Unable to connect. Please check your network and try again."
+          : err instanceof Error
+            ? err.message
+            : "Failed to set up tables"
+      );
+    } finally {
+      setSetupTablesLoading(false);
+    }
+  }, []);
+
+  const showSetupTablesButton =
+    databaseUrl.trim().length > 0 && !databaseUrl.includes("***");
+
   return (
     <div className="space-y-6" data-testid="global-settings-content">
       <div data-testid="api-keys-section-wrapper">
@@ -253,6 +281,17 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
               </button>
             </div>
           </div>
+          {showSetupTablesButton && (
+            <button
+              type="button"
+              onClick={() => setSetupTablesDialogOpen(true)}
+              disabled={databaseUrlLoading}
+              className="btn-secondary"
+              data-testid="setup-tables-button"
+            >
+              Set up tables
+            </button>
+          )}
         </div>
         {databaseUrlError && (
           <p className="text-sm text-theme-error-text mt-2" role="alert">
@@ -260,6 +299,56 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
           </p>
         )}
       </div>
+      {setupTablesDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="setup-tables-dialog">
+          <div
+            className="absolute inset-0 bg-theme-overlay backdrop-blur-sm"
+            onClick={() => !setupTablesLoading && setSetupTablesDialogOpen(false)}
+          />
+          <div
+            className="relative bg-theme-surface rounded-xl shadow-2xl w-full max-w-lg mx-4 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
+              <h2 className="text-lg font-semibold text-theme-text">Set up tables</h2>
+              <CloseButton
+                onClick={() => !setupTablesLoading && setSetupTablesDialogOpen(false)}
+                ariaLabel="Close setup tables confirmation"
+              />
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-theme-text">
+                Data loss may occur. Please confirm that you&apos;ve backed up any important data in
+                this database before proceeding.
+              </p>
+              {setupTablesError && (
+                <p className="text-sm text-theme-error-text" role="alert">
+                  {setupTablesError}
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-theme-border bg-theme-bg rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => !setupTablesLoading && setSetupTablesDialogOpen(false)}
+                className="btn-secondary"
+                disabled={setupTablesLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSetupTablesConfirm()}
+                disabled={setupTablesLoading}
+                className="btn-primary disabled:opacity-50"
+                data-testid="setup-tables-confirm"
+              >
+                {setupTablesLoading ? "Setting up…" : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div>
         <h3 className="text-sm font-semibold text-theme-text">Theme</h3>
         <p className="text-xs text-theme-muted mb-3">

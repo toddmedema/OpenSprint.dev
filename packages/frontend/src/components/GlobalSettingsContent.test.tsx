@@ -20,6 +20,7 @@ const mockGlobalSettingsGet = vi.fn();
 const mockGlobalSettingsPut = vi.fn();
 const mockRevealKey = vi.fn();
 const mockClearLimitHit = vi.fn();
+const mockSetupTables = vi.fn();
 
 vi.mock("../api/client", () => ({
   api: {
@@ -29,6 +30,7 @@ vi.mock("../api/client", () => ({
       revealKey: (provider: string, id: string) =>
         mockRevealKey(provider, id).then((v: { value: string }) => v),
       clearLimitHit: (provider: string, id: string) => mockClearLimitHit(provider, id),
+      setupTables: (databaseUrl: string) => mockSetupTables(databaseUrl),
     },
   },
   isConnectionError: () => false,
@@ -258,5 +260,113 @@ describe("GlobalSettingsContent", () => {
 
     expect(mockGlobalSettingsPut).not.toHaveBeenCalled();
     expect(screen.getByText("Enter the full connection URL to save changes")).toBeInTheDocument();
+  });
+
+  it("shows Set up tables button when DB URL has value and is not masked", async () => {
+    mockGlobalSettingsGet.mockResolvedValue({ databaseUrl: "", apiKeys: undefined });
+
+    render(<GlobalSettingsContent />);
+
+    await screen.findByTestId("database-url-input");
+    const input = screen.getByTestId("database-url-input");
+    await act(async () => {
+      fireEvent.change(input, {
+        target: { value: "postgresql://user:secret@localhost:5432/opensprint" },
+      });
+    });
+
+    expect(screen.getByTestId("setup-tables-button")).toBeInTheDocument();
+  });
+
+  it("hides Set up tables button when DB URL is masked", async () => {
+    render(<GlobalSettingsContent />);
+
+    await screen.findByTestId("database-url-input");
+    expect(screen.queryByTestId("setup-tables-button")).not.toBeInTheDocument();
+  });
+
+  it("opens confirmation dialog with warning when Set up tables clicked", async () => {
+    mockGlobalSettingsGet.mockResolvedValue({ databaseUrl: "", apiKeys: undefined });
+
+    render(<GlobalSettingsContent />);
+
+    await screen.findByTestId("database-url-input");
+    const input = screen.getByTestId("database-url-input");
+    await act(async () => {
+      fireEvent.change(input, {
+        target: { value: "postgresql://user:secret@localhost:5432/opensprint" },
+      });
+    });
+
+    const setupBtn = screen.getByTestId("setup-tables-button");
+    await act(async () => {
+      fireEvent.click(setupBtn);
+    });
+
+    expect(screen.getByTestId("setup-tables-dialog")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Data loss may occur. Please confirm that you've backed up any important data in this database before proceeding."
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("calls setupTables on confirm", async () => {
+    mockGlobalSettingsGet.mockResolvedValue({ databaseUrl: "", apiKeys: undefined });
+    mockSetupTables.mockResolvedValue({ ok: true });
+
+    render(<GlobalSettingsContent />);
+
+    await screen.findByTestId("database-url-input");
+    const input = screen.getByTestId("database-url-input");
+    await act(async () => {
+      fireEvent.change(input, {
+        target: { value: "postgresql://user:secret@localhost:5432/opensprint" },
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("setup-tables-button"));
+    });
+
+    const confirmBtn = await screen.findByTestId("setup-tables-confirm");
+    await act(async () => {
+      fireEvent.click(confirmBtn);
+    });
+
+    await waitFor(() => {
+      expect(mockSetupTables).toHaveBeenCalledWith(
+        "postgresql://user:secret@localhost:5432/opensprint"
+      );
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("setup-tables-dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("does not call setupTables on cancel", async () => {
+    mockGlobalSettingsGet.mockResolvedValue({ databaseUrl: "", apiKeys: undefined });
+
+    render(<GlobalSettingsContent />);
+
+    await screen.findByTestId("database-url-input");
+    const input = screen.getByTestId("database-url-input");
+    await act(async () => {
+      fireEvent.change(input, {
+        target: { value: "postgresql://user:secret@localhost:5432/opensprint" },
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("setup-tables-button"));
+    });
+
+    const cancelBtn = screen.getByRole("button", { name: /cancel/i });
+    await act(async () => {
+      fireEvent.click(cancelBtn);
+    });
+
+    expect(mockSetupTables).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("setup-tables-dialog")).not.toBeInTheDocument();
   });
 });
