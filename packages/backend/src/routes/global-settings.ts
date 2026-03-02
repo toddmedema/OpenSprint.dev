@@ -16,6 +16,7 @@ import {
   getGlobalSettings,
   updateGlobalSettings,
 } from "../services/global-settings.service.js";
+import { clearLimitHit } from "../services/api-key-resolver.service.js";
 
 export const globalSettingsRouter = Router();
 
@@ -42,6 +43,24 @@ globalSettingsRouter.get("/reveal-key/:provider/:id", async (req, res, next) => 
       throw new AppError(404, ErrorCodes.NOT_FOUND, "API key not found");
     }
     res.json({ data: { value: entry.value } } as ApiResponse<{ value: string }>);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /global-settings/clear-limit-hit/:provider/:id — Clears limitHitAt for a rate-limited key so it can be retried.
+globalSettingsRouter.post("/clear-limit-hit/:provider/:id", async (req, res, next) => {
+  try {
+    const provider = req.params.provider as ApiKeyProvider;
+    const id = req.params.id;
+    if (!API_KEY_PROVIDERS.includes(provider) || !id || typeof id !== "string") {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Invalid provider or id");
+    }
+    await clearLimitHit("", provider, id, "global");
+    const settings = await getGlobalSettings();
+    res.json({
+      data: buildResponse(settings),
+    } as ApiResponse<GlobalSettingsResponse>);
   } catch (err) {
     next(err);
   }

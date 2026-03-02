@@ -7,7 +7,10 @@ import os from "os";
 import { globalSettingsRouter } from "../routes/global-settings.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { errorHandler } from "../middleware/error-handler.js";
-import { setGlobalSettings } from "../services/global-settings.service.js";
+import {
+  setGlobalSettings,
+  getGlobalSettings,
+} from "../services/global-settings.service.js";
 
 vi.mock("../services/task-store.service.js", () => ({
   taskStore: {
@@ -328,6 +331,58 @@ describe("Global Settings API", () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("INVALID_INPUT");
+    });
+  });
+
+  describe("POST /global-settings/clear-limit-hit/:provider/:id", () => {
+    it("clears limitHitAt for a rate-limited key and returns updated settings", async () => {
+      const limitHitAt = new Date().toISOString();
+      await setGlobalSettings({
+        apiKeys: {
+          ANTHROPIC_API_KEY: [
+            { id: "k1", value: "sk-ant-secret", limitHitAt },
+          ],
+        },
+      });
+
+      const res = await request(app).post(
+        `${API_PREFIX}/global-settings/clear-limit-hit/ANTHROPIC_API_KEY/k1`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([
+        { id: "k1", masked: "••••••••" },
+      ]);
+      expect(res.body.data.apiKeys.ANTHROPIC_API_KEY[0]).not.toHaveProperty("limitHitAt");
+
+      const gs = await getGlobalSettings();
+      expect(gs.apiKeys?.ANTHROPIC_API_KEY?.[0]).not.toHaveProperty("limitHitAt");
+    });
+
+    it("returns 400 for invalid provider", async () => {
+      const res = await request(app).post(
+        `${API_PREFIX}/global-settings/clear-limit-hit/INVALID_PROVIDER/k1`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+    });
+
+    it("no-ops when key has no limitHitAt (idempotent)", async () => {
+      await setGlobalSettings({
+        apiKeys: {
+          CURSOR_API_KEY: [{ id: "c1", value: "cursor-key" }],
+        },
+      });
+
+      const res = await request(app).post(
+        `${API_PREFIX}/global-settings/clear-limit-hit/CURSOR_API_KEY/c1`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.apiKeys.CURSOR_API_KEY).toEqual([
+        { id: "c1", masked: "••••••••" },
+      ]);
     });
   });
 });

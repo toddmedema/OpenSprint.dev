@@ -65,6 +65,8 @@ interface ApiKeysSectionProps {
   variant?: ApiKeysSectionVariant;
   /** When provided (global variant), fetches actual key value for reveal-on-click after refresh. */
   onRevealKey?: (provider: ApiKeyProvider, id: string) => Promise<string>;
+  /** When provided (global variant), clears limitHitAt for a rate-limited key so it can be retried. */
+  onClearLimitHit?: (provider: ApiKeyProvider, id: string) => Promise<void>;
   onApiKeysChange: (apiKeys: Partial<Record<ApiKeyProvider, Array<{ id: string; value?: string; limitHitAt?: string }>>>) => void;
 }
 
@@ -74,6 +76,7 @@ export function ApiKeysSection({
   providers: providersProp,
   variant = "project",
   onRevealKey,
+  onClearLimitHit,
   onApiKeysChange,
 }: ApiKeysSectionProps) {
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
@@ -81,6 +84,7 @@ export function ApiKeysSection({
   const [newKeys, setNewKeys] = useState<Partial<Record<ApiKeyProvider, Array<{ id: string; value: string }>>>>({});
   const [revealedValues, setRevealedValues] = useState<Record<string, string>>({});
   const [revealingId, setRevealingId] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const providers =
     providersProp ??
@@ -330,9 +334,29 @@ export function ApiKeysSection({
                         </button>
                       </div>
                       {entry.limitHitAt && (
-                        <p className="text-xs text-theme-muted">
-                          Limit hit at {formatLimitHitAt(entry.limitHitAt)} — retry after 24h
-                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-xs text-theme-muted">
+                            Limit hit at {formatLimitHitAt(entry.limitHitAt)} — retry after 24h
+                          </p>
+                          {onClearLimitHit && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setRetryingId(entry.id);
+                                try {
+                                  await onClearLimitHit(provider, entry.id);
+                                } finally {
+                                  setRetryingId(null);
+                                }
+                              }}
+                              disabled={retryingId === entry.id}
+                              className="btn-secondary text-xs py-1 px-2 disabled:opacity-50 disabled:cursor-wait"
+                              data-testid={`api-key-retry-${provider}-${entry.id}`}
+                            >
+                              {retryingId === entry.id ? "Retrying…" : "Retry"}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   );

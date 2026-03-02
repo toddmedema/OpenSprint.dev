@@ -126,6 +126,10 @@ export const api = {
       }),
     revealKey: (provider: string, id: string) =>
       request<{ value: string }>(`/global-settings/reveal-key/${encodeURIComponent(provider)}/${encodeURIComponent(id)}`),
+    clearLimitHit: (provider: string, id: string) =>
+      request<GlobalSettingsResponse>(`/global-settings/clear-limit-hit/${encodeURIComponent(provider)}/${encodeURIComponent(id)}`, {
+        method: "POST",
+      }),
   },
   env: {
     getKeys: () =>

@@ -256,4 +256,49 @@ describe("ApiKeysSection", () => {
     expect(screen.getByText("ANTHROPIC_API_KEY (Claude API)")).toBeInTheDocument();
     expect(screen.getByText("CURSOR_API_KEY")).toBeInTheDocument();
   });
+
+  it("shows Retry button when limitHitAt is set and onClearLimitHit provided", async () => {
+    const user = userEvent.setup();
+    const onClearLimitHit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ApiKeysSection
+        apiKeys={{
+          ANTHROPIC_API_KEY: [
+            { id: "k1", masked: "••••••••", limitHitAt: "2025-02-25T12:00:00Z" },
+          ],
+        }}
+        providers={["ANTHROPIC_API_KEY"]}
+        variant="global"
+        onClearLimitHit={onClearLimitHit}
+        onApiKeysChange={onApiKeysChange}
+      />
+    );
+
+    const retryBtn = screen.getByTestId("api-key-retry-ANTHROPIC_API_KEY-k1");
+    expect(retryBtn).toBeInTheDocument();
+    expect(retryBtn).toHaveTextContent("Retry");
+
+    await user.click(retryBtn);
+
+    await waitFor(() => {
+      expect(onClearLimitHit).toHaveBeenCalledWith("ANTHROPIC_API_KEY", "k1");
+    });
+  });
+
+  it("does not show Retry button when limitHitAt is set but onClearLimitHit not provided", () => {
+    render(
+      <ApiKeysSection
+        apiKeys={{
+          ANTHROPIC_API_KEY: [
+            { id: "k1", masked: "••••••••", limitHitAt: "2025-02-25T12:00:00Z" },
+          ],
+        }}
+        providers={["ANTHROPIC_API_KEY"]}
+        variant="global"
+        onApiKeysChange={onApiKeysChange}
+      />
+    );
+
+    expect(screen.queryByTestId("api-key-retry-ANTHROPIC_API_KEY-k1")).not.toBeInTheDocument();
+  });
 });

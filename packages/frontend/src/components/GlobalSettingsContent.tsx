@@ -140,6 +140,27 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
     return () => clearTimeout(t);
   }, [databaseUrl, databaseUrlLoading]);
 
+  const handleClearLimitHit = useCallback(
+    async (provider: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | "OPENAI_API_KEY", id: string) => {
+      setApiKeysError(null);
+      notifySaveState("saving");
+      try {
+        const res = await api.globalSettings.clearLimitHit(provider, id);
+        setApiKeys(res.apiKeys);
+        notifySaveState("saved");
+      } catch (err) {
+        const message = isConnectionError(err)
+          ? "Unable to connect. Please check your network and try again."
+          : err instanceof Error
+            ? err.message
+            : "Failed to clear limit";
+        setApiKeysError(message);
+        notifySaveState("saved");
+      }
+    },
+    [notifySaveState]
+  );
+
   const handleApiKeysChange = async (
     updates: Partial<
       Record<
@@ -179,6 +200,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
           onRevealKey={(provider, id) =>
             api.globalSettings.revealKey(provider, id).then((r) => r.value)
           }
+          onClearLimitHit={handleClearLimitHit}
           onApiKeysChange={handleApiKeysChange}
         />
         {apiKeysError && (

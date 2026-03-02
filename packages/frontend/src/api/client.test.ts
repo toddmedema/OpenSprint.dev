@@ -448,6 +448,30 @@ describe("api client", () => {
         expect.any(Object)
       );
     });
+
+    it("clearLimitHit posts to clear-limit-hit and returns updated settings", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          data: {
+            databaseUrl: "postgresql://user:***@localhost:5432/opensprint",
+            apiKeys: {
+              ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••" }],
+            },
+          },
+        }),
+      } as Response);
+
+      const result = await api.globalSettings.clearLimitHit("ANTHROPIC_API_KEY", "k1");
+      expect(result.apiKeys).toEqual({
+        ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••" }],
+      });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/global-settings/clear-limit-hit/ANTHROPIC_API_KEY/k1"),
+        expect.objectContaining({ method: "POST" })
+      );
+    });
   });
 
   describe("isConnectionError", () => {

@@ -19,6 +19,7 @@ vi.mock("../contexts/DisplayPreferencesContext", () => ({
 const mockGlobalSettingsGet = vi.fn();
 const mockGlobalSettingsPut = vi.fn();
 const mockRevealKey = vi.fn();
+const mockClearLimitHit = vi.fn();
 
 vi.mock("../api/client", () => ({
   api: {
@@ -27,6 +28,7 @@ vi.mock("../api/client", () => ({
       put: (...args: unknown[]) => mockGlobalSettingsPut(...args),
       revealKey: (provider: string, id: string) =>
         mockRevealKey(provider, id).then((v: { value: string }) => v),
+      clearLimitHit: (provider: string, id: string) => mockClearLimitHit(provider, id),
     },
   },
   isConnectionError: () => false,
@@ -119,6 +121,38 @@ describe("GlobalSettingsContent", () => {
     await screen.findByTestId("api-keys-section");
     expect(screen.getByText(/Limit hit at/)).toBeInTheDocument();
     expect(screen.getByText(/retry after 24h/)).toBeInTheDocument();
+  });
+
+  it("calls clearLimitHit and updates apiKeys when Retry clicked on rate-limited key", async () => {
+    mockGlobalSettingsGet.mockResolvedValue({
+      databaseUrl: "postgresql://user:***@localhost:5432/opensprint",
+      apiKeys: {
+        ANTHROPIC_API_KEY: [
+          { id: "k1", masked: "••••••••", limitHitAt: "2025-02-25T12:00:00Z" },
+        ],
+      },
+    });
+    mockClearLimitHit.mockResolvedValue({
+      databaseUrl: "postgresql://user:***@localhost:5432/opensprint",
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••" }],
+      },
+    });
+
+    render(<GlobalSettingsContent />);
+
+    await screen.findByTestId("api-key-retry-ANTHROPIC_API_KEY-k1");
+    const retryBtn = screen.getByTestId("api-key-retry-ANTHROPIC_API_KEY-k1");
+    await act(async () => {
+      fireEvent.click(retryBtn);
+    });
+
+    await waitFor(() => {
+      expect(mockClearLimitHit).toHaveBeenCalledWith("ANTHROPIC_API_KEY", "k1");
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/Limit hit at/)).not.toBeInTheDocument();
+    });
   });
 
   it("renders Theme section", async () => {
