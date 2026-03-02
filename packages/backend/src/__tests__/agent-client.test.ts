@@ -626,6 +626,67 @@ describe("AgentClient", () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     });
 
+    it("does not recordLimitHit when detached output only mentions rate limits in normal text", async () => {
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const os = await import("os");
+      const tmpDir = path.join(os.tmpdir(), `agent-client-output-fp-${Date.now()}`);
+      const taskDir = path.join(tmpDir, ".opensprint/active/bd-a3f8.1");
+      await fs.mkdir(taskDir, { recursive: true });
+      const taskFilePath = path.join(taskDir, "prompt.md");
+      await fs.writeFile(taskFilePath, "# Task\n\nFix bug", "utf-8");
+      const outputLogPath = path.join(taskDir, "output.log");
+
+      mockGetNextKey.mockResolvedValue({ key: "cursor-key", keyId: "k1", source: "global" });
+
+      const mockChild = {
+        killed: false,
+        kill: vi.fn(),
+        pid: 10001,
+        stdout: { on: vi.fn(), removeAllListeners: vi.fn() },
+        stderr: { on: vi.fn(), removeAllListeners: vi.fn() },
+        on: vi.fn((ev: string, fn: (code?: number) => void) => {
+          if (ev === "close") setTimeout(() => fn(1), 20);
+          return { on: vi.fn(), removeAllListeners: vi.fn() };
+        }),
+        removeAllListeners: vi.fn(),
+      };
+      mockSpawn.mockReturnValue(mockChild);
+
+      const onOutput = vi.fn();
+      const onExit = vi.fn();
+      const config: AgentConfig = { type: "cursor", model: "gpt-4", cliCommand: null };
+
+      client.spawnWithTaskFile(
+        config,
+        taskFilePath,
+        tmpDir,
+        onOutput,
+        onExit,
+        "coder",
+        outputLogPath,
+        "proj-123"
+      );
+
+      await fs.writeFile(
+        outputLogPath,
+        '{"type":"text","text":"We should handle rate limits gracefully in this feature."}\n',
+        "utf-8"
+      );
+
+      await vi.waitFor(
+        () => {
+          expect(onExit).toHaveBeenCalledWith(1);
+        },
+        { timeout: 2000 }
+      );
+
+      expect(mockRecordLimitHit).not.toHaveBeenCalled();
+      expect(mockGetNextKey).toHaveBeenCalledTimes(1);
+
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    });
+
     it("should return kill that terminates process with process group", async () => {
       const fs = await import("fs/promises");
       const path = await import("path");

@@ -92,6 +92,65 @@ async function collectOpenAIResponsesStream(
   return fullContent;
 }
 
+function getStructuredAgentErrorMessage(obj: unknown): string | null {
+  if (obj === null || typeof obj !== "object") return null;
+
+  const o = obj as Record<string, unknown>;
+  const nestedError =
+    o.error && typeof o.error === "object"
+      ? (o.error as Record<string, unknown>)
+      : null;
+  const explicitErrorMessage =
+    typeof o.message === "string"
+      ? o.message
+      : typeof o.error === "string"
+        ? o.error
+        : nestedError && typeof nestedError.message === "string"
+          ? nestedError.message
+          : typeof o.detail === "string"
+            ? o.detail
+            : null;
+
+  if (
+    ((o.type === "error" || o.subtype === "error") && explicitErrorMessage) ||
+    (o.status === "error" && explicitErrorMessage)
+  ) {
+    return explicitErrorMessage;
+  }
+
+  return null;
+}
+
+/**
+ * Detached Cursor runs write stdout and stderr into a single log file.
+ * Only explicit error records should participate in rate-limit detection.
+ */
+function extractExplicitAgentErrors(rawOutput: string): string {
+  if (!rawOutput.trim()) return "";
+
+  const errors: string[] = [];
+  for (const line of rawOutput.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const agentErrorMatch = trimmed.match(/^\[Agent error:\s*(.+?)\]$/i);
+    if (agentErrorMatch) {
+      errors.push(agentErrorMatch[1]);
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      const message = getStructuredAgentErrorMessage(parsed);
+      if (message) errors.push(message);
+    } catch {
+      // Ignore normal output lines. Detached log files mix stdout and stderr.
+    }
+  }
+
+  return errors.join("\n");
+}
+
 /** Format raw agent errors into user-friendly messages with remediation hints */
 function formatAgentError(
   agentType: "claude" | "claude-cli" | "cursor" | "custom" | "openai",
@@ -331,7 +390,10 @@ export class AgentClient {
         } else {
           output = stderrCollector.stderr;
         }
-        if (isLimitError({ stderr: output }) && keyId !== ENV_FALLBACK_KEY_ID) {
+        const limitCheckOutput = outputLogPath
+          ? extractExplicitAgentErrors(output)
+          : output;
+        if (isLimitError({ stderr: limitCheckOutput }) && keyId !== ENV_FALLBACK_KEY_ID) {
           await recordLimitHit(projectId, "CURSOR_API_KEY", keyId, source);
           const next = await getNextKey(projectId, "CURSOR_API_KEY");
           if (next) {
