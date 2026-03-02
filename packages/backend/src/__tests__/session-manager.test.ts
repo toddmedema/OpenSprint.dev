@@ -75,6 +75,36 @@ vi.mock("../services/task-store.service.js", async () => {
 const sessionTaskStoreMod = await import("../services/task-store.service.js");
 const sessionPostgresOk = (sessionTaskStoreMod as { _postgresAvailable?: boolean })._postgresAvailable ?? false;
 
+/** Pure path tests that run without Postgres */
+describe("SessionManager getResultPath", () => {
+  let manager: SessionManager;
+
+  beforeEach(() => {
+    manager = new SessionManager();
+  });
+
+  it("returns result.json path when angle is undefined", () => {
+    const result = manager.getResultPath("/repo", "task-1");
+    expect(result).toMatch(/result\.json$/);
+    expect(result).not.toContain("review-angles");
+    expect(result).toContain("task-1");
+  });
+
+  it("returns review-angles/<angle>/result.json when angle provided", () => {
+    const result = manager.getResultPath("/repo", "task-1", "security");
+    expect(result).toContain("review-angles/security/result.json");
+    expect(result).toContain("task-1");
+  });
+
+  it("returns different paths for different angles", () => {
+    const security = manager.getResultPath("/repo", "task-x", "security");
+    const performance = manager.getResultPath("/repo", "task-x", "performance");
+    expect(security).toContain("security");
+    expect(performance).toContain("performance");
+    expect(security).not.toBe(performance);
+  });
+});
+
 describe.skipIf(!sessionPostgresOk)("SessionManager", () => {
   let manager: SessionManager;
   let repoPath: string;
@@ -290,6 +320,25 @@ describe.skipIf(!sessionPostgresOk)("SessionManager", () => {
       expect(result).toEqual(resultData);
     });
 
+    it("returns result from review-angles/<angle>/result.json when angle provided", async () => {
+      const activeDir = path.join(repoPath, OPENSPRINT_PATHS.active, "task-angle");
+      const angleDir = path.join(activeDir, "review-angles", "security");
+      await fs.mkdir(angleDir, { recursive: true });
+      const resultData = { status: "approved", summary: "Security review passed" };
+      await fs.writeFile(path.join(angleDir, "result.json"), JSON.stringify(resultData));
+
+      const result = await manager.readResult(repoPath, "task-angle", "security");
+      expect(result).toEqual(resultData);
+    });
+
+    it("returns null when angle-specific result.json does not exist", async () => {
+      const activeDir = path.join(repoPath, OPENSPRINT_PATHS.active, "task-no-angle");
+      await fs.mkdir(activeDir, { recursive: true });
+
+      const result = await manager.readResult(repoPath, "task-no-angle", "performance");
+      expect(result).toBeNull();
+    });
+
     it("returns null when result.json does not exist", async () => {
       const result = await manager.readResult(repoPath, "no-result-task");
       expect(result).toBeNull();
@@ -302,6 +351,36 @@ describe.skipIf(!sessionPostgresOk)("SessionManager", () => {
 
       const result = await manager.readResult(repoPath, "task-malformed");
       expect(result).toBeNull();
+    });
+  });
+
+  describe("clearResult", () => {
+    it("removes result.json when angle is undefined", async () => {
+      const activeDir = path.join(repoPath, OPENSPRINT_PATHS.active, "task-clear");
+      await fs.mkdir(activeDir, { recursive: true });
+      await fs.writeFile(path.join(activeDir, "result.json"), '{"status":"success"}');
+
+      await manager.clearResult(repoPath, "task-clear");
+
+      await expect(fs.access(path.join(activeDir, "result.json"))).rejects.toThrow();
+    });
+
+    it("removes review-angles/<angle>/result.json when angle provided", async () => {
+      const activeDir = path.join(repoPath, OPENSPRINT_PATHS.active, "task-clear-angle");
+      const angleDir = path.join(activeDir, "review-angles", "security");
+      await fs.mkdir(angleDir, { recursive: true });
+      await fs.writeFile(path.join(angleDir, "result.json"), '{"status":"approved"}');
+
+      await manager.clearResult(repoPath, "task-clear-angle", "security");
+
+      await expect(fs.access(path.join(angleDir, "result.json"))).rejects.toThrow();
+    });
+
+    it("does not throw when result file does not exist", async () => {
+      await expect(manager.clearResult(repoPath, "nonexistent-task")).resolves.toBeUndefined();
+      await expect(
+        manager.clearResult(repoPath, "nonexistent-task", "performance")
+      ).resolves.toBeUndefined();
     });
   });
 

@@ -4,6 +4,7 @@ import {
   resolveTestCommand,
   getAgentName,
   getAgentNameForRole,
+  AGENT_NAMES_BY_ROLE,
   isAgentAssignee,
   isBlockedByTechnicalError,
   TECHNICAL_BLOCK_REASONS,
@@ -64,8 +65,10 @@ describe("getAgentNameForRole", () => {
     expect(getAgentNameForRole("dreamer", 0)).toBe("Gandalf");
   });
   it("wraps with modulo", () => {
-    // reviewer list has 10 entries; index 10 wraps to 0
-    expect(getAgentNameForRole("reviewer", 10)).toBe(getAgentNameForRole("reviewer", 0));
+    const reviewerCount = AGENT_NAMES_BY_ROLE.reviewer.length;
+    expect(getAgentNameForRole("reviewer", reviewerCount)).toBe(
+      getAgentNameForRole("reviewer", 0)
+    );
   });
   it("falls back to coder list for unknown role", () => {
     expect(getAgentNameForRole("unknown", 0)).toBe("Frodo");

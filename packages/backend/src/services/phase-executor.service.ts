@@ -5,7 +5,7 @@
 
 import fs from "fs/promises";
 import path from "path";
-import type { ActiveTaskConfig } from "@opensprint/shared";
+import type { ActiveTaskConfig, ReviewAngle } from "@opensprint/shared";
 import {
   OPENSPRINT_PATHS,
   resolveTestCommand,
@@ -52,7 +52,12 @@ export interface PhaseExecutorHost {
   testRunner: TestRunner;
   lifecycleManager: AgentLifecycleManager;
   persistCounters(projectId: string, repoPath: string): Promise<void>;
-  preflightCheck(repoPath: string, wtPath: string, taskId: string): Promise<void>;
+  preflightCheck(
+    repoPath: string,
+    wtPath: string,
+    taskId: string,
+    reviewAngles?: ReviewAngle[]
+  ): Promise<void>;
   runSummarizer(
     projectId: string,
     settings: import("@opensprint/shared").ProjectSettings,
@@ -150,7 +155,7 @@ export class PhaseExecutorService {
         }
       }
 
-      await this.host.preflightCheck(repoPath, wtPath, task.id);
+      await this.host.preflightCheck(repoPath, wtPath, task.id, undefined);
 
       let context: TaskContext = await this.host.contextAssembler.buildContext(
         projectId,
@@ -307,6 +312,15 @@ export class PhaseExecutorService {
     const wtPath = slot.worktreePath ?? repoPath;
 
     try {
+      await this.host.preflightCheck(
+        repoPath,
+        wtPath,
+        task.id,
+        settings.reviewAngles && settings.reviewAngles.length > 0
+          ? settings.reviewAngles
+          : undefined
+      );
+
       const config: ActiveTaskConfig = {
         invocation_id: task.id,
         agent_role: "reviewer",

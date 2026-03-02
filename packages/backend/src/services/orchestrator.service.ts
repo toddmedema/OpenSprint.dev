@@ -13,6 +13,7 @@ import {
   OPENSPRINT_PATHS,
   resolveTestCommand,
   DEFAULT_REVIEW_MODE,
+  type ReviewAngle,
   getAgentForPlanningRole,
   getAgentName,
   getAgentNameForRole,
@@ -213,7 +214,7 @@ export class OrchestratorService {
 
   private phaseExecutor = new PhaseExecutorService(this as unknown as PhaseExecutorHost, {
     handleCodingDone: (a, b, c, d, e) => this.handleCodingDone(a, b, c, d, e),
-    handleReviewDone: (a, b, c, d, e) => this.handleReviewDone(a, b, c, d, e),
+    handleReviewDone: (a, b, c, d, e, f) => this.handleReviewDone(a, b, c, d, e, f),
     handleTaskFailure: (a, b, c, d, e, f, g, h) =>
       this.failureHandler.handleTaskFailure(a, b, c, d, e, f, g as FailureType | undefined, h),
     handleApiKeysExhausted: (a, b, c, d, provider) =>
@@ -1616,7 +1617,8 @@ export class OrchestratorService {
     repoPath: string,
     task: StoredTask,
     branchName: string,
-    exitCode: number | null
+    exitCode: number | null,
+    angle?: ReviewAngle
   ): Promise<void> {
     const state = this.getState(projectId);
     const slot = state.slots.get(task.id);
@@ -1639,7 +1641,8 @@ export class OrchestratorService {
     const wtPath = slot.worktreePath ?? repoPath;
     const result = (await this.sessionManager.readResult(
       wtPath,
-      task.id
+      task.id,
+      angle
     )) as ReviewAgentResult | null;
 
     if (result && result.status) {
@@ -1924,7 +1927,12 @@ export class OrchestratorService {
     return context;
   }
 
-  private async preflightCheck(repoPath: string, wtPath: string, taskId: string): Promise<void> {
+  private async preflightCheck(
+    repoPath: string,
+    wtPath: string,
+    taskId: string,
+    reviewAngles?: ReviewAngle[]
+  ): Promise<void> {
     await this.branchManager.waitForGitReady(wtPath);
 
     try {
@@ -1939,7 +1947,13 @@ export class OrchestratorService {
       }
     }
 
-    await this.sessionManager.clearResult(wtPath, taskId);
+    if (reviewAngles && reviewAngles.length > 0) {
+      for (const angle of reviewAngles) {
+        await this.sessionManager.clearResult(wtPath, taskId, angle);
+      }
+    } else {
+      await this.sessionManager.clearResult(wtPath, taskId);
+    }
   }
 
   /** MergeCoordinatorHost: run merger agent to resolve conflicts; returns true if agent exited 0 */

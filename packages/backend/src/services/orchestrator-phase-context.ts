@@ -57,7 +57,8 @@ export interface PhaseExecutorCallbacks {
     repoPath: string,
     task: StoredTask,
     branchName: string,
-    exitCode: number | null
+    exitCode: number | null,
+    angle?: import("@opensprint/shared").ReviewAngle
   ): Promise<void>;
   handleTaskFailure(
     projectId: string,

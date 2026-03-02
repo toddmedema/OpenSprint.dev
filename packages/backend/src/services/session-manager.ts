@@ -3,7 +3,13 @@ import fs from "fs/promises";
 import path from "path";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { heartbeatService } from "./heartbeat.service.js";
-import type { AgentSession, AgentSessionStatus, TestResults, AgentType } from "@opensprint/shared";
+import type {
+  AgentSession,
+  AgentSessionStatus,
+  TestResults,
+  AgentType,
+  ReviewAngle,
+} from "@opensprint/shared";
 import { ensureRuntimeDir, getRuntimePath } from "../utils/runtime-dir.js";
 import { taskStore } from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
@@ -32,10 +38,29 @@ export class SessionManager {
   }
 
   /**
-   * Read the result.json from a completed agent run.
+   * Get the path to result.json for a task (general or angle-specific).
+   * When angle is undefined: .opensprint/active/<taskId>/result.json
+   * When angle is provided: .opensprint/active/<taskId>/review-angles/<angle>/result.json
    */
-  async readResult(repoPath: string, taskId: string): Promise<unknown | null> {
-    const resultPath = path.join(this.getActiveDir(repoPath, taskId), "result.json");
+  getResultPath(repoPath: string, taskId: string, angle?: ReviewAngle): string {
+    const activeDir = this.getActiveDir(repoPath, taskId);
+    if (angle) {
+      return path.join(activeDir, "review-angles", angle, "result.json");
+    }
+    return path.join(activeDir, "result.json");
+  }
+
+  /**
+   * Read the result.json from a completed agent run.
+   * When angle is undefined: reads from result.json (general agent).
+   * When angle is provided: reads from review-angles/<angle>/result.json.
+   */
+  async readResult(
+    repoPath: string,
+    taskId: string,
+    angle?: ReviewAngle
+  ): Promise<unknown | null> {
+    const resultPath = this.getResultPath(repoPath, taskId, angle);
     try {
       const raw = await fs.readFile(resultPath, "utf-8");
       return JSON.parse(raw);
@@ -47,9 +72,15 @@ export class SessionManager {
   /**
    * Remove stale result.json from a previous run so the orchestrator
    * doesn't mistakenly read it after a new agent invocation.
+   * When angle is undefined: clears result.json (general agent).
+   * When angle is provided: clears review-angles/<angle>/result.json.
    */
-  async clearResult(repoPath: string, taskId: string): Promise<void> {
-    const resultPath = path.join(this.getActiveDir(repoPath, taskId), "result.json");
+  async clearResult(
+    repoPath: string,
+    taskId: string,
+    angle?: ReviewAngle
+  ): Promise<void> {
+    const resultPath = this.getResultPath(repoPath, taskId, angle);
     try {
       await fs.unlink(resultPath);
     } catch {
