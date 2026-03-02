@@ -676,6 +676,24 @@ describe("executeSlice", () => {
       expect(state.activeAgentsLoadedOnce).toBe(true);
     });
 
+    it("maps per-agent IDs back to taskId for taskIdToStartedAt", async () => {
+      const agents = [
+        {
+          id: "task-1--review--security",
+          taskId: "task-1",
+          phase: "review",
+          role: "reviewer",
+          label: "Reviewer",
+          startedAt: "2025-01-03",
+        },
+      ];
+      vi.mocked(api.agents.active).mockResolvedValue(agents as never);
+      const store = createStore();
+      await store.dispatch(fetchActiveAgents("proj-1"));
+      const state = store.getState().execute;
+      expect(state.taskIdToStartedAt).toEqual({ "task-1": "2025-01-03" });
+    });
+
     it("sets activeAgentsLoadedOnce true on rejected", async () => {
       vi.mocked(api.agents.active).mockRejectedValue(new Error("Network error"));
       const store = createStore();

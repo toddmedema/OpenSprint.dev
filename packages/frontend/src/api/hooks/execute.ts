@@ -125,7 +125,7 @@ export function useActiveAgents(projectId: string | undefined, options?: { enabl
       const taskIdToStartedAt: Record<string, string> = {};
       for (const a of agents) {
         if (a.phase === "coding" || a.phase === "review") {
-          taskIdToStartedAt[a.id] = a.startedAt;
+          taskIdToStartedAt[a.taskId ?? a.id] = a.startedAt;
         }
       }
       return { agents, taskIdToStartedAt };

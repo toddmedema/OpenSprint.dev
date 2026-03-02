@@ -367,6 +367,30 @@ describe("ActiveAgentsList", () => {
     expect(screen.queryByText(/Coder \(/)).not.toBeInTheDocument();
   });
 
+  it("shows reviewer angle name in parentheses for parallel reviews", async () => {
+    mockAgentsActive.mockResolvedValue([
+      {
+        id: "task-1--review--security",
+        taskId: "task-1",
+        phase: "review",
+        role: "reviewer",
+        label: "Task 1",
+        name: "Security",
+        startedAt: "2026-02-16T12:00:00.000Z",
+      },
+    ]);
+
+    renderActiveAgentsList();
+    await waitFor(() => {
+      expect(screen.getByText("1 agent running")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Active agents"));
+
+    expect(screen.getByText(/Reviewer \(Security\)/)).toBeInTheDocument();
+  });
+
   it("dropdown agent items have visible hover background and cursor pointer for clickability feedback", async () => {
     mockAgentsActive.mockResolvedValue([
       {

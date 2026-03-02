@@ -306,6 +306,11 @@ describe("ProjectSettingsModal", () => {
 
     await screen.findByText("Code Review");
     expect(screen.getByTestId("review-angles-multiselect")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Leave empty for one general review. Select one or more angles for parallel angle-specific reviews."
+      )
+    ).toBeInTheDocument();
     expect(screen.getByText("Security implications")).toBeInTheDocument();
     expect(screen.getByText("Performance impact")).toBeInTheDocument();
 

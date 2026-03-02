@@ -26,15 +26,26 @@ export interface ReviewOutcome {
 
 export type PhaseResolution = (test: TestOutcome, review: ReviewOutcome) => Promise<void>;
 
+const DEFAULT_REVIEW_KEY = "__general_review__";
+
+export interface TaskPhaseCoordinatorOptions {
+  reviewAngles?: string[];
+}
+
 export class TaskPhaseCoordinator {
   private testOutcome: TestOutcome | null = null;
-  private reviewOutcome: ReviewOutcome | null = null;
+  private readonly expectedReviewKeys: Set<string>;
+  private readonly reviewOutcomes = new Map<string, ReviewOutcome>();
   private resolved = false;
 
   constructor(
     private readonly taskId: string,
-    private readonly resolve: PhaseResolution
-  ) {}
+    private readonly resolve: PhaseResolution,
+    options?: TaskPhaseCoordinatorOptions
+  ) {
+    const angles = options?.reviewAngles?.filter(Boolean) ?? [];
+    this.expectedReviewKeys = new Set(angles.length > 0 ? angles : [DEFAULT_REVIEW_KEY]);
+  }
 
   setTestOutcome(outcome: TestOutcome): void {
     if (this.resolved) return;
@@ -43,23 +54,92 @@ export class TaskPhaseCoordinator {
     this.tryResolve();
   }
 
-  setReviewOutcome(outcome: ReviewOutcome): void {
+  setReviewOutcome(outcome: ReviewOutcome, angle?: string): void {
     if (this.resolved) return;
-    this.reviewOutcome = outcome;
-    log.info("Review outcome received", { taskId: this.taskId, status: outcome.status });
+    const key = this.resolveReviewKey(angle);
+    this.reviewOutcomes.set(key, outcome);
+    log.info("Review outcome received", {
+      taskId: this.taskId,
+      status: outcome.status,
+      reviewKey: key,
+      received: this.reviewOutcomes.size,
+      expected: this.expectedReviewKeys.size,
+    });
     this.tryResolve();
   }
 
   private tryResolve(): void {
-    if (this.resolved || !this.testOutcome || !this.reviewOutcome) return;
+    if (this.resolved || !this.testOutcome) return;
+    const reviewOutcome = this.getAggregatedReviewOutcome();
+    if (!reviewOutcome) return;
+
     this.resolved = true;
     log.info("Both outcomes ready, resolving", {
       taskId: this.taskId,
       test: this.testOutcome.status,
-      review: this.reviewOutcome.status,
+      review: reviewOutcome.status,
+      reviewCount: this.reviewOutcomes.size,
     });
-    this.resolve(this.testOutcome, this.reviewOutcome).catch((err) => {
+    this.resolve(this.testOutcome, reviewOutcome).catch((err) => {
       log.error("Phase resolution failed", { taskId: this.taskId, err });
     });
+  }
+
+  private resolveReviewKey(angle?: string): string {
+    if (angle && this.expectedReviewKeys.has(angle)) return angle;
+    if (!angle && this.expectedReviewKeys.size === 1) {
+      return [...this.expectedReviewKeys][0]!;
+    }
+    if (angle) return angle;
+    return DEFAULT_REVIEW_KEY;
+  }
+
+  private getAggregatedReviewOutcome(): ReviewOutcome | null {
+    for (const key of this.expectedReviewKeys) {
+      if (!this.reviewOutcomes.has(key)) return null;
+    }
+
+    const outcomes = [...this.expectedReviewKeys].map((key) => this.reviewOutcomes.get(key)!);
+    const firstNoResult = outcomes.find((o) => o.status === "no_result" || o.status === "error");
+    if (firstNoResult) {
+      return { status: "no_result", result: null, exitCode: firstNoResult.exitCode };
+    }
+
+    const rejected = outcomes.filter((o) => o.status === "rejected");
+    if (rejected.length > 0) {
+      const mergedIssues = [
+        ...new Set(
+          rejected
+            .flatMap((o) => o.result?.issues ?? [])
+            .map((issue) => issue.trim())
+            .filter(Boolean)
+        ),
+      ];
+      const mergedSummary = rejected
+        .map((o) => o.result?.summary?.trim() ?? "")
+        .filter(Boolean)
+        .join(" | ");
+      const mergedNotes = rejected
+        .map((o) => o.result?.notes?.trim() ?? "")
+        .filter(Boolean)
+        .join("\n\n");
+
+      return {
+        status: "rejected",
+        exitCode: rejected[0]?.exitCode ?? null,
+        result: {
+          status: "rejected",
+          summary: mergedSummary || "Review rejected",
+          ...(mergedIssues.length > 0 && { issues: mergedIssues }),
+          notes: mergedNotes,
+        },
+      };
+    }
+
+    return {
+      status: "approved",
+      result: outcomes[0]?.result ?? null,
+      exitCode: outcomes[0]?.exitCode ?? 0,
+    };
   }
 }

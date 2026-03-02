@@ -78,4 +78,91 @@ describe("TaskPhaseCoordinator", () => {
       coord.setReviewOutcome(reviewApproved);
     }).not.toThrow();
   });
+
+  it("waits for all angle outcomes before resolving", () => {
+    const resolve = vi.fn().mockResolvedValue(undefined);
+    const coord = new TaskPhaseCoordinator("t1", resolve, {
+      reviewAngles: ["security", "performance"],
+    });
+
+    coord.setTestOutcome(testPassed);
+    coord.setReviewOutcome(reviewApproved, "security");
+    expect(resolve).not.toHaveBeenCalled();
+
+    coord.setReviewOutcome(reviewApproved, "performance");
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(resolve).toHaveBeenCalledWith(
+      testPassed,
+      expect.objectContaining({
+        status: "approved",
+      })
+    );
+  });
+
+  it("aggregates rejected outcomes across angles", () => {
+    const resolve = vi.fn().mockResolvedValue(undefined);
+    const coord = new TaskPhaseCoordinator("t1", resolve, {
+      reviewAngles: ["security", "performance", "code_quality"],
+    });
+
+    coord.setTestOutcome(testPassed);
+    coord.setReviewOutcome(
+      {
+        status: "rejected",
+        exitCode: 1,
+        result: {
+          status: "rejected",
+          summary: "Security issue",
+          issues: ["Unsanitized SQL input"],
+          notes: "Use parameterized queries.",
+        },
+      },
+      "security"
+    );
+    coord.setReviewOutcome(reviewApproved, "performance");
+    coord.setReviewOutcome(
+      {
+        status: "rejected",
+        exitCode: 1,
+        result: {
+          status: "rejected",
+          summary: "Quality issue",
+          issues: ["Dead code in handler"],
+          notes: "Remove unused branch.",
+        },
+      },
+      "code_quality"
+    );
+
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(resolve).toHaveBeenCalledWith(
+      testPassed,
+      expect.objectContaining({
+        status: "rejected",
+        result: expect.objectContaining({
+          summary: expect.stringContaining("Security issue"),
+          issues: expect.arrayContaining(["Unsanitized SQL input", "Dead code in handler"]),
+        }),
+      })
+    );
+  });
+
+  it("returns no_result when any angle has no valid result", () => {
+    const resolve = vi.fn().mockResolvedValue(undefined);
+    const coord = new TaskPhaseCoordinator("t1", resolve, {
+      reviewAngles: ["security", "performance"],
+    });
+
+    coord.setTestOutcome(testPassed);
+    coord.setReviewOutcome(reviewApproved, "security");
+    coord.setReviewOutcome({ status: "no_result", result: null, exitCode: 1 }, "performance");
+
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(resolve).toHaveBeenCalledWith(
+      testPassed,
+      expect.objectContaining({
+        status: "no_result",
+      })
+    );
+  });
 });

@@ -13,7 +13,7 @@ export type AgentRole =
   | "reviewer"
   | "merger";
 
-/** Agent slot: Planning (concurrent) or Coding (single-agent per project) */
+/** Agent slot: Planning (concurrent) or Coding (single task slot; review can fan out per angle) */
 export type AgentSlot = "planning" | "coding";
 
 /** Map role to slot */
@@ -253,6 +253,8 @@ export type AgentResult = CodingAgentResult | ReviewAgentResult;
 /** Active agent (from GET /projects/:id/agents/active) */
 export interface ActiveAgent {
   id: string;
+  /** Owning task ID for Execute agents (when id is a per-agent runtime ID). */
+  taskId?: string;
   phase: string;
   /** Named agent role (e.g. coder, reviewer) */
   role: AgentRole;

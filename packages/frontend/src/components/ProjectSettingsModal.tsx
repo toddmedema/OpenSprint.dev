@@ -719,7 +719,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                         Review angles
                       </label>
                       <p className="text-xs text-theme-muted mb-2">
-                        Select one or more focus areas for the review agent. Leave empty to cover all angles.
+                        Leave empty for one general review. Select one or more angles for parallel angle-specific reviews.
                       </p>
                       <div className="flex flex-wrap gap-2" data-testid="review-angles-multiselect">
                         {REVIEW_ANGLE_OPTIONS.map((opt) => {

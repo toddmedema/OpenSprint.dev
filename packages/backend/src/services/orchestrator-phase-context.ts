@@ -41,6 +41,14 @@ export interface AgentSlotLike {
   infraRetries: number;
   agent: { outputLog: string[]; startedAt: string; killedDueToTimeout: boolean };
   timers: { clearAll: () => void };
+  reviewAgents?: Map<
+    string,
+    {
+      angle?: string;
+      agent: { outputLog: string[]; startedAt: string; killedDueToTimeout: boolean };
+      timers: { clearAll: () => void };
+    }
+  >;
 }
 
 /** Callbacks PhaseExecutor needs from ResultHandler (passed from Orchestrator) */
@@ -108,5 +116,6 @@ export interface TaskAssignmentLike {
   agentConfig: AgentConfig;
   attempt: number;
   retryContext?: RetryContext;
+  angle?: string;
   createdAt: string;
 }

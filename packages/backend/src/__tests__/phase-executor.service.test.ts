@@ -22,6 +22,7 @@ const mockWriteJsonAtomic = vi.fn();
 const mockLifecycleRun = vi.fn();
 const mockPersistCounters = vi.fn();
 const mockGetState = vi.fn();
+const mockHandleReviewDone = vi.fn();
 
 vi.mock("../services/project.service.js", () => ({
   ProjectService: vi.fn(),
@@ -188,6 +189,7 @@ describe("PhaseExecutorService", () => {
 
     phaseExecutor = new PhaseExecutorService(mockHost, {
       handleCodingDone: vi.fn().mockResolvedValue(undefined),
+      handleReviewDone: mockHandleReviewDone,
       handleTaskFailure: vi.fn().mockResolvedValue(undefined),
     });
   });
@@ -267,6 +269,114 @@ describe("PhaseExecutorService", () => {
 
       expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, task.id);
       expect(mockCreateOrCheckoutBranch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("executeReviewPhase", () => {
+    it("spawns one general review agent when reviewAngles are empty", async () => {
+      mockGetSettings.mockResolvedValue({
+        testFramework: "vitest",
+        simpleComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+        complexComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+        reviewMode: "always",
+        reviewAngles: undefined,
+        deployment: { mode: "custom", autoResolveFeedbackOnTaskCompletion: false },
+        maxConcurrentCoders: 1,
+        gitWorkingMode: "worktree",
+      });
+      mockBuildContext.mockResolvedValue({
+        taskId,
+        title: "Test task",
+        description: "",
+        prdExcerpt: "",
+        planContent: "",
+        dependencyOutputs: [],
+      });
+      const task = makeTask();
+      const slot = makeSlot();
+      const slots = new Map([[task.id, slot]]);
+      mockGetState.mockReturnValue({ slots, status: { queueDepth: 0 } });
+      (mockHost.branchManager as { captureBranchDiff: ReturnType<typeof vi.fn> }).captureBranchDiff =
+        vi.fn().mockResolvedValue("");
+
+      await phaseExecutor.executeReviewPhase(projectId, repoPath, task, slot.branchName);
+
+      expect(mockLifecycleRun).toHaveBeenCalledTimes(1);
+      const runParams = mockLifecycleRun.mock.calls[0]?.[0] as {
+        promptPath: string;
+        onDone: (code: number | null) => Promise<void>;
+      };
+      expect(runParams.promptPath).toContain(path.join(".opensprint", "active", taskId, "prompt.md"));
+
+      await runParams.onDone(0);
+      expect(mockHandleReviewDone).toHaveBeenCalledWith(
+        projectId,
+        repoPath,
+        task,
+        slot.branchName,
+        0
+      );
+    });
+
+    it("spawns one review agent per angle when reviewAngles has values", async () => {
+      mockGetSettings.mockResolvedValue({
+        testFramework: "vitest",
+        simpleComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+        complexComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+        reviewMode: "always",
+        reviewAngles: ["security", "performance"],
+        deployment: { mode: "custom", autoResolveFeedbackOnTaskCompletion: false },
+        maxConcurrentCoders: 1,
+        gitWorkingMode: "worktree",
+      });
+      mockBuildContext.mockResolvedValue({
+        taskId,
+        title: "Test task",
+        description: "",
+        prdExcerpt: "",
+        planContent: "",
+        dependencyOutputs: [],
+      });
+      const task = makeTask();
+      const slot = makeSlot();
+      const slots = new Map([[task.id, slot]]);
+      mockGetState.mockReturnValue({ slots, status: { queueDepth: 0 } });
+      (mockHost.branchManager as { captureBranchDiff: ReturnType<typeof vi.fn> }).captureBranchDiff =
+        vi.fn().mockResolvedValue("");
+
+      await phaseExecutor.executeReviewPhase(projectId, repoPath, task, slot.branchName);
+
+      expect(mockLifecycleRun).toHaveBeenCalledTimes(2);
+      const runParams = mockLifecycleRun.mock.calls.map((call) => call[0] as {
+        promptPath: string;
+        onDone: (code: number | null) => Promise<void>;
+      });
+      expect(runParams.map((r) => r.promptPath)).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(path.join("review-angles", "security", "prompt.md")),
+          expect.stringContaining(path.join("review-angles", "performance", "prompt.md")),
+        ])
+      );
+
+      for (const p of runParams) {
+        await p.onDone(0);
+      }
+      expect(mockHandleReviewDone).toHaveBeenCalledWith(
+        projectId,
+        repoPath,
+        task,
+        slot.branchName,
+        0,
+        "security"
+      );
+      expect(mockHandleReviewDone).toHaveBeenCalledWith(
+        projectId,
+        repoPath,
+        task,
+        slot.branchName,
+        0,
+        "performance"
+      );
     });
   });
 });

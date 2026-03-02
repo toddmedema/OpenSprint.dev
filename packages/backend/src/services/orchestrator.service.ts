@@ -22,7 +22,9 @@ import {
   AGENT_NAMES,
   AGENT_NAMES_BY_ROLE,
   OPEN_QUESTION_BLOCK_REASON,
+  REVIEW_ANGLE_OPTIONS,
   type PlanComplexity,
+  type ReviewAngle,
 } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton, type StoredTask } from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
@@ -120,12 +122,31 @@ export function formatReviewFeedback(result: ReviewAgentResult): string {
   return parts.join("");
 }
 
+const REVIEW_AGENT_ID_DELIMITER = "--review--";
+const REVIEW_ANGLE_ACTIVE_LABELS: Record<ReviewAngle, string> = {
+  security: "Security",
+  performance: "Performance",
+  test_coverage: "Test Coverage",
+  code_quality: "Code Quality",
+  design_ux_accessibility: "Design/UX",
+};
+
+function buildReviewAgentId(taskId: string, angle: string): string {
+  return `${taskId}${REVIEW_AGENT_ID_DELIMITER}${angle}`;
+}
+
 /** Results carried over from coding phase to review/merge */
 interface PhaseResult {
   codingDiff: string;
   codingSummary: string;
   testResults: TestResults | null;
   testOutput: string;
+}
+
+interface ReviewAgentSlotState {
+  angle: ReviewAngle;
+  agent: AgentRunState;
+  timers: TimerRegistry;
 }
 
 // ─── Slot-based State Model (v2) ───
@@ -142,6 +163,7 @@ export interface AgentSlot {
   phaseResult: PhaseResult;
   infraRetries: number;
   timers: TimerRegistry;
+  reviewAgents?: Map<ReviewAngle, ReviewAgentSlotState>;
   fileScope?: FileScope;
   /** Coordinator for joining parallel test + review when both are enabled. */
   phaseCoordinator?: TaskPhaseCoordinator;
@@ -282,6 +304,16 @@ export class OrchestratorService {
   private buildActiveTasks(state: OrchestratorState): OrchestratorStatus["activeTasks"] {
     const tasks: OrchestratorStatus["activeTasks"] = [];
     for (const slot of state.slots.values()) {
+      if (slot.phase === "review" && slot.reviewAgents && slot.reviewAgents.size > 0) {
+        for (const reviewAgent of slot.reviewAgents.values()) {
+          tasks.push({
+            taskId: slot.taskId,
+            phase: slot.phase,
+            startedAt: reviewAgent.agent.startedAt || new Date().toISOString(),
+          });
+        }
+        continue;
+      }
       tasks.push({
         taskId: slot.taskId,
         phase: slot.phase,
@@ -369,19 +401,32 @@ export class OrchestratorService {
     }
   }
 
+  private killProcessIfActive(agent: AgentRunState): void {
+    if (!agent.activeProcess) return;
+    try {
+      agent.activeProcess.kill();
+    } catch {
+      // Process may already be dead
+    }
+    agent.activeProcess = null;
+  }
+
+  private cleanupReviewAgents(slot: AgentSlot): void {
+    if (!slot.reviewAgents) return;
+    for (const reviewAgent of slot.reviewAgents.values()) {
+      reviewAgent.timers.clearAll();
+      this.killProcessIfActive(reviewAgent.agent);
+    }
+    slot.reviewAgents = undefined;
+  }
+
   /** Remove a slot and clean up its per-slot timers and summarizer cache. Kills active agent process if any. */
   private removeSlot(state: OrchestratorState, taskId: string): void {
     const slot = state.slots.get(taskId);
     if (slot) {
       slot.timers.clearAll();
-      if (slot.agent.activeProcess) {
-        try {
-          slot.agent.activeProcess.kill();
-        } catch {
-          // Process may already be dead
-        }
-        slot.agent.activeProcess = null;
-      }
+      this.killProcessIfActive(slot.agent);
+      this.cleanupReviewAgents(slot);
       state.slots.delete(taskId);
       state.summarizerCache.delete(taskId);
     }
@@ -579,9 +624,20 @@ export class OrchestratorService {
   async killAgent(projectId: string, agentId: string): Promise<boolean> {
     const state = this.getState(projectId);
     const slot = state.slots.get(agentId);
-    if (!slot) return false;
-    await this.stopTaskAndFreeSlot(projectId, agentId);
-    return true;
+    if (slot) {
+      await this.stopTaskAndFreeSlot(projectId, agentId);
+      return true;
+    }
+
+    for (const reviewSlot of state.slots.values()) {
+      if (!reviewSlot.reviewAgents || reviewSlot.reviewAgents.size === 0) continue;
+      for (const [angle, reviewAgent] of reviewSlot.reviewAgents.entries()) {
+        if (buildReviewAgentId(reviewSlot.taskId, angle) !== agentId) continue;
+        this.killProcessIfActive(reviewAgent.agent);
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -643,16 +699,15 @@ export class OrchestratorService {
 
     for (const slot of state.slots.values()) {
       slot.timers.clearAll();
-      if (slot.agent.activeProcess) {
-        const preserveAgents = process.env.OPENSPRINT_PRESERVE_AGENTS === "1";
-        if (!preserveAgents) {
-          try {
-            slot.agent.activeProcess.kill();
-          } catch {
-            // Process may already be dead
-          }
+      const preserveAgents = process.env.OPENSPRINT_PRESERVE_AGENTS === "1";
+      if (!preserveAgents) this.killProcessIfActive(slot.agent);
+      else slot.agent.activeProcess = null;
+      if (slot.reviewAgents) {
+        for (const reviewAgent of slot.reviewAgents.values()) {
+          reviewAgent.timers.clearAll();
+          if (!preserveAgents) this.killProcessIfActive(reviewAgent.agent);
+          else reviewAgent.agent.activeProcess = null;
         }
-        slot.agent.activeProcess = null;
       }
     }
 
@@ -963,8 +1018,27 @@ export class OrchestratorService {
 
     // Execute agents — derived from slots (single source of truth)
     for (const slot of state.slots.values()) {
+      if (slot.phase === "review" && slot.reviewAgents && slot.reviewAgents.size > 0) {
+        for (const reviewAgent of slot.reviewAgents.values()) {
+          const optionLabel =
+            REVIEW_ANGLE_OPTIONS.find((o) => o.value === reviewAgent.angle)?.label ?? reviewAgent.angle;
+          const angleLabel = REVIEW_ANGLE_ACTIVE_LABELS[reviewAgent.angle] ?? optionLabel;
+          agents.push({
+            id: buildReviewAgentId(slot.taskId, reviewAgent.angle),
+            taskId: slot.taskId,
+            phase: "review",
+            role: "reviewer",
+            label: slot.taskTitle ?? slot.taskId,
+            startedAt: reviewAgent.agent.startedAt || new Date().toISOString(),
+            branchName: slot.branchName,
+            name: angleLabel,
+          });
+        }
+        continue;
+      }
       agents.push({
         id: slot.taskId,
+        taskId: slot.taskId,
         phase: slot.phase,
         role: slot.phase === "review" ? "reviewer" : "coder",
         label: slot.taskTitle ?? slot.taskId,
@@ -1468,7 +1542,7 @@ export class OrchestratorService {
             testOutcome,
             reviewOutcome
           )
-        );
+        , { reviewAngles: settings.reviewAngles });
         slot.phaseCoordinator = coordinator;
 
         // Fire-and-forget: tests report to coordinator when done
@@ -1612,6 +1686,30 @@ export class OrchestratorService {
     return this.phaseExecutor.executeReviewPhase(projectId, repoPath, task, branchName);
   }
 
+  private async readReviewResult(
+    wtPath: string,
+    taskId: string,
+    angle?: string
+  ): Promise<ReviewAgentResult | null> {
+    if (!angle) {
+      return (await this.sessionManager.readResult(wtPath, taskId)) as ReviewAgentResult | null;
+    }
+    const angleResultPath = path.join(
+      wtPath,
+      OPENSPRINT_PATHS.active,
+      taskId,
+      "review-angles",
+      angle,
+      "result.json"
+    );
+    try {
+      const raw = await fs.readFile(angleResultPath, "utf-8");
+      return JSON.parse(raw) as ReviewAgentResult;
+    } catch {
+      return null;
+    }
+  }
+
   private async handleReviewDone(
     projectId: string,
     repoPath: string,
@@ -1639,15 +1737,14 @@ export class OrchestratorService {
       return;
     }
     const wtPath = slot.worktreePath ?? repoPath;
-    const result = (await this.sessionManager.readResult(
-      wtPath,
-      task.id,
-      angle
-    )) as ReviewAgentResult | null;
+    const result = await this.readReviewResult(wtPath, task.id, angle);
 
     if (result && result.status) {
       normalizeReviewStatus(result);
     }
+
+    const reviewAgentState = angle ? slot.reviewAgents?.get(angle) : undefined;
+    const killedDueToTimeout = reviewAgentState?.agent.killedDueToTimeout ?? slot.agent.killedDueToTimeout;
 
     // If coordinated with tests, report outcome and let the coordinator decide
     if (slot.phaseCoordinator) {
@@ -1657,7 +1754,13 @@ export class OrchestratorService {
           : result?.status === "rejected"
             ? "rejected"
             : "no_result";
-      slot.phaseCoordinator.setReviewOutcome({ status, result, exitCode });
+      slot.phaseCoordinator.setReviewOutcome({ status, result, exitCode }, angle);
+      if (angle) {
+        slot.reviewAgents?.delete(angle as ReviewAngle);
+        if (slot.reviewAgents && slot.reviewAgents.size === 0) {
+          slot.reviewAgents = undefined;
+        }
+      }
       return;
     }
 
@@ -1667,18 +1770,21 @@ export class OrchestratorService {
     } else if (result && result.status === "rejected") {
       await this.handleReviewRejection(projectId, repoPath, task, branchName, result);
     } else {
-      const failureType: FailureType = slot.agent.killedDueToTimeout
+      const failureType: FailureType = killedDueToTimeout
         ? "timeout"
         : exitCode === 143 || exitCode === 137
           ? "agent_crash"
           : "no_result";
       slot.agent.killedDueToTimeout = false;
+      if (reviewAgentState) reviewAgentState.agent.killedDueToTimeout = false;
       await this.failureHandler.handleTaskFailure(
         projectId,
         repoPath,
         task,
         branchName,
-        `Review agent exited with code ${exitCode} without producing a valid result`,
+        angle
+          ? `Review agent (${angle}) exited with code ${exitCode} without producing a valid result`
+          : `Review agent exited with code ${exitCode} without producing a valid result`,
         null,
         failureType
       );
@@ -1740,18 +1846,13 @@ export class OrchestratorService {
         reviewOutcome.result!
       );
     } else {
-      const failureType: FailureType = slot.agent.killedDueToTimeout
-        ? "timeout"
-        : reviewOutcome.exitCode === 143 || reviewOutcome.exitCode === 137
-          ? "agent_crash"
-          : "no_result";
-      slot.agent.killedDueToTimeout = false;
+      const failureType: FailureType = "no_result";
       await this.failureHandler.handleTaskFailure(
         projectId,
         repoPath,
         task,
         branchName,
-        `Review agent exited with code ${reviewOutcome.exitCode} without producing a valid result`,
+        "One or more review agents exited without producing a valid result",
         null,
         failureType
       );

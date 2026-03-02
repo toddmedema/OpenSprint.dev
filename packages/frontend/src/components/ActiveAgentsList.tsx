@@ -225,8 +225,9 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
         dispatch(setSelectedPlanId(null));
         navigate(getProjectPhasePath(projectId, "plan"));
       } else {
-        dispatch(setSelectedTaskId(agent.id));
-        navigate(getProjectPhasePath(projectId, "execute", { task: agent.id }));
+        const selectedTaskId = agent.taskId ?? agent.id;
+        dispatch(setSelectedTaskId(selectedTaskId));
+        navigate(getProjectPhasePath(projectId, "execute", { task: selectedTaskId }));
       }
       setOpen(false);
     },

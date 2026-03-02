@@ -34,7 +34,7 @@ import type {
   TaskAssignmentLike,
 } from "./orchestrator-phase-context.js";
 import type { AgentRunState } from "./agent-lifecycle.js";
-import type { TimerRegistry } from "./timer-registry.js";
+import { TimerRegistry } from "./timer-registry.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("phase-executor");
@@ -76,6 +76,18 @@ export class PhaseExecutorService {
     private host: PhaseExecutorHost,
     private callbacks: PhaseExecutorCallbacks
   ) {}
+
+  private createAgentRunState(startedAt: string): AgentRunState {
+    return {
+      activeProcess: null,
+      lastOutputTime: 0,
+      outputLog: [],
+      outputLogBytes: 0,
+      startedAt,
+      exitHandled: false,
+      killedDueToTimeout: false,
+    };
+  }
 
   async executeCodingPhase(
     projectId: string,
@@ -310,6 +322,8 @@ export class PhaseExecutorService {
     }
     const settings = await this.host.projectService.getSettings(projectId);
     const wtPath = slot.worktreePath ?? repoPath;
+    const reviewAngles = [...new Set((settings.reviewAngles ?? []).filter(Boolean))] as ReviewAngle[];
+    const useAngleSpecificReview = reviewAngles.length > 0;
 
     try {
       await this.host.preflightCheck(
@@ -356,8 +370,6 @@ export class PhaseExecutorService {
 
       await this.host.contextAssembler.assembleTaskDirectory(wtPath, task.id, config, context);
 
-      const promptPath = path.join(taskDir, "prompt.md");
-
       const complexity = await getComplexityForAgent(
         projectId,
         repoPath,
@@ -396,7 +408,9 @@ export class PhaseExecutorService {
         phase: "review",
         branchName,
         worktreePath: wtPath,
-        promptPath,
+        promptPath: useAngleSpecificReview
+          ? path.join(taskDir, "review-angles", reviewAngles[0]!, "prompt.md")
+          : path.join(taskDir, "prompt.md"),
         agentConfig,
         attempt: slot.attempt,
         createdAt: new Date().toISOString(),
@@ -411,33 +425,91 @@ export class PhaseExecutorService {
         assignment
       );
 
-      this.host.lifecycleManager.run(
-        {
-          projectId,
-          taskId: task.id,
-          phase: "review",
-          wtPath,
-          branchName,
-          promptPath,
-          agentConfig,
-          agentLabel: slot.taskTitle ?? task.id,
-          role: "reviewer",
-          onDone: (code) =>
-            this.callbacks.handleReviewDone(projectId, repoPath, task, branchName, code),
-        },
-        slot.agent,
-        slot.timers
-      );
+      if (useAngleSpecificReview) {
+        slot.reviewAgents = new Map();
+        await Promise.all(
+          reviewAngles.map(async (angle) => {
+            const angleDir = path.join(taskDir, "review-angles", angle);
+            const anglePromptPath = path.join(angleDir, "prompt.md");
+            const angleAssignment: TaskAssignmentLike = {
+              ...assignment,
+              promptPath: anglePromptPath,
+              angle,
+            };
 
-      eventLogService
-        .append(repoPath, {
-          timestamp: new Date().toISOString(),
-          projectId,
-          taskId: task.id,
-          event: "agent.spawned",
-          data: { phase: "review", model: agentConfig.model, attempt: slot.attempt },
-        })
-        .catch(() => {});
+            await fs.mkdir(angleDir, { recursive: true });
+            await writeJsonAtomic(path.join(angleDir, OPENSPRINT_PATHS.assignment), angleAssignment);
+
+            const mainRepoAngleDir = path.join(mainRepoActiveDirReview, "review-angles", angle);
+            await fs.mkdir(mainRepoAngleDir, { recursive: true });
+            await writeJsonAtomic(
+              path.join(mainRepoAngleDir, OPENSPRINT_PATHS.assignment),
+              angleAssignment
+            );
+
+            const angleAgent = this.createAgentRunState(angleAssignment.createdAt);
+            const angleTimers = new TimerRegistry();
+            slot.reviewAgents?.set(angle, { angle, agent: angleAgent, timers: angleTimers });
+
+            this.host.lifecycleManager.run(
+              {
+                projectId,
+                taskId: task.id,
+                phase: "review",
+                wtPath,
+                branchName,
+                promptPath: anglePromptPath,
+                agentConfig,
+                agentLabel: slot.taskTitle ?? task.id,
+                role: "reviewer",
+                onDone: (code) =>
+                  this.callbacks.handleReviewDone(projectId, repoPath, task, branchName, code, angle),
+              },
+              angleAgent,
+              angleTimers
+            );
+
+            eventLogService
+              .append(repoPath, {
+                timestamp: new Date().toISOString(),
+                projectId,
+                taskId: task.id,
+                event: "agent.spawned",
+                data: { phase: "review", model: agentConfig.model, attempt: slot.attempt, angle },
+              })
+              .catch(() => {});
+          })
+        );
+      } else {
+        slot.reviewAgents = undefined;
+        this.host.lifecycleManager.run(
+          {
+            projectId,
+            taskId: task.id,
+            phase: "review",
+            wtPath,
+            branchName,
+            promptPath: path.join(taskDir, "prompt.md"),
+            agentConfig,
+            agentLabel: slot.taskTitle ?? task.id,
+            role: "reviewer",
+            onDone: (code) =>
+              this.callbacks.handleReviewDone(projectId, repoPath, task, branchName, code),
+          },
+          slot.agent,
+          slot.timers
+        );
+
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: task.id,
+            event: "agent.spawned",
+            data: { phase: "review", model: agentConfig.model, attempt: slot.attempt },
+          })
+          .catch(() => {});
+      }
 
       await this.host.persistCounters(projectId, repoPath);
     } catch (error) {
