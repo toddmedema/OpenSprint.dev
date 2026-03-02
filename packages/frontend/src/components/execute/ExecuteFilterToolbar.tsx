@@ -90,7 +90,7 @@ export function ExecuteFilterToolbar({
                 type="button"
                 onClick={handleClick}
                 data-testid={`filter-chip-${filter}`}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 min-h-[44px] min-w-[44px] text-sm font-medium transition-colors ${
                   isActive
                     ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
                     : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
@@ -128,7 +128,7 @@ export function ExecuteFilterToolbar({
               <button
                 type="button"
                 onClick={handleSearchClose}
-                className="p-1.5 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+                className="p-1.5 min-h-[44px] min-w-[44px] rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
                 aria-label="Close search"
                 data-testid="execute-search-close"
               >
@@ -147,7 +147,7 @@ export function ExecuteFilterToolbar({
             <button
               type="button"
               onClick={handleSearchExpand}
-              className="p-1.5 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+              className="p-1.5 min-h-[44px] min-w-[44px] rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
               aria-label="Expand search"
               data-testid="execute-search-expand"
             >

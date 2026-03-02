@@ -143,9 +143,10 @@ export function Navbar({
             <button
               type="button"
               onClick={() => setDropdownOpen((o) => !o)}
-              className="dropdown-trigger ml-1 inline-flex items-center gap-1 min-h-[44px] text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 px-2 hover:bg-theme-border-subtle max-w-[120px] md:max-w-none"
+              className="dropdown-trigger ml-1 inline-flex items-center gap-1 min-h-[44px] min-w-[44px] text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 px-2 hover:bg-theme-border-subtle max-w-[120px] md:max-w-none"
               aria-expanded={dropdownOpen}
               aria-haspopup="listbox"
+              aria-label={`Select project: ${project ? project.name : "All Projects"}`}
             >
               <span className="truncate">{project ? project.name : "All Projects"}</span>
               <span className="pr-2">
@@ -215,20 +216,38 @@ export function Navbar({
         {/* Center: Phase Tabs — horizontally scrollable on mobile */}
         {project && currentPhase && onPhaseChange && (
           <div className="flex flex-1 min-w-0 md:flex-initial overflow-x-auto -mx-1 md:mx-0 [&::-webkit-scrollbar]:h-1">
-            <div className="flex items-center gap-1 bg-theme-border-subtle rounded-lg p-1 shrink-0">
-            {phaseTabs.map((phase) => (
-              <button
-                key={phase.key}
-                onClick={() => onPhaseChange(phase.key)}
-                className={`phase-tab ${
-                  currentPhase === phase.key && !isSettingsActive && !isHelpActive
-                    ? "phase-tab-active"
-                    : "phase-tab-inactive"
-                }`}
-              >
-                {phase.label}
-              </button>
-            ))}
+            <div
+              className="flex items-center gap-1 bg-theme-border-subtle rounded-lg p-1 shrink-0"
+              role="tablist"
+              aria-label="Phase navigation"
+            >
+            {phaseTabs.map((phase, index) => {
+              const isActive = currentPhase === phase.key && !isSettingsActive && !isHelpActive;
+              return (
+                <button
+                  key={phase.key}
+                  role="tab"
+                  onClick={() => onPhaseChange(phase.key)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowLeft" && index > 0) {
+                      e.preventDefault();
+                      onPhaseChange(phaseTabs[index - 1].key);
+                    } else if (e.key === "ArrowRight" && index < phaseTabs.length - 1) {
+                      e.preventDefault();
+                      onPhaseChange(phaseTabs[index + 1].key);
+                    }
+                  }}
+                  className={`phase-tab ${
+                    isActive ? "phase-tab-active" : "phase-tab-inactive"
+                  }`}
+                  aria-label={`Switch to ${phase.label} phase`}
+                  aria-selected={isActive}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  {phase.label}
+                </button>
+              );
+            })}
             </div>
           </div>
         )}

@@ -444,7 +444,7 @@ function TaskDetailSidebarInner({
             )}
           </div>
         )}
-        <div className="shrink-0">
+        <div className="shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center">
           <CloseButton onClick={onClose} ariaLabel="Close task detail" />
         </div>
       </div>

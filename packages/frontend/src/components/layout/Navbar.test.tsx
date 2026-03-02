@@ -301,8 +301,83 @@ describe("Navbar", () => {
     renderNavbar(
       <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />
     );
-    const phaseTabsContainer = screen.getByRole("button", { name: "Sketch" }).closest("div")?.parentElement;
+    const phaseTabsContainer = screen.getByRole("tab", { name: /Sketch/ }).closest("div")?.parentElement;
     expect(phaseTabsContainer).toHaveClass("overflow-x-auto");
+  });
+
+  it("phase tabs have aria-label and aria-current for accessibility", () => {
+    const mockProject = {
+      id: "proj-1",
+      name: "Test",
+      repoPath: "/path",
+      currentPhase: "sketch" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
+    renderNavbar(
+      <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />
+    );
+    const sketchTab = screen.getByRole("tab", { name: /Sketch/ });
+    const planTab = screen.getByRole("tab", { name: /Plan/ });
+    expect(sketchTab).toHaveAttribute("aria-label", "Switch to Sketch phase");
+    expect(sketchTab).toHaveAttribute("aria-current", "page");
+    expect(planTab).toHaveAttribute("aria-label", "Switch to Plan phase");
+    expect(planTab).not.toHaveAttribute("aria-current");
+  });
+
+  it("phase tabs have role tab and tablist for keyboard navigation", () => {
+    const mockProject = {
+      id: "proj-1",
+      name: "Test",
+      repoPath: "/path",
+      currentPhase: "sketch" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
+    renderNavbar(
+      <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />
+    );
+    const tablist = screen.getByRole("tablist", { name: "Phase navigation" });
+    expect(tablist).toBeInTheDocument();
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(5);
+  });
+
+  it("phase tabs use phase-tab class with 44px touch targets", () => {
+    const mockProject = {
+      id: "proj-1",
+      name: "Test",
+      repoPath: "/path",
+      currentPhase: "sketch" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
+    renderNavbar(
+      <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />
+    );
+    const sketchTab = screen.getByRole("tab", { name: /Sketch/ });
+    expect(sketchTab).toHaveClass("phase-tab");
+    // .phase-tab in index.css includes min-h-[44px] min-w-[44px] for WCAG touch targets
+  });
+
+  it("phase tabs support arrow key navigation", async () => {
+    const mockProject = {
+      id: "proj-1",
+      name: "Test",
+      repoPath: "/path",
+      currentPhase: "sketch" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
+    const onPhaseChange = vi.fn();
+    renderNavbar(
+      <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={onPhaseChange} />
+    );
+    const planTab = screen.getByRole("tab", { name: /Plan/ });
+    planTab.focus();
+    const user = userEvent.setup();
+    await user.keyboard("{ArrowRight}");
+    expect(onPhaseChange).toHaveBeenCalledWith("execute");
   });
 
   it("has z-[60] so dropdowns appear above Build sidebar (z-50)", () => {
@@ -336,8 +411,8 @@ describe("Navbar", () => {
       store
     );
 
-    expect(screen.getByRole("button", { name: "Execute" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "⚠️ Execute" })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Execute/ })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /⚠️ Execute/ })).not.toBeInTheDocument();
   });
 
   it("shows ⚠️ Execute badge in phase nav when blocked task count > 0", () => {
@@ -356,8 +431,8 @@ describe("Navbar", () => {
       store
     );
 
-    expect(screen.getByRole("button", { name: "⚠️ Execute" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Execute" })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /⚠️ Execute/ })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /^Execute$/ })).not.toBeInTheDocument();
   });
 
   it("shows Execute (no badge) when blocked count returns to zero", () => {
@@ -376,8 +451,8 @@ describe("Navbar", () => {
       store
     );
 
-    expect(screen.getByRole("button", { name: "Execute" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "⚠️ Execute" })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Execute/ })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /⚠️ Execute/ })).not.toBeInTheDocument();
   });
 
   describe("integration: (?) navigates to Help page (full page, project-specific when in project)", () => {
@@ -489,11 +564,11 @@ describe("Navbar", () => {
       );
 
       await screen.findByTestId("help-page");
-      expect(screen.getByRole("button", { name: "Sketch" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Plan" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Execute" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Evaluate" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Deliver" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Sketch/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Plan/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Execute/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Evaluate/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Deliver/ })).toBeInTheDocument();
     });
 
     it("Help page shows Meet your Team tab with agent grid", async () => {
@@ -749,7 +824,7 @@ describe("Navbar", () => {
 
     await screen.findByTestId("project-settings-page");
     const settingsLink = screen.getByRole("link", { name: "Project settings" });
-    const sketchTab = screen.getByRole("button", { name: "Sketch" });
+    const sketchTab = screen.getByRole("tab", { name: /Sketch/ });
     expect(settingsLink).toHaveClass("phase-tab-active");
     expect(sketchTab).toHaveClass("phase-tab-inactive");
     expect(sketchTab).not.toHaveClass("phase-tab-active");
@@ -784,7 +859,7 @@ describe("Navbar", () => {
 
     await screen.findByTestId("help-page");
     const helpLink = screen.getByRole("link", { name: "Help" });
-    const sketchTab = screen.getByRole("button", { name: "Sketch" });
+    const sketchTab = screen.getByRole("tab", { name: /Sketch/ });
     expect(helpLink).toHaveClass("phase-tab-active");
     expect(sketchTab).toHaveClass("phase-tab-inactive");
     expect(sketchTab).not.toHaveClass("phase-tab-active");

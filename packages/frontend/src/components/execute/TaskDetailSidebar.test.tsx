@@ -2,6 +2,7 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
   renderWithProviders,
@@ -205,9 +206,12 @@ describe("TaskDetailSidebar", () => {
       openQuestionNotification,
       onOpenQuestionResolved: vi.fn(),
     });
-    renderWithProviders(<TaskDetailSidebar {...props} />, {
-      preloadedState: defaultPreloadedState,
-    });
+    renderWithProviders(
+      <MemoryRouter>
+        <TaskDetailSidebar {...props} />
+      </MemoryRouter>,
+      { preloadedState: defaultPreloadedState }
+    );
 
     expect(screen.getByTestId("open-questions-block")).toBeInTheDocument();
     expect(screen.getByText("Which database should I use for this feature?")).toBeInTheDocument();

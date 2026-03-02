@@ -42,7 +42,7 @@ export function ViewToggle<T extends string>({ options, value, onChange }: ViewT
             aria-label={option.label}
             data-testid={`view-toggle-${option.value}`}
             onClick={() => onChange(option.value)}
-            className={`p-1.5 transition-colors rounded-md ${
+            className={`p-1.5 min-h-[44px] min-w-[44px] transition-colors rounded-md inline-flex items-center justify-center ${
               isActive
                 ? "bg-theme-surface shadow-sm ring-1 ring-theme-border text-theme-text"
                 : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle/50"
