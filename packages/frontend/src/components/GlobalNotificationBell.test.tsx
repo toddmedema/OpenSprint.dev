@@ -11,10 +11,12 @@ import openQuestionsReducer from "../store/slices/openQuestionsSlice";
 
 const mockListGlobal = vi.fn();
 const mockProjectsList = vi.fn();
+const mockClearAllGlobal = vi.fn();
 vi.mock("../api/client", () => ({
   api: {
     notifications: {
       listGlobal: (...args: unknown[]) => mockListGlobal(...args),
+      clearAllGlobal: (...args: unknown[]) => mockClearAllGlobal(...args),
     },
     projects: {
       list: (...args: unknown[]) => mockProjectsList(...args),
@@ -30,6 +32,7 @@ const defaultProjects = [
 beforeEach(() => {
   mockListGlobal.mockResolvedValue([]);
   mockProjectsList.mockResolvedValue(defaultProjects);
+  mockClearAllGlobal.mockResolvedValue({ deletedCount: 1 });
 });
 
 function renderGlobalNotificationBell(
@@ -153,6 +156,32 @@ describe("GlobalNotificationBell", () => {
     await user.click(screen.getByTitle("Open questions"));
     expect(screen.getByText(/unknown-proj/)).toBeInTheDocument();
     expect(screen.getByText(/Execute/)).toBeInTheDocument();
+  });
+
+  it("shows Clear all button and clears global notifications on click", async () => {
+    const notifications = [
+      {
+        id: "oq-1",
+        projectId: "proj-1",
+        source: "plan" as const,
+        sourceId: "plan-1",
+        questions: [{ id: "q1", text: "Plan question?", createdAt: "2025-01-01T00:00:00Z" }],
+        status: "open" as const,
+        createdAt: "2025-01-01T00:00:00Z",
+        resolvedAt: null,
+      },
+    ];
+    renderGlobalNotificationBell(notifications);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /1 notification/ })).toBeInTheDocument();
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Open questions"));
+    expect(screen.getByRole("button", { name: "Clear all" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+    await waitFor(() => {
+      expect(mockClearAllGlobal).toHaveBeenCalled();
+    });
   });
 
   it("displays multiple notifications from different projects", async () => {

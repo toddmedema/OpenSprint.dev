@@ -457,6 +457,12 @@ export const api = {
     listByProject: (projectId: string) =>
       request<Notification[]>(`/projects/${projectId}/notifications`),
     listGlobal: () => request<Notification[]>("/notifications"),
+    clearAllByProject: (projectId: string) =>
+      request<{ deletedCount: number }>(`/projects/${projectId}/notifications`, {
+        method: "DELETE",
+      }),
+    clearAllGlobal: () =>
+      request<{ deletedCount: number }>("/notifications", { method: "DELETE" }),
     resolve: (
       projectId: string,
       notificationId: string,

@@ -10,16 +10,19 @@ import planReducer from "../store/slices/planSlice";
 import openQuestionsReducer from "../store/slices/openQuestionsSlice";
 
 const mockListByProject = vi.fn();
+const mockClearAllByProject = vi.fn();
 vi.mock("../api/client", () => ({
   api: {
     notifications: {
       listByProject: (...args: unknown[]) => mockListByProject(...args),
+      clearAllByProject: (...args: unknown[]) => mockClearAllByProject(...args),
     },
   },
 }));
 
 beforeEach(() => {
   mockListByProject.mockResolvedValue([]);
+  mockClearAllByProject.mockResolvedValue({ deletedCount: 1 });
 });
 
 function LocationCapture() {
@@ -139,6 +142,32 @@ describe("NotificationBell", () => {
     await user.click(screen.getByTitle("Notifications (open questions & API issues)"));
     expect(screen.getByText("Rate limit")).toBeInTheDocument();
     expect(screen.getByText(/Rate limit exceeded/)).toBeInTheDocument();
+  });
+
+  it("shows Clear all button and clears project notifications on click", async () => {
+    const notifications = [
+      {
+        id: "oq-1",
+        projectId: "proj-1",
+        source: "plan" as const,
+        sourceId: "plan-1",
+        questions: [{ id: "q1", text: "What is the scope?", createdAt: "2025-01-01T00:00:00Z" }],
+        status: "open" as const,
+        createdAt: "2025-01-01T00:00:00Z",
+        resolvedAt: null,
+      },
+    ];
+    renderNotificationBell(notifications);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /1 notification/ })).toBeInTheDocument();
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByTitle("Notifications (open questions & API issues)"));
+    expect(screen.getByRole("button", { name: "Clear all" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+    await waitFor(() => {
+      expect(mockClearAllByProject).toHaveBeenCalledWith("proj-1");
+    });
   });
 
   it("navigates to project settings with Global tab when clicking rate_limit notification", async () => {

@@ -5,7 +5,7 @@ import type { Notification } from "@opensprint/shared";
 import { getProjectPhasePath } from "../lib/phaseRouting";
 import { setSelectedPlanId } from "../store/slices/planSlice";
 import { setSelectedTaskId } from "../store/slices/executeSlice";
-import { fetchProjectNotifications } from "../store/slices/openQuestionsSlice";
+import { fetchProjectNotifications, clearAllByProject } from "../store/slices/openQuestionsSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { getDropdownPositionRightAligned } from "../lib/dropdownViewport";
 import {
@@ -64,6 +64,11 @@ export function NotificationBell({ projectId }: NotificationBellProps) {
     }
   }, [open]);
 
+  const handleClearAll = useCallback(() => {
+    dispatch(clearAllByProject(projectId));
+    setOpen(false);
+  }, [projectId, dispatch]);
+
   const handleNotificationClick = useCallback(
     (n: Notification) => {
       // RATE LIMIT: navigate to project settings with Global tab for quick access to API keys
@@ -121,6 +126,15 @@ export function NotificationBell({ projectId }: NotificationBellProps) {
           estimatedHeight: 280,
         })}
       >
+        <div className="flex items-center justify-end px-4 pb-2">
+          <button
+            type="button"
+            onClick={handleClearAll}
+            className="text-sm text-theme-muted hover:text-theme-text transition-colors"
+          >
+            Clear all
+          </button>
+        </div>
         <ul className="divide-y divide-theme-border-subtle">
           {notifications.map((n) => (
             <li key={n.id} role="option">

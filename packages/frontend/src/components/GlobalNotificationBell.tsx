@@ -5,7 +5,7 @@ import type { Notification, Project } from "@opensprint/shared";
 import { getProjectPhasePath } from "../lib/phaseRouting";
 import { setSelectedPlanId } from "../store/slices/planSlice";
 import { setSelectedTaskId } from "../store/slices/executeSlice";
-import { fetchGlobalNotifications } from "../store/slices/openQuestionsSlice";
+import { fetchGlobalNotifications, clearAllGlobal } from "../store/slices/openQuestionsSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { api } from "../api/client";
 import { getDropdownPositionRightAligned } from "../lib/dropdownViewport";
@@ -74,6 +74,11 @@ export function GlobalNotificationBell() {
 
   const projectNameMap = new Map(projects.map((p) => [p.id, p.name]));
 
+  const handleClearAll = useCallback(() => {
+    dispatch(clearAllGlobal());
+    setOpen(false);
+  }, [dispatch]);
+
   const handleNotificationClick = useCallback(
     (n: Notification) => {
       const phase =
@@ -121,6 +126,15 @@ export function GlobalNotificationBell() {
           estimatedHeight: 280,
         })}
       >
+        <div className="flex items-center justify-end px-4 pb-2">
+          <button
+            type="button"
+            onClick={handleClearAll}
+            className="text-sm text-theme-muted hover:text-theme-text transition-colors"
+          >
+            Clear all
+          </button>
+        </div>
         <ul className="divide-y divide-theme-border-subtle">
           {notifications.map((n) => (
             <li key={n.id} role="option">

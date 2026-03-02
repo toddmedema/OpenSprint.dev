@@ -17,6 +17,7 @@ vi.mock("../services/task-store.service.js", async (importOriginal) => {
 });
 
 const mockGetSettings = vi.fn();
+const mockCreateHilApproval = vi.fn();
 
 vi.mock("../services/project.service.js", () => {
   return {
@@ -25,6 +26,12 @@ vi.mock("../services/project.service.js", () => {
     })),
   };
 });
+
+vi.mock("../services/notification.service.js", () => ({
+  notificationService: {
+    createHilApproval: (...args: unknown[]) => mockCreateHilApproval(...args),
+  },
+}));
 
 // Import after mocks are set up
 const { HilService } = await import("../services/hil-service.js");
@@ -45,6 +52,22 @@ describe.skipIf(!hilPostgresOk)("HilService", () => {
         dependencyModifications: "automated",
       },
     });
+    // Restore after clearAllMocks (which clears mock implementations)
+    mockCreateHilApproval.mockImplementation(
+      async (input: { description?: string; projectId?: string; source?: string; sourceId?: string }) => ({
+        id: "hil-test-123",
+        projectId: input?.projectId ?? "test-project",
+        source: input?.source ?? "eval",
+        sourceId: input?.sourceId ?? "scope",
+        questions: [
+          { id: "q-1", text: input?.description ?? "Placeholder", createdAt: new Date().toISOString() },
+        ],
+        status: "open",
+        createdAt: new Date().toISOString(),
+        resolvedAt: null,
+        kind: "hil_approval",
+      })
+    );
     hilService = new HilService();
   });
 

@@ -83,6 +83,18 @@ projectNotificationsRouter.post(
   }
 );
 
+// DELETE /projects/:projectId/notifications — Clear all notifications for project
+projectNotificationsRouter.delete("/", async (req: Request<ProjectParams>, res, next) => {
+  try {
+    const deletedCount = await notificationService.deleteByProject(req.params.projectId);
+    res.json({
+      data: { deletedCount },
+    } as ApiResponse<{ deletedCount: number }>);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /projects/:projectId/notifications — List unresolved notifications for project
 projectNotificationsRouter.get("/", async (req: Request<ProjectParams>, res, next) => {
   try {
@@ -137,6 +149,18 @@ projectNotificationsRouter.patch(
     }
   }
 );
+
+// DELETE /notifications — Clear all notifications across all projects (global)
+globalNotificationsRouter.delete("/", async (_req, res, next) => {
+  try {
+    const deletedCount = await notificationService.deleteAll();
+    res.json({
+      data: { deletedCount },
+    } as ApiResponse<{ deletedCount: number }>);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /notifications — List unresolved notifications across all projects (global)
 globalNotificationsRouter.get("/", async (_req, res, next) => {

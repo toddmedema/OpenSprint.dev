@@ -99,6 +99,46 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
     expect(ours.source).toBe("execute");
   });
 
+  it("DELETE /projects/:id/notifications clears all project notifications", async () => {
+    await notificationService.create({
+      projectId,
+      source: "plan",
+      sourceId: "plan-1",
+      questions: [{ id: "q1", text: "Q1" }],
+    });
+    await notificationService.create({
+      projectId,
+      source: "execute",
+      sourceId: "task-1",
+      questions: [{ id: "q2", text: "Q2" }],
+    });
+
+    const res = await request(app).delete(`${API_PREFIX}/projects/${projectId}/notifications`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.deletedCount).toBe(2);
+
+    const listRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
+    expect(listRes.body.data).toHaveLength(0);
+  });
+
+  it("DELETE /notifications clears all global notifications", async () => {
+    await notificationService.create({
+      projectId,
+      source: "plan",
+      sourceId: "plan-1",
+      questions: [{ id: "q1", text: "Q1" }],
+    });
+
+    const res = await request(app).delete(`${API_PREFIX}/notifications`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.deletedCount).toBeGreaterThanOrEqual(1);
+
+    const listRes = await request(app).get(`${API_PREFIX}/notifications`);
+    expect(listRes.body.data).toHaveLength(0);
+  });
+
   it("PATCH /projects/:id/notifications/:nid resolves notification", async () => {
     const created = await notificationService.create({
       projectId,

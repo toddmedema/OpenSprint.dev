@@ -5,15 +5,21 @@ import openQuestionsReducer, {
   removeNotification,
   fetchProjectNotifications,
   fetchGlobalNotifications,
+  clearAllByProject,
+  clearAllGlobal,
 } from "./openQuestionsSlice";
 
 const mockListByProject = vi.fn();
 const mockListGlobal = vi.fn();
+const mockClearAllByProject = vi.fn();
+const mockClearAllGlobal = vi.fn();
 vi.mock("../../api/client", () => ({
   api: {
     notifications: {
       listByProject: (...args: unknown[]) => mockListByProject(...args),
       listGlobal: (...args: unknown[]) => mockListGlobal(...args),
+      clearAllByProject: (...args: unknown[]) => mockClearAllByProject(...args),
+      clearAllGlobal: (...args: unknown[]) => mockClearAllGlobal(...args),
     },
   },
 }));
@@ -32,6 +38,8 @@ const sampleNotification = {
 beforeEach(() => {
   mockListByProject.mockResolvedValue([]);
   mockListGlobal.mockResolvedValue([]);
+  mockClearAllByProject.mockResolvedValue({ deletedCount: 1 });
+  mockClearAllGlobal.mockResolvedValue({ deletedCount: 1 });
 });
 
 describe("openQuestionsSlice", () => {
@@ -86,5 +94,29 @@ describe("openQuestionsSlice", () => {
     const state = store.getState().openQuestions;
     expect(state.global).toHaveLength(1);
     expect(state.global[0].id).toBe("oq-1");
+  });
+
+  it("clearAllByProject clears project notifications from state", async () => {
+    const store = configureStore({ reducer: { openQuestions: openQuestionsReducer } });
+    store.dispatch(addNotification(sampleNotification));
+    mockClearAllByProject.mockResolvedValue({ deletedCount: 1 });
+
+    await store.dispatch(clearAllByProject("proj-1"));
+
+    const state = store.getState().openQuestions;
+    expect(state.byProject["proj-1"]).toHaveLength(0);
+    expect(state.global).toHaveLength(0);
+  });
+
+  it("clearAllGlobal clears all notifications from state", async () => {
+    const store = configureStore({ reducer: { openQuestions: openQuestionsReducer } });
+    store.dispatch(addNotification(sampleNotification));
+    mockClearAllGlobal.mockResolvedValue({ deletedCount: 1 });
+
+    await store.dispatch(clearAllGlobal());
+
+    const state = store.getState().openQuestions;
+    expect(state.byProject).toEqual({});
+    expect(state.global).toHaveLength(0);
   });
 });

@@ -340,6 +340,40 @@ describe.skipIf(!notifPostgresOk)("NotificationService", () => {
     });
   });
 
+  describe("deleteByProject", () => {
+    it("deletes all notifications for the project and returns count", async () => {
+      await service.create({
+        projectId: "proj-a",
+        source: "plan",
+        sourceId: "p1",
+        questions: [{ id: "q1", text: "Q1" }],
+      });
+      await service.create({
+        projectId: "proj-a",
+        source: "execute",
+        sourceId: "t1",
+        questions: [{ id: "q2", text: "Q2" }],
+      });
+      await service.create({
+        projectId: "proj-b",
+        source: "plan",
+        sourceId: "p2",
+        questions: [{ id: "q3", text: "Q3" }],
+      });
+
+      const deleted = await service.deleteByProject("proj-a");
+
+      expect(deleted).toBe(2);
+      expect(await service.listByProject("proj-a")).toHaveLength(0);
+      expect(await service.listByProject("proj-b")).toHaveLength(1);
+    });
+
+    it("returns 0 when project has no notifications", async () => {
+      const deleted = await service.deleteByProject("proj-empty");
+      expect(deleted).toBe(0);
+    });
+  });
+
   describe("deleteAll", () => {
     it("deletes all notifications and returns count", async () => {
       await service.create({

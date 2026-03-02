@@ -38,6 +38,20 @@ export const fetchGlobalNotifications = createAsyncThunk(
   }
 );
 
+export const clearAllByProject = createAsyncThunk(
+  "openQuestions/clearAllByProject",
+  async (projectId: string): Promise<{ deletedCount: number }> => {
+    return api.notifications.clearAllByProject(projectId);
+  }
+);
+
+export const clearAllGlobal = createAsyncThunk(
+  "openQuestions/clearAllGlobal",
+  async (): Promise<{ deletedCount: number }> => {
+    return api.notifications.clearAllGlobal();
+  }
+);
+
 const openQuestionsSlice = createSlice({
   name: "openQuestions",
   initialState,
@@ -95,6 +109,20 @@ const openQuestionsSlice = createSlice({
       })
       .addCase(fetchGlobalNotifications.rejected, (state) => {
         state.async.global.loading = false;
+      })
+      .addCase(clearAllByProject.fulfilled, (state, action) => {
+        const projectId = action.meta.arg;
+        if (action.payload.deletedCount > 0 && state.byProject[projectId]) {
+          const ids = new Set(state.byProject[projectId].map((n) => n.id));
+          state.global = state.global.filter((x) => !ids.has(x.id));
+          state.byProject[projectId] = [];
+        }
+      })
+      .addCase(clearAllGlobal.fulfilled, (state, action) => {
+        if (action.payload.deletedCount > 0) {
+          state.byProject = {};
+          state.global = [];
+        }
       });
   },
 });

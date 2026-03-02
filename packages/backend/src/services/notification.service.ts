@@ -354,6 +354,31 @@ export class NotificationService {
   }
 
   /**
+   * Delete all open notifications for a project.
+   * Used by Clear all in project-scoped notification dropdown.
+   * Returns the number of rows deleted.
+   */
+  async deleteByProject(projectId: string): Promise<number> {
+    const db = await taskStore.getDb();
+    const row = await db.queryOne(
+      "SELECT COUNT(*)::int as cnt FROM open_questions WHERE project_id = $1",
+      [projectId]
+    );
+    const count = (row?.cnt as number) ?? 0;
+
+    if (count === 0) {
+      return 0;
+    }
+
+    await taskStore.runWrite(async (tx) => {
+      await tx.execute("DELETE FROM open_questions WHERE project_id = $1", [projectId]);
+    });
+
+    log.info("Deleted project notifications", { projectId, deletedCount: count });
+    return count;
+  }
+
+  /**
    * Delete all HIL notifications (open_questions) from storage.
    * Manual utility for testing/cleanup. Returns the number of rows deleted.
    */
