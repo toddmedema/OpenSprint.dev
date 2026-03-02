@@ -368,6 +368,17 @@ const FeedbackCard = memo(
       disabled: !replyText.trim() || submitting,
     });
 
+    const handleAnswerSubmit = useCallback(() => {
+      if (!answerText.trim() || answeringOpenQuestion || !onAnswerOpenQuestion || !notification) return;
+      onAnswerOpenQuestion(item.id, notification.id, answerText.trim());
+      setAnswerText("");
+    }, [answerText, answeringOpenQuestion, onAnswerOpenQuestion, notification, item.id]);
+
+    const onKeyDownAnswer = useSubmitShortcut(handleAnswerSubmit, {
+      multiline: true,
+      disabled: !answerText.trim() || answeringOpenQuestion,
+    });
+
     const isResolvedAndAnimating =
       (item.status === "resolved" || item.status === "cancelled") && isAnimatingOut;
 
@@ -486,6 +497,7 @@ const FeedbackCard = memo(
                     className="input text-sm min-h-[60px] w-full"
                     value={answerText}
                     onChange={(e) => setAnswerText(e.target.value)}
+                    onKeyDown={onKeyDownAnswer}
                     placeholder="Type your answer..."
                     disabled={answeringOpenQuestion}
                     data-testid="feedback-answer-input"

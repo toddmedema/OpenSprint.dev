@@ -702,6 +702,86 @@ describe("EvalPhase feedback form", () => {
       });
       expect(api.feedback.recategorize).not.toHaveBeenCalled();
     });
+
+    it("Enter key submits the notification prompt reply", async () => {
+      const { api } = await import("../../api/client");
+      vi.mocked(api.notifications.listByProject).mockResolvedValue([openQuestionNotification]);
+
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const user = userEvent.setup();
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+      { store }
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-open-questions")).toBeInTheDocument();
+      });
+
+      const answerInput = screen.getByTestId("feedback-answer-input");
+      await user.type(answerInput, "Login screen");
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => {
+        expect(api.feedback.recategorize).toHaveBeenCalledWith("proj-1", "fb-1", "Login screen");
+      });
+    });
+
+    it("Ctrl+Enter submits the notification prompt reply", async () => {
+      const { api } = await import("../../api/client");
+      vi.mocked(api.notifications.listByProject).mockResolvedValue([openQuestionNotification]);
+
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const user = userEvent.setup();
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+      { store }
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-open-questions")).toBeInTheDocument();
+      });
+
+      const answerInput = screen.getByTestId("feedback-answer-input");
+      await user.type(answerInput, "Home screen");
+      await user.keyboard("{Control>}{Enter}{/Control}");
+
+      await waitFor(() => {
+        expect(api.feedback.recategorize).toHaveBeenCalledWith("proj-1", "fb-1", "Home screen");
+      });
+    });
+
+    it("Shift+Enter inserts newline and does not submit", async () => {
+      const { api } = await import("../../api/client");
+      vi.mocked(api.notifications.listByProject).mockResolvedValue([openQuestionNotification]);
+
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const user = userEvent.setup();
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+      { store }
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-open-questions")).toBeInTheDocument();
+      });
+
+      const answerInput = screen.getByTestId("feedback-answer-input") as HTMLTextAreaElement;
+      await user.type(answerInput, "Line 1");
+      await user.keyboard("{Shift>}{Enter}{/Shift}");
+      await user.type(answerInput, "Line 2");
+
+      expect(answerInput.value).toContain("Line 1");
+      expect(answerInput.value).toContain("Line 2");
+      expect(answerInput.value).toContain("\n");
+      expect(api.feedback.recategorize).not.toHaveBeenCalled();
+    });
   });
 
   describe("feedback form draft persistence (localStorage)", () => {

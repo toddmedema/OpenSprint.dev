@@ -387,6 +387,30 @@ describe("Navbar", () => {
     expect(nav).toHaveClass("z-[60]");
   });
 
+  it("renders bottom border overlay for continuous line across full navbar width", () => {
+    const mockProject = {
+      id: "proj-1",
+      name: "Test",
+      repoPath: "/path",
+      currentPhase: "sketch" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
+    renderNavbar(
+      <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />
+    );
+    const border = screen.getByTestId("navbar-bottom-border");
+    expect(border).toBeInTheDocument();
+    expect(border).toHaveClass("absolute", "bottom-0", "left-0", "right-0", "bg-theme-border", "z-10");
+    expect(border).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("renders bottom border overlay on homepage (no phase tabs)", () => {
+    renderNavbar(<Navbar project={null} />);
+    const border = screen.getByTestId("navbar-bottom-border");
+    expect(border).toBeInTheDocument();
+  });
+
   it("does not render theme toggle in navbar", () => {
     renderNavbar(<Navbar project={null} />);
 

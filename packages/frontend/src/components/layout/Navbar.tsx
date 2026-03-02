@@ -118,9 +118,15 @@ export function Navbar({
 
   return (
     <nav
-      className="relative z-[60] flex items-center bg-theme-surface border-b border-theme-border px-4 md:px-6 shrink-0"
+      className="relative z-[60] flex items-center bg-theme-surface px-4 md:px-6 shrink-0"
       style={{ height: NAVBAR_HEIGHT }}
     >
+      {/* Bottom border overlay — ensures continuous line across full width, above phase buttons */}
+      <div
+        data-testid="navbar-bottom-border"
+        className="absolute bottom-0 left-0 right-0 h-px bg-theme-border pointer-events-none z-10"
+        aria-hidden="true"
+      />
       <div className="flex w-full items-center justify-between gap-2 min-w-0">
         {/* Left: Logo + Project Selector */}
         <div className="flex items-center gap-2 md:gap-4 min-w-0 shrink-0">
