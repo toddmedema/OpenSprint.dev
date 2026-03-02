@@ -401,14 +401,14 @@ export interface MaskedApiKeyEntry {
   limitHitAt?: string;
 }
 
-/** Masked API keys for GET /projects/:id/settings response */
+/** Masked API keys for GET /global-settings response */
 export type MaskedApiKeys = Partial<Record<ApiKeyProvider, MaskedApiKeyEntry[]>>;
 
 const MASKED_PLACEHOLDER = "••••••••";
 
 /**
  * Transform apiKeys for API response: exclude value, return {id, masked, limitHitAt}.
- * Use for GET /projects/:id/settings so raw keys are never exposed.
+ * Use for GET /global-settings so raw keys are never exposed.
  */
 export function maskApiKeysForResponse(apiKeys: ApiKeys | undefined): MaskedApiKeys | undefined {
   if (!apiKeys || Object.keys(apiKeys).length === 0) return undefined;

@@ -111,6 +111,54 @@ describe("api client", () => {
         })
       );
     });
+
+    it("getSettings returns project settings without apiKeys (global-only)", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          data: {
+            simpleComplexityAgent: { type: "cursor", model: "composer-1.5", cliCommand: null },
+            complexComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+            deployment: { mode: "custom" },
+            hilConfig: {},
+            testFramework: "vitest",
+          },
+        }),
+      } as Response);
+
+      const result = await api.projects.getSettings("proj-1");
+      expect(result).not.toHaveProperty("apiKeys");
+      expect(result.simpleComplexityAgent).toBeDefined();
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/projects/proj-1/settings"),
+        expect.any(Object)
+      );
+    });
+
+    it("updateSettings does not send apiKeys (use global settings)", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          data: {
+            simpleComplexityAgent: { type: "cursor", model: "composer-1.5", cliCommand: null },
+            complexComplexityAgent: { type: "cursor", model: "composer-1.5", cliCommand: null },
+            deployment: { mode: "custom" },
+            hilConfig: {},
+            testFramework: "vitest",
+          },
+        }),
+      } as Response);
+
+      await api.projects.updateSettings("proj-1", {
+        simpleComplexityAgent: { type: "cursor", model: "composer-1.5", cliCommand: null },
+        complexComplexityAgent: { type: "cursor", model: "composer-1.5", cliCommand: null },
+      });
+      const call = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(call[1]?.body as string);
+      expect(body).not.toHaveProperty("apiKeys");
+    });
   });
 
   describe("chat", () => {
