@@ -59,9 +59,15 @@ Add under Sketch Phase (or PRD Storage):
 
 - **SPEC.md as Sketch output:** The Sketch phase PRD is saved as SPEC.md at the repository root—a flat markdown file with standard section headers. This replaces the previous prd.json format to provide a standardized, AI-agent-friendly specification that tools and agents can consume directly.
 
+Add under Execute Phase (Code Review):
+
+- **Multi-angle parallel review:** When review angles are empty, one general Reviewer runs (scope + code quality). When 1+ angles are selected, N parallel Reviewers run (one per angle); all must approve for overall approval.
+
 ## Technical Architecture
 
 Replace all references to `prd.json` with `SPEC.md`. The Sketch phase PRD is stored as **SPEC.md** at the repository root—a flat markdown file with standard section headers (Executive Summary, Problem Statement, User Personas, Goals and Success Metrics, Feature List, Technical Architecture, Data Model, API Contracts, Non-Functional Requirements, Open Questions). This format is standardized and optimized for AI agent consumption. The Dreamer writes SPEC.md directly during conversation (trust boundary exception). The Harmonizer proposes updates; the orchestrator writes and commits SPEC.md. Agent context receives `context/spec.md`. Git commit queue includes SPEC.md. Resolved Decisions table: PRD storage → SPEC.md at repo root (flat markdown) for AI-agent-friendly standardized format.
+
+**Code review flow:** When `reviewAngles` is empty or undefined, one Reviewer runs with a general prompt (scope + code quality). When 1+ angles are selected, N parallel Reviewers run (one per angle); all must approve for overall approval. The single-agent constraint is relaxed for this case: multiple parallel reviewers are allowed for the same task when angles are selected.
 
 ## Data Model
 
@@ -85,7 +91,7 @@ Replace all references to `prd.json` with `SPEC.md`. The Sketch phase PRD is sto
 
 **Tasks:** GET `/projects/:id/tasks`, GET `/projects/:id/tasks/ready`, GET `/projects/:id/tasks/:taskId`, GET `/projects/:id/tasks/:taskId/sessions`, GET `/projects/:id/tasks/:taskId/sessions/:attempt`. Task responses include `sourceFeedbackIds?: string[]` when the task has linked feedback (derived from discovered-from dependencies).
 
-**Execute:** GET `/projects/:id/execute/status`
+**Execute:** GET `/projects/:id/execute/status` — Returns orchestrator status including `activeTasks`. When multi-angle review is active, `activeTasks` may include multiple entries per task (one per angle).
 
 **Evaluate:** GET/POST `/projects/:id/feedback`, GET `/projects/:id/feedback/:feedbackId`
 
@@ -93,11 +99,13 @@ Replace all references to `prd.json` with `SPEC.md`. The Sketch phase PRD is sto
 
 **Chat:** POST `/projects/:id/chat`, GET `/projects/:id/chat/history`
 
-**Agents:** GET `/projects/:id/agents/instructions` — Returns `{ content: string }` (AGENTS.md). PUT `/projects/:id/agents/instructions` — Body `{ content: string }`, writes to repo root AGENTS.md.
+**Agents:** GET `/projects/:id/agents/instructions` — Returns `{ content: string }` (AGENTS.md). PUT `/projects/:id/agents/instructions` — Body `{ content: string }`, writes to repo root AGENTS.md. GET `/projects/:id/agents/active` — Returns active agents; when multi-angle review is active, multiple entries per task may appear (e.g., `Reviewer (Security)`, `Reviewer (Performance)`).
 
 ### WebSocket (`ws://localhost:<port>/ws/projects/:id`)
 
 **Server → Client:** `task.updated`, `task.blocked`, `agent.output`, `agent.completed`, `prd.updated`, `execute.status`, `hil.request`, `feedback.mapped`, `deploy.started`, `deploy.completed`, `deploy.output`
+
+`execute.status` payload includes `activeTasks`; when multi-angle review is active, multiple entries per task may appear.
 
 **Client → Server:** `agent.subscribe`, `agent.unsubscribe`, `hil.respond`
 
@@ -106,7 +114,7 @@ Replace all references to `prd.json` with `SPEC.md`. The Sketch phase PRD is sto
 | Category        | Requirement                                                                                                 |
 | --------------- | ----------------------------------------------------------------------------------------------------------- |
 | Performance     | Agent output streaming < 500ms latency; task status updates within 1 second                                |
-| Scalability     | Up to 500 tasks; single Coder/Reviewer in v1                                                                |
+| Scalability     | Up to 500 tasks; single Coder/Reviewer in v1, except multiple parallel reviewers allowed when review angles are selected |
 | Reliability     | Agent failures must not corrupt state; transactional, recoverable                                           |
 | Security        | Sandboxed code execution; filesystem isolation                                                             |
 | Usability       | First-time users reach Execute within 30 minutes without docs                                               |
