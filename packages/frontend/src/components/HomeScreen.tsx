@@ -195,15 +195,18 @@ export function HomeScreen() {
 
   return (
     <Layout>
-      <div className={`${HOMEPAGE_CONTAINER_CLASS} py-10`} data-testid="project-list-container">
-        {/* Header */}
-        <div className="flex justify-between items-center gap-6 mb-10">
-          <h1 className="text-3xl font-bold text-theme-text shrink-0">Projects</h1>
-          <div className="flex gap-4 shrink-0">
+      <div
+        className={`${HOMEPAGE_CONTAINER_CLASS} py-6 sm:py-10 flex-1 min-h-0 overflow-y-auto`}
+        data-testid="project-list-container"
+      >
+        {/* Header: stack buttons on narrow screens */}
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 sm:gap-6 mb-10">
+          <h1 className="text-2xl sm:text-3xl font-bold text-theme-text shrink-0">Projects</h1>
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 shrink-0 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => handleCreateOrAddClick("/projects/add-existing")}
-              className="btn-secondary hover:bg-theme-info-bg"
+              className="btn-secondary hover:bg-theme-info-bg min-h-[44px] sm:min-h-0"
               data-testid="add-existing-button"
             >
               Add Existing
@@ -211,7 +214,7 @@ export function HomeScreen() {
             <button
               type="button"
               onClick={() => handleCreateOrAddClick("/projects/create-new")}
-              className="btn-primary"
+              className="btn-primary min-h-[44px] sm:min-h-0"
               data-testid="create-new-button"
             >
               Create New
@@ -271,7 +274,7 @@ export function HomeScreen() {
                           setMenuOpenId(project.id);
                         }
                       }}
-                      className="p-1.5 rounded text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+                      className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
                       aria-label="Project actions"
                       aria-expanded={menuOpenId === project.id}
                       aria-haspopup="menu"
@@ -351,7 +354,7 @@ export function HomeScreen() {
         href={GITHUB_REPO_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="fixed bottom-4 right-4 text-xs text-theme-muted/50 hover:text-theme-muted transition-colors"
+        className="fixed bottom-4 left-4 md:left-auto md:right-4 text-xs text-theme-muted/50 hover:text-theme-muted transition-colors min-h-[44px] min-w-[44px] flex items-center"
         data-testid="github-link"
       >
         GitHub

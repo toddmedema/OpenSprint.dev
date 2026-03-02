@@ -32,7 +32,7 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
     <div className="flex flex-col h-full min-h-0">
       {/* Full-width secondary nav bar — matches Plan/Execute filter bar pattern */}
       <div
-        className="w-full px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0"
+        className="w-full px-4 sm:px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0"
         role="tablist"
         aria-label="Help sections"
       >
@@ -45,7 +45,7 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
             aria-controls="help-tabpanel-ask"
             id="help-tab-ask"
             onClick={() => setActiveTab("ask")}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 min-h-[44px] text-sm font-medium transition-colors ${
               activeTab === "ask"
                 ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
                 : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
@@ -61,7 +61,7 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
             aria-controls="help-tabpanel-meet"
             id="help-tab-meet"
             onClick={() => setActiveTab("meet")}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 min-h-[44px] text-sm font-medium transition-colors ${
               activeTab === "meet"
                 ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
                 : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
@@ -98,7 +98,7 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
             id="help-tabpanel-ask"
             role="tabpanel"
             aria-labelledby="help-tab-ask"
-            className="flex-1 min-h-0 flex flex-col overflow-hidden px-6 py-4 max-w-4xl mx-auto w-full"
+            className="flex-1 min-h-0 flex flex-col overflow-hidden px-4 sm:px-6 py-4 max-w-4xl mx-auto w-full"
           >
             <AskQuestionContent project={project} isActive={true} />
           </div>
@@ -108,7 +108,7 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
             id="help-tabpanel-meet"
             role="tabpanel"
             aria-labelledby="help-tab-meet"
-            className="flex-1 overflow-y-auto min-h-0 px-6 py-4 max-w-4xl mx-auto w-full"
+            className="flex-1 overflow-y-auto min-h-0 px-4 sm:px-6 py-4 max-w-4xl mx-auto w-full"
           >
             <MeetYourTeamContent />
           </div>

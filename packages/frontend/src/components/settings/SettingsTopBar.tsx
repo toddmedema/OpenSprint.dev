@@ -35,20 +35,20 @@ export function SettingsTopBar({ projectId, saveStatus }: SettingsTopBarProps) {
 
   return (
     <div
-      className="px-6 min-h-[48px] flex items-center justify-between py-2 border-b border-theme-border bg-theme-surface shrink-0"
+      className="px-4 sm:px-6 min-h-[48px] flex items-center justify-between py-2 border-b border-theme-border bg-theme-surface shrink-0"
       data-testid="settings-top-bar"
     >
       <div className="flex items-center gap-1 bg-theme-border-subtle rounded-lg p-1">
         <Link
           to={globalHref}
-          className={`phase-tab ${isGlobal ? "phase-tab-active" : "phase-tab-inactive"}`}
+          className={`phase-tab min-h-[44px] ${isGlobal ? "phase-tab-active" : "phase-tab-inactive"}`}
           data-testid="settings-global-tab"
         >
           Global
         </Link>
         <Link
           to={projectHref}
-          className={`phase-tab ${!isGlobal ? "phase-tab-active" : "phase-tab-inactive"}`}
+          className={`phase-tab min-h-[44px] ${!isGlobal ? "phase-tab-active" : "phase-tab-inactive"}`}
           data-testid="settings-project-tab"
         >
           Project

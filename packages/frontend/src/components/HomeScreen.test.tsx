@@ -94,7 +94,7 @@ describe("HomeScreen", () => {
     expect(screen.getByTestId("add-existing-button")).toHaveTextContent("Add Existing");
   });
 
-  it("renders faint GitHub link at bottom-right linking to OpenSprint repo", async () => {
+  it("renders faint GitHub link at bottom linking to OpenSprint repo", async () => {
     mockProjectsList.mockResolvedValue([]);
     renderHomeScreen();
     await screen.findByTestId("projects-grid");
@@ -105,7 +105,7 @@ describe("HomeScreen", () => {
     expect(link).toHaveAttribute("href", GITHUB_REPO_URL);
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
-    expect(link).toHaveClass("fixed", "bottom-4", "right-4", "text-xs", "text-theme-muted/50");
+    expect(link).toHaveClass("fixed", "bottom-4", "text-xs", "text-theme-muted/50");
   });
 
   it("renders project cards when projects exist", async () => {
