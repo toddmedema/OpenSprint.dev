@@ -448,6 +448,33 @@ describe("TaskDetailSidebar", () => {
     expect(screen.queryByTestId("sidebar-actions-menu")).not.toBeInTheDocument();
   });
 
+  it("live output sits inside a single container with one border (no redundant nesting)", () => {
+    const props = createMinimalProps({
+      wsConnected: true,
+      isDoneTask: false,
+      agentOutput: ["Line 1", "Line 2"],
+      artifactsSectionExpanded: true,
+    });
+
+    const { container } = renderWithProviders(<TaskDetailSidebar {...props} />, {
+      preloadedState: defaultPreloadedState,
+    });
+
+    const artifactsContent = container.querySelector("#artifacts-content");
+    expect(artifactsContent).toBeInTheDocument();
+
+    // Single bordered container: bg-theme-code-bg rounded-lg border border-theme-border
+    const borderedContainers = artifactsContent?.querySelectorAll(
+      ".bg-theme-code-bg.rounded-lg.border.border-theme-border"
+    ) ?? [];
+    expect(borderedContainers.length).toBe(1);
+
+    const liveOutput = screen.getByTestId("live-agent-output");
+    expect(liveOutput).toBeInTheDocument();
+    expect(liveOutput).toHaveTextContent("Line 1");
+    expect(liveOutput).toHaveTextContent("Line 2");
+  });
+
   it("uses plain text rendering while live output is still streaming", () => {
     const props = createMinimalProps({
       wsConnected: true,

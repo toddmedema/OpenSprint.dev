@@ -889,7 +889,7 @@ function TaskDetailSidebarInner({
                 <ArchivedSessionView sessions={archivedSessions} />
               )
             ) : (
-              <div className="flex flex-col min-h-0 flex-1">
+              <div className="relative flex flex-col min-h-0 flex-1">
                 {!wsConnected ? (
                   <div className="p-4 flex flex-col gap-3" data-testid="live-output-connecting">
                     <div className="text-sm text-theme-muted flex items-center gap-2">
@@ -912,7 +912,7 @@ function TaskDetailSidebarInner({
                     </button>
                   </div>
                 ) : (
-                  <div className="relative flex-1 min-h-0 flex flex-col">
+                  <>
                     <VirtualizedAgentOutput
                       content={liveOutputContent}
                       mode={completionState ? "markdown" : "stream"}
@@ -931,7 +931,7 @@ function TaskDetailSidebarInner({
                         Jump to bottom
                       </button>
                     )}
-                  </div>
+                  </>
                 )}
                 {completionState && (
                   <div className="px-4 pb-4 pt-3 mt-0">
