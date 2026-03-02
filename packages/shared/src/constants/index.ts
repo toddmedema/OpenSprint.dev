@@ -141,12 +141,23 @@ export function getAgentName(slotIndex: number): string {
 export const AGENT_NAMES_BY_ROLE: Record<string, readonly string[]> = {
   coder: AGENT_NAMES,
   dreamer: ["Gandalf", "Saruman", "Radagast", "Pallando", "Alatar"],
-  planner: ["Aragorn", "Théoden", "Thranduil", "Dáin Ironfoot", "Brand of Dale"],
+  planner: ["Aragorn", "Théoden", "Thranduil", "Dáin", "Brand"],
   harmonizer: ["Elrond", "Galadriel", "Celeborn", "Arwen", "Círdan"],
   analyst: ["Faramir", "Halbarad", "Éomer", "Elladan", "Elrohir"],
   summarizer: ["Treebeard", "Quickbeam", "Leaflock", "Skinbark", "Beechbone"],
   auditor: ["Gimli", "Glóin", "Balin", "Dwalin", "Thorin"],
-  reviewer: ["Boromir", "Imrahil", "Éowyn", "Beregond", "Húrin of the Keys"],
+  reviewer: [
+    "Boromir",
+    "Imrahil",
+    "Éowyn",
+    "Beregond",
+    "Húrin",
+    "Glorfindel",
+    "Erkenbrand",
+    "Grimbold",
+    "Forlong",
+    "Angbor",
+  ],
   merger: ["Gwaihir", "Landroval", "Meneldor", "Thorondor", "Sorontar"],
 };
 
