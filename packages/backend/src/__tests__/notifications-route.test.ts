@@ -7,6 +7,7 @@ import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
 import { notificationService } from "../services/notification.service.js";
 import { taskStore } from "../services/task-store.service.js";
+import { setGlobalSettings } from "../services/global-settings.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
@@ -142,5 +143,87 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
     const updated = await taskStore.show(projectId, task.id);
     expect(updated.status).toBe("open");
     expect((updated as { block_reason?: string | null }).block_reason ?? null).toBeFalsy();
+  });
+
+  describe("POST /projects/:id/notifications/:nid/retry-rate-limit", () => {
+    it("resolves rate-limit notifications when keys are available", async () => {
+      await setGlobalSettings({
+        apiKeys: {
+          ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-available" }],
+        },
+      });
+
+      const created = await notificationService.createApiBlocked({
+        projectId,
+        source: "execute",
+        sourceId: "task-1",
+        message: "Rate limit exceeded",
+        errorCode: "rate_limit",
+      });
+
+      const res = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/notifications/${created.id}/retry-rate-limit`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.ok).toBe(true);
+      expect(res.body.data.resolvedCount).toBeGreaterThanOrEqual(1);
+
+      const listRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
+      const rateLimitNotifications = listRes.body.data.filter(
+        (n: { kind?: string; errorCode?: string }) =>
+          n.kind === "api_blocked" && n.errorCode === "rate_limit"
+      );
+      expect(rateLimitNotifications).toHaveLength(0);
+    });
+
+    it("returns 400 when no API keys available", async () => {
+      const recent = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+      await setGlobalSettings({
+        apiKeys: {
+          ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-limited", limitHitAt: recent }],
+        },
+      });
+
+      const created = await notificationService.createApiBlocked({
+        projectId,
+        source: "execute",
+        sourceId: "task-1",
+        message: "Rate limit exceeded",
+        errorCode: "rate_limit",
+      });
+
+      const res = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/notifications/${created.id}/retry-rate-limit`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.message).toContain("No API keys available");
+    });
+
+    it("returns 404 when notification not found", async () => {
+      const res = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/notifications/nonexistent-id/retry-rate-limit`
+      );
+
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 400 when notification is not rate_limit", async () => {
+      const created = await notificationService.createApiBlocked({
+        projectId,
+        source: "execute",
+        sourceId: "task-1",
+        message: "Invalid API key",
+        errorCode: "auth",
+      });
+
+      const res = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/notifications/${created.id}/retry-rate-limit`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.message).toContain("only available for rate limit");
+    });
   });
 });

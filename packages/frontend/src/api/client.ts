@@ -459,6 +459,11 @@ export const api = {
         method: "PATCH",
         body: body ? JSON.stringify(body) : undefined,
       }),
+    retryRateLimit: (projectId: string, notificationId: string) =>
+      request<{ ok: boolean; resolvedCount: number }>(
+        `/projects/${projectId}/notifications/${notificationId}/retry-rate-limit`,
+        { method: "POST" }
+      ),
   },
 
   // ─── Agents ───

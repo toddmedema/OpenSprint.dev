@@ -9,6 +9,7 @@ vi.mock("../api/client", () => ({
   api: {
     notifications: {
       resolve: vi.fn(),
+      retryRateLimit: vi.fn(),
     },
   },
 }));
@@ -153,7 +154,9 @@ describe("OpenQuestionsBlock", () => {
     expect(screen.getByTestId("open-questions-dismiss-btn")).toBeInTheDocument();
   });
 
-  it("renders API-blocked variant with Dismiss only (no Answer input)", () => {
+  it("renders API-blocked rate_limit variant with Retry and Dismiss (no Answer input)", () => {
+    vi.mocked(api.notifications.retryRateLimit).mockResolvedValue({ ok: true, resolvedCount: 1 });
+
     const apiBlockedNotification: Notification = {
       ...mockNotification,
       id: "ab-1",
@@ -177,7 +180,96 @@ describe("OpenQuestionsBlock", () => {
     expect(screen.getByText(/Rate limit: Fix in Project Settings/)).toBeInTheDocument();
     expect(screen.getByText(/Rate limit exceeded/)).toBeInTheDocument();
     expect(screen.queryByTestId("open-questions-answer-input")).not.toBeInTheDocument();
+    expect(screen.getByTestId("open-questions-retry-btn")).toBeInTheDocument();
     expect(screen.getByTestId("open-questions-dismiss-btn")).toBeInTheDocument();
+  });
+
+  it("calls retryRateLimit and onResolved when Retry clicked on rate_limit notification", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.notifications.retryRateLimit).mockResolvedValue({ ok: true, resolvedCount: 1 });
+
+    const apiBlockedNotification: Notification = {
+      ...mockNotification,
+      id: "ab-1",
+      questions: [{ id: "q1", text: "Rate limit exceeded.", createdAt: "2025-01-01T00:00:00Z" }],
+      kind: "api_blocked",
+      errorCode: "rate_limit",
+    };
+
+    render(
+      <OpenQuestionsBlock
+        notification={apiBlockedNotification}
+        projectId="proj-1"
+        source="execute"
+        sourceId="task-1"
+        onResolved={onResolved}
+      />
+    );
+
+    await user.click(screen.getByTestId("open-questions-retry-btn"));
+
+    await waitFor(() => {
+      expect(api.notifications.retryRateLimit).toHaveBeenCalledWith("proj-1", "ab-1");
+      expect(onResolved).toHaveBeenCalled();
+    });
+  });
+
+  it("renders API-blocked auth variant with Dismiss only (no Retry)", () => {
+    const apiBlockedNotification: Notification = {
+      ...mockNotification,
+      id: "ab-2",
+      questions: [{ id: "q1", text: "Invalid API key.", createdAt: "2025-01-01T00:00:00Z" }],
+      kind: "api_blocked",
+      errorCode: "auth",
+    };
+
+    render(
+      <OpenQuestionsBlock
+        notification={apiBlockedNotification}
+        projectId="proj-1"
+        source="execute"
+        sourceId="task-1"
+        onResolved={onResolved}
+      />
+    );
+
+    expect(screen.getByText("API blocked")).toBeInTheDocument();
+    expect(screen.queryByTestId("open-questions-retry-btn")).not.toBeInTheDocument();
+    expect(screen.getByTestId("open-questions-dismiss-btn")).toBeInTheDocument();
+  });
+
+  it("shows error message when Retry fails on rate_limit notification", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.notifications.retryRateLimit).mockRejectedValue(
+      new Error("No API keys available. Add more keys in Settings or wait 24h.")
+    );
+
+    const apiBlockedNotification: Notification = {
+      ...mockNotification,
+      id: "ab-1",
+      questions: [{ id: "q1", text: "Rate limit exceeded.", createdAt: "2025-01-01T00:00:00Z" }],
+      kind: "api_blocked",
+      errorCode: "rate_limit",
+    };
+
+    render(
+      <OpenQuestionsBlock
+        notification={apiBlockedNotification}
+        projectId="proj-1"
+        source="execute"
+        sourceId="task-1"
+        onResolved={onResolved}
+      />
+    );
+
+    await user.click(screen.getByTestId("open-questions-retry-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("open-questions-retry-error")).toHaveTextContent(
+        "No API keys available. Add more keys in Settings or wait 24h."
+      );
+    });
+    expect(onResolved).not.toHaveBeenCalled();
   });
 
   it("returns null when notification has no questions", () => {

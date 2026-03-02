@@ -332,6 +332,23 @@ describe("api client", () => {
     });
   });
 
+  describe("notifications", () => {
+    it("retryRateLimit posts to retry-rate-limit and returns ok", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { ok: true, resolvedCount: 1 } }),
+      } as Response);
+
+      const result = await api.notifications.retryRateLimit("proj-1", "ab-123");
+      expect(result).toEqual({ ok: true, resolvedCount: 1 });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/projects/proj-1/notifications/ab-123/retry-rate-limit"),
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+  });
+
   describe("globalSettings", () => {
     it("get returns databaseUrl", async () => {
       vi.mocked(fetch).mockResolvedValue({

@@ -37,6 +37,8 @@ export function OpenQuestionsBlock({
   const [answerText, setAnswerText] = useState("");
   const [answerSubmitting, setAnswerSubmitting] = useState(false);
   const [dismissLoading, setDismissLoading] = useState(false);
+  const [retryLoading, setRetryLoading] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
 
   const handleDismiss = useCallback(async () => {
     setDismissLoading(true);
@@ -62,6 +64,20 @@ export function OpenQuestionsBlock({
       setAnswerSubmitting(false);
     }
   }, [answerText, onAnswerSent, projectId, notification.id, onResolved]);
+
+  const handleRetry = useCallback(async () => {
+    setRetryError(null);
+    setRetryLoading(true);
+    try {
+      await api.notifications.retryRateLimit(projectId, notification.id);
+      onResolved();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Retry failed";
+      setRetryError(msg);
+    } finally {
+      setRetryLoading(false);
+    }
+  }, [projectId, notification.id, onResolved]);
 
   const questions = notification.questions ?? [];
   if (questions.length === 0) return null;
@@ -124,15 +140,33 @@ export function OpenQuestionsBlock({
             </button>
           </div>
         )}
-        <button
-          type="button"
-          onClick={handleDismiss}
-          disabled={dismissLoading}
-          className="text-xs text-theme-muted hover:text-theme-text hover:underline self-start disabled:opacity-50"
-          data-testid="open-questions-dismiss-btn"
-        >
-          {dismissLoading ? "Dismissing…" : "Dismiss"}
-        </button>
+        <div className="flex gap-2 items-center flex-wrap">
+          {isApiBlocked && notification.errorCode === "rate_limit" && (
+            <button
+              type="button"
+              onClick={handleRetry}
+              disabled={retryLoading}
+              className="btn-primary text-sm px-3 py-2 disabled:opacity-50 disabled:cursor-wait"
+              data-testid="open-questions-retry-btn"
+            >
+              {retryLoading ? "Retrying…" : "Retry"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleDismiss}
+            disabled={dismissLoading}
+            className="text-xs text-theme-muted hover:text-theme-text hover:underline disabled:opacity-50"
+            data-testid="open-questions-dismiss-btn"
+          >
+            {dismissLoading ? "Dismissing…" : "Dismiss"}
+          </button>
+        </div>
+        {retryError && (
+          <p className="text-xs text-theme-error-text" data-testid="open-questions-retry-error">
+            {retryError}
+          </p>
+        )}
       </div>
     </div>
   );
