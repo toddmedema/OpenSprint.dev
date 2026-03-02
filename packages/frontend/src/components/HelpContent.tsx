@@ -270,7 +270,7 @@ function AskQuestionContent({
           {error}
         </p>
       )}
-      <div className="shrink-0 border-t border-theme-border pt-3">
+      <div className="shrink-0 pt-3">
         <ChatInput
           value={input}
           onChange={setInput}
