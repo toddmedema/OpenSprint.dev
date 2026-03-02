@@ -164,6 +164,8 @@ function createStore(executeTasks: Task[] = []) {
         awaitingApproval: false,
         orchestratorRunning: false,
         activeTasks: [],
+        activeAgents: [],
+        activeAgentsLoadedOnce: false,
         selectedTaskId: null,
         taskDetailLoading: false,
         taskDetailError: null,
@@ -278,6 +280,29 @@ describe("Navbar", () => {
 
     const nonSelectedOption = screen.getByRole("option", { name: "Project B" });
     expect(nonSelectedOption).toHaveClass("hover:bg-theme-info-bg");
+  });
+
+  it("uses responsive padding (px-4 on mobile, px-6 on md+)", () => {
+    renderNavbar(<Navbar project={null} />);
+    const nav = screen.getByRole("navigation");
+    expect(nav).toHaveClass("px-4");
+    expect(nav).toHaveClass("md:px-6");
+  });
+
+  it("phase tabs container is horizontally scrollable on mobile (overflow-x-auto)", () => {
+    const mockProject = {
+      id: "proj-1",
+      name: "Test",
+      repoPath: "/path",
+      currentPhase: "sketch" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
+    renderNavbar(
+      <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />
+    );
+    const phaseTabsContainer = screen.getByRole("button", { name: "Sketch" }).closest("div")?.parentElement;
+    expect(phaseTabsContainer).toHaveClass("overflow-x-auto");
   });
 
   it("has z-[60] so dropdowns appear above Build sidebar (z-50)", () => {

@@ -51,7 +51,7 @@ export function Navbar({
   const helpHref = project ? `/projects/${project.id}/help` : "/help";
 
   const helpButtonClassName =
-    "p-1.5 rounded-md transition-colors text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle";
+    "p-1.5 rounded-md transition-colors text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle min-h-[44px] min-w-[44px] inline-flex items-center justify-center";
 
   const dispatch = useAppDispatch();
   const executeBlockedCount = useAppSelector((s) => {
@@ -118,12 +118,12 @@ export function Navbar({
 
   return (
     <nav
-      className="relative z-[60] flex items-center bg-theme-surface border-b border-theme-border px-6 shrink-0"
+      className="relative z-[60] flex items-center bg-theme-surface border-b border-theme-border px-4 md:px-6 shrink-0"
       style={{ height: NAVBAR_HEIGHT }}
     >
-      <div className="flex w-full items-center justify-between">
+      <div className="flex w-full items-center justify-between gap-2 min-w-0">
         {/* Left: Logo + Project Selector */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0 shrink-0">
           <Link to="/" className="flex items-center gap-2" data-testid="navbar-logo-link">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -138,16 +138,16 @@ export function Navbar({
             <span className="hidden min-[1000px]:inline font-sans font-semibold text-lg text-theme-text">Open Sprint</span>
           </Link>
 
-          <div className="relative flex items-center" ref={dropdownRef}>
-            <span className="hidden min-[1000px]:inline text-theme-muted">/</span>
+          <div className="relative flex items-center min-w-0" ref={dropdownRef}>
+            <span className="hidden min-[1000px]:inline text-theme-muted shrink-0">/</span>
             <button
               type="button"
               onClick={() => setDropdownOpen((o) => !o)}
-              className="dropdown-trigger ml-1 inline-flex items-center gap-1 text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 hover:bg-theme-border-subtle"
+              className="dropdown-trigger ml-1 inline-flex items-center gap-1 min-h-[44px] text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 px-2 hover:bg-theme-border-subtle max-w-[120px] md:max-w-none"
               aria-expanded={dropdownOpen}
               aria-haspopup="listbox"
             >
-              {project ? project.name : "All Projects"}
+              <span className="truncate">{project ? project.name : "All Projects"}</span>
               <span className="pr-2">
                 <svg
                   className={`w-4 h-4 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
@@ -166,7 +166,7 @@ export function Navbar({
             </button>
             {dropdownOpen && (
               <div
-                className="absolute left-0 top-full mt-1 min-w-[200px] max-h-[280px] overflow-y-auto bg-theme-surface border border-theme-border rounded-lg shadow-lg py-1 z-50"
+                className="absolute left-0 top-full mt-1 min-w-[200px] max-w-[min(280px,calc(100vw-2rem))] max-h-[min(280px,calc(100vh-6rem))] overflow-y-auto bg-theme-surface border border-theme-border rounded-lg shadow-lg py-1 z-50"
                 role="listbox"
               >
                 {projects.map((p) => (
@@ -212,9 +212,10 @@ export function Navbar({
           </div>
         </div>
 
-        {/* Center: Phase Tabs */}
+        {/* Center: Phase Tabs — horizontally scrollable on mobile */}
         {project && currentPhase && onPhaseChange && (
-          <div className="flex items-center gap-1 bg-theme-border-subtle rounded-lg p-1">
+          <div className="flex flex-1 min-w-0 md:flex-initial overflow-x-auto -mx-1 md:mx-0 [&::-webkit-scrollbar]:h-1">
+            <div className="flex items-center gap-1 bg-theme-border-subtle rounded-lg p-1 shrink-0">
             {phaseTabs.map((phase) => (
               <button
                 key={phase.key}
@@ -228,11 +229,12 @@ export function Navbar({
                 {phase.label}
               </button>
             ))}
+            </div>
           </div>
         )}
 
         {/* Right: Active agents + Help + Status + Settings */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 md:gap-3 shrink-0">
           {project ? (
             <>
               <ActiveAgentsList projectId={project.id} />
@@ -240,8 +242,8 @@ export function Navbar({
               <ConnectionIndicator />
               <Link
                 to={helpHref}
-                className={`p-1.5 rounded-md transition-colors inline-flex items-center justify-center ${
-                  isHelpActive ? "phase-tab phase-tab-active aspect-square shrink-0 !p-2" : helpButtonClassName
+                className={`rounded-md transition-colors inline-flex items-center justify-center min-h-[44px] min-w-[44px] shrink-0 aspect-square ${
+                  isHelpActive ? "phase-tab phase-tab-active !p-2" : helpButtonClassName
                 }`}
                 aria-label="Help"
                 title="Help"
@@ -250,8 +252,8 @@ export function Navbar({
               </Link>
               <Link
                 to={settingsHref}
-                className={`p-1.5 rounded-md transition-colors ${
-                  isSettingsActive ? "phase-tab phase-tab-active" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle"
+                className={`rounded-md transition-colors inline-flex items-center justify-center min-h-[44px] min-w-[44px] shrink-0 ${
+                  isSettingsActive ? "phase-tab phase-tab-active !p-2" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle p-1.5"
                 }`}
                 aria-label="Project settings"
                 title="Project settings"
@@ -282,8 +284,8 @@ export function Navbar({
               <GlobalNotificationBell />
               <Link
                 to={helpHref}
-                className={`p-1.5 rounded-md transition-colors inline-flex items-center justify-center ${
-                  isHelpActive ? "phase-tab phase-tab-active aspect-square shrink-0 !p-2" : helpButtonClassName
+                className={`rounded-md transition-colors inline-flex items-center justify-center min-h-[44px] min-w-[44px] shrink-0 aspect-square ${
+                  isHelpActive ? "phase-tab phase-tab-active !p-2" : helpButtonClassName
                 }`}
                 aria-label="Help"
                 title="Help"
@@ -292,8 +294,8 @@ export function Navbar({
               </Link>
               <Link
                 to={settingsHref}
-                className={`p-1.5 rounded-md transition-colors ${
-                  isSettingsActive ? "phase-tab phase-tab-active" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle"
+                className={`rounded-md transition-colors inline-flex items-center justify-center min-h-[44px] min-w-[44px] shrink-0 ${
+                  isSettingsActive ? "phase-tab phase-tab-active !p-2" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle p-1.5"
                 }`}
                 aria-label="Settings"
                 title="Settings"
@@ -322,8 +324,8 @@ export function Navbar({
             <>
               <Link
                 to={helpHref}
-                className={`p-1.5 rounded-md transition-colors inline-flex items-center justify-center ${
-                  isHelpActive ? "phase-tab phase-tab-active aspect-square shrink-0 !p-2" : helpButtonClassName
+                className={`rounded-md transition-colors inline-flex items-center justify-center min-h-[44px] min-w-[44px] shrink-0 aspect-square ${
+                  isHelpActive ? "phase-tab phase-tab-active !p-2" : helpButtonClassName
                 }`}
                 aria-label="Help"
                 title="Help"
@@ -332,8 +334,8 @@ export function Navbar({
               </Link>
               <Link
                 to={settingsHref}
-                className={`p-1.5 rounded-md transition-colors ${
-                  isSettingsActive ? "phase-tab phase-tab-active" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle"
+                className={`rounded-md transition-colors inline-flex items-center justify-center min-h-[44px] min-w-[44px] shrink-0 ${
+                  isSettingsActive ? "phase-tab phase-tab-active !p-2" : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle p-1.5"
                 }`}
                 aria-label="Settings"
                 title="Settings"

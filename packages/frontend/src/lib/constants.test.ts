@@ -3,8 +3,10 @@ import {
   CONTENT_CONTAINER_CLASS,
   GITHUB_REPO_URL,
   HOMEPAGE_CONTAINER_CLASS,
+  MOBILE_BREAKPOINT,
   NAVBAR_HEIGHT,
   PHASE_TOOLBAR_HEIGHT,
+  TABLET_BREAKPOINT,
   PRD_SECTION_ORDER,
   PRD_SOURCE_COLORS,
   PRD_SOURCE_LABELS,
@@ -21,6 +23,18 @@ describe("constants", () => {
   describe("PHASE_TOOLBAR_HEIGHT", () => {
     it("matches NAVBAR_HEIGHT for consistent second-level nav bar", () => {
       expect(PHASE_TOOLBAR_HEIGHT).toBe(NAVBAR_HEIGHT);
+    });
+  });
+
+  describe("MOBILE_BREAKPOINT", () => {
+    it("is 768 to match Tailwind md breakpoint for JS-based responsive decisions", () => {
+      expect(MOBILE_BREAKPOINT).toBe(768);
+    });
+  });
+
+  describe("TABLET_BREAKPOINT", () => {
+    it("is 1024 to match Tailwind lg breakpoint for JS-based responsive decisions", () => {
+      expect(TABLET_BREAKPOINT).toBe(1024);
     });
   });
 

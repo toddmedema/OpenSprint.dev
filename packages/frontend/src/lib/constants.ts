@@ -8,6 +8,12 @@ export const ASSET_BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/*$/, "/")
 /** Navbar height in px — used for fixed positioning (e.g. NotificationBar) and layout consistency. */
 export const NAVBAR_HEIGHT = 48;
 
+/** Breakpoint (px) below which layout is considered mobile. Matches Tailwind md (768px). */
+export const MOBILE_BREAKPOINT = 768;
+
+/** Breakpoint (px) below which layout is considered tablet. Matches Tailwind lg (1024px). */
+export const TABLET_BREAKPOINT = 1024;
+
 /** Phase toolbar (second-level nav) height in px — matches top nav for consistency. */
 export const PHASE_TOOLBAR_HEIGHT = 48;
 
