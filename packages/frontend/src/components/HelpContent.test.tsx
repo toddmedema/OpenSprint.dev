@@ -46,6 +46,18 @@ describe("HelpContent", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(9);
   });
 
+  it("Meet your Team view shows only agent icons — no chat input or chat UI", async () => {
+    const user = userEvent.setup();
+    render(<HelpContent />);
+
+    await user.click(screen.getByRole("tab", { name: "Meet your Team" }));
+
+    expect(screen.queryByRole("textbox", { name: "Help chat message" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("help-chat-messages")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Ask a question...")).not.toBeInTheDocument();
+    expect(screen.getByText("Dreamer")).toBeInTheDocument();
+  });
+
   it("shows project context in Ask a Question when project provided", () => {
     render(<HelpContent project={{ id: "proj-1", name: "My Project" }} />);
 
