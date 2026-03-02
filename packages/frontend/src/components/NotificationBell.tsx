@@ -7,7 +7,7 @@ import { setSelectedPlanId } from "../store/slices/planSlice";
 import { setSelectedTaskId } from "../store/slices/executeSlice";
 import { fetchProjectNotifications } from "../store/slices/openQuestionsSlice";
 import { useAppDispatch, useAppSelector } from "../store";
-import { DROPDOWN_PORTAL_Z_INDEX } from "../lib/constants";
+import { getDropdownPositionRightAligned } from "../lib/dropdownViewport";
 import {
   NOTIFICATION_SOURCE_LABELS,
   API_BLOCKED_LABELS,
@@ -115,12 +115,11 @@ export function NotificationBell({ projectId }: NotificationBellProps) {
       <div
         ref={dropdownRef}
         role="listbox"
-        className="fixed min-w-[260px] max-h-[320px] overflow-y-auto bg-theme-surface rounded-lg shadow-lg border border-theme-border py-2"
-        style={{
-          top: dropdownRect.bottom + 4,
-          right: window.innerWidth - dropdownRect.right,
-          zIndex: DROPDOWN_PORTAL_Z_INDEX,
-        }}
+        className="bg-theme-surface rounded-lg shadow-lg border border-theme-border py-2"
+        style={getDropdownPositionRightAligned(dropdownRect, {
+          minWidth: 260,
+          estimatedHeight: 280,
+        })}
       >
         <ul className="divide-y divide-theme-border-subtle">
           {notifications.map((n) => (

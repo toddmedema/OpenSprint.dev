@@ -15,10 +15,8 @@ import { setSelectedPlanId } from "../store/slices/planSlice";
 import { useDisplayPreferences } from "../contexts/DisplayPreferencesContext";
 import { UptimeDisplay } from "./UptimeDisplay";
 import { api } from "../api/client";
-import {
-  AGENT_DROPDOWN_ICON_SIZE,
-  DROPDOWN_PORTAL_Z_INDEX,
-} from "../lib/constants";
+import { AGENT_DROPDOWN_ICON_SIZE } from "../lib/constants";
+import { getDropdownPositionRightAligned } from "../lib/dropdownViewport";
 import { getAgentIconSrc, isPlanningAgent } from "../lib/agentUtils";
 import { getKillAgentConfirmDisabled } from "../lib/killAgentConfirmStorage";
 import { KillAgentConfirmDialog } from "./KillAgentConfirmDialog";
@@ -252,12 +250,11 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
       <div
         ref={dropdownRef}
         role="listbox"
-        className="fixed min-w-[220px] max-h-[320px] overflow-y-auto bg-theme-surface rounded-lg shadow-lg border border-theme-border py-2"
-        style={{
-          top: dropdownRect.bottom + 4,
-          right: window.innerWidth - dropdownRect.right,
-          zIndex: DROPDOWN_PORTAL_Z_INDEX,
-        }}
+        className="bg-theme-surface rounded-lg shadow-lg border border-theme-border py-2"
+        style={getDropdownPositionRightAligned(dropdownRect, {
+          minWidth: 220,
+          estimatedHeight: 280,
+        })}
       >
         {showLoadingInDropdown ? (
           <div

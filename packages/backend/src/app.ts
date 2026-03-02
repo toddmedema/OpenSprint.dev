@@ -10,6 +10,7 @@ import { createExecuteRouter } from "./routes/execute.js";
 import { deliverRouter } from "./routes/deliver.js";
 import { agentsRouter } from "./routes/agents.js";
 import { createTasksRouter } from "./routes/tasks.js";
+import { createTasksAnalyticsRouter } from "./routes/tasks-analytics.js";
 import { createAppServices } from "./composition.js";
 import { feedbackRouter } from "./routes/feedback.js";
 import {
@@ -40,6 +41,7 @@ export function createApp() {
   // API routes
   app.use(`${API_PREFIX}/models`, modelsRouter);
   app.use(`${API_PREFIX}/env`, envRouter);
+  app.use(`${API_PREFIX}/tasks`, createTasksAnalyticsRouter(taskService));
   app.use(`${API_PREFIX}/global-settings`, globalSettingsRouter);
   app.use(`${API_PREFIX}/help`, helpRouter);
   app.use(`${API_PREFIX}/projects`, projectsRouter);

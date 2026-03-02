@@ -8,7 +8,7 @@ import { setSelectedTaskId } from "../store/slices/executeSlice";
 import { fetchGlobalNotifications } from "../store/slices/openQuestionsSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { api } from "../api/client";
-import { DROPDOWN_PORTAL_Z_INDEX } from "../lib/constants";
+import { getDropdownPositionRightAligned } from "../lib/dropdownViewport";
 import {
   NOTIFICATION_POLL_INTERVAL_MS,
   NOTIFICATION_SOURCE_LABELS,
@@ -115,12 +115,11 @@ export function GlobalNotificationBell() {
       <div
         ref={dropdownRef}
         role="listbox"
-        className="fixed min-w-[280px] max-h-[320px] overflow-y-auto bg-theme-surface rounded-lg shadow-lg border border-theme-border py-2"
-        style={{
-          top: dropdownRect.bottom + 4,
-          right: window.innerWidth - dropdownRect.right,
-          zIndex: DROPDOWN_PORTAL_Z_INDEX,
-        }}
+        className="bg-theme-surface rounded-lg shadow-lg border border-theme-border py-2"
+        style={getDropdownPositionRightAligned(dropdownRect, {
+          minWidth: 280,
+          estimatedHeight: 280,
+        })}
       >
         <ul className="divide-y divide-theme-border-subtle">
           {notifications.map((n) => (

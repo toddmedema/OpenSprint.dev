@@ -1,7 +1,19 @@
 import fs from "fs/promises";
 import path from "path";
-import type { Task, AgentSession, KanbanColumn, TaskDependency } from "@opensprint/shared";
-import { resolveTestCommand, clampTaskComplexity } from "@opensprint/shared";
+import type {
+  Task,
+  AgentSession,
+  KanbanColumn,
+  TaskDependency,
+  TaskAnalytics,
+  TaskAnalyticsBucket,
+} from "@opensprint/shared";
+import {
+  resolveTestCommand,
+  clampTaskComplexity,
+  TASK_COMPLEXITY_MIN,
+  TASK_COMPLEXITY_MAX,
+} from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import type { TaskStoreService } from "./task-store.service.js";
 import { AppError } from "../middleware/error-handler.js";
@@ -32,6 +44,48 @@ export class TaskService {
     private branchManager: BranchManager,
     private orchestrator: TaskOrchestratorControl
   ) {}
+
+  /**
+   * Get task analytics for the 100 most recently completed tasks.
+   * When projectId is provided, scope to that project; when undefined, global scope.
+   * Returns data grouped by complexity (1-10) with avg completion time and task count per bucket.
+   */
+  async getTaskAnalytics(projectId?: string): Promise<TaskAnalytics> {
+    if (projectId != null) {
+      await this.projectService.getProject(projectId);
+    }
+    const tasks = await this.taskStore.listRecentlyCompletedTasks(
+      projectId ?? null,
+      100
+    );
+    const buckets = new Map<number, { totalMs: number; count: number }>();
+    for (let c = TASK_COMPLEXITY_MIN; c <= TASK_COMPLEXITY_MAX; c++) {
+      buckets.set(c, { totalMs: 0, count: 0 });
+    }
+    for (const t of tasks) {
+      const complexity = clampTaskComplexity(t.complexity);
+      if (complexity == null) continue;
+      const created = new Date(t.created_at).getTime();
+      const completed = new Date(t.completed_at).getTime();
+      if (isNaN(created) || isNaN(completed)) continue;
+      const completionMs = completed - created;
+      const b = buckets.get(complexity);
+      if (b) {
+        b.totalMs += completionMs;
+        b.count += 1;
+      }
+    }
+    const byComplexity: TaskAnalyticsBucket[] = [];
+    for (let c = TASK_COMPLEXITY_MIN; c <= TASK_COMPLEXITY_MAX; c++) {
+      const b = buckets.get(c)!;
+      byComplexity.push({
+        complexity: c,
+        taskCount: b.count,
+        avgCompletionTimeMs: b.count > 0 ? Math.round(b.totalMs / b.count) : 0,
+      });
+    }
+    return { byComplexity, totalTasks: tasks.length };
+  }
 
   /** List all tasks for a project with computed kanban columns and test results.
    * Uses task store for listAll.

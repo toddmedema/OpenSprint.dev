@@ -50,6 +50,7 @@ vi.mock("../services/task-store.service.js", async () => {
       planGet: vi.fn(),
       planUpdateMetadata: vi.fn(),
       syncForPush: vi.fn(),
+      listRecentlyCompletedTasks: vi.fn().mockResolvedValue([]),
     },
     TaskStoreService: vi.fn(),
     SCHEMA_SQL: "",
@@ -143,6 +144,46 @@ describe("TaskService", () => {
       new BranchManager(),
       mockOrchestrator
     );
+  });
+
+  it("getTaskAnalytics returns analytics grouped by complexity", async () => {
+    vi.mocked(taskStore.listRecentlyCompletedTasks).mockResolvedValue([
+      {
+        id: "t1",
+        created_at: "2024-01-01T00:00:00Z",
+        completed_at: "2024-01-01T01:00:00Z",
+        complexity: 3,
+      },
+      {
+        id: "t2",
+        created_at: "2024-01-01T00:00:00Z",
+        completed_at: "2024-01-01T02:00:00Z",
+        complexity: 3,
+      },
+      {
+        id: "t3",
+        created_at: "2024-01-01T00:00:00Z",
+        completed_at: "2024-01-01T00:30:00Z",
+        complexity: 5,
+      },
+    ]);
+    const analytics = await taskService.getTaskAnalytics("proj-1");
+    expect(analytics.byComplexity).toHaveLength(10);
+    const bucket3 = analytics.byComplexity.find((b) => b.complexity === 3);
+    expect(bucket3).toBeDefined();
+    expect(bucket3!.taskCount).toBe(2);
+    expect(bucket3!.avgCompletionTimeMs).toBe(1.5 * 60 * 60 * 1000); // avg of 1h and 2h = 1.5h
+    const bucket5 = analytics.byComplexity.find((b) => b.complexity === 5);
+    expect(bucket5).toBeDefined();
+    expect(bucket5!.taskCount).toBe(1);
+    expect(bucket5!.avgCompletionTimeMs).toBe(30 * 60 * 1000); // 30 min
+    expect(analytics.totalTasks).toBe(3);
+  });
+
+  it("getTaskAnalytics (global) calls listRecentlyCompletedTasks with null projectId", async () => {
+    vi.mocked(taskStore.listRecentlyCompletedTasks).mockResolvedValue([]);
+    await taskService.getTaskAnalytics();
+    expect(taskStore.listRecentlyCompletedTasks).toHaveBeenCalledWith(null, 100);
   });
 
   it("getTask returns task from task store listAll", async () => {

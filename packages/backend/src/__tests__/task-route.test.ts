@@ -697,4 +697,40 @@ Test review prompt generation.
     expect(res.status).toBe(400);
     expect(res.body.error?.message).toMatch(/parentTaskId/i);
   });
+
+  it("GET /projects/:projectId/tasks/analytics returns analytics grouped by complexity", async () => {
+    const t1 = await taskStore.create(projectId, "Analytics Task 1", {
+      type: "task",
+      priority: 1,
+      complexity: 3,
+    });
+    const t2 = await taskStore.create(projectId, "Analytics Task 2", {
+      type: "task",
+      priority: 1,
+      complexity: 3,
+    });
+    await taskStore.close(projectId, t1.id, "Done");
+    await taskStore.close(projectId, t2.id, "Done");
+
+    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/analytics`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeDefined();
+    expect(res.body.data.byComplexity).toBeDefined();
+    expect(Array.isArray(res.body.data.byComplexity)).toBe(true);
+    expect(res.body.data.byComplexity).toHaveLength(10);
+    const bucket3 = res.body.data.byComplexity.find((b: { complexity: number }) => b.complexity === 3);
+    expect(bucket3).toBeDefined();
+    expect(bucket3.taskCount).toBe(2);
+    expect(bucket3.avgCompletionTimeMs).toBeGreaterThanOrEqual(0);
+    expect(res.body.data.totalTasks).toBe(2);
+  });
+
+  it("GET /tasks/analytics returns global analytics", async () => {
+    const res = await request(app).get(`${API_PREFIX}/tasks/analytics`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeDefined();
+    expect(res.body.data.byComplexity).toBeDefined();
+    expect(res.body.data.byComplexity).toHaveLength(10);
+    expect(typeof res.body.data.totalTasks).toBe("number");
+  });
 });

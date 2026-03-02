@@ -43,6 +43,7 @@ import { getProjectPhasePath } from "../lib/phaseRouting";
 import { VALID_PHASE_SLUGS } from "../lib/phaseRouting";
 import type { ProjectPhase } from "@opensprint/shared";
 import { ACTIVE_AGENTS_POLL_INTERVAL_MS } from "../lib/constants";
+import { TOAST_SAFE_STYLE } from "../lib/dropdownViewport";
 import { fetchProjectNotifications } from "../store/slices/openQuestionsSlice";
 
 /** Derives current view from pathname: "help" | "settings" | phase slug. */
@@ -369,7 +370,8 @@ function PlanRefreshToast({ error, onDismiss }: { error: string | null; onDismis
   if (!error) return null;
   return (
     <div
-      className="fixed bottom-4 right-4 z-40 max-w-md rounded-lg border border-theme-error-border bg-theme-error-bg p-4 shadow-lg text-theme-error-text"
+      className="fixed z-40 max-w-md max-h-[90vh] overflow-y-auto rounded-lg border border-theme-error-border bg-theme-error-bg p-4 shadow-lg text-theme-error-text"
+      style={TOAST_SAFE_STYLE}
       data-testid="plan-refresh-toast"
       role="alert"
     >
@@ -413,7 +415,8 @@ function DeliverToast({
     variantStyles[toast.variant] ?? "border-theme-border bg-theme-surface text-theme-text";
   return (
     <div
-      className={`fixed bottom-4 right-4 z-40 max-w-md rounded-lg border p-4 shadow-lg ${style}`}
+      className={`fixed z-40 max-w-md max-h-[90vh] overflow-y-auto rounded-lg border p-4 shadow-lg ${style}`}
+      style={TOAST_SAFE_STYLE}
       data-testid="deliver-toast"
       role="status"
     >

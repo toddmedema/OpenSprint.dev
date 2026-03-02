@@ -58,6 +58,19 @@ export interface HelpChatHistory {
   messages: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
+/** Task analytics: per-complexity bucket (1-10) */
+export interface TaskAnalyticsBucket {
+  complexity: number;
+  taskCount: number;
+  avgCompletionTimeMs: number;
+}
+
+/** Task analytics response (100 most recently completed tasks, grouped by complexity) */
+export interface TaskAnalytics {
+  byComplexity: TaskAnalyticsBucket[];
+  totalTasks: number;
+}
+
 /** Feedback submission */
 export interface FeedbackSubmitRequest {
   text: string;

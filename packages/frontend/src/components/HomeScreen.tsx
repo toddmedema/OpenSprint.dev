@@ -8,6 +8,7 @@ import { useAppDispatch } from "../store";
 import { addNotification } from "../store/slices/notificationSlice";
 import { CloseButton } from "./CloseButton";
 import { GITHUB_REPO_URL, HOMEPAGE_CONTAINER_CLASS } from "../lib/constants";
+import { getDropdownPositionLeftAligned } from "../lib/dropdownViewport";
 import type { Project } from "@opensprint/shared";
 
 const DROPDOWN_MIN_WIDTH = 140;
@@ -49,21 +50,21 @@ function ProjectActionConfirmModal({
   children,
 }: ProjectActionConfirmModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-theme-overlay backdrop-blur-sm" onClick={onCancel} />
       <div
-        className="relative bg-theme-surface rounded-xl shadow-2xl w-full max-w-lg mx-4 flex flex-col"
+        className="relative bg-theme-surface rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border shrink-0">
           <h2 className="text-lg font-semibold text-theme-text">{title}</h2>
           <CloseButton onClick={onCancel} ariaLabel="Close modal" />
         </div>
-        <div className="px-5 py-4">
+        <div className="px-5 py-4 min-h-0 overflow-y-auto">
           <p className="text-sm text-theme-text">{message}</p>
           {children}
         </div>
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-theme-border bg-theme-bg rounded-b-xl">
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-theme-border bg-theme-bg rounded-b-xl shrink-0">
           <button type="button" onClick={onCancel} className="btn-primary" disabled={confirming}>
             Cancel
           </button>
@@ -283,19 +284,13 @@ export function HomeScreen() {
                       createPortal(
                         <div
                           ref={dropdownRef}
-                          className="fixed py-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg z-[100] min-w-[140px]"
+                          className="py-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg"
                           role="menu"
                           data-testid={`project-card-dropdown-${project.id}`}
-                          style={{
-                            top: menuAnchorRect.bottom + 4,
-                            left: Math.max(
-                              8,
-                              Math.min(
-                                menuAnchorRect.right - DROPDOWN_MIN_WIDTH,
-                                window.innerWidth - DROPDOWN_MIN_WIDTH - 8
-                              )
-                            ),
-                          }}
+                          style={getDropdownPositionLeftAligned(menuAnchorRect, {
+                            minWidth: DROPDOWN_MIN_WIDTH,
+                            estimatedHeight: 100,
+                          })}
                         >
                           <button
                             type="button"

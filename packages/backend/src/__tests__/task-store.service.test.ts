@@ -540,6 +540,51 @@ suite("TaskStoreService", () => {
     });
   });
 
+  describe("listRecentlyCompletedTasks", () => {
+    it("returns closed tasks with completed_at, ordered by completed_at DESC", async () => {
+      const t1 = await store.create(TEST_PROJECT_ID, "Task 1", { type: "task", complexity: 3 });
+      const t2 = await store.create(TEST_PROJECT_ID, "Task 2", { type: "task", complexity: 5 });
+      await store.close(TEST_PROJECT_ID, t1.id, "Done");
+      await store.close(TEST_PROJECT_ID, t2.id, "Done");
+      const result = await store.listRecentlyCompletedTasks(TEST_PROJECT_ID, 100);
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe(t2.id);
+      expect(result[1].id).toBe(t1.id);
+      expect(result[0].complexity).toBe(5);
+      expect(result[1].complexity).toBe(3);
+      expect(result[0].completed_at).toBeDefined();
+      expect(result[0].created_at).toBeDefined();
+    });
+
+    it("scopes to project when projectId provided", async () => {
+      const otherProject = "other-project";
+      const t1 = await store.create(TEST_PROJECT_ID, "Task P1", { type: "task", complexity: 1 });
+      const t2 = await store.create(otherProject, "Task P2", { type: "task", complexity: 2 });
+      await store.close(TEST_PROJECT_ID, t1.id, "Done");
+      await store.close(otherProject, t2.id, "Done");
+      const result = await store.listRecentlyCompletedTasks(TEST_PROJECT_ID, 100);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe(t1.id);
+    });
+
+    it("returns global scope when projectId is null", async () => {
+      const t1 = await store.create(TEST_PROJECT_ID, "Task 1", { type: "task", complexity: 1 });
+      await store.close(TEST_PROJECT_ID, t1.id, "Done");
+      const result = await store.listRecentlyCompletedTasks(null, 100);
+      expect(result.length).toBeGreaterThanOrEqual(1);
+      expect(result.some((r) => r.id === t1.id)).toBe(true);
+    });
+
+    it("respects limit", async () => {
+      for (let i = 0; i < 5; i++) {
+        const t = await store.create(TEST_PROJECT_ID, `Task ${i}`, { type: "task" });
+        await store.close(TEST_PROJECT_ID, t.id, "Done");
+      }
+      const result = await store.listRecentlyCompletedTasks(TEST_PROJECT_ID, 3);
+      expect(result).toHaveLength(3);
+    });
+  });
+
   describe("ready", () => {
     it("should return ready tasks priority-sorted", async () => {
       await store.create(TEST_PROJECT_ID, "Low priority", { priority: 2 });
