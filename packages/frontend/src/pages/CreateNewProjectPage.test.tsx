@@ -302,6 +302,24 @@ describe("CreateNewProjectPage", () => {
     expect(screen.getByTestId("scaffold-retry-button")).toBeInTheDocument();
   });
 
+  it("shows clear actionable error when prerequisites (git/node) are missing", async () => {
+    const prereqMsg =
+      "Git is not installed or not available in PATH. Install Git from https://git-scm.com/ and ensure it is in your PATH, then try again.";
+    mockScaffold.mockRejectedValue(new ApiError(prereqMsg, "SCAFFOLD_PREREQUISITES_MISSING"));
+    const user = userEvent.setup();
+    renderCreateNewProjectPage();
+    await user.type(screen.getByLabelText(/project name/i), "My App");
+    await user.type(screen.getByPlaceholderText("/Users/you/projects/my-app"), "/path/to/parent");
+    await user.click(screen.getByTestId("next-button"));
+    await user.click(screen.getByTestId("next-button"));
+
+    const errorDetails = await screen.findByTestId("scaffold-error-details");
+    expect(errorDetails).toHaveTextContent(/git.*not installed/i);
+    expect(errorDetails).toHaveTextContent("https://git-scm.com/");
+    expect(errorDetails).toHaveTextContent(/path/i);
+    expect(screen.getByTestId("scaffold-retry-button")).toBeInTheDocument();
+  });
+
   it("loads env keys when entering agents step", async () => {
     const user = userEvent.setup();
     renderCreateNewProjectPage();

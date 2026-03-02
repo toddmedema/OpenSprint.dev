@@ -386,6 +386,45 @@ export class ProjectService {
     };
   }
 
+  /** Check that git and node are available before scaffolding. */
+  private async checkScaffoldPrerequisites(): Promise<{ missing: string[] }> {
+    const missing: string[] = [];
+    const timeout = 5000;
+
+    const isCommandNotFound = (err: unknown): boolean => {
+      const msg = err instanceof Error ? err.message : String(err);
+      const code = err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+      return (
+        code === "ENOENT" ||
+        /command not found/i.test(msg) ||
+        /not recognized/i.test(msg) ||
+        /not found/i.test(msg)
+      );
+    };
+
+    try {
+      await execAsync("git --version", { timeout });
+    } catch (err) {
+      if (isCommandNotFound(err)) {
+        missing.push("Git");
+      } else {
+        throw err;
+      }
+    }
+
+    try {
+      await execAsync("node --version", { timeout });
+    } catch (err) {
+      if (isCommandNotFound(err)) {
+        missing.push("Node.js");
+      } else {
+        throw err;
+      }
+    }
+
+    return { missing };
+  }
+
   /** Scaffold a new project from template (Create New wizard). */
   async scaffoldProject(input: ScaffoldProjectRequest): Promise<ScaffoldProjectResponse> {
     const name = (input.name ?? "").trim();
@@ -404,6 +443,20 @@ export class ProjectService {
         ErrorCodes.INVALID_INPUT,
         `Unsupported template: ${template}. Only "web-app-expo-react" is supported.`
       );
+    }
+
+    const prereq = await this.checkScaffoldPrerequisites();
+    if (prereq.missing.length > 0) {
+      const list = prereq.missing.join(", ");
+      const msg =
+        prereq.missing.length === 1
+          ? `${list} is not installed or not available in PATH. ` +
+            (prereq.missing[0] === "Git"
+              ? "Install Git from https://git-scm.com/ and ensure it is in your PATH, then try again."
+              : "Install Node.js from https://nodejs.org/ and ensure it is in your PATH, then try again.")
+          : `${list} are not installed or not available in PATH. ` +
+            "Install Git from https://git-scm.com/ and Node.js from https://nodejs.org/, ensure both are in your PATH, then try again.";
+      throw new AppError(400, ErrorCodes.SCAFFOLD_PREREQUISITES_MISSING, msg);
     }
 
     const repoPath = path.resolve(parentPath);

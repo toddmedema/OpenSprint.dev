@@ -6,6 +6,12 @@ import { ProjectService } from "../services/project.service.js";
 import type { DbClient } from "../db/client.js";
 
 const { testClientRef } = vi.hoisted(() => ({ testClientRef: { current: null as DbClient | null } }));
+
+vi.mock("../services/scaffold-recovery.service.js", () => ({
+  classifyInitError: () => ({ category: "unknown", recoverable: false, summary: "Unknown", rawError: "" }),
+  attemptRecovery: async () => ({ success: false, category: "unknown" as const }),
+}));
+
 vi.mock("../services/task-store.service.js", async () => {
   const { SCHEMA_SQL, runSchema } = await import("../db/schema.js");
   const { createTestPostgresClient } = await import("./test-db-helper.js");
@@ -42,6 +48,8 @@ vi.mock("../services/task-store.service.js", async () => {
 });
 
 let expoInstallShouldFail = false;
+let gitCheckShouldFail = false;
+let nodeCheckShouldFail = false;
 
 vi.mock("child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("child_process")>();
@@ -58,6 +66,36 @@ vi.mock("child_process", async (importOriginal) => {
         stdout?: string,
         stderr?: string
       ) => void;
+      if (cmd.trim() === "git --version") {
+        if (gitCheckShouldFail) {
+          const err = new Error("git: command not found") as Error & { code?: string };
+          err.code = "ENOENT";
+          callback(err, "", "git: command not found");
+        } else {
+          const execOpts = typeof optsOrCb === "function" ? {} : (optsOrCb as object);
+          (actual.exec as (a: string, b: unknown, c: (err: Error | null, stdout?: string, stderr?: string) => void) => void)(
+            cmd,
+            execOpts,
+            callback
+          );
+        }
+        return;
+      }
+      if (cmd.trim() === "node --version") {
+        if (nodeCheckShouldFail) {
+          const err = new Error("node: command not found") as Error & { code?: string };
+          err.code = "ENOENT";
+          callback(err, "", "node: command not found");
+        } else {
+          const execOpts = typeof optsOrCb === "function" ? {} : (optsOrCb as object);
+          (actual.exec as (a: string, b: unknown, c: (err: Error | null, stdout?: string, stderr?: string) => void) => void)(
+            cmd,
+            execOpts,
+            callback
+          );
+        }
+        return;
+      }
       if (cmd.includes("create-expo-app")) {
         const cwd = opts.cwd || process.cwd();
         const pkgPath = path.join(cwd, "package.json");
@@ -198,6 +236,68 @@ describe("ProjectService.scaffoldProject", () => {
       expect(err.message).toContain("Ensure Expo CLI is available");
     } finally {
       expoInstallShouldFail = false;
+    }
+  });
+
+  it("surfaces clear error when git is missing", async () => {
+    gitCheckShouldFail = true;
+    try {
+      const err = await projectService
+        .scaffoldProject({
+          name: "no-git",
+          parentPath: tempDir,
+          template: "web-app-expo-react",
+        })
+        .catch((e) => e);
+      expect(err).toMatchObject({ code: "SCAFFOLD_PREREQUISITES_MISSING" });
+      expect(err.message).toContain("Git");
+      expect(err.message).toContain("not installed");
+      expect(err.message).toContain("https://git-scm.com/");
+      expect(err.message).toContain("PATH");
+    } finally {
+      gitCheckShouldFail = false;
+    }
+  });
+
+  it("surfaces clear error when node is missing", async () => {
+    nodeCheckShouldFail = true;
+    try {
+      const err = await projectService
+        .scaffoldProject({
+          name: "no-node",
+          parentPath: tempDir,
+          template: "web-app-expo-react",
+        })
+        .catch((e) => e);
+      expect(err).toMatchObject({ code: "SCAFFOLD_PREREQUISITES_MISSING" });
+      expect(err.message).toContain("Node.js");
+      expect(err.message).toContain("not installed");
+      expect(err.message).toContain("https://nodejs.org/");
+      expect(err.message).toContain("PATH");
+    } finally {
+      nodeCheckShouldFail = false;
+    }
+  });
+
+  it("surfaces clear error when both git and node are missing", async () => {
+    gitCheckShouldFail = true;
+    nodeCheckShouldFail = true;
+    try {
+      const err = await projectService
+        .scaffoldProject({
+          name: "no-tools",
+          parentPath: tempDir,
+          template: "web-app-expo-react",
+        })
+        .catch((e) => e);
+      expect(err).toMatchObject({ code: "SCAFFOLD_PREREQUISITES_MISSING" });
+      expect(err.message).toContain("Git");
+      expect(err.message).toContain("Node.js");
+      expect(err.message).toContain("https://git-scm.com/");
+      expect(err.message).toContain("https://nodejs.org/");
+    } finally {
+      gitCheckShouldFail = false;
+      nodeCheckShouldFail = false;
     }
   });
 });
