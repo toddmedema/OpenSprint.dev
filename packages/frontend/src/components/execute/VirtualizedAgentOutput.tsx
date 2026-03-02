@@ -68,13 +68,16 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
 
   const proseClasses =
     "prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none text-theme-success-muted prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg";
+  const streamClasses = "text-theme-success-muted";
   const useMarkdown = mode === "markdown";
+  const containerClasses = useMarkdown ? proseClasses : streamClasses;
+  const preClasses = "whitespace-pre-wrap break-normal font-sans m-0 w-full";
 
   if (useFallback) {
     return (
       <div
         ref={containerRef}
-        className={`p-4 text-xs min-h-[120px] overflow-y-auto flex-1 min-h-0 ${proseClasses} ${className}`}
+        className={`p-4 text-xs min-h-[120px] overflow-y-auto flex-1 min-h-0 ${containerClasses} ${className}`}
         data-testid={testId}
         onScroll={onScroll}
       >
@@ -83,7 +86,7 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
             {deferredContent || ""}
           </ReactMarkdown>
         ) : (
-          <pre className="whitespace-pre-wrap font-sans m-0">{deferredContent || ""}</pre>
+          <pre className={preClasses}>{deferredContent || ""}</pre>
         )}
       </div>
     );
@@ -92,7 +95,7 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
   return (
     <div
       ref={containerRef}
-      className={`p-4 text-xs min-h-[120px] overflow-y-auto flex-1 min-h-0 ${proseClasses} ${className}`}
+      className={`p-4 text-xs min-h-[120px] overflow-y-auto flex-1 min-h-0 ${containerClasses} ${className}`}
       data-testid={testId}
       onScroll={onScroll}
     >
@@ -122,7 +125,7 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
                   {blockContent}
                 </ReactMarkdown>
               ) : (
-                <pre className="whitespace-pre-wrap font-sans m-0">{blockContent}</pre>
+                <pre className={preClasses}>{blockContent}</pre>
               )}
             </div>
           );

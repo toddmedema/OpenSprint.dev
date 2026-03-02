@@ -24,7 +24,6 @@ import {
   OPEN_QUESTION_BLOCK_REASON,
   REVIEW_ANGLE_OPTIONS,
   type PlanComplexity,
-  type ReviewAngle,
 } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton, type StoredTask } from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
@@ -287,6 +286,8 @@ export class OrchestratorService {
         lastOutputTime: 0,
         outputLog: [],
         outputLogBytes: 0,
+        outputParseBuffer: "",
+        activeToolCallIds: new Set<string>(),
         startedAt: new Date().toISOString(),
         exitHandled: false,
         killedDueToTimeout: false,

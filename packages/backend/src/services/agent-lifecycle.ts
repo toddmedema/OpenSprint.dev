@@ -18,6 +18,8 @@ const log = createLogger("agent-lifecycle");
 
 /** Poll interval for tailing agent output file after GUPP recovery (must match agent-client for consistency) */
 const OUTPUT_POLL_MS = 150;
+/** Allow long-running shell/tool execution (e.g. npm test) to finish and report back before inactivity kills the agent. */
+const ACTIVE_TOOL_CALL_TIMEOUT_MS = 15 * 60 * 1000;
 
 /** Check whether a PID is still running */
 function isPidAlive(pid: number): boolean {
@@ -42,6 +44,10 @@ export interface AgentRunState {
   lastOutputTime: number;
   outputLog: string[];
   outputLogBytes: number;
+  /** Buffer for NDJSON-style agent output so tool-call lifecycle can be parsed across chunk boundaries. */
+  outputParseBuffer: string;
+  /** Active tool call ids inferred from structured agent output (primarily Cursor/Codex NDJSON). */
+  activeToolCallIds: Set<string>;
   startedAt: string;
   exitHandled: boolean;
   killedDueToTimeout: boolean;
@@ -97,6 +103,8 @@ export class AgentLifecycleManager {
     runState.startedAt = runState.startedAt || new Date().toISOString();
     runState.outputLog = [];
     runState.outputLogBytes = 0;
+    runState.outputParseBuffer = "";
+    runState.activeToolCallIds.clear();
     runState.lastOutputTime = Date.now();
 
     const outputLogPath = path.join(
@@ -125,7 +133,7 @@ export class AgentLifecycleManager {
       outputLogPath,
       projectId,
       onOutput: (chunk: string) => {
-        appendOutputLog(runState, chunk);
+        ingestOutputChunk(runState, chunk);
         runState.lastOutputTime = Date.now();
         sendAgentOutputToProject(projectId, taskId, chunk);
       },
@@ -161,6 +169,8 @@ export class AgentLifecycleManager {
   ): void {
     const { projectId, wtPath, taskId, branchName, onDone } = params;
     runState.activeProcess = handle;
+    runState.outputParseBuffer = "";
+    runState.activeToolCallIds.clear();
     runState.lastOutputTime = Date.now();
     runState.exitHandled = false;
     runState.killedDueToTimeout = false;
@@ -218,7 +228,7 @@ export class AgentLifecycleManager {
           if (bytesRead > 0) {
             readOffset += bytesRead;
             const chunk = buf.subarray(0, bytesRead).toString();
-            appendOutputLog(runState, chunk);
+            ingestOutputChunk(runState, chunk);
             runState.lastOutputTime = Date.now();
             sendAgentOutputToProject(projectId, taskId, chunk);
           }
@@ -280,6 +290,10 @@ export class AgentLifecycleManager {
       () => {
         if (runState.exitHandled) return;
         const elapsed = Date.now() - runState.lastOutputTime;
+        const hasActiveToolCalls = runState.activeToolCallIds.size > 0;
+        const effectiveTimeout = hasActiveToolCalls
+          ? ACTIVE_TOOL_CALL_TIMEOUT_MS
+          : AGENT_INACTIVITY_TIMEOUT_MS;
         const proc = runState.activeProcess;
         const pidDead = proc && proc.pid !== null && !isPidAlive(proc.pid);
 
@@ -303,8 +317,13 @@ export class AgentLifecycleManager {
           return;
         }
 
-        if (elapsed > AGENT_INACTIVITY_TIMEOUT_MS) {
-          log.warn("Agent timeout", { taskId, elapsedMs: elapsed });
+        if (elapsed > effectiveTimeout) {
+          log.warn("Agent timeout", {
+            taskId,
+            elapsedMs: elapsed,
+            effectiveTimeoutMs: effectiveTimeout,
+            activeToolCallCount: runState.activeToolCallIds.size,
+          });
           if (runState.activeProcess) {
             runState.killedDueToTimeout = true;
             this.branchManager
@@ -334,5 +353,42 @@ function appendOutputLog(state: AgentRunState, chunk: string): void {
   while (state.outputLogBytes > MAX_OUTPUT_LOG_BYTES && state.outputLog.length > 1) {
     const dropped = state.outputLog.shift()!;
     state.outputLogBytes -= dropped.length;
+  }
+}
+
+function ingestOutputChunk(state: AgentRunState, chunk: string): void {
+  appendOutputLog(state, chunk);
+  updateToolCallState(state, chunk);
+}
+
+function updateToolCallState(state: AgentRunState, chunk: string): void {
+  state.outputParseBuffer += chunk;
+  const lines = state.outputParseBuffer.split("\n");
+  state.outputParseBuffer = lines.pop() ?? "";
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) continue;
+
+    try {
+      const parsed = JSON.parse(trimmed) as {
+        type?: string;
+        subtype?: string;
+        call_id?: string;
+      };
+      if (parsed.type !== "tool_call" || typeof parsed.call_id !== "string") continue;
+
+      if (parsed.subtype === "started") {
+        state.activeToolCallIds.add(parsed.call_id);
+      } else if (
+        parsed.subtype === "completed" ||
+        parsed.subtype === "failed" ||
+        parsed.subtype === "cancelled"
+      ) {
+        state.activeToolCallIds.delete(parsed.call_id);
+      }
+    } catch {
+      // Non-JSON or partial JSON lines are normal for non-Cursor agents; ignore.
+    }
   }
 }

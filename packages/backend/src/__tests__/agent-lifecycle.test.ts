@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AgentLifecycleManager } from "../services/agent-lifecycle.js";
 import type { AgentRunState, AgentRunParams } from "../services/agent-lifecycle.js";
 import { TimerRegistry } from "../services/timer-registry.js";
+import { AGENT_INACTIVITY_TIMEOUT_MS } from "@opensprint/shared";
 
 const mockInvokeCodingAgent = vi.fn();
 const mockInvokeReviewAgent = vi.fn();
@@ -63,6 +64,8 @@ describe("AgentLifecycleManager", () => {
       lastOutputTime: 0,
       outputLog: [],
       outputLogBytes: 0,
+      outputParseBuffer: "",
+      activeToolCallIds: new Set<string>(),
       startedAt: "",
       exitHandled: false,
       killedDueToTimeout: false,
@@ -187,6 +190,75 @@ describe("AgentLifecycleManager", () => {
       await capturedOnExit?.(1);
 
       expect(baseParams.onDone).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not timeout while a shell tool call is still active", async () => {
+      vi.useFakeTimers();
+      const handle = { kill: vi.fn(), pid: 9999 };
+      let capturedOnOutput: ((chunk: string) => void) | undefined;
+
+      mockInvokeCodingAgent.mockImplementation(
+        (_path: string, _config: unknown, options: { onOutput?: (chunk: string) => void }) => {
+          capturedOnOutput = options.onOutput;
+          return handle;
+        }
+      );
+
+      const killSpy = vi.spyOn(process, "kill").mockImplementation((pid: number, sig?: number) => {
+        if (sig === 0 && pid === 9999) return true;
+        return true;
+      });
+
+      manager.run(baseParams, runState, timers);
+      capturedOnOutput?.(
+        '{"type":"tool_call","subtype":"started","call_id":"call-1","tool_call":{"shellToolCall":{"args":{"command":"npm test"}}}}\n'
+      );
+
+      await vi.advanceTimersByTimeAsync(AGENT_INACTIVITY_TIMEOUT_MS + 30_000);
+
+      expect(handle.kill).not.toHaveBeenCalled();
+      expect(runState.killedDueToTimeout).toBe(false);
+      expect(runState.activeToolCallIds.has("call-1")).toBe(true);
+
+      killSpy.mockRestore();
+      vi.useRealTimers();
+    });
+
+    it("times out eventually when a shell tool call stays silent past the extended window", async () => {
+      vi.useFakeTimers();
+      const handle = {
+        kill: vi.fn(() => {
+          runState.activeProcess = null;
+        }),
+        pid: 9999,
+      };
+      let capturedOnOutput: ((chunk: string) => void) | undefined;
+
+      mockInvokeCodingAgent.mockImplementation(
+        (_path: string, _config: unknown, options: { onOutput?: (chunk: string) => void }) => {
+          capturedOnOutput = options.onOutput;
+          return handle;
+        }
+      );
+
+      const killSpy = vi.spyOn(process, "kill").mockImplementation((pid: number, sig?: number) => {
+        if (sig === 0 && pid === 9999) return true;
+        return true;
+      });
+
+      manager.run(baseParams, runState, timers);
+      capturedOnOutput?.(
+        '{"type":"tool_call","subtype":"started","call_id":"call-1","tool_call":{"shellToolCall":{"args":{"command":"npm test"}}}}\n'
+      );
+
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 30_000);
+      await Promise.resolve();
+
+      expect(runState.killedDueToTimeout).toBe(true);
+      expect(handle.kill).toHaveBeenCalled();
+
+      killSpy.mockRestore();
+      vi.useRealTimers();
     });
   });
 

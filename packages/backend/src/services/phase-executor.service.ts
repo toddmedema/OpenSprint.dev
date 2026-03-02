@@ -83,6 +83,8 @@ export class PhaseExecutorService {
       lastOutputTime: 0,
       outputLog: [],
       outputLogBytes: 0,
+      outputParseBuffer: "",
+      activeToolCallIds: new Set<string>(),
       startedAt,
       exitHandled: false,
       killedDueToTimeout: false,

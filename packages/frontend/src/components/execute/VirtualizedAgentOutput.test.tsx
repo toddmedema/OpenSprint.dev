@@ -35,6 +35,9 @@ describe("VirtualizedAgentOutput", () => {
     const el = screen.getByTestId("output");
     expect(el).toBeInTheDocument();
     expect(el).toHaveTextContent("**Bold** and `code`");
+    expect(el).not.toHaveClass("prose");
+    expect(el).not.toHaveClass("prose-execute-task");
+    expect(el.querySelector("pre")).toHaveClass("break-normal");
   });
 
   it("renders empty content as empty string", () => {

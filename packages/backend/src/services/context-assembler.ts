@@ -146,7 +146,7 @@ export class ContextAssembler {
       const reviewAngles = config.reviewAngles;
       if (reviewAngles && reviewAngles.length > 0) {
         // Angle-specific: create review-angles/<angle>/ per angle
-        for (const angle of reviewAngles) {
+        for (const angle of reviewAngles as ReviewAngle[]) {
           const angleDir = path.join(taskDir, "review-angles", angle);
           await fs.mkdir(angleDir, { recursive: true });
           const prompt = this.generateReviewPromptForAngle(config, context, angle);
