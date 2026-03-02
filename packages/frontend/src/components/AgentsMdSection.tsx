@@ -152,9 +152,28 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
 
   return (
     <div className="pt-2">
-      <h3 className="text-sm font-semibold text-theme-text mb-3">
-        Agent Instructions (AGENTS.md)
-      </h3>
+      <div className="flex items-center justify-between gap-4 mb-3">
+        <h3 className="text-sm font-semibold text-theme-text shrink-0">
+          Agent Instructions (AGENTS.md)
+        </h3>
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
+          {!editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="btn-secondary text-sm"
+              data-testid="agents-md-edit"
+            >
+              Edit
+            </button>
+          )}
+          {saveFeedback === "saved" && (
+            <span className="text-sm text-theme-success-muted" data-testid="agents-md-saved">
+              Saved
+            </span>
+          )}
+        </div>
+      </div>
       <p className="text-xs text-theme-muted mb-3">
         Agent-specific instructions read by coding agents. Edit to customize behavior for this
         project.
@@ -240,21 +259,6 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
               <p className="text-theme-muted text-sm italic">
                 No agent instructions yet. Click Edit to add.
               </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="btn-secondary text-sm"
-              data-testid="agents-md-edit"
-            >
-              Edit
-            </button>
-            {saveFeedback === "saved" && (
-              <span className="text-sm text-theme-success-muted" data-testid="agents-md-saved">
-                Saved
-              </span>
             )}
           </div>
         </div>

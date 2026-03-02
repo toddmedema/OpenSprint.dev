@@ -84,6 +84,16 @@ describe("AgentsMdSection", () => {
     expect(screen.getByTestId("agents-md-edit")).toBeInTheDocument();
   });
 
+  it("shows Edit button in same row as title, right-aligned", async () => {
+    renderSection();
+
+    await screen.findByTestId("agents-md-view");
+    const title = screen.getByText("Agent Instructions (AGENTS.md)");
+    const editBtn = screen.getByTestId("agents-md-edit");
+    expect(title.closest("div")).toContainElement(editBtn);
+    expect(editBtn.closest("div")?.className).toMatch(/ml-auto|justify-between/);
+  });
+
   it("shows placeholder when content is empty", async () => {
     mockGetAgentsInstructions.mockResolvedValue({ content: "" });
     renderSection();
