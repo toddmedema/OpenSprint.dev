@@ -281,6 +281,41 @@ export class NotificationService {
   }
 
   /**
+   * Resolve all open rate-limit notifications for a project.
+   * Called when the system is demonstrably working (e.g. review agent starts, retry succeeds).
+   * Returns the list of resolved notification IDs for broadcasting.
+   */
+  async resolveRateLimitNotifications(projectId: string): Promise<Array<{ id: string; source: NotificationSource; sourceId: string }>> {
+    const client = await taskStore.getDb();
+    const rows = await client.query(
+      `SELECT id, source, source_id FROM open_questions
+       WHERE project_id = $1 AND status = 'open' AND kind = 'api_blocked' AND error_code = 'rate_limit'`,
+      [projectId]
+    );
+
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const resolvedAt = new Date().toISOString();
+    await taskStore.runWrite(async (tx) => {
+      await tx.execute(
+        `UPDATE open_questions SET status = 'resolved', resolved_at = $1
+         WHERE project_id = $2 AND status = 'open' AND kind = 'api_blocked' AND error_code = 'rate_limit'`,
+        [resolvedAt, projectId]
+      );
+    });
+
+    const resolved = rows.map((r) => ({
+      id: r.id as string,
+      source: r.source as NotificationSource,
+      sourceId: r.source_id as string,
+    }));
+    log.info("Resolved rate limit notifications", { projectId, count: resolved.length, ids: resolved.map((r) => r.id) });
+    return resolved;
+  }
+
+  /**
    * Resolve a notification by ID. Project ID is required for scoping.
    */
   async resolve(projectId: string, notificationId: string): Promise<Notification> {

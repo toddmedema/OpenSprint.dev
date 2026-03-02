@@ -1439,6 +1439,7 @@ export class OrchestratorService {
         }
         slot.phaseResult.testResults = scopedResult;
         await this.branchManager.commitWip(wtPath, task.id);
+        await this.clearRateLimitNotifications(projectId);
         await this.mergeCoordinator.performMergeAndDone(projectId, repoPath, task, branchName);
       } else {
         // Review + tests in parallel, joined via TaskPhaseCoordinator
@@ -1495,6 +1496,7 @@ export class OrchestratorService {
           });
 
         // Fire-and-forget: review agent spawned, reports to coordinator via handleReviewDone
+        await this.clearRateLimitNotifications(projectId);
         await this.executeReviewPhase(projectId, repoPath, task, branchName);
       }
     } else {
@@ -1571,6 +1573,27 @@ export class OrchestratorService {
         null,
         "coding_failure"
       );
+    }
+  }
+
+  /**
+   * Clear rate limit notifications when system is demonstrably working
+   * (review agent starting or coding success with reviewMode=never).
+   */
+  private async clearRateLimitNotifications(projectId: string): Promise<void> {
+    try {
+      const resolved = await notificationService.resolveRateLimitNotifications(projectId);
+      for (const n of resolved) {
+        broadcastToProject(projectId, {
+          type: "notification.resolved",
+          notificationId: n.id,
+          projectId,
+          source: n.source,
+          sourceId: n.sourceId,
+        });
+      }
+    } catch (err) {
+      log.warn("Failed to clear rate limit notifications", { projectId, err });
     }
   }
 

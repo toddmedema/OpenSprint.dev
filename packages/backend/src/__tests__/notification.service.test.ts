@@ -238,6 +238,70 @@ describe.skipIf(!notifPostgresOk)("NotificationService", () => {
     });
   });
 
+  describe("resolveRateLimitNotifications", () => {
+    it("resolves all open rate_limit api_blocked notifications for project", async () => {
+      await service.createApiBlocked({
+        projectId: "proj-rl",
+        source: "execute",
+        sourceId: "task-1",
+        message: "Rate limit hit",
+        errorCode: "rate_limit",
+      });
+      await service.createApiBlocked({
+        projectId: "proj-rl",
+        source: "execute",
+        sourceId: "api-keys-ANTHROPIC_API_KEY",
+        message: "All keys exhausted",
+        errorCode: "rate_limit",
+      });
+      await service.createApiBlocked({
+        projectId: "proj-rl",
+        source: "execute",
+        sourceId: "task-2",
+        message: "Invalid key",
+        errorCode: "auth",
+      });
+
+      const resolved = await service.resolveRateLimitNotifications("proj-rl");
+
+      expect(resolved).toHaveLength(2);
+      expect(resolved.map((r) => r.id)).toHaveLength(2);
+      const list = await service.listByProject("proj-rl");
+      expect(list).toHaveLength(1);
+      expect(list[0]!.errorCode).toBe("auth");
+    });
+
+    it("returns empty array when no rate limit notifications exist", async () => {
+      const resolved = await service.resolveRateLimitNotifications("proj-empty");
+      expect(resolved).toEqual([]);
+    });
+
+    it("does not resolve notifications from other projects", async () => {
+      await service.createApiBlocked({
+        projectId: "proj-a",
+        source: "execute",
+        sourceId: "task-1",
+        message: "Rate limit",
+        errorCode: "rate_limit",
+      });
+      await service.createApiBlocked({
+        projectId: "proj-b",
+        source: "execute",
+        sourceId: "task-2",
+        message: "Rate limit",
+        errorCode: "rate_limit",
+      });
+
+      const resolved = await service.resolveRateLimitNotifications("proj-a");
+
+      expect(resolved).toHaveLength(1);
+      const listA = await service.listByProject("proj-a");
+      expect(listA).toHaveLength(0);
+      const listB = await service.listByProject("proj-b");
+      expect(listB).toHaveLength(1);
+    });
+  });
+
   describe("resolve", () => {
     it("marks notification as resolved", async () => {
       const created = await service.create({
