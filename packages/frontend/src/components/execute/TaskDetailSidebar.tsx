@@ -750,12 +750,12 @@ function TaskDetailSidebarInner({
                       <button
                         type="button"
                         onClick={() => onNavigateToPlan!(plan!.metadata.planId)}
-                        className="inline-flex items-center gap-1.5 text-left hover:underline text-brand-600 hover:text-brand-500 transition-colors"
+                        className="inline-flex items-center gap-1.5 text-left text-brand-600 hover:text-brand-500 transition-colors"
                         title={`View plan: ${planTitle}`}
                         data-testid="sidebar-view-plan-btn"
                       >
                         <span className="text-theme-muted shrink-0">Plan:</span>
-                        <span className="truncate max-w-[200px]" title={planTitle!}>
+                        <span className="truncate max-w-[200px] hover:underline" title={planTitle!}>
                           {planTitle}
                         </span>
                       </button>
@@ -770,11 +770,11 @@ function TaskDetailSidebarInner({
                           key={d.targetId}
                           type="button"
                           onClick={() => onSelectTask(d.targetId!)}
-                          className="inline-flex items-center gap-1.5 text-left hover:underline text-brand-600 hover:text-brand-500 transition-colors"
+                          className="inline-flex items-center gap-1.5 text-left text-brand-600 hover:text-brand-500 transition-colors"
                         >
                           <TaskStatusBadge column={col} size="xs" title={COLUMN_LABELS[col]} />
                           <span className="text-theme-muted shrink-0">{typeLabel}</span>
-                          <span className="truncate max-w-[200px]" title={label}>
+                          <span className="truncate max-w-[200px] hover:underline" title={label}>
                             {label}
                           </span>
                         </button>
