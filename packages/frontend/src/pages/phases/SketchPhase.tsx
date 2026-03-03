@@ -612,7 +612,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
             What do you want to build?
           </h1>
           <p className="text-theme-muted mt-2 max-w-md mx-auto">
-            Describe your app idea and AI will generate a comprehensive product requirements
+            Describe your app idea and Open Sprint will generate a comprehensive product requirements
             document for you.
           </p>
         </div>

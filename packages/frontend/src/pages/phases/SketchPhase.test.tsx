@@ -194,7 +194,7 @@ describe("SketchPhase with sketchSlice", () => {
     it("renders central prompt when prdContent is empty", () => {
       renderSketchPhase();
       expect(screen.getByText("What do you want to build?")).toBeInTheDocument();
-      expect(screen.getByText(/Describe your app idea and AI will generate/)).toBeInTheDocument();
+      expect(screen.getByText(/Describe your app idea and Open Sprint will generate/)).toBeInTheDocument();
       expect(screen.getByRole("textbox")).toBeInTheDocument();
     });
 
