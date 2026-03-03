@@ -17,20 +17,31 @@ export interface HeartbeatData {
  * Manages heartbeat files for agent process liveness detection.
  * Heartbeat files are written to .opensprint/active/<task-id>/heartbeat.json
  * every 10 seconds during agent execution.
+ * When subpath is provided (e.g. "review-angles/security"), path is
+ * .opensprint/active/<task-id>/<subpath>/heartbeat.json for parallel angle reviewers.
  */
 export class HeartbeatService {
   /**
    * Get the path to the heartbeat file for a task.
+   * @param subpath - Optional subpath (e.g. "review-angles/security") for parallel agents.
    */
-  getHeartbeatPath(repoPath: string, taskId: string): string {
-    return path.join(repoPath, OPENSPRINT_PATHS.active, taskId, OPENSPRINT_PATHS.heartbeat);
+  getHeartbeatPath(repoPath: string, taskId: string, subpath?: string): string {
+    const base = path.join(repoPath, OPENSPRINT_PATHS.active, taskId);
+    return subpath
+      ? path.join(base, subpath, OPENSPRINT_PATHS.heartbeat)
+      : path.join(base, OPENSPRINT_PATHS.heartbeat);
   }
 
   /**
    * Write a heartbeat file. Uses atomic write (tmp + rename) to prevent corruption.
    */
-  async writeHeartbeat(repoPath: string, taskId: string, data: HeartbeatData): Promise<void> {
-    const heartbeatPath = this.getHeartbeatPath(repoPath, taskId);
+  async writeHeartbeat(
+    repoPath: string,
+    taskId: string,
+    data: HeartbeatData,
+    subpath?: string
+  ): Promise<void> {
+    const heartbeatPath = this.getHeartbeatPath(repoPath, taskId, subpath);
     const dir = path.dirname(heartbeatPath);
 
     try {
@@ -44,8 +55,12 @@ export class HeartbeatService {
   /**
    * Read heartbeat data. Returns null if file doesn't exist or is invalid.
    */
-  async readHeartbeat(repoPath: string, taskId: string): Promise<HeartbeatData | null> {
-    const heartbeatPath = this.getHeartbeatPath(repoPath, taskId);
+  async readHeartbeat(
+    repoPath: string,
+    taskId: string,
+    subpath?: string
+  ): Promise<HeartbeatData | null> {
+    const heartbeatPath = this.getHeartbeatPath(repoPath, taskId, subpath);
     try {
       const raw = await fs.readFile(heartbeatPath, "utf-8");
       const data = JSON.parse(raw) as HeartbeatData;
@@ -73,8 +88,8 @@ export class HeartbeatService {
   /**
    * Delete the heartbeat file. Safe to call if file doesn't exist.
    */
-  async deleteHeartbeat(repoPath: string, taskId: string): Promise<void> {
-    const heartbeatPath = this.getHeartbeatPath(repoPath, taskId);
+  async deleteHeartbeat(repoPath: string, taskId: string, subpath?: string): Promise<void> {
+    const heartbeatPath = this.getHeartbeatPath(repoPath, taskId, subpath);
     try {
       await fs.unlink(heartbeatPath);
     } catch {

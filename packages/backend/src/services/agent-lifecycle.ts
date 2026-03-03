@@ -87,6 +87,16 @@ export interface AgentRunParams {
   onDone: (exitCode: number | null) => Promise<void>;
   /** Called when runtime state changes (running <-> suspended). */
   onStateChange?: () => void | Promise<void>;
+  /**
+   * Override output log path. When multiple agents run in parallel (e.g. angle-specific reviewers),
+   * each needs a distinct path to avoid overwriting. Default: .opensprint/active/<taskId>/agent-output.log
+   */
+  outputLogPath?: string;
+  /**
+   * Subpath for heartbeat file. When provided, heartbeat is written to
+   * .opensprint/active/<taskId>/<subpath>/heartbeat.json. Used for parallel angle reviewers.
+   */
+  heartbeatSubpath?: string;
 }
 
 /**
@@ -128,12 +138,10 @@ export class AgentLifecycleManager {
     this.setRunningState(runState, Date.now());
     runState.lastOutputAtIso = undefined;
 
-    const outputLogPath = path.join(
-      wtPath,
-      OPENSPRINT_PATHS.active,
-      taskId,
-      OPENSPRINT_PATHS.agentOutputLog
-    );
+    const outputLogPath =
+      params.outputLogPath ??
+      path.join(wtPath, OPENSPRINT_PATHS.active, taskId, OPENSPRINT_PATHS.agentOutputLog);
+    const heartbeatSubpath = params.heartbeatSubpath;
 
     broadcastToProject(projectId, {
       type: "agent.started",
@@ -164,7 +172,7 @@ export class AgentLifecycleManager {
         runState.exitHandled = true;
         runState.activeProcess = null;
         this.cleanupTimers(timers);
-        await heartbeatService.deleteHeartbeat(wtPath, taskId);
+        await heartbeatService.deleteHeartbeat(wtPath, taskId, params.heartbeatSubpath);
         try {
           await onDone(code);
         } catch (err) {
@@ -173,8 +181,17 @@ export class AgentLifecycleManager {
       },
     });
 
-    this.startHeartbeat(runState, wtPath, taskId, timers);
-    this.startInactivityMonitor(runState, wtPath, taskId, branchName, timers, onDone, params);
+    this.startHeartbeat(runState, wtPath, taskId, timers, heartbeatSubpath);
+    this.startInactivityMonitor(
+      runState,
+      wtPath,
+      taskId,
+      branchName,
+      timers,
+      onDone,
+      params,
+      heartbeatSubpath
+    );
   }
 
   /**
@@ -353,7 +370,8 @@ export class AgentLifecycleManager {
     runState: AgentRunState,
     wtPath: string,
     taskId: string,
-    timers: TimerRegistry
+    timers: TimerRegistry,
+    heartbeatSubpath?: string
   ): void {
     timers.setInterval(
       "heartbeat",
@@ -365,7 +383,7 @@ export class AgentLifecycleManager {
             processGroupLeaderPid: runState.activeProcess.pid ?? 0,
             lastOutputTimestamp: runState.lastOutputTime,
             heartbeatTimestamp: Date.now(),
-          })
+          }, heartbeatSubpath)
           .catch(() => {});
       },
       HEARTBEAT_INTERVAL_MS
@@ -379,7 +397,8 @@ export class AgentLifecycleManager {
     branchName: string,
     timers: TimerRegistry,
     onDone: (exitCode: number | null) => Promise<void>,
-    params?: AgentRunParams
+    params?: AgentRunParams,
+    heartbeatSubpath?: string
   ): void {
     timers.setInterval(
       "inactivity",
@@ -399,7 +418,7 @@ export class AgentLifecycleManager {
           log.warn("Agent process dead, recovering immediately", { taskId, pid: proc.pid });
           runState.activeProcess = null;
           this.cleanupTimers(timers);
-          heartbeatService.deleteHeartbeat(wtPath, taskId).catch(() => {});
+          heartbeatService.deleteHeartbeat(wtPath, taskId, heartbeatSubpath).catch(() => {});
           this.branchManager
             .commitWip(wtPath, taskId)
             .then(() => onDone(null))

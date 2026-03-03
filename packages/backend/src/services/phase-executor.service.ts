@@ -479,6 +479,16 @@ export class PhaseExecutorService {
             const angleTimers = new TimerRegistry();
             slot.reviewAgents?.set(angle, { angle, agent: angleAgent, timers: angleTimers });
 
+            const angleOutputLogPath = path.join(
+              wtPath,
+              OPENSPRINT_PATHS.active,
+              task.id,
+              "review-angles",
+              angle,
+              OPENSPRINT_PATHS.agentOutputLog
+            );
+            const angleHeartbeatSubpath = `review-angles/${angle}`;
+
             this.host.lifecycleManager.run(
               {
                 projectId,
@@ -502,6 +512,8 @@ export class PhaseExecutorService {
                     angle
                   ),
                 onStateChange: this.host.onAgentStateChange(projectId),
+                outputLogPath: angleOutputLogPath,
+                heartbeatSubpath: angleHeartbeatSubpath,
               },
               angleAgent,
               angleTimers

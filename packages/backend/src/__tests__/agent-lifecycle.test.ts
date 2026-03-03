@@ -166,7 +166,7 @@ describe("AgentLifecycleManager", () => {
       expect(baseParams.onDone).toHaveBeenCalledWith(0);
       expect(runState.activeProcess).toBeNull();
       expect(runState.exitHandled).toBe(true);
-      expect(mockDeleteHeartbeat).toHaveBeenCalledWith("/tmp/repo", "task-1");
+      expect(mockDeleteHeartbeat).toHaveBeenCalledWith("/tmp/repo", "task-1", undefined);
       expect(timers.has("heartbeat")).toBe(false);
       expect(timers.has("inactivity")).toBe(false);
     });

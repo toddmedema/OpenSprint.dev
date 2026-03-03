@@ -389,7 +389,14 @@ describe("PhaseExecutorService", () => {
           call[0] as {
             promptPath: string;
             onDone: (code: number | null) => Promise<void>;
+            outputLogPath?: string;
+            heartbeatSubpath?: string;
           }
+      );
+      // Each angle agent gets distinct output log and heartbeat paths
+      expect(runParams.every((r) => r.outputLogPath?.includes("review-angles"))).toBe(true);
+      expect(runParams.map((r) => r.heartbeatSubpath)).toEqual(
+        expect.arrayContaining(["review-angles/security", "review-angles/performance"])
       );
       expect(runParams.map((r) => r.promptPath)).toEqual(
         expect.arrayContaining([

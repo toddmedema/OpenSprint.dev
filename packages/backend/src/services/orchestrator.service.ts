@@ -1314,7 +1314,7 @@ export class OrchestratorService {
             label: slot.taskTitle ?? slot.taskId,
             startedAt: reviewAgent.agent.startedAt || new Date().toISOString(),
             branchName: slot.branchName,
-            name: angleLabel,
+            name: `Reviewer (${angleLabel})`,
             state: reviewAgent.agent.lifecycleState,
             ...(reviewAgent.agent.lastOutputAtIso
               ? { lastOutputAt: reviewAgent.agent.lastOutputAtIso }

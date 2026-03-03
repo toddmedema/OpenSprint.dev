@@ -933,7 +933,7 @@ describe("OrchestratorService (slot-based model)", () => {
         expect.arrayContaining([`${task.id}--review--security`, `${task.id}--review--performance`])
       );
       expect(reviewerAgents.map((a) => a.name)).toEqual(
-        expect.arrayContaining(["Security", "Performance"])
+        expect.arrayContaining(["Reviewer (Security)", "Reviewer (Performance)"])
       );
       expect(reviewerAgents.every((a) => a.taskId === task.id)).toBe(true);
     });
