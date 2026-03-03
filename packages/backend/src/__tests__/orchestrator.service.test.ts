@@ -515,7 +515,7 @@ describe("OrchestratorService (slot-based model)", () => {
 
     it("rebuilds review coordination when recovering a review-phase task", async () => {
       const task = { ...makeTask("task-review"), status: "in_progress" };
-      const host = (orchestrator as any).buildRecoveryHost();
+      const host = orchestrator.getRecoveryHost();
 
       mockGetSettings.mockResolvedValue({
         ...defaultSettings,

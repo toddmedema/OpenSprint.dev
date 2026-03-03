@@ -300,8 +300,8 @@ export function ResizableSidebar({
     >
       {visible && (
         <div
-          role="separator"
-          aria-orientation="vertical"
+          role="slider"
+          tabIndex={0}
           aria-valuenow={width}
           aria-valuemin={minWidth}
           aria-valuemax={maxWidth}

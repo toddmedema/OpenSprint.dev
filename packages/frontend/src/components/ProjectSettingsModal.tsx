@@ -144,7 +144,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     google: boolean;
     claudeCli: boolean;
   } | null>(null);
-  const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
+  const [modelRefreshTrigger] = useState(0);
 
   useEffect(() => {
     let cancelled = false;

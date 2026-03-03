@@ -6,7 +6,7 @@
  */
 import fs from "fs/promises";
 import path from "path";
-import type { GlobalSettings, ApiKeys } from "@opensprint/shared";
+import type { GlobalSettings } from "@opensprint/shared";
 import {
   sanitizeApiKeys,
   mergeApiKeysWithCurrent,

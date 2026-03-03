@@ -131,6 +131,7 @@ export function AddLinkFlow({
           <input
             ref={inputRef}
             type="text"
+            role="combobox"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -139,6 +140,7 @@ export function AddLinkFlow({
             data-testid="add-link-input"
             aria-label="Task to link"
             aria-autocomplete="list"
+            aria-haspopup="listbox"
             aria-expanded={showSuggestions}
             aria-controls={showSuggestions ? "add-link-listbox" : undefined}
             aria-activedescendant={

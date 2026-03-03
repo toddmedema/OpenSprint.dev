@@ -5,7 +5,6 @@ import path from "path";
 import os from "os";
 import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
-import { taskStore } from "../services/task-store.service.js";
 import { helpChatService } from "../routes/help.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 

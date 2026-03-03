@@ -85,7 +85,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
   const databaseUrlRef = useRef(databaseUrl);
   databaseUrlRef.current = databaseUrl;
   const [databaseUrlLoading, setDatabaseUrlLoading] = useState(true);
-  const [databaseUrlSaving, setDatabaseUrlSaving] = useState(false);
+  const [, setDatabaseUrlSaving] = useState(false);
   const [databaseUrlError, setDatabaseUrlError] = useState<string | null>(null);
   const [showDatabaseUrl, setShowDatabaseUrl] = useState(false);
   const [setupTablesDialogOpen, setSetupTablesDialogOpen] = useState(false);

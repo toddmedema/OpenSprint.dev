@@ -12,7 +12,6 @@ import { api } from "../../api/client";
 import projectReducer from "../../store/slices/projectSlice";
 import planReducer, { setPlansAndGraph, setSelectedPlanId } from "../../store/slices/planSlice";
 import executeReducer, {
-  fetchTasks,
   taskUpdated,
   toTasksByIdAndOrder,
 } from "../../store/slices/executeSlice";
@@ -29,7 +28,7 @@ function createPlanPhaseQueryClient() {
   });
 }
 
-const planPhaseWrapper = ({ children }: { children: React.ReactNode }) => {
+const PlanPhaseWrapper = ({ children }: { children: React.ReactNode }) => {
   const [client] = React.useState(() => createPlanPhaseQueryClient());
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 };
@@ -291,7 +290,7 @@ describe("PlanPhase Redux integration", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.getByRole("progressbar", { name: /tasks done/i })).toBeInTheDocument();
@@ -308,7 +307,7 @@ describe("PlanPhase Redux integration", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.getByText("Archive Test Feature")).toBeInTheDocument();
@@ -324,7 +323,7 @@ describe("PlanPhase Redux integration", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.getByText("Failed to load plans")).toBeInTheDocument();
@@ -347,7 +346,7 @@ describe("PlanPhase Redux integration", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const addPlanBtn = screen.getByTestId("add-plan-button");
@@ -374,7 +373,7 @@ describe("PlanPhase Redux integration", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -408,7 +407,7 @@ describe("PlanPhase Redux integration", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     // Initially Task B shows "ready" (appears in EpicCard and sidebar)
@@ -475,7 +474,7 @@ describe("PlanPhase Redux integration", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     // Sidebar Tasks count is 2 (epic-a only); if filter failed it would show 3
     expect(screen.getByText("Tasks (2)")).toBeInTheDocument();
@@ -496,7 +495,7 @@ describe("PlanPhase Redux integration", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.getByText("Archive Test Feature")).toBeInTheDocument();
@@ -533,7 +532,7 @@ describe("PlanPhase Redux integration", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     // EpicCard uses formatPlanIdAsTitle(planId): plan-planning -> "Plan Planning", plan-building -> "Plan Building"
@@ -560,7 +559,7 @@ describe("PlanPhase archive", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const archiveButton = screen.getByTitle("Archive plan (mark all ready/open tasks as done)");
@@ -575,7 +574,7 @@ describe("PlanPhase archive", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     const mainContent = screen.getByText("Feature Plans").closest(".overflow-auto");
     expect(mainContent).toBeInTheDocument();
@@ -592,7 +591,7 @@ describe("PlanPhase archive", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     const root = container.firstElementChild;
     expect(root).toHaveClass("flex");
@@ -609,7 +608,7 @@ describe("PlanPhase archive", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.getByRole("separator", { name: "Resize sidebar" })).toBeInTheDocument();
@@ -623,7 +622,7 @@ describe("PlanPhase archive", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     // Header (title + close) should be in a shrink-0 container so it stays pinned
     const titleInput = screen.getByRole("textbox", { name: /title/i });
@@ -646,7 +645,7 @@ describe("PlanPhase archive", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     const titleInput = screen.getByRole("textbox", { name: /title/i });
     const scrollableBody = titleInput.closest(".shrink-0")?.nextElementSibling as HTMLDivElement;
@@ -672,7 +671,7 @@ describe("PlanPhase archive", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     // On open we scroll to top (scrollTop = 0), not to bottom; no scrollIntoView on initial load
     expect(scrollIntoViewMock).not.toHaveBeenCalled();
@@ -687,7 +686,7 @@ describe("PlanPhase archive", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const archiveButton = screen.getByTitle("Archive plan (mark all ready/open tasks as done)");
@@ -711,7 +710,7 @@ describe("PlanPhase inline editing", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.getByRole("textbox", { name: /title/i })).toBeInTheDocument();
@@ -726,7 +725,7 @@ describe("PlanPhase inline editing", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     // The plan title may appear in EpicCard (h3) plus the editable input in sidebar,
     // but there should be no extra h3 inside the sidebar panel itself
@@ -749,7 +748,7 @@ describe("PlanPhase inline editing", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const titleInput = screen.getByRole("textbox", { name: /title/i });
@@ -779,7 +778,7 @@ describe("PlanPhase inline editing", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     const editorContainer = container.querySelector('[data-testid="plan-markdown-editor"]');
     expect(editorContainer).toBeInTheDocument();
@@ -816,7 +815,7 @@ describe("PlanPhase Re-execute button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.getByRole("button", { name: "Re-execute" })).toBeInTheDocument();
@@ -842,7 +841,7 @@ describe("PlanPhase Re-execute button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.queryByRole("button", { name: /re-execute/i })).not.toBeInTheDocument();
@@ -868,7 +867,7 @@ describe("PlanPhase Re-execute button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.queryByRole("button", { name: /re-execute/i })).not.toBeInTheDocument();
@@ -894,7 +893,7 @@ describe("PlanPhase Re-execute button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.queryByRole("button", { name: /re-execute/i })).not.toBeInTheDocument();
@@ -920,7 +919,7 @@ describe("PlanPhase Re-execute button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.queryByRole("button", { name: /re-execute/i })).not.toBeInTheDocument();
@@ -949,7 +948,7 @@ describe("PlanPhase dynamic plan button label", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     expect(await screen.findByTestId("plan-tasks-button")).toBeInTheDocument();
     expect(screen.queryByTestId("execute-button")).not.toBeInTheDocument();
@@ -971,7 +970,7 @@ describe("PlanPhase dynamic plan button label", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     expect(await screen.findByTestId("execute-button")).toBeInTheDocument();
     expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
@@ -993,7 +992,7 @@ describe("PlanPhase dynamic plan button label", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     expect(await screen.findByText(/Archive Test Feature/i)).toBeInTheDocument();
     expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
@@ -1019,7 +1018,7 @@ describe("PlanPhase dynamic plan button label", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     expect(await screen.findByText(/Archive Test Feature/i)).toBeInTheDocument();
     expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
@@ -1047,7 +1046,7 @@ describe("PlanPhase dynamic plan button label", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-      { wrapper: planPhaseWrapper }
+      { wrapper: PlanPhaseWrapper }
     );
     expect(await screen.findByTestId("plan-tasks-button")).toBeInTheDocument();
     expect(screen.queryByTestId("execute-button")).not.toBeInTheDocument();
@@ -1064,7 +1063,7 @@ describe("PlanPhase dynamic plan button label", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-      { wrapper: planPhaseWrapper }
+      { wrapper: PlanPhaseWrapper }
     );
     expect(await screen.findByTestId("execute-button")).toBeInTheDocument();
     expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
@@ -1086,7 +1085,7 @@ describe("PlanPhase dynamic plan button label", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-      { wrapper: planPhaseWrapper }
+      { wrapper: PlanPhaseWrapper }
     );
     expect(await screen.findByTestId("execute-button")).toBeInTheDocument();
 
@@ -1101,7 +1100,7 @@ describe("PlanPhase dynamic plan button label", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-      { wrapper: planPhaseWrapper }
+      { wrapper: PlanPhaseWrapper }
     );
     expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
     expect(screen.queryByTestId("execute-button")).not.toBeInTheDocument();
@@ -1137,7 +1136,7 @@ describe("PlanPhase dynamic plan button label", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     expect(await screen.findByTestId("execute-button")).toBeInTheDocument();
     expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
@@ -1181,7 +1180,7 @@ describe("Plan All Tasks button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     expect(await screen.findByTestId("plan-all-tasks-button")).toBeInTheDocument();
     expect(screen.getByTestId("plan-all-tasks-button")).toHaveTextContent("Plan All Tasks");
@@ -1228,7 +1227,7 @@ describe("Plan All Tasks button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     await waitFor(() => {
       expect(screen.getByText("Feature Plans")).toBeInTheDocument();
@@ -1269,7 +1268,7 @@ describe("Plan All Tasks button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     const planAllBtn = await screen.findByTestId("plan-all-tasks-button");
     await user.click(planAllBtn);
@@ -1322,7 +1321,7 @@ describe("Plan All Tasks button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     const planAllBtn = await screen.findByTestId("plan-all-tasks-button");
     await user.click(planAllBtn);
@@ -1394,7 +1393,7 @@ describe("Execute All button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     expect(await screen.findByTestId("execute-all-button")).toBeInTheDocument();
     expect(screen.getByTestId("execute-all-button")).toHaveTextContent("Execute All");
@@ -1441,7 +1440,7 @@ describe("Execute All button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     await waitFor(() => {
       expect(screen.getByText("Feature Plans")).toBeInTheDocument();
@@ -1499,7 +1498,7 @@ describe("Execute All button", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
     const executeAllBtn = await screen.findByTestId("execute-all-button");
     await user.click(executeAllBtn);
@@ -1539,7 +1538,7 @@ describe("PlanPhase planTasks thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const planTasksBtn = await screen.findByTestId("plan-tasks-button");
@@ -1581,7 +1580,7 @@ describe("PlanPhase executePlan thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const executeBtn = await screen.findByRole("button", { name: "Execute" });
@@ -1613,7 +1612,7 @@ describe("PlanPhase executePlan thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const executeBtn = await screen.findByRole("button", { name: "Execute" });
@@ -1660,7 +1659,7 @@ describe("PlanPhase Execute loading and double-click prevention", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const executeBtn = await screen.findByRole("button", { name: "Execute" });
@@ -1696,7 +1695,7 @@ describe("PlanPhase Execute loading and double-click prevention", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const executeBtn = await screen.findByRole("button", { name: "Execute" });
@@ -1727,7 +1726,7 @@ describe("PlanPhase Execute loading and double-click prevention", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const executeBtn = await screen.findByRole("button", { name: "Execute" });
@@ -1755,7 +1754,7 @@ describe("PlanPhase Execute loading and double-click prevention", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const executeBtn = await screen.findByRole("button", { name: "Execute" });
@@ -1790,7 +1789,7 @@ describe("PlanPhase Execute loading and double-click prevention", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(await screen.findByRole("button", { name: "Execute" }));
@@ -1817,7 +1816,7 @@ describe("PlanPhase Execute loading and double-click prevention", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(await screen.findByRole("button", { name: "Execute" }));
@@ -1845,7 +1844,7 @@ describe("PlanPhase Execute loading and double-click prevention", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(await screen.findByRole("button", { name: "Execute" }));
@@ -1889,7 +1888,7 @@ describe("PlanPhase reExecutePlan thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const reExecuteBtn = await screen.findByRole("button", { name: "Re-execute" });
@@ -1932,7 +1931,7 @@ describe("PlanPhase plan sorting and status filter", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const planningCard = screen.getByText("Planning Feature").closest('[role="button"]');
@@ -1957,7 +1956,7 @@ describe("PlanPhase plan sorting and status filter", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const allChip = screen.getByRole("button", { name: /all 1/i });
@@ -1986,7 +1985,7 @@ describe("PlanPhase plan sorting and status filter", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.getByText(/planning feature/i)).toBeInTheDocument();
@@ -2015,7 +2014,7 @@ describe("PlanPhase plan sorting and status filter", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const completeChip = screen.getByRole("button", { name: /complete 0/i });
@@ -2060,7 +2059,7 @@ describe("PlanPhase sendPlanMessage thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     // Filter chips
@@ -2090,7 +2089,7 @@ describe("PlanPhase sendPlanMessage thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     // Default: Card mode
@@ -2122,7 +2121,7 @@ describe("PlanPhase sendPlanMessage thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     // Switch to Graph mode
@@ -2146,7 +2145,7 @@ describe("PlanPhase sendPlanMessage thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     expect(screen.getByRole("radio", { name: /graph view/i })).toHaveAttribute(
@@ -2208,7 +2207,7 @@ describe("PlanPhase sendPlanMessage thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-      { wrapper: planPhaseWrapper }
+      { wrapper: PlanPhaseWrapper }
     );
 
     const graphView = screen.getByTestId("plan-graph-view");
@@ -2239,7 +2238,7 @@ describe("PlanPhase sendPlanMessage thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const chatInput = screen.getByPlaceholderText(/refine this plan/i);
@@ -2273,7 +2272,7 @@ describe("PlanPhase sendPlanMessage thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     const chatInput = await screen.findByPlaceholderText(/refine this plan/i);
@@ -2314,7 +2313,7 @@ describe("PlanPhase sendPlanMessage thunk", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await waitFor(() => {
@@ -2349,7 +2348,7 @@ Updated auth flow with OAuth support.
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await waitFor(() => {
@@ -2379,7 +2378,7 @@ Updated auth flow with OAuth support.
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await waitFor(() => {
@@ -2412,7 +2411,7 @@ Updated auth flow with OAuth support.
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await waitFor(() => {
@@ -2450,7 +2449,7 @@ describe("PlanPhase open questions", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await waitFor(() => {
@@ -2477,7 +2476,7 @@ describe("PlanPhase Generate Plan", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -2498,7 +2497,7 @@ describe("PlanPhase Generate Plan", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -2524,7 +2523,7 @@ describe("PlanPhase Generate Plan", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -2568,7 +2567,7 @@ describe("PlanPhase Generate Plan", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -2587,7 +2586,7 @@ describe("PlanPhase Generate Plan", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -2613,7 +2612,7 @@ describe("PlanPhase Generate Plan", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -2636,7 +2635,7 @@ describe("PlanPhase Generate Plan", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -2653,7 +2652,7 @@ describe("PlanPhase Generate Plan", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -2722,7 +2721,7 @@ describe("PlanPhase Generate Plan", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -2761,7 +2760,7 @@ describe("PlanPhase Generate Plan", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -2807,7 +2806,7 @@ describe("PlanPhase Generate Plan", () => {
           <PlanPhase projectId="proj-1" />
         </Provider>
       </MemoryRouter>,
-  { wrapper: planPhaseWrapper }
+  { wrapper: PlanPhaseWrapper }
 );
 
     await user.click(screen.getByTestId("add-plan-button"));

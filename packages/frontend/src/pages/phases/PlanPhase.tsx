@@ -105,7 +105,6 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   const plans = useAppSelector((s) => s.plan.plans);
   const dependencyGraph = useAppSelector((s) => s.plan.dependencyGraph);
   const chatMessages = useAppSelector((s) => s.plan.chatMessages);
-  const loading = useAppSelector((s) => s.plan.loading);
   const executingPlanId = useAppSelector((s) => s.plan.executingPlanId);
   const reExecutingPlanId = useAppSelector((s) => s.plan.reExecutingPlanId);
   const planTasksPlanIds = useAppSelector((s) => s.plan.planTasksPlanIds);

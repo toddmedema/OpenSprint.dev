@@ -7,7 +7,6 @@ import { PlanService } from "../services/plan.service.js";
 import { ProjectService } from "../services/project.service.js";
 import { type TaskStoreService } from "../services/task-store.service.js";
 import {
-  OPENSPRINT_PATHS,
   PLAN_MARKDOWN_SECTIONS,
   SPEC_MD,
   SPEC_METADATA_PATH,

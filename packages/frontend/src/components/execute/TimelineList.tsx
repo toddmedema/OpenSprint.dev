@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Task } from "@opensprint/shared";
 import type { Plan } from "@opensprint/shared";
@@ -118,10 +118,6 @@ export function TimelineList({
   scrollRef,
   selectedTaskId,
 }: TimelineListProps) {
-  if (tasks.length === 0) {
-    return null;
-  }
-
   const epicIdToTitle = useMemo(() => {
     const m = new Map<string, string>();
     plans.forEach((p) => m.set(p.metadata.epicId, getEpicTitleFromPlan(p)));
@@ -211,6 +207,10 @@ export function TimelineList({
       }
     }
   }, [selectedTaskId, taskIdToIndex, useVirtualization, virtualizer]);
+
+  if (tasks.length === 0) {
+    return null;
+  }
 
   if (useVirtualization) {
     const virtualItems = virtualizer.getVirtualItems();

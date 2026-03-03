@@ -18,7 +18,6 @@ import type { AppDb } from "../db/app-db.js";
 import {
   PlanStore,
   type PlanInsertData,
-  type StoredPlan,
 } from "./plan-store.service.js";
 import { toPgParams } from "../db/sql-params.js";
 import { getDatabaseUrl } from "./global-settings.service.js";

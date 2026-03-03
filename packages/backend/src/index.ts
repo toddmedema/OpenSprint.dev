@@ -34,7 +34,6 @@ import {
   clearAgentProcessRegistry,
 } from "./services/agent-process-registry.js";
 import { createLogger } from "./utils/logger.js";
-import { getGlobalSettings } from "./services/global-settings.service.js";
 import { isLocalDatabaseUrl } from "@opensprint/shared";
 import { initAppDb } from "./db/app-db.js";
 

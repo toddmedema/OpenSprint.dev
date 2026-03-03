@@ -6,7 +6,6 @@
  */
 
 import { recoveryService, type RecoveryHost } from "./recovery.service.js";
-import { activeAgentsService } from "./active-agents.service.js";
 import { orchestratorService } from "./orchestrator.service.js";
 import { createLogger } from "../utils/logger.js";
 

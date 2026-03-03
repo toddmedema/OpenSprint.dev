@@ -6,7 +6,6 @@ import { ChatService } from "../services/chat.service.js";
 import { ProjectService } from "../services/project.service.js";
 import {
   DEFAULT_HIL_CONFIG,
-  OPENSPRINT_PATHS,
   SPEC_MD,
   SPEC_METADATA_PATH,
   specMarkdownToPrd,

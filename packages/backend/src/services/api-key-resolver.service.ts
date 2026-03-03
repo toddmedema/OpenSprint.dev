@@ -116,7 +116,7 @@ export async function clearLimitHit(
     if (!entries) return gs;
     const updated = entries.map((e) => {
       if (e.id !== keyId) return e;
-      const { limitHitAt, ...rest } = e;
+      const { limitHitAt: _limitHitAt, ...rest } = e;
       return rest as ApiKeyEntry;
     });
     return { ...gs, apiKeys: { ...gs.apiKeys, [provider]: updated } };

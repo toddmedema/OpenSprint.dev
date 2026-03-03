@@ -51,6 +51,7 @@ const DescriptionMarkdown = React.memo(({ content }: { content: string }) => (
     </ReactMarkdown>
   </div>
 ));
+DescriptionMarkdown.displayName = "DescriptionMarkdown";
 
 const EXECUTION_PHASE_LABELS: Record<TaskExecutionPhase, string> = {
   coding: "Coding",

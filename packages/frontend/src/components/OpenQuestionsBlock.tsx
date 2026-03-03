@@ -32,7 +32,7 @@ export function OpenQuestionsBlock({
   notification,
   projectId,
   source,
-  sourceId,
+  sourceId: _sourceId,
   onResolved,
   onAnswerSent,
 }: OpenQuestionsBlockProps) {

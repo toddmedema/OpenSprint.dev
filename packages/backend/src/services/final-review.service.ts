@@ -5,7 +5,6 @@
  * Epic closure is gated on review pass or user approval.
  */
 
-import type { StoredTask } from "./task-store.service.js";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { agentService } from "./agent.service.js";
 import { getAgentForPlanningRole } from "@opensprint/shared";

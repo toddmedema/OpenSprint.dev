@@ -18,7 +18,6 @@ import {
   getAgentForPlanningRole,
   PLAN_MARKDOWN_SECTIONS,
   validatePlanContent,
-  parsePlanTasks,
   clampTaskComplexity,
 } from "@opensprint/shared";
 import { syncPlanTasksFromContent } from "./plan-task-sync.service.js";
@@ -731,7 +730,6 @@ export class PlanService {
 
       // File-scope labels for parallel scheduling (preserve from raw task)
       for (let i = 0; i < rawTasks.length; i++) {
-        const task = rawTasks[i]!;
         const files = tasks[i]!.files;
         if (files && (files.modify?.length || files.create?.length || files.test?.length)) {
           const filesJson = JSON.stringify(files);

@@ -144,10 +144,10 @@ function createMinimalProps(overrides: Record<string, unknown> = {}) {
       onClose: flat.onClose as () => void,
       onMarkDone: flat.onMarkDone as () => void,
       onUnblock: flat.onUnblock as () => void,
-      onDeleteTask: flat.onDeleteTask as () => void | Promise<void>,
+      onDeleteTask: flat.onDeleteTask as (() => void | Promise<void>),
       onSelectTask: flat.onSelectTask as (taskId: string) => void,
-      onNavigateToPlan: flat.onNavigateToPlan as undefined | (planId: string) => void,
-      onOpenQuestionResolved: flat.onOpenQuestionResolved as undefined | () => void,
+      onNavigateToPlan: flat.onNavigateToPlan as undefined | ((planId: string) => void),
+      onOpenQuestionResolved: flat.onOpenQuestionResolved as undefined | (() => void),
     },
     ...(flat.openQuestionNotification !== undefined && flat.openQuestionNotification !== null && {
       openQuestionNotification: flat.openQuestionNotification,

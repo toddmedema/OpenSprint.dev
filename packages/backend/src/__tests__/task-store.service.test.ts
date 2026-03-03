@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach, beforeAll, afterAll, afterEach } from "vitest";
-import type { Pool } from "pg";
-import { runSchema, toPgParams, type DbClient } from "../db/index.js";
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { runSchema, toPgParams } from "../db/index.js";
 import { TaskStoreService } from "../services/task-store.service.js";
 import { createTestPostgresClient } from "./test-db-helper.js";
 

@@ -13,7 +13,6 @@ import type {
 } from "@opensprint/shared";
 import {
   OPENSPRINT_DIR,
-  OPENSPRINT_PATHS,
   SPEC_MD,
   SPEC_METADATA_PATH,
   prdToSpecMarkdown,
@@ -44,7 +43,6 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import * as projectIndex from "./project-index.js";
 import { parseAgentConfig, type AgentConfigInput } from "../schemas/agent-config.js";
-import { writeJsonAtomic } from "../utils/file-utils.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
 import { classifyInitError, attemptRecovery } from "./scaffold-recovery.service.js";
@@ -728,7 +726,7 @@ export class ProjectService {
   async getSettings(projectId: string): Promise<ProjectSettings> {
     const repoPath = await this.getRepoPath(projectId);
     const defaults = buildDefaultSettings();
-    let stored = await getSettingsFromStore(projectId, defaults);
+    const stored = await getSettingsFromStore(projectId, defaults);
     if (stored === defaults) {
       const detected = await detectTestFramework(repoPath);
       const enriched: ProjectSettings = {

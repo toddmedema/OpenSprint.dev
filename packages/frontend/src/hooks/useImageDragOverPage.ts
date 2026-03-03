@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ACCEPTED_IMAGE_TYPES } from "./useImageAttachment";
 
 function hasImageFiles(dataTransfer: DataTransfer | null): boolean {
@@ -29,7 +29,7 @@ export interface UseImageDragOverPageReturn {
  */
 export function useImageDragOverPage(): UseImageDragOverPageReturn {
   const [isDragging, setIsDragging] = useState(false);
-  const dragCounterRef = { current: 0 };
+  const dragCounterRef = useRef(0);
 
   const handleDragEnter = useCallback((e: DragEvent) => {
     if (!hasImageFiles(e.dataTransfer)) return;
@@ -38,7 +38,7 @@ export function useImageDragOverPage(): UseImageDragOverPageReturn {
     setIsDragging(true);
   }, []);
 
-  const handleDragLeave = useCallback((e: DragEvent) => {
+  const handleDragLeave = useCallback(() => {
     // Don't check dataTransfer in dragleave — it may be restricted. Decrement to balance dragenter.
     dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
     if (dragCounterRef.current === 0) {

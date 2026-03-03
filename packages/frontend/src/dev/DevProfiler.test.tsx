@@ -3,8 +3,6 @@ import { render, screen } from "@testing-library/react";
 import { DevProfiler } from "./DevProfiler";
 
 describe("DevProfiler", () => {
-  const originalEnv = import.meta.env.DEV;
-
   beforeEach(() => {
     vi.stubGlobal("PerformanceObserver", vi.fn().mockImplementation(() => ({
       observe: vi.fn(),

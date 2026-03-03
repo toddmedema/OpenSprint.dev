@@ -198,7 +198,6 @@ describe("deploy-trigger.service", () => {
 
   describe("triggerDeployForEvent", () => {
     it("deploys to each target with matching autoDeployTrigger sequentially", async () => {
-      const deployIds: string[] = [];
       mockGetSettings.mockResolvedValue({
         deployment: {
           mode: "custom",

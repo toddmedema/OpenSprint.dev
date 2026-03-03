@@ -8,7 +8,6 @@ import type {
   MaskedApiKeyEntry,
   MaskedApiKeys,
 } from "@opensprint/shared";
-import { API_KEY_PROVIDERS } from "@opensprint/shared";
 
 const MASKED_PLACEHOLDER = "••••••••";
 
@@ -93,8 +92,6 @@ export function ApiKeysSection({
 
   const providers = providersProp ?? (settings ? getApiKeyProvidersForSection(settings) : []);
   const apiKeys = apiKeysProp ?? settings?.apiKeys;
-
-  if (providers.length === 0) return null;
 
   const toggleVisible = useCallback(
     async (provider: ApiKeyProvider, id: string, currentValue: string) => {
@@ -233,6 +230,8 @@ export function ApiKeysSection({
     },
     [getEntriesForProvider, newKeys, editedValues, emitApiKeysForProvider]
   );
+
+  if (providers.length === 0) return null;
 
   return (
     <div data-testid="api-keys-section" className="space-y-4">

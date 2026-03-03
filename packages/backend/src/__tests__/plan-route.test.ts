@@ -6,7 +6,7 @@ import os from "os";
 import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
 import { TaskStoreService } from "../services/task-store.service.js";
-import { API_PREFIX, OPENSPRINT_PATHS } from "@opensprint/shared";
+import { API_PREFIX } from "@opensprint/shared";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 const mockSuggestInvoke = vi.fn();

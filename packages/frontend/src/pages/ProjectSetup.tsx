@@ -95,7 +95,7 @@ export function ProjectSetup() {
     !claudeCliMissing &&
     (simpleComplexityAgent.type !== "custom" || simpleComplexityAgent.cliCommand.trim()) &&
     (complexComplexityAgent.type !== "custom" || complexComplexityAgent.cliCommand.trim());
-  const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
+  const [modelRefreshTrigger] = useState(0);
   const [createError, setCreateError] = useState<string | null>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
 

@@ -7,7 +7,7 @@ import { PlanService } from "../services/plan.service.js";
 import { ProjectService } from "../services/project.service.js";
 import { TaskStoreService } from "../services/task-store.service.js";
 import * as projectIndex from "../services/project-index.js";
-import { DEFAULT_HIL_CONFIG, OPENSPRINT_PATHS } from "@opensprint/shared";
+import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/task-store.service.js")>();

@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useDeferredValue } from "react";
+import React, { useMemo, useDeferredValue } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";

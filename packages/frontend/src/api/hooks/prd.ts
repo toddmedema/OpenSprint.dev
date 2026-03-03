@@ -45,7 +45,7 @@ export function useSavePrdSection(projectId: string) {
       section: string;
       content: string;
     }) => api.prd.updateSection(projectId, section, content),
-    onSuccess: (_, { section }) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.prd.detail(projectId) });
       void qc.invalidateQueries({ queryKey: queryKeys.prd.history(projectId) });
     },

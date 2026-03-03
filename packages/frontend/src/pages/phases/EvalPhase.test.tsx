@@ -23,7 +23,6 @@ import {
   toTasksByIdAndOrder,
 } from "../../store/slices/executeSlice";
 import { updateFeedbackItem } from "../../store/slices/evalSlice";
-import type { ReactElement } from "react";
 import type { FeedbackItem, Notification, Task } from "@opensprint/shared";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -2391,7 +2390,6 @@ describe("EvalPhase feedback form", () => {
 
     it("does not refresh page when clicking Resolve (prevents form submit)", async () => {
       const formSubmit = vi.fn();
-      const store = createStore({ evalFeedback: mockFeedbackItems });
       const user = userEvent.setup();
       renderWithProviders(
         <form

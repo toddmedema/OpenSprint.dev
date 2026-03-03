@@ -50,7 +50,6 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
                 ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
                 : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
             }`}
-            aria-pressed={activeTab === "ask"}
           >
             Ask a Question
           </button>
@@ -66,7 +65,6 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
                 ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
                 : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
             }`}
-            aria-pressed={activeTab === "meet"}
           >
             Meet your Team
           </button>

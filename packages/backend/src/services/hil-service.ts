@@ -23,8 +23,6 @@ export interface ScopeChangeHilMetadata {
   scopeChangeProposedUpdates: ScopeChangeProposedUpdate[];
 }
 
-/** Max age for unanswered HIL notifications before auto-resolve (1 hour) */
-const HIL_NOTIFICATION_TTL_MS = 60 * 60 * 1000;
 /** How often to sweep stale HIL notifications */
 const HIL_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -73,11 +71,6 @@ export class HilService {
 
     const settings = await this.projectService.getSettings(projectId);
     const mode = settings.hilConfig[category];
-
-    const defaultOptions = options || [
-      { id: "approve", label: "Approve", description: "Proceed with this decision" },
-      { id: "reject", label: "Reject", description: "Do not proceed" },
-    ];
 
     switch (mode) {
       case "automated":

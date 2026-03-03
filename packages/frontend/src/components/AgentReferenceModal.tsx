@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AgentRole } from "@opensprint/shared";
 import {
   AGENT_ROLE_CANONICAL_ORDER,
@@ -18,28 +18,31 @@ export interface AgentReferenceModalProps {
  * Accessible: keyboard-navigable, screen-reader friendly.
  */
 export function AgentReferenceModal({ onClose }: AgentReferenceModalProps) {
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") onClose();
-  };
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-theme-overlay p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agent-reference-title"
-      aria-label="Meet the Agent Team"
-      onClick={handleBackdropClick}
-      onKeyDown={handleKeyDown}
-      data-testid="agent-reference-backdrop"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-theme-overlay"
+        aria-label="Close agent reference"
+        onClick={onClose}
+        data-testid="agent-reference-backdrop"
+      />
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="agent-reference-title"
+        aria-label="Meet the Agent Team"
         className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col rounded-lg bg-theme-surface shadow-xl"
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-theme-border shrink-0">

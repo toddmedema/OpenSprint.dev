@@ -242,7 +242,7 @@ describe("ExecutePhase epic card task order", () => {
       },
     ];
     const store = createStore(tasks);
-    const { container } = render(
+    render(
       <MemoryRouter>
         <Provider store={store}>
           <ExecutePhase projectId="proj-1" />
@@ -279,7 +279,7 @@ describe("ExecutePhase epic card task order", () => {
       },
     ];
     const store = createStore(tasks);
-    const { container } = render(
+    render(
       <MemoryRouter>
         <Provider store={store}>
           <ExecutePhase projectId="proj-1" />
@@ -339,7 +339,7 @@ describe("ExecutePhase epic card task order", () => {
       },
     ];
     const store = createStore(tasks);
-    const { container } = render(
+    render(
       <MemoryRouter>
         <Provider store={store}>
           <ExecutePhase projectId="proj-1" />
@@ -499,7 +499,7 @@ describe("ExecutePhase top bar", () => {
       },
     ];
     const store = createStore(tasks);
-    const { container } = render(
+    render(
       <MemoryRouter>
         <Provider store={store}>
           <ExecutePhase projectId="proj-1" />

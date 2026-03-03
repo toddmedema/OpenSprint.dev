@@ -34,7 +34,9 @@ vi.mock("../services/task-store.service.js", () => ({
     planGetByEpicId: vi.fn().mockResolvedValue(null),
     planGetShippedContent: vi.fn().mockResolvedValue(null),
     closePool: vi.fn(),
-    runWrite: vi.fn().mockImplementation(async (fn: Function) => fn(null)),
+    runWrite: vi
+      .fn()
+      .mockImplementation(async (fn: (db: null) => Promise<unknown> | unknown) => fn(null)),
   },
   TaskStoreService: vi.fn(),
 }));

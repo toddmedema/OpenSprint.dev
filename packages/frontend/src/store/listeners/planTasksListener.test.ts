@@ -5,7 +5,6 @@ import executeReducer from "../slices/executeSlice";
 import projectReducer from "../slices/projectSlice";
 import { planTasksListener } from "./planTasksListener";
 import { planTasks, generateTasksForPlan } from "../slices/planSlice";
-import { fetchTasks } from "../slices/executeSlice";
 import { api } from "../../api/client";
 
 vi.mock("../../api/client", () => ({

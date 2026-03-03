@@ -10,7 +10,6 @@ import type { Task } from "@opensprint/shared";
 import { ThemeProvider } from "../../contexts/ThemeContext";
 import { DisplayPreferencesProvider } from "../../contexts/DisplayPreferencesContext";
 import { NAVBAR_HEIGHT } from "../../lib/constants";
-import { queryKeys } from "../../api/queryKeys";
 import { Navbar } from "./Navbar";
 import executeReducer, { toTasksByIdAndOrder } from "../../store/slices/executeSlice";
 import planReducer from "../../store/slices/planSlice";

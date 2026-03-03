@@ -101,7 +101,6 @@ describe("RecoveryService — stale heartbeat recovery", () => {
   });
 
   it("terminates orphaned agent process before recovering task when heartbeat.pid is alive", async () => {
-    const worktreeBase = path.join(os.tmpdir(), "opensprint-worktrees");
     mockFindStaleHeartbeats.mockResolvedValue([
       {
         taskId: "task-stale",

@@ -112,9 +112,6 @@ function countByStatus(feedback: FeedbackItem[], filter: FeedbackStatusFilter): 
 
 const VALID_FILTER_VALUES: FeedbackStatusFilter[] = ["all", "pending", "resolved", "cancelled"];
 
-/** Stable empty object for tasksById fallback (avoids selector returning new ref each render) */
-const EMPTY_TASKS_BY_ID: Record<string, never> = {};
-
 function loadFeedbackStatusFilter(): FeedbackStatusFilter {
   if (typeof window === "undefined") return "pending";
   try {
@@ -755,7 +752,6 @@ export function EvalPhase({
 
   /* ── Redux state ── */
   const feedback = useAppSelector((s) => s.eval.feedback);
-  const tasksById = useAppSelector((s) => s.execute?.tasksById ?? EMPTY_TASKS_BY_ID);
   const taskSummaries = useAppSelector(selectTaskSummariesForFeedback);
   const taskSummaryById = useMemo(() => {
     if (taskSummaries.length === 0) return EMPTY_TASK_SUMMARY_BY_ID;

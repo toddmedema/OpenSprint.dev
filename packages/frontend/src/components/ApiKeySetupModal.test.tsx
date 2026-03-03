@@ -354,8 +354,6 @@ describe("ApiKeySetupModal", () => {
   });
 
   it("shows error when Save is clicked with empty key for Claude", async () => {
-    const user = userEvent.setup();
-
     render(
       <ApiKeySetupModal
         onComplete={onComplete}

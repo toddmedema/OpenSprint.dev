@@ -32,7 +32,7 @@ export function loadFeedbackFormDraft(projectId: string): FeedbackFormDraft {
     const obj = parsed as Record<string, unknown>;
     const text = typeof obj.text === "string" ? obj.text : "";
     const imagesRaw = obj.images;
-    let images: string[] = [];
+    const images: string[] = [];
     if (Array.isArray(imagesRaw)) {
       let totalBytes = 0;
       for (const item of imagesRaw) {
@@ -58,7 +58,7 @@ export function loadFeedbackFormDraft(projectId: string): FeedbackFormDraft {
 export function saveFeedbackFormDraft(projectId: string, draft: FeedbackFormDraft): void {
   if (typeof window === "undefined") return;
   try {
-    let images = draft.images ?? [];
+    const images = draft.images ?? [];
     let totalBytes = 0;
     const truncated: string[] = [];
     for (const img of images) {

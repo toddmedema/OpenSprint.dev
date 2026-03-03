@@ -56,11 +56,6 @@ function getProjectSettingsPath(tempDir: string): string {
   return path.join(tempDir, ".opensprint", "settings.json");
 }
 
-/** Path to global settings store (global-settings.json for apiKeys). */
-function getGlobalSettingsJsonPath(tempDir: string): string {
-  return path.join(tempDir, ".opensprint", "global-settings.json");
-}
-
 /** Read project settings from project store. */
 async function readProjectFromGlobalStore(
   tempDir: string,

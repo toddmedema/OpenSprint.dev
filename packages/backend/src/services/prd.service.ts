@@ -12,7 +12,6 @@ import { ProjectService } from "./project.service.js";
 import { gitCommitQueue } from "./git-commit-queue.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
-import { writeJsonAtomic } from "../utils/file-utils.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("prd.service");

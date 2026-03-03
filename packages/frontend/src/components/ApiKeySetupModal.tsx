@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CloseButton } from "./CloseButton";
 import { api, isConnectionError } from "../api/client";
 
@@ -69,7 +69,7 @@ export interface ApiKeySetupModalProps {
 export function ApiKeySetupModal({
   onComplete,
   onCancel,
-  intendedRoute,
+  intendedRoute: _intendedRoute,
 }: ApiKeySetupModalProps) {
   const [provider, setProvider] = useState<ProviderOption>("claude");
   const [keyValue, setKeyValue] = useState("");
@@ -133,27 +133,33 @@ export function ApiKeySetupModal({
     provider === "custom" ||
     (needsKeyInput && keyValue.trim().length > 0);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") onCancel();
-  };
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onCancel]);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="api-key-modal-title"
-      onKeyDown={handleKeyDown}
       data-testid="api-key-setup-modal-backdrop"
     >
-      <div
+      <button
+        type="button"
         className="absolute inset-0 bg-theme-overlay backdrop-blur-sm"
+        aria-label="Close API key setup modal"
         onClick={onCancel}
         data-testid="api-key-setup-modal-overlay"
       />
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="api-key-modal-title"
         className="relative bg-theme-surface rounded-xl shadow-2xl w-full max-w-md mx-4 flex flex-col"
-        onClick={(e) => e.stopPropagation()}
         data-testid="api-key-setup-modal"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">

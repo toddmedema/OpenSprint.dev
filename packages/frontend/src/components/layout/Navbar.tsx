@@ -31,7 +31,7 @@ export function Navbar({
   project,
   currentPhase,
   onPhaseChange,
-  onProjectSaved,
+  onProjectSaved: _onProjectSaved,
 }: NavbarProps) {
   const navigate = useNavigate();
   const location = useLocation();
