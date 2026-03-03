@@ -202,7 +202,6 @@ export function ApiKeysSection({
   const removeKey = useCallback(
     (provider: ApiKeyProvider, id: string) => {
       const entries = getEntriesForProvider(provider);
-      if (entries.length <= 1) return;
       const isNew = newKeys[provider]?.some((e) => e.id === id);
       if (isNew) {
         setNewKeys((prev) => ({
@@ -264,7 +263,6 @@ export function ApiKeysSection({
                       "")
                     : "";
                   const isVisible = visibleKeys.has(entry.id);
-                  const canRemove = entries.length > 1;
                   const placeholder = !hasValue
                     ? isNew
                       ? provider === "ANTHROPIC_API_KEY"
@@ -309,8 +307,7 @@ export function ApiKeysSection({
                         <button
                           type="button"
                           onClick={() => removeKey(provider, entry.id)}
-                          disabled={!canRemove}
-                          className="text-theme-error-text hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed p-1 shrink-0"
+                          className="text-theme-error-text hover:opacity-80 p-1 shrink-0"
                           aria-label="Remove key"
                           data-testid={`api-key-remove-${provider}-${entry.id}`}
                         >

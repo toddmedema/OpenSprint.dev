@@ -155,7 +155,7 @@ describe("ApiKeysSection", () => {
     expect(lastCall.ANTHROPIC_API_KEY!.some((e) => e.value === "sk-ant-new-key")).toBe(true);
   });
 
-  it("disables remove when only one key remains", () => {
+  it("enables remove when only one key remains (allows key rotation/cleanup)", () => {
     const settingsWithOneKey: ApiKeysSectionSettings = {
       ...mockSettingsClaude,
       apiKeys: {
@@ -164,7 +164,7 @@ describe("ApiKeysSection", () => {
     };
     render(<ApiKeysSection settings={settingsWithOneKey} onApiKeysChange={onApiKeysChange} />);
     const removeBtn = screen.getByTestId("api-key-remove-ANTHROPIC_API_KEY-k1");
-    expect(removeBtn).toBeDisabled();
+    expect(removeBtn).not.toBeDisabled();
   });
 
   it("enables remove when multiple keys exist", () => {
@@ -184,6 +184,37 @@ describe("ApiKeysSection", () => {
     const lastCall = onApiKeysChange.mock.calls[onApiKeysChange.mock.calls.length - 1][0];
     expect(lastCall.ANTHROPIC_API_KEY).toHaveLength(1);
     expect(lastCall.ANTHROPIC_API_KEY![0].id).toBe("k2");
+  });
+
+  it("removes last key and allows adding new key afterward", async () => {
+    const user = userEvent.setup();
+    const settingsWithOneKey: ApiKeysSectionSettings = {
+      ...mockSettingsClaude,
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-only" }],
+      },
+    };
+    const { rerender } = render(
+      <ApiKeysSection settings={settingsWithOneKey} onApiKeysChange={onApiKeysChange} />
+    );
+    const removeBtn = screen.getByTestId("api-key-remove-ANTHROPIC_API_KEY-k1");
+    await user.click(removeBtn);
+
+    expect(onApiKeysChange).toHaveBeenCalled();
+    const lastCall = onApiKeysChange.mock.calls[onApiKeysChange.mock.calls.length - 1][0];
+    expect(lastCall.ANTHROPIC_API_KEY).toEqual([]);
+
+    rerender(
+      <ApiKeysSection
+        settings={{ ...mockSettingsClaude, apiKeys: { ANTHROPIC_API_KEY: [] } }}
+        onApiKeysChange={onApiKeysChange}
+      />
+    );
+
+    const addBtn = screen.getByTestId("api-key-add-ANTHROPIC_API_KEY");
+    await user.click(addBtn);
+    const inputs = screen.getAllByTestId(/api-key-input-ANTHROPIC_API_KEY-/);
+    expect(inputs.length).toBe(1);
   });
 
   it("shows both providers when mixed (claude + cursor)", () => {
