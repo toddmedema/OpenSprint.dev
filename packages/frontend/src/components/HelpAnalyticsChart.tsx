@@ -19,13 +19,13 @@ function formatDuration(ms: number): string {
 /** Dual-axis chart: bars for avg completion time (left Y), line for task count (right Y), X = complexity 1–10 */
 export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 600, height: 280 });
+  const [dimensions, setDimensions] = useState({ width: 600, height: 400 });
 
   useEffect(() => {
     const el = svgRef.current?.parentElement;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
-      const { width, height } = entries[0]?.contentRect ?? { width: 600, height: 280 };
+      const { width, height } = entries[0]?.contentRect ?? { width: 600, height: 400 };
       setDimensions({ width: Math.max(200, width), height: Math.max(150, height) });
     });
     ro.observe(el);
@@ -139,8 +139,10 @@ export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps
   }
 
   return (
-    <div className="w-full min-h-[280px]" data-testid="help-analytics-chart">
-      <svg ref={svgRef} className="w-full h-full" aria-label="Task analytics by complexity" />
+    <div data-testid="help-analytics-chart">
+      <div className="w-full h-[400px]">
+        <svg ref={svgRef} className="w-full h-full" aria-label="Task analytics by complexity" />
+      </div>
       <div className="flex gap-6 mt-2 text-xs text-theme-muted">
         <span>
           <span className="inline-block w-3 h-3 rounded-sm bg-[var(--color-accent,#6366f1)] opacity-80 mr-1" />

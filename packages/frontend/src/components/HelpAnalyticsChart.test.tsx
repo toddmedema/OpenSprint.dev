@@ -46,4 +46,15 @@ describe("HelpAnalyticsChart", () => {
     expect(screen.getByLabelText("Task analytics by complexity")).toBeInTheDocument();
     expect(screen.getByText(/Based on 3 most recent completed tasks/)).toBeInTheDocument();
   });
+
+  it("chart container has fixed height of 400px", () => {
+    const data = Array.from({ length: 10 }, (_, i) => ({
+      complexity: i + 1,
+      taskCount: i === 2 ? 2 : 0,
+      avgCompletionTimeMs: i === 2 ? 90000 : 0,
+    }));
+    const { container } = render(<HelpAnalyticsChart data={data} totalTasks={2} />);
+    const chartContainer = container.querySelector('[data-testid="help-analytics-chart"] > div');
+    expect(chartContainer).toHaveClass("h-[400px]");
+  });
 });
