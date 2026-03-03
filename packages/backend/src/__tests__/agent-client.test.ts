@@ -51,22 +51,19 @@ vi.mock("../services/api-key-resolver.service.js", () => ({
   ENV_FALLBACK_KEY_ID: "__env__",
 }));
 
-const { mockGeminiSendMessage, mockGeminiSendMessageStream, mockGeminiGenerateContentStream } =
-  vi.hoisted(() => ({
-    mockGeminiSendMessage: vi.fn(),
-    mockGeminiSendMessageStream: vi.fn(),
-    mockGeminiGenerateContentStream: vi.fn(),
-  }));
+const { mockGeminiGenerateContent, mockGeminiGenerateContentStream } = vi.hoisted(() => ({
+  mockGeminiGenerateContent: vi.fn(),
+  mockGeminiGenerateContentStream: vi.fn(),
+}));
 
-vi.mock("@google/generative-ai", () => ({
-  GoogleGenerativeAI: vi.fn().mockImplementation(() => ({
-    getGenerativeModel: () => ({
-      startChat: ({ history }: { history: unknown[] }) => ({
-        sendMessage: (prompt: string) => mockGeminiSendMessage(prompt, history),
-        sendMessageStream: (prompt: string) => mockGeminiSendMessageStream(prompt, history),
-      }),
-      generateContentStream: (content: string) => mockGeminiGenerateContentStream(content),
-    }),
+vi.mock("@google/genai", () => ({
+  GoogleGenAI: vi.fn().mockImplementation(() => ({
+    models: {
+      generateContent: (opts: { contents: unknown }) =>
+        mockGeminiGenerateContent(opts.contents),
+      generateContentStream: (opts: { contents: unknown }) =>
+        Promise.resolve(mockGeminiGenerateContentStream(opts.contents)),
+    },
   })),
 }));
 
@@ -375,9 +372,7 @@ describe("AgentClient", () => {
 
     it("should route google config to Gemini API", async () => {
       mockGetNextKey.mockResolvedValue({ key: "gemini-key", keyId: "k1", source: "global" });
-      mockGeminiSendMessage.mockResolvedValue({
-        response: { text: () => "Gemini planning response" },
-      });
+      mockGeminiGenerateContent.mockResolvedValue({ text: "Gemini planning response" });
 
       const result = await client.invoke({
         config: { type: "google", model: "gemini-1.5-flash", cliCommand: null },
@@ -389,7 +384,7 @@ describe("AgentClient", () => {
 
       expect(mockSpawn).not.toHaveBeenCalled();
       expect(mockGetNextKey).toHaveBeenCalledWith("proj-gemini", "GOOGLE_API_KEY");
-      expect(mockGeminiSendMessage).toHaveBeenCalled();
+      expect(mockGeminiGenerateContent).toHaveBeenCalled();
       expect(mockClearLimitHit).toHaveBeenCalledWith("proj-gemini", "GOOGLE_API_KEY", "k1", "global");
       expect(result.content).toBe("Gemini planning response");
     });
@@ -397,13 +392,11 @@ describe("AgentClient", () => {
     it("should use safeGeminiText when Gemini response has no text (blocked)", async () => {
       mockGetNextKey.mockResolvedValue({ key: "gemini-key", keyId: "k1", source: "global" });
       const responseWithNoText = {
-        response: {
-          text: () => {
-            throw new Error("The `response.text` quick accessor requires the response to contain a valid `Part`");
-          },
+        text: () => {
+          throw new Error("The `response.text` quick accessor requires the response to contain a valid `Part`");
         },
       };
-      mockGeminiSendMessage.mockResolvedValue(responseWithNoText);
+      mockGeminiGenerateContent.mockResolvedValue(responseWithNoText);
 
       const result = await client.invoke({
         config: { type: "google", model: "gemini-1.5-pro", cliCommand: null },
@@ -589,10 +582,10 @@ describe("AgentClient", () => {
 
       mockGetNextKey.mockResolvedValue({ key: "gemini-spawn-key", keyId: "k1", source: "global" });
       async function* geminiStream() {
-        yield { text: () => "First " };
-        yield { text: () => "chunk." };
+        yield { text: "First " };
+        yield { text: "chunk." };
       }
-      mockGeminiGenerateContentStream.mockReturnValue({ stream: geminiStream() });
+      mockGeminiGenerateContentStream.mockReturnValue(geminiStream());
 
       const onOutput = vi.fn();
       const onExit = vi.fn();

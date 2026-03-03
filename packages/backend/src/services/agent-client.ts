@@ -4,7 +4,7 @@ import { open as fsOpen, stat as fsStat, readFile } from "fs/promises";
 import path from "path";
 import { promisify } from "util";
 import OpenAI from "openai";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import type { AgentConfig } from "@opensprint/shared";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
@@ -154,11 +154,12 @@ function extractExplicitAgentErrors(rawOutput: string): string {
 
 /**
  * Safely get text from a Gemini response or stream chunk.
- * response.text() / chunk.text() can throw when the response is blocked (safety) or has no content.
+ * @google/genai uses `text` as a property; legacy SDK used text() method.
  */
-function safeGeminiText(obj: { text(): string }): string {
+function safeGeminiText(obj: { text?: string | (() => string) }): string {
   try {
-    return obj.text() ?? "";
+    if (typeof obj.text === "function") return obj.text() ?? "";
+    return obj.text ?? "";
   } catch {
     return "";
   }
@@ -829,16 +830,17 @@ export class AgentClient {
         }
         triedKeyIds.add(keyId);
 
-        const genAI = new GoogleGenerativeAI(key);
-        const geminiModel = genAI.getGenerativeModel({
+        const ai = new GoogleGenAI({ apiKey: key });
+        const streamPromise = ai.models.generateContentStream({
           model,
-          systemInstruction: systemPrompt,
+          contents: taskContent,
+          config: { systemInstruction: systemPrompt },
         });
 
         try {
-          const result = await geminiModel.generateContentStream(taskContent);
+          const stream = await streamPromise;
           let fullContent = "";
-          for await (const chunk of result.stream) {
+          for await (const chunk of stream) {
             if (aborted) break;
             const text = safeGeminiText(chunk);
             if (text) {
@@ -1676,24 +1678,27 @@ export class AgentClient {
       }
       triedKeyIds.add(keyId);
 
-      const genAI = new GoogleGenerativeAI(key);
-      const geminiModel = genAI.getGenerativeModel({
-        model,
-        systemInstruction: systemPrompt?.trim() || undefined,
-      });
+      const ai = new GoogleGenAI({ apiKey: key });
+      const contents = [
+        ...(conversationHistory ?? []).map((m) => ({
+          role: (m.role === "user" ? "user" : "model") as "user" | "model",
+          parts: [{ text: m.content }],
+        })),
+        { role: "user" as const, parts: [{ text: prompt }] },
+      ];
 
       try {
-        const chat = geminiModel.startChat({
-          history: (conversationHistory ?? []).map((m) => ({
-            role: m.role === "user" ? "user" : "model",
-            parts: [{ text: m.content }],
-          })),
-        });
-
         if (options.onChunk) {
-          const result = await chat.sendMessageStream(prompt);
+          const streamPromise = ai.models.generateContentStream({
+            model,
+            contents,
+            config: systemPrompt?.trim()
+              ? { systemInstruction: systemPrompt.trim() }
+              : undefined,
+          });
+          const stream = await streamPromise;
           let fullContent = "";
-          for await (const chunk of result.stream) {
+          for await (const chunk of stream) {
             const text = safeGeminiText(chunk);
             if (text) {
               fullContent += text;
@@ -1706,8 +1711,13 @@ export class AgentClient {
           return { content: fullContent };
         }
 
-        const result = await chat.sendMessage(prompt);
-        const response = result.response;
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+          config: systemPrompt?.trim()
+            ? { systemInstruction: systemPrompt.trim() }
+            : undefined,
+        });
         const content = safeGeminiText(response);
 
         if (projectId && keyId !== ENV_FALLBACK_KEY_ID) {
