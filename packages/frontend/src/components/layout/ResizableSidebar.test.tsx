@@ -39,7 +39,7 @@ describe("ResizableSidebar", () => {
     );
 
     expect(screen.getByTestId("sidebar-content")).toHaveTextContent("Sidebar content");
-    expect(screen.getByRole("separator", { name: "Resize sidebar" })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Resize sidebar" })).toBeInTheDocument();
   });
 
   it("uses persisted width from localStorage when available", () => {
@@ -73,7 +73,7 @@ describe("ResizableSidebar", () => {
       </ResizableSidebar>
     );
 
-    const handle = screen.getByRole("separator", { name: "Resize sidebar" });
+    const handle = screen.getByRole("slider", { name: "Resize sidebar" });
 
     // Simulate mousedown, mousemove (drag left 20px), mouseup
     handle.dispatchEvent(new MouseEvent("mousedown", { clientX: 100, bubbles: true }));
@@ -120,7 +120,7 @@ describe("ResizableSidebar", () => {
       </ResizableSidebar>
     );
 
-    expect(screen.queryByRole("separator", { name: "Resize sidebar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("slider", { name: "Resize sidebar" })).not.toBeInTheDocument();
   });
 
   it("accepts custom className", () => {
@@ -141,8 +141,7 @@ describe("ResizableSidebar", () => {
       </ResizableSidebar>
     );
 
-    const handle = screen.getByRole("separator", { name: "Resize sidebar" });
-    expect(handle).toHaveAttribute("aria-orientation", "vertical");
+    const handle = screen.getByRole("slider", { name: "Resize sidebar" });
     expect(handle).toHaveAttribute("aria-valuenow", "420");
     expect(handle).toHaveAttribute("aria-valuemin", "280");
     expect(handle).toHaveAttribute("aria-valuemax", "800");
@@ -158,7 +157,7 @@ describe("ResizableSidebar", () => {
       </ResizableSidebar>
     );
 
-    const handle = screen.getByRole("separator", { name: "Resize sidebar" });
+    const handle = screen.getByRole("slider", { name: "Resize sidebar" });
     expect(handle).toHaveAttribute("aria-valuemin", "200");
     expect(handle).toHaveAttribute("aria-valuemax", "800"); // 80% of 1000
 
@@ -311,6 +310,35 @@ describe("ResizableSidebar", () => {
 
       const panel = screen.getByTestId("right-content").closest(".animate-slide-in-right");
       expect(panel).toBeInTheDocument();
+    });
+  });
+
+  describe("overlayOnMobile=false (always inline, no backdrop)", () => {
+    beforeEach(() => {
+      mockViewportWidth(MOBILE_BREAKPOINT - 1);
+    });
+
+    afterEach(() => {
+      mockViewportWidth(1024);
+    });
+
+    it("renders inline sidebar (no overlay, no backdrop) when overlayOnMobile=false", () => {
+      render(
+        <ResizableSidebar
+          storageKey={STORAGE_KEY}
+          responsive
+          overlayOnMobile={false}
+          onClose={() => {}}
+        >
+          <span data-testid="inline-content">Inline content</span>
+        </ResizableSidebar>
+      );
+
+      expect(screen.getByTestId("inline-content")).toHaveTextContent("Inline content");
+      expect(screen.queryByRole("button", { name: "Close sidebar (backdrop)" })).not.toBeInTheDocument();
+      const container = screen.getByTestId("inline-content").closest(".relative");
+      expect(container).toBeInTheDocument();
+      expect(container).toHaveClass("w-full");
     });
   });
 });

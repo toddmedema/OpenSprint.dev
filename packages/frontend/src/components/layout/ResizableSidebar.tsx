@@ -36,6 +36,8 @@ export interface ResizableSidebarProps {
   visible?: boolean;
   /** When true, on mobile (< md) renders as fixed overlay with backdrop; on md+ uses inline layout */
   responsive?: boolean;
+  /** When true (default), on mobile uses fixed overlay with backdrop. When false, always inline flex (no overlay). Use false for Execute so main content stays scrollable. */
+  overlayOnMobile?: boolean;
   /** Called when user closes overlay (button, backdrop, swipe). Required when responsive=true for overlay close affordance. */
   onClose?: () => void;
   /** Accessible label for the resize handle (default "Resize sidebar") */
@@ -141,6 +143,7 @@ export function ResizableSidebar({
   className = "",
   visible = true,
   responsive = false,
+  overlayOnMobile = true,
   onClose,
   resizeHandleLabel = "Resize sidebar",
   noBorder = false,
@@ -152,7 +155,7 @@ export function ResizableSidebar({
     loadPersistedWidth(storageKey, defaultWidth, minWidth, maxWidth)
   );
 
-  const isMobileOverlay = responsive && viewportWidth < MOBILE_BREAKPOINT;
+  const isMobileOverlay = responsive && overlayOnMobile && viewportWidth < MOBILE_BREAKPOINT;
   const swipe = useSwipeToClose(side, onClose ?? (() => {}), isMobileOverlay && !!onClose);
 
   // Re-clamp width when viewport changes (e.g. window resize)

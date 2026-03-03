@@ -461,6 +461,7 @@ export function ExecutePhase({
           defaultWidth={420}
           resizeHandleLabel="Resize task detail sidebar"
           responsive
+          overlayOnMobile={false}
           onClose={handleClose}
         >
           <TaskDetailSidebar

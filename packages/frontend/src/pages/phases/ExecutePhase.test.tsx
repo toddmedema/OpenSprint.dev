@@ -242,7 +242,7 @@ describe("ExecutePhase epic card task order", () => {
       },
     ];
     const store = createStore(tasks);
-    render(
+    const { container } = render(
       <MemoryRouter>
         <Provider store={store}>
           <ExecutePhase projectId="proj-1" />
@@ -279,7 +279,7 @@ describe("ExecutePhase epic card task order", () => {
       },
     ];
     const store = createStore(tasks);
-    render(
+    const { container } = render(
       <MemoryRouter>
         <Provider store={store}>
           <ExecutePhase projectId="proj-1" />
@@ -339,7 +339,7 @@ describe("ExecutePhase epic card task order", () => {
       },
     ];
     const store = createStore(tasks);
-    render(
+    const { container } = render(
       <MemoryRouter>
         <Provider store={store}>
           <ExecutePhase projectId="proj-1" />
@@ -2251,7 +2251,7 @@ describe("ExecutePhase Redux integration", () => {
       expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
     });
 
-    expect(screen.getByRole("separator", { name: "Resize task detail sidebar" })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Resize task detail sidebar" })).toBeInTheDocument();
   });
 
   it("persists task detail sidebar width to localStorage when resized (matches Plan/Sketch)", async () => {
@@ -2280,7 +2280,7 @@ describe("ExecutePhase Redux integration", () => {
       expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
     });
 
-    const handle = screen.getByRole("separator", { name: "Resize task detail sidebar" });
+    const handle = screen.getByRole("slider", { name: "Resize task detail sidebar" });
     handle.dispatchEvent(new MouseEvent("mousedown", { clientX: 100, bubbles: true }));
     document.dispatchEvent(new MouseEvent("mousemove", { clientX: 80, bubbles: true }));
     document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));

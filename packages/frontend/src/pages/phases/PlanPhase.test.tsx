@@ -611,7 +611,7 @@ describe("PlanPhase archive", () => {
   { wrapper: PlanPhaseWrapper }
 );
 
-    expect(screen.getByRole("separator", { name: "Resize sidebar" })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Resize sidebar" })).toBeInTheDocument();
   });
 
   it("keeps plan details sidebar header fixed at top when scrolling (matches Execute sidebar)", () => {
@@ -729,7 +729,7 @@ describe("PlanPhase inline editing", () => {
 );
     // The plan title may appear in EpicCard (h3) plus the editable input in sidebar,
     // but there should be no extra h3 inside the sidebar panel itself
-    const sidebar = container.querySelector('[role="separator"]')?.closest(".relative");
+    const sidebar = container.querySelector('[role="slider"]')?.closest(".relative");
     if (sidebar) {
       const sidebarH3s = sidebar.querySelectorAll("h3");
       const sidebarTitleH3 = Array.from(sidebarH3s).filter((h) =>
