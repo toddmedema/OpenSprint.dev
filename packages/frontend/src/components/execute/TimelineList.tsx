@@ -196,6 +196,8 @@ export function TimelineList({
     estimateSize: (i) => (items[i]?.type === "header" ? HEADER_HEIGHT : ROW_HEIGHT),
     overscan: 5,
   });
+  const virtualItems = virtualizer.getVirtualItems();
+  const useFallback = useVirtualization && virtualItems.length === 0;
 
   // Scroll to selected task only once when selection changes (sidebar opens or user picks another task).
   // Do not re-run on every render — virtualizer/taskIdToIndex can change frequently and would cause
@@ -217,8 +219,38 @@ export function TimelineList({
     return null;
   }
 
+  const renderSectionedList = () => (
+    <div data-testid="timeline-list">
+      {sections.map(
+        ({ key, tasks: sectionTasks }) =>
+          sectionTasks.length > 0 && (
+            <section key={key} data-testid={`timeline-section-${key}`}>
+              <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase px-4 pt-4 pb-2 border-b border-theme-border-subtle">
+                {SECTION_LABELS[key]}
+              </h3>
+              <ul className="divide-y divide-theme-border-subtle">
+                {sectionTasks.map((task) => (
+                  <TimelineRow
+                    key={task.id}
+                    task={task}
+                    epicName={task.epicId ? (epicIdToTitle.get(task.epicId) ?? task.epicId) : ""}
+                    relativeTime={getRelativeTime(task)}
+                    onTaskSelect={onTaskSelect}
+                    onUnblock={task.kanbanColumn === "blocked" ? onUnblock : undefined}
+                  />
+                ))}
+              </ul>
+            </section>
+          )
+      )}
+    </div>
+  );
+
+  if (useFallback) {
+    return renderSectionedList();
+  }
+
   if (useVirtualization) {
-    const virtualItems = virtualizer.getVirtualItems();
     return (
       <div
         data-testid="timeline-list"
@@ -280,30 +312,5 @@ export function TimelineList({
     );
   }
 
-  return (
-    <div data-testid="timeline-list">
-      {sections.map(
-        ({ key, tasks: sectionTasks }) =>
-          sectionTasks.length > 0 && (
-            <section key={key} data-testid={`timeline-section-${key}`}>
-              <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase px-4 pt-4 pb-2 border-b border-theme-border-subtle">
-                {SECTION_LABELS[key]}
-              </h3>
-              <ul className="divide-y divide-theme-border-subtle">
-                {sectionTasks.map((task) => (
-                  <TimelineRow
-                    key={task.id}
-                    task={task}
-                    epicName={task.epicId ? (epicIdToTitle.get(task.epicId) ?? task.epicId) : ""}
-                    relativeTime={getRelativeTime(task)}
-                    onTaskSelect={onTaskSelect}
-                    onUnblock={task.kanbanColumn === "blocked" ? onUnblock : undefined}
-                  />
-                ))}
-              </ul>
-            </section>
-          )
-      )}
-    </div>
-  );
+  return renderSectionedList();
 }

@@ -262,7 +262,6 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                 webhookUrl: effDeployment.webhookUrl ?? undefined,
                 rollbackCommand: effDeployment.rollbackCommand ?? undefined,
                 targets: effDeployment.targets,
-                envVars: effDeployment.envVars,
                 autoResolveFeedbackOnTaskCompletion:
                   effDeployment.autoResolveFeedbackOnTaskCompletion ?? false,
               },
@@ -1071,6 +1070,84 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                                 }}
                                 onBlur={scheduleSaveOnBlur}
                               />
+                              <div className="mt-3 pt-3 border-t border-theme-border">
+                                <h5 className="text-xs font-medium text-theme-text mb-2">
+                                  Environment variables
+                                </h5>
+                                <p className="text-xs text-theme-muted mb-2">
+                                  Key-value pairs for this target (passed to command/webhook).
+                                </p>
+                                {Object.entries(t.envVars ?? {}).map(([k, v], j) => (
+                                  <div key={j} className="flex gap-2 mb-2">
+                                    <input
+                                      type="text"
+                                      className="input flex-1 font-mono text-xs"
+                                      placeholder="KEY"
+                                      value={k}
+                                      onChange={(e) => {
+                                        const next = [...(deployment.targets ?? [])];
+                                        const ev = { ...(next[i].envVars ?? {}) };
+                                        delete ev[k];
+                                        if (e.target.value) ev[e.target.value] = v;
+                                        next[i] = {
+                                          ...next[i],
+                                          envVars: Object.keys(ev).length ? ev : undefined,
+                                        };
+                                        updateDeployment({ targets: next }, { immediate: false });
+                                      }}
+                                    />
+                                    <input
+                                      type="text"
+                                      className="input flex-1 font-mono text-xs"
+                                      placeholder="value"
+                                      value={v}
+                                      onChange={(e) => {
+                                        const next = [...(deployment.targets ?? [])];
+                                        next[i] = {
+                                          ...next[i],
+                                          envVars: {
+                                            ...(next[i].envVars ?? {}),
+                                            [k]: e.target.value,
+                                          },
+                                        };
+                                        updateDeployment({ targets: next }, { immediate: false });
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const next = [...(deployment.targets ?? [])];
+                                        const ev = { ...(next[i].envVars ?? {}) };
+                                        delete ev[k];
+                                        next[i] = {
+                                          ...next[i],
+                                          envVars: Object.keys(ev).length ? ev : undefined,
+                                        };
+                                        updateDeployment({ targets: next });
+                                      }}
+                                      className="text-theme-error-text hover:opacity-80 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const key = prompt("Environment variable name:");
+                                    if (!key || (t.envVars ?? {})[key] !== undefined) return;
+                                    const next = [...(deployment.targets ?? [])];
+                                    next[i] = {
+                                      ...next[i],
+                                      envVars: { ...(next[i].envVars ?? {}), [key]: "" },
+                                    };
+                                    updateDeployment({ targets: next });
+                                  }}
+                                  className="btn-secondary text-xs"
+                                >
+                                  + Add env var
+                                </button>
+                              </div>
                             </div>
                           ))}
                           <button
@@ -1087,73 +1164,91 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             + Add target
                           </button>
                         </div>
-                        <div className="pt-3 border-t border-theme-border">
-                          <h4 className="text-sm font-medium text-theme-text mb-2">
-                            Environment variables
-                          </h4>
-                          <p className="text-xs text-theme-muted mb-2">
-                            Key-value pairs passed to deployment commands and webhooks.
-                          </p>
-                          {Object.entries(deployment.envVars ?? {}).map(([k, v], i) => (
-                            <div key={i} className="flex gap-2 mb-2">
-                              <input
-                                type="text"
-                                className="input flex-1 font-mono text-xs"
-                                placeholder="KEY"
-                                value={k}
-                                onChange={(e) => {
-                                  const next = { ...(deployment.envVars ?? {}) };
-                                  delete next[k];
-                                  if (e.target.value) next[e.target.value] = v;
-                                  updateDeployment(
-                                    { envVars: Object.keys(next).length ? next : undefined },
-                                    { immediate: false }
-                                  );
-                                }}
-                              />
-                              <input
-                                type="text"
-                                className="input flex-1 font-mono text-xs"
-                                placeholder="value"
-                                value={v}
-                                onChange={(e) => {
-                                  const next = {
-                                    ...(deployment.envVars ?? {}),
-                                    [k]: e.target.value,
-                                  };
-                                  updateDeployment({ envVars: next }, { immediate: false });
-                                }}
-                              />
+                      </div>
+                    )}
+                    {deployment.mode === "expo" && (
+                      <div className="space-y-3 pt-2 border-t border-theme-border">
+                        <h4 className="text-sm font-medium text-theme-text">
+                          Environment variables per target
+                        </h4>
+                        <p className="text-xs text-theme-muted">
+                          Key-value pairs passed to deploy for each target.
+                        </p>
+                        {getDeploymentTargetsForUi(deployment).map((target) => {
+                          const targetEnvVars = target.envVars ?? {};
+                          const updateTargetEnvVars = (newEnvVars: Record<string, string>) => {
+                            const uiTargets = getDeploymentTargetsForUi(deployment);
+                            const current = deployment.targets ?? [];
+                            const next = uiTargets.map((t) => {
+                              const existing = current.find((c) => c.name === t.name);
+                              const base = existing ?? { name: t.name };
+                              return t.name === target.name
+                                ? { ...base, envVars: newEnvVars }
+                                : base;
+                            });
+                            updateDeployment({ targets: next });
+                          };
+                          return (
+                            <div
+                              key={target.name}
+                              className="p-3 rounded-lg border border-theme-border bg-theme-surface"
+                            >
+                              <h5 className="text-xs font-medium text-theme-text mb-2">
+                                {target.name}
+                              </h5>
+                              {Object.entries(targetEnvVars).map(([k, v], j) => (
+                                <div key={j} className="flex gap-2 mb-2">
+                                  <input
+                                    type="text"
+                                    className="input flex-1 font-mono text-xs"
+                                    placeholder="KEY"
+                                    value={k}
+                                    onChange={(e) => {
+                                      const next = { ...targetEnvVars };
+                                      delete next[k];
+                                      if (e.target.value) next[e.target.value] = v;
+                                      updateTargetEnvVars(next);
+                                    }}
+                                  />
+                                  <input
+                                    type="text"
+                                    className="input flex-1 font-mono text-xs"
+                                    placeholder="value"
+                                    value={v}
+                                    onChange={(e) => {
+                                      updateTargetEnvVars({
+                                        ...targetEnvVars,
+                                        [k]: e.target.value,
+                                      });
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const next = { ...targetEnvVars };
+                                      delete next[k];
+                                      updateTargetEnvVars(next);
+                                    }}
+                                    className="text-theme-error-text hover:opacity-80 text-xs"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const next = { ...(deployment.envVars ?? {}) };
-                                  delete next[k];
-                                  updateDeployment({
-                                    envVars: Object.keys(next).length ? next : undefined,
-                                  });
+                                  const key = prompt("Environment variable name:");
+                                  if (!key || targetEnvVars[key] !== undefined) return;
+                                  updateTargetEnvVars({ ...targetEnvVars, [key]: "" });
                                 }}
-                                className="text-theme-error-text hover:opacity-80 text-xs"
+                                className="btn-secondary text-xs"
                               >
-                                Remove
+                                + Add env var
                               </button>
                             </div>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const key = prompt("Environment variable name:");
-                              if (key && !(deployment.envVars ?? {})[key]) {
-                                updateDeployment({
-                                  envVars: { ...(deployment.envVars ?? {}), [key]: "" },
-                                });
-                              }
-                            }}
-                            className="btn-secondary text-sm"
-                          >
-                            + Add env var
-                          </button>
-                        </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

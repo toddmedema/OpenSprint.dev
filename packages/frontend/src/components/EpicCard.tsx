@@ -257,7 +257,7 @@ export function EpicCard({
                     className="btn-primary text-xs w-full py-2 rounded-lg font-medium inline-flex items-center justify-center"
                     data-testid="plan-tasks-button"
                   >
-                    Plan Tasks
+                    Generate Tasks
                   </button>
                 )}
               </div>
@@ -310,7 +310,7 @@ export function EpicCard({
               >
                 <span className="flex-1 min-w-0">
                   {executeError.message.includes("no epic")
-                    ? "Generate tasks first. Click \u201CPlan Tasks\u201D to create tasks from this plan, or use the AI chat to refine it."
+                    ? "Generate tasks first. Click \u201CGenerate Tasks\u201D to create tasks from this plan, or use the AI chat to refine it."
                     : executeError.message.includes("active agent") &&
                         executeError.message.includes("worktree")
                       ? "Another task's agent is still using that branch. Wait for it to finish or restart the backend."

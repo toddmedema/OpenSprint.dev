@@ -11,6 +11,10 @@ export default defineConfig({
       pg: path.resolve(__dirname, "../../node_modules/pg/lib/index.js"),
     },
   },
+  // Let Node load @google/genai natively so Vite doesn't fail resolving/loading its ESM exports
+  ssr: {
+    external: ["@google/genai"],
+  },
   test: {
     globals: true,
     environment: "node",

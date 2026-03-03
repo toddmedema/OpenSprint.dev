@@ -931,7 +931,7 @@ describe("PlanPhase dynamic plan button label", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("shows Plan Tasks when plan has zero tasks (epic blocked, planning status)", async () => {
+  it("shows Generate Tasks when plan has zero tasks (epic blocked, planning status)", async () => {
     const planningPlan = {
       ...basePlan,
       status: "planning" as const,
@@ -975,7 +975,7 @@ describe("PlanPhase dynamic plan button label", () => {
     expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
   });
 
-  it("hides Plan Tasks and Execute when plan status is building", async () => {
+  it("hides Generate Tasks and Execute when plan status is building", async () => {
     const buildingPlan = {
       ...basePlan,
       status: "building" as const,
@@ -998,7 +998,7 @@ describe("PlanPhase dynamic plan button label", () => {
     expect(screen.queryByTestId("execute-button")).not.toBeInTheDocument();
   });
 
-  it("hides Plan Tasks button and shows only loading spinner during plan generation", async () => {
+  it("hides Generate Tasks button and shows only loading spinner during plan generation", async () => {
     const planningPlan = {
       ...basePlan,
       status: "planning" as const,
@@ -1030,7 +1030,7 @@ describe("PlanPhase dynamic plan button label", () => {
     ).toBeNull();
   });
 
-  it("button updates reactively: Plan Tasks when tasks empty, Execute when tasks added", async () => {
+  it("button updates reactively: Generate Tasks when tasks empty, Execute when tasks added", async () => {
     const planningPlan = {
       ...basePlan,
       status: "planning" as const,
@@ -1070,7 +1070,7 @@ describe("PlanPhase dynamic plan button label", () => {
     expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
   });
 
-  it("button updates reactively: hides Plan Tasks and Execute when plan status → building", async () => {
+  it("button updates reactively: hides Generate Tasks and Execute when plan status → building", async () => {
     const planningPlan = {
       ...basePlan,
       status: "planning" as const,
@@ -1148,13 +1148,13 @@ describe("PlanPhase dynamic plan button label", () => {
   });
 });
 
-describe("Plan All Tasks button", () => {
+describe("Generate All Tasks button", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("shows Plan All Tasks when there are 2+ plans with no tasks", async () => {
+  it("shows Generate All Tasks when there are 2+ plans with no tasks", async () => {
     const planA = {
       ...basePlan,
       metadata: {
@@ -1188,10 +1188,10 @@ describe("Plan All Tasks button", () => {
       { wrapper: PlanPhaseWrapper }
     );
     expect(await screen.findByTestId("plan-all-tasks-button")).toBeInTheDocument();
-    expect(screen.getByTestId("plan-all-tasks-button")).toHaveTextContent("Plan All Tasks");
+    expect(screen.getByTestId("plan-all-tasks-button")).toHaveTextContent("Generate All Tasks");
   });
 
-  it("does not show Plan All Tasks when only one plan has no tasks", async () => {
+  it("does not show Generate All Tasks when only one plan has no tasks", async () => {
     const planWithNoTasks = {
       ...basePlan,
       metadata: {
@@ -1240,7 +1240,7 @@ describe("Plan All Tasks button", () => {
     expect(screen.queryByTestId("plan-all-tasks-button")).not.toBeInTheDocument();
   });
 
-  it("queues all plans with no tasks sequentially when Plan All Tasks is clicked", async () => {
+  it("queues all plans with no tasks sequentially when Generate All Tasks is clicked", async () => {
     const planA = {
       ...basePlan,
       metadata: {
@@ -1525,7 +1525,7 @@ describe("PlanPhase planTasks thunk", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("dispatches planTasks thunk when Plan Tasks is clicked and shows success notification", async () => {
+  it("dispatches planTasks thunk when Generate Tasks is clicked and shows success notification", async () => {
     const planWithNoTasks = {
       ...basePlan,
       status: "planning" as const,

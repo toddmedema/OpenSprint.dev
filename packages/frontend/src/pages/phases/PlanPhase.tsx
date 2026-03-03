@@ -251,12 +251,12 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     };
   }, [dependencyGraph, statusFilter, searchQuery]);
 
-  /** Plans that show "Plan Tasks" (planning status, zero tasks). Used for "Plan All Tasks" button. */
+  /** Plans that show "Generate Tasks" (planning status, zero tasks). Used for "Generate All Tasks" button. */
   const plansWithNoTasks = useMemo(() => {
     return plans.filter((p) => p.status === "planning" && p.taskCount === 0);
   }, [plans]);
 
-  /** Plan IDs for "Plan All Tasks" in dependency order (foundational first), or current order if no edges. */
+  /** Plan IDs for "Generate All Tasks" in dependency order (foundational first), or current order if no edges. */
   const plansWithNoTasksOrderedIds = useMemo(() => {
     const ids = plansWithNoTasks.map((p) => p.metadata.planId);
     if (dependencyGraph?.edges?.length) {
@@ -883,8 +883,8 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                           {selectedPlanTasks.length === 0 ? (
                             <div className="space-y-2">
                               <p className="text-sm text-theme-muted">
-                                No tasks yet. Click \u201CPlan Tasks\u201D below or on the card to
-                                generate tasks from this plan, or use the AI chat to refine it
+                                No tasks yet. Click \u201CGenerate Tasks\u201D below or on the card
+                                to generate tasks from this plan, or use the AI chat to refine it
                                 first.
                               </p>
                               {(planTasksPlanIds ?? []).includes(selectedPlan.metadata.planId) ? (
@@ -903,7 +903,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                                   className="btn-primary text-sm w-full py-2 rounded-lg font-medium inline-flex items-center justify-center"
                                   data-testid="plan-tasks-button-sidebar"
                                 >
-                                  Plan Tasks
+                                  Generate Tasks
                                 </button>
                               )}
                             </div>

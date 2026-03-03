@@ -11,7 +11,7 @@ export function getApiErrorHint(code: string | undefined): string | null {
   if (!code) return null;
   const hints: Record<string, string> = {
     NO_GATE_TASK: "Generate tasks first or add a gating task in Plan.",
-    NO_EPIC: "Plan has no epic. Use Plan Tasks to generate tasks first.",
+    NO_EPIC: "Plan has no epic. Use Generate Tasks to generate tasks first.",
     AGENT_INVOKE_FAILED: "Check agent login or Project Settings → Agent Config.",
     AGENT_CLI_REQUIRED: "Install the agent CLI (see Project Settings → Agent Config).",
     CURSOR_API_ERROR: "Check Cursor agent login or API key in Project Settings.",

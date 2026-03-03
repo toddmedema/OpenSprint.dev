@@ -1758,6 +1758,31 @@ describe("ExecutePhase view toggle", () => {
     expect(screen.getByTestId("view-toggle-timeline")).toHaveAttribute("aria-checked", "true");
   });
 
+  it("renders timeline rows on initial mount when timeline view is persisted and list exceeds virtualization threshold", () => {
+    localStorage.setItem(STORAGE_KEY, "timeline");
+    const tasks = Array.from({ length: 30 }, (_, index) => ({
+      id: `epic-1.${index + 1}`,
+      title: `Task ${index + 1}`,
+      epicId: "epic-1",
+      kanbanColumn: index % 2 === 0 ? ("in_progress" as const) : ("ready" as const),
+      priority: index % 3,
+      assignee: null,
+    }));
+    const store = createStore(tasks);
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId("timeline-list")).toBeInTheDocument();
+    expect(screen.getByTestId("timeline-row-epic-1.1")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "In Progress" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ready" })).toBeInTheDocument();
+  });
+
   it("invalid localStorage value defaults to kanban", () => {
     localStorage.setItem(STORAGE_KEY, "invalid");
     const tasks = [

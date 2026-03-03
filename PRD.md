@@ -319,11 +319,12 @@ The Plan phase breaks the high-level PRD into discrete, implementable features. 
 
 #### 7.2.2 Key Capabilities
 
-- **AI-assisted decomposition:** The **Planner** analyzes the PRD and suggests a breakdown into features. The user can accept, modify, merge, or split. The Planner outputs an indexed task list with ordinal dependency references (e.g., `"depends_on": [0, 2]`); the orchestrator resolves these to actual task IDs and executes `TaskStoreService.createMany` / `addDependencies` (Sections 5.5, 12.3.2).
+- **Plan creation (markdown and mockups only):** When the user clicks "Plan it" (Sketch) or "Add Plan" (Plan), the **Planner** produces only plan markdown and mockups (no subtasks). Tasks are generated later when the user clicks **Generate Tasks** (or **Generate All Tasks** in the toolbar when multiple plans have no tasks).
+- **AI-assisted decomposition:** The **Planner** analyzes the PRD and suggests a breakdown into features. The user can accept, modify, merge, or split. When generating tasks (e.g. from "Generate Tasks" or at Execute!), the Planner outputs an indexed task list with ordinal dependency references (e.g., `"depends_on": [0, 2]`); the orchestrator resolves these to actual task IDs and executes `TaskStoreService.createMany` / `addDependencies` (Sections 5.5, 12.3.2).
 - **Plan markdown specification:** Each feature is documented in a structured markdown file at `.opensprint/plans/<plan-id>.md` (see Section 7.2.3 for template).
 - **Dependency graph visualization:** A visual graph shows how features relate to each other, highlighting critical paths and implementation order.
 - **Upstream propagation:** Plan changes are automatically reflected in the living PRD at two trigger points: (1) "Execute!" flow (steps 3–5 below), and (2) Evaluate scope-change feedback (Section 7.4.2). Both use the Harmonizer (Section 5.5).
-- **"Execute!" transition:** Plans and their decomposed tasks exist in a Planning state — the epic has `status: "blocked"`, so its child tasks do not appear in `ready()` and show "Planning" in the UI. Each Plan card in the Plan view has an "Execute!" button. Clicking it triggers the following behavior:
+- **"Generate Tasks" and "Execute!" transition:** Plans are created with markdown and mockups only; the epic has `status: "blocked"`. When a plan has no tasks, its CTA is **Generate Tasks** (toolbar: **Generate All Tasks** when ≥2 plans have no tasks). Once a plan has at least one task, its CTA becomes **Execute** (toolbar: **Execute All** when ≥2 plans have tasks). Plans and their tasks exist in a Planning state until Execute — child tasks do not appear in `ready()` and show "Planning" in the UI. Clicking **Execute** triggers the following behavior:
 
   **Cross-epic dependency check:** Before executing, the orchestrator checks whether any tasks in this epic have `blocks` dependencies on tasks in other epics that are still in Planning state (epic still blocked). If so, a **confirmation modal** is shown: _"This feature requires that [Feature X, Feature Y] must be implemented first. Queueing this feature will also queue those features. Proceed?"_ If the user confirms, the orchestrator executes the "Execute!" scripted sequence for all prerequisite epics first (in dependency order), then for the requested epic.
 
@@ -347,7 +348,7 @@ Each Plan markdown file follows a standardized template: Feature Title, Overview
 
 #### 7.2.4 User Interface
 
-The Plan tab displays a card-based interface showing all feature Plans, with a dependency graph visualization at the top. Each card shows the feature title, status (Planning/Building/Complete), complexity estimate, and dependency count. Users can click into any Plan to view or edit the full markdown. A sidebar allows conversational interaction with the **Dreamer** agent to refine individual Plans. Each Plan card has a "Execute!" button (or "Re-execute" for completed Plans with pending changes; disabled if any tasks are In Progress or In Review).
+The Plan tab displays a card-based interface showing all feature Plans, with a dependency graph visualization at the top. Each card shows the feature title, status (Planning/Building/Complete), complexity estimate, and dependency count. Users can click into any Plan to view or edit the full markdown. A sidebar allows conversational interaction with the **Dreamer** agent to refine individual Plans. Each Plan card shows **Generate Tasks** when the plan has no tasks, or **Execute** when it has tasks (or **Re-execute** for completed Plans with pending changes; disabled if any tasks are In Progress or In Review).
 
 ---
 

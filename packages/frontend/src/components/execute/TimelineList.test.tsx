@@ -260,6 +260,33 @@ describe("TimelineList", () => {
     expect(readySection).toContainElement(screen.getByTestId("timeline-row-ready-1"));
   });
 
+  it("falls back to sectioned rendering when virtualization has no scroll element yet", () => {
+    const tasks = Array.from({ length: 30 }, (_, index) =>
+      createMockTask({
+        id: `task-${index}`,
+        title: `Task ${index}`,
+        kanbanColumn: index % 2 === 0 ? "in_progress" : "ready",
+      })
+    );
+    const plans = [createMockPlan("epic-1", "Auth")];
+    const scrollRef = { current: null };
+
+    render(
+      <TimelineList
+        tasks={tasks}
+        plans={plans}
+        onTaskSelect={vi.fn()}
+        scrollRef={scrollRef}
+        statusFilter="all"
+      />
+    );
+
+    expect(screen.getByTestId("timeline-list")).toBeInTheDocument();
+    expect(screen.getByTestId("timeline-row-task-0")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "In Progress" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ready" })).toBeInTheDocument();
+  });
+
   it("empty tasks array renders nothing", () => {
     const plans = [createMockPlan("epic-1", "Auth")];
 

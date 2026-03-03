@@ -124,7 +124,7 @@ describe("EpicCard", () => {
     expect(overlay).toBeInTheDocument();
   });
 
-  it("hides Plan Tasks button when isOptimistic (planning, zero tasks)", () => {
+  it("hides Generate Tasks button when isOptimistic (planning, zero tasks)", () => {
     const planningPlan = {
       ...basePlan,
       status: "planning" as const,
@@ -146,7 +146,7 @@ describe("EpicCard", () => {
       />
     );
 
-    expect(screen.queryByText("Plan Tasks")).not.toBeInTheDocument();
+    expect(screen.queryByText("Generate Tasks")).not.toBeInTheDocument();
     expect(screen.getByTestId("plan-tasks-loading")).toBeInTheDocument();
   });
 
@@ -250,7 +250,7 @@ describe("EpicCard", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
-  it("shows Plan Tasks button when plan has zero tasks", () => {
+  it("shows Generate Tasks button when plan has zero tasks", () => {
     const plan: Plan = { ...basePlan, status: "planning", taskCount: 0, doneTaskCount: 0 };
     renderWithStore(
       <EpicCard
@@ -267,11 +267,11 @@ describe("EpicCard", () => {
     );
 
     expect(screen.getByTestId("plan-tasks-button")).toBeInTheDocument();
-    expect(screen.getByText("Plan Tasks")).toBeInTheDocument();
+    expect(screen.getByText("Generate Tasks")).toBeInTheDocument();
     expect(screen.queryByTestId("execute-button")).not.toBeInTheDocument();
   });
 
-  it("shows Plan Tasks when plan has zero implementation tasks", () => {
+  it("shows Generate Tasks when plan has zero implementation tasks", () => {
     const plan: Plan = {
       ...basePlan,
       status: "planning",
@@ -293,11 +293,11 @@ describe("EpicCard", () => {
     );
 
     expect(screen.getByTestId("plan-tasks-button")).toBeInTheDocument();
-    expect(screen.getByText("Plan Tasks")).toBeInTheDocument();
+    expect(screen.getByText("Generate Tasks")).toBeInTheDocument();
     expect(screen.queryByTestId("execute-button")).not.toBeInTheDocument();
   });
 
-  it("calls onPlanTasks when Plan Tasks is clicked", async () => {
+  it("calls onPlanTasks when Generate Tasks is clicked", async () => {
     const onPlanTasks = vi.fn();
     const user = userEvent.setup();
     const plan: Plan = { ...basePlan, status: "planning", taskCount: 0, doneTaskCount: 0 };
@@ -315,11 +315,11 @@ describe("EpicCard", () => {
       />
     );
 
-    await user.click(screen.getByText("Plan Tasks"));
+    await user.click(screen.getByText("Generate Tasks"));
     expect(onPlanTasks).toHaveBeenCalledTimes(1);
   });
 
-  it("hides Plan Tasks button and shows only loading spinner during plan generation", () => {
+  it("hides Generate Tasks button and shows only loading spinner during plan generation", () => {
     const plan: Plan = { ...basePlan, status: "planning", taskCount: 0, doneTaskCount: 0 };
     renderWithStore(
       <EpicCard
@@ -336,11 +336,11 @@ describe("EpicCard", () => {
     );
 
     expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
-    expect(screen.queryByText("Plan Tasks")).not.toBeInTheDocument();
+    expect(screen.queryByText("Generate Tasks")).not.toBeInTheDocument();
     expect(screen.getByTestId("plan-tasks-loading")).toBeInTheDocument();
   });
 
-  it("hides Plan Tasks and Execute when plan status is building", () => {
+  it("hides Generate Tasks and Execute when plan status is building", () => {
     const plan: Plan = { ...basePlan, status: "building", taskCount: 2, doneTaskCount: 0 };
     renderWithStore(
       <EpicCard
@@ -696,7 +696,7 @@ describe("EpicCard", () => {
     expect(btn).not.toBeDisabled();
   });
 
-  it("shows Plan Tasks button when plan has no tasks", () => {
+  it("shows Generate Tasks button when plan has no tasks", () => {
     const plan: Plan = {
       ...basePlan,
       status: "planning",
@@ -724,7 +724,7 @@ describe("EpicCard", () => {
     expect(screen.queryByTestId("execute-button")).not.toBeInTheDocument();
   });
 
-  it("does not call onShip when plan has no tasks (Plan Tasks button only)", () => {
+  it("does not call onShip when plan has no tasks (Generate Tasks button only)", () => {
     const plan: Plan = {
       ...basePlan,
       status: "planning",
@@ -799,7 +799,7 @@ describe("EpicCard", () => {
 
     expect(screen.getByTestId("execute-error-inline")).toBeInTheDocument();
     expect(
-      screen.getByText(/Generate tasks first. Click .Plan Tasks. to create tasks from this plan/)
+      screen.getByText(/Generate tasks first. Click .Generate Tasks. to create tasks from this plan/)
     ).toBeInTheDocument();
   });
 });

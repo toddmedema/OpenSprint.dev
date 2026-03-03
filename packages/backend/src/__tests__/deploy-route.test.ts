@@ -222,16 +222,24 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       expect(getRes.body.data.deployment.autoResolveFeedbackOnTaskCompletion).toBe(true);
     });
 
-    it("should accept and persist targets and envVars (PRD §7.5.2/7.5.4)", async () => {
+    it("should accept and persist targets with per-target envVars (PRD §7.5.2/7.5.4)", async () => {
       const res = await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({
           mode: "custom",
           targets: [
-            { name: "staging", command: "echo deploy-staging", isDefault: true },
-            { name: "production", webhookUrl: "https://api.example.com/deploy" },
+            {
+              name: "staging",
+              command: "echo deploy-staging",
+              isDefault: true,
+              envVars: { NODE_ENV: "staging", API_URL: "https://staging.example.com" },
+            },
+            {
+              name: "production",
+              webhookUrl: "https://api.example.com/deploy",
+              envVars: { NODE_ENV: "production", API_URL: "https://api.example.com" },
+            },
           ],
-          envVars: { NODE_ENV: "production", API_URL: "https://api.example.com" },
         });
 
       expect(res.status).toBe(200);
@@ -240,19 +248,21 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
         name: "staging",
         command: "echo deploy-staging",
         isDefault: true,
+        envVars: { NODE_ENV: "staging", API_URL: "https://staging.example.com" },
       });
       expect(res.body.data.deployment.targets[1]).toMatchObject({
         name: "production",
         webhookUrl: "https://api.example.com/deploy",
-      });
-      expect(res.body.data.deployment.envVars).toEqual({
-        NODE_ENV: "production",
-        API_URL: "https://api.example.com",
+        envVars: { NODE_ENV: "production", API_URL: "https://api.example.com" },
       });
 
       const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(getRes.body.data.deployment.targets).toHaveLength(2);
-      expect(getRes.body.data.deployment.envVars).toEqual({
+      expect(getRes.body.data.deployment.targets[0].envVars).toEqual({
+        NODE_ENV: "staging",
+        API_URL: "https://staging.example.com",
+      });
+      expect(getRes.body.data.deployment.targets[1].envVars).toEqual({
         NODE_ENV: "production",
         API_URL: "https://api.example.com",
       });

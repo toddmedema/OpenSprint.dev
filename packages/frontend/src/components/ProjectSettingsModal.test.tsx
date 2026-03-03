@@ -427,7 +427,7 @@ describe("ProjectSettingsModal", () => {
     );
   });
 
-  it("Custom mode with targets shows per-target auto-deploy dropdowns", async () => {
+  it("Custom mode with targets shows per-target auto-deploy dropdowns and env vars per target", async () => {
     mockGetSettings.mockResolvedValueOnce({
       ...mockSettings,
       deployment: {
@@ -449,6 +449,23 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByTestId("auto-deploy-trigger-production")).toBeInTheDocument();
     expect(screen.getByTestId("auto-deploy-trigger-staging")).toHaveValue("each_task");
     expect(screen.getByTestId("auto-deploy-trigger-production")).toHaveValue("nightly");
+    expect(screen.getByText("Delivery targets")).toBeInTheDocument();
+    const envVarHeadings = screen.getAllByText("Environment variables");
+    expect(envVarHeadings.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("Expo mode shows environment variables per target section", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      deployment: { mode: "expo" as const },
+    });
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const deploymentTab = screen.getByRole("button", { name: "Deliver" });
+    await userEvent.click(deploymentTab);
+
+    expect(screen.getByText("Environment variables per target")).toBeInTheDocument();
   });
 
   it("saves auto-deploy triggers for Custom mode targets on blur", async () => {

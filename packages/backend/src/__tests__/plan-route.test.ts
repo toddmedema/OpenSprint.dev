@@ -1098,37 +1098,19 @@ Updated description for task two.`;
     });
 
     it(
-      "generates a plan from a freeform description, creating epic + child tasks",
+      "generates a plan from a freeform description, creating epic only (markdown and mockups, no tasks)",
       { timeout: 15000 },
       async () => {
-        // First call: generate plan; second call: auto-review against repo
-        mockPlanningAgentInvoke
-          .mockResolvedValueOnce({
-            content: JSON.stringify({
-              title: "Dark Mode Support",
-              content:
-                "# Dark Mode Support\n\n## Overview\n\nAdd dark/light theme toggle.\n\n## Acceptance Criteria\n\n- Toggle works",
-              complexity: "medium",
-              mockups: [{ title: "Toggle UI", content: "[Dark] [Light]" }],
-              tasks: [
-                {
-                  title: "Create theme context",
-                  description: "React context for theme state",
-                  priority: 0,
-                  dependsOn: [],
-                },
-                {
-                  title: "Add toggle component",
-                  description: "UI toggle button",
-                  priority: 1,
-                  dependsOn: ["Create theme context"],
-                },
-              ],
-            }),
-          })
-          .mockResolvedValueOnce({
-            content: JSON.stringify({ changes: [] }),
-          });
+        // Single call: generate plan (auto-review skipped when no tasks created)
+        mockPlanningAgentInvoke.mockResolvedValueOnce({
+          content: JSON.stringify({
+            title: "Dark Mode Support",
+            content:
+              "# Dark Mode Support\n\n## Overview\n\nAdd dark/light theme toggle.\n\n## Acceptance Criteria\n\n- Toggle works",
+            complexity: "medium",
+            mockups: [{ title: "Toggle UI", content: "[Dark] [Light]" }],
+          }),
+        });
 
         const res = await request(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
@@ -1140,7 +1122,7 @@ Updated description for task two.`;
         expect(plan.metadata.planId).toBe("dark-mode-support");
         expect(plan.metadata.epicId).toBeDefined();
         expect(plan.metadata.complexity).toBe("medium");
-        expect(plan.taskCount).toBe(2);
+        expect(plan.taskCount).toBe(0);
         expect(plan.content).toContain("Dark Mode Support");
 
         const _project = await projectService.getProject(projectId);
@@ -1150,9 +1132,7 @@ Updated description for task two.`;
           (i: { id: string; issue_type?: string; type?: string }) =>
             i.id.startsWith(epicId + ".") && (i.issue_type ?? i.type) !== "epic"
         );
-        expect(childTasks.length).toBe(2);
-        expect(childTasks.map((t: { title: string }) => t.title)).toContain("Create theme context");
-        expect(childTasks.map((t: { title: string }) => t.title)).toContain("Add toggle component");
+        expect(childTasks.length).toBe(0);
 
         // First invocation is the plan generation itself
         const invokeArgs = mockPlanningAgentInvoke.mock.calls[0][0];
@@ -1210,7 +1190,7 @@ Updated description for task two.`;
           title: "Simple Feature",
           content: "# Simple Feature\n\n## Overview\n\nA simple feature.",
           complexity: "low",
-          tasks: [],
+          mockups: [{ title: "UI", content: "Simple UI" }],
         }),
       });
 
@@ -1224,7 +1204,7 @@ Updated description for task two.`;
     });
 
     it(
-      "accepts snake_case Planner output (plan_title, plan_content, task_list, mock_ups, depends_on)",
+      "accepts snake_case Planner output (plan_title, plan_content, mock_ups; task_list ignored)",
       {
         timeout: 15000,
       },
@@ -1236,18 +1216,8 @@ Updated description for task two.`;
             complexity: "medium",
             mock_ups: [{ title: "Screen", content: "+---+\n| X |\n+---+" }],
             task_list: [
-              {
-                task_title: "Setup",
-                task_description: "Setup step",
-                task_priority: 0,
-                depends_on: [],
-              },
-              {
-                task_title: "Implement",
-                task_description: "Implement step",
-                task_priority: 1,
-                depends_on: ["Setup"],
-              },
+              { task_title: "Setup", task_description: "Setup step", task_priority: 0, depends_on: [] },
+              { task_title: "Implement", task_description: "Implement step", task_priority: 1, depends_on: ["Setup"] },
             ],
           }),
         });
@@ -1259,7 +1229,7 @@ Updated description for task two.`;
         expect(res.status).toBe(201);
         const plan = res.body.data;
         expect(plan.metadata.planId).toBe("snake-case-feature");
-        expect(plan.taskCount).toBe(2);
+        expect(plan.taskCount).toBe(0);
         expect(plan.metadata.mockups).toHaveLength(1);
         expect(plan.metadata.mockups[0].title).toBe("Screen");
         const allIssues = await taskStore.listAll(projectId);
@@ -1268,8 +1238,7 @@ Updated description for task two.`;
           (i: { id: string; issue_type?: string; type?: string }) =>
             i.id.startsWith(epicId + ".") && (i.issue_type ?? i.type) !== "epic"
         );
-        expect(childTasks.map((t: { title: string }) => t.title)).toContain("Setup");
-        expect(childTasks.map((t: { title: string }) => t.title)).toContain("Implement");
+        expect(childTasks.length).toBe(0);
       }
     );
   });

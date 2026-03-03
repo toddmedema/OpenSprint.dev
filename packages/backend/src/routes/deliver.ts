@@ -282,7 +282,10 @@ deliverRouter.post("/expo-deploy", async (req: Request<ProjectParams>, res, next
     const resolvedRepo = path.resolve(project.repoPath);
     const tmpDir = path.resolve(os.tmpdir());
     const repoInTempDir = resolvedRepo.startsWith(tmpDir + path.sep) || resolvedRepo === tmpDir;
-    const envVars = settings.deployment.envVars ?? {};
+    const expoTarget = variant === "prod" ? "production" : "staging";
+    const expoTargetConfig = getDeploymentTargetConfig(settings.deployment, expoTarget);
+    const envVars =
+      expoTargetConfig?.envVars ?? settings.deployment.envVars ?? {};
 
     const emit = (chunk: string) => {
       deployStorageService.appendLog(projectId, record.id, chunk);
@@ -400,7 +403,7 @@ export async function runDeployAsync(
   const config = settings.deployment;
   const effectiveTarget = targetName ?? getDefaultDeploymentTarget(config);
   const targetConfig = getDeploymentTargetConfig(config, effectiveTarget);
-  const envVars = config.envVars ?? {};
+  const envVars = targetConfig?.envVars ?? config.envVars ?? {};
   const emit = (chunk: string) => {
     const p = deployStorageService.appendLog(projectId, deployId, chunk);
     broadcastToProject(projectId, { type: "deliver.output", deployId, chunk });

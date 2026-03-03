@@ -490,6 +490,43 @@ describe("parseSettings deployment migration", () => {
     expect(parsed.deployment).not.toHaveProperty("autoDeployOnEvalResolution");
     expect(parsed.deployment.targets).toBeUndefined();
   });
+
+  it("migrates top-level envVars into default target when targets exist", () => {
+    const raw = {
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: {
+        mode: "custom",
+        envVars: { A: "1", B: "2" },
+        targets: [{ name: "staging", isDefault: true }, { name: "production" }],
+      },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+    };
+    const parsed = parseSettings(raw);
+    expect(parsed.deployment.targets).toHaveLength(2);
+    const defaultTarget = parsed.deployment.targets?.find((t) => t.isDefault) ?? parsed.deployment.targets?.[0];
+    expect(defaultTarget?.envVars).toEqual({ A: "1", B: "2" });
+  });
+
+  it("migrates top-level envVars into staging and production targets when no targets (Expo)", () => {
+    const raw = {
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: {
+        mode: "expo",
+        envVars: { API_KEY: "secret" },
+      },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+    };
+    const parsed = parseSettings(raw);
+    expect(parsed.deployment.targets).toHaveLength(2);
+    const staging = parsed.deployment.targets?.find((t) => t.name === "staging");
+    const production = parsed.deployment.targets?.find((t) => t.name === "production");
+    expect(staging?.envVars).toEqual({ API_KEY: "secret" });
+    expect(production?.envVars).toEqual({ API_KEY: "secret" });
+  });
 });
 
 describe("getDeploymentTargetsForUi", () => {

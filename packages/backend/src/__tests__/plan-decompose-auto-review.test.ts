@@ -185,11 +185,10 @@ describe.skipIf(!planDecomposePostgresOk)("Plan decompose with auto-review", () 
   });
 
   it(
-    "invokes auto-review agent after decompose and closes identified tasks",
+    "decompose creates plans with markdown and mockups only; auto-review skipped when no tasks",
     { timeout: 15000 },
     async () => {
-      // First invoke: decompose response
-      const decomposeResponse = {
+      mockInvoke.mockResolvedValueOnce({
         content: JSON.stringify({
           plans: [
             {
@@ -198,97 +197,47 @@ describe.skipIf(!planDecomposePostgresOk)("Plan decompose with auto-review", () 
                 "# Backend API\n\n## Overview\n\nREST API.\n\n## Acceptance Criteria\n\n- Endpoints work",
               complexity: "medium",
               mockups: [{ title: "API", content: "GET /api" }],
-              tasks: [
-                {
-                  title: "Create health endpoint",
-                  description: "GET /health",
-                  priority: 0,
-                  dependsOn: [],
-                },
-                {
-                  title: "Create users endpoint",
-                  description: "GET /users",
-                  priority: 1,
-                  dependsOn: [],
-                },
-              ],
             },
           ],
         }),
-      };
-
-      // Second invoke: auto-review response (mark first task as already implemented)
-      let taskIdToClose = "";
-      mockInvoke
-        .mockResolvedValueOnce(decomposeResponse)
-        .mockImplementation(async (_opts: { prompt?: string }) => {
-          // When auto-review runs, we need to return task IDs from the created plans
-          // We don't know them until after decompose - so we get them from task store
-          const allIssues = await taskStore.listAll(projectId);
-          const implTasks = allIssues.filter(
-            (i: { id: string; title?: string; issue_type?: string }) =>
-              (i.issue_type ?? i.type) !== "epic" &&
-              i.title !== "Plan approval gate" &&
-              !i.id.endsWith(".0")
-          );
-          taskIdToClose = implTasks[0]?.id ?? "";
-          return {
-            content: JSON.stringify({
-              taskIdsToClose: taskIdToClose ? [taskIdToClose] : [],
-              reason: "Health endpoint already exists in src/server.ts",
-            }),
-          };
-        });
+      });
 
       const result = await planService.decomposeFromPrd(projectId);
 
       expect(result.created).toBe(1);
       expect(result.plans).toHaveLength(1);
+      expect(result.plans[0].taskCount).toBe(0);
 
-      // Verify agent was invoked twice (decompose + auto-review)
-      expect(mockInvoke).toHaveBeenCalledTimes(2);
+      // Only decompose is invoked; auto-review is skipped when no tasks were created
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
 
-      // Verify auto-review closed the identified task
       const allIssues = await taskStore.listAll(projectId);
-      const closedTasks = allIssues.filter((i: { status: string }) => i.status === "closed");
-      // Gate task + one auto-reviewed task = at least 2 closed
-      expect(closedTasks.length).toBeGreaterThanOrEqual(1);
-
       const implTasks = allIssues.filter(
-        (i: { id: string; title?: string; issue_type?: string }) =>
-          (i.issue_type ?? i.type) !== "epic" &&
-          i.title !== "Plan approval gate" &&
-          !i.id.endsWith(".0")
+        (i: { id: string; issue_type?: string; type?: string }) => (i.issue_type ?? i.type) !== "epic"
       );
-      // At least one implementation task should be closed by auto-review
-      const autoReviewed = implTasks.filter((i: { status: string }) => i.status === "closed");
-      expect(autoReviewed.length).toBeGreaterThanOrEqual(1);
+      expect(implTasks.length).toBe(0);
     }
   );
 
   it("continues when auto-review agent fails (best-effort)", { timeout: 15000 }, async () => {
-    mockInvoke
-      .mockResolvedValueOnce({
-        content: JSON.stringify({
-          plans: [
-            {
-              title: "Simple Feature",
-              content: "# Simple\n\nOverview.",
-              complexity: "low",
-              mockups: [{ title: "UI", content: "Box" }],
-              tasks: [{ title: "Task 1", description: "Do something", priority: 0, dependsOn: [] }],
-            },
-          ],
-        }),
-      })
-      .mockRejectedValueOnce(new Error("Agent timeout"));
+    mockInvoke.mockResolvedValueOnce({
+      content: JSON.stringify({
+        plans: [
+          {
+            title: "Simple Feature",
+            content: "# Simple\n\nOverview.",
+            complexity: "low",
+            mockups: [{ title: "UI", content: "Box" }],
+          },
+        ],
+      }),
+    });
 
     const result = await planService.decomposeFromPrd(projectId);
 
     expect(result.created).toBe(1);
     expect(result.plans).toHaveLength(1);
-    // Decompose succeeded despite auto-review failure
-    expect(mockInvoke).toHaveBeenCalledTimes(2);
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
 
   it("skips auto-review when no implementation tasks exist", { timeout: 15000 }, async () => {
@@ -349,39 +298,30 @@ describe.skipIf(!planDecomposePostgresOk)("Plan decompose with auto-review", () 
     });
 
     it(
-      "should register and unregister for Plan auto-review when tasks exist",
+      "should register and unregister for Feature decomposition only (auto-review skipped when no tasks)",
       { timeout: 15000 },
       async () => {
-        mockInvoke
-          .mockResolvedValueOnce({
-            content: JSON.stringify({
-              plans: [
-                {
-                  title: "Auto-Review Registry Test",
-                  content: "# Test\n\nContent.",
-                  complexity: "low",
-                  mockups: [{ title: "UI", content: "Box" }],
-                  tasks: [{ title: "Task 1", description: "Do it", priority: 0, dependsOn: [] }],
-                },
-              ],
-            }),
-          })
-          .mockResolvedValueOnce({
-            content: JSON.stringify({ taskIdsToClose: [], reason: "Nothing implemented" }),
-          });
+        mockInvoke.mockResolvedValueOnce({
+          content: JSON.stringify({
+            plans: [
+              {
+                title: "Auto-Review Registry Test",
+                content: "# Test\n\nContent.",
+                complexity: "low",
+                mockups: [{ title: "UI", content: "Box" }],
+              },
+            ],
+          }),
+        });
 
         await planService.decomposeFromPrd(projectId);
 
-        // First call: decompose (register plan-decompose, unregister)
-        // Second call: auto-review (register plan-auto-review, unregister)
-        expect(mockRegister).toHaveBeenCalledTimes(2);
-        expect(mockUnregister).toHaveBeenCalledTimes(2);
+        // Only decompose is invoked; auto-review is skipped when no tasks created
+        expect(mockRegister).toHaveBeenCalledTimes(1);
+        expect(mockUnregister).toHaveBeenCalledTimes(1);
 
         const decomposeCall = mockRegister.mock.calls.find((c) =>
           c[0].startsWith("plan-decompose-")
-        );
-        const autoReviewCall = mockRegister.mock.calls.find((c) =>
-          c[0].startsWith("plan-auto-review-")
         );
         expect(decomposeCall).toBeDefined();
         expect(decomposeCall).toEqual([
@@ -390,19 +330,6 @@ describe.skipIf(!planDecomposePostgresOk)("Plan decompose with auto-review", () 
           "plan",
           "planner",
           "Feature decomposition",
-          expect.any(String),
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-        ]);
-        expect(autoReviewCall).toBeDefined();
-        expect(autoReviewCall).toEqual([
-          expect.stringMatching(/^plan-auto-review-.*-/),
-          projectId,
-          "plan",
-          "planner",
-          "Plan auto-review",
           expect.any(String),
           undefined,
           undefined,
@@ -424,36 +351,27 @@ describe.skipIf(!planDecomposePostgresOk)("Plan decompose with auto-review", () 
   });
 
   it(
-    "does not close tasks when auto-review returns empty taskIdsToClose",
+    "does not create tasks at decompose (markdown and mockups only)",
     { timeout: 15000 },
     async () => {
-      mockInvoke
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            plans: [
-              {
-                title: "New Feature",
-                content: "# New\n\nOverview.",
-                complexity: "medium",
-                mockups: [{ title: "UI", content: "Box" }],
-                tasks: [
-                  { title: "Implement X", description: "Build X", priority: 0, dependsOn: [] },
-                ],
-              },
-            ],
-          }),
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            taskIdsToClose: [],
-            reason: "No existing implementation found",
-          }),
-        });
+      mockInvoke.mockResolvedValueOnce({
+        content: JSON.stringify({
+          plans: [
+            {
+              title: "New Feature",
+              content: "# New\n\nOverview.",
+              complexity: "medium",
+              mockups: [{ title: "UI", content: "Box" }],
+            },
+          ],
+        }),
+      });
 
       const result = await planService.decomposeFromPrd(projectId);
 
       expect(result.created).toBe(1);
-      expect(mockInvoke).toHaveBeenCalledTimes(2);
+      expect(result.plans[0].taskCount).toBe(0);
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
 
       const allIssues = await taskStore.listAll(projectId);
       const implTasks = allIssues.filter(

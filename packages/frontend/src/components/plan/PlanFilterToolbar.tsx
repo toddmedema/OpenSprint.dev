@@ -137,7 +137,7 @@ export function PlanFilterToolbar({
               className="btn-primary text-sm py-1.5 px-2.5 min-h-[44px] min-w-[44px] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center"
               data-testid="plan-all-tasks-button"
             >
-              {planAllInProgress ? "Planning all…" : "Plan All Tasks"}
+              {planAllInProgress ? "Generating all…" : "Generate All Tasks"}
             </button>
           )}
         </div>

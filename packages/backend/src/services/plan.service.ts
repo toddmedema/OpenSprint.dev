@@ -245,7 +245,7 @@ async function readPlanJsonFromRepo(
 
 const DECOMPOSE_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. You analyze Product Requirements Documents (PRDs) and suggest a breakdown into discrete, implementable features (Plans).
 
-**Output format:** Your response MUST be the plan(s) as JSON in this message. Do NOT write plans to files; do NOT respond with only a summary or "here's what I created" — the system parses your message for JSON only. Produce exactly the JSON output (no preamble, no explanation after the JSON). You may wrap in a \`\`\`json ... \`\`\` code block. Required shape:
+**Output format:** Your response MUST be the plan(s) as JSON in this message. Do NOT write plans to files; do NOT respond with only a summary or "here's what I created" — the system parses your message for JSON only. Produce exactly the JSON output (no preamble, no explanation after the JSON). You may wrap in a \`\`\`json ... \`\`\` code block. Required shape (markdown and mockups only; no tasks):
 
 {
   "plans": [
@@ -256,35 +256,24 @@ const DECOMPOSE_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint
       "dependsOnPlans": [],
       "mockups": [
         {"title": "Main Screen", "content": "+------------------+\\n| Header           |\\n+------------------+\\n| Content area     |\\n|                  |\\n+------------------+"}
-      ],
-      "tasks": [
-        {"title": "Task title", "description": "Task spec", "priority": 1, "dependsOn": [], "complexity": 3, "files": {"modify": ["src/existing.ts"], "create": ["src/new.ts"], "test": ["src/__tests__/new.test.ts"]}}
       ]
     }
   ]
 }
 
-complexity: low, medium, high, or very_high (plan-level). Task-level complexity: integer 1-10 (1=simplest, 10=most complex) — assign per task based on implementation difficulty (1-3: routine, isolated; 4-6: moderate; 7-10: challenging, many integrations). priority: 0=highest. dependsOn: array of task titles this task depends on (blocked by) — use exact titles from your own output. dependsOnPlans: array of slugified plan titles (lowercase, hyphens) that match other plan titles in your output; e.g. if Plan A is "User Authentication", another plan depending on it uses dependsOnPlans: ["user-authentication"]. mockups: array of {title, content} — ASCII wireframes; at least one required per plan. Every task MUST include a files object with the expected file scope: { modify?: string[], create?: string[], test?: string[] }.
+complexity: low, medium, high, or very_high (plan-level). dependsOnPlans: array of slugified plan titles (lowercase, hyphens) that match other plan titles in your output; e.g. if Plan A is "User Authentication", another plan depending on it uses dependsOnPlans: ["user-authentication"]. mockups: array of {title, content} — ASCII wireframes; at least one required per plan.
 
 **Task:** Given the full PRD, produce a feature decomposition. For each feature:
 1. Create a Plan with a clear title and full markdown specification
-2. Break the Plan into granular, atomic tasks that an AI coding agent can implement
-3. Specify task dependencies (dependsOn) where one task must complete before another
-4. Recommend implementation order (foundational/risky first)
-5. Create at least one UI/UX mockup per Plan using ASCII wireframes
-
-Do NOT create plans that are single massive tasks — each plan should decompose into 2+ atomic tasks.
+2. Recommend implementation order at the plan level (foundational/risky first); use dependsOnPlans where one feature depends on another
+3. Create at least one UI/UX mockup per Plan using ASCII wireframes
 
 Plan markdown MUST follow this structure (PRD §7.2.3). Each plan's content must include these sections in order:
 ${PLAN_MARKDOWN_SECTIONS.map((s) => `- ## ${s}`).join("\n")}
 
 Template structure: ${PLAN_TEMPLATE_STRUCTURE}
 
-Tasks should be atomic, implementable in one agent session, with clear acceptance criteria in the description.
-
-MOCKUPS: Every Plan MUST include at least one mockup. Backend-heavy features: include a mockup of the admin/monitoring UI, API response shape, or data flow diagram — not "N/A". Use box-drawing characters, labels, and annotations.
-
-If the PRD mentions integration points or external services, ensure tasks include setup/configuration steps.`;
+MOCKUPS: Every Plan MUST include at least one mockup. Backend-heavy features: include a mockup of the admin/monitoring UI, API response shape, or data flow diagram — not "N/A". Use box-drawing characters, labels, and annotations.`;
 
 const TASK_GENERATION_SYSTEM_PROMPT = `You are an AI planning assistant for OpenSprint. Given a feature plan specification (and optional PRD context), break it down into granular, atomic implementation tasks that an AI coding agent can complete in a single session.
 
@@ -1782,21 +1771,18 @@ ${planNew}`;
     const settings = await this.projectService.getSettings(projectId);
     const prdContext = await this.buildPrdContext(projectId);
 
-    const systemPrompt = `You are an AI planning assistant for OpenSprint. The user will describe a feature idea in freeform text. Your job is to produce a complete, implementation-ready feature plan.
+    const systemPrompt = `You are an AI planning assistant for OpenSprint. The user will describe a feature idea in freeform text. Your job is to produce a complete feature plan (markdown and mockups only; no subtasks).
 
 ## Output requirement (mandatory)
 Your entire response MUST be the plan as a single JSON object. Do NOT write the plan to a file. Do NOT respond with a summary, description, or "here's what I created" text — the system parses your message for JSON only; any prose instead of JSON will cause failure.
-You may wrap the JSON in a markdown code block (\`\`\`json ... \`\`\`). The JSON must include at minimum: "title", "content", "complexity", "mockups", "tasks".
+You may wrap the JSON in a markdown code block (\`\`\`json ... \`\`\`). The JSON must include at minimum: "title", "content", "complexity", "mockups". Do NOT include a tasks array.
 
 Required JSON shape:
 {
   "title": "Feature Name",
   "content": "# Feature Name\\n\\n## Overview\\n...full markdown...",
   "complexity": "medium",
-  "mockups": [{"title": "Main Screen", "content": "ASCII wireframe"}],
-  "tasks": [
-    {"title": "Task title", "description": "Detailed spec", "priority": 1, "dependsOn": [], "complexity": 3}
-  ]
+  "mockups": [{"title": "Main Screen", "content": "ASCII wireframe"}]
 }
 
 Plan markdown MUST follow this structure (PRD §7.2.3). Each plan's content must include these sections in order:
@@ -1804,11 +1790,9 @@ ${PLAN_MARKDOWN_SECTIONS.map((s) => `- ## ${s}`).join("\n")}
 
 Template structure: ${PLAN_TEMPLATE_STRUCTURE}
 
-Tasks should be atomic, implementable in one agent session, with clear acceptance criteria in the description.
-
 MOCKUPS: Include at least one mockup (ASCII wireframe or text diagram) illustrating key UI for the feature.
 
-Field rules: complexity: low, medium, high, or very_high (plan-level). Task-level complexity: integer 1-10 (1=simplest, 10=most complex) — assign per task based on implementation difficulty. priority: 0=highest. dependsOn: array of other task titles this task depends on.
+Field rules: complexity: low, medium, high, or very_high (plan-level).
 
 **When requirements are unclear:** If the feature idea is too vague to decompose, return JSON with \`open_questions\`: [{ "id": "q1", "text": "Clarification question" }] instead of a plan. The server surfaces these via the Human Notification System; wait for user answers before proceeding.`;
 
@@ -1866,10 +1850,7 @@ Field rules: complexity: low, medium, high, or very_high (plan-level). Task-leve
       content: spec.content || `# ${spec.title}\n\n${description}`,
       complexity: spec.complexity as PlanComplexity | undefined,
       mockups: spec.mockups,
-      tasks: spec.tasks.map((t) => normalizePlannerTask(t, spec.tasks)) as unknown as Record<
-        string,
-        unknown
-      >[],
+      // Markdown and mockups only; tasks are generated later via Generate Tasks
     });
 
     // Auto-review against codebase
@@ -1982,7 +1963,7 @@ Field rules: complexity: low, medium, high, or very_high (plan-level). Task-leve
 
     const prdContext = await this.buildPrdContext(projectId);
 
-    const prompt = `Analyze the PRD below and produce a feature decomposition. Output valid JSON with a "plans" array. Each plan has: title, content (full markdown), complexity (low|medium|high|very_high), and tasks array. Each task has: title, description, priority (0-4), dependsOn (array of task titles it depends on), complexity (integer 1-10 — assign per task based on implementation difficulty, 1=simplest, 10=most complex).`;
+    const prompt = `Analyze the PRD below and produce a feature decomposition. Output valid JSON with a "plans" array. Each plan has: title, content (full markdown), complexity (low|medium|high|very_high), dependsOnPlans (array of slugified plan IDs this plan depends on), and mockups (array of {title, content} — ASCII wireframes). Do NOT include a tasks array; plans are created with markdown and mockups only.`;
 
     const agentId = `plan-decompose-${projectId}-${Date.now()}`;
 
@@ -2016,7 +1997,6 @@ Field rules: complexity: low, medium, high, or very_high (plan-level). Task-leve
         rawContent,
         normalizeDependsOnPlans(spec as unknown as Record<string, unknown>)
       );
-      const rawTasks = (spec.tasks ?? []) as unknown as Array<Record<string, unknown>>;
       const plan = await this.createPlan(projectId, {
         title: spec.title || "Untitled Feature",
         content,
@@ -2025,10 +2005,7 @@ Field rules: complexity: low, medium, high, or very_high (plan-level). Task-leve
           title: m.title || "Mockup",
           content: m.content || "",
         })),
-        tasks: rawTasks.map((t) => normalizePlannerTask(t, rawTasks)) as unknown as Record<
-          string,
-          unknown
-        >[],
+        // Markdown and mockups only; tasks are generated later via Generate Tasks
       });
       created.push(plan);
     }

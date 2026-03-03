@@ -33,6 +33,8 @@ export interface DeploymentTargetConfig {
   isDefault?: boolean;
   /** When to auto-deploy to this target. Default: "none". */
   autoDeployTrigger?: AutoDeployTrigger;
+  /** Environment variables for this target (passed to deploy command/webhook). */
+  envVars?: Record<string, string>;
 }
 
 /** Deployment configuration */
@@ -42,7 +44,10 @@ export interface DeploymentConfig {
   target?: DeploymentTarget;
   /** Deployment targets with per-target command/webhook (PRD ?7.5.2/7.5.4) */
   targets?: DeploymentTargetConfig[];
-  /** Environment variables for deployment (PRD ?7.5.4) */
+  /**
+   * Environment variables for deployment (PRD ?7.5.4).
+   * @deprecated Use per-target envVars on targets[]. Kept for migration/fallback only.
+   */
   envVars?: Record<string, string>;
   /** Auto-resolve feedback when all its created tasks are Done (PRD ?10.2). Default: false. */
   autoResolveFeedbackOnTaskCompletion?: boolean;
@@ -160,6 +165,26 @@ function migrateDeploymentConfig(raw: unknown): DeploymentConfig {
     rollbackCommand: input.rollbackCommand,
     nightlyDeployTime: input.nightlyDeployTime,
   };
+
+  // Migrate top-level envVars to per-target: merge into default target, or create staging/production for Expo
+  if (input.envVars && Object.keys(input.envVars).length > 0) {
+    const existingTargets = base.targets ?? [];
+    if (existingTargets.length > 0) {
+      const defaultIdx =
+        existingTargets.findIndex((t) => t.isDefault) >= 0
+          ? existingTargets.findIndex((t) => t.isDefault)
+          : 0;
+      const migratedTargets = existingTargets.map((t, i) =>
+        i === defaultIdx ? { ...t, envVars: { ...t.envVars, ...input.envVars } } : t
+      );
+      base.targets = migratedTargets;
+    } else {
+      base.targets = [
+        { name: "staging", envVars: { ...input.envVars } },
+        { name: "production", envVars: { ...input.envVars } },
+      ];
+    }
+  }
 
   const epic = input.autoDeployOnEpicCompletion === true;
   const evalRes = input.autoDeployOnEvalResolution === true;
