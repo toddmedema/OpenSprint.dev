@@ -320,7 +320,7 @@ describe("SketchPhase with sketchSlice", () => {
 
       await waitFor(() => {
         expect(screen.getByText("Generating your PRD...")).toBeInTheDocument();
-        expect(screen.getByText(/This may take a moment/)).toBeInTheDocument();
+        expect(screen.getByText(/This may take a moment while Open Sprint crafts your product requirements/)).toBeInTheDocument();
       });
 
       resolveSend!({ message: "Here is your PRD" });

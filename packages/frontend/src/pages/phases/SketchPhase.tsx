@@ -579,8 +579,8 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
             </p>
             <p className="text-sm text-theme-muted mt-1">
               {generatingFromCodebase
-                ? "The AI is scanning your repo and drafting a product requirements document."
-                : "This may take a moment while the AI crafts your product requirements"}
+                ? "Open Sprint is scanning your repo and drafting a product requirements document."
+                : "This may take a moment while Open Sprint crafts your product requirements"}
             </p>
           </div>
         )}
