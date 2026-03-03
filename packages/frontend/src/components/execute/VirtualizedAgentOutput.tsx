@@ -7,7 +7,8 @@ import remarkGfm from "remark-gfm";
 const MARKDOWN_NO_HR = { hr: () => null };
 
 const LINES_PER_BLOCK = 30;
-const ESTIMATED_LINE_HEIGHT = 20;
+/** Initial estimate; virtualizer measures actual height via measureElement (ResizeObserver). */
+const ESTIMATED_BLOCK_HEIGHT = 120;
 
 export interface VirtualizedAgentOutputProps {
   /** Full content to display (joined agent output) */
@@ -57,7 +58,7 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
   const virtualizer = useVirtualizer({
     count: blocks.length,
     getScrollElement: () => containerRef.current,
-    estimateSize: () => LINES_PER_BLOCK * ESTIMATED_LINE_HEIGHT,
+    estimateSize: () => ESTIMATED_BLOCK_HEIGHT,
     overscan: 2,
   });
 
@@ -67,7 +68,7 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
   const useFallback = virtualItems.length === 0;
 
   const proseClasses =
-    "prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none text-theme-success-muted prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg";
+    "prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none text-theme-success-muted prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-pre:my-1.5 prose-blockquote:my-1.5";
   const streamClasses = "text-theme-success-muted";
   const useMarkdown = mode === "markdown";
   const containerClasses = useMarkdown ? proseClasses : streamClasses;
@@ -112,6 +113,7 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
             <div
               key={virtualItem.key}
               data-index={virtualItem.index}
+              ref={virtualizer.measureElement}
               style={{
                 position: "absolute",
                 top: 0,
