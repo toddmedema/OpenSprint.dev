@@ -344,6 +344,24 @@ describe("SketchPhase with sketchSlice", () => {
       expect(screen.getByTestId("sketch-attach-images")).toBeInTheDocument();
     });
 
+    it("empty state shows animated typewriter placeholder that types and deletes example suggestions", async () => {
+      vi.useFakeTimers();
+      renderSketchPhase();
+      const textarea = screen.getByRole("textbox");
+
+      // Advance past first tick (40–80ms) — placeholder should have at least one character
+      await vi.advanceTimersByTimeAsync(100);
+      const initialPlaceholder = textarea.getAttribute("placeholder") ?? "";
+      expect(initialPlaceholder.length).toBeGreaterThan(0);
+
+      // Advance more — placeholder should grow (typing)
+      await vi.advanceTimersByTimeAsync(500);
+      const midPlaceholder = textarea.getAttribute("placeholder") ?? "";
+      expect(midPlaceholder.length).toBeGreaterThanOrEqual(initialPlaceholder.length);
+
+      vi.useRealTimers();
+    });
+
     it("submits on Enter key (without Shift)", async () => {
       const user = userEvent.setup();
       renderSketchPhase();

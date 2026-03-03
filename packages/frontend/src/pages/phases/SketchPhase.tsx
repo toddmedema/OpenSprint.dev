@@ -298,7 +298,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
 
   /* ── Typewriter placeholder effect ── */
   useEffect(() => {
-    if (hasPrdContent) return;
+    if (hasPrdContent || !showPrdEmptyState) return;
     const el = textareaRef.current;
     if (!el) return;
 
@@ -341,7 +341,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [hasPrdContent]);
+  }, [hasPrdContent, showPrdEmptyState]);
 
   /* ── Text selection handler for inline commenting ── */
   useEffect(() => {
