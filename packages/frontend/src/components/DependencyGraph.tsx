@@ -530,7 +530,7 @@ export function DependencyGraph({ graph, onPlanClick, fillHeight }: DependencyGr
     <div
       ref={containerRef}
       className={`w-full overflow-hidden rounded-lg border border-theme-border bg-theme-surface ${
-        fillHeight ? "h-full min-h-[280px]" : ""
+        fillHeight ? "h-full min-h-[200px] sm:min-h-[280px]" : ""
       }`}
     >
       <svg ref={svgRef} className="block" />

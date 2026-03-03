@@ -114,4 +114,30 @@ describe("PlanFilterToolbar", () => {
     await user.click(screen.getByTestId("view-toggle-graph"));
     expect(props.onViewModeChange).toHaveBeenCalledWith("graph");
   });
+
+  it("uses responsive padding and flex-wrap for mobile layout", () => {
+    const { container } = render(
+      <PlanFilterToolbar
+        statusFilter="all"
+        setStatusFilter={vi.fn()}
+        planCountByStatus={{ all: 2, planning: 1, building: 1, complete: 0 }}
+        viewMode="card"
+        onViewModeChange={vi.fn()}
+        plansWithNoTasksCount={0}
+        plansReadyToExecuteCount={0}
+        planAllInProgress={false}
+        executeAllInProgress={false}
+        executingPlanId={null}
+        planTasksPlanIds={[]}
+        onPlanAllTasks={vi.fn()}
+        onExecuteAll={vi.fn()}
+        onAddPlan={vi.fn()}
+      />
+    );
+    const toolbar = container.firstElementChild;
+    expect(toolbar).toHaveClass("px-4");
+    expect(toolbar).toHaveClass("md:px-6");
+    const inner = toolbar?.querySelector(".flex-wrap");
+    expect(inner).toBeInTheDocument();
+  });
 });

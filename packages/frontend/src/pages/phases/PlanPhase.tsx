@@ -616,7 +616,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           handleSearchKeyDown={handleSearchKeyDown}
         />
 
-        <div className="flex-1 min-h-0 overflow-auto p-6">
+        <div className="flex-1 min-h-0 overflow-auto p-4 md:p-6">
           {/* Error banner — inline, dismissible */}
           {planError && (
             <div
@@ -647,7 +647,10 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
 
           {viewMode === "graph" ? (
             /* Graph Mode: dependency graph full screen */
-            <div className="h-full min-h-[400px]" data-testid="plan-graph-view">
+            <div
+              className="h-full min-h-[200px] sm:min-h-[320px] md:min-h-[400px] overflow-hidden"
+              data-testid="plan-graph-view"
+            >
               {filteredDependencyGraph && filteredDependencyGraph.plans.length === 0 ? (
                 <div className="text-center py-10 text-theme-muted">
                   {isSearchActive
@@ -840,7 +843,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
 
       {/* Sidebar: Plan Detail + Chat — show when planContext set so chat persists across reloads (e.g. deep link) */}
       {planContext && (
-        <ResizableSidebar storageKey="plan" defaultWidth={420} responsive onClose={handleClosePlan}>
+        <ResizableSidebar storageKey="plan" defaultWidth={420} responsive={true} onClose={handleClosePlan}>
           {/* Sticky header + scrollable body (matches Execute sidebar) */}
           {selectedPlan ? (
             <PlanDetailContent
