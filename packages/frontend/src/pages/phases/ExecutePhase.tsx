@@ -263,7 +263,7 @@ export function ExecutePhase({
     [tasks]
   );
 
-  // Default to "All" when selected filter has no visible tasks (e.g. user navigated with "Blocked" selected but no blocked tasks)
+  // Default to "All" when selected filter has no visible tasks (e.g. user navigated with "Failures" selected but no blocked tasks)
   useEffect(() => {
     if (loading || implTasks.length === 0) return;
     if (statusFilter === "all") return;
@@ -389,7 +389,7 @@ export function ExecutePhase({
                   {blockedSwimlanes.length > 0 && (
                     <section data-testid="execute-section-blocked">
                       <h2 className="text-sm font-semibold text-theme-muted tracking-wide uppercase mb-4">
-                        Blocked
+                        Failures
                       </h2>
                       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         {blockedSwimlanes.map((lane) => (

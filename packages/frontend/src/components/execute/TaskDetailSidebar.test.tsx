@@ -310,7 +310,7 @@ describe("TaskDetailSidebar", () => {
     });
 
     expect(screen.getByTestId("sidebar-actions-menu-trigger")).toBeInTheDocument();
-    expect(screen.queryByTestId("sidebar-unblock-btn")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("sidebar-retry-btn")).not.toBeInTheDocument();
     await user.click(screen.getByTestId("sidebar-actions-menu-trigger"));
     expect(screen.getByTestId("sidebar-mark-done-btn")).toBeInTheDocument();
     expect(screen.getByTestId("sidebar-delete-task-btn")).toBeInTheDocument();
@@ -335,7 +335,7 @@ describe("TaskDetailSidebar", () => {
     ).toBeTruthy();
   });
 
-  it("renders actions menu with Unblock when task is blocked", async () => {
+  it("renders actions menu with Retry when task is blocked", async () => {
     const user = userEvent.setup();
     const props = createMinimalProps({
       selectedTaskData: {
@@ -361,7 +361,7 @@ describe("TaskDetailSidebar", () => {
 
     expect(screen.getByTestId("sidebar-actions-menu-trigger")).toBeInTheDocument();
     await user.click(screen.getByTestId("sidebar-actions-menu-trigger"));
-    expect(screen.getByTestId("sidebar-unblock-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("sidebar-retry-btn")).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: /mark done/i })).not.toBeInTheDocument();
   });
 
@@ -421,7 +421,7 @@ describe("TaskDetailSidebar", () => {
     expect(onMarkDone).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onUnblock when Unblock is clicked from actions menu", async () => {
+  it("calls onUnblock when Retry is clicked from actions menu", async () => {
     const user = userEvent.setup();
     const onUnblock = vi.fn();
     const props = createMinimalProps({
@@ -449,7 +449,7 @@ describe("TaskDetailSidebar", () => {
     });
 
     await user.click(screen.getByTestId("sidebar-actions-menu-trigger"));
-    await user.click(screen.getByTestId("sidebar-unblock-btn"));
+    await user.click(screen.getByTestId("sidebar-retry-btn"));
     expect(onUnblock).toHaveBeenCalledTimes(1);
   });
 
@@ -2349,7 +2349,7 @@ describe("TaskDetailSidebar", () => {
     });
 
     expect(screen.getByTestId("execution-diagnostics-block-reason")).toHaveTextContent(
-      "Blocked: Merge Failure"
+      "Failures: Merge Failure"
     );
     expect(screen.getByTestId("execution-diagnostics-latest-summary")).toHaveTextContent(
       "fatal: no rebase in progress"
@@ -2357,7 +2357,7 @@ describe("TaskDetailSidebar", () => {
     expect(screen.getByTestId("execution-diagnostics-earlier-failures")).toHaveTextContent(
       "Attempts 1-2"
     );
-    expect(screen.getByTestId("execution-attempt-6")).toHaveTextContent("Merge · Blocked");
+    expect(screen.getByTestId("execution-attempt-6")).toHaveTextContent("Merge · Failures");
     expect(screen.getByTestId("execution-attempt-6")).toHaveTextContent(
       "packages/backend/src/routes/global-settings.ts"
     );

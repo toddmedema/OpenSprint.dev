@@ -24,7 +24,7 @@ export interface TimelineListProps {
   onTaskSelect: (taskId: string) => void;
   onUnblock?: (taskId: string) => void;
   taskIdToStartedAt?: Record<string, string>;
-  /** When "all", a Blocked section is shown at top when blocked tasks exist. */
+  /** When "all", a Failures section is shown at top when blocked tasks exist. */
   statusFilter?: StatusFilter;
   /** Optional scroll container ref for virtualization. When not provided, renders non-virtualized (for tests). */
   scrollRef?: React.RefObject<HTMLDivElement | null>;
@@ -36,7 +36,7 @@ const SECTION_LABELS: Record<string, string> = {
   [TIMELINE_SECTION.active]: "In Progress",
   [TIMELINE_SECTION.queue]: "Up Next",
   [TIMELINE_SECTION.completed]: "Completed",
-  blocked: "Blocked",
+  blocked: "Failures",
   ready: "Ready",
   in_line: "Up Next",
 };
@@ -90,7 +90,7 @@ function TimelineRow({
             }}
             className="shrink-0 text-xs font-medium text-theme-error-text hover:bg-theme-error-bg px-2 py-1 rounded transition-colors"
           >
-            Unblock
+            Retry
           </button>
         )}
       </div>

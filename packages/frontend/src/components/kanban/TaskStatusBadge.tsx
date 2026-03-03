@@ -7,7 +7,7 @@ export const COLUMN_LABELS: Record<KanbanColumn, string> = {
   in_progress: "In Progress",
   in_review: "In Review",
   done: "Done",
-  blocked: "Blocked",
+  blocked: "Failures",
 };
 
 const columnColors: Record<KanbanColumn, string> = {

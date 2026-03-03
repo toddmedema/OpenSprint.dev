@@ -67,7 +67,7 @@ const EXECUTION_OUTCOME_LABELS: Record<TaskExecutionOutcome, string> = {
   rejected: "Rejected",
   requeued: "Requeued",
   demoted: "Demoted",
-  blocked: "Blocked",
+  blocked: "Failures",
   completed: "Completed",
 };
 
@@ -443,9 +443,9 @@ function TaskDetailSidebarInner({
                       }}
                       disabled={unblockLoading}
                       className="dropdown-item w-full flex items-center gap-2 text-left text-xs text-theme-error-text hover:bg-theme-error-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      data-testid="sidebar-unblock-btn"
+                      data-testid="sidebar-retry-btn"
                     >
-                      {unblockLoading ? "Unblocking…" : "Unblock"}
+                      {unblockLoading ? "Retrying…" : "Retry"}
                     </button>
                   </li>
                 )}
@@ -892,7 +892,7 @@ function TaskDetailSidebarInner({
                       className="font-medium text-theme-error-text"
                       data-testid="execution-diagnostics-block-reason"
                     >
-                      Blocked: {task.blockReason}
+                      Failures: {task.blockReason}
                     </div>
                   )}
                   {diagnostics.latestSummary && (

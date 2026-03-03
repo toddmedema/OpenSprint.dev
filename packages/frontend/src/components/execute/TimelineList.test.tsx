@@ -191,7 +191,7 @@ describe("TimelineList", () => {
     expect(onTaskSelect).toHaveBeenCalledWith("task-xyz");
   });
 
-  it("blocked row shows Unblock button", async () => {
+  it("blocked row shows Retry button", async () => {
     const user = userEvent.setup();
     const onUnblock = vi.fn();
     const tasks = [
@@ -203,14 +203,14 @@ describe("TimelineList", () => {
       <TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} onUnblock={onUnblock} />
     );
 
-    const unblockBtn = screen.getByRole("button", { name: "Unblock" });
+    const unblockBtn = screen.getByRole("button", { name: "Retry" });
     expect(unblockBtn).toBeInTheDocument();
 
     await user.click(unblockBtn);
     expect(onUnblock).toHaveBeenCalledWith("blocked-1");
   });
 
-  it("shows Blocked section at top when statusFilter is all and blocked tasks exist", () => {
+  it("shows Failures section at top when statusFilter is all and blocked tasks exist", () => {
     const tasks = [
       createMockTask({ id: "blocked-1", title: "Blocked task", kanbanColumn: "blocked" }),
       createMockTask({ id: "ready-1", title: "Ready task", kanbanColumn: "ready" }),
@@ -220,13 +220,13 @@ describe("TimelineList", () => {
     render(<TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} statusFilter="all" />);
 
     expect(screen.getByTestId("timeline-section-blocked")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Blocked" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Failures" })).toBeInTheDocument();
     expect(screen.getByText("Blocked task")).toBeInTheDocument();
     const sections = screen.getAllByRole("heading", { level: 3 });
-    expect(sections[0]).toHaveTextContent("Blocked");
+    expect(sections[0]).toHaveTextContent("Failures");
   });
 
-  it("hides Blocked section when no blocked tasks", () => {
+  it("hides Failures section when no blocked tasks", () => {
     const tasks = [
       createMockTask({ id: "ready-1", title: "Ready task", kanbanColumn: "ready" }),
       createMockTask({ id: "done-1", title: "Done task", kanbanColumn: "done" }),
@@ -236,10 +236,10 @@ describe("TimelineList", () => {
     render(<TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} statusFilter="all" />);
 
     expect(screen.queryByTestId("timeline-section-blocked")).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Blocked" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Failures" })).not.toBeInTheDocument();
   });
 
-  it("blocked tasks appear only in Blocked section, not duplicated in Ready", () => {
+  it("blocked tasks appear only in Failures section, not duplicated in Ready", () => {
     const tasks = [
       createMockTask({ id: "blocked-1", title: "Blocked task", kanbanColumn: "blocked" }),
       createMockTask({ id: "ready-1", title: "Ready task", kanbanColumn: "ready" }),

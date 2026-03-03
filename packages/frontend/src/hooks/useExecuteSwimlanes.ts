@@ -192,7 +192,7 @@ export function useExecuteSwimlanes(
     ...(blockedOnHumanCount > 0
       ? [
           {
-            label: "⚠️ Blocked on Human",
+            label: "⚠️ Failures",
             filter: "blocked" as StatusFilter,
             count: blockedOnHumanCount,
           },

@@ -683,9 +683,9 @@ const executeSlice = createSlice({
         state.taskIdsOrder = taskIdsOrder;
       },
       onRejected: (state, action) => {
-        state.error = action.error?.message ?? "Failed to unblock";
+        state.error = action.error?.message ?? "Failed to retry";
       },
-      defaultError: "Failed to unblock",
+      defaultError: "Failed to retry",
     });
 
     // updateTaskPriority — optimistic update, revert on error

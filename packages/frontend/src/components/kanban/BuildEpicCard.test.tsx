@@ -152,7 +152,7 @@ describe("BuildEpicCard", () => {
     expect(screen.queryByRole("button", { name: /more/ })).not.toBeInTheDocument();
   });
 
-  it("shows Unblock button for blocked tasks when onUnblock is provided", async () => {
+  it("shows Retry button for blocked tasks when onUnblock is provided", async () => {
     const user = userEvent.setup();
     const onTaskSelect = vi.fn();
     const onUnblock = vi.fn();
@@ -169,16 +169,16 @@ describe("BuildEpicCard", () => {
       />
     );
 
-    expect(screen.getByTitle("Blocked")).toBeInTheDocument();
+    expect(screen.getByTitle("Failures")).toBeInTheDocument();
     expect(screen.getByTestId("task-blocked")).toBeInTheDocument();
-    const unblockBtn = screen.getByRole("button", { name: "Unblock" });
+    const unblockBtn = screen.getByRole("button", { name: "Retry" });
     expect(unblockBtn).toBeInTheDocument();
 
     await user.click(unblockBtn);
     expect(onUnblock).toHaveBeenCalledWith("epic-1.1");
   });
 
-  it("does not show Unblock button for blocked tasks when onUnblock is not provided", () => {
+  it("does not show Retry button for blocked tasks when onUnblock is not provided", () => {
     const tasks = [
       createMockTask({ id: "epic-1.1", title: "Blocked Task", kanbanColumn: "blocked" }),
     ];
@@ -186,7 +186,7 @@ describe("BuildEpicCard", () => {
       <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />
     );
 
-    expect(screen.queryByRole("button", { name: "Unblock" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
   });
 
   it("shows assignee when task has assignee", () => {
@@ -458,7 +458,7 @@ describe("BuildEpicCard", () => {
     expect(screen.getByTitle("In Progress")).toBeInTheDocument();
     expect(screen.getByTitle("In Review")).toBeInTheDocument();
     expect(screen.getByTitle("Done")).toBeInTheDocument();
-    expect(screen.getByTitle("Blocked")).toBeInTheDocument();
+    expect(screen.getByTitle("Failures")).toBeInTheDocument();
   });
 
   it("uses virtualized task list when expanded with many tasks (11+)", async () => {

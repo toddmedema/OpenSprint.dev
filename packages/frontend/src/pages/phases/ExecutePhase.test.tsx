@@ -260,7 +260,7 @@ describe("ExecutePhase epic card task order", () => {
     expect(container).not.toHaveTextContent("Done task");
   });
 
-  it("All filter shows Blocked section when blocked tasks exist", () => {
+  it("All filter shows Failures section when blocked tasks exist", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -549,7 +549,7 @@ describe("ExecutePhase top bar", () => {
     expect(topBar?.querySelector('[role="progressbar"]')).not.toBeInTheDocument();
   });
 
-  it("shows status filter chips with task counts (All, Up Next, Ready, In Progress, In Review, Done; Blocked on Human only when count > 0)", () => {
+  it("shows status filter chips with task counts (All, Up Next, Ready, In Progress, In Review, Done; Failures only when count > 0)", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -629,7 +629,7 @@ describe("ExecutePhase top bar", () => {
     expect(screen.getByTestId("filter-chip-done")).toHaveTextContent("1");
   });
 
-  it("shows Blocked on Human chip only when kanbanColumn blocked count > 0", () => {
+  it("shows Failures chip only when kanbanColumn blocked count > 0", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -658,11 +658,11 @@ describe("ExecutePhase top bar", () => {
     );
 
     expect(screen.getByTestId("filter-chip-ready")).toHaveTextContent("1");
-    expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("⚠️ Blocked on Human");
+    expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("⚠️ Failures");
     expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("1");
   });
 
-  it("counts only kanbanColumn blocked for Blocked on Human chip", () => {
+  it("counts only kanbanColumn blocked for Failures chip", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -698,7 +698,7 @@ describe("ExecutePhase top bar", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("⚠️ Blocked on Human");
+    expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("⚠️ Failures");
     expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("1");
   });
 
@@ -930,7 +930,7 @@ describe("ExecutePhase top bar", () => {
     expect(localStorage.getItem("opensprint.executeStatusFilter")).toBe("all");
   });
 
-  it("defaults to All when persisted filter is Blocked but no blocked tasks exist", async () => {
+  it("defaults to All when persisted filter is Failures but no blocked tasks exist", async () => {
     localStorage.setItem("opensprint.executeStatusFilter", "blocked");
     const tasks = [
       {
@@ -1667,7 +1667,7 @@ describe("ExecutePhase view toggle", () => {
     expect(screen.queryByTestId("timeline-row-epic-1.2")).not.toBeInTheDocument();
   });
 
-  it("Queue view with All filter shows Blocked section when blocked tasks exist", async () => {
+  it("Queue view with All filter shows Failures section when blocked tasks exist", async () => {
     const user = userEvent.setup();
     const tasks = [
       {
@@ -1700,7 +1700,7 @@ describe("ExecutePhase view toggle", () => {
     await user.click(screen.getByTestId("filter-chip-all"));
 
     expect(screen.getByTestId("timeline-section-blocked")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Blocked" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Failures" })).toBeInTheDocument();
     expect(screen.getByText("Blocked task")).toBeInTheDocument();
     expect(screen.getByText("Ready task")).toBeInTheDocument();
     const blockedSection = screen.getByTestId("timeline-section-blocked");
@@ -1710,7 +1710,7 @@ describe("ExecutePhase view toggle", () => {
     );
   });
 
-  it("Queue view with All filter hides Blocked section when no blocked tasks", async () => {
+  it("Queue view with All filter hides Failures section when no blocked tasks", async () => {
     const user = userEvent.setup();
     const tasks = [
       {
@@ -1945,7 +1945,7 @@ describe("ExecutePhase Redux integration", () => {
     });
   });
 
-  it("shows Unblock in actions menu for blocked tasks and dispatches unblockTask when clicked", async () => {
+  it("shows Retry in actions menu for blocked tasks and dispatches unblockTask when clicked", async () => {
     const user = userEvent.setup();
     mockGet.mockResolvedValue({ id: "epic-1.1", title: "Blocked Task", kanbanColumn: "blocked" });
     const tasks = [
@@ -1969,7 +1969,7 @@ describe("ExecutePhase Redux integration", () => {
 
     const menuTrigger = await screen.findByTestId("sidebar-actions-menu-trigger");
     await user.click(menuTrigger);
-    const unblockBtn = await screen.findByTestId("sidebar-unblock-btn");
+    const unblockBtn = await screen.findByTestId("sidebar-retry-btn");
     expect(unblockBtn).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: /mark done/i })).not.toBeInTheDocument();
 

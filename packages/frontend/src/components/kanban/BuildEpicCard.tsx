@@ -70,7 +70,7 @@ const EpicTaskRow = memo(function EpicTaskRow({
             }}
             className="shrink-0 text-xs font-medium text-theme-error-text hover:bg-theme-error-bg px-2 py-1 rounded transition-colors"
           >
-            Unblock
+            Retry
           </button>
         )}
       </div>
