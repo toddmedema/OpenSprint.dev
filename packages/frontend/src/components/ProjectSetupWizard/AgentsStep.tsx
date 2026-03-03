@@ -11,6 +11,7 @@ import {
 } from "@opensprint/shared";
 import type { AgentRole } from "@opensprint/shared";
 import { ASSET_BASE } from "../../lib/constants";
+import { hasNoApiKeys } from "../../utils/agentConfigDefaults";
 
 export interface AgentConfig {
   type: AgentType;
@@ -101,11 +102,24 @@ export function AgentsStep({
 
       {(needsAnthropic || needsCursor || needsOpenai) && (
         <div
-          className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+          className={
+            hasNoApiKeys(envKeys)
+              ? "p-3 rounded-lg bg-theme-error-bg border border-theme-error-border"
+              : "p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+          }
           data-testid="no-api-keys-warning"
         >
-          <p className="text-sm text-theme-warning-text">
-            <strong>API key required:</strong> Add at least one API key to continue.{" "}
+          <p
+            className={
+              hasNoApiKeys(envKeys)
+                ? "text-sm text-theme-error-text"
+                : "text-sm text-theme-warning-text"
+            }
+          >
+            <strong>API key required:</strong>{" "}
+            {hasNoApiKeys(envKeys)
+              ? "You must add at least one API key to continue. "
+              : "Add at least one API key to continue. "}
             <Link
               to="/settings"
               className="underline hover:opacity-80 font-medium"

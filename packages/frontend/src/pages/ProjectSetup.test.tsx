@@ -192,6 +192,68 @@ describe("ProjectSetup - Add Existing flow (no Delivery step)", () => {
 });
 
 describe("ProjectSetup - Agents step API key validation", () => {
+  it("defaults provider to first with API key (Claude when anthropic has keys)", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.globalSettings.get).mockResolvedValue({
+      databaseUrl: "",
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "a", masked: "••••••••" }],
+        CURSOR_API_KEY: [],
+        OPENAI_API_KEY: [],
+      },
+    });
+    vi.mocked(api.env.getKeys).mockResolvedValue({
+      anthropic: true,
+      cursor: false,
+      openai: false,
+      claudeCli: true,
+      useCustomCli: false,
+    });
+
+    renderProjectSetup();
+    await user.type(screen.getByLabelText(/project name/i), "My Project");
+    await user.type(screen.getByPlaceholderText("/Users/you/projects/my-app"), "/path/to/repo");
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("agents-step")).toBeInTheDocument();
+    });
+    const providerSelects = screen.getAllByRole("combobox");
+    expect(providerSelects[0]).toHaveValue("claude");
+    expect(providerSelects[2]).toHaveValue("claude");
+  });
+
+  it("defaults provider to OpenAI when only OpenAI has keys", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.globalSettings.get).mockResolvedValue({
+      databaseUrl: "",
+      apiKeys: {
+        ANTHROPIC_API_KEY: [],
+        CURSOR_API_KEY: [],
+        OPENAI_API_KEY: [{ id: "o", masked: "••••••••" }],
+      },
+    });
+    vi.mocked(api.env.getKeys).mockResolvedValue({
+      anthropic: false,
+      cursor: false,
+      openai: true,
+      claudeCli: true,
+      useCustomCli: false,
+    });
+
+    renderProjectSetup();
+    await user.type(screen.getByLabelText(/project name/i), "My Project");
+    await user.type(screen.getByPlaceholderText("/Users/you/projects/my-app"), "/path/to/repo");
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("agents-step")).toBeInTheDocument();
+    });
+    const providerSelects = screen.getAllByRole("combobox");
+    expect(providerSelects[0]).toHaveValue("openai");
+    expect(providerSelects[2]).toHaveValue("openai");
+  });
+
   it("shows no-API-keys warning when 0 providers have keys and Custom is not selected", async () => {
     const user = userEvent.setup();
     vi.mocked(api.globalSettings.get).mockResolvedValue({

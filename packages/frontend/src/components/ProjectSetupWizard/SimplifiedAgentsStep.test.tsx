@@ -133,6 +133,16 @@ describe("SimplifiedAgentsStep", () => {
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
   });
 
+  it("shows error banner with 'You must add at least one' when no API keys configured", () => {
+    renderSimplifiedAgentsStep({
+      envKeys: { anthropic: false, cursor: false, openai: false, claudeCli: true },
+    });
+
+    expect(screen.getByTestId("no-api-keys-warning")).toBeInTheDocument();
+    expect(screen.getByText(/You must add at least one API key to continue/)).toBeInTheDocument();
+    expect(screen.getByTestId("no-api-keys-settings-link")).toHaveAttribute("href", "/settings");
+  });
+
   it("does not show API key section when envKeys is null", () => {
     renderSimplifiedAgentsStep({ envKeys: null });
 

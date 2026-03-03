@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ModelSelect } from "../ModelSelect";
 import type { AgentType } from "@opensprint/shared";
 import type { AgentConfig, EnvKeys } from "./AgentsStep";
+import { hasNoApiKeys } from "../../utils/agentConfigDefaults";
 
 export interface SimplifiedAgentsStepProps {
   simpleComplexityAgent: AgentConfig;
@@ -49,84 +50,110 @@ export function SimplifiedAgentsStep({
       {(needsAnthropic || needsCursor || needsOpenai) && (
         <>
           <div
-            className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+            className={
+              hasNoApiKeys(envKeys)
+                ? "p-3 rounded-lg bg-theme-error-bg border border-theme-error-border"
+                : "p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+            }
             data-testid="no-api-keys-warning"
           >
-            <p className="text-sm text-theme-warning-text">
+            <p
+              className={
+                hasNoApiKeys(envKeys)
+                  ? "text-sm text-theme-error-text"
+                  : "text-sm text-theme-warning-text"
+              }
+            >
               <strong>API key required:</strong>{" "}
-              {needsAnthropic && needsCursor && needsOpenai ? (
+              {hasNoApiKeys(envKeys) ? (
                 <>
-                  Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code>,{" "}
-                  <code className="font-mono text-xs">CURSOR_API_KEY</code>, and{" "}
-                  <code className="font-mono text-xs">OPENAI_API_KEY</code> to continue.
-                </>
-              ) : needsAnthropic && needsCursor ? (
-                <>
-                  Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and{" "}
-                  <code className="font-mono text-xs">CURSOR_API_KEY</code> to continue.
-                </>
-              ) : needsAnthropic && needsOpenai ? (
-                <>
-                  Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and{" "}
-                  <code className="font-mono text-xs">OPENAI_API_KEY</code> to continue.
-                </>
-              ) : needsCursor && needsOpenai ? (
-                <>
-                  Add your <code className="font-mono text-xs">CURSOR_API_KEY</code> and{" "}
-                  <code className="font-mono text-xs">OPENAI_API_KEY</code> to continue.
-                </>
-              ) : needsAnthropic ? (
-                <>
-                  Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> to use
-                  Claude (API). Get one from{" "}
-                  <a
-                    href="https://console.anthropic.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline hover:opacity-80"
+                  You must add at least one API key to continue.{" "}
+                  <Link
+                    to="/settings"
+                    className="underline hover:opacity-80 font-medium"
+                    data-testid="no-api-keys-settings-link"
                   >
-                    Anthropic Console
-                  </a>
-                  .
-                </>
-              ) : needsOpenai ? (
-                <>
-                  Add your <code className="font-mono text-xs">OPENAI_API_KEY</code> to use OpenAI.
-                  Get one from{" "}
-                  <a
-                    href="https://platform.openai.com/api-keys"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline hover:opacity-80"
-                  >
-                    OpenAI Platform
-                  </a>
-                  .
+                    Open Settings
+                  </Link>{" "}
+                  to add your keys.
                 </>
               ) : (
                 <>
-                  Add your <code className="font-mono text-xs">CURSOR_API_KEY</code> to use Cursor.
-                  Get one from{" "}
-                  <a
-                    href="https://cursor.com/settings"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline hover:opacity-80"
+                  {needsAnthropic && needsCursor && needsOpenai ? (
+                    <>
+                      Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code>,{" "}
+                      <code className="font-mono text-xs">CURSOR_API_KEY</code>, and{" "}
+                      <code className="font-mono text-xs">OPENAI_API_KEY</code> to continue.
+                    </>
+                  ) : needsAnthropic && needsCursor ? (
+                    <>
+                      Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and{" "}
+                      <code className="font-mono text-xs">CURSOR_API_KEY</code> to continue.
+                    </>
+                  ) : needsAnthropic && needsOpenai ? (
+                    <>
+                      Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> and{" "}
+                      <code className="font-mono text-xs">OPENAI_API_KEY</code> to continue.
+                    </>
+                  ) : needsCursor && needsOpenai ? (
+                    <>
+                      Add your <code className="font-mono text-xs">CURSOR_API_KEY</code> and{" "}
+                      <code className="font-mono text-xs">OPENAI_API_KEY</code> to continue.
+                    </>
+                  ) : needsAnthropic ? (
+                    <>
+                      Add your <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> to use
+                      Claude (API). Get one from{" "}
+                      <a
+                        href="https://console.anthropic.com/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:opacity-80"
+                      >
+                        Anthropic Console
+                      </a>
+                      .
+                    </>
+                  ) : needsOpenai ? (
+                    <>
+                      Add your <code className="font-mono text-xs">OPENAI_API_KEY</code> to use
+                      OpenAI. Get one from{" "}
+                      <a
+                        href="https://platform.openai.com/api-keys"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:opacity-80"
+                      >
+                        OpenAI Platform
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      Add your <code className="font-mono text-xs">CURSOR_API_KEY</code> to use
+                      Cursor. Get one from{" "}
+                      <a
+                        href="https://cursor.com/settings"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:opacity-80"
+                      >
+                        Cursor → Integrations → User API Keys
+                      </a>
+                      .
+                    </>
+                  )}{" "}
+                  Or{" "}
+                  <Link
+                    to="/settings"
+                    className="underline hover:opacity-80 font-medium"
+                    data-testid="no-api-keys-settings-link"
                   >
-                    Cursor → Integrations → User API Keys
-                  </a>
-                  .
+                    open Settings
+                  </Link>{" "}
+                  to add keys.
                 </>
               )}
-              {" Or "}
-              <Link
-                to="/settings"
-                className="underline hover:opacity-80 font-medium"
-                data-testid="no-api-keys-settings-link"
-              >
-                open Settings
-              </Link>{" "}
-              to add keys.
             </p>
           </div>
           <div className="space-y-3">

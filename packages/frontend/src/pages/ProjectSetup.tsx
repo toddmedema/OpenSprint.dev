@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { getProjectPhasePath } from "../lib/phaseRouting";
 import { Layout } from "../components/layout/Layout";
@@ -21,6 +21,7 @@ import type {
 } from "@opensprint/shared";
 import { DEFAULT_AI_AUTONOMY_LEVEL, DEFAULT_DEPLOYMENT_CONFIG } from "@opensprint/shared";
 import { api, isApiError } from "../api/client";
+import { getDefaultProviderFromEnvKeys } from "../utils/agentConfigDefaults";
 
 type Step = "basics" | "agents" | "testing" | "hil" | "confirm";
 
@@ -99,6 +100,7 @@ export function ProjectSetup() {
   const [modelRefreshTrigger] = useState(0);
   const [createError, setCreateError] = useState<string | null>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
+  const hasSetAgentDefaultRef = useRef(false);
 
   const steps = ADD_EXISTING_STEPS;
   const currentStepIndex = steps.findIndex((s) => s.key === step);
@@ -139,7 +141,14 @@ export function ProjectSetup() {
         const anthropic = (apiKeys?.ANTHROPIC_API_KEY?.length ?? 0) > 0;
         const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
         const openai = (apiKeys?.OPENAI_API_KEY?.length ?? 0) > 0;
-        setEnvKeys({ anthropic, cursor, openai, claudeCli: env.claudeCli });
+        const keys = { anthropic, cursor, openai, claudeCli: env.claudeCli };
+        setEnvKeys(keys);
+        if (!hasSetAgentDefaultRef.current) {
+          hasSetAgentDefaultRef.current = true;
+          const defaultType = getDefaultProviderFromEnvKeys(keys);
+          setSimpleComplexityAgent((prev) => ({ ...prev, type: defaultType, model: "", cliCommand: "" }));
+          setComplexComplexityAgent((prev) => ({ ...prev, type: defaultType, model: "", cliCommand: "" }));
+        }
       })
       .catch(() => setEnvKeys(null));
   }, [step]);

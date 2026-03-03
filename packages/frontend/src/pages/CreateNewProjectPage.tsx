@@ -12,6 +12,7 @@ import {
 import type { ProjectMetadataState } from "../components/ProjectSetupWizard";
 import type { AgentType, Project, ScaffoldRecoveryInfo } from "@opensprint/shared";
 import { api, ApiError } from "../api/client";
+import { getDefaultProviderFromEnvKeys } from "../utils/agentConfigDefaults";
 import { getPlatformFamily } from "../utils/platform";
 import { getRunInstructions } from "../utils/runInstructions";
 
@@ -59,6 +60,7 @@ export function CreateNewProjectPage() {
     "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | "OPENAI_API_KEY" | null
   >(null);
   const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
+  const hasSetAgentDefaultRef = useRef(false);
 
   const [scaffolding, setScaffolding] = useState(false);
   const [scaffoldError, setScaffoldError] = useState<string | null>(null);
@@ -78,7 +80,14 @@ export function CreateNewProjectPage() {
         const anthropic = (apiKeys?.ANTHROPIC_API_KEY?.length ?? 0) > 0;
         const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
         const openai = (apiKeys?.OPENAI_API_KEY?.length ?? 0) > 0;
-        setEnvKeys({ anthropic, cursor, openai, claudeCli: env.claudeCli });
+        const keys = { anthropic, cursor, openai, claudeCli: env.claudeCli };
+        setEnvKeys(keys);
+        if (!hasSetAgentDefaultRef.current) {
+          hasSetAgentDefaultRef.current = true;
+          const defaultType = getDefaultProviderFromEnvKeys(keys);
+          setSimpleComplexityAgent((prev) => ({ ...prev, type: defaultType, model: "", cliCommand: "" }));
+          setComplexComplexityAgent((prev) => ({ ...prev, type: defaultType, model: "", cliCommand: "" }));
+        }
       })
       .catch(() => setEnvKeys(null));
   }, [step]);

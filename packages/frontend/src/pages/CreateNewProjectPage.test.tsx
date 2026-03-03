@@ -209,6 +209,35 @@ describe("CreateNewProjectPage", () => {
     expect(screen.queryByTestId("create-new-basics-step")).not.toBeInTheDocument();
   });
 
+  it("defaults provider to first with API key (Claude when anthropic has keys)", async () => {
+    const user = userEvent.setup();
+    mockGlobalSettingsGet.mockResolvedValue({
+      databaseUrl: "",
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "a", masked: "••••••••" }],
+        CURSOR_API_KEY: [],
+        OPENAI_API_KEY: [],
+      },
+    });
+    mockGetKeys.mockResolvedValue({
+      anthropic: true,
+      cursor: false,
+      openai: false,
+      claudeCli: true,
+      useCustomCli: false,
+    });
+
+    renderCreateNewProjectPage();
+    await user.type(screen.getByLabelText(/project name/i), "My App");
+    await user.type(screen.getByPlaceholderText("/Users/you/projects/my-app"), "/path/to/parent");
+    await user.click(screen.getByTestId("next-button"));
+
+    await screen.findByTestId("simplified-agents-step");
+    const providerSelects = screen.getAllByRole("combobox");
+    expect(providerSelects[0]).toHaveValue("claude");
+    expect(providerSelects[2]).toHaveValue("claude");
+  });
+
   it("shows no-API-keys warning when 0 providers have keys and Custom is not selected", async () => {
     const user = userEvent.setup();
     mockGlobalSettingsGet.mockResolvedValue({
@@ -512,6 +541,9 @@ describe("CreateNewProjectPage", () => {
     await user.click(screen.getByTestId("next-button"));
 
     await screen.findByTestId("simplified-agents-step");
+    // Default is claude (first with keys); select cursor which has no key
+    const providerSelects = screen.getAllByRole("combobox");
+    await user.selectOptions(providerSelects[0], "cursor");
     expect(screen.getByTestId("next-button")).toBeDisabled();
   });
 
