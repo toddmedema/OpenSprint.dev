@@ -117,6 +117,8 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+    /** Inline "add new env var" row state per target (key: custom-0, expo-staging, etc.) */
+    const [newEnvRow, setNewEnvRow] = useState<Record<string, { key: string; value: string }>>({});
 
     const saveStatus = saving ? "saving" : "saved";
 
@@ -1131,22 +1133,63 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                                     </button>
                                   </div>
                                 ))}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const key = prompt("Environment variable name:");
-                                    if (!key || (t.envVars ?? {})[key] !== undefined) return;
+                                {(() => {
+                                  const tk = `custom-${i}`;
+                                  const row = newEnvRow[tk] ?? { key: "", value: "" };
+                                  const commitNewRow = (keyVal: string, valueVal: string) => {
+                                    const k = keyVal.trim();
+                                    if (!k || (t.envVars ?? {})[k] !== undefined) return;
                                     const next = [...(deployment.targets ?? [])];
                                     next[i] = {
                                       ...next[i],
-                                      envVars: { ...(next[i].envVars ?? {}), [key]: "" },
+                                      envVars: { ...(next[i].envVars ?? {}), [k]: valueVal },
                                     };
                                     updateDeployment({ targets: next });
-                                  }}
-                                  className="btn-secondary text-xs"
-                                >
-                                  + Add env var
-                                </button>
+                                    setNewEnvRow((prev) => {
+                                      const u = { ...prev };
+                                      delete u[tk];
+                                      return u;
+                                    });
+                                  };
+                                  return (
+                                    <div className="flex gap-2 mb-2">
+                                      <input
+                                        type="text"
+                                        className="input flex-1 font-mono text-xs"
+                                        placeholder="KEY"
+                                        value={row.key}
+                                        onChange={(e) =>
+                                          setNewEnvRow((prev) => ({
+                                            ...prev,
+                                            [tk]: { ...row, key: e.target.value },
+                                          }))
+                                        }
+                                        onBlur={(e) => {
+                                          const k = e.target.value.trim();
+                                          if (k) commitNewRow(k, row.value);
+                                        }}
+                                        data-testid="env-var-name-input"
+                                      />
+                                      <input
+                                        type="text"
+                                        className="input flex-1 font-mono text-xs"
+                                        placeholder="value"
+                                        value={row.value}
+                                        onChange={(e) =>
+                                          setNewEnvRow((prev) => ({
+                                            ...prev,
+                                            [tk]: { ...row, value: e.target.value },
+                                          }))
+                                        }
+                                        onBlur={(e) => {
+                                          const k = row.key.trim();
+                                          if (k) commitNewRow(k, e.target.value);
+                                        }}
+                                        data-testid="env-var-value-input"
+                                      />
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </div>
                           ))}
@@ -1235,17 +1278,58 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                                   </button>
                                 </div>
                               ))}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const key = prompt("Environment variable name:");
-                                  if (!key || targetEnvVars[key] !== undefined) return;
-                                  updateTargetEnvVars({ ...targetEnvVars, [key]: "" });
-                                }}
-                                className="btn-secondary text-xs"
-                              >
-                                + Add env var
-                              </button>
+                              {(() => {
+                                const tk = `expo-${target.name}`;
+                                const row = newEnvRow[tk] ?? { key: "", value: "" };
+                                const commitNewRow = (keyVal: string, valueVal: string) => {
+                                  const k = keyVal.trim();
+                                  if (!k || targetEnvVars[k] !== undefined) return;
+                                  updateTargetEnvVars({ ...targetEnvVars, [k]: valueVal });
+                                  setNewEnvRow((prev) => {
+                                    const u = { ...prev };
+                                    delete u[tk];
+                                    return u;
+                                  });
+                                };
+                                return (
+                                  <div className="flex gap-2 mb-2">
+                                    <input
+                                      type="text"
+                                      className="input flex-1 font-mono text-xs"
+                                      placeholder="KEY"
+                                      value={row.key}
+                                      onChange={(e) =>
+                                        setNewEnvRow((prev) => ({
+                                          ...prev,
+                                          [tk]: { ...row, key: e.target.value },
+                                        }))
+                                      }
+                                      onBlur={(e) => {
+                                        const k = e.target.value.trim();
+                                        if (k) commitNewRow(k, row.value);
+                                      }}
+                                      data-testid="env-var-name-input"
+                                    />
+                                    <input
+                                      type="text"
+                                      className="input flex-1 font-mono text-xs"
+                                      placeholder="value"
+                                      value={row.value}
+                                      onChange={(e) =>
+                                        setNewEnvRow((prev) => ({
+                                          ...prev,
+                                          [tk]: { ...row, value: e.target.value },
+                                        }))
+                                      }
+                                      onBlur={(e) => {
+                                        const k = row.key.trim();
+                                        if (k) commitNewRow(k, e.target.value);
+                                      }}
+                                      data-testid="env-var-value-input"
+                                    />
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })}

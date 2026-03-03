@@ -482,6 +482,51 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByText("Environment variables per target")).toBeInTheDocument();
   });
 
+  it("adds env var via inline inputs in Deploy settings (no prompt)", async () => {
+    const promptSpy = vi.spyOn(window, "prompt").mockImplementation(() => null);
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      deployment: {
+        mode: "custom" as const,
+        targets: [
+          { name: "staging", command: "./deploy.sh", envVars: {} },
+          { name: "production", command: "./deploy.sh" },
+        ],
+      },
+    });
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const deploymentTab = screen.getByRole("button", { name: "Deliver" });
+    await userEvent.click(deploymentTab);
+
+    const nameInputs = screen.getAllByTestId("env-var-name-input");
+    expect(nameInputs.length).toBeGreaterThanOrEqual(1);
+    const valueInputs = screen.getAllByTestId("env-var-value-input");
+    expect(valueInputs.length).toBeGreaterThanOrEqual(1);
+
+    await userEvent.type(nameInputs[0]!, "API_KEY");
+    fireEvent.blur(nameInputs[0]!);
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          deployment: expect.objectContaining({
+            targets: expect.arrayContaining([
+              expect.objectContaining({
+                name: "staging",
+                envVars: expect.objectContaining({ API_KEY: "" }),
+              }),
+            ]),
+          }),
+        })
+      )
+    );
+    expect(promptSpy).not.toHaveBeenCalled();
+    promptSpy.mockRestore();
+  });
+
   it("saves auto-deploy triggers for Custom mode targets on blur", async () => {
     mockGetSettings.mockResolvedValueOnce({
       ...mockSettings,
