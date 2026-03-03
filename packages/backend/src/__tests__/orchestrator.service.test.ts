@@ -512,6 +512,58 @@ describe("OrchestratorService (slot-based model)", () => {
       const status = await orchestrator.ensureRunning(projectId);
       expect(status.totalFailed).toBeGreaterThanOrEqual(1);
     });
+
+    it("rebuilds review coordination when recovering a review-phase task", async () => {
+      const task = { ...makeTask("task-review"), status: "in_progress" };
+      const host = (orchestrator as any).buildRecoveryHost();
+
+      mockGetSettings.mockResolvedValue({
+        ...defaultSettings,
+        reviewMode: "always",
+        simpleComplexityAgent: { type: "cursor", model: "gpt-5", cliCommand: null },
+        complexComplexityAgent: { type: "cursor", model: "gpt-5", cliCommand: null },
+      });
+      mockGetChangedFiles.mockResolvedValue(["src/foo.ts"]);
+      mockRunScopedTests.mockResolvedValue({ passed: 3, failed: 0, rawOutput: "ok" });
+      mockGetActiveDir.mockImplementation((base: string, tid: string) =>
+        path.join(base, ".opensprint", "active", tid)
+      );
+      mockWriteJsonAtomic.mockResolvedValue(undefined);
+      mockInvokeReviewAgent.mockImplementation(() => ({ kill: vi.fn(), pid: 4321 }));
+
+      const resumed = await host.resumeReviewPhase?.(
+        projectId,
+        repoPath,
+        task as never,
+        {
+          taskId: task.id,
+          projectId,
+          phase: "review",
+          branchName: `opensprint/${task.id}`,
+          worktreePath: repoPath,
+          promptPath: path.join(repoPath, ".opensprint", "active", task.id, "prompt.md"),
+          agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+          attempt: 2,
+          createdAt: "2026-03-02T10:00:00.000Z",
+        },
+        { pidAlive: false }
+      );
+
+      expect(resumed).toBe(true);
+      await vi.waitFor(() => {
+        expect(mockRunScopedTests).toHaveBeenCalledWith(
+          repoPath,
+          ["src/foo.ts"],
+          expect.any(String)
+        );
+      });
+      await vi.waitFor(() => {
+        expect(mockInvokeReviewAgent).toHaveBeenCalled();
+      });
+      await vi.waitFor(() => {
+        expect(mockCommitWip).toHaveBeenCalledWith(repoPath, task.id);
+      });
+    });
   });
 
   describe("single task dispatch (maxConcurrentCoders=1)", () => {

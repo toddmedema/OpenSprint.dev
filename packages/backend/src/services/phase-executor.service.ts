@@ -85,6 +85,7 @@ export class PhaseExecutorService {
       outputLogBytes: 0,
       outputParseBuffer: "",
       activeToolCallIds: new Set<string>(),
+      activeToolCallSummaries: new Map<string, string | null>(),
       startedAt,
       exitHandled: false,
       killedDueToTimeout: false,
@@ -271,11 +272,13 @@ export class PhaseExecutorService {
         {
           projectId,
           taskId: task.id,
+          repoPath,
           phase: "coding",
           wtPath,
           branchName,
           promptPath,
           agentConfig,
+          attempt: slot.attempt,
           agentLabel: slot.taskTitle ?? task.id,
           role: "coder",
           onDone: (code) =>
@@ -457,11 +460,13 @@ export class PhaseExecutorService {
               {
                 projectId,
                 taskId: task.id,
+                repoPath,
                 phase: "review",
                 wtPath,
                 branchName,
                 promptPath: anglePromptPath,
                 agentConfig,
+                attempt: slot.attempt,
                 agentLabel: slot.taskTitle ?? task.id,
                 role: "reviewer",
                 onDone: (code) =>
@@ -488,11 +493,13 @@ export class PhaseExecutorService {
           {
             projectId,
             taskId: task.id,
+            repoPath,
             phase: "review",
             wtPath,
             branchName,
             promptPath: path.join(taskDir, "prompt.md"),
             agentConfig,
+            attempt: slot.attempt,
             agentLabel: slot.taskTitle ?? task.id,
             role: "reviewer",
             onDone: (code) =>

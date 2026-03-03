@@ -548,6 +548,27 @@ describe("websocketMiddleware", () => {
       });
     });
 
+    it("invalidates diagnostics on agent.activity", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      wsInstance!.simulateMessage({
+        type: "agent.activity",
+        taskId: "task-1",
+        phase: "coding",
+        activity: "waiting_on_tool",
+        summary: "npm test",
+      });
+
+      await vi.waitFor(() => {
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({
+          queryKey: queryKeys.execute.diagnostics("proj-1", "task-1"),
+        });
+      });
+    });
+
     it("dispatches setCompletionState on agent.completed", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));

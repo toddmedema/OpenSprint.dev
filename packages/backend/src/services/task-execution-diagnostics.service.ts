@@ -169,6 +169,26 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
     };
   }
 
+  if (event.event === "agent.waiting_on_tool" || event.event === "agent.tool_completed") {
+    const phase = phaseFromUnknown(data.phase, "coding");
+    const toolSummary = asString(data.summary);
+    const waiting = event.event === "agent.waiting_on_tool";
+    return {
+      at: event.timestamp,
+      attempt,
+      phase,
+      outcome: "running",
+      title: waiting ? "Waiting on tool" : "Tool completed",
+      summary: compactExecutionText(
+        waiting
+          ? `${labelForPhase(phase)} waiting on ${toolSummary ?? "a tool call"}`
+          : `${labelForPhase(phase)} tool completed${toolSummary ? `: ${toolSummary}` : ""}`,
+        240
+      ),
+      nextAction: waiting ? "Awaiting tool completion" : "Agent resuming after tool output",
+    };
+  }
+
   if (event.event === "task.failed") {
     const phase = phaseFromUnknown(data.phase, "coding");
     const reason = asString(data.reason);
@@ -429,6 +449,7 @@ export class TaskExecutionDiagnosticsService {
       }
     }
 
+    const latestTimelineEvent = timeline.at(-1) ?? null;
     const latestEvent = [...timeline].reverse().find((event) => event.outcome !== "running") ?? null;
 
     return {
@@ -436,10 +457,14 @@ export class TaskExecutionDiagnosticsService {
       taskStatus: task.status,
       blockReason: task.block_reason ?? null,
       cumulativeAttempts,
-      latestSummary: lastExecution?.summary ?? latestEvent?.summary ?? null,
-      latestFailureType: lastExecution?.failureType ?? latestEvent?.failureType ?? null,
-      latestOutcome: lastExecution?.outcome ?? latestEvent?.outcome ?? null,
-      latestNextAction: latestEvent?.nextAction ?? defaultNextAction(lastExecution?.outcome ?? "failed"),
+      latestSummary: lastExecution?.summary ?? latestTimelineEvent?.summary ?? latestEvent?.summary ?? null,
+      latestFailureType:
+        lastExecution?.failureType ?? latestTimelineEvent?.failureType ?? latestEvent?.failureType ?? null,
+      latestOutcome: lastExecution?.outcome ?? latestTimelineEvent?.outcome ?? latestEvent?.outcome ?? null,
+      latestNextAction:
+        latestTimelineEvent?.nextAction ??
+        latestEvent?.nextAction ??
+        defaultNextAction(lastExecution?.outcome ?? "failed"),
       attempts,
       timeline,
     };

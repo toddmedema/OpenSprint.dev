@@ -165,4 +165,54 @@ describe("TaskExecutionDiagnosticsService", () => {
       })
     );
   });
+
+  it("surfaces running tool-wait diagnostics for active attempts", async () => {
+    taskStore.show.mockResolvedValue({
+      id: taskId,
+      status: "in_progress",
+      labels: ["attempts:6"],
+      block_reason: null,
+      last_execution_summary: null,
+    });
+    sessionManager.listSessions.mockResolvedValue([]);
+    mockReadForTask.mockResolvedValue([
+      {
+        timestamp: "2026-03-02T10:00:00.000Z",
+        projectId,
+        taskId,
+        event: "transition.start_task",
+        data: { attempt: 6 },
+      },
+      {
+        timestamp: "2026-03-02T10:02:00.000Z",
+        projectId,
+        taskId,
+        event: "agent.waiting_on_tool",
+        data: {
+          attempt: 6,
+          phase: "coding",
+          summary: "npm test -- --runInBand",
+        },
+      },
+    ]);
+
+    const service = new TaskExecutionDiagnosticsService(
+      projectService as never,
+      taskStore as never,
+      sessionManager as never
+    );
+
+    const diagnostics = await service.getDiagnostics(projectId, taskId);
+
+    expect(diagnostics.latestOutcome).toBe("running");
+    expect(diagnostics.latestSummary).toContain("waiting on npm test");
+    expect(diagnostics.latestNextAction).toBe("Awaiting tool completion");
+    expect(diagnostics.timeline.at(-1)).toEqual(
+      expect.objectContaining({
+        phase: "coding",
+        outcome: "running",
+        title: "Waiting on tool",
+      })
+    );
+  });
 });

@@ -288,6 +288,7 @@ export class OrchestratorService {
         outputLogBytes: 0,
         outputParseBuffer: "",
         activeToolCallIds: new Set<string>(),
+        activeToolCallSummaries: new Map<string, string | null>(),
         startedAt: new Date().toISOString(),
         exitHandled: false,
         killedDueToTimeout: false,
@@ -791,11 +792,13 @@ export class OrchestratorService {
           {
             projectId,
             taskId: task.id,
+            repoPath,
             phase: "coding",
             wtPath: assignment.worktreePath,
             branchName: assignment.branchName,
             promptPath: assignment.promptPath,
             agentConfig: assignment.agentConfig as AgentConfig,
+            attempt: assignment.attempt,
             agentLabel: slot.taskTitle ?? task.id,
             role: "coder",
             onDone: (code) =>
@@ -804,6 +807,132 @@ export class OrchestratorService {
           slot.agent,
           slot.timers
         );
+        return true;
+      },
+      resumeReviewPhase: async (
+        projectId: string,
+        repoPath: string,
+        task: StoredTask,
+        assignment: GuppAssignment,
+        options: { pidAlive: boolean }
+      ): Promise<boolean> => {
+        const state = this.getState(projectId);
+        const settings = await this.projectService.getSettings(projectId);
+        const reviewMode = settings.reviewMode ?? DEFAULT_REVIEW_MODE;
+        if (reviewMode === "never") return false;
+
+        try {
+          await fs.access(assignment.worktreePath);
+        } catch {
+          return false;
+        }
+
+        const reviewAngles = [...new Set((settings.reviewAngles ?? []).filter(Boolean))] as ReviewAngle[];
+        if (options.pidAlive && reviewAngles.length > 0) {
+          log.warn("Recovery: cannot safely reattach multi-angle review with live reviewer PID", {
+            taskId: task.id,
+            reviewAngles,
+          });
+          return false;
+        }
+
+        const heartbeat = options.pidAlive
+          ? await heartbeatService.readHeartbeat(assignment.worktreePath, task.id)
+          : null;
+        const handle = heartbeat?.pid ? createPidHandle(heartbeat.pid) : null;
+        if (options.pidAlive && !handle) return false;
+
+        let changedFiles: string[] = [];
+        try {
+          changedFiles = await this.branchManager.getChangedFiles(repoPath, assignment.branchName);
+        } catch {
+          // Fall back to the configured/full suite
+        }
+
+        const reviewerList = AGENT_NAMES_BY_ROLE.reviewer ?? [];
+        const reviewerAssignee =
+          typeof task.assignee === "string" && reviewerList.includes(task.assignee)
+            ? task.assignee
+            : getAgentNameForRole("reviewer", state.nextReviewerIndex);
+        const reviewerIdx = reviewerList.indexOf(reviewerAssignee);
+        if (reviewerIdx >= 0) state.nextReviewerIndex = Math.max(state.nextReviewerIndex, reviewerIdx + 1);
+        else state.nextReviewerIndex += 1;
+
+        const slot = this.createSlot(
+          task.id,
+          task.title ?? null,
+          assignment.branchName,
+          assignment.attempt,
+          reviewerAssignee
+        );
+        slot.worktreePath = assignment.worktreePath;
+        slot.agent.startedAt = assignment.createdAt;
+        state.slots.set(task.id, slot);
+        this.transition(projectId, {
+          to: "enter_review",
+          taskId: task.id,
+          queueDepth: state.status.queueDepth,
+          assignee: reviewerAssignee,
+        });
+        await this.persistCounters(projectId, repoPath);
+
+        this.startReviewCoordinatorAndTests(
+          projectId,
+          repoPath,
+          task,
+          assignment.branchName,
+          settings,
+          changedFiles
+        );
+
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: task.id,
+            event: "recovery.review_resumed",
+            data: {
+              attempt: assignment.attempt,
+              mode: handle ? "reattach" : "respawn",
+              reviewAngles,
+            },
+          })
+          .catch(() => {});
+
+        await this.clearRateLimitNotifications(projectId);
+
+        if (handle) {
+          broadcastToProject(projectId, {
+            type: "agent.started",
+            taskId: task.id,
+            phase: "review",
+            branchName: assignment.branchName,
+            startedAt: assignment.createdAt,
+          });
+          this.lifecycleManager.resumeMonitoring(
+            handle,
+            {
+              projectId,
+              taskId: task.id,
+              repoPath,
+              phase: "review",
+              wtPath: assignment.worktreePath,
+              branchName: assignment.branchName,
+              promptPath: assignment.promptPath,
+              agentConfig: assignment.agentConfig as AgentConfig,
+              attempt: assignment.attempt,
+              agentLabel: slot.taskTitle ?? task.id,
+              role: "reviewer",
+              onDone: (code) =>
+                this.handleReviewDone(projectId, repoPath, task, assignment.branchName, code),
+            },
+            slot.agent,
+            slot.timers
+          );
+          return true;
+        }
+
+        await this.executeReviewPhase(projectId, repoPath, task, assignment.branchName);
         return true;
       },
       removeStaleSlot: async (
@@ -1533,48 +1662,14 @@ export class OrchestratorService {
           assignee: reviewerAssignee,
         });
         await this.persistCounters(projectId, repoPath);
-
-        const coordinator = new TaskPhaseCoordinator(task.id, (testOutcome, reviewOutcome) =>
-          this.resolveTestAndReview(
-            projectId,
-            repoPath,
-            task,
-            branchName,
-            testOutcome,
-            reviewOutcome
-          )
-        , { reviewAngles: settings.reviewAngles });
-        slot.phaseCoordinator = coordinator;
-
-        // Fire-and-forget: tests report to coordinator when done
-        this.testRunner
-          .runScopedTests(wtPath, changedFiles, testCommand)
-          .then(async (scopedResult) => {
-            const sl = this.getState(projectId).slots.get(task.id);
-            if (!sl) {
-              coordinator.setTestOutcome({
-                status: "error",
-                errorMessage: "Slot removed during tests",
-              });
-              return;
-            }
-            sl.phaseResult.testOutput = scopedResult.rawOutput;
-            if (scopedResult.failed > 0) {
-              coordinator.setTestOutcome({
-                status: "failed",
-                results: scopedResult,
-                rawOutput: scopedResult.rawOutput,
-              });
-            } else {
-              sl.phaseResult.testResults = scopedResult;
-              await this.branchManager.commitWip(wtPath, task.id);
-              coordinator.setTestOutcome({ status: "passed", results: scopedResult });
-            }
-          })
-          .catch((err) => {
-            log.error("Background tests failed for task", { taskId: task.id, err });
-            coordinator.setTestOutcome({ status: "error", errorMessage: String(err) });
-          });
+        this.startReviewCoordinatorAndTests(
+          projectId,
+          repoPath,
+          task,
+          branchName,
+          settings,
+          changedFiles
+        );
 
         // Fire-and-forget: review agent spawned, reports to coordinator via handleReviewDone
         await this.clearRateLimitNotifications(projectId);
@@ -1676,6 +1771,63 @@ export class OrchestratorService {
     } catch (err) {
       log.warn("Failed to clear rate limit notifications", { projectId, err });
     }
+  }
+
+  private startReviewCoordinatorAndTests(
+    projectId: string,
+    repoPath: string,
+    task: StoredTask,
+    branchName: string,
+    settings: import("@opensprint/shared").ProjectSettings,
+    changedFiles: string[]
+  ): void {
+    const slot = this.getState(projectId).slots.get(task.id);
+    if (!slot) return;
+    const wtPath = slot.worktreePath ?? repoPath;
+    const testCommand = resolveTestCommand(settings) || undefined;
+    const coordinator = new TaskPhaseCoordinator(
+      task.id,
+      (testOutcome, reviewOutcome) =>
+        this.resolveTestAndReview(
+          projectId,
+          repoPath,
+          task,
+          branchName,
+          testOutcome,
+          reviewOutcome
+        ),
+      { reviewAngles: settings.reviewAngles }
+    );
+    slot.phaseCoordinator = coordinator;
+
+    this.testRunner
+      .runScopedTests(wtPath, changedFiles, testCommand)
+      .then(async (scopedResult) => {
+        const sl = this.getState(projectId).slots.get(task.id);
+        if (!sl) {
+          coordinator.setTestOutcome({
+            status: "error",
+            errorMessage: "Slot removed during tests",
+          });
+          return;
+        }
+        sl.phaseResult.testOutput = scopedResult.rawOutput;
+        if (scopedResult.failed > 0) {
+          coordinator.setTestOutcome({
+            status: "failed",
+            results: scopedResult,
+            rawOutput: scopedResult.rawOutput,
+          });
+        } else {
+          sl.phaseResult.testResults = scopedResult;
+          await this.branchManager.commitWip(wtPath, task.id);
+          coordinator.setTestOutcome({ status: "passed", results: scopedResult });
+        }
+      })
+      .catch((err) => {
+        log.error("Background tests failed for task", { taskId: task.id, err });
+        coordinator.setTestOutcome({ status: "error", errorMessage: String(err) });
+      });
   }
 
   private async executeReviewPhase(

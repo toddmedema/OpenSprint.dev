@@ -8,18 +8,32 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { detectTestFramework } from "../services/test-framework.service.js";
 
+function getDefaultBrowseRoot(): string {
+  if (process.platform === "win32") {
+    const windowsHome =
+      process.env.USERPROFILE?.trim() ||
+      `${process.env.HOMEDRIVE ?? ""}${process.env.HOMEPATH ?? ""}`.trim() ||
+      process.env.HOME?.trim();
+    if (windowsHome) {
+      return path.resolve(windowsHome);
+    }
+  }
+
+  const homeDir = process.env.HOME?.trim() || process.env.USERPROFILE?.trim();
+  if (homeDir) {
+    return path.resolve(homeDir);
+  }
+
+  return path.resolve(process.cwd());
+}
+
 function getFsAllowedRoot(): string {
   const configuredRoot = process.env.OPENSPRINT_FS_ROOT?.trim();
   if (configuredRoot) {
     return path.resolve(configuredRoot);
   }
 
-  const homeDir = process.env.HOME || process.env.USERPROFILE;
-  if (homeDir?.trim()) {
-    return path.resolve(homeDir);
-  }
-
-  return path.resolve(process.cwd());
+  return getDefaultBrowseRoot();
 }
 
 function isPathUnderRoot(resolvedPath: string): boolean {
@@ -43,9 +57,7 @@ fsRouter.get(
   async (req: Request<object, object, object, { path?: string }>, res, next) => {
     try {
       const rawPath = req.query.path;
-      const targetPath = rawPath?.trim()
-        ? resolve(rawPath)
-        : resolve(process.env.HOME || process.env.USERPROFILE || "/");
+      const targetPath = rawPath?.trim() ? resolve(rawPath) : getDefaultBrowseRoot();
 
       if (!isPathUnderRoot(targetPath)) {
         throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");

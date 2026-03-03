@@ -10,6 +10,7 @@ import { agentService } from "./agent.service.js";
 import type { CodingAgentHandle } from "./agent.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { BranchManager } from "./branch-manager.js";
+import { eventLogService } from "./event-log.service.js";
 import { broadcastToProject, sendAgentOutputToProject } from "../websocket/index.js";
 import { TimerRegistry } from "./timer-registry.js";
 import { createLogger } from "../utils/logger.js";
@@ -48,6 +49,8 @@ export interface AgentRunState {
   outputParseBuffer: string;
   /** Active tool call ids inferred from structured agent output (primarily Cursor/Codex NDJSON). */
   activeToolCallIds: Set<string>;
+  /** Best-effort tool summaries keyed by call id (e.g. "npm test"). */
+  activeToolCallSummaries: Map<string, string | null>;
   startedAt: string;
   exitHandled: boolean;
   killedDueToTimeout: boolean;
@@ -58,11 +61,13 @@ export interface AgentRunState {
 export interface AgentRunParams {
   projectId: string;
   taskId: string;
+  repoPath: string;
   phase: AgentPhase;
   wtPath: string;
   branchName: string;
   promptPath: string;
   agentConfig: AgentConfig;
+  attempt: number;
   agentLabel: string;
   /** "coder" uses invokeCodingAgent; "reviewer" uses invokeReviewAgent */
   role: "coder" | "reviewer";
@@ -105,6 +110,7 @@ export class AgentLifecycleManager {
     runState.outputLogBytes = 0;
     runState.outputParseBuffer = "";
     runState.activeToolCallIds.clear();
+    runState.activeToolCallSummaries.clear();
     runState.lastOutputTime = Date.now();
 
     const outputLogPath = path.join(
@@ -133,7 +139,8 @@ export class AgentLifecycleManager {
       outputLogPath,
       projectId,
       onOutput: (chunk: string) => {
-        ingestOutputChunk(runState, chunk);
+        const toolEvents = ingestOutputChunk(runState, chunk);
+        this.recordToolActivity(params, toolEvents);
         runState.lastOutputTime = Date.now();
         sendAgentOutputToProject(projectId, taskId, chunk);
       },
@@ -171,6 +178,7 @@ export class AgentLifecycleManager {
     runState.activeProcess = handle;
     runState.outputParseBuffer = "";
     runState.activeToolCallIds.clear();
+    runState.activeToolCallSummaries.clear();
     runState.lastOutputTime = Date.now();
     runState.exitHandled = false;
     runState.killedDueToTimeout = false;
@@ -181,7 +189,14 @@ export class AgentLifecycleManager {
       taskId,
       OPENSPRINT_PATHS.agentOutputLog
     );
-    const outputTailStop = this.startOutputTail(outputLogPath, runState, projectId, taskId, timers);
+    const outputTailStop = this.startOutputTail(
+      outputLogPath,
+      params,
+      runState,
+      projectId,
+      taskId,
+      timers
+    );
     runState.outputTailStop = outputTailStop;
 
     const wrappedOnDone = async (code: number | null) => {
@@ -201,6 +216,7 @@ export class AgentLifecycleManager {
    */
   private startOutputTail(
     outputLogPath: string,
+    params: AgentRunParams,
     runState: AgentRunState,
     projectId: string,
     taskId: string,
@@ -228,7 +244,8 @@ export class AgentLifecycleManager {
           if (bytesRead > 0) {
             readOffset += bytesRead;
             const chunk = buf.subarray(0, bytesRead).toString();
-            ingestOutputChunk(runState, chunk);
+            const toolEvents = ingestOutputChunk(runState, chunk);
+            this.recordToolActivity(params, toolEvents);
             runState.lastOutputTime = Date.now();
             sendAgentOutputToProject(projectId, taskId, chunk);
           }
@@ -344,6 +361,40 @@ export class AgentLifecycleManager {
     timers.clear("heartbeat");
     timers.clear("inactivity");
   }
+
+  private recordToolActivity(
+    params: AgentRunParams,
+    toolEvents: ToolCallLifecycleEvent[]
+  ): void {
+    if (toolEvents.length === 0) return;
+
+    for (const event of toolEvents) {
+      const summary = formatToolSummary(event.summary);
+      const logEvent = event.kind === "started" ? "agent.waiting_on_tool" : "agent.tool_completed";
+      eventLogService
+        .append(params.repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId: params.projectId,
+          taskId: params.taskId,
+          event: logEvent,
+          data: {
+            attempt: params.attempt,
+            phase: params.phase,
+            toolCallId: event.callId,
+            summary,
+          },
+        })
+        .catch(() => {});
+
+      broadcastToProject(params.projectId, {
+        type: "agent.activity",
+        taskId: params.taskId,
+        phase: params.phase,
+        activity: event.kind === "started" ? "waiting_on_tool" : "tool_completed",
+        ...(summary ? { summary } : {}),
+      });
+    }
+  }
 }
 
 /** Append a chunk to outputLog, evicting oldest entries when the size cap is exceeded. */
@@ -356,15 +407,22 @@ function appendOutputLog(state: AgentRunState, chunk: string): void {
   }
 }
 
-function ingestOutputChunk(state: AgentRunState, chunk: string): void {
-  appendOutputLog(state, chunk);
-  updateToolCallState(state, chunk);
+interface ToolCallLifecycleEvent {
+  kind: "started" | "completed";
+  callId: string;
+  summary: string | null;
 }
 
-function updateToolCallState(state: AgentRunState, chunk: string): void {
+function ingestOutputChunk(state: AgentRunState, chunk: string): ToolCallLifecycleEvent[] {
+  appendOutputLog(state, chunk);
+  return updateToolCallState(state, chunk);
+}
+
+function updateToolCallState(state: AgentRunState, chunk: string): ToolCallLifecycleEvent[] {
   state.outputParseBuffer += chunk;
   const lines = state.outputParseBuffer.split("\n");
   state.outputParseBuffer = lines.pop() ?? "";
+  const toolEvents: ToolCallLifecycleEvent[] = [];
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -375,20 +433,56 @@ function updateToolCallState(state: AgentRunState, chunk: string): void {
         type?: string;
         subtype?: string;
         call_id?: string;
+        tool_call?: Record<string, unknown>;
       };
       if (parsed.type !== "tool_call" || typeof parsed.call_id !== "string") continue;
 
+      const summary = extractToolCallSummary(parsed.tool_call);
+
       if (parsed.subtype === "started") {
         state.activeToolCallIds.add(parsed.call_id);
+        state.activeToolCallSummaries.set(parsed.call_id, summary);
+        toolEvents.push({ kind: "started", callId: parsed.call_id, summary });
       } else if (
         parsed.subtype === "completed" ||
         parsed.subtype === "failed" ||
         parsed.subtype === "cancelled"
       ) {
         state.activeToolCallIds.delete(parsed.call_id);
+        const knownSummary = summary ?? state.activeToolCallSummaries.get(parsed.call_id) ?? null;
+        state.activeToolCallSummaries.delete(parsed.call_id);
+        toolEvents.push({ kind: "completed", callId: parsed.call_id, summary: knownSummary });
       }
     } catch {
       // Non-JSON or partial JSON lines are normal for non-Cursor agents; ignore.
     }
   }
+
+  return toolEvents;
+}
+
+function extractToolCallSummary(toolCall: Record<string, unknown> | undefined): string | null {
+  if (!toolCall || typeof toolCall !== "object") return null;
+
+  const shellToolCall =
+    "shellToolCall" in toolCall &&
+    toolCall.shellToolCall &&
+    typeof toolCall.shellToolCall === "object"
+      ? (toolCall.shellToolCall as Record<string, unknown>)
+      : null;
+  const shellArgs =
+    shellToolCall?.args && typeof shellToolCall.args === "object"
+      ? (shellToolCall.args as Record<string, unknown>)
+      : null;
+  if (typeof shellArgs?.command === "string" && shellArgs.command.trim()) {
+    return shellArgs.command.trim();
+  }
+
+  const toolName = Object.keys(toolCall).find(Boolean);
+  return toolName ?? null;
+}
+
+function formatToolSummary(summary: string | null): string | undefined {
+  if (!summary) return undefined;
+  return summary.length > 160 ? `${summary.slice(0, 157)}...` : summary;
 }

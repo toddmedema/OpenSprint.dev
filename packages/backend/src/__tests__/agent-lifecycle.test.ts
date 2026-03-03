@@ -11,6 +11,7 @@ const mockDeleteHeartbeat = vi.fn().mockResolvedValue(undefined);
 const mockBroadcastToProject = vi.fn();
 const mockSendAgentOutputToProject = vi.fn();
 const mockCommitWip = vi.fn().mockResolvedValue(undefined);
+const mockAppendEvent = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("../services/agent.service.js", () => ({
   agentService: {
@@ -23,6 +24,12 @@ vi.mock("../services/heartbeat.service.js", () => ({
   heartbeatService: {
     writeHeartbeat: (...args: unknown[]) => mockWriteHeartbeat(...args),
     deleteHeartbeat: (...args: unknown[]) => mockDeleteHeartbeat(...args),
+  },
+}));
+
+vi.mock("../services/event-log.service.js", () => ({
+  eventLogService: {
+    append: (...args: unknown[]) => mockAppendEvent(...args),
   },
 }));
 
@@ -45,11 +52,13 @@ describe("AgentLifecycleManager", () => {
   const baseParams: AgentRunParams = {
     projectId: "proj-1",
     taskId: "task-1",
+    repoPath: "/tmp/repo",
     phase: "coding",
     wtPath: "/tmp/repo",
     branchName: "main",
     promptPath: "/tmp/prompt.md",
     agentConfig: { type: "cursor", model: "gpt-4" },
+    attempt: 1,
     agentLabel: "Coder",
     role: "coder",
     onDone: vi.fn().mockResolvedValue(undefined),
@@ -66,6 +75,7 @@ describe("AgentLifecycleManager", () => {
       outputLogBytes: 0,
       outputParseBuffer: "",
       activeToolCallIds: new Set<string>(),
+      activeToolCallSummaries: new Map<string, string | null>(),
       startedAt: "",
       exitHandled: false,
       killedDueToTimeout: false,
@@ -259,6 +269,67 @@ describe("AgentLifecycleManager", () => {
 
       killSpy.mockRestore();
       vi.useRealTimers();
+    });
+
+    it("records tool wait activity for diagnostics when a tool call starts and completes", () => {
+      let capturedOnOutput: ((chunk: string) => void) | undefined;
+      mockInvokeCodingAgent.mockImplementation(
+        (_path: string, _config: unknown, options: { onOutput?: (chunk: string) => void }) => {
+          capturedOnOutput = options.onOutput;
+          return { kill: vi.fn(), pid: 9999 };
+        }
+      );
+
+      manager.run(baseParams, runState, timers);
+      capturedOnOutput?.(
+        '{"type":"tool_call","subtype":"started","call_id":"call-1","tool_call":{"shellToolCall":{"args":{"command":"npm test -- --runInBand"}}}}\n'
+      );
+      capturedOnOutput?.(
+        '{"type":"tool_call","subtype":"completed","call_id":"call-1"}\n'
+      );
+
+      expect(mockAppendEvent).toHaveBeenNthCalledWith(
+        1,
+        "/tmp/repo",
+        expect.objectContaining({
+          taskId: "task-1",
+          event: "agent.waiting_on_tool",
+          data: expect.objectContaining({
+            attempt: 1,
+            phase: "coding",
+            summary: "npm test -- --runInBand",
+          }),
+        })
+      );
+      expect(mockAppendEvent).toHaveBeenNthCalledWith(
+        2,
+        "/tmp/repo",
+        expect.objectContaining({
+          taskId: "task-1",
+          event: "agent.tool_completed",
+          data: expect.objectContaining({
+            attempt: 1,
+            phase: "coding",
+            summary: "npm test -- --runInBand",
+          }),
+        })
+      );
+      expect(mockBroadcastToProject).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          type: "agent.activity",
+          taskId: "task-1",
+          activity: "waiting_on_tool",
+        })
+      );
+      expect(mockBroadcastToProject).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          type: "agent.activity",
+          taskId: "task-1",
+          activity: "tool_completed",
+        })
+      );
     });
   });
 

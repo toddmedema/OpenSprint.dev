@@ -7,11 +7,14 @@ import { RecoveryService } from "../services/recovery.service.js";
 const TEST_PID = 99999;
 const mockFindStaleHeartbeats = vi.fn();
 const mockKill = vi.fn();
+const mockReadHeartbeat = vi.fn();
+const mockFindOrphanedAssignments = vi.fn();
+const mockFindOrphanedAssignmentsFromWorktrees = vi.fn();
 
 vi.mock("../services/heartbeat.service.js", () => ({
   heartbeatService: {
     findStaleHeartbeats: (...args: unknown[]) => mockFindStaleHeartbeats(...args),
-    readHeartbeat: vi.fn().mockResolvedValue(null),
+    readHeartbeat: (...args: unknown[]) => mockReadHeartbeat(...args),
     deleteHeartbeat: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -34,8 +37,9 @@ vi.mock("../services/event-log.service.js", () => ({
 
 vi.mock("../services/crash-recovery.service.js", () => ({
   CrashRecoveryService: vi.fn().mockImplementation(() => ({
-    findOrphanedAssignments: vi.fn().mockResolvedValue([]),
-    findOrphanedAssignmentsFromWorktrees: vi.fn().mockResolvedValue([]),
+    findOrphanedAssignments: (...args: unknown[]) => mockFindOrphanedAssignments(...args),
+    findOrphanedAssignmentsFromWorktrees: (...args: unknown[]) =>
+      mockFindOrphanedAssignmentsFromWorktrees(...args),
     deleteAssignmentAt: vi.fn().mockResolvedValue(undefined),
   })),
 }));
@@ -76,6 +80,10 @@ describe("RecoveryService — stale heartbeat recovery", () => {
     await fs.mkdir(path.join(tmpDir, ".git"), { recursive: true });
     service = new RecoveryService();
     vi.clearAllMocks();
+    mockFindStaleHeartbeats.mockResolvedValue([]);
+    mockReadHeartbeat.mockResolvedValue(null);
+    mockFindOrphanedAssignments.mockResolvedValue([]);
+    mockFindOrphanedAssignmentsFromWorktrees.mockResolvedValue([]);
     vi.mocked(taskStore.show).mockResolvedValue({
       id: "task-stale",
       status: "in_progress",
@@ -173,6 +181,63 @@ describe("RecoveryService — stale heartbeat recovery", () => {
 
     expect(mockKill).not.toHaveBeenCalledWith(expect.anything(), "SIGTERM");
     expect(vi.mocked(taskStore.update)).toHaveBeenCalledWith(
+      "proj-1",
+      "task-stale",
+      expect.objectContaining({ status: "open" })
+    );
+  });
+
+  it("resumes review-phase assignments through the host instead of requeueing", async () => {
+    const reviewHost = {
+      ...host,
+      reattachSlot: vi.fn().mockResolvedValue(false),
+      resumeReviewPhase: vi.fn().mockResolvedValue(true),
+    };
+    vi.mocked(taskStore.listAll).mockResolvedValue([
+      {
+        id: "task-stale",
+        status: "in_progress",
+        assignee: "Boromir",
+      } as never,
+    ]);
+
+    mockFindOrphanedAssignments.mockResolvedValue([
+      {
+        taskId: "task-stale",
+        assignment: {
+          taskId: "task-stale",
+          projectId: "proj-1",
+          phase: "review",
+          branchName: "opensprint/task-stale",
+          worktreePath: "/tmp/review-wt",
+          promptPath: "/tmp/review-wt/.opensprint/active/task-stale/prompt.md",
+          agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+          attempt: 3,
+          createdAt: new Date().toISOString(),
+        },
+      },
+    ]);
+    mockReadHeartbeat.mockResolvedValue({
+      pid: TEST_PID,
+      lastOutputTimestamp: Date.now(),
+      heartbeatTimestamp: Date.now(),
+    });
+    process.kill = mockKill as unknown as typeof process.kill;
+    mockKill.mockImplementation((pid: number, signal: number | string) => {
+      if (signal === 0 && pid === TEST_PID) return;
+      throw new Error("Should not send other signals");
+    });
+
+    await service.runFullRecovery("proj-1", tmpDir, reviewHost, { includeGupp: true });
+
+    expect(reviewHost.resumeReviewPhase).toHaveBeenCalledWith(
+      "proj-1",
+      tmpDir,
+      expect.objectContaining({ id: "task-stale" }),
+      expect.objectContaining({ phase: "review", attempt: 3 }),
+      { pidAlive: true }
+    );
+    expect(vi.mocked(taskStore.update)).not.toHaveBeenCalledWith(
       "proj-1",
       "task-stale",
       expect.objectContaining({ status: "open" })

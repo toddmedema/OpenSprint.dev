@@ -43,6 +43,14 @@ export interface RecoveryHost {
     task: StoredTask,
     assignment: GuppAssignment
   ): Promise<boolean>;
+  /** Called to resume a review-phase task after restart, rebuilding review/test coordination safely. */
+  resumeReviewPhase?(
+    projectId: string,
+    repoPath: string,
+    task: StoredTask,
+    assignment: GuppAssignment,
+    options: { pidAlive: boolean }
+  ): Promise<boolean>;
   /** Called to remove a slot whose task no longer exists in task store */
   removeStaleSlot?(projectId: string, taskId: string, repoPath: string): Promise<void>;
 }
@@ -204,6 +212,16 @@ export class RecoveryService {
       if (pidAlive && assignment.phase === "coding" && host.reattachSlot) {
         const attached = await host.reattachSlot(projectId, repoPath, task, assignment);
         if (attached) {
+          reattached.push(taskId);
+          continue;
+        }
+      }
+
+      if (assignment.phase === "review" && host.resumeReviewPhase) {
+        const resumed = await host.resumeReviewPhase(projectId, repoPath, task, assignment, {
+          pidAlive,
+        });
+        if (resumed) {
           reattached.push(taskId);
           continue;
         }

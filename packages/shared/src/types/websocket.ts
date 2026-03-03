@@ -81,6 +81,14 @@ export interface AgentCompletedEvent {
   reason?: string;
 }
 
+export interface AgentActivityEvent {
+  type: "agent.activity";
+  taskId: string;
+  phase: AgentPhase;
+  activity: "waiting_on_tool" | "tool_completed";
+  summary?: string;
+}
+
 export interface PrdUpdatedEvent {
   type: "prd.updated";
   section: string;
@@ -219,6 +227,7 @@ export type ServerEvent =
   | AgentOutputBackfillEvent
   | AgentStartedEvent
   | AgentCompletedEvent
+  | AgentActivityEvent
   | PrdUpdatedEvent
   | ExecuteStatusEvent
   | TaskBlockedEvent

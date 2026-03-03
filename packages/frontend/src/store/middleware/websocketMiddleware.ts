@@ -271,6 +271,12 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
         break;
 
+      case "agent.activity":
+        void qc.invalidateQueries({
+          queryKey: queryKeys.execute.diagnostics(projectId, event.taskId),
+        });
+        break;
+
       case "agent.completed": {
         const completed = event as AgentCompletedEvent;
         void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
