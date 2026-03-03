@@ -210,7 +210,7 @@ describe("SourceFeedbackSection", () => {
     expect(screen.queryByText(/2\/17\/2026|Feb.*17.*2026|10:00:00/)).not.toBeInTheDocument();
   });
 
-  it("shows link to View feedback in Evaluate that navigates to Evaluate phase with feedback param", async () => {
+  it("shows link to View Feedback that navigates to Evaluate phase with feedback param", async () => {
     mockFeedbackGet.mockResolvedValue({
       id: "fb-1",
       text: "Add dark mode support",
@@ -231,7 +231,7 @@ describe("SourceFeedbackSection", () => {
     );
 
     await screen.findByText("Add dark mode support");
-    const link = screen.getByRole("link", { name: /view feedback in evaluate/i });
+    const link = screen.getByRole("link", { name: /view feedback/i });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute("href", "/projects/proj-1/eval?feedback=fb-1");
     expect(link).toHaveClass("text-brand-600");

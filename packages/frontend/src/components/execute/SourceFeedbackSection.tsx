@@ -85,7 +85,7 @@ function SourceFeedbackSectionInner({
               className="text-xs text-brand-600 hover:text-brand-700 hover:underline"
               data-testid="source-feedback-view-in-eval-link"
             >
-              View feedback in Evaluate
+              View Feedback
             </Link>
           </div>
         </div>
