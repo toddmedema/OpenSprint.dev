@@ -1459,7 +1459,8 @@ export class OrchestratorService {
         settings.gitWorkingMode === "branches" ? 1 : (settings.maxConcurrentCoders ?? 1);
       this.maxSlotsCache.set(projectId, maxSlots);
 
-      const { tasks: readyTasksRaw } = await this.taskStore.readyWithStatusMap(projectId);
+      const { tasks: readyTasksRaw, allIssues } =
+        await this.taskStore.readyWithStatusMap(projectId);
 
       let readyTasks = readyTasksRaw.filter((t) => (t.issue_type ?? t.type) !== "epic");
       readyTasks = readyTasks.filter((t) => (t.issue_type ?? t.type) !== "chore");
@@ -1492,7 +1493,7 @@ export class OrchestratorService {
         state.slots,
         maxSlots,
         {
-          allIssues: readyTasksRaw,
+          allIssues,
           unknownScopeStrategy: settings.unknownScopeStrategy ?? "conservative",
         }
       );

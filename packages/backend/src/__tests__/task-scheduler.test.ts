@@ -114,6 +114,34 @@ describe("TaskScheduler", () => {
       expect(result).toHaveLength(1);
       expect(result[0].task.id).toBe("b");
     });
+
+    it("selects Ready task with all blockers Done when allIssues includes closed blockers", async () => {
+      const blocker = {
+        ...makeTask("blocker"),
+        status: "closed",
+        dependencies: [],
+      };
+      const blocked = {
+        ...makeTask("blocked", 0),
+        dependencies: [{ depends_on_id: "blocker", type: "blocks" }],
+      };
+      const allIssues = [blocker, blocked];
+      mockTaskStore.getBlockersFromIssue.mockImplementation((t: { id: string }) =>
+        t.id === "blocked" ? ["blocker"] : []
+      );
+
+      const result = await scheduler.selectTasks(
+        "proj",
+        "/repo",
+        [blocked],
+        new Map(),
+        1,
+        { allIssues }
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].task.id).toBe("blocked");
+    });
   });
 
   describe("parallel dispatch with file-scope overlap detection", () => {

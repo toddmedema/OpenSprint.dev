@@ -1037,6 +1037,21 @@ suite("TaskStoreService", () => {
       expect(tasks).toHaveLength(1);
       expect(statusMap.size).toBe(2);
     });
+
+    it("should return allIssues including closed blockers for scheduler", async () => {
+      const blocker = await store.create(TEST_PROJECT_ID, "Blocker");
+      const blocked = await store.create(TEST_PROJECT_ID, "Blocked");
+      await store.addDependency(TEST_PROJECT_ID, blocked.id, blocker.id, "blocks");
+      await store.close(TEST_PROJECT_ID, blocker.id, "Done");
+
+      const { tasks, allIssues } = await store.readyWithStatusMap(TEST_PROJECT_ID);
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].id).toBe(blocked.id);
+      expect(allIssues).toHaveLength(2);
+      const statusById = new Map(allIssues.map((i) => [i.id, i.status]));
+      expect(statusById.get(blocker.id)).toBe("closed");
+      expect(statusById.get(blocked.id)).toBe("open");
+    });
   });
 
   describe("ID generation", () => {

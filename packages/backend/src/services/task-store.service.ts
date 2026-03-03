@@ -542,7 +542,7 @@ export class TaskStoreService {
 
   async readyWithStatusMap(
     projectId: string
-  ): Promise<{ tasks: StoredTask[]; statusMap: Map<string, string> }> {
+  ): Promise<{ tasks: StoredTask[]; statusMap: Map<string, string>; allIssues: StoredTask[] }> {
     const allIssues = await this.listAll(projectId);
     const statusMap = new Map(allIssues.map((i) => [i.id, i.status]));
 
@@ -567,7 +567,7 @@ export class TaskStoreService {
     }
 
     filtered.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
-    return { tasks: filtered, statusMap };
+    return { tasks: filtered, statusMap, allIssues };
   }
 
   async ready(projectId: string): Promise<StoredTask[]> {
