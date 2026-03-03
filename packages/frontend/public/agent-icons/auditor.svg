@@ -1,4 +1,5 @@
 <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(0, -4)">
   <line x1="4" y1="48" x2="48" y2="48" stroke="#c4b5fd" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
   <path d="M12 48 L12 28 Q12 12 26 12 Q40 12 40 28 L40 48"
         fill="#ede9fe" fill-opacity="0.05" stroke="#c4b5fd" stroke-width="1.8" stroke-linejoin="round"/>
@@ -8,4 +9,5 @@
   <path d="M15 32 Q15 18 26 16 Q37 18 37 32"
         fill="none" stroke="#a78bfa" stroke-width="0.8" stroke-dasharray="2 2.5" opacity="0.5"/>
   <line x1="10" y1="48" x2="42" y2="48" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round"/>
+  </g>
 </svg>
