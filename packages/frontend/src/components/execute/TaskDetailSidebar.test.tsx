@@ -94,6 +94,8 @@ function createMinimalProps(overrides: Record<string, unknown> = {}) {
     setDescriptionSectionExpanded: vi.fn(),
     artifactsSectionExpanded: true,
     setArtifactsSectionExpanded: vi.fn(),
+    diagnosticsSectionExpanded: true,
+    setDiagnosticsSectionExpanded: vi.fn(),
     sourceFeedbackExpanded: {} as Record<string, boolean>,
     setSourceFeedbackExpanded: vi.fn(),
     onClose: vi.fn(),
@@ -149,6 +151,10 @@ function createMinimalProps(overrides: Record<string, unknown> = {}) {
       >,
       artifactsSectionExpanded: flat.artifactsSectionExpanded as boolean,
       setArtifactsSectionExpanded: flat.setArtifactsSectionExpanded as React.Dispatch<
+        React.SetStateAction<boolean>
+      >,
+      diagnosticsSectionExpanded: flat.diagnosticsSectionExpanded as boolean,
+      setDiagnosticsSectionExpanded: flat.setDiagnosticsSectionExpanded as React.Dispatch<
         React.SetStateAction<boolean>
       >,
       sourceFeedbackExpanded: flat.sourceFeedbackExpanded as Record<string, boolean>,
@@ -2124,6 +2130,7 @@ describe("TaskDetailSidebar", () => {
     const setSourceFeedbackExpanded = vi.fn();
     const setDescriptionSectionExpanded = vi.fn();
     const setArtifactsSectionExpanded = vi.fn();
+    const setDiagnosticsSectionExpanded = vi.fn();
     const props = createMinimalProps({
       selectedTaskData: {
         id: "epic-1.1",
@@ -2141,12 +2148,26 @@ describe("TaskDetailSidebar", () => {
         createdAt: "",
         updatedAt: "",
       },
+      diagnostics: {
+        taskId: "epic-1.1",
+        taskStatus: "in_progress",
+        blockReason: null,
+        cumulativeAttempts: 1,
+        latestSummary: "Running",
+        latestFailureType: null,
+        latestOutcome: "running" as const,
+        latestNextAction: null,
+        timeline: [],
+        attempts: [],
+      },
       sourceFeedbackExpanded: { "fb-1": true },
       setSourceFeedbackExpanded,
       descriptionSectionExpanded: true,
       setDescriptionSectionExpanded,
       artifactsSectionExpanded: true,
       setArtifactsSectionExpanded,
+      diagnosticsSectionExpanded: true,
+      setDiagnosticsSectionExpanded,
     });
 
     renderSidebar(props, {
@@ -2157,6 +2178,9 @@ describe("TaskDetailSidebar", () => {
 
     const descBtn = screen.getByRole("button", { name: /collapse description/i });
     const sourceBtn = screen.getByRole("button", { name: /collapse source feedback/i });
+    const diagnosticsBtn = screen.getByRole("button", {
+      name: /collapse execution diagnostics/i,
+    });
     const artifactsBtn = screen.getByRole("button", {
       name: /collapse live agent output/i,
     });
@@ -2166,6 +2190,9 @@ describe("TaskDetailSidebar", () => {
 
     await user.click(sourceBtn);
     expect(setSourceFeedbackExpanded).toHaveBeenCalledTimes(1);
+
+    await user.click(diagnosticsBtn);
+    expect(setDiagnosticsSectionExpanded).toHaveBeenCalledTimes(1);
 
     await user.click(artifactsBtn);
     expect(setArtifactsSectionExpanded).toHaveBeenCalledTimes(1);
@@ -2334,6 +2361,31 @@ describe("TaskDetailSidebar", () => {
     expect(screen.getByTestId("execution-attempt-6")).toHaveTextContent(
       "packages/backend/src/routes/global-settings.ts"
     );
+  });
+
+  it("hides Execution diagnostics content when diagnosticsSectionExpanded is false", () => {
+    const props = createMinimalProps({
+      diagnostics: {
+        taskId: "epic-1.1",
+        taskStatus: "blocked",
+        blockReason: "Merge Failure",
+        cumulativeAttempts: 1,
+        latestSummary: "Merge failed",
+        latestFailureType: null,
+        latestOutcome: "blocked" as const,
+        latestNextAction: null,
+        timeline: [],
+        attempts: [],
+      },
+      diagnosticsSectionExpanded: false,
+    });
+
+    renderSidebar(props, {
+      preloadedState: defaultPreloadedState,
+    });
+
+    expect(screen.getByRole("button", { name: /expand execution diagnostics/i })).toBeInTheDocument();
+    expect(screen.queryByTestId("execution-diagnostics-section")).not.toBeInTheDocument();
   });
 
   it("shows multiple linked feedback sections when task has sourceFeedbackIds", async () => {

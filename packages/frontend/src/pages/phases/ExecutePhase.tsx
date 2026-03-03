@@ -57,6 +57,7 @@ export function ExecutePhase({
   });
   const [artifactsSectionExpanded, setArtifactsSectionExpanded] = useState(true);
   const [descriptionSectionExpanded, setDescriptionSectionExpanded] = useState(true);
+  const [diagnosticsSectionExpanded, setDiagnosticsSectionExpanded] = useState(true);
   const [sourceFeedbackExpanded, setSourceFeedbackExpanded] = useState<Record<string, boolean>>({});
   const executeScrollRef = useRef<HTMLDivElement>(null);
 
@@ -525,6 +526,8 @@ export function ExecutePhase({
               setDescriptionSectionExpanded,
               artifactsSectionExpanded,
               setArtifactsSectionExpanded,
+              diagnosticsSectionExpanded,
+              setDiagnosticsSectionExpanded,
               sourceFeedbackExpanded,
               setSourceFeedbackExpanded,
             }}

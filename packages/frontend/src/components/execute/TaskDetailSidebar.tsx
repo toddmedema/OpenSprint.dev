@@ -96,6 +96,8 @@ export interface TaskDetailSections {
   setDescriptionSectionExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   artifactsSectionExpanded: boolean;
   setArtifactsSectionExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  diagnosticsSectionExpanded: boolean;
+  setDiagnosticsSectionExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   sourceFeedbackExpanded: Record<string, boolean>;
   setSourceFeedbackExpanded: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
 }
@@ -181,6 +183,8 @@ function areTaskDetailSidebarPropsEqual(
     sec(prev).setDescriptionSectionExpanded !== sec(next).setDescriptionSectionExpanded ||
     sec(prev).artifactsSectionExpanded !== sec(next).artifactsSectionExpanded ||
     sec(prev).setArtifactsSectionExpanded !== sec(next).setArtifactsSectionExpanded ||
+    sec(prev).diagnosticsSectionExpanded !== sec(next).diagnosticsSectionExpanded ||
+    sec(prev).setDiagnosticsSectionExpanded !== sec(next).setDiagnosticsSectionExpanded ||
     cb(prev).onNavigateToPlan !== cb(next).onNavigateToPlan ||
     cb(prev).onClose !== cb(next).onClose ||
     prev.openQuestionNotification !== next.openQuestionNotification ||
@@ -231,6 +235,8 @@ function TaskDetailSidebarInner({
     setDescriptionSectionExpanded,
     artifactsSectionExpanded,
     setArtifactsSectionExpanded,
+    diagnosticsSectionExpanded,
+    setDiagnosticsSectionExpanded,
   } = sections;
   const {
     onNavigateToPlan,
@@ -860,16 +866,26 @@ function TaskDetailSidebarInner({
             ))
           : null}
 
-        <div className="p-4" data-testid="execution-diagnostics-section">
-          <div className="rounded-lg border border-theme-border bg-theme-surface p-4">
-            <h4 className="text-sm font-medium text-theme-text">Execution diagnostics</h4>
+        <CollapsibleSection
+          title="Execution diagnostics"
+          expanded={diagnosticsSectionExpanded}
+          onToggle={() => setDiagnosticsSectionExpanded((prev) => !prev)}
+          expandAriaLabel="Expand Execution diagnostics"
+          collapseAriaLabel="Collapse Execution diagnostics"
+          contentId="execution-diagnostics-content"
+          headerId="execution-diagnostics-header"
+        >
+          <div
+            className="rounded-lg border border-theme-border bg-theme-surface p-4"
+            data-testid="execution-diagnostics-section"
+          >
             {diagnosticsLoading && !diagnostics ? (
-              <div className="mt-3 text-xs text-theme-muted">Loading execution diagnostics...</div>
+              <div className="text-xs text-theme-muted">Loading execution diagnostics...</div>
             ) : diagnostics &&
               (diagnostics.latestSummary ||
                 diagnostics.attempts.length > 0 ||
                 diagnostics.timeline.length > 0) ? (
-              <div className="mt-3 space-y-3">
+              <div className="space-y-3">
                 <div className="space-y-1 text-xs">
                   {task?.blockReason && (
                     <div
@@ -945,10 +961,10 @@ function TaskDetailSidebarInner({
                 </div>
               </div>
             ) : (
-              <div className="mt-3 text-xs text-theme-muted">No execution diagnostics yet.</div>
+              <div className="text-xs text-theme-muted">No execution diagnostics yet.</div>
             )}
           </div>
-        </div>
+        </CollapsibleSection>
 
         <CollapsibleSection
           title={isDoneTask ? "Done Work Artifacts" : "Live agent output"}

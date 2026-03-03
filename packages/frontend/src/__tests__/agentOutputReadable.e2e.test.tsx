@@ -114,6 +114,8 @@ function createTaskDetailSidebarProps(taskDetail: {
       setDescriptionSectionExpanded: vi.fn(),
       artifactsSectionExpanded: true,
       setArtifactsSectionExpanded: vi.fn(),
+      diagnosticsSectionExpanded: true,
+      setDiagnosticsSectionExpanded: vi.fn(),
     },
     callbacks: {
       onClose: vi.fn(),
