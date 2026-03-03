@@ -17,9 +17,13 @@ const mockDelete = vi.fn();
 const mockGetGlobalStatus = vi.fn();
 const mockValidateKey = vi.fn();
 const mockSaveKey = vi.fn();
+const mockDbStatusGet = vi.fn();
 
 vi.mock("../api/client", () => ({
   api: {
+    dbStatus: {
+      get: (...args: unknown[]) => mockDbStatusGet(...args),
+    },
     projects: {
       list: (...args: unknown[]) => mockProjectsList(...args),
       archive: (...args: unknown[]) => mockArchive(...args),
@@ -73,7 +77,9 @@ describe("HomeScreen", () => {
     mockGetGlobalStatus.mockReset();
     mockValidateKey.mockReset();
     mockSaveKey.mockReset();
+    mockDbStatusGet.mockReset();
     mockGetGlobalStatus.mockResolvedValue({ hasAnyKey: true, useCustomCli: false });
+    mockDbStatusGet.mockResolvedValue({ ok: true });
   });
 
   it("shows loading state while fetching projects", async () => {
@@ -116,6 +122,61 @@ describe("HomeScreen", () => {
     await screen.findByText("My Project");
     expect(screen.getByTestId("project-card-proj-1")).toBeInTheDocument();
     expect(screen.getByText("/path/to/repo")).toBeInTheDocument();
+  });
+
+  it("shows PostgreSQL error banner when backend cannot connect to database", async () => {
+    mockProjectsList.mockResolvedValue([]);
+    mockDbStatusGet.mockResolvedValue({
+      ok: false,
+      message: "Server is unable to connect to PostgreSQL database.",
+    });
+
+    renderHomeScreen();
+
+    await screen.findByTestId("postgres-error-banner");
+    expect(screen.getByTestId("postgres-error-banner")).toHaveTextContent(
+      "Server is unable to connect to PostgreSQL database."
+    );
+  });
+
+  it("shows root cause message when Postgres is unreachable", async () => {
+    mockProjectsList.mockResolvedValue([]);
+    mockDbStatusGet.mockResolvedValue({
+      ok: false,
+      message: "No PostgreSQL server running",
+    });
+
+    renderHomeScreen();
+
+    await screen.findByTestId("postgres-error-banner");
+    expect(screen.getByTestId("postgres-error-banner")).toHaveTextContent(
+      "No PostgreSQL server running"
+    );
+  });
+
+  it("shows root cause message when auth/database config is wrong", async () => {
+    mockProjectsList.mockResolvedValue([]);
+    mockDbStatusGet.mockResolvedValue({
+      ok: false,
+      message: "PostgreSQL server is running but wrong user or database setup",
+    });
+
+    renderHomeScreen();
+
+    await screen.findByTestId("postgres-error-banner");
+    expect(screen.getByTestId("postgres-error-banner")).toHaveTextContent(
+      "PostgreSQL server is running but wrong user or database setup"
+    );
+  });
+
+  it("does not show error banner when DB is connected", async () => {
+    mockProjectsList.mockResolvedValue([]);
+    mockDbStatusGet.mockResolvedValue({ ok: true });
+
+    renderHomeScreen();
+
+    await screen.findByTestId("projects-grid");
+    expect(screen.queryByTestId("postgres-error-banner")).not.toBeInTheDocument();
   });
 
   it("project cards have hover effect for clickability feedback", async () => {

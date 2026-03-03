@@ -22,6 +22,7 @@ import { modelsRouter } from "./routes/models.js";
 import { envRouter } from "./routes/env.js";
 import { globalSettingsRouter } from "./routes/global-settings.js";
 import { helpRouter } from "./routes/help.js";
+import { dbStatusRouter } from "./routes/db-status.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { requestIdMiddleware } from "./middleware/request-id.js";
 
@@ -39,6 +40,7 @@ export function createApp() {
   });
 
   // API routes
+  app.use(`${API_PREFIX}/db-status`, dbStatusRouter);
   app.use(`${API_PREFIX}/models`, modelsRouter);
   app.use(`${API_PREFIX}/env`, envRouter);
   app.use(`${API_PREFIX}/tasks`, createTasksAnalyticsRouter(taskService));

@@ -110,9 +110,19 @@ export interface ModelOption {
   displayName: string;
 }
 
+// ─── DB Status ───
+export interface DbStatusResponse {
+  ok: boolean;
+  message?: string;
+}
+
 // ─── Projects ───
 
 export const api = {
+  dbStatus: {
+    get: (signal?: AbortSignal) =>
+      request<DbStatusResponse>("/db-status", signal ? { signal } : {}),
+  },
   models: {
     list: (provider: string, projectId?: string) => {
       const params = new URLSearchParams({ provider });

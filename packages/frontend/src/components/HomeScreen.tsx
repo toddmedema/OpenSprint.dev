@@ -87,6 +87,7 @@ export function HomeScreen() {
   const dispatch = useAppDispatch();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dbError, setDbError] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null);
   const [archiveModal, setArchiveModal] = useState<Project | null>(null);
@@ -116,6 +117,7 @@ export function HomeScreen() {
     const ac = new AbortController();
     let cancelled = false;
     setLoading(true);
+    setDbError(null);
     api.projects
       .list(ac.signal)
       .then((data) => {
@@ -126,6 +128,27 @@ export function HomeScreen() {
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    let cancelled = false;
+    api.dbStatus
+      .get(ac.signal)
+      .then((status) => {
+        if (!cancelled && !status.ok && status.message) {
+          setDbError(status.message);
+        } else if (!cancelled) {
+          setDbError(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDbError(null);
       });
     return () => {
       cancelled = true;
@@ -195,6 +218,15 @@ export function HomeScreen() {
 
   return (
     <Layout>
+      {dbError && (
+        <div
+          role="alert"
+          className="bg-theme-error-bg text-theme-error-text px-4 py-3 text-center text-sm font-medium"
+          data-testid="postgres-error-banner"
+        >
+          {dbError}
+        </div>
+      )}
       <div
         className={`${HOMEPAGE_CONTAINER_CLASS} py-6 sm:py-10 flex-1 min-h-0 overflow-y-auto`}
         data-testid="project-list-container"

@@ -88,6 +88,59 @@ export type TaskChangeCallback = (
   task: StoredTask
 ) => void;
 
+/** Node.js/network codes: Postgres server unreachable */
+const DB_UNREACHABLE_CODES = new Set([
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "ENOTFOUND",
+  "ECONNRESET",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EAI_AGAIN",
+]);
+
+/** PostgreSQL error codes: server reachable but auth/database/config wrong */
+const DB_AUTH_CONFIG_CODES = new Set([
+  "28P01", // invalid_password
+  "28000", // invalid_authorization_specification
+  "3D000", // invalid_catalog_name (database does not exist)
+  "42501", // insufficient_privilege
+  "42P01", // undefined_table (schema not applied)
+]);
+
+export function classifyDbConnectionError(err: unknown): string {
+  const code =
+    (err as NodeJS.ErrnoException).code ??
+    (err as { code?: string }).code ??
+    (err as { errno?: number }).errno;
+  const codeStr = typeof code === "number" ? String(code) : String(code ?? "");
+
+  if (DB_UNREACHABLE_CODES.has(codeStr)) {
+    return "No PostgreSQL server running";
+  }
+  if (DB_AUTH_CONFIG_CODES.has(codeStr)) {
+    return "PostgreSQL server is running but wrong user or database setup";
+  }
+
+  const msg = err instanceof Error ? err.message : String(err);
+  if (
+    /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|connection refused|getaddrinfo|connect EHOSTUNREACH/i.test(
+      msg
+    )
+  ) {
+    return "No PostgreSQL server running";
+  }
+  if (
+    /password authentication failed|role .* does not exist|database .* does not exist|permission denied/i.test(
+      msg
+    )
+  ) {
+    return "PostgreSQL server is running but wrong user or database setup";
+  }
+
+  return "Server is unable to connect to PostgreSQL database.";
+}
+
 export class TaskStoreService {
   private client: DbClient | null = null;
   private pool: Pool | null = null;
@@ -211,6 +264,20 @@ export class TaskStoreService {
       );
     }
     return this.client;
+  }
+
+  /**
+   * Check PostgreSQL connectivity. Used by GET /db-status for homepage error banner.
+   * Returns { ok: true } when connected, or { ok: false, message } when not.
+   */
+  async checkConnection(): Promise<{ ok: true } | { ok: false; message: string }> {
+    try {
+      const client = this.ensureClient();
+      await client.query("SELECT 1");
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: classifyDbConnectionError(err) };
+    }
   }
 
   private async withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
