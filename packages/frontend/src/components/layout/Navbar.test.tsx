@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Provider } from "react-redux";
@@ -15,6 +15,7 @@ import { Navbar } from "./Navbar";
 import executeReducer, { toTasksByIdAndOrder } from "../../store/slices/executeSlice";
 import planReducer from "../../store/slices/planSlice";
 import websocketReducer from "../../store/slices/websocketSlice";
+import globalReducer from "../../store/slices/globalSlice";
 import openQuestionsReducer from "../../store/slices/openQuestionsSlice";
 import notificationReducer from "../../store/slices/notificationSlice";
 import projectReducer from "../../store/slices/projectSlice";
@@ -70,6 +71,9 @@ vi.mock("../../api/client", () => ({
     help: {
       history: vi.fn().mockResolvedValue({ messages: [] }),
       chat: vi.fn(),
+    },
+    dbStatus: {
+      get: vi.fn().mockResolvedValue({ ok: true, state: "connected", lastCheckedAt: null }),
     },
   },
 }));
@@ -144,7 +148,10 @@ function renderNavbar(ui: ReactElement, store = createStore()) {
   );
 }
 
-function createStore(executeTasks: Task[] = []) {
+function createStore(
+  executeTasks: Task[] = [],
+  overrides?: { websocket?: { connected: boolean; deliverToast: string | null } }
+) {
   return configureStore({
     reducer: {
       project: projectReducer,
@@ -152,6 +159,7 @@ function createStore(executeTasks: Task[] = []) {
       execute: executeReducer,
       plan: planReducer,
       websocket: websocketReducer,
+      global: globalReducer,
       sketch: sketchReducer,
       eval: evalReducer,
       deliver: deliverReducer,
@@ -191,7 +199,7 @@ function createStore(executeTasks: Task[] = []) {
         archivingPlanId: null,
         error: null,
       },
-      websocket: { connected: false, deliverToast: null },
+      websocket: overrides?.websocket ?? { connected: false, deliverToast: null },
     },
   });
 }
@@ -979,5 +987,77 @@ describe("Navbar", () => {
     await screen.findByTestId("help-page");
     const helpLink = screen.getByRole("link", { name: "Help" });
     expect(helpLink).toHaveClass("aspect-square");
+  });
+
+  describe("agent dropdown visibility when offline", () => {
+    const mockProject = {
+      id: "proj-1",
+      name: "Test",
+      repoPath: "/path",
+      currentPhase: "sketch" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
+    const projects = [mockProject];
+
+    it("shows agent dropdown when online (websocket connected)", async () => {
+      mockProjectsList.mockResolvedValue(projects);
+      const store = createStore([], {
+        websocket: { connected: true, deliverToast: null },
+      });
+      renderNavbar(
+        <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />,
+        store
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTitle("Active agents")).toBeInTheDocument();
+      });
+    });
+
+    it("hides agent dropdown when offline (offline indicator shown)", async () => {
+      vi.useFakeTimers();
+      try {
+        mockProjectsList.mockResolvedValue(projects);
+        const store = createStore([], {
+          websocket: { connected: false, deliverToast: null },
+        });
+        renderNavbar(
+          <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />,
+          store
+        );
+
+        // useIsOffline debounces 600ms; advance timers so offline state is shown
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(700);
+        });
+
+        expect(screen.queryByTitle("Active agents")).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("shows offline indicator when offline", async () => {
+      vi.useFakeTimers();
+      try {
+        mockProjectsList.mockResolvedValue(projects);
+        const store = createStore([], {
+          websocket: { connected: false, deliverToast: null },
+        });
+        renderNavbar(
+          <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />,
+          store
+        );
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(700);
+        });
+
+        expect(screen.getByText("Offline")).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

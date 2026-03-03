@@ -14,6 +14,7 @@ import { NotificationBell } from "../NotificationBell";
 import { GlobalNotificationBell } from "../GlobalNotificationBell";
 import { ConnectionIndicator } from "../ConnectionIndicator";
 import { useDbStatus } from "../../api/hooks";
+import { useIsOffline } from "../../hooks/useIsOffline";
 interface NavbarProps {
   project?: Project | null;
   currentPhase?: ProjectPhase;
@@ -70,6 +71,8 @@ export function Navbar({
     [executeBlockedCount]
   );
   const showDbBackedChrome = dbStatus?.ok === true;
+  const isOffline = useIsOffline();
+  const showAgentDropdown = showDbBackedChrome && !isOffline;
 
   // Load projects when on home (no project) so we can show GlobalActiveAgentsList when at least one exists
   useEffect(() => {
@@ -265,7 +268,7 @@ export function Navbar({
         <div className="flex items-center shrink-0 [&>*:not(:first-child)]:pl-1 md:[&>*:not(:first-child)]:pl-3">
           {project ? (
             <>
-              {showDbBackedChrome && <ActiveAgentsList projectId={project.id} />}
+              {showAgentDropdown && <ActiveAgentsList projectId={project.id} />}
               {showDbBackedChrome && <NotificationBell projectId={project.id} />}
               <ConnectionIndicator />
               <NavButton
@@ -308,7 +311,7 @@ export function Navbar({
             </>
           ) : projects.length >= 1 ? (
             <>
-              {showDbBackedChrome && <GlobalActiveAgentsList />}
+              {showAgentDropdown && <GlobalActiveAgentsList />}
               {showDbBackedChrome && <GlobalNotificationBell />}
               <NavButton
                 to={helpHref}

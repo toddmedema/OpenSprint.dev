@@ -1,7 +1,4 @@
-import { useState, useEffect } from "react";
-import { useAppSelector } from "../store";
-
-const OFFLINE_DEBOUNCE_MS = 600;
+import { useIsOffline } from "../hooks/useIsOffline";
 
 /**
  * Shows connection status only when offline. Hidden when server is online and
@@ -9,17 +6,7 @@ const OFFLINE_DEBOUNCE_MS = 600;
  * initial connect or brief reconnects.
  */
 export function ConnectionIndicator() {
-  const connected = useAppSelector((s) => s.websocket.connected);
-  const [showOffline, setShowOffline] = useState(false);
-
-  useEffect(() => {
-    if (connected) {
-      setShowOffline(false);
-      return;
-    }
-    const timer = setTimeout(() => setShowOffline(true), OFFLINE_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [connected]);
+  const showOffline = useIsOffline();
 
   if (!showOffline) {
     return null;
