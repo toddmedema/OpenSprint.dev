@@ -410,7 +410,7 @@ function TaskDetailSidebarInner({
 
   return (
     <>
-      <div className="flex items-center gap-2 p-4 shrink-0 min-h-0 flex-nowrap">
+      <div className="flex items-center gap-2 px-4 pt-4 pb-2 shrink-0 min-h-0 flex-nowrap">
         {/* Title: single line for header */}
         <div className="min-w-0 flex-1">
           <h3
@@ -660,7 +660,7 @@ function TaskDetailSidebarInner({
           />
         )}
 
-        <div className="p-4">
+        <div className="px-4 pt-2 pb-4">
           {task && (
             <>
               {/* Row 1: Status and priority on a single row */}
