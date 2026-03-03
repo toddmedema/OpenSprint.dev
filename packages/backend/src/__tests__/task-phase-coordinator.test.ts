@@ -79,6 +79,22 @@ describe("TaskPhaseCoordinator", () => {
     }).not.toThrow();
   });
 
+  it("resolves with single angle when reviewAngles has one item", () => {
+    const resolve = vi.fn().mockResolvedValue(undefined);
+    const coord = new TaskPhaseCoordinator("t1", resolve, {
+      reviewAngles: ["security"],
+    });
+
+    coord.setTestOutcome(testPassed);
+    coord.setReviewOutcome(reviewApproved, "security");
+
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(resolve).toHaveBeenCalledWith(
+      testPassed,
+      expect.objectContaining({ status: "approved" })
+    );
+  });
+
   it("waits for all angle outcomes before resolving", () => {
     const resolve = vi.fn().mockResolvedValue(undefined);
     const coord = new TaskPhaseCoordinator("t1", resolve, {
