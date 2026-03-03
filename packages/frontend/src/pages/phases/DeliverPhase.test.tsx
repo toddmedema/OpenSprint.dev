@@ -269,9 +269,8 @@ describe("DeliverPhase", () => {
     });
     const store = createStore();
     renderWithRouter(store);
-    await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
-    const betaBtn = screen.getByTestId("deploy-beta-button");
-    const prodBtn = screen.getByTestId("deploy-prod-button");
+    const betaBtn = await screen.findByTestId("deploy-beta-button");
+    const prodBtn = await screen.findByTestId("deploy-prod-button");
     const topBar = screen.getByTestId("deliver-top-bar");
     expect(topBar).toContainElement(betaBtn);
     expect(topBar).toContainElement(prodBtn);
@@ -297,9 +296,8 @@ describe("DeliverPhase", () => {
     });
     const store = createStore();
     renderWithRouter(store);
-    await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
-    const betaBtn = screen.getByTestId("deploy-beta-button");
-    const prodBtn = screen.getByTestId("deploy-prod-button");
+    const betaBtn = await screen.findByTestId("deploy-beta-button");
+    const prodBtn = await screen.findByTestId("deploy-prod-button");
     expect(betaBtn).toBeInTheDocument();
     expect(betaBtn).toHaveTextContent("Deploy to Staging");
     expect(betaBtn).toHaveClass("btn-secondary");
@@ -322,11 +320,9 @@ describe("DeliverPhase", () => {
     });
     const store = createStore();
     renderWithRouter(store);
-    await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
+    const deployBtn = await screen.findByTestId("deploy-to-production-button");
     expect(screen.queryByTestId("deploy-prod-button")).not.toBeInTheDocument();
-    expect(screen.getByTestId("deploy-to-production-button")).toHaveTextContent(
-      "Deploy to production"
-    );
+    expect(deployBtn).toHaveTextContent("Deploy to production");
   });
 
   it("Deploy to Staging calls expoDeploy with variant beta", async () => {

@@ -295,6 +295,59 @@ describe("MergeCoordinatorService", () => {
     );
   });
 
+  it("passes worktreeBaseBranch to enqueueAndWait when worktree mode", async () => {
+    mockGetSettings.mockResolvedValue({
+      simpleComplexityAgent: { type: "cursor", model: null },
+      complexComplexityAgent: { type: "cursor", model: null },
+      deployment: {},
+      gitWorkingMode: "worktree",
+      worktreeBaseBranch: "develop",
+    });
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "worktree_merge",
+        baseBranch: "develop",
+      })
+    );
+  });
+
+  it("passes main as baseBranch when branches mode", async () => {
+    mockGetSettings.mockResolvedValue({
+      simpleComplexityAgent: { type: "cursor", model: null },
+      complexComplexityAgent: { type: "cursor", model: null },
+      deployment: {},
+      gitWorkingMode: "branches",
+    });
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "worktree_merge",
+        baseBranch: "main",
+      })
+    );
+  });
+
+  it("passes baseBranch to getChangedFiles after merge succeeds", async () => {
+    mockGetSettings.mockResolvedValue({
+      simpleComplexityAgent: { type: "cursor", model: null },
+      complexComplexityAgent: { type: "cursor", model: null },
+      deployment: {},
+      gitWorkingMode: "worktree",
+      worktreeBaseBranch: "develop",
+    });
+    const mockGetChangedFiles = vi.fn().mockResolvedValue(["src/foo.ts"]);
+    mockHost.branchManager.getChangedFiles = mockGetChangedFiles;
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(mockGetChangedFiles).toHaveBeenCalledWith(repoPath, branchName, "develop");
+  });
+
   it("archives session when merge fails so task detail sidebar can show output", async () => {
     const slotWithOutput = makeSlot();
     slotWithOutput.agent.outputLog = ["Agent output line 1\n", "Agent output line 2\n"];
