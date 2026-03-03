@@ -178,7 +178,7 @@ describe("Git working mode Branches — full Execute flow integration", () => {
     // 4. Post-agent: merge and done (MergeCoordinator.performMergeAndDone)
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
     await vi.waitFor(() => {
-      expect(pushMainSpy).toHaveBeenCalledWith(repoPath);
+      expect(pushMainSpy).toHaveBeenCalledWith(repoPath, "main");
     });
 
     // 5. Assertions

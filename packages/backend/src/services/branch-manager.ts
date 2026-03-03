@@ -1065,10 +1065,17 @@ export class BranchManager {
 
   /**
    * Merge a branch into the base branch from the main working tree.
-   * The main working tree must be on the base branch (which it always should be with worktrees).
+   * Ensures we're on baseBranch before merging.
    * @param message - Optional merge commit message (PRD §5.9: "merge: opensprint/<task-id> — <task title>")
+   * @param baseBranch - Base branch to merge into (default: "main")
    */
-  async mergeToMain(repoPath: string, branchName: string, message?: string): Promise<void> {
+  async mergeToMain(
+    repoPath: string,
+    branchName: string,
+    message?: string,
+    baseBranch: string = "main"
+  ): Promise<void> {
+    await this.ensureOnMain(repoPath, baseBranch);
     if (message) {
       const escaped = message.replace(/"/g, '\\"');
       await this.git(repoPath, `merge -m "${escaped}" ${branchName}`);
@@ -1080,9 +1087,15 @@ export class BranchManager {
   /**
    * Merge a branch into the base branch without committing. Leaves the merge result staged.
    * Used when combining merge + task metadata into a single commit.
-   * Caller must ensure main working tree is on base branch (via ensureOnMain) before calling.
+   * Ensures we're on baseBranch before merging.
+   * @param baseBranch - Base branch to merge into (default: "main")
    */
-  async mergeToMainNoCommit(repoPath: string, branchName: string): Promise<MergeToMainResult> {
+  async mergeToMainNoCommit(
+    repoPath: string,
+    branchName: string,
+    baseBranch: string = "main"
+  ): Promise<MergeToMainResult> {
+    await this.ensureOnMain(repoPath, baseBranch);
     let autoResolvedFiles: string[] = [];
     try {
       await this.git(repoPath, `merge --no-commit --no-ff ${branchName}`);

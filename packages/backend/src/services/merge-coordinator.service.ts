@@ -251,7 +251,7 @@ export class MergeCoordinatorService {
     await this.waitForPushComplete(projectId);
     const settings = await this.host.projectService.getSettings(projectId);
     const baseBranch =
-      settings.gitWorkingMode === "worktree"
+      (settings.gitWorkingMode ?? "worktree") === "worktree"
         ? (settings.worktreeBaseBranch ?? "main")
         : "main";
 
@@ -686,7 +686,7 @@ export class MergeCoordinatorService {
 
     const settings = await this.host.projectService.getSettings(projectId);
     const baseBranch =
-      settings.gitWorkingMode === "worktree"
+      (settings.gitWorkingMode ?? "worktree") === "worktree"
         ? (settings.worktreeBaseBranch ?? "main")
         : "main";
 

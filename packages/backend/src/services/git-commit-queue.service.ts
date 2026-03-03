@@ -338,7 +338,8 @@ class GitCommitQueueImpl implements GitCommitQueueService {
         try {
           const mergeResult = await this.branchManager.mergeToMainNoCommit(
             repoPath,
-            job.branchName
+            job.branchName,
+            baseBranch
           );
           if (mergeResult.autoResolvedFiles.length > 0) {
             const project = await this.projectService.getProjectByRepoPath(repoPath);

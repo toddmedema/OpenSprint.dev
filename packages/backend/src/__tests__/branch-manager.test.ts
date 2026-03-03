@@ -562,6 +562,29 @@ describe("BranchManager", () => {
       const merged = await branchManager.verifyMerge(repoPath, branchName);
       expect(merged).toBe(true);
     });
+
+    it("should create task worktree from custom baseBranch develop", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+      await execAsync("git checkout -b develop", { cwd: repoPath });
+      await execAsync("git checkout main", { cwd: repoPath });
+
+      const taskId = `wt-develop-${Date.now()}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, taskId, "develop");
+      worktreePaths.push(wtPath);
+
+      // Task branch should be based on develop
+      const { stdout } = await execAsync(
+        `git merge-base develop opensprint/${taskId}`,
+        { cwd: repoPath }
+      );
+      const developSha = (await execAsync("git rev-parse develop", { cwd: repoPath })).stdout.trim();
+      expect(stdout.trim()).toBe(developSha);
+    });
   });
 
   describe("pushMain squash commit message", () => {

@@ -644,7 +644,11 @@ export class TaskService {
     const branchName = `opensprint/${taskId}`;
 
     if (createBranch) {
-      await this.branchManager.createOrCheckoutBranch(repoPath, branchName);
+      const baseBranch =
+        (settings.gitWorkingMode ?? "worktree") === "worktree"
+          ? (settings.worktreeBaseBranch ?? "main")
+          : "main";
+      await this.branchManager.createOrCheckoutBranch(repoPath, branchName, baseBranch);
     }
 
     const prdExcerpt = await this.contextAssembler.extractPrdExcerpt(repoPath);

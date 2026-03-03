@@ -933,9 +933,17 @@ export class OrchestratorService {
       return true;
     }
 
+    const baseBranch =
+      (settings.gitWorkingMode ?? "worktree") === "worktree"
+        ? (settings.worktreeBaseBranch ?? "main")
+        : "main";
     let changedFiles: string[] = [];
     try {
-      changedFiles = await this.branchManager.getChangedFiles(repoPath, assignment.branchName);
+      changedFiles = await this.branchManager.getChangedFiles(
+        repoPath,
+        assignment.branchName,
+        baseBranch
+      );
     } catch {
       // Fall back to the configured/full suite
     }
@@ -1390,7 +1398,12 @@ export class OrchestratorService {
     });
 
     await this.persistCounters(projectId, repoPath);
-    await this.branchManager.ensureOnMain(repoPath);
+    const settings = await this.projectService.getSettings(projectId);
+    const baseBranch =
+      (settings.gitWorkingMode ?? "worktree") === "worktree"
+        ? (settings.worktreeBaseBranch ?? "main")
+        : "main";
+    await this.branchManager.ensureOnMain(repoPath, baseBranch);
     await this.executeCodingPhase(projectId, repoPath, task, slot, undefined);
   }
 
