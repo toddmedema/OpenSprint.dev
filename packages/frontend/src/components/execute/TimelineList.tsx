@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Task } from "@opensprint/shared";
 import type { Plan } from "@opensprint/shared";
@@ -197,13 +197,20 @@ export function TimelineList({
     overscan: 5,
   });
 
+  // Scroll to selected task only once when selection changes (sidebar opens or user picks another task).
+  // Do not re-run on every render — virtualizer/taskIdToIndex can change frequently and would cause
+  // continuous scroll-to-task, making content unscrollable.
+  const lastScrolledTaskIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (selectedTaskId && useVirtualization) {
-      const index = taskIdToIndex.get(selectedTaskId);
-      if (index != null) {
-        virtualizer.scrollToIndex(index, { align: "center", behavior: "smooth" });
-      }
+    if (!selectedTaskId || !useVirtualization) {
+      lastScrolledTaskIdRef.current = null;
+      return;
     }
+    const index = taskIdToIndex.get(selectedTaskId);
+    if (index == null) return;
+    if (lastScrolledTaskIdRef.current === selectedTaskId) return;
+    lastScrolledTaskIdRef.current = selectedTaskId;
+    virtualizer.scrollToIndex(index, { align: "center", behavior: "smooth" });
   }, [selectedTaskId, taskIdToIndex, useVirtualization, virtualizer]);
 
   if (tasks.length === 0) {
