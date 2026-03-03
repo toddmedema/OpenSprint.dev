@@ -4,8 +4,10 @@ import { getQueryClient } from "../../queryClient";
 import { queryKeys } from "../../api/queryKeys";
 
 /**
- * When priority update succeeds, invalidate tasks list and task detail so
- * TanStack Query cache stays in sync with server.
+ * When priority update succeeds:
+ * - Invalidate tasks list so main content (kanban/timeline) ordering stays in sync.
+ * - Update task detail cache in place (do NOT invalidate) so the sidebar does not
+ *   refetch and show loading state. Only the priority component updates.
  */
 export const executeListeners = createListenerMiddleware();
 
@@ -15,12 +17,10 @@ executeListeners.startListening({
   effect: (action) => {
     try {
       const qc = getQueryClient();
-      const { taskId } = action.payload;
+      const { task, taskId } = action.payload;
       const projectId = action.meta.arg.projectId;
       void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
-      void qc.invalidateQueries({
-        queryKey: queryKeys.tasks.detail(projectId, taskId),
-      });
+      qc.setQueryData(queryKeys.tasks.detail(projectId, taskId), task);
     } catch {
       // QueryClient may not be set in tests
     }
