@@ -12,7 +12,7 @@ import { ChatInput } from "./ChatInput";
 import { NavButton } from "./layout/NavButton";
 import { HelpAnalyticsChart } from "./HelpAnalyticsChart";
 import { api } from "../api/client";
-import { ASSET_BASE } from "../lib/constants";
+import { ASSET_BASE, NAVBAR_HEIGHT } from "../lib/constants";
 
 export interface HelpContentProps {
   /** Optional project context (per-project view vs homepage) */
@@ -34,7 +34,8 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
     <div className="flex flex-col h-full min-h-0">
       {/* Full-width secondary nav bar — matches Plan/Execute filter bar pattern */}
       <div
-        className="w-full px-4 sm:px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0"
+        className="w-full px-4 sm:px-6 flex items-center border-b border-theme-border bg-theme-surface shrink-0"
+        style={{ height: NAVBAR_HEIGHT }}
         role="tablist"
         aria-label="Help sections"
       >

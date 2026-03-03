@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 import { NavButton } from "../layout/NavButton";
 import { SaveIndicator, type SaveStatus } from "../SaveIndicator";
+import { NAVBAR_HEIGHT } from "../../lib/constants";
 
 const LEVEL_PARAM = "level";
 
@@ -36,7 +37,8 @@ export function SettingsTopBar({ projectId, saveStatus }: SettingsTopBarProps) {
 
   return (
     <div
-      className="px-4 sm:px-6 min-h-[48px] flex items-center justify-between py-2 border-b border-theme-border bg-theme-surface shrink-0"
+      className="px-4 sm:px-6 flex items-center justify-between border-b border-theme-border bg-theme-surface shrink-0"
+      style={{ height: NAVBAR_HEIGHT }}
       data-testid="settings-top-bar"
     >
       <div className="flex-1 min-w-0" aria-hidden="true" />

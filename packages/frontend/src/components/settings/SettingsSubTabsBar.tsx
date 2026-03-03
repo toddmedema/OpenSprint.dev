@@ -1,4 +1,5 @@
 import { NavButton } from "../layout/NavButton";
+import { NAVBAR_HEIGHT } from "../../lib/constants";
 
 /**
  * Third-level navigation bar for Settings sub-tabs (Project mode only).
@@ -48,7 +49,8 @@ export function SettingsSubTabsBar({
   }
   return (
     <div
-      className="px-4 sm:px-6 min-h-[48px] flex items-center justify-center py-2 border-b border-theme-border bg-theme-surface shrink-0"
+      className="px-4 sm:px-6 flex items-center justify-center border-b border-theme-border bg-theme-surface shrink-0"
+      style={{ height: NAVBAR_HEIGHT }}
       data-testid="settings-sub-tabs-bar"
     >
       {content}
