@@ -39,6 +39,8 @@ export interface AgentsStepProps {
   onUnknownScopeStrategyChange: (value: UnknownScopeStrategy) => void;
   gitWorkingMode: GitWorkingMode;
   onGitWorkingModeChange: (value: GitWorkingMode) => void;
+  worktreeBaseBranch?: string;
+  onWorktreeBaseBranchChange?: (value: string) => void;
 }
 
 export function AgentsStep({
@@ -54,6 +56,8 @@ export function AgentsStep({
   onUnknownScopeStrategyChange,
   gitWorkingMode,
   onGitWorkingModeChange,
+  worktreeBaseBranch = "main",
+  onWorktreeBaseBranchChange,
 }: AgentsStepProps) {
   const [agentReferenceOpen, setAgentReferenceOpen] = useState(false);
 
@@ -294,6 +298,25 @@ export function AgentsStep({
       </div>
       {gitWorkingMode === "worktree" && (
         <>
+          <hr />
+          {onWorktreeBaseBranchChange && (
+            <div>
+              <label className="block text-sm font-medium text-theme-text mb-1">
+                Base branch
+              </label>
+              <p className="text-xs text-theme-muted mb-2">
+                Task branches are created from and merged into this branch.
+              </p>
+              <input
+                type="text"
+                className="input w-full max-w-xs"
+                value={worktreeBaseBranch}
+                onChange={(e) => onWorktreeBaseBranchChange(e.target.value || "main")}
+                placeholder="main"
+                data-testid="worktree-base-branch-input"
+              />
+            </div>
+          )}
           <hr />
           <div>
             <h3 className="text-sm font-semibold text-theme-text mb-1">Parallelism</h3>

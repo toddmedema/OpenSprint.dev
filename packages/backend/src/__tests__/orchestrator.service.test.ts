@@ -617,7 +617,11 @@ describe("OrchestratorService (slot-based model)", () => {
         expect(mockWriteJsonAtomic).toHaveBeenCalled();
       });
 
-      expect(mockCreateOrCheckoutBranch).toHaveBeenCalledWith(repoPath, "opensprint/task-branches");
+      expect(mockCreateOrCheckoutBranch).toHaveBeenCalledWith(
+        repoPath,
+        "opensprint/task-branches",
+        "main"
+      );
       expect(mockCreateTaskWorktree).not.toHaveBeenCalled();
       expect(mockSymlinkNodeModules).not.toHaveBeenCalled();
       expect(mockEnsureRepoNodeModules).toHaveBeenCalledWith(repoPath);
@@ -653,7 +657,7 @@ describe("OrchestratorService (slot-based model)", () => {
       });
 
       expect(mockCreateTaskWorktree).toHaveBeenCalledTimes(1);
-      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, "task-1");
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, "task-1", "main");
     });
   });
 

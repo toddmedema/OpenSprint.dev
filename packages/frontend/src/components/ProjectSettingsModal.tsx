@@ -218,6 +218,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
       deployment: typeof deployment;
       aiAutonomyLevel: AiAutonomyLevel;
       gitWorkingMode: GitWorkingMode;
+      worktreeBaseBranch: string;
       testCommand: string | null;
       reviewMode: ReviewMode;
       reviewAngles: ReviewAngle[];
@@ -280,6 +281,10 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                 effSettings?.unknownScopeStrategy ??
                 "optimistic",
               gitWorkingMode: effGitMode,
+              worktreeBaseBranch:
+                effGitMode === "worktree"
+                  ? (overrides?.worktreeBaseBranch ?? effSettings?.worktreeBaseBranch ?? "main")
+                  : undefined,
             }),
           ]);
           if (notifyOnComplete) onSaved?.();
@@ -797,6 +802,33 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                       </div>
                     ) : (
                       <div>
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-theme-text mb-1">
+                            Base branch
+                          </label>
+                          <p className="text-xs text-theme-muted mb-2">
+                            Task branches are created from and merged into this branch. Use
+                            alphanumeric, slash, underscore, hyphen, or dot.
+                          </p>
+                          <input
+                            type="text"
+                            className="input w-full max-w-xs"
+                            value={settings?.worktreeBaseBranch ?? "main"}
+                            onChange={(e) =>
+                              setSettings((s) =>
+                                s ? { ...s, worktreeBaseBranch: e.target.value || "main" } : null
+                              )
+                            }
+                            onBlur={() =>
+                              void persistSettings(undefined, {
+                                worktreeBaseBranch:
+                                  settings?.worktreeBaseBranch?.trim() || "main",
+                              })
+                            }
+                            placeholder="main"
+                            data-testid="worktree-base-branch-input"
+                          />
+                        </div>
                         <h3 className="text-sm font-semibold text-theme-text mb-1">Parallelism</h3>
                         <p className="text-xs text-theme-muted mb-3">
                           Run multiple coding agents simultaneously on independent tasks. Higher

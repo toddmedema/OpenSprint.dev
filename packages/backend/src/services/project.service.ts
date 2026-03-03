@@ -126,6 +126,7 @@ function buildDefaultSettings(): ProjectSettings {
     testCommand: null,
     reviewMode: DEFAULT_REVIEW_MODE,
     gitWorkingMode: "worktree",
+    worktreeBaseBranch: "main",
   };
 }
 
@@ -145,6 +146,7 @@ function toCanonicalSettings(s: ProjectSettings): ProjectSettings {
     ...(s.maxConcurrentCoders !== undefined && { maxConcurrentCoders: s.maxConcurrentCoders }),
     ...(s.unknownScopeStrategy !== undefined && { unknownScopeStrategy: s.unknownScopeStrategy }),
     gitWorkingMode: s.gitWorkingMode ?? "worktree",
+    worktreeBaseBranch: s.worktreeBaseBranch ?? "main",
   };
 }
 

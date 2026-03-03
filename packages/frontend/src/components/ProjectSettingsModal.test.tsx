@@ -690,6 +690,18 @@ describe("ProjectSettingsModal", () => {
     ).toBeInTheDocument();
   });
 
+  it("when Worktree selected, shows Base branch text input", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    const baseBranchInput = screen.getByTestId("worktree-base-branch-input");
+    expect(baseBranchInput).toBeInTheDocument();
+    expect(baseBranchInput).toHaveValue("main");
+  });
+
   it("when Branches selected, hides Parallelism section and shows explanatory text", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await waitForModalReady();

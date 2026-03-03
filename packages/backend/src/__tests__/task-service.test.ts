@@ -622,7 +622,8 @@ describe("TaskService", () => {
     expect(mockOrchestrator.nudge).toHaveBeenCalledWith("proj-1");
     expect(mockBranchManagerInstance.revertAndReturnToMain).toHaveBeenCalledWith(
       "/tmp/test-repo",
-      "opensprint/task-1"
+      "opensprint/task-1",
+      "main"
     );
   });
 

@@ -1767,17 +1767,26 @@ export class OrchestratorService {
     }
 
     if (result.status === "success") {
+      const settings = await this.projectService.getSettings(projectId);
+      const baseBranch =
+        (settings.gitWorkingMode ?? "worktree") === "worktree"
+          ? (settings.worktreeBaseBranch ?? "main")
+          : "main";
       slot.phaseResult.codingDiff = await this.branchManager.captureBranchDiff(
         repoPath,
-        branchName
+        branchName,
+        baseBranch
       );
       slot.phaseResult.codingSummary = result.summary ?? "";
 
-      const settings = await this.projectService.getSettings(projectId);
       const testCommand = resolveTestCommand(settings) || undefined;
       let changedFiles: string[] = [];
       try {
-        changedFiles = await this.branchManager.getChangedFiles(repoPath, branchName);
+        changedFiles = await this.branchManager.getChangedFiles(
+          repoPath,
+          branchName,
+          baseBranch
+        );
       } catch {
         // Fall back to full suite
       }
@@ -2194,9 +2203,18 @@ export class OrchestratorService {
       summary: compactExecutionText(reason, 500),
     });
 
+    const settings = await this.projectService.getSettings(projectId);
+    const baseBranch =
+      (settings.gitWorkingMode ?? "worktree") === "worktree"
+        ? (settings.worktreeBaseBranch ?? "main")
+        : "main";
     let gitDiff = "";
     try {
-      const branchDiff = await this.branchManager.captureBranchDiff(repoPath, branchName);
+      const branchDiff = await this.branchManager.captureBranchDiff(
+        repoPath,
+        branchName,
+        baseBranch
+      );
       const uncommittedDiff = await this.branchManager.captureUncommittedDiff(wtPath);
       gitDiff = [branchDiff, uncommittedDiff]
         .filter(Boolean)
@@ -2204,8 +2222,6 @@ export class OrchestratorService {
     } catch {
       // Best-effort capture
     }
-
-    const settings = await this.projectService.getSettings(projectId);
     const session = await this.sessionManager.createSession(repoPath, {
       taskId: task.id,
       attempt: slot.attempt,

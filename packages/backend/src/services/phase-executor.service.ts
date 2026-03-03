@@ -108,6 +108,10 @@ export class PhaseExecutorService {
     const settings = await this.host.projectService.getSettings(projectId);
     const branchName = slot.branchName;
     const gitWorkingMode = settings.gitWorkingMode ?? "worktree";
+    const baseBranch =
+      gitWorkingMode === "worktree"
+        ? (settings.worktreeBaseBranch ?? "main")
+        : "main";
 
     // Pre-flight: ensure API key available before any heavy work
     const complexity = await getComplexityForAgent(projectId, repoPath, task, this.host.taskStore);
@@ -139,24 +143,27 @@ export class PhaseExecutorService {
       let wtPath: string;
       if (gitWorkingMode === "branches") {
         if (!retryContext?.useExistingBranch) {
-          await this.host.branchManager.syncMainWithOrigin(repoPath);
+          await this.host.branchManager.syncMainWithOrigin(repoPath, baseBranch);
         }
-        await this.host.branchManager.createOrCheckoutBranch(repoPath, branchName);
+        await this.host.branchManager.createOrCheckoutBranch(repoPath, branchName, baseBranch);
         wtPath = repoPath;
         await this.host.branchManager.ensureRepoNodeModules(repoPath);
       } else {
         if (!retryContext?.useExistingBranch) {
-          await this.host.branchManager.syncMainWithOrigin(repoPath);
+          await this.host.branchManager.syncMainWithOrigin(repoPath, baseBranch);
         }
-        wtPath = await this.host.branchManager.createTaskWorktree(repoPath, task.id);
+        wtPath = await this.host.branchManager.createTaskWorktree(repoPath, task.id, baseBranch);
       }
       (slot as { worktreePath: string | null }).worktreePath = wtPath;
 
       if (retryContext?.useExistingBranch) {
         await this.host.branchManager.waitForGitReady(wtPath);
         try {
-          await this.host.branchManager.rebaseOntoMain(wtPath);
-          log.info("Rebased existing branch onto main before retry", { taskId: task.id });
+          await this.host.branchManager.rebaseOntoMain(wtPath, baseBranch);
+          log.info("Rebased existing branch onto base before retry", {
+            taskId: task.id,
+            baseBranch,
+          });
         } catch {
           const conflictedFiles = await this.host.branchManager
             .getConflictedFiles(wtPath)
@@ -179,7 +186,7 @@ export class PhaseExecutorService {
         task.id,
         this.host.taskStore,
         this.host.branchManager,
-        { task }
+        { task, baseBranch }
       );
 
       if (shouldInvokeSummarizer(context)) {
@@ -328,6 +335,11 @@ export class PhaseExecutorService {
       return;
     }
     const settings = await this.host.projectService.getSettings(projectId);
+    const gitWorkingMode = settings.gitWorkingMode ?? "worktree";
+    const baseBranch =
+      gitWorkingMode === "worktree"
+        ? (settings.worktreeBaseBranch ?? "main")
+        : "main";
     const wtPath = slot.worktreePath ?? repoPath;
     const reviewAngles = [
       ...new Set((settings.reviewAngles ?? []).filter(Boolean)),
@@ -371,11 +383,15 @@ export class PhaseExecutorService {
         task.id,
         this.host.taskStore,
         this.host.branchManager,
-        { task }
+        { task, baseBranch }
       );
 
       context.reviewHistory = await this.host.buildReviewHistory(repoPath, task.id);
-      context.branchDiff = await this.host.branchManager.captureBranchDiff(repoPath, branchName);
+      context.branchDiff = await this.host.branchManager.captureBranchDiff(
+        repoPath,
+        branchName,
+        baseBranch
+      );
 
       await this.host.contextAssembler.assembleTaskDirectory(wtPath, task.id, config, context);
 

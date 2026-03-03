@@ -87,9 +87,9 @@ export interface MergeCoordinatorHost {
     commitWip(wtPath: string, taskId: string): Promise<void>;
     removeTaskWorktree(repoPath: string, taskId: string, actualPath?: string): Promise<void>;
     deleteBranch(repoPath: string, branchName: string): Promise<void>;
-    getChangedFiles(repoPath: string, branchName: string): Promise<string[]>;
-    pushMain(repoPath: string): Promise<void>;
-    pushMainToOrigin(repoPath: string): Promise<void>;
+    getChangedFiles(repoPath: string, branchName: string, baseBranch?: string): Promise<string[]>;
+    pushMain(repoPath: string, baseBranch?: string): Promise<void>;
+    pushMainToOrigin(repoPath: string, baseBranch?: string): Promise<void>;
     isMergeInProgress(repoPath: string): Promise<boolean>;
     mergeAbort(repoPath: string): Promise<void>;
     mergeContinue(repoPath: string): Promise<void>;
@@ -136,6 +136,7 @@ export interface MergeCoordinatorHost {
       testCommand?: string | null;
       testFramework?: string | null;
       gitWorkingMode?: "worktree" | "branches";
+      worktreeBaseBranch?: string;
       unknownScopeStrategy?: "conservative" | "optimistic";
     }>;
   };
@@ -249,6 +250,10 @@ export class MergeCoordinatorService {
     await this.host.branchManager.commitWip(wtPath, task.id);
     await this.waitForPushComplete(projectId);
     const settings = await this.host.projectService.getSettings(projectId);
+    const baseBranch =
+      settings.gitWorkingMode === "worktree"
+        ? (settings.worktreeBaseBranch ?? "main")
+        : "main";
 
     // 2. Attempt merge inside the serialized queue. Rebase now happens there.
     try {
@@ -260,6 +265,7 @@ export class MergeCoordinatorService {
         branchName,
         taskId: task.id,
         taskTitle: task.title || task.id,
+        baseBranch,
       });
     } catch (mergeErr) {
       log.warn("Merge to main failed", { taskId: task.id, branchName, mergeErr });
@@ -302,7 +308,11 @@ export class MergeCoordinatorService {
     await this.host.sessionManager.archiveSession(repoPath, task.id, slot.attempt, session, wtPath);
 
     try {
-      const changedFiles = await this.host.branchManager.getChangedFiles(repoPath, branchName);
+      const changedFiles = await this.host.branchManager.getChangedFiles(
+        repoPath,
+        branchName,
+        baseBranch
+      );
       await this.host.fileScopeAnalyzer.recordActual(
         projectId,
         repoPath,
@@ -674,8 +684,14 @@ export class MergeCoordinatorService {
     await gitCommitQueue.drain();
     await this.host.taskStore.syncForPush(projectId);
 
+    const settings = await this.host.projectService.getSettings(projectId);
+    const baseBranch =
+      settings.gitWorkingMode === "worktree"
+        ? (settings.worktreeBaseBranch ?? "main")
+        : "main";
+
     try {
-      await this.host.branchManager.pushMain(repoPath);
+      await this.host.branchManager.pushMain(repoPath, baseBranch);
       log.info("Push to origin succeeded", { projectId });
       eventLogService
         .append(repoPath, {
@@ -699,14 +715,15 @@ export class MergeCoordinatorService {
           config: settings.simpleComplexityAgent as AgentConfig,
           phase: "push_rebase",
           taskId: "",
-          branchName: "main",
+          branchName: baseBranch,
           conflictedFiles: err.conflictedFiles,
           testCommand: resolveTestCommand(settings),
+          baseBranch,
         });
         if (resolved) {
           try {
             await this.host.branchManager.rebaseContinue(repoPath);
-            await this.host.branchManager.pushMainToOrigin(repoPath);
+            await this.host.branchManager.pushMainToOrigin(repoPath, baseBranch);
             log.info("Merger resolved push rebase conflicts, push succeeded", { projectId });
             eventLogService
               .append(repoPath, {

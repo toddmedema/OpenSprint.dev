@@ -222,7 +222,7 @@ describe("PhaseExecutorService", () => {
 
       await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot);
 
-      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, task.id);
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, task.id, "main");
       expect(mockCreateOrCheckoutBranch).not.toHaveBeenCalled();
       expect(mockEnsureRepoNodeModules).not.toHaveBeenCalled();
       expect(slot.worktreePath).not.toBe(repoPath);
@@ -249,7 +249,7 @@ describe("PhaseExecutorService", () => {
 
       await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot);
 
-      expect(mockCreateOrCheckoutBranch).toHaveBeenCalledWith(repoPath, `opensprint/${taskId}`);
+      expect(mockCreateOrCheckoutBranch).toHaveBeenCalledWith(repoPath, `opensprint/${taskId}`, "main");
       expect(mockCreateTaskWorktree).not.toHaveBeenCalled();
       expect(mockEnsureRepoNodeModules).toHaveBeenCalledWith(repoPath);
       expect(slot.worktreePath).toBe(repoPath);
@@ -274,7 +274,7 @@ describe("PhaseExecutorService", () => {
 
       await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot);
 
-      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, task.id);
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, task.id, "main");
       expect(mockCreateOrCheckoutBranch).not.toHaveBeenCalled();
     });
   });

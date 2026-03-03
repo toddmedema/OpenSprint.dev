@@ -68,24 +68,34 @@ export class BranchManager {
   private projectService = new ProjectService();
 
   /**
-   * Create a task branch from main.
+   * Create a task branch from the base branch.
+   * @param baseBranch - Base branch to create from (default: "main")
    */
-  async createBranch(repoPath: string, branchName: string): Promise<void> {
-    await this.git(repoPath, "checkout main");
+  async createBranch(
+    repoPath: string,
+    branchName: string,
+    baseBranch: string = "main"
+  ): Promise<void> {
+    await this.git(repoPath, `checkout ${baseBranch}`);
     await this.git(repoPath, `checkout -b ${branchName}`);
   }
 
   /**
    * Create branch if it does not exist, otherwise checkout existing branch.
    * Used when retrying after review rejection (branch already has coding agent's work).
+   * @param baseBranch - Base branch to create from when branch doesn't exist (default: "main")
    */
-  async createOrCheckoutBranch(repoPath: string, branchName: string): Promise<void> {
+  async createOrCheckoutBranch(
+    repoPath: string,
+    branchName: string,
+    baseBranch: string = "main"
+  ): Promise<void> {
     await this.waitForGitReady(repoPath);
     try {
       await shellExec(`git rev-parse --verify ${branchName}`, { cwd: repoPath });
       await this.checkout(repoPath, branchName);
     } catch {
-      await this.createBranch(repoPath, branchName);
+      await this.createBranch(repoPath, branchName, baseBranch);
     }
   }
 
@@ -105,22 +115,27 @@ export class BranchManager {
   }
 
   /**
-   * Revert all changes on a branch and return to main.
+   * Revert all changes on a branch and return to the base branch.
+   * @param baseBranch - Base branch to return to (default: "main")
    */
-  async revertAndReturnToMain(repoPath: string, branchName: string): Promise<void> {
+  async revertAndReturnToMain(
+    repoPath: string,
+    branchName: string,
+    baseBranch: string = "main"
+  ): Promise<void> {
     try {
       // Reset any uncommitted changes
       await this.git(repoPath, "reset --hard HEAD");
       await this.git(repoPath, "clean -fd");
-      // Switch back to main
-      await this.git(repoPath, "checkout main");
+      // Switch back to base branch
+      await this.git(repoPath, `checkout ${baseBranch}`);
       // Delete the task branch
       await this.git(repoPath, `branch -D ${branchName}`);
     } catch (error) {
       log.error("Failed to revert branch", { branchName, error });
-      // Force checkout main even if something failed
+      // Force checkout base branch even if something failed
       try {
-        await this.git(repoPath, "checkout -f main");
+        await this.git(repoPath, `checkout -f ${baseBranch}`);
       } catch {
         // Last resort
       }
@@ -128,11 +143,16 @@ export class BranchManager {
   }
 
   /**
-   * Verify that a branch has been merged to main.
+   * Verify that a branch has been merged to the base branch.
+   * @param baseBranch - Base branch to check merge against (default: "main")
    */
-  async verifyMerge(repoPath: string, branchName: string): Promise<boolean> {
+  async verifyMerge(
+    repoPath: string,
+    branchName: string,
+    baseBranch: string = "main"
+  ): Promise<boolean> {
     try {
-      const { stdout } = await shellExec(`git branch --merged main`, { cwd: repoPath });
+      const { stdout } = await shellExec(`git branch --merged ${baseBranch}`, { cwd: repoPath });
       return stdout.includes(branchName);
     } catch {
       return false;
@@ -151,10 +171,15 @@ export class BranchManager {
   }
 
   /**
-   * Get the diff between main and a task branch.
+   * Get the diff between the base branch and a task branch.
+   * @param baseBranch - Base branch for diff (default: "main")
    */
-  async getDiff(repoPath: string, branchName: string): Promise<string> {
-    const { stdout } = await shellExec(`git diff main...${branchName}`, {
+  async getDiff(
+    repoPath: string,
+    branchName: string,
+    baseBranch: string = "main"
+  ): Promise<string> {
+    const { stdout } = await shellExec(`git diff ${baseBranch}...${branchName}`, {
       cwd: repoPath,
       maxBuffer: 10 * 1024 * 1024,
     });
@@ -174,30 +199,35 @@ export class BranchManager {
   }
 
   /**
-   * Push main to the remote. Called after successful merge so completed work reaches origin.
-   * Fetches and rebases first when origin/main exists (to handle concurrent pushes).
-   * If the remote has no main branch (e.g. empty repo or first push), skips rebase and pushes.
+   * Push the base branch to the remote. Called after successful merge so completed work reaches origin.
+   * Fetches and rebases first when origin/<baseBranch> exists (to handle concurrent pushes).
+   * If the remote has no base branch (e.g. empty repo or first push), skips rebase and pushes.
    * If rebase hits conflicts, throws a RebaseConflictError (repo left in rebase state
    * so a merger agent can resolve). Caller is responsible for aborting if resolution fails.
+   * @param baseBranch - Base branch to push (default: "main")
    */
-  async pushMain(repoPath: string): Promise<void> {
+  async pushMain(repoPath: string, baseBranch: string = "main"): Promise<void> {
     try {
-      await this.git(repoPath, "fetch origin main");
+      await this.git(repoPath, `fetch origin ${baseBranch}`);
     } catch (error) {
       log.warn("pushMain: fetch failed, pushing anyway", { error });
     }
 
     await this.commitWip(repoPath, "pre-push");
 
-    const hasOriginMain = await this.hasRemoteBranch(repoPath, "origin/main");
-    if (hasOriginMain) {
-      await this.squashLocalCommits(repoPath, "origin/main");
+    const originRef = `origin/${baseBranch}`;
+    const hasOriginBase = await this.hasRemoteBranch(repoPath, originRef);
+    if (hasOriginBase) {
+      await this.squashLocalCommits(repoPath, originRef);
 
       try {
-        await shellExec("git -c core.hooksPath=/dev/null rebase --empty=drop origin/main", {
-          cwd: repoPath,
-          timeout: 120000,
-        });
+        await shellExec(
+          `git -c core.hooksPath=/dev/null rebase --empty=drop ${originRef}`,
+          {
+            cwd: repoPath,
+            timeout: 120000,
+          }
+        );
       } catch (rebaseErr) {
         const rebaseActive = await this.isRebaseInProgress(repoPath);
         if (!rebaseActive) {
@@ -207,10 +237,10 @@ export class BranchManager {
         throw new RebaseConflictError(conflictedFiles);
       }
     } else {
-      log.info("pushMain: origin/main not present (e.g. empty remote), skipping rebase");
+      log.info("pushMain: origin/%s not present (e.g. empty remote), skipping rebase", baseBranch);
     }
 
-    await this.git(repoPath, "-c core.hooksPath=/dev/null push origin main");
+    await this.git(repoPath, `-c core.hooksPath=/dev/null push origin ${baseBranch}`);
   }
 
   /**
@@ -321,11 +351,12 @@ export class BranchManager {
   }
 
   /**
-   * Push main to origin (no fetch/rebase). Used after the merger agent has resolved conflicts.
+   * Push the base branch to origin (no fetch/rebase). Used after the merger agent has resolved conflicts.
+   * @param baseBranch - Base branch to push (default: "main")
    */
-  async pushMainToOrigin(repoPath: string): Promise<void> {
+  async pushMainToOrigin(repoPath: string, baseBranch: string = "main"): Promise<void> {
     await this.commitWip(repoPath, "pre-push");
-    await this.git(repoPath, "-c core.hooksPath=/dev/null push origin main");
+    await this.git(repoPath, `-c core.hooksPath=/dev/null push origin ${baseBranch}`);
   }
 
   /**
@@ -458,10 +489,15 @@ export class BranchManager {
   }
 
   /**
-   * Get a summary of files changed between main and a branch.
+   * Get a summary of files changed between the base branch and a branch.
+   * @param baseBranch - Base branch for diff (default: "main")
    */
-  async getChangedFiles(repoPath: string, branchName: string): Promise<string[]> {
-    const { stdout } = await shellExec(`git diff --name-only main...${branchName}`, {
+  async getChangedFiles(
+    repoPath: string,
+    branchName: string,
+    baseBranch: string = "main"
+  ): Promise<string[]> {
+    const { stdout } = await shellExec(`git diff --name-only ${baseBranch}...${branchName}`, {
       cwd: repoPath,
     });
     return stdout.trim().split("\n").filter(Boolean);
@@ -477,38 +513,44 @@ export class BranchManager {
   }
 
   /**
-   * Update local main to match origin/main (fetch + reset --hard).
-   * Call before merging a task branch so we never merge into a stale main
+   * Update local base branch to match origin/<baseBranch> (fetch + reset --hard).
+   * Call before merging a task branch so we never merge into a stale base
    * and overwrite recent work (e.g. a previous task's rename that hadn't been pushed yet).
-   * No-op if origin/main does not exist (e.g. empty remote).
+   * No-op if origin/<baseBranch> does not exist (e.g. empty remote).
+   * @param baseBranch - Base branch to sync (default: "main")
    */
-  async syncMainWithOrigin(repoPath: string): Promise<MainSyncResult> {
+  async syncMainWithOrigin(repoPath: string, baseBranch: string = "main"): Promise<MainSyncResult> {
     await this.waitForGitReady(repoPath);
     try {
-      await this.git(repoPath, "fetch origin main");
+      await this.git(repoPath, `fetch origin ${baseBranch}`);
     } catch (error) {
       log.warn("syncMainWithOrigin: fetch failed", { error });
       return "fetch_failed";
     }
-    const hasOriginMain = await this.hasRemoteBranch(repoPath, "origin/main");
-    if (!hasOriginMain) {
-      log.info("syncMainWithOrigin: origin/main not present, skipping");
+    const originRef = `origin/${baseBranch}`;
+    const hasOriginBase = await this.hasRemoteBranch(repoPath, originRef);
+    if (!hasOriginBase) {
+      log.info("syncMainWithOrigin: origin/%s not present, skipping", baseBranch);
       return "up_to_date";
     }
     const currentBranch = await this.getCurrentBranch(repoPath).catch(() => "");
-    if (currentBranch !== "main") {
-      await this.git(repoPath, "checkout main");
+    if (currentBranch !== baseBranch) {
+      await this.git(repoPath, `checkout ${baseBranch}`);
     }
-    const { stdout } = await shellExec("git rev-list --left-right --count main...origin/main", {
-      cwd: repoPath,
-      timeout: 5000,
-    });
+    const { stdout } = await shellExec(
+      `git rev-list --left-right --count ${baseBranch}...${originRef}`,
+      {
+        cwd: repoPath,
+        timeout: 5000,
+      }
+    );
     const [localAheadRaw = "0", localBehindRaw = "0"] = stdout.trim().split(/\s+/);
     const localAhead = parseInt(localAheadRaw, 10) || 0;
     const localBehind = parseInt(localBehindRaw, 10) || 0;
 
     if (localAhead > 0) {
-      log.info("syncMainWithOrigin: local main is ahead of origin/main, preserving local commits", {
+      log.info("syncMainWithOrigin: local %s is ahead of origin/%s, preserving local commits", {
+        baseBranch,
         localAhead,
         localBehind,
       });
@@ -516,24 +558,25 @@ export class BranchManager {
     }
 
     if (localBehind > 0) {
-      await this.git(repoPath, "merge --ff-only origin/main");
-      log.info("syncMainWithOrigin: fast-forwarded main to origin/main", { localBehind });
+      await this.git(repoPath, `merge --ff-only ${originRef}`);
+      log.info("syncMainWithOrigin: fast-forwarded %s to origin/%s", baseBranch, baseBranch);
       return "fast_forwarded";
     }
 
     return "up_to_date";
   }
 
-  async updateMainFromOrigin(repoPath: string): Promise<void> {
-    await this.syncMainWithOrigin(repoPath);
+  async updateMainFromOrigin(repoPath: string, baseBranch: string = "main"): Promise<void> {
+    await this.syncMainWithOrigin(repoPath, baseBranch);
   }
 
   /**
-   * Ensure the main working tree is on the main branch.
+   * Ensure the main working tree is on the base branch.
    * With worktrees, this should always be the case. Logs a warning if not
    * and corrects it, but does not perform destructive operations.
+   * @param baseBranch - Base branch to ensure on (default: "main")
    */
-  async ensureOnMain(repoPath: string): Promise<void> {
+  async ensureOnMain(repoPath: string, baseBranch: string = "main"): Promise<void> {
     await this.waitForGitReady(repoPath);
 
     let currentBranch: string;
@@ -543,15 +586,13 @@ export class BranchManager {
       // No HEAD (e.g. new repo with no commits) — nothing to switch
       return;
     }
-    if (currentBranch !== "main") {
-      log.warn("Expected main but on different branch, switching to main", {
-        currentBranch,
-      });
+    if (currentBranch !== baseBranch) {
+      log.warn("Expected %s but on different branch, switching", { baseBranch, currentBranch });
       try {
         await this.git(repoPath, "reset --hard HEAD");
-        await this.git(repoPath, "checkout main");
+        await this.git(repoPath, `checkout ${baseBranch}`);
       } catch {
-        await this.git(repoPath, "checkout -f main");
+        await this.git(repoPath, `checkout -f ${baseBranch}`);
       }
     }
 
@@ -574,12 +615,17 @@ export class BranchManager {
   // ─── No-Checkout Diff Capture ───
 
   /**
-   * Capture a branch's diff from main without checking it out.
+   * Capture a branch's diff from the base branch without checking it out.
    * Returns empty string if the branch doesn't exist or has no diff.
+   * @param baseBranch - Base branch for diff (default: "main")
    */
-  async captureBranchDiff(repoPath: string, branchName: string): Promise<string> {
+  async captureBranchDiff(
+    repoPath: string,
+    branchName: string,
+    baseBranch: string = "main"
+  ): Promise<string> {
     try {
-      const { stdout } = await shellExec(`git diff main...${branchName}`, {
+      const { stdout } = await shellExec(`git diff ${baseBranch}...${branchName}`, {
         cwd: repoPath,
         maxBuffer: 10 * 1024 * 1024,
       });
@@ -688,23 +734,28 @@ export class BranchManager {
 
   /**
    * Create an isolated git worktree for a task.
-   * Creates the branch from main if it doesn't exist, removes stale worktrees,
+   * Creates the branch from the base branch if it doesn't exist, removes stale worktrees,
    * then creates a fresh worktree at /tmp/opensprint-worktrees/<taskId>.
    * If the branch is already in use by another path (e.g. leftover from a crash),
    * that worktree is removed first so the branch can be reused.
    * After creation, symlinks node_modules from the main repo so dependencies
    * (vitest, etc.) are available for test execution.
    * Returns the worktree path.
+   * @param baseBranch - Base branch to create task branch from (default: "main")
    */
-  async createTaskWorktree(repoPath: string, taskId: string): Promise<string> {
+  async createTaskWorktree(
+    repoPath: string,
+    taskId: string,
+    baseBranch: string = "main"
+  ): Promise<string> {
     const branchName = `opensprint/${taskId}`;
     const wtPath = this.getWorktreePath(taskId);
 
-    // Create branch from main if it doesn't exist
+    // Create branch from base branch if it doesn't exist
     try {
       await shellExec(`git rev-parse --verify ${branchName}`, { cwd: repoPath });
     } catch {
-      await this.git(repoPath, `branch ${branchName} main`);
+      await this.git(repoPath, `branch ${branchName} ${baseBranch}`);
     }
 
     // Remove stale worktree at our path if it exists
@@ -993,12 +1044,17 @@ export class BranchManager {
   }
 
   /**
-   * Get the number of commits a branch is ahead of main.
-   * Returns 0 if the branch doesn't exist or has no commits beyond main.
+   * Get the number of commits a branch is ahead of the base branch.
+   * Returns 0 if the branch doesn't exist or has no commits beyond the base.
+   * @param baseBranch - Base branch to compare against (default: "main")
    */
-  async getCommitCountAhead(repoPath: string, branchName: string): Promise<number> {
+  async getCommitCountAhead(
+    repoPath: string,
+    branchName: string,
+    baseBranch: string = "main"
+  ): Promise<number> {
     try {
-      const { stdout } = await shellExec(`git rev-list --count main..${branchName}`, {
+      const { stdout } = await shellExec(`git rev-list --count ${baseBranch}..${branchName}`, {
         cwd: repoPath,
       });
       return parseInt(stdout.trim(), 10) || 0;
@@ -1008,8 +1064,8 @@ export class BranchManager {
   }
 
   /**
-   * Merge a branch into main from the main working tree.
-   * The main working tree must be on main (which it always should be with worktrees).
+   * Merge a branch into the base branch from the main working tree.
+   * The main working tree must be on the base branch (which it always should be with worktrees).
    * @param message - Optional merge commit message (PRD §5.9: "merge: opensprint/<task-id> — <task title>")
    */
   async mergeToMain(repoPath: string, branchName: string, message?: string): Promise<void> {
@@ -1022,8 +1078,9 @@ export class BranchManager {
   }
 
   /**
-   * Merge a branch into main without committing. Leaves the merge result staged.
+   * Merge a branch into the base branch without committing. Leaves the merge result staged.
    * Used when combining merge + task metadata into a single commit.
+   * Caller must ensure main working tree is on base branch (via ensureOnMain) before calling.
    */
   async mergeToMainNoCommit(repoPath: string, branchName: string): Promise<MergeToMainResult> {
     let autoResolvedFiles: string[] = [];
@@ -1079,13 +1136,14 @@ export class BranchManager {
   }
 
   /**
-   * Rebase a branch onto current main within a worktree.
+   * Rebase a branch onto the current base branch within a worktree.
    * Used before merge to ensure fast-forward merge is possible.
    * Throws RebaseConflictError if conflicts are found.
+   * @param baseBranch - Base branch to rebase onto (default: "main")
    */
-  async rebaseOntoMain(wtPath: string): Promise<void> {
+  async rebaseOntoMain(wtPath: string, baseBranch: string = "main"): Promise<void> {
     try {
-      await this.git(wtPath, "rebase main");
+      await this.git(wtPath, `rebase ${baseBranch}`);
     } catch (_err) {
       const conflicted = await this.getConflictedFiles(wtPath);
       throw new RebaseConflictError(conflicted);

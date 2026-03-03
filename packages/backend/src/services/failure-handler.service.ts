@@ -50,11 +50,11 @@ export interface FailureHandlerHost {
     ): Promise<void>;
   };
   branchManager: {
-    captureBranchDiff(repoPath: string, branchName: string): Promise<string>;
+    captureBranchDiff(repoPath: string, branchName: string, baseBranch?: string): Promise<string>;
     captureUncommittedDiff(wtPath: string): Promise<string>;
     removeTaskWorktree(repoPath: string, taskId: string, actualPath?: string): Promise<void>;
     deleteBranch(repoPath: string, branchName: string): Promise<void>;
-    revertAndReturnToMain(repoPath: string, branchName: string): Promise<void>;
+    revertAndReturnToMain(repoPath: string, branchName: string, baseBranch?: string): Promise<void>;
   };
   sessionManager: {
     createSession(repoPath: string, data: Record<string, unknown>): Promise<{ id: string }>;
@@ -71,6 +71,7 @@ export interface FailureHandlerHost {
       simpleComplexityAgent: { type: string; model?: string | null };
       complexComplexityAgent: { type: string; model?: string | null };
       gitWorkingMode?: "worktree" | "branches";
+      worktreeBaseBranch?: string;
     }>;
   };
   persistCounters(projectId: string, repoPath: string): Promise<void>;
@@ -284,10 +285,18 @@ export class FailureHandlerService {
       })
       .catch((err) => log.warn("Failed to record attempt", { err }));
 
+    const baseBranch =
+      gitWorkingMode === "worktree"
+        ? (failSettings.worktreeBaseBranch ?? "main")
+        : "main";
     let previousDiff = "";
     let gitDiff = "";
     try {
-      const branchDiff = await this.host.branchManager.captureBranchDiff(repoPath, branchName);
+      const branchDiff = await this.host.branchManager.captureBranchDiff(
+        repoPath,
+        branchName,
+        baseBranch
+      );
       previousDiff = branchDiff;
       let uncommittedDiff = "";
       if (wtPath) {
@@ -343,7 +352,9 @@ export class FailureHandlerService {
         summary: `${failureSummary}. Waiting for API issue to be resolved.`,
       });
       await persistTaskLastExecutionSummary(this.host.taskStore, projectId, task.id, retrySummary);
-      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode);
+      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
+        baseBranch,
+      });
       await this.host.deleteAssignment(repoPath, task.id);
       try {
         await this.host.taskStore.update(projectId, task.id, {
@@ -376,7 +387,9 @@ export class FailureHandlerService {
       await this.host.taskStore.setCumulativeAttempts(projectId, task.id, cumulativeAttempts, {
         currentLabels: (task.labels ?? []) as string[],
       });
-      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode);
+      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
+        baseBranch,
+      });
       await this.host.deleteAssignment(repoPath, task.id);
       await this.blockTask(
         projectId,
@@ -422,7 +435,9 @@ export class FailureHandlerService {
         failureType,
       });
 
-      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode);
+      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
+        baseBranch,
+      });
 
       await this.host.persistCounters(projectId, repoPath);
       await this.host.executeCodingPhase(projectId, repoPath, task, slot, {
@@ -471,7 +486,9 @@ export class FailureHandlerService {
           },
         })
         .catch(() => {});
-      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode);
+      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
+        baseBranch,
+      });
 
       slot.attempt = cumulativeAttempts + 1;
       log.info(`Retrying ${task.id} (attempt ${slot.attempt}), preserving branch`);
@@ -489,6 +506,7 @@ export class FailureHandlerService {
     } else {
       await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
         deleteBranch: true,
+        baseBranch,
       });
       await this.host.deleteAssignment(repoPath, task.id);
 
@@ -571,10 +589,11 @@ export class FailureHandlerService {
     branchName: string,
     slot: FailureSlot,
     gitWorkingMode: "worktree" | "branches",
-    options?: { deleteBranch?: boolean }
+    options?: { deleteBranch?: boolean; baseBranch?: string }
   ): Promise<void> {
+    const baseBranch = options?.baseBranch ?? "main";
     if (gitWorkingMode === "branches") {
-      await this.host.branchManager.revertAndReturnToMain(repoPath, branchName);
+      await this.host.branchManager.revertAndReturnToMain(repoPath, branchName, baseBranch);
       slot.worktreePath = null;
       return;
     }

@@ -143,6 +143,8 @@ export interface RunMergerAgentOptions {
   branchName: string;
   conflictedFiles: string[];
   testCommand?: string;
+  /** Base branch for merger prompt context (default: "main") */
+  baseBranch?: string;
 }
 
 /** Create a handle for an existing process by PID (used when re-attaching after backend restart). */
@@ -322,14 +324,18 @@ export class AgentService {
   }
 
   private async buildMergerPrompt(options: RunMergerAgentOptions): Promise<string> {
+    const baseBranch = options.baseBranch ?? "main";
     const [statusShort, diffFilterU, mainLog, branchDiffStat] = await Promise.all([
       this.captureGitOutput(options.cwd, "git status --short"),
       this.captureGitOutput(options.cwd, "git diff --name-only --diff-filter=U"),
       this.captureGitOutput(
         options.cwd,
-        `git log --oneline -${AgentService.MERGER_MAIN_LOG_LIMIT} main`
+        `git log --oneline -${AgentService.MERGER_MAIN_LOG_LIMIT} ${baseBranch}`
       ),
-      this.captureGitOutput(options.cwd, `git diff --stat main...${options.branchName}`),
+      this.captureGitOutput(
+        options.cwd,
+        `git diff --stat ${baseBranch}...${options.branchName}`
+      ),
     ]);
 
     const conflictedFiles =
@@ -345,6 +351,7 @@ You are the Merger agent. Your job is to resolve ${options.phase} conflicts for 
 - Stage: ${options.phase}
 - Task ID: ${options.taskId}
 - Branch: ${options.branchName}
+- Base branch: ${baseBranch}
 - Test command: ${testCommand}
 
 ### Conflicted files
@@ -356,10 +363,10 @@ ${statusShort || "(no output)"}
 ### git diff --name-only --diff-filter=U
 ${diffFilterU || "(no output)"}
 
-### Recent main commits
+### Recent ${baseBranch} commits
 ${mainLog || "(no output)"}
 
-### Branch diff stat vs main
+### Branch diff stat vs ${baseBranch}
 ${branchDiffStat || "(no output)"}
 
 ## Your Task

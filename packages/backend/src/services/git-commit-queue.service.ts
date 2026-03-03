@@ -61,6 +61,8 @@ export interface WorktreeMergeJob {
   taskId: string;
   /** Fallback when task store show fails; queue fetches title via taskStore.show(taskId) */
   taskTitle?: string;
+  /** Base branch for rebase/merge (default: "main") */
+  baseBranch?: string;
 }
 
 import { formatClosedCommitMessage as formatClosedCommitMessageUtil } from "../utils/commit-message.js";
@@ -258,15 +260,17 @@ class GitCommitQueueImpl implements GitCommitQueueService {
             fallback: job.taskTitle ?? job.taskId,
           });
         }
+        const baseBranch = job.baseBranch ?? "main";
         log.info("Executing worktree_merge", {
           branchName: job.branchName,
+          baseBranch,
           taskTitle,
         });
-        await this.branchManager.syncMainWithOrigin(repoPath);
-        await this.branchManager.ensureOnMain(repoPath);
+        await this.branchManager.syncMainWithOrigin(repoPath, baseBranch);
+        await this.branchManager.ensureOnMain(repoPath, baseBranch);
 
         // Skip merge when branch is already merged (e.g. previous run or manual merge).
-        if (await this.branchManager.verifyMerge(repoPath, job.branchName)) {
+        if (await this.branchManager.verifyMerge(repoPath, job.branchName, baseBranch)) {
           log.info("Branch already merged, skipping merge and commit", {
             branchName: job.branchName,
           });
@@ -278,7 +282,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           await this.branchManager.checkout(repoPath, job.branchName);
         }
         try {
-          await this.branchManager.rebaseOntoMain(job.worktreePath);
+          await this.branchManager.rebaseOntoMain(job.worktreePath, baseBranch);
         } catch (rebaseErr) {
           if (rebaseErr instanceof RebaseConflictError) {
             const { projectId, config, testCommand } = await this.getMergeAgentConfig(
@@ -298,6 +302,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
               branchName: job.branchName,
               conflictedFiles: rebaseErr.conflictedFiles,
               testCommand,
+              baseBranch,
             });
             if (!resolved) {
               await this.branchManager.rebaseAbort(job.worktreePath);
@@ -327,7 +332,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           }
         }
         if (sharedRepoPath) {
-          await this.branchManager.ensureOnMain(repoPath);
+          await this.branchManager.ensureOnMain(repoPath, baseBranch);
         }
 
         try {
@@ -373,6 +378,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
               branchName: job.branchName,
               conflictedFiles: mergeErr.conflictedFiles,
               testCommand,
+              baseBranch,
             });
             if (resolved) {
               try {

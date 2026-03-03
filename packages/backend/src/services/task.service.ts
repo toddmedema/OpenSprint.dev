@@ -472,10 +472,14 @@ export class TaskService {
       }
     }
 
-    // 3. Delete task branch so next agent starts from fresh main
+    // 3. Delete task branch so next agent starts from fresh base branch
     const branchName = `opensprint/${taskId}`;
+    const baseBranch =
+      gitWorkingMode === "worktree"
+        ? (settings.worktreeBaseBranch ?? "main")
+        : "main";
     try {
-      await this.branchManager.revertAndReturnToMain(repoPath, branchName);
+      await this.branchManager.revertAndReturnToMain(repoPath, branchName, baseBranch);
     } catch (err) {
       log.warn("Revert-branch-on-unblock failed (branch may not exist)", {
         taskId,

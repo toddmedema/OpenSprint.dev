@@ -261,6 +261,94 @@ describe("parseSettings", () => {
 
     expect(parsed.aiAutonomyLevel).toBe("major_only");
   });
+
+  describe("worktreeBaseBranch", () => {
+    it("should default to main when parseSettings receives empty object", () => {
+      const parsed = parseSettings({});
+      expect(parsed.worktreeBaseBranch).toBe("main");
+    });
+
+    it("should default to main when worktreeBaseBranch is empty string", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        worktreeBaseBranch: "",
+      });
+      expect(parsed.worktreeBaseBranch).toBe("main");
+    });
+
+    it("should default to main when worktreeBaseBranch is whitespace only", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        worktreeBaseBranch: "   ",
+      });
+      expect(parsed.worktreeBaseBranch).toBe("main");
+    });
+
+    it("should default to main when worktreeBaseBranch contains invalid chars (spaces)", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        worktreeBaseBranch: "my branch",
+      });
+      expect(parsed.worktreeBaseBranch).toBe("main");
+    });
+
+    it("should default to main when worktreeBaseBranch contains invalid chars", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        worktreeBaseBranch: "branch@name",
+      });
+      expect(parsed.worktreeBaseBranch).toBe("main");
+    });
+
+    it("should preserve valid worktreeBaseBranch main", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        worktreeBaseBranch: "main",
+      });
+      expect(parsed.worktreeBaseBranch).toBe("main");
+    });
+
+    it("should preserve valid worktreeBaseBranch with slash", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        worktreeBaseBranch: "release/1.0",
+      });
+      expect(parsed.worktreeBaseBranch).toBe("release/1.0");
+    });
+
+    it("should preserve valid worktreeBaseBranch with underscore, hyphen, dot", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        worktreeBaseBranch: "feature_my-branch.v2",
+      });
+      expect(parsed.worktreeBaseBranch).toBe("feature_my-branch.v2");
+    });
+
+    it("should trim valid worktreeBaseBranch", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        worktreeBaseBranch: "  develop  ",
+      });
+      expect(parsed.worktreeBaseBranch).toBe("develop");
+    });
+
+    it("should default to main when worktreeBaseBranch is not a string", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        worktreeBaseBranch: 123,
+      });
+      expect(parsed.worktreeBaseBranch).toBe("main");
+    });
+  });
 });
 
 describe("getDefaultDeploymentTarget", () => {

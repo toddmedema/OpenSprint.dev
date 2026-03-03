@@ -3656,7 +3656,7 @@ describe("ExecutePhase Source feedback section", () => {
       expect(mockFeedbackGet).toHaveBeenCalledWith("proj-1", "fb-resolved");
     });
 
-    expect(screen.getByTestId("source-feedback-card")).toBeInTheDocument();
+    expect(await screen.findByTestId("source-feedback-card")).toBeInTheDocument();
     const resolvedChip = screen.getByText("Resolved");
     expect(resolvedChip).toBeInTheDocument();
     expect(resolvedChip).toHaveClass("bg-theme-success-bg", "text-theme-success-text");

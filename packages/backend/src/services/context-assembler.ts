@@ -213,8 +213,9 @@ export class ContextAssembler {
    * Build full context for a task.
    * - Gets Plan path from epic description, reads Plan markdown
    * - Extracts relevant PRD sections
-   * - For each dependency task: gets git diff (main...branch) if branch exists, else uses archived session
+   * - For each dependency task: gets git diff (baseBranch...branch) if branch exists, else uses archived session
    * @param options.task - When provided, avoids taskStore.show(taskId) and taskStore.getBlockers (uses issue data).
+   * @param options.baseBranch - Base branch for git diff (default: "main")
    */
   async buildContext(
     projectId: string,
@@ -222,7 +223,7 @@ export class ContextAssembler {
     taskId: string,
     taskStore: TaskStoreService,
     branchManager: BranchManager,
-    options?: { task?: StoredTask }
+    options?: { task?: StoredTask; baseBranch?: string }
   ): Promise<TaskContext> {
     const task = options?.task ?? (await taskStore.show(projectId, taskId));
     const title = task.title ?? "";
@@ -236,10 +237,12 @@ export class ContextAssembler {
     const dependencyTaskIds = options?.task
       ? taskStore.getBlockersFromIssue(task)
       : await taskStore.getBlockers(projectId, taskId);
+    const baseBranch = options?.baseBranch ?? "main";
     const dependencyOutputs = await this.collectDependencyOutputsWithGitDiff(
       repoPath,
       dependencyTaskIds,
-      branchManager
+      branchManager,
+      baseBranch
     );
 
     let userClarification: string | undefined;
@@ -266,12 +269,13 @@ export class ContextAssembler {
 
   /**
    * Collect diffs/summaries from dependency tasks.
-   * For each dep: try git diff main...branch first; if branch doesn't exist (merged/deleted), use archived session.
+   * For each dep: try git diff baseBranch...branch first; if branch doesn't exist (merged/deleted), use archived session.
    */
   private async collectDependencyOutputsWithGitDiff(
     repoPath: string,
     dependencyTaskIds: string[],
-    branchManager: BranchManager
+    branchManager: BranchManager,
+    baseBranch: string = "main"
   ): Promise<Array<{ taskId: string; diff: string; summary: string }>> {
     const outputs: Array<{ taskId: string; diff: string; summary: string }> = [];
 
@@ -282,7 +286,7 @@ export class ContextAssembler {
 
       // Try git diff first (branch exists if dep is in progress or in review)
       try {
-        diff = await branchManager.getDiff(repoPath, branchName);
+        diff = await branchManager.getDiff(repoPath, branchName, baseBranch);
       } catch {
         // Branch merged/deleted — fall back to archived session
       }

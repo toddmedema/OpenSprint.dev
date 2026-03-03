@@ -61,6 +61,7 @@ export function ProjectSetup() {
   const [unknownScopeStrategy, setUnknownScopeStrategy] =
     useState<UnknownScopeStrategy>("optimistic");
   const [gitWorkingMode, setGitWorkingMode] = useState<GitWorkingMode>("worktree");
+  const [worktreeBaseBranch, setWorktreeBaseBranch] = useState("main");
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
 
   const [detectedFramework, setDetectedFramework] = useState<string | null>(null);
@@ -202,6 +203,7 @@ export function ProjectSetup() {
         maxConcurrentCoders: gitWorkingMode === "branches" ? 1 : maxConcurrentCoders,
         unknownScopeStrategy,
         gitWorkingMode,
+        worktreeBaseBranch: gitWorkingMode === "worktree" ? worktreeBaseBranch || "main" : undefined,
       });
       navigate(getProjectPhasePath((project as { id: string }).id, "sketch"));
     } catch (err) {
@@ -304,6 +306,8 @@ export function ProjectSetup() {
                   setGitWorkingMode(v);
                   if (v === "branches") setMaxConcurrentCoders(1);
                 }}
+                worktreeBaseBranch={worktreeBaseBranch}
+                onWorktreeBaseBranchChange={setWorktreeBaseBranch}
               />
             )}
 

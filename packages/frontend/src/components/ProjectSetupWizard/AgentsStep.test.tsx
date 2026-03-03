@@ -282,6 +282,21 @@ describe("AgentsStep", () => {
     expect(screen.getByTestId("max-concurrent-coders-slider")).toBeInTheDocument();
   });
 
+  it("shows Base branch input when Worktree selected and onWorktreeBaseBranchChange provided", () => {
+    const onBaseBranchChange = vi.fn();
+    renderAgentsStep({
+      gitWorkingMode: "worktree",
+      worktreeBaseBranch: "develop",
+      onWorktreeBaseBranchChange: onBaseBranchChange,
+    });
+
+    const baseBranchInput = screen.getByTestId("worktree-base-branch-input");
+    expect(baseBranchInput).toBeInTheDocument();
+    expect(baseBranchInput).toHaveValue("develop");
+    fireEvent.change(baseBranchInput, { target: { value: "main" } });
+    expect(onBaseBranchChange).toHaveBeenCalledWith("main");
+  });
+
   describe("About the agent team section", () => {
     it("renders collapsible 'What do these agents do?' section", () => {
       renderAgentsStep();

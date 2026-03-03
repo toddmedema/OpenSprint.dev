@@ -474,6 +474,8 @@ export interface ProjectSettings {
   unknownScopeStrategy?: UnknownScopeStrategy;
   /** Git working mode: "worktree" (parallel worktrees) or "branches" (single branch in main repo). Default: "worktree". */
   gitWorkingMode?: GitWorkingMode;
+  /** Base branch for worktree mode (task branches created from and merged into this). Default: "main". */
+  worktreeBaseBranch?: string;
 }
 
 /** Planning agent roles — Dreamer/Analyst use fixed tiers; others inherit plan complexity */
@@ -519,6 +521,16 @@ export function getAgentForComplexity(
 const DEFAULT_AGENT: AgentConfig = { type: "cursor", model: null, cliCommand: null };
 
 const VALID_AI_AUTONOMY_LEVELS: AiAutonomyLevel[] = ["confirm_all", "major_only", "full"];
+
+/** Valid branch name: alphanumeric, slash, underscore, hyphen, dot */
+const BRANCH_NAME_REGEX = /^[a-zA-Z0-9/_.-]+$/;
+
+function normalizeWorktreeBaseBranch(raw: unknown): string {
+  if (typeof raw !== "string" || !raw.trim()) return "main";
+  const trimmed = raw.trim();
+  if (!BRANCH_NAME_REGEX.test(trimmed)) return "main";
+  return trimmed;
+}
 const VALID_REVIEW_ANGLES: ReviewAngle[] = [
   "security",
   "performance",
@@ -570,6 +582,7 @@ export function parseSettings(raw: unknown): ProjectSettings {
     hilConfig,
     testFramework: (r?.testFramework as string | null) ?? null,
     gitWorkingMode,
+    worktreeBaseBranch: normalizeWorktreeBaseBranch(r?.worktreeBaseBranch),
     reviewAngles: parseReviewAngles(r?.reviewAngles),
   };
 
