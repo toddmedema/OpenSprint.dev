@@ -1,5 +1,5 @@
 import { useState, useRef, useLayoutEffect, useCallback, useEffect } from "react";
-import type { AgentRole } from "@opensprint/shared";
+import type { AgentRole, TaskAnalytics } from "@opensprint/shared";
 import {
   AGENT_ROLE_CANONICAL_ORDER,
   AGENT_ROLE_LABELS,
@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChatInput } from "./ChatInput";
 import { NavButton } from "./layout/NavButton";
+import { HelpAnalyticsChart } from "./HelpAnalyticsChart";
 import { api } from "../api/client";
 import { ASSET_BASE } from "../lib/constants";
 
@@ -20,10 +21,10 @@ export interface HelpContentProps {
   onClose?: () => void;
 }
 
-type TabId = "ask" | "meet";
+type TabId = "ask" | "meet" | "analytics";
 
 /**
- * Shared Help content with two tabs: Ask a Question and Meet your Team.
+ * Shared Help content with three tabs: Ask a Question, Meet your Team, and Analytics.
  * Used by HelpModal (legacy) and HelpPage (full-screen).
  */
 export function HelpContent({ project, onClose }: HelpContentProps) {
@@ -58,6 +59,16 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
             id="help-tab-meet"
           >
             Meet your Team
+          </NavButton>
+          <NavButton
+            active={activeTab === "analytics"}
+            onClick={() => setActiveTab("analytics")}
+            role="tab"
+            aria-selected={activeTab === "analytics"}
+            aria-controls="help-tabpanel-analytics"
+            id="help-tab-analytics"
+          >
+            Analytics
           </NavButton>
         </div>
         <div className="flex-1 min-w-0 flex justify-end items-center">
@@ -101,6 +112,16 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
             className="flex-1 overflow-y-auto min-h-0 px-4 sm:px-6 py-4 max-w-[1800px] mx-auto w-full"
           >
             <MeetYourTeamContent />
+          </div>
+        )}
+        {activeTab === "analytics" && (
+          <div
+            id="help-tabpanel-analytics"
+            role="tabpanel"
+            aria-labelledby="help-tab-analytics"
+            className="flex-1 overflow-y-auto min-h-0 px-4 sm:px-6 py-4 max-w-[1800px] mx-auto w-full"
+          >
+            <AnalyticsContent projectId={project?.id ?? null} />
           </div>
         )}
       </div>
@@ -276,6 +297,63 @@ function AskQuestionContent({
           inputRef={chatInputRef}
         />
       </div>
+    </div>
+  );
+}
+
+function AnalyticsContent({ projectId }: { projectId: string | null }) {
+  const [data, setData] = useState<TaskAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    api.help
+      .analytics(projectId)
+      .then((res) => {
+        if (!cancelled) {
+          setData(res);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load analytics");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-theme-muted text-sm">
+        Loading analytics…
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="py-6 text-theme-error text-sm" role="alert">
+        {error}
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-theme-muted text-sm">
+        {projectId
+          ? "Task completion analytics for this project (100 most recent completed tasks)."
+          : "Task completion analytics across all projects (100 most recent completed tasks)."}
+      </p>
+      <HelpAnalyticsChart data={data.byComplexity} totalTasks={data.totalTasks} />
     </div>
   );
 }

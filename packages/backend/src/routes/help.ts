@@ -4,14 +4,29 @@ import type {
   HelpChatRequest,
   HelpChatResponse,
   HelpChatHistory,
+  TaskAnalytics,
 } from "@opensprint/shared";
 import { HelpChatService } from "../services/help-chat.service.js";
+import { getTaskAnalytics } from "../services/help-analytics.service.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("help-route");
 export const helpChatService = new HelpChatService();
 
 export const helpRouter = Router();
+
+// GET /help/analytics — Task analytics by complexity (projectId query = per-project; omit = all projects)
+helpRouter.get("/analytics", async (req: Request, res, next) => {
+  try {
+    const projectId = (req.query.projectId as string)?.trim() || null;
+    log.info("GET /help/analytics", { projectId: projectId ?? "all" });
+    const analytics = await getTaskAnalytics(projectId);
+    const result: ApiResponse<TaskAnalytics> = { data: analytics };
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /help/chat/history — Load persisted Help chat messages (projectId query = per-project; omit = homepage)
 helpRouter.get("/chat/history", async (req: Request, res, next) => {

@@ -466,24 +466,32 @@ export class TaskStoreService {
    * List the N most recently completed tasks for analytics.
    * When projectId is provided, scope to that project; when null, global scope.
    * Only returns tasks with completed_at set (required for completion time).
+   * Includes started_at for completion-time calculation (fallback to created_at when null).
    */
   async listRecentlyCompletedTasks(
     projectId: string | null,
     limit: number = 100
   ): Promise<
-    Array<{ id: string; created_at: string; completed_at: string; complexity: number | null }>
+    Array<{
+      id: string;
+      created_at: string;
+      started_at: string | null;
+      completed_at: string;
+      complexity: number | null;
+    }>
   > {
     await this.ensureInitialized();
     const client = this.ensureClient();
     const sql =
       projectId != null
-        ? "SELECT id, created_at, completed_at, complexity FROM tasks WHERE project_id = ? AND status = 'closed' AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT ?"
-        : "SELECT id, created_at, completed_at, complexity FROM tasks WHERE status = 'closed' AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT ?";
+        ? "SELECT id, created_at, started_at, completed_at, complexity FROM tasks WHERE project_id = ? AND status = 'closed' AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT ?"
+        : "SELECT id, created_at, started_at, completed_at, complexity FROM tasks WHERE status = 'closed' AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT ?";
     const params = projectId != null ? [projectId, limit] : [limit];
     const rows = await client.query(toPgParams(sql), params);
     return rows.map((r) => ({
       id: r.id as string,
       created_at: r.created_at as string,
+      started_at: (r.started_at as string | null) ?? null,
       completed_at: r.completed_at as string,
       complexity: r.complexity as number | null,
     }));

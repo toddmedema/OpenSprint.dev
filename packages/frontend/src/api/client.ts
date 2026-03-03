@@ -36,6 +36,7 @@ import type {
   HelpChatRequest,
   HelpChatResponse,
   HelpChatHistory,
+  TaskAnalytics,
   ExecuteTaskContext,
 } from "@opensprint/shared";
 import type { TaskListResponse } from "./taskList";
@@ -523,6 +524,10 @@ export const api = {
     history: (projectId: string | null) =>
       request<HelpChatHistory>(
         `/help/chat/history${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`
+      ),
+    analytics: (projectId: string | null) =>
+      request<TaskAnalytics>(
+        `/help/analytics${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`
       ),
   },
 

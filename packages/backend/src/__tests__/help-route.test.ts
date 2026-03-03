@@ -6,6 +6,7 @@ import os from "os";
 import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
 import { helpChatService } from "../routes/help.js";
+import { taskStore } from "../services/task-store.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 vi.mock("../services/beads.service.js", () => ({
@@ -231,6 +232,34 @@ describe.skipIf(!helpPostgresOk)("Help chat API", () => {
       content: "What projects do I have?",
     });
     expect(res.body.data.messages[1].role).toBe("assistant");
+  });
+
+  it("GET /help/analytics returns byComplexity and totalTasks (project scope)", async () => {
+    const t1 = await taskStore.create(projectId, "Task 1", { type: "task", complexity: 3 });
+    const t2 = await taskStore.create(projectId, "Task 2", { type: "task", complexity: 5 });
+    await taskStore.close(projectId, t1.id, "Done");
+    await taskStore.close(projectId, t2.id, "Done");
+
+    const res = await request(app).get(`${API_PREFIX}/help/analytics?projectId=${projectId}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeDefined();
+    expect(res.body.data.byComplexity).toHaveLength(10);
+    expect(res.body.data.totalTasks).toBe(2);
+    const b3 = res.body.data.byComplexity.find((b: { complexity: number }) => b.complexity === 3);
+    const b5 = res.body.data.byComplexity.find((b: { complexity: number }) => b.complexity === 5);
+    expect(b3?.taskCount).toBe(1);
+    expect(b5?.taskCount).toBe(1);
+    expect(b3?.avgCompletionTimeMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("GET /help/analytics returns global scope when projectId omitted", async () => {
+    const res = await request(app).get(`${API_PREFIX}/help/analytics`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeDefined();
+    expect(res.body.data.byComplexity).toHaveLength(10);
+    expect(res.body.data.totalTasks).toBeGreaterThanOrEqual(0);
   });
 
   it.skip("project and homepage help histories are stored separately", async () => {

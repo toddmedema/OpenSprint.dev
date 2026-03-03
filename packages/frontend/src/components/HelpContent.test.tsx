@@ -9,6 +9,7 @@ vi.mock("../api/client", () => ({
     help: {
       history: vi.fn(),
       chat: vi.fn(),
+      analytics: vi.fn(),
     },
   },
 }));
@@ -16,13 +17,22 @@ vi.mock("../api/client", () => ({
 describe("HelpContent", () => {
   beforeEach(() => {
     vi.mocked(api.help.history).mockResolvedValue({ messages: [] });
+    vi.mocked(api.help.analytics).mockResolvedValue({
+      byComplexity: Array.from({ length: 10 }, (_, i) => ({
+        complexity: i + 1,
+        taskCount: i === 2 ? 2 : i === 4 ? 1 : 0,
+        avgCompletionTimeMs: i === 2 ? 90000 : i === 4 ? 180000 : 0,
+      })),
+      totalTasks: 3,
+    });
   });
 
-  it("renders two tabs: Ask a Question (default) and Meet your Team", () => {
+  it("renders three tabs: Ask a Question (default), Meet your Team, and Analytics", () => {
     render(<HelpContent />);
 
     expect(screen.getByRole("tab", { name: "Ask a Question" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Meet your Team" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Analytics" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Ask a Question" })).toHaveAttribute(
       "aria-selected",
       "true"
@@ -62,6 +72,29 @@ describe("HelpContent", () => {
     render(<HelpContent project={{ id: "proj-1", name: "My Project" }} />);
 
     expect(screen.getByText(/Ask about My Project/)).toBeInTheDocument();
+  });
+
+  it("switches to Analytics tab and shows chart", async () => {
+    const user = userEvent.setup();
+    render(<HelpContent />);
+
+    await user.click(screen.getByRole("tab", { name: "Analytics" }));
+
+    expect(screen.getByRole("tab", { name: "Analytics" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    expect(api.help.analytics).toHaveBeenCalledWith(null);
+    expect(screen.getByTestId("help-analytics-chart")).toBeInTheDocument();
+  });
+
+  it("Analytics tab scopes to project when project provided", async () => {
+    const user = userEvent.setup();
+    render(<HelpContent project={{ id: "proj-1", name: "My Project" }} />);
+
+    await user.click(screen.getByRole("tab", { name: "Analytics" }));
+
+    expect(api.help.analytics).toHaveBeenCalledWith("proj-1");
   });
 
   it("keeps chat input pinned at bottom with scrollable messages above", async () => {
