@@ -303,6 +303,15 @@ export const REVIEW_ANGLE_OPTIONS: { value: ReviewAngle; label: string }[] = [
   { value: "design_ux_accessibility", label: "Design, UX and accessibility" },
 ];
 
+/** UI-only option for general review (scope + code quality). When selected alone, reviewAngles is empty. */
+export const GENERAL_REVIEW_OPTION = "general" as const;
+
+/** All review agent options for UI: General first (checked by default), then angle-specific options. */
+export const REVIEW_AGENT_OPTIONS: { value: typeof GENERAL_REVIEW_OPTION | ReviewAngle; label: string }[] = [
+  { value: GENERAL_REVIEW_OPTION, label: "General" },
+  ...REVIEW_ANGLE_OPTIONS,
+];
+
 /** Strategy when file scope is unknown for parallel scheduling */
 export type UnknownScopeStrategy = "conservative" | "optimistic";
 

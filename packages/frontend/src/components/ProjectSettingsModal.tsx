@@ -31,9 +31,10 @@ import {
   AI_AUTONOMY_LEVELS,
   DEFAULT_AI_AUTONOMY_LEVEL,
   DEFAULT_REVIEW_MODE,
+  GENERAL_REVIEW_OPTION,
   getDeploymentTargetsForUi,
   AUTO_DEPLOY_TRIGGER_OPTIONS,
-  REVIEW_ANGLE_OPTIONS,
+  REVIEW_AGENT_OPTIONS,
   normalizeWorktreeBaseBranch,
   type AutoDeployTrigger,
 } from "@opensprint/shared";
@@ -735,36 +736,68 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                           Review agents
                         </label>
                         <p className="text-xs text-theme-muted mb-2">
-                          Leave empty for one general review. Select one or more for parallel
-                          agent-specific reviews.
+                          Leave empty for one general review. Select one or more angles for
+                          parallel angle-specific reviews.
                         </p>
                         <div
                           className="flex flex-wrap gap-2"
                           data-testid="review-agents-multiselect"
                         >
-                          {REVIEW_ANGLE_OPTIONS.map((opt) => {
-                            const selected = (settings?.reviewAngles ?? []).includes(opt.value);
+                          {REVIEW_AGENT_OPTIONS.map((opt) => {
+                            const isGeneral = opt.value === GENERAL_REVIEW_OPTION;
+                            const angles = settings?.reviewAngles ?? [];
+                            const generalSelected = angles.length === 0;
+                            const selected = isGeneral
+                              ? generalSelected
+                              : angles.includes(opt.value);
+                            const selectedCount = (generalSelected ? 1 : 0) + angles.length;
+                            const wouldLeaveZero = selected && selectedCount === 1;
+                            const disabled = wouldLeaveZero;
                             return (
                               <label
                                 key={opt.value}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors text-sm ${
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors text-sm ${
+                                  disabled
+                                    ? "cursor-not-allowed opacity-90"
+                                    : "cursor-pointer hover:border-theme-muted"
+                                } ${
                                   selected
                                     ? "border-brand-600 bg-brand-50 dark:bg-brand-900/20"
-                                    : "border-theme-border hover:border-theme-muted"
+                                    : "border-theme-border"
                                 }`}
                               >
                                 <input
                                   type="checkbox"
                                   checked={selected}
+                                  disabled={disabled}
                                   onChange={() => {
-                                    const current = settings?.reviewAngles ?? [];
-                                    const next = selected
-                                      ? current.filter((a) => a !== opt.value)
-                                      : [...current, opt.value];
-                                    setSettings((s) => (s ? { ...s, reviewAngles: next } : null));
-                                    void persistSettings(undefined, { reviewAngles: next });
+                                    if (disabled) return;
+                                    if (isGeneral) {
+                                      if (selected) {
+                                        return;
+                                      } else {
+                                        setSettings((s) =>
+                                          s ? { ...s, reviewAngles: [] } : null
+                                        );
+                                        void persistSettings(undefined, {
+                                          reviewAngles: undefined,
+                                        });
+                                      }
+                                    } else {
+                                      const current = angles;
+                                      const next = selected
+                                        ? current.filter((a) => a !== opt.value)
+                                        : [...current, opt.value];
+                                      if (next.length === 0 && selected) return;
+                                      setSettings((s) =>
+                                        s ? { ...s, reviewAngles: next } : null
+                                      );
+                                      void persistSettings(undefined, {
+                                        reviewAngles: next.length > 0 ? next : undefined,
+                                      });
+                                    }
                                   }}
-                                  className="rounded border-0 focus:ring-2 focus:ring-brand-500 focus:ring-offset-0"
+                                  className="rounded border-0 focus:ring-2 focus:ring-brand-500 focus:ring-offset-0 disabled:cursor-not-allowed"
                                 />
                                 <span className="text-theme-text">{opt.label}</span>
                               </label>

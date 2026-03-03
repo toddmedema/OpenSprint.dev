@@ -297,6 +297,52 @@ describe("ProjectSettingsModal", () => {
     );
   });
 
+  it("shows General first and checked by default when reviewAngles is empty", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, reviewAngles: undefined });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Code Review");
+    const multiselect = screen.getByTestId("review-agents-multiselect");
+    const firstCheckbox = within(multiselect).getAllByRole("checkbox")[0];
+    expect(firstCheckbox).toHaveAccessibleName("General");
+    expect(firstCheckbox).toBeChecked();
+  });
+
+  it("disables General checkbox when it is the only selected option", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, reviewAngles: undefined });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Code Review");
+    const generalCheckbox = screen.getByRole("checkbox", { name: /^General$/i });
+    expect(generalCheckbox).toBeChecked();
+    expect(generalCheckbox).toBeDisabled();
+  });
+
+  it("disables angle checkbox when it is the only selected option", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, reviewAngles: ["security"] });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Code Review");
+    const securityCheckbox = screen.getByRole("checkbox", { name: /Security implications/i });
+    expect(securityCheckbox).toBeChecked();
+    expect(securityCheckbox).toBeDisabled();
+  });
+
   it("shows review agents multi-select and persists selection", async () => {
     mockGetSettings.mockResolvedValue({ ...mockSettings, reviewAngles: undefined });
 
@@ -311,9 +357,10 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByTestId("review-agents-multiselect")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Leave empty for one general review. Select one or more for parallel agent-specific reviews."
+        "Leave empty for one general review. Select one or more angles for parallel angle-specific reviews."
       )
     ).toBeInTheDocument();
+    expect(screen.getByText("General")).toBeInTheDocument();
     expect(screen.getByText("Security implications")).toBeInTheDocument();
     expect(screen.getByText("Performance impact")).toBeInTheDocument();
 
