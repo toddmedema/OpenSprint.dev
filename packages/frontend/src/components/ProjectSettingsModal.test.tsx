@@ -350,6 +350,20 @@ describe("ProjectSettingsModal", () => {
     expect(testCoverageCheckbox).toBeChecked();
   });
 
+  it("review angle checkboxes have no visible border", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, reviewAngles: undefined });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Code Review");
+    const securityCheckbox = screen.getByRole("checkbox", { name: /Security implications/i });
+    expect(securityCheckbox).toHaveClass("border-0");
+  });
+
   it("Autonomy tab shows AI Autonomy slider with three levels", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await waitForModalReady();

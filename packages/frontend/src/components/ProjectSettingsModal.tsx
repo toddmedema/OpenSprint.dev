@@ -753,7 +753,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                                     setSettings((s) => (s ? { ...s, reviewAngles: next } : null));
                                     void persistSettings(undefined, { reviewAngles: next });
                                   }}
-                                  className="rounded"
+                                  className="rounded border-0 focus:ring-2 focus:ring-brand-500 focus:ring-offset-0"
                                 />
                                 <span className="text-theme-text">{opt.label}</span>
                               </label>
