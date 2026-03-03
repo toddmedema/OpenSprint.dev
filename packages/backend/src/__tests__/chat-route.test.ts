@@ -785,7 +785,7 @@ A simple marketing site for OpenSprint.
       expect(mockUnregister).toHaveBeenCalledWith(mockRegister.mock.calls[0][0]);
     });
 
-    it("does not register Analyst agent when context is execute (task chat reply)", async () => {
+    it("registers 'Processing reply' agent when context is execute (task chat reply)", async () => {
       const task = await taskStore.create(projectId, "Implement login flow", {
         type: "task",
         description: "Add JWT authentication",
@@ -801,8 +801,21 @@ A simple marketing site for OpenSprint.
       expect(res.status).toBe(200);
       expect(res.body.data.message).toContain("Answer received");
       expect(mockInvokePlanningAgent).not.toHaveBeenCalled();
-      expect(mockRegister).not.toHaveBeenCalled();
-      expect(mockUnregister).not.toHaveBeenCalled();
+      expect(mockRegister).toHaveBeenCalledTimes(1);
+      expect(mockRegister).toHaveBeenCalledWith(
+        expect.stringMatching(/^execute-reply-/),
+        projectId,
+        "execute",
+        "analyst",
+        "Processing reply",
+        expect.any(String),
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      );
+      expect(mockUnregister).toHaveBeenCalledTimes(1);
+      expect(mockUnregister).toHaveBeenCalledWith(mockRegister.mock.calls[0][0]);
     });
   });
 });

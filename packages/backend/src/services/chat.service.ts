@@ -32,6 +32,7 @@ import {
   type HarmonizerPrdUpdate,
 } from "./harmonizer.service.js";
 import { buildAutonomyDescription } from "./context-assembler.js";
+import { activeAgentsService } from "./active-agents.service.js";
 
 const log = createLogger("chat");
 const ARCHITECTURE_SECTIONS = ["technical_architecture", "data_model", "api_contracts"] as const;
@@ -386,29 +387,46 @@ export class ChatService {
 
     // Execute chat: store user answer with task context for Coder; no agent invocation
     if (isExecuteContext && taskId) {
-      const taskContextBlock =
-        body.taskContext &&
-        `## Task context (for resolving "this task" references)\n\n- **ID:** ${body.taskContext.id}\n- **Title:** ${body.taskContext.title}\n- **Description:** ${body.taskContext.description}\n- **Status:** ${body.taskContext.status ?? "—"}\n- **Column:** ${body.taskContext.kanbanColumn ?? "—"}\n\n`;
-      const storedContent = taskContextBlock
-        ? `${taskContextBlock}## User's answer\n\n${body.message}`
-        : body.message;
-      const userMessage: ConversationMessage = {
-        role: "user",
-        content: storedContent,
-        timestamp: new Date().toISOString(),
-      };
-      conversation.messages.push(userMessage);
-      const assistantMessage: ConversationMessage = {
-        role: "assistant",
-        content:
-          "Answer received. The task will be unblocked and the orchestrator will pick it up.",
-        timestamp: new Date().toISOString(),
-      };
-      conversation.messages.push(assistantMessage);
-      await this.saveConversation(projectId, conversation);
-      return {
-        message: assistantMessage.content,
-      };
+      const agentId = `execute-reply-${projectId}-${taskId}-${conversation.id}-${Date.now()}`;
+      activeAgentsService.register(
+        agentId,
+        projectId,
+        "execute",
+        "analyst",
+        "Processing reply",
+        new Date().toISOString(),
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      );
+      try {
+        const taskContextBlock =
+          body.taskContext &&
+          `## Task context (for resolving "this task" references)\n\n- **ID:** ${body.taskContext.id}\n- **Title:** ${body.taskContext.title}\n- **Description:** ${body.taskContext.description}\n- **Status:** ${body.taskContext.status ?? "—"}\n- **Column:** ${body.taskContext.kanbanColumn ?? "—"}\n\n`;
+        const storedContent = taskContextBlock
+          ? `${taskContextBlock}## User's answer\n\n${body.message}`
+          : body.message;
+        const userMessage: ConversationMessage = {
+          role: "user",
+          content: storedContent,
+          timestamp: new Date().toISOString(),
+        };
+        conversation.messages.push(userMessage);
+        const assistantMessage: ConversationMessage = {
+          role: "assistant",
+          content:
+            "Answer received. The task will be unblocked and the orchestrator will pick it up.",
+          timestamp: new Date().toISOString(),
+        };
+        conversation.messages.push(assistantMessage);
+        await this.saveConversation(projectId, conversation);
+        return {
+          message: assistantMessage.content,
+        };
+      } finally {
+        activeAgentsService.unregister(agentId);
+      }
     }
 
     // Build prompt for agent; add PRD section context if user clicked to focus (PRD §7.1.5)
