@@ -41,6 +41,10 @@ export interface ActiveTaskInfo {
   lastOutputAt?: string;
   suspendedAt?: string;
   suspendReason?: AgentSuspendReason;
+  /** Per-agent ID when multi-angle review (e.g. taskId--review--security). */
+  id?: string;
+  /** Display name when multi-angle review (e.g. "Reviewer (Security)"). */
+  name?: string;
 }
 
 const TASKS_IN_FLIGHT_KEY = "tasksInFlightCount" as const;

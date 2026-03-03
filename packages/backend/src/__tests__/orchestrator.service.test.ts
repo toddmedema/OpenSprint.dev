@@ -146,7 +146,10 @@ vi.mock("../services/task-store.service.js", async () => {
     ready: mockTaskStoreReady,
     readyWithStatusMap: vi
       .fn()
-      .mockImplementation(async () => ({ tasks: await mockTaskStoreReady() })),
+      .mockImplementation(async () => {
+        const tasks = await mockTaskStoreReady();
+        return { tasks, statusMap: new Map(), allIssues: tasks };
+      }),
     syncForPush: vi.fn().mockResolvedValue(undefined),
     getDb: vi.fn().mockResolvedValue(mockDb),
     runWrite: vi.fn().mockImplementation(async (fn: (db: typeof mockDb) => void) => {
@@ -317,6 +320,17 @@ vi.mock("../utils/file-utils.js", () => ({
 
 vi.mock("../services/plan-complexity.js", () => ({
   getComplexityForAgent: (...args: unknown[]) => mockGetComplexityForAgent(...args),
+}));
+
+const mockGetNextKey = vi.fn().mockResolvedValue({ key: "test-key", keyId: "k1", source: "env" });
+vi.mock("../services/api-key-resolver.service.js", () => ({
+  getNextKey: (...args: unknown[]) => mockGetNextKey(...args),
+}));
+
+vi.mock("../services/api-key-exhausted.service.js", () => ({
+  isExhausted: vi.fn().mockReturnValue(false),
+  clearExhausted: vi.fn(),
+  markExhausted: vi.fn(),
 }));
 
 vi.mock("../services/crash-recovery.service.js", () => ({
@@ -932,10 +946,75 @@ describe("OrchestratorService (slot-based model)", () => {
       expect(reviewerAgents.map((a) => a.id)).toEqual(
         expect.arrayContaining([`${task.id}--review--security`, `${task.id}--review--performance`])
       );
+      // name is instance suffix; getRoleDisplayLabel produces "Reviewer (Security)" from name "Security"
       expect(reviewerAgents.map((a) => a.name)).toEqual(
-        expect.arrayContaining(["Reviewer (Security)", "Reviewer (Performance)"])
+        expect.arrayContaining(["Security", "Performance"])
       );
       expect(reviewerAgents.every((a) => a.taskId === task.id)).toBe(true);
+    });
+
+    it("getStatus.activeTasks emits one entry per active review agent when multi-angle", async () => {
+      const { task } = setupSingleTaskFlow("task-build-active");
+      mockTaskStoreReady.mockResolvedValueOnce([task]);
+      mockTaskStoreListAll.mockResolvedValue([task]);
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      const state = (
+        orchestrator as unknown as { getState: (id: string) => { slots: Map<string, unknown> } }
+      ).getState(projectId);
+      const slot = state.slots.get(task.id) as {
+        phase: "coding" | "review";
+        reviewAgents?: Map<
+          string,
+          {
+            angle: string;
+            agent: { startedAt: string; lifecycleState: string; activeProcess: null };
+            timers: { clearAll: () => void };
+          }
+        >;
+      };
+      expect(slot).toBeTruthy();
+      slot.phase = "review";
+      slot.reviewAgents = new Map([
+        [
+          "security",
+          {
+            angle: "security",
+            agent: {
+              startedAt: "2026-02-20T10:00:00.000Z",
+              lifecycleState: "running",
+              activeProcess: null,
+            },
+            timers: { clearAll: vi.fn() },
+          },
+        ],
+        [
+          "performance",
+          {
+            angle: "performance",
+            agent: {
+              startedAt: "2026-02-20T10:00:05.000Z",
+              lifecycleState: "running",
+              activeProcess: null,
+            },
+            timers: { clearAll: vi.fn() },
+          },
+        ],
+      ]);
+
+      const status = await orchestrator.getStatus(projectId);
+      const reviewTasks = status.activeTasks.filter((t) => t.phase === "review");
+      expect(reviewTasks).toHaveLength(2);
+      expect(reviewTasks.map((t) => t.id)).toEqual(
+        expect.arrayContaining([`${task.id}--review--security`, `${task.id}--review--performance`])
+      );
+      expect(reviewTasks.map((t) => t.name)).toEqual(
+        expect.arrayContaining(["Reviewer (Security)", "Reviewer (Performance)"])
+      );
     });
   });
 

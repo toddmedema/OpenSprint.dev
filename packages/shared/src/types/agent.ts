@@ -301,6 +301,10 @@ export interface ActiveTaskEntry {
   lastOutputAt?: string;
   suspendedAt?: string;
   suspendReason?: AgentSuspendReason;
+  /** Per-agent ID when multi-angle review (e.g. taskId--review--security). Enables UI to distinguish parallel reviewers. */
+  id?: string;
+  /** Display name when multi-angle review (e.g. "Reviewer (Security)"). */
+  name?: string;
 }
 
 /** Build orchestrator status (always-on per PRDv2 §5.7, v2 multi-slot model) */

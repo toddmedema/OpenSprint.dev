@@ -313,11 +313,17 @@ export class OrchestratorService {
     for (const slot of state.slots.values()) {
       if (slot.phase === "review" && slot.reviewAgents && slot.reviewAgents.size > 0) {
         for (const reviewAgent of slot.reviewAgents.values()) {
+          const angleLabel =
+            REVIEW_ANGLE_ACTIVE_LABELS[reviewAgent.angle] ??
+            REVIEW_ANGLE_OPTIONS.find((o) => o.value === reviewAgent.angle)?.label ??
+            reviewAgent.angle;
           tasks.push({
             taskId: slot.taskId,
             phase: slot.phase,
             startedAt: reviewAgent.agent.startedAt || new Date().toISOString(),
             state: reviewAgent.agent.lifecycleState,
+            id: buildReviewAgentId(slot.taskId, reviewAgent.angle),
+            name: `Reviewer (${angleLabel})`,
             ...(reviewAgent.agent.lastOutputAtIso
               ? { lastOutputAt: reviewAgent.agent.lastOutputAtIso }
               : {}),
@@ -1314,7 +1320,7 @@ export class OrchestratorService {
             label: slot.taskTitle ?? slot.taskId,
             startedAt: reviewAgent.agent.startedAt || new Date().toISOString(),
             branchName: slot.branchName,
-            name: `Reviewer (${angleLabel})`,
+            name: angleLabel,
             state: reviewAgent.agent.lifecycleState,
             ...(reviewAgent.agent.lastOutputAtIso
               ? { lastOutputAt: reviewAgent.agent.lastOutputAtIso }
