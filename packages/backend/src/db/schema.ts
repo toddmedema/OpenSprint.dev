@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS agent_stats (
     project_id   TEXT NOT NULL,
     task_id      TEXT NOT NULL,
     agent_id     TEXT NOT NULL,
+    role         TEXT,
     model        TEXT NOT NULL,
     attempt      INTEGER NOT NULL,
     started_at   TEXT NOT NULL,
@@ -107,6 +108,8 @@ CREATE TABLE IF NOT EXISTS agent_stats (
 );
 CREATE INDEX IF NOT EXISTS idx_agent_stats_project ON agent_stats(project_id);
 CREATE INDEX IF NOT EXISTS idx_agent_stats_task ON agent_stats(task_id);
+-- Add role column for existing tables (no-op if column exists)
+ALTER TABLE agent_stats ADD COLUMN IF NOT EXISTS role TEXT;
 
 -- Orchestrator events (SQL-only)
 CREATE TABLE IF NOT EXISTS orchestrator_events (

@@ -276,10 +276,12 @@ export class FailureHandlerService {
     }
 
     const gitWorkingMode = failSettings.gitWorkingMode ?? "worktree";
+    const agentRole = slot.phase === "review" ? "reviewer" : "coder";
     agentIdentityService
       .recordAttempt(repoPath, {
         taskId: task.id,
         agentId: `${agentConfig.type}-${agentConfig.model ?? "default"}`,
+        role: agentRole,
         model: agentConfig.model ?? "unknown",
         attempt: cumulativeAttempts,
         startedAt: slot.agent.startedAt,

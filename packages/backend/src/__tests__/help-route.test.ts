@@ -265,11 +265,12 @@ describe.skipIf(!helpPostgresOk)("Help chat API", () => {
   it("GET /help/agent-log returns entries for project scope", async () => {
     await taskStore.runWrite(async (client) => {
       await client.execute(
-        `INSERT INTO agent_stats (project_id, task_id, agent_id, model, attempt, started_at, completed_at, outcome, duration_ms)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `INSERT INTO agent_stats (project_id, task_id, agent_id, role, model, attempt, started_at, completed_at, outcome, duration_ms)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           projectId,
           "os-abc.1",
+          "cursor-cursor-composer-1.5",
           "coder",
           "claude-sonnet-4",
           1,
@@ -299,12 +300,13 @@ describe.skipIf(!helpPostgresOk)("Help chat API", () => {
   it("GET /help/agent-log returns entries with project names for global scope", async () => {
     await taskStore.runWrite(async (client) => {
       await client.execute(
-        `INSERT INTO agent_stats (project_id, task_id, agent_id, model, attempt, started_at, completed_at, outcome, duration_ms)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `INSERT INTO agent_stats (project_id, task_id, agent_id, role, model, attempt, started_at, completed_at, outcome, duration_ms)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           projectId,
           "os-xyz.1",
-          "claude-sonnet",
+          "claude-claude-sonnet-4",
+          "reviewer",
           "claude-sonnet-4",
           1,
           "2025-03-01T11:00:00Z",
@@ -320,11 +322,11 @@ describe.skipIf(!helpPostgresOk)("Help chat API", () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
     expect(Array.isArray(res.body.data)).toBe(true);
-    const entry = res.body.data.find((e: { role: string }) => e.role === "claude-sonnet");
+    const entry = res.body.data.find((e: { role: string }) => e.role === "Reviewer");
     expect(entry).toBeDefined();
     expect(entry).toMatchObject({
       model: "claude-sonnet-4",
-      role: "claude-sonnet",
+      role: "Reviewer",
       durationMs: 120000,
       endTime: "2025-03-01T11:02:00Z",
       projectName: "Test Project",
@@ -334,11 +336,12 @@ describe.skipIf(!helpPostgresOk)("Help chat API", () => {
   it("GET /help/agent-log includes sessionId when agent_sessions has output_log", async () => {
     await taskStore.runWrite(async (client) => {
       await client.execute(
-        `INSERT INTO agent_stats (project_id, task_id, agent_id, model, attempt, started_at, completed_at, outcome, duration_ms)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `INSERT INTO agent_stats (project_id, task_id, agent_id, role, model, attempt, started_at, completed_at, outcome, duration_ms)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           projectId,
           "os-sess.1",
+          "cursor-cursor-composer",
           "coder",
           "claude-sonnet-4",
           1,

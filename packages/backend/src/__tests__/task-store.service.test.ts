@@ -1222,9 +1222,9 @@ suite("TaskStoreService", () => {
       );
       await db.execute(
         toPgParams(
-          `INSERT INTO agent_stats (project_id, task_id, agent_id, model, attempt, started_at, completed_at, outcome, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO agent_stats (project_id, task_id, agent_id, role, model, attempt, started_at, completed_at, outcome, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ),
-        [pid, task.id, "agent-1", "claude", 1, now, now, "success", 1000]
+        [pid, task.id, "agent-1", "coder", "claude", 1, now, now, "success", 1000]
       );
       await db.execute(
         toPgParams(

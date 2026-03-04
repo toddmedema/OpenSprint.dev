@@ -7,7 +7,7 @@
  */
 
 import crypto from "crypto";
-import type { AgentConfig, ProjectSettings } from "@opensprint/shared";
+import type { AgentConfig, AgentRole, ProjectSettings } from "@opensprint/shared";
 import { getAgentForComplexity } from "@opensprint/shared";
 import type { PlanComplexity } from "@opensprint/shared";
 import { createLogger } from "../utils/logger.js";
@@ -36,6 +36,8 @@ export type AttemptOutcome =
 export interface TaskAttemptRecord {
   taskId: string;
   agentId: string;
+  /** Agent role/type (e.g. coder, reviewer) for display in Agent log */
+  role?: AgentRole;
   model: string;
   attempt: number;
   startedAt: string;
@@ -64,12 +66,13 @@ export class AgentIdentityService {
     const projectId = await repoPathToProjectId(repoPath);
     await taskStore.runWrite(async (client) => {
       await client.execute(
-        `INSERT INTO agent_stats (project_id, task_id, agent_id, model, attempt, started_at, completed_at, outcome, duration_ms)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `INSERT INTO agent_stats (project_id, task_id, agent_id, role, model, attempt, started_at, completed_at, outcome, duration_ms)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           projectId,
           record.taskId,
           record.agentId,
+          record.role ?? null,
           record.model,
           record.attempt,
           record.startedAt,

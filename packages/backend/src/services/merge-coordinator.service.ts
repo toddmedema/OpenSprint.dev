@@ -285,6 +285,7 @@ export class MergeCoordinatorService {
       .recordAttempt(repoPath, {
         taskId: task.id,
         agentId: `${agentConfig.type}-${agentConfig.model ?? "default"}`,
+        role: "coder",
         model: agentConfig.model ?? "unknown",
         attempt: slot.attempt,
         startedAt: slot.agent.startedAt,
