@@ -77,7 +77,7 @@ export function ExecuteFilterToolbar({
       data-testid="execute-filter-toolbar"
     >
       <div className="flex w-full items-center justify-between gap-2 sm:gap-4">
-        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto flex-nowrap">
           {chipConfig.map(({ label, filter, count }) => {
             const isActive = statusFilter === filter;
             const isAll = filter === "all";
@@ -90,7 +90,7 @@ export function ExecuteFilterToolbar({
                 type="button"
                 onClick={handleClick}
                 data-testid={`filter-chip-${filter}`}
-                className={`inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 min-h-[44px] min-w-[44px] text-sm font-medium transition-colors ${
+                className={`inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 min-h-[44px] min-w-[44px] text-sm font-medium transition-colors shrink-0 ${
                   isActive
                     ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
                     : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
@@ -104,7 +104,7 @@ export function ExecuteFilterToolbar({
             );
           })}
           {awaitingApproval && (
-            <span className="ml-2 text-sm font-medium text-theme-warning-text">
+            <span className="ml-2 text-sm font-medium text-theme-warning-text shrink-0">
               Awaiting approval…
             </span>
           )}

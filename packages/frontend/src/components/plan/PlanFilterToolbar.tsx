@@ -103,7 +103,7 @@ export function PlanFilterToolbar({
   return (
     <div className="w-full px-4 md:px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0">
       <div className="flex flex-wrap w-full items-center justify-between gap-3 md:gap-4">
-        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto flex-nowrap">
           {chipConfig.map(({ label, filter, count }) => {
             const isActive = statusFilter === filter;
             const isAll = filter === "all";
@@ -116,7 +116,7 @@ export function PlanFilterToolbar({
                 type="button"
                 onClick={handleClick}
                 data-testid={`plan-filter-chip-${filter}`}
-                className={`inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 min-h-[44px] min-w-[44px] text-sm font-medium transition-colors ${
+                className={`inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 min-h-[44px] min-w-[44px] text-sm font-medium transition-colors shrink-0 ${
                   isActive
                     ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
                     : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
@@ -134,7 +134,7 @@ export function PlanFilterToolbar({
               type="button"
               onClick={onPlanAllTasks}
               disabled={planAllInProgress || planTasksPlanIds.length > 0}
-              className="btn-primary text-sm py-1.5 px-2.5 min-h-[44px] min-w-[44px] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center"
+              className="btn-primary text-sm py-1.5 px-2.5 min-h-[44px] min-w-[44px] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
               data-testid="plan-all-tasks-button"
             >
               {planAllInProgress ? "Generating all…" : "Generate All Tasks"}
