@@ -27,8 +27,10 @@ export function SettingsPage() {
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden" data-testid="settings-page">
         <SettingsTopBar saveStatus={saveStatus} />
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className={`${SETTINGS_HELP_CONTAINER_CLASS} py-6 sm:py-8`}>
-            <div className="bg-theme-surface rounded-xl border border-theme-border p-4 sm:p-6">
+          <div
+            className={`${SETTINGS_HELP_CONTAINER_CLASS} py-6 sm:py-8 bg-theme-surface rounded-xl`}
+          >
+            <div className="rounded-xl border border-theme-border p-4 sm:p-6">
               <GlobalSettingsContent onSaveStateChange={setSaveStatus} />
             </div>
           </div>

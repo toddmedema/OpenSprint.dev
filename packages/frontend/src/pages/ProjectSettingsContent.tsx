@@ -91,8 +91,8 @@ export function ProjectSettingsContent() {
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-4 sm:px-6 py-4 sm:py-6">
         {isGlobalLevel ? (
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="max-w-[1800px] mx-auto">
-              <div className="bg-theme-surface rounded-xl border border-theme-border p-4 sm:p-6">
+            <div className="max-w-[1800px] mx-auto bg-theme-surface rounded-xl">
+              <div className="rounded-xl border border-theme-border p-4 sm:p-6">
                 <GlobalSettingsContent onSaveStateChange={setSaveStatus} />
               </div>
             </div>

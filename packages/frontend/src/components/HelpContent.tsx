@@ -105,46 +105,48 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        {activeTab === "ask" && (
-          <div
-            id="help-tabpanel-ask"
-            role="tabpanel"
-            aria-labelledby="help-tab-ask"
-            className="flex-1 min-h-0 flex flex-col overflow-hidden px-4 sm:px-6 py-4 max-w-[1800px] mx-auto w-full"
-          >
-            <AskQuestionContent project={project} isActive={true} />
-          </div>
-        )}
-        {activeTab === "meet" && (
-          <div
-            id="help-tabpanel-meet"
-            role="tabpanel"
-            aria-labelledby="help-tab-meet"
-            className="flex-1 overflow-y-auto min-h-0 px-4 sm:px-6 py-4 max-w-[1800px] mx-auto w-full"
-          >
-            <MeetYourTeamContent />
-          </div>
-        )}
-        {activeTab === "analytics" && (
-          <div
-            id="help-tabpanel-analytics"
-            role="tabpanel"
-            aria-labelledby="help-tab-analytics"
-            className="flex-1 overflow-y-auto min-h-0 px-4 sm:px-6 py-4 max-w-[1800px] mx-auto w-full"
-          >
-            <AnalyticsContent projectId={project?.id ?? null} />
-          </div>
-        )}
-        {activeTab === "agentLog" && (
-          <div
-            id="help-tabpanel-agent-log"
-            role="tabpanel"
-            aria-labelledby="help-tab-agent-log"
-            className="flex-1 overflow-y-auto min-h-0 px-4 sm:px-6 py-4 max-w-[1800px] mx-auto w-full"
-          >
-            <AgentLogContent projectId={project?.id ?? null} showProjectColumn={!project} />
-          </div>
-        )}
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden max-w-[1800px] mx-auto w-full bg-theme-surface px-4 sm:px-6 py-4">
+          {activeTab === "ask" && (
+            <div
+              id="help-tabpanel-ask"
+              role="tabpanel"
+              aria-labelledby="help-tab-ask"
+              className="flex-1 min-h-0 flex flex-col overflow-hidden"
+            >
+              <AskQuestionContent project={project} isActive={true} />
+            </div>
+          )}
+          {activeTab === "meet" && (
+            <div
+              id="help-tabpanel-meet"
+              role="tabpanel"
+              aria-labelledby="help-tab-meet"
+              className="flex-1 overflow-y-auto min-h-0"
+            >
+              <MeetYourTeamContent />
+            </div>
+          )}
+          {activeTab === "analytics" && (
+            <div
+              id="help-tabpanel-analytics"
+              role="tabpanel"
+              aria-labelledby="help-tab-analytics"
+              className="flex-1 overflow-y-auto min-h-0"
+            >
+              <AnalyticsContent projectId={project?.id ?? null} />
+            </div>
+          )}
+          {activeTab === "agentLog" && (
+            <div
+              id="help-tabpanel-agent-log"
+              role="tabpanel"
+              aria-labelledby="help-tab-agent-log"
+              className="flex-1 overflow-y-auto min-h-0"
+            >
+              <AgentLogContent projectId={project?.id ?? null} showProjectColumn={!project} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

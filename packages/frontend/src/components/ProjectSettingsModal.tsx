@@ -424,7 +424,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
       ? "flex-1 min-h-0 flex flex-col overflow-hidden"
       : "fixed inset-0 z-50 flex items-center justify-center";
     const contentClass = fullScreen
-      ? "relative bg-theme-surface flex-1 min-h-0 flex flex-col overflow-hidden"
+      ? "relative flex-1 min-h-0 flex flex-col overflow-hidden"
       : "relative bg-theme-surface rounded-xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[85vh] overflow-hidden";
 
     return (
@@ -459,7 +459,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
           {/* Content */}
           <div
             className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden py-4 overscroll-contain ${
-              fullScreen ? SETTINGS_HELP_CONTAINER_CLASS : "px-5"
+              fullScreen ? `${SETTINGS_HELP_CONTAINER_CLASS} bg-theme-surface` : "px-5"
             }`}
             data-testid="settings-modal-content"
           >
