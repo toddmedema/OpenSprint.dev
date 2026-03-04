@@ -42,7 +42,7 @@ export function getDropdownPositionRightAligned(
   const base = {
     position: "fixed" as const,
     right,
-    minWidth,
+    ...(minWidth > 0 ? { minWidth } : {}),
     maxWidth: `${maxWidth}px`,
     maxHeight: "90vh",
     overflowY: "auto" as const,

@@ -536,7 +536,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
           value={runningAgentsDisplayMode}
           onChange={(e) => setRunningAgentsDisplayMode(e.target.value as RunningAgentsDisplayMode)}
           data-testid="running-agents-display-mode"
-          className="input w-full max-w-xs"
+          className="input w-fit"
         >
           {RUNNING_AGENTS_DISPLAY_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>

@@ -51,6 +51,12 @@ describe("dropdownViewport", () => {
       const style = getDropdownPositionRightAligned(rect, { minWidth: 260 });
       expect(style.minWidth).toBe(260);
     });
+
+    it("omits minWidth when 0 so dropdown sizes to content", () => {
+      const rect = new DOMRect(900, 100, 50, 40);
+      const style = getDropdownPositionRightAligned(rect, { minWidth: 0 });
+      expect(style.minWidth).toBeUndefined();
+    });
   });
 
   describe("getDropdownPositionLeftAligned", () => {

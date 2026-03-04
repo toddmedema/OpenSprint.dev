@@ -256,6 +256,11 @@ html[data-theme="dark"] {
   [data-testid="settings-modal"] select.input {
     padding-right: 2.5rem !important;
   }
+  /* Running agents display mode: size to content, no min-width (feedback u5d6y3) */
+  [data-testid="running-agents-display-mode"] {
+    width: fit-content;
+    min-width: unset;
+  }
   .dropdown-item {
     @apply px-3 py-2;
   }
