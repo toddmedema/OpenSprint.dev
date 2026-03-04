@@ -347,8 +347,9 @@ export function ApiKeysSection({
                   onClick={() => addKey(provider)}
                   className="btn-secondary text-sm"
                   data-testid={`api-key-add-${provider}`}
+                  aria-label="Add key"
                 >
-                  + Add key
+                  +
                 </button>
               </div>
             </div>
