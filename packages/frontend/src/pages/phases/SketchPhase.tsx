@@ -237,6 +237,8 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
     prdLoading,
     prdEmpty
   );
+  // Show loading until backend definitively indicates whether PRD exists (prevents flash of PRD content before app idea prompt)
+  const prdStateUnknown = prdLoading;
 
   /* ── Fetch sketch-context when in empty state (for "Generate from codebase" visibility) ── */
   useEffect(() => {
@@ -567,9 +569,9 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
         : null;
 
   /* ══════════════════════════════════════════════════════════
-   *  RENDER: Loading spinner during fetch
+   *  RENDER: Loading spinner until PRD state is known
    * ══════════════════════════════════════════════════════════ */
-  if (showPrdSpinner) {
+  if (prdStateUnknown || showPrdSpinner) {
     return (
       <div
         className="flex flex-1 min-h-0 items-center justify-center bg-theme-bg"

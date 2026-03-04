@@ -207,6 +207,38 @@ describe("SketchPhase with sketchSlice", () => {
   });
 
   describe("initial prompt view (no PRD) — empty-state onboarding", () => {
+    it("shows loading spinner until PRD state is known (prevents flash)", async () => {
+      let resolvePrd: (v: unknown) => void;
+      mockPrdGet.mockImplementation(
+        () => new Promise((resolve) => { resolvePrd = resolve; })
+      );
+
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: 0 } },
+      });
+      queryClient.setQueryData(queryKeys.prd.history("proj-1"), []);
+
+      const wrappedUi = (
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <Provider store={createStore()}>
+              <SketchPhase projectId="proj-1" />
+            </Provider>
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+
+      render(wrappedUi);
+
+      expect(screen.getByTestId("sketch-phase-loading")).toBeInTheDocument();
+
+      (resolvePrd as (v: unknown) => void)({ sections: {} });
+
+      await waitFor(() => {
+        expect(screen.getByText("What do you want to build?")).toBeInTheDocument();
+      });
+    });
+
     it("renders central prompt when prdContent is empty", () => {
       renderSketchPhase();
       expect(screen.getByText("What do you want to build?")).toBeInTheDocument();
