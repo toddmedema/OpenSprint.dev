@@ -37,6 +37,7 @@ import { DependencyGraph } from "../../components/DependencyGraph";
 import { PlanDetailContent } from "../../components/plan/PlanDetailContent";
 import { AddPlanModal } from "../../components/plan/AddPlanModal";
 import { PlanFilterToolbar, type PlanViewMode } from "../../components/plan/PlanFilterToolbar";
+import { AuditorRunsSection } from "../../components/plan/AuditorRunsSection";
 import { EpicCard } from "../../components/EpicCard";
 import { ResizableSidebar } from "../../components/layout/ResizableSidebar";
 import { ChatInput } from "../../components/ChatInput";
@@ -1159,6 +1160,12 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                         onRetryConnect={() => dispatch(wsConnect({ projectId }))}
                       />
                     )}
+
+                    {/* Auditor runs — historical execution logs */}
+                    <AuditorRunsSection
+                      projectId={projectId}
+                      planId={selectedPlan.metadata.planId}
+                    />
 
                     {/* Open questions block — when planner needs clarification */}
                     {selectedPlanNotification && (
