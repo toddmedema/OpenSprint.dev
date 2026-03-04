@@ -2039,7 +2039,7 @@ describe("PlanPhase plan sorting and status filter", () => {
     expect(screen.queryByText(/building feature/i)).not.toBeInTheDocument();
   });
 
-  it("shows empty message when filter has no matches", async () => {
+  it("hides filter chips when count is 0", () => {
     const plans = [
       {
         ...basePlan,
@@ -2048,7 +2048,6 @@ describe("PlanPhase plan sorting and status filter", () => {
       },
     ];
     const store = createStore(plans);
-    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <Provider store={store}>
@@ -2058,10 +2057,10 @@ describe("PlanPhase plan sorting and status filter", () => {
       { wrapper: PlanPhaseWrapper }
     );
 
-    const completeChip = screen.getByRole("button", { name: /complete 0/i });
-    await user.click(completeChip);
-
-    expect(screen.getByText(/no plans match/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /all 1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /planning 1/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /building 0/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /complete 0/i })).not.toBeInTheDocument();
   });
 });
 
@@ -2103,11 +2102,11 @@ describe("PlanPhase sendPlanMessage thunk", () => {
       { wrapper: PlanPhaseWrapper }
     );
 
-    // Filter chips
+    // Filter chips (chips with count 0 are hidden)
     expect(screen.getByRole("button", { name: /all 1/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /planning 0/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /planning 0/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /building 1/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /complete 0/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /complete 0/i })).not.toBeInTheDocument();
 
     // View toggle: Card (default) and Graph
     const cardView = screen.getByRole("radio", { name: /card view/i });

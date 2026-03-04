@@ -35,6 +35,31 @@ function renderToolbar(overrides: Partial<React.ComponentProps<typeof PlanFilter
 }
 
 describe("PlanFilterToolbar", () => {
+  it("hides filter chips when count is 0", () => {
+    render(
+      <PlanFilterToolbar
+        statusFilter="all"
+        setStatusFilter={vi.fn()}
+        planCountByStatus={{ all: 2, planning: 1, building: 0, complete: 1 }}
+        viewMode="card"
+        onViewModeChange={vi.fn()}
+        plansWithNoTasksCount={0}
+        plansReadyToExecuteCount={0}
+        planAllInProgress={false}
+        executeAllInProgress={false}
+        executingPlanId={null}
+        planTasksPlanIds={[]}
+        onPlanAllTasks={vi.fn()}
+        onExecuteAll={vi.fn()}
+        onAddPlan={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId("plan-filter-chip-all")).toBeInTheDocument();
+    expect(screen.getByTestId("plan-filter-chip-planning")).toBeInTheDocument();
+    expect(screen.queryByTestId("plan-filter-chip-building")).not.toBeInTheDocument();
+    expect(screen.getByTestId("plan-filter-chip-complete")).toBeInTheDocument();
+  });
+
   it("toggles status filters back to all when the active non-all chip is clicked", async () => {
     const user = userEvent.setup();
     const props = renderToolbar();

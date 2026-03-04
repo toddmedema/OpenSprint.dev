@@ -98,7 +98,7 @@ export function PlanFilterToolbar({
     { label: "Planning", filter: "planning" as const, count: planCountByStatus.planning },
     { label: "Building", filter: "building" as const, count: planCountByStatus.building },
     { label: "Complete", filter: "complete" as const, count: planCountByStatus.complete },
-  ];
+  ].filter((c) => c.filter === "all" || c.count > 0);
 
   return (
     <div className="w-full px-4 md:px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0">

@@ -78,7 +78,7 @@ export function ExecuteFilterToolbar({
     >
       <div className="flex w-full items-center justify-between gap-2 sm:gap-4">
         <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto overflow-y-visible flex-nowrap py-1">
-          {chipConfig.map(({ label, filter, count }) => {
+          {chipConfig.filter((c) => c.filter === "all" || c.count > 0).map(({ label, filter, count }) => {
             const isActive = statusFilter === filter;
             const isAll = filter === "all";
             const handleClick = () => {

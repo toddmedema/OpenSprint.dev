@@ -376,6 +376,13 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     return counts;
   }, [plans]);
 
+  // Reset to "all" when the selected filter chip is hidden (count 0)
+  useEffect(() => {
+    if (statusFilter === "all") return;
+    const count = planCountByStatus[statusFilter];
+    if (count === 0) setStatusFilter("all");
+  }, [statusFilter, planCountByStatus]);
+
   const filteredDependencyGraph = useMemo(() => {
     if (!dependencyGraph) return null;
     let filteredPlans =
