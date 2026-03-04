@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import fs from "fs/promises";
+import fsSync from "fs";
+import path from "path";
+import os from "os";
 import { AgentService, createProcessGroupHandle } from "../services/agent.service.js";
 import type { AgentConfig } from "@opensprint/shared";
+import { OPENSPRINT_PATHS } from "@opensprint/shared";
 
 const { mockSpawnWithTaskFile } = vi.hoisted(() => ({
   mockSpawnWithTaskFile: vi.fn(),
@@ -276,6 +281,56 @@ describe("AgentService", () => {
       );
       expect(logCalls.some((c) => String(c[0]).includes("develop"))).toBe(true);
       expect(diffCalls.some((c) => String(c[0]).includes("develop"))).toBe(true);
+    });
+
+    it("prepends combined agent instructions for merger role to the merger prompt", async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-merger-prompt-test-"));
+      try {
+        await fs.writeFile(path.join(tempDir, "AGENTS.md"), "General agent instructions.", "utf-8");
+        await fs.mkdir(path.join(tempDir, OPENSPRINT_PATHS.agents), { recursive: true });
+        await fs.writeFile(
+          path.join(tempDir, OPENSPRINT_PATHS.agents, "merger.md"),
+          "Merger-specific: prefer preserving both sides.",
+          "utf-8"
+        );
+
+        let writtenPrompt = "";
+        mockSpawnWithTaskFile.mockImplementation(
+          (
+            _config: unknown,
+            promptPath: string,
+            _cwd: unknown,
+            _onOutput: unknown,
+            onExit: (code: number | null) => void
+          ) => {
+            writtenPrompt = fsSync.readFileSync(promptPath, "utf-8");
+            setImmediate(() => onExit(0));
+            return { kill: vi.fn(), pid: 12345 };
+          }
+        );
+        mockShellExec.mockResolvedValue({ stdout: "", stderr: "" });
+
+        await service.runMergerAgentAndWait({
+          projectId: "proj-123",
+          cwd: tempDir,
+          config: { type: "cursor", model: null, cliCommand: null },
+          phase: "merge_to_main",
+          taskId: "os-1",
+          branchName: "opensprint/os-1",
+          conflictedFiles: ["src/a.ts"],
+        });
+
+        expect(writtenPrompt).toContain("## Agent Instructions");
+        expect(writtenPrompt).toContain("General agent instructions.");
+        expect(writtenPrompt).toContain("## Role-specific Instructions");
+        expect(writtenPrompt).toContain("Merger-specific: prefer preserving both sides.");
+        expect(writtenPrompt).toContain("# Merger Agent: Resolve Git Conflicts");
+        expect(writtenPrompt.indexOf("## Agent Instructions")).toBeLessThan(
+          writtenPrompt.indexOf("# Merger Agent: Resolve Git Conflicts")
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
     });
   });
 
