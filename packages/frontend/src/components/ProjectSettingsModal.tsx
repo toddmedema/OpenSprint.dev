@@ -456,7 +456,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
 
           {/* Content */}
           <div
-            className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain ${
+            className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain mt-[15px] ${
               fullScreen
                 ? `${SETTINGS_HELP_CONTAINER_CLASS} bg-theme-surface pt-0 pb-4`
                 : "px-5 py-4"
