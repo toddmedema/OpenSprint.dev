@@ -103,7 +103,7 @@ export function PlanFilterToolbar({
   return (
     <div className="w-full px-4 md:px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0">
       <div className="flex flex-wrap w-full items-center justify-between gap-3 md:gap-4">
-        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto flex-nowrap">
+        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto overflow-y-visible flex-nowrap py-1">
           {chipConfig.map(({ label, filter, count }) => {
             const isActive = statusFilter === filter;
             const isAll = filter === "all";
