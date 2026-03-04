@@ -285,9 +285,11 @@ html[data-theme="dark"] {
   }
   /* Execute task description markdown: prose + layout + explicit high-contrast text (feedback kutduv).
    * Uses !important to override prose-neutral/prose-invert defaults for WCAG AA contrast.
-   * No border/container (feedback bwe92b) — description displays without visible box. */
+   * No border/container (feedback bwe92b) — description displays without visible box.
+   * Minimal padding: CollapsibleSection content wrapper uses -mx-4 px-1 pt-0 pb-0 (feedback ese6j4).
+   * Tight vertical spacing to match layout density (feedback ese6j4). */
   .prose-task-description {
-    @apply prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none p-4 overflow-y-auto min-h-0 max-h-[50vh] text-xs;
+    @apply prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none overflow-y-auto min-h-0 max-h-[50vh] text-xs;
     @apply !text-gray-900 dark:!text-gray-100;
     @apply prose-headings:!text-gray-900 dark:prose-headings:!text-gray-100 prose-p:!text-gray-900 dark:prose-p:!text-gray-100 prose-li:!text-gray-900 dark:prose-li:!text-gray-100;
     @apply prose-td:!text-gray-900 dark:prose-td:!text-gray-100 prose-th:!text-gray-900 dark:prose-th:!text-gray-100;
@@ -298,6 +300,10 @@ html[data-theme="dark"] {
     @apply prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg;
     @apply prose-kbd:!text-gray-900 dark:prose-kbd:!text-gray-100 prose-figcaption:!text-gray-900 dark:prose-figcaption:!text-gray-100;
     @apply prose-a:text-brand-600 dark:prose-a:text-brand-400;
+    /* Reduce vertical spacing for layout density */
+    @apply prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5;
+    @apply prose-pre:my-1.5 prose-blockquote:my-1.5 prose-hr:my-1.5;
+    @apply [&>*:first-child]:!mt-0 [&>*:last-child]:!mb-0;
   }
 
   /* Sketch Discuss chat bubble markdown: compact prose for sidebar chat messages */

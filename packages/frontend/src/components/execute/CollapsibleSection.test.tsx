@@ -103,4 +103,25 @@ describe("CollapsibleSection", () => {
       "tracking-wide"
     );
   });
+
+  it("uses contentClassName when provided for compact sections", () => {
+    const { container } = render(
+      <CollapsibleSection
+        title="Description"
+        expanded={true}
+        onToggle={() => {}}
+        expandAriaLabel="Expand"
+        collapseAriaLabel="Collapse"
+        contentId="desc-content"
+        headerId="desc-header"
+        contentClassName="px-3 pt-0 pb-2"
+      >
+        <div>Content</div>
+      </CollapsibleSection>
+    );
+
+    const content = container.querySelector("#desc-content");
+    expect(content).toHaveClass("px-3", "pt-0", "pb-2");
+    expect(content).not.toHaveClass("p-4");
+  });
 });

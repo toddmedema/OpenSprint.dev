@@ -1623,7 +1623,7 @@ describe("ExecutePhase mobile layout", () => {
     expect(grid).toHaveClass("grid-cols-1", "sm:grid-cols-2", "lg:grid-cols-3");
   });
 
-  it("task detail sidebar renders as overlay with backdrop on mobile viewport (< 768px)", async () => {
+  it("task detail sidebar renders inline (no overlay, no backdrop) on mobile viewport (< 768px)", async () => {
     const originalInnerWidth = window.innerWidth;
     Object.defineProperty(window, "innerWidth", { value: MOBILE_BREAKPOINT - 1, writable: true });
 
@@ -1665,9 +1665,10 @@ describe("ExecutePhase mobile layout", () => {
       expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
     });
 
+    // Execute sidebar uses overlayOnMobile=false: always inline, no backdrop (same as Plan/Sketch)
     expect(
-      screen.getByRole("button", { name: "Close sidebar (backdrop)" })
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Close sidebar (backdrop)" })
+    ).not.toBeInTheDocument();
 
     Object.defineProperty(window, "innerWidth", { value: originalInnerWidth, writable: true });
   });

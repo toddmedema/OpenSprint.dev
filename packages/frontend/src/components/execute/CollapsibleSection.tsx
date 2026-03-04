@@ -13,6 +13,7 @@ function CollapsibleSectionInner({
   collapseAriaLabel,
   contentId,
   headerId,
+  contentClassName,
   children,
 }: {
   title: string;
@@ -22,6 +23,8 @@ function CollapsibleSectionInner({
   collapseAriaLabel: string;
   contentId: string;
   headerId: string;
+  /** Optional. Defaults to "p-4 pt-0". Use for compact sections (e.g. Description). */
+  contentClassName?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -39,7 +42,12 @@ function CollapsibleSectionInner({
         <span className="text-theme-muted text-xs">{expanded ? "▼" : "▶"}</span>
       </button>
       {expanded && (
-        <div id={contentId} role="region" aria-labelledby={headerId} className="p-4 pt-0">
+        <div
+          id={contentId}
+          role="region"
+          aria-labelledby={headerId}
+          className={contentClassName ?? "p-4 pt-0"}
+        >
           {children}
         </div>
       )}

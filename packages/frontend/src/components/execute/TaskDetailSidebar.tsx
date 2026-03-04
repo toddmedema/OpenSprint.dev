@@ -897,6 +897,7 @@ function TaskDetailSidebarInner({
             collapseAriaLabel="Collapse Description"
             contentId="description-content"
             headerId="description-header"
+            contentClassName="-mx-4 px-1 pt-0 pb-0"
           >
             <DescriptionMarkdown content={displayDesc} />
           </CollapsibleSection>
