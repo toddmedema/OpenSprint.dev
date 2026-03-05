@@ -243,6 +243,11 @@ describe("Settings API lifecycle", () => {
     expect(res.body.data.complexComplexityAgent).toBeDefined();
     expect(res.body.data.complexComplexityAgent.type).toBe("claude");
     expect(res.body.data.gitWorkingMode).toBe("worktree");
+    expect(res.body.data.gitRuntimeStatus).toEqual({
+      lastCheckedAt: null,
+      stale: true,
+      refreshing: true,
+    });
   });
 
   it("PUT /api/v1/projects/:id/settings with new field names succeeds", async () => {
@@ -286,6 +291,17 @@ describe("Settings API lifecycle", () => {
 
     const settings = await readProjectFromGlobalStore(tempDir, projectId);
     expect(settings.gitWorkingMode).toBe("branches");
+  });
+
+  it("PUT /api/v1/projects/:id/settings returns refreshing runtime status when worktreeBaseBranch changes", async () => {
+    const res = await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({ worktreeBaseBranch: "develop" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.worktreeBaseBranch).toBe("develop");
+    expect(res.body.data.gitRuntimeStatus?.refreshing).toBe(true);
+    expect(res.body.data.gitRuntimeStatus?.stale).toBe(true);
   });
 
   it("PUT /api/v1/projects/:id/settings forces maxConcurrentCoders to 1 when gitWorkingMode is branches", async () => {

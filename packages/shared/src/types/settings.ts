@@ -375,6 +375,13 @@ export interface GlobalSettingsPutRequest {
   expoToken?: string;
 }
 
+/** Read-only runtime cache/probe status for Git fields returned by project settings APIs. */
+export interface GitRuntimeStatus {
+  lastCheckedAt: string | null;
+  stale: boolean;
+  refreshing: boolean;
+}
+
 /**
  * Validate that a string is a valid PostgreSQL URL format.
  * Accepts postgres:// or postgresql:// schemes.
@@ -493,6 +500,8 @@ export interface ProjectSettings {
   worktreeBaseBranch?: string;
   /** Read-only runtime status: whether the repo can publish to origin, is local-only, or has a remote configured but currently unreachable. */
   gitRemoteMode?: "publishable" | "local_only" | "remote_error";
+  /** Read-only runtime cache/probe status for Git fields returned by project settings APIs. */
+  gitRuntimeStatus?: GitRuntimeStatus;
 }
 
 /** Planning agent roles — Dreamer/Analyst use fixed tiers; others inherit plan complexity */

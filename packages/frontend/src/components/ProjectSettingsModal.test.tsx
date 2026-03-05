@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -114,6 +114,10 @@ describe("ProjectSettingsModal", () => {
       }))
     );
     Object.keys(storage).forEach((k) => delete storage[k]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   function renderModal(ui: ReactElement) {
@@ -792,6 +796,66 @@ describe("ProjectSettingsModal", () => {
     const baseBranchInput = screen.getByTestId("worktree-base-branch-input");
     expect(baseBranchInput).toBeInTheDocument();
     expect(baseBranchInput).toHaveValue("main");
+  });
+
+  it("shows checking status text when git runtime state is refreshing", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      gitRemoteMode: undefined,
+      gitRuntimeStatus: {
+        lastCheckedAt: null,
+        stale: true,
+        refreshing: true,
+      },
+    });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    expect(screen.getByTestId("git-remote-mode")).toHaveTextContent("Checking remote configuration...");
+    expect(screen.getByTestId("git-runtime-refresh-status")).toHaveTextContent(
+      "Checking live Git status..."
+    );
+  });
+
+  it("polls settings while git runtime refresh is active and updates status text", async () => {
+    mockGetSettings
+      .mockResolvedValueOnce({
+        ...mockSettings,
+        gitRemoteMode: undefined,
+        gitRuntimeStatus: {
+          lastCheckedAt: null,
+          stale: true,
+          refreshing: true,
+        },
+      })
+      .mockResolvedValueOnce({
+        ...mockSettings,
+        gitRemoteMode: "publishable",
+        gitRuntimeStatus: {
+          lastCheckedAt: "2026-01-01T00:00:00.000Z",
+          stale: false,
+          refreshing: false,
+        },
+      });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    expect(screen.getByTestId("git-remote-mode")).toHaveTextContent("Checking remote configuration...");
+    await waitFor(() => expect(mockGetSettings).toHaveBeenCalledTimes(2), { timeout: 2500 });
+    await waitFor(() =>
+      expect(screen.getByTestId("git-remote-mode")).toHaveTextContent("Remote configured")
+    );
+    expect(screen.getByTestId("git-runtime-refresh-status")).toHaveTextContent(
+      "Git status is current"
+    );
   });
 
   it("when Branches selected, hides Parallelism section and shows explanatory text", async () => {

@@ -39,6 +39,7 @@ import { deleteFeedbackAssetsForProject } from "./feedback-store.service.js";
 import { BranchManager } from "./branch-manager.js";
 import { detectTestFramework } from "./test-framework.service.js";
 import { ensureEasConfig } from "./eas-config.js";
+import { projectGitRuntimeCache } from "./project-git-runtime-cache.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import * as projectIndex from "./project-index.js";
@@ -816,6 +817,9 @@ export class ProjectService {
     }
 
     this.invalidateListCache();
+    if (repoPathChanged) {
+      projectGitRuntimeCache.invalidate(id);
+    }
     return { project: updated, repoPathChanged };
   }
 
@@ -844,11 +848,13 @@ export class ProjectService {
       this.getSettings(projectId),
       this.getRepoPath(projectId),
     ]);
-    const repoState = await inspectGitRepoState(repoPath, settings.worktreeBaseBranch);
+    const preferredBaseBranch = settings.worktreeBaseBranch ?? "main";
+    const runtime = projectGitRuntimeCache.getSnapshot(projectId, repoPath, preferredBaseBranch);
     return {
       ...settings,
-      worktreeBaseBranch: repoState.baseBranch,
-      gitRemoteMode: repoState.remoteMode,
+      worktreeBaseBranch: runtime.worktreeBaseBranch,
+      gitRemoteMode: runtime.gitRemoteMode,
+      gitRuntimeStatus: runtime.gitRuntimeStatus,
     };
   }
 
@@ -931,6 +937,9 @@ export class ProjectService {
     };
     const toPersist = toCanonicalSettings(updated);
     await setSettingsInStore(projectId, toPersist);
+    if ((toPersist.worktreeBaseBranch ?? "main") !== (current.worktreeBaseBranch ?? "main")) {
+      projectGitRuntimeCache.invalidate(projectId);
+    }
     return this.getSettingsWithRuntimeState(projectId);
   }
 
@@ -940,6 +949,7 @@ export class ProjectService {
     await this.taskStore.deleteOpenQuestionsByProjectId(id);
     await projectIndex.removeProject(id);
     this.invalidateListCache();
+    projectGitRuntimeCache.invalidate(id);
   }
 
   /** Delete a project: remove all project data from global store and delete .opensprint directory. */
@@ -980,5 +990,6 @@ export class ProjectService {
 
     await projectIndex.removeProject(id);
     this.invalidateListCache();
+    projectGitRuntimeCache.invalidate(id);
   }
 }

@@ -119,6 +119,8 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     const [saving, setSaving] = useState(false);
     const saveGenerationRef = useRef(0);
     const saveCompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const loadRequestRef = useRef(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showFolderBrowser, setShowFolderBrowser] = useState(false);
@@ -146,6 +148,9 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
         if (saveCompleteTimeoutRef.current) {
           clearTimeout(saveCompleteTimeoutRef.current);
         }
+        if (pollTimeoutRef.current) {
+          clearTimeout(pollTimeoutRef.current);
+        }
       };
     }, []);
 
@@ -167,29 +172,50 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     } | null>(null);
     const [modelRefreshTrigger] = useState(0);
 
+    const clearPollTimeout = useCallback(() => {
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
+      }
+    }, []);
+
+    const loadSettings = useCallback(
+      async (options?: { preserveSpinner?: boolean }) => {
+        const preserveSpinner = options?.preserveSpinner !== false;
+        const requestId = ++loadRequestRef.current;
+        if (preserveSpinner) {
+          setLoading(true);
+        }
+        setError(null);
+        try {
+          const data = await api.projects.getSettings(project.id);
+          if (loadRequestRef.current !== requestId) return;
+          setSettings(data);
+          clearPollTimeout();
+          if (data.gitRuntimeStatus?.refreshing) {
+            pollTimeoutRef.current = setTimeout(() => {
+              void loadSettings({ preserveSpinner: false });
+            }, 1000);
+          }
+        } catch (err) {
+          if (loadRequestRef.current !== requestId) return;
+          setError(err instanceof Error ? err.message : "Failed to load settings");
+        } finally {
+          if (loadRequestRef.current === requestId && preserveSpinner) {
+            setLoading(false);
+          }
+        }
+      },
+      [clearPollTimeout, project.id]
+    );
+
     useEffect(() => {
-      let cancelled = false;
-      setLoading(true);
-      setError(null);
-      api.projects
-        .getSettings(project.id)
-        .then((data) => {
-          if (!cancelled) {
-            setSettings(data);
-          }
-        })
-        .catch((err) => {
-          if (!cancelled) {
-            setError(err instanceof Error ? err.message : "Failed to load settings");
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
+      void loadSettings({ preserveSpinner: true });
       return () => {
-        cancelled = true;
+        loadRequestRef.current += 1;
+        clearPollTimeout();
       };
-    }, [project.id]);
+    }, [clearPollTimeout, loadSettings]);
 
     // Fetch API key status when agents tab is active.
     // API key warning (claude/cursor/openai/google) uses global store only; claudeCli uses env for CLI availability.
@@ -222,6 +248,23 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     const deployment = settings?.deployment ?? { mode: "custom" as DeploymentMode };
     const aiAutonomyLevel = settings?.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL;
     const gitWorkingMode = settings?.gitWorkingMode ?? "worktree";
+    const gitRemoteModeText =
+      settings?.gitRemoteMode === "publishable"
+        ? "Remote configured"
+        : settings?.gitRemoteMode === "remote_error"
+          ? "Remote unreachable"
+          : settings?.gitRemoteMode === "local_only"
+            ? "Local-only repo"
+            : settings?.gitRuntimeStatus?.refreshing
+              ? "Checking remote configuration..."
+              : "Local-only repo";
+    const gitRuntimeRefreshText = settings?.gitRuntimeStatus?.refreshing
+      ? settings.gitRuntimeStatus.lastCheckedAt
+        ? "Refreshing live Git status..."
+        : "Checking live Git status..."
+      : settings?.gitRuntimeStatus?.lastCheckedAt
+        ? "Git status is current"
+        : null;
 
     type PersistOverrides = Partial<{
       name: string;
@@ -845,12 +888,16 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             : "Branches: agents work in main repo on task branches, one at a time."}
                         </p>
                         <p className="text-xs text-theme-muted mt-1" data-testid="git-remote-mode">
-                          {settings?.gitRemoteMode === "publishable"
-                            ? "Remote configured"
-                            : settings?.gitRemoteMode === "remote_error"
-                              ? "Remote unreachable"
-                              : "Local-only repo"}
+                          {gitRemoteModeText}
                         </p>
+                        {gitRuntimeRefreshText && (
+                          <p
+                            className="text-xs text-theme-muted mt-1"
+                            data-testid="git-runtime-refresh-status"
+                          >
+                            {gitRuntimeRefreshText}
+                          </p>
+                        )}
                       </div>
                       <select
                         className="input w-48 shrink-0"
