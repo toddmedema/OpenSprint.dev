@@ -5,13 +5,7 @@ import path from "path";
 import os from "os";
 import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
-import {
-  API_PREFIX,
-  OPENSPRINT_PATHS,
-  SPEC_MD,
-  SPEC_METADATA_PATH,
-  prdToSpecMarkdown,
-} from "@opensprint/shared";
+import { API_PREFIX, SPEC_MD, prdToSpecMarkdown } from "@opensprint/shared";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 const mockDecomposeInvoke = vi.fn();
@@ -32,12 +26,6 @@ async function writeSpec(
     changeLog: [],
   };
   await fs.writeFile(path.join(repoPath, SPEC_MD), prdToSpecMarkdown(prd as never), "utf-8");
-  await fs.mkdir(path.join(repoPath, path.dirname(SPEC_METADATA_PATH)), { recursive: true });
-  await fs.writeFile(
-    path.join(repoPath, SPEC_METADATA_PATH),
-    JSON.stringify({ version: 1, changeLog: [] }, null, 2),
-    "utf-8"
-  );
 }
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
@@ -100,6 +88,17 @@ vi.mock("../services/orchestrator.service.js", () => ({
 const planStatusTaskStoreMod = await import("../services/task-store.service.js");
 const planStatusPostgresOk =
   (planStatusTaskStoreMod as { _postgresAvailable?: boolean })._postgresAvailable ?? false;
+const planStatusTaskStore = (
+  planStatusTaskStoreMod as {
+    taskStore: {
+      getDb: () => Promise<{
+        query: (sql: string, params?: unknown[]) => Promise<Record<string, unknown>[]>;
+        queryOne: (sql: string, params?: unknown[]) => Promise<Record<string, unknown> | undefined>;
+        execute: (sql: string, params?: unknown[]) => Promise<number>;
+      }>;
+    };
+  }
+).taskStore;
 
 describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run creation", () => {
   let tempDir: string;
@@ -108,7 +107,9 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
   let projectService: ProjectService;
 
   afterAll(async () => {
-    const mod = (await import("../services/task-store.service.js")) as { _testPool?: { end: () => Promise<void> } };
+    const mod = (await import("../services/task-store.service.js")) as {
+      _testPool?: { end: () => Promise<void> };
+    };
     if (mod._testPool) await mod._testPool.end();
   });
 
@@ -150,6 +151,29 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
     });
   });
 
+  it("GET /projects/:id/plan-status returns MIGRATION_REQUIRED when legacy planning-runs files exist", async () => {
+    const project = await projectService.getProject(projectId);
+    await writeSpec(project.repoPath, { executive_summary: { content: "A todo app" } });
+    const legacyRunsDir = path.join(project.repoPath, ".opensprint", "planning-runs");
+    await fs.mkdir(legacyRunsDir, { recursive: true });
+    await fs.writeFile(
+      path.join(legacyRunsDir, "legacy-run.json"),
+      JSON.stringify({
+        id: "legacy-run",
+        created_at: "2025-01-01T00:00:00.000Z",
+        prd_snapshot: { version: 1, sections: {}, changeLog: [] },
+        plans_created: [],
+      }),
+      "utf-8"
+    );
+
+    const app = createApp();
+    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error?.code).toBe("MIGRATION_REQUIRED");
+  });
+
   it(
     "POST decompose creates planning run; plan-status returns none when PRD unchanged",
     {
@@ -182,10 +206,12 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
       );
       expect(decomposeRes.status).toBe(201);
 
-      const runsDir = path.join(project.repoPath, OPENSPRINT_PATHS.planningRuns);
-      const runFiles = await fs.readdir(runsDir);
-      expect(runFiles.length).toBe(1);
-      expect(runFiles[0]).toMatch(/\.json$/);
+      const db = await planStatusTaskStore.getDb();
+      const rows = await db.query(
+        "SELECT id FROM planning_runs WHERE project_id = $1 ORDER BY created_at DESC",
+        [projectId]
+      );
+      expect(rows.length).toBe(1);
 
       const statusRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
       expect(statusRes.status).toBe(200);
@@ -264,11 +290,18 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
       );
       expect(decomposeRes.status).toBe(201);
 
-      const runsDir = path.join(project.repoPath, OPENSPRINT_PATHS.planningRuns);
-      const runFiles = await fs.readdir(runsDir);
-      expect(runFiles.length).toBe(1);
-
-      const runData = JSON.parse(await fs.readFile(path.join(runsDir, runFiles[0]!), "utf-8"));
+      const db = await planStatusTaskStore.getDb();
+      const row = await db.queryOne(
+        "SELECT id, created_at, prd_snapshot, plans_created FROM planning_runs WHERE project_id = $1 ORDER BY created_at DESC LIMIT 1",
+        [projectId]
+      );
+      expect(row).toBeDefined();
+      const runData = {
+        id: String(row?.id ?? ""),
+        created_at: String(row?.created_at ?? ""),
+        prd_snapshot: JSON.parse(String(row?.prd_snapshot ?? "{}")),
+        plans_created: JSON.parse(String(row?.plans_created ?? "[]")),
+      };
       expect(runData).toMatchObject({
         id: expect.any(String),
         created_at: expect.any(String),
@@ -326,9 +359,7 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
 
   it("plan-status uses latest run when multiple runs exist", async () => {
     const project = await projectService.getProject(projectId);
-    const runsDir = path.join(project.repoPath, OPENSPRINT_PATHS.planningRuns);
     await writeSpec(project.repoPath, { executive_summary: { content: "v1" } });
-    await fs.mkdir(runsDir, { recursive: true });
 
     const prdContent = {
       version: 1,
@@ -351,20 +382,29 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
       changeLog: [],
     };
 
-    const olderRun = {
-      id: "run-older",
-      created_at: "2025-01-01T00:00:00Z",
-      prd_snapshot: prdContent,
-      plans_created: ["plan-1"],
-    };
-    const newerRun = {
-      id: "run-newer",
-      created_at: "2025-01-02T00:00:00Z",
-      prd_snapshot: prdContent,
-      plans_created: ["plan-2"],
-    };
-    await fs.writeFile(path.join(runsDir, "run-older.json"), JSON.stringify(olderRun), "utf-8");
-    await fs.writeFile(path.join(runsDir, "run-newer.json"), JSON.stringify(newerRun), "utf-8");
+    const db = await planStatusTaskStore.getDb();
+    await db.execute(
+      `INSERT INTO planning_runs (id, project_id, created_at, prd_snapshot, plans_created)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        "run-older",
+        projectId,
+        "2025-01-01T00:00:00Z",
+        JSON.stringify(prdContent),
+        JSON.stringify(["plan-1"]),
+      ]
+    );
+    await db.execute(
+      `INSERT INTO planning_runs (id, project_id, created_at, prd_snapshot, plans_created)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        "run-newer",
+        projectId,
+        "2025-01-02T00:00:00Z",
+        JSON.stringify(prdContent),
+        JSON.stringify(["plan-2"]),
+      ]
+    );
 
     const app = createApp();
     const statusRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);

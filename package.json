@@ -28,7 +28,8 @@
     "perf": "npx tsx scripts/perf.ts",
     "perf:baseline": "npx tsx scripts/perf.ts --baseline",
     "perf:compare": "npx tsx scripts/perf.ts --compare",
-    "delete-hil-notifications": "npx tsx scripts/delete-hil-notifications.ts"
+    "delete-hil-notifications": "npx tsx scripts/delete-hil-notifications.ts",
+    "migrate:opensprint": "npx tsx scripts/migrate-opensprint-to-db.ts"
   },
   "engines": {
     "node": ">=20.0.0"

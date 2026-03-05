@@ -1,4 +1,0 @@
-{
-  "taskIdsToClose": [],
-  "reason": "No existing implementation found. AGENT_ROLE_DESCRIPTIONS and AGENT_ROLE_PHASES are not in shared package; AgentReferenceModal does not exist; Navbar has no Help/Agents entry; Sketch chat lacks phase-specific agent context; ActiveAgentsList has no hover descriptions; AgentsStep has no 'About the agent team' section."
-}

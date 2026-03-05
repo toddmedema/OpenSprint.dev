@@ -156,11 +156,7 @@ export class TaskStoreService {
         (err instanceof AppError && err.code === ErrorCodes.DATABASE_UNAVAILABLE) ||
         isDbConnectionError(err)
       ) {
-        throw new AppError(
-          503,
-          ErrorCodes.DATABASE_UNAVAILABLE,
-          classifyDbConnectionError(err)
-        );
+        throw new AppError(503, ErrorCodes.DATABASE_UNAVAILABLE, classifyDbConnectionError(err));
       }
       const msg =
         err instanceof Error
@@ -1064,11 +1060,7 @@ export class TaskStoreService {
     });
   }
 
-  async removeDependency(
-    _projectId: string,
-    childId: string,
-    parentId: string
-  ): Promise<void> {
+  async removeDependency(_projectId: string, childId: string, parentId: string): Promise<void> {
     return this.withWriteLock(async () => {
       await this.ensureInitialized();
       const client = this.ensureClient();
@@ -1361,6 +1353,28 @@ export class TaskStoreService {
         projectId,
       ]);
       await client.execute(toPgParams("DELETE FROM deployments WHERE project_id = ?"), [projectId]);
+      await client.execute(toPgParams("DELETE FROM prd_metadata WHERE project_id = ?"), [
+        projectId,
+      ]);
+      await client.execute(toPgParams("DELETE FROM project_conversations WHERE project_id = ?"), [
+        projectId,
+      ]);
+      await client.execute(toPgParams("DELETE FROM planning_runs WHERE project_id = ?"), [
+        projectId,
+      ]);
+      await client.execute(toPgParams("DELETE FROM agent_instructions WHERE project_id = ?"), [
+        projectId,
+      ]);
+      await client.execute(toPgParams("DELETE FROM project_workflows WHERE project_id = ?"), [
+        projectId,
+      ]);
+      await client.execute(toPgParams("DELETE FROM repo_file_migrations WHERE project_id = ?"), [
+        projectId,
+      ]);
+      await client.execute(
+        toPgParams("DELETE FROM help_chat_histories WHERE scope_key = ? OR scope_key = ?"),
+        [`project:${projectId}`, projectId]
+      );
       await this.planStore.planDeleteAllForProject(projectId);
       await client.execute(toPgParams("DELETE FROM open_questions WHERE project_id = ?"), [
         projectId,

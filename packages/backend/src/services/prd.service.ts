@@ -10,6 +10,8 @@ import {
 } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { gitCommitQueue } from "./git-commit-queue.service.js";
+import { taskStore } from "./task-store.service.js";
+import { assertMigrationCompleteForResource } from "./migration-guard.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { createLogger } from "../utils/logger.js";
@@ -67,9 +69,79 @@ export class PrdService {
     return path.join(project.repoPath, SPEC_MD);
   }
 
-  private async getSpecMetadataPath(projectId: string): Promise<string> {
-    const project = await this.projectService.getProject(projectId);
-    return path.join(project.repoPath, SPEC_METADATA_PATH);
+  private async loadMetadataFromDb(
+    projectId: string,
+    repoPath: string
+  ): Promise<{
+    version: number;
+    changeLog: PrdChangeLogEntry[];
+    sectionVersions?: Record<string, number>;
+  } | null> {
+    const client = await taskStore.getDb();
+    const row = await client.queryOne(
+      "SELECT version, change_log, section_versions FROM prd_metadata WHERE project_id = $1",
+      [projectId]
+    );
+    if (!row) {
+      await assertMigrationCompleteForResource({
+        hasDbRecord: false,
+        resource: "PRD metadata",
+        legacyPaths: [path.join(repoPath, SPEC_METADATA_PATH)],
+        projectId,
+      });
+      return null;
+    }
+
+    let changeLog: PrdChangeLogEntry[] = [];
+    let sectionVersions: Record<string, number> | undefined;
+    try {
+      const parsed = JSON.parse(String(row.change_log ?? "[]")) as unknown;
+      if (Array.isArray(parsed)) {
+        changeLog = parsed as PrdChangeLogEntry[];
+      }
+    } catch {
+      changeLog = [];
+    }
+    try {
+      const parsed = JSON.parse(String(row.section_versions ?? "{}")) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        sectionVersions = parsed as Record<string, number>;
+      }
+    } catch {
+      sectionVersions = undefined;
+    }
+
+    return {
+      version: Number(row.version ?? 0),
+      changeLog,
+      sectionVersions,
+    };
+  }
+
+  private async saveMetadataToDb(projectId: string, prd: Prd): Promise<void> {
+    const sectionVersions: Record<string, number> = {};
+    for (const [k, s] of Object.entries(prd.sections)) {
+      sectionVersions[k] = s.version;
+    }
+    const now = new Date().toISOString();
+    await taskStore.runWrite(async (client) => {
+      await client.execute(
+        `INSERT INTO prd_metadata (project_id, version, change_log, section_versions, updated_at)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT(project_id) DO UPDATE SET
+           version = excluded.version,
+           change_log = excluded.change_log,
+           section_versions = excluded.section_versions,
+           updated_at = excluded.updated_at`,
+        [
+          projectId,
+          prd.version,
+          JSON.stringify(prd.changeLog),
+          JSON.stringify(sectionVersions),
+          now,
+        ]
+      );
+    });
   }
 
   /**
@@ -81,6 +153,8 @@ export class PrdService {
     const prdJsonPath = path.join(repoPath, OPENSPRINT_PATHS.prd);
     const prdMdPath = path.join(repoPath, "PRD.md");
     const specPath = path.join(repoPath, SPEC_MD);
+    const project = await this.projectService.getProjectByRepoPath(repoPath);
+    const projectId = project?.id;
 
     try {
       const prdJsonStat = await fs.stat(prdJsonPath).catch(() => null);
@@ -90,21 +164,9 @@ export class PrdService {
         if (!Array.isArray(parsed.changeLog)) parsed.changeLog = [];
         const markdown = prdToSpecMarkdown(parsed);
         await fs.writeFile(specPath, markdown, "utf-8");
-        const metaPath = path.join(repoPath, path.dirname(SPEC_METADATA_PATH));
-        await fs.mkdir(metaPath, { recursive: true });
-        const sectionVersions: Record<string, number> = {};
-        for (const [k, s] of Object.entries(parsed.sections || {})) {
-          sectionVersions[k] = (s as { version?: number }).version ?? 1;
+        if (projectId) {
+          await this.saveMetadataToDb(projectId, parsed);
         }
-        await fs.writeFile(
-          path.join(repoPath, SPEC_METADATA_PATH),
-          JSON.stringify(
-            { version: parsed.version, changeLog: parsed.changeLog, sectionVersions },
-            null,
-            2
-          ),
-          "utf-8"
-        );
         await fs.unlink(prdJsonPath).catch(() => {});
         log.info("Migrated prd.json to SPEC.md", { repoPath });
         return parsed;
@@ -120,13 +182,9 @@ export class PrdService {
         const prd = specMarkdownToPrd(raw);
         const markdown = prdToSpecMarkdown(prd);
         await fs.writeFile(specPath, markdown, "utf-8");
-        const metaDir = path.join(repoPath, path.dirname(SPEC_METADATA_PATH));
-        await fs.mkdir(metaDir, { recursive: true });
-        await fs.writeFile(
-          path.join(repoPath, SPEC_METADATA_PATH),
-          JSON.stringify({ version: 0, changeLog: [] }, null, 2),
-          "utf-8"
-        );
+        if (projectId) {
+          await this.saveMetadataToDb(projectId, prd);
+        }
         await fs.unlink(prdMdPath).catch(() => {});
         log.info("Migrated PRD.md to SPEC.md", { repoPath });
         return prd;
@@ -142,33 +200,11 @@ export class PrdService {
   private async loadPrd(projectId: string): Promise<Prd> {
     const project = await this.projectService.getProject(projectId);
     const specPath = path.join(project.repoPath, SPEC_MD);
-    const metaPath = path.join(project.repoPath, SPEC_METADATA_PATH);
 
     try {
       const markdown = await fs.readFile(specPath, "utf-8");
-      let metadata:
-        | {
-            version: number;
-            changeLog: PrdChangeLogEntry[];
-            sectionVersions?: Record<string, number>;
-          }
-        | undefined;
-      try {
-        const metaRaw = await fs.readFile(metaPath, "utf-8");
-        const meta = JSON.parse(metaRaw) as {
-          version?: number;
-          changeLog?: PrdChangeLogEntry[];
-          sectionVersions?: Record<string, number>;
-        };
-        metadata = {
-          version: meta.version ?? 0,
-          changeLog: Array.isArray(meta.changeLog) ? meta.changeLog : [],
-          sectionVersions: meta.sectionVersions,
-        };
-      } catch {
-        metadata = undefined;
-      }
-      const prd = specMarkdownToPrd(markdown, metadata);
+      const metadata = await this.loadMetadataFromDb(projectId, project.repoPath);
+      const prd = specMarkdownToPrd(markdown, metadata ?? undefined);
       if (metadata?.sectionVersions) {
         for (const [key, ver] of Object.entries(metadata.sectionVersions)) {
           if (prd.sections[key]) prd.sections[key]!.version = ver;
@@ -200,7 +236,7 @@ export class PrdService {
     }
   }
 
-  /** Save the PRD to disk (SPEC.md + spec-metadata.json) and enqueue git commit */
+  /** Save the PRD to disk (SPEC.md) and persist metadata to DB, then enqueue git commit */
   private async savePrd(
     projectId: string,
     prd: Prd,
@@ -208,7 +244,6 @@ export class PrdService {
   ): Promise<void> {
     const project = await this.projectService.getProject(projectId);
     const specPath = path.join(project.repoPath, SPEC_MD);
-    const metaPath = path.join(project.repoPath, SPEC_METADATA_PATH);
 
     const cwd = process.cwd();
     const normalizedRepo = path.resolve(project.repoPath);
@@ -226,16 +261,7 @@ export class PrdService {
 
     const markdown = prdToSpecMarkdown(prd);
     await fs.writeFile(specPath, markdown, "utf-8");
-    await fs.mkdir(path.dirname(metaPath), { recursive: true });
-    const sectionVersions: Record<string, number> = {};
-    for (const [k, s] of Object.entries(prd.sections)) {
-      sectionVersions[k] = s.version;
-    }
-    await fs.writeFile(
-      metaPath,
-      JSON.stringify({ version: prd.version, changeLog: prd.changeLog, sectionVersions }, null, 2),
-      "utf-8"
-    );
+    await this.saveMetadataToDb(projectId, prd);
     const source = options?.source ?? "sketch";
     gitCommitQueue.enqueue({
       type: "prd_update",

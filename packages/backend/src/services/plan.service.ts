@@ -34,15 +34,9 @@ import { buildAutonomyDescription } from "./context-assembler.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
-import {
-  broadcastToProject,
-  sendPlanAgentOutputToProject,
-} from "../websocket/index.js";
-import {
-  appendPlanAgentOutput,
-  clearPlanAgentOutput,
-} from "./plan-agent-output-buffer.service.js";
-import { writeJsonAtomic } from "../utils/file-utils.js";
+import { broadcastToProject, sendPlanAgentOutputToProject } from "../websocket/index.js";
+import { appendPlanAgentOutput, clearPlanAgentOutput } from "./plan-agent-output-buffer.service.js";
+import { assertMigrationCompleteForResource } from "./migration-guard.service.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { createLogger } from "../utils/logger.js";
@@ -377,6 +371,23 @@ export class PlanService {
   private async getPlanningRunsDir(projectId: string): Promise<string> {
     const project = await this.projectService.getProject(projectId);
     return path.join(project.repoPath, OPENSPRINT_PATHS.planningRuns);
+  }
+
+  private async assertPlanningRunsWritable(projectId: string): Promise<void> {
+    const client = await this.taskStore.getDb();
+    const existing = await client.queryOne(
+      "SELECT 1 FROM planning_runs WHERE project_id = $1 LIMIT 1",
+      [projectId]
+    );
+    if (existing) return;
+
+    const runsDir = await this.getPlanningRunsDir(projectId);
+    await assertMigrationCompleteForResource({
+      hasDbRecord: false,
+      resource: "Planning runs",
+      legacyPaths: [runsDir],
+      projectId,
+    });
   }
 
   /** Get repo path for a project */
@@ -1160,8 +1171,8 @@ ${planNew}`;
     let auditorResponse: { content: string };
     try {
       const auditorSystemPrompt =
-          "You are the Auditor agent for OpenSprint (PRD §12.3.6). Audit the app's current capabilities and generate delta tasks for re-execution.\n\n" +
-          (await getCombinedInstructions(repoPath, "auditor"));
+        "You are the Auditor agent for OpenSprint (PRD §12.3.6). Audit the app's current capabilities and generate delta tasks for re-execution.\n\n" +
+        (await getCombinedInstructions(repoPath, "auditor"));
       auditorResponse = await agentService.invokePlanningAgent({
         projectId,
         config: getAgentForPlanningRole(settings, "auditor", plan.metadata.complexity),
@@ -1514,31 +1525,49 @@ ${planNew}`;
     prd_snapshot: Prd;
     plans_created: string[];
   } | null> {
-    const runsDir = await this.getPlanningRunsDir(projectId);
-    try {
-      const files = await fs.readdir(runsDir);
-      const jsonFiles = files.filter((f) => f.endsWith(".json"));
-      if (jsonFiles.length === 0) return null;
-      let latest: {
-        id: string;
-        created_at: string;
-        prd_snapshot: Prd;
-        plans_created: string[];
-      } | null = null;
-      for (const file of jsonFiles) {
-        const data = await fs.readFile(path.join(runsDir, file), "utf-8");
-        const run = JSON.parse(data) as {
-          id: string;
-          created_at: string;
-          prd_snapshot: Prd;
-          plans_created: string[];
-        };
-        if (!latest || run.created_at > latest.created_at) latest = run;
-      }
-      return latest;
-    } catch {
+    const client = await this.taskStore.getDb();
+    const row = await client.queryOne(
+      `SELECT id, created_at, prd_snapshot, plans_created
+       FROM planning_runs
+       WHERE project_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [projectId]
+    );
+    if (!row) {
+      const runsDir = await this.getPlanningRunsDir(projectId);
+      await assertMigrationCompleteForResource({
+        hasDbRecord: false,
+        resource: "Planning runs",
+        legacyPaths: [runsDir],
+        projectId,
+      });
       return null;
     }
+
+    let prdSnapshot: Prd;
+    try {
+      prdSnapshot = JSON.parse(String(row.prd_snapshot ?? "{}")) as Prd;
+    } catch {
+      prdSnapshot = { version: 0, sections: {}, changeLog: [] } as unknown as Prd;
+    }
+
+    let plansCreated: string[] = [];
+    try {
+      const parsed = JSON.parse(String(row.plans_created ?? "[]")) as unknown;
+      if (Array.isArray(parsed)) {
+        plansCreated = parsed.filter((item): item is string => typeof item === "string");
+      }
+    } catch {
+      plansCreated = [];
+    }
+
+    return {
+      id: String(row.id),
+      created_at: String(row.created_at),
+      prd_snapshot: prdSnapshot,
+      plans_created: plansCreated,
+    };
   }
 
   /** Compare two PRDs by section content (ignoring changeLog) */
@@ -1557,6 +1586,8 @@ ${planNew}`;
     projectId: string,
     plansCreated: Plan[]
   ): Promise<{ id: string; created_at: string }> {
+    await this.assertPlanningRunsWritable(projectId);
+
     const prd = await this.prdService.getPrd(projectId);
     const runId = crypto.randomUUID();
     const created_at = new Date().toISOString();
@@ -1566,9 +1597,19 @@ ${planNew}`;
       prd_snapshot: { ...prd },
       plans_created: plansCreated.map((p) => p.metadata.planId),
     };
-    const runsDir = await this.getPlanningRunsDir(projectId);
-    await fs.mkdir(runsDir, { recursive: true });
-    await writeJsonAtomic(path.join(runsDir, `${runId}.json`), run);
+    await this.taskStore.runWrite(async (client) => {
+      await client.execute(
+        `INSERT INTO planning_runs (id, project_id, created_at, prd_snapshot, plans_created)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          run.id,
+          projectId,
+          run.created_at,
+          JSON.stringify(run.prd_snapshot),
+          JSON.stringify(run.plans_created),
+        ]
+      );
+    });
     return { id: runId, created_at };
   }
 

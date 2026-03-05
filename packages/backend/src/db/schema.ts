@@ -200,6 +200,70 @@ CREATE INDEX IF NOT EXISTS idx_open_questions_project_id ON open_questions(proje
 CREATE INDEX IF NOT EXISTS idx_open_questions_status ON open_questions(status);
 -- Add scope_change_metadata for existing tables (no-op if column exists)
 ALTER TABLE open_questions ADD COLUMN IF NOT EXISTS scope_change_metadata TEXT;
+
+-- PRD metadata (version/changeLog/sectionVersions) moved from .opensprint/spec-metadata.json
+CREATE TABLE IF NOT EXISTS prd_metadata (
+    project_id        TEXT PRIMARY KEY,
+    version           INTEGER NOT NULL DEFAULT 0,
+    change_log        TEXT NOT NULL DEFAULT '[]',
+    section_versions  TEXT NOT NULL DEFAULT '{}',
+    updated_at        TEXT NOT NULL
+);
+
+-- Chat conversations moved from .opensprint/conversations/*.json
+CREATE TABLE IF NOT EXISTS project_conversations (
+    project_id       TEXT NOT NULL,
+    context          TEXT NOT NULL,
+    conversation_id  TEXT NOT NULL,
+    messages         TEXT NOT NULL DEFAULT '[]',
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    PRIMARY KEY (project_id, context)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_project_conversations_project_conversation
+  ON project_conversations(project_id, conversation_id);
+
+-- Plan status snapshots moved from .opensprint/planning-runs/*.json
+CREATE TABLE IF NOT EXISTS planning_runs (
+    id            TEXT PRIMARY KEY,
+    project_id    TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    prd_snapshot  TEXT NOT NULL,
+    plans_created TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS idx_planning_runs_project_created
+  ON planning_runs(project_id, created_at DESC);
+
+-- Role-specific agent instructions moved from .opensprint/agents/<role>.md
+CREATE TABLE IF NOT EXISTS agent_instructions (
+    project_id   TEXT NOT NULL,
+    role         TEXT NOT NULL,
+    content      TEXT NOT NULL,
+    updated_at   TEXT NOT NULL,
+    PRIMARY KEY (project_id, role)
+);
+
+-- Optional workflow override moved from .opensprint/workflow.json
+CREATE TABLE IF NOT EXISTS project_workflows (
+    project_id   TEXT PRIMARY KEY,
+    workflow     TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+);
+
+-- Help chat history (project + homepage) moved from file storage
+CREATE TABLE IF NOT EXISTS help_chat_histories (
+    scope_key    TEXT PRIMARY KEY,
+    messages     TEXT NOT NULL DEFAULT '[]',
+    updated_at   TEXT NOT NULL
+);
+
+-- Idempotency + audit for one-time repo file migration script
+CREATE TABLE IF NOT EXISTS repo_file_migrations (
+    project_id     TEXT NOT NULL,
+    migration_key  TEXT NOT NULL,
+    applied_at     TEXT NOT NULL,
+    PRIMARY KEY (project_id, migration_key)
+);
 `;
 
 /** Strip leading comment-only and empty lines so statements starting with "-- Comment\nCREATE ..." are executed. */

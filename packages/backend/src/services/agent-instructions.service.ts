@@ -2,6 +2,11 @@ import fs from "fs/promises";
 import path from "path";
 import { AGENT_ROLE_CANONICAL_ORDER, OPENSPRINT_PATHS } from "@opensprint/shared";
 import type { AgentRole } from "@opensprint/shared";
+import { ProjectService } from "./project.service.js";
+import { taskStore } from "./task-store.service.js";
+import { assertMigrationCompleteForResource } from "./migration-guard.service.js";
+
+const projectService = new ProjectService();
 
 /** Read file content or return empty string if missing. */
 async function readFileOrEmpty(filePath: string): Promise<string> {
@@ -14,6 +19,72 @@ async function readFileOrEmpty(filePath: string): Promise<string> {
   }
 }
 
+export class AgentInstructionsService {
+  async getGeneralInstructions(projectId: string): Promise<string> {
+    const project = await projectService.getProject(projectId);
+    return readFileOrEmpty(path.join(project.repoPath, "AGENTS.md"));
+  }
+
+  async setGeneralInstructions(projectId: string, content: string): Promise<void> {
+    const project = await projectService.getProject(projectId);
+    await fs.writeFile(path.join(project.repoPath, "AGENTS.md"), content, "utf-8");
+  }
+
+  async getRoleInstructions(projectId: string, role: AgentRole): Promise<string> {
+    const client = await taskStore.getDb();
+    const row = await client.queryOne(
+      "SELECT content FROM agent_instructions WHERE project_id = $1 AND role = $2",
+      [projectId, role]
+    );
+    if (row) {
+      return String(row.content ?? "");
+    }
+
+    const project = await projectService.getProject(projectId);
+    await assertMigrationCompleteForResource({
+      hasDbRecord: false,
+      resource: "Agent instructions",
+      legacyPaths: [path.join(project.repoPath, OPENSPRINT_PATHS.agents, `${role}.md`)],
+      projectId,
+    });
+    return "";
+  }
+
+  async setRoleInstructions(projectId: string, role: AgentRole, content: string): Promise<void> {
+    const existing = await taskStore
+      .getDb()
+      .then((client) =>
+        client.queryOne("SELECT 1 FROM agent_instructions WHERE project_id = $1 AND role = $2", [
+          projectId,
+          role,
+        ])
+      );
+    if (!existing) {
+      const project = await projectService.getProject(projectId);
+      await assertMigrationCompleteForResource({
+        hasDbRecord: false,
+        resource: "Agent instructions",
+        legacyPaths: [path.join(project.repoPath, OPENSPRINT_PATHS.agents, `${role}.md`)],
+        projectId,
+      });
+    }
+
+    const now = new Date().toISOString();
+    await taskStore.runWrite(async (client) => {
+      await client.execute(
+        `INSERT INTO agent_instructions (project_id, role, content, updated_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT(project_id, role) DO UPDATE SET
+           content = excluded.content,
+           updated_at = excluded.updated_at`,
+        [projectId, role, content, now]
+      );
+    });
+  }
+}
+
+export const agentInstructionsService = new AgentInstructionsService();
+
 /**
  * Returns combined agent instructions: general (AGENTS.md) plus optional role-specific content.
  * Role must be in AGENT_ROLE_CANONICAL_ORDER.
@@ -22,21 +93,34 @@ async function readFileOrEmpty(filePath: string): Promise<string> {
  * - `## Agent Instructions\n\n` + general content
  * - If role content exists: `\n\n## Role-specific Instructions\n\n` + role content
  */
-export async function getCombinedInstructions(
-  repoPath: string,
-  role: AgentRole
-): Promise<string> {
+export async function getCombinedInstructions(repoPath: string, role: AgentRole): Promise<string> {
   if (!AGENT_ROLE_CANONICAL_ORDER.includes(role)) {
-    throw new Error(`Invalid agent role: ${role}. Must be one of: ${AGENT_ROLE_CANONICAL_ORDER.join(", ")}`);
+    throw new Error(
+      `Invalid agent role: ${role}. Must be one of: ${AGENT_ROLE_CANONICAL_ORDER.join(", ")}`
+    );
   }
 
   const generalPath = path.join(repoPath, "AGENTS.md");
   const rolePath = path.join(repoPath, OPENSPRINT_PATHS.agents, `${role}.md`);
+  const generalContent = await readFileOrEmpty(generalPath);
 
-  const [generalContent, roleContent] = await Promise.all([
-    readFileOrEmpty(generalPath),
-    readFileOrEmpty(rolePath),
-  ]);
+  let roleContent = "";
+  const lookupProjectByRepo =
+    typeof (projectService as unknown as { getProjectByRepoPath?: unknown })
+      .getProjectByRepoPath === "function"
+      ? (
+          projectService as unknown as {
+            getProjectByRepoPath: (repoPath: string) => Promise<{ id: string } | null>;
+          }
+        ).getProjectByRepoPath
+      : null;
+
+  const project = lookupProjectByRepo ? await lookupProjectByRepo(repoPath) : null;
+  if (project) {
+    roleContent = await agentInstructionsService.getRoleInstructions(project.id, role);
+  } else {
+    roleContent = await readFileOrEmpty(rolePath);
+  }
 
   let result = `## Agent Instructions\n\n${generalContent}`;
   if (roleContent.trim()) {

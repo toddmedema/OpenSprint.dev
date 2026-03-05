@@ -93,15 +93,17 @@ describe.skipIf(!projectServicePostgresOk)("ProjectService", () => {
     expect(project.repoPath).toBe(repoPath);
     expect(project.currentPhase).toBe("sketch");
 
-    // Verify .opensprint directory structure
+    // Verify .opensprint marker directory exists
     const opensprintDir = path.join(repoPath, ".opensprint");
     const stat = await fs.stat(opensprintDir);
     expect(stat.isDirectory()).toBe(true);
 
-    const subdirs = ["plans", "conversations", "feedback", "active"];
-    for (const sub of subdirs) {
-      const subStat = await fs.stat(path.join(opensprintDir, sub));
-      expect(subStat.isDirectory()).toBe(true);
+    // Canonical state is DB-backed; these legacy canonical directories are not bootstrapped.
+    const legacyCanonicalDirs = ["plans", "conversations", "feedback", "active"];
+    for (const sub of legacyCanonicalDirs) {
+      await expect(fs.stat(path.join(opensprintDir, sub))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
     }
 
     // Verify settings in global store

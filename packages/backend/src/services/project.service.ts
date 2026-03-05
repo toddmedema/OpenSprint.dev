@@ -14,7 +14,6 @@ import type {
 import {
   OPENSPRINT_DIR,
   SPEC_MD,
-  SPEC_METADATA_PATH,
   prdToSpecMarkdown,
   DEFAULT_HIL_CONFIG,
   DEFAULT_AI_AUTONOMY_LEVEL,
@@ -69,12 +68,11 @@ function normalizeDeployment(input: CreateProjectRequest["deployment"]): Deploym
       ? (input.mode as "expo" | "custom")
       : "custom";
   const hasTargets = input?.targets && input.targets.length > 0;
-  const targets =
-    hasTargets
-      ? input!.targets
-      : input?.envVars && Object.keys(input.envVars).length > 0
-        ? [{ name: "production", isDefault: true, envVars: input.envVars }]
-        : input?.targets;
+  const targets = hasTargets
+    ? input!.targets
+    : input?.envVars && Object.keys(input.envVars).length > 0
+      ? [{ name: "production", isDefault: true, envVars: input.envVars }]
+      : input?.targets;
   return {
     ...DEFAULT_DEPLOYMENT_CONFIG,
     ...input,
@@ -157,21 +155,6 @@ function toCanonicalSettings(s: ProjectSettings): ProjectSettings {
     ...(s.unknownScopeStrategy !== undefined && { unknownScopeStrategy: s.unknownScopeStrategy }),
     gitWorkingMode: s.gitWorkingMode ?? "worktree",
     worktreeBaseBranch: s.worktreeBaseBranch ?? "main",
-  };
-}
-
-function buildSectionVersions(version = 0): Record<string, number> {
-  return {
-    executive_summary: version,
-    problem_statement: version,
-    user_personas: version,
-    goals_and_metrics: version,
-    feature_list: version,
-    technical_architecture: version,
-    data_model: version,
-    api_contracts: version,
-    non_functional_requirements: version,
-    open_questions: version,
   };
 }
 
@@ -394,11 +377,8 @@ export class ProjectService {
       await fs.writeFile(gitignorePath, gitignoreEntries.join("\n") + "\n");
     }
 
-    // Create .opensprint directory structure (sessions live in runtime dir, not repo)
-    await fs.mkdir(path.join(opensprintDir, "plans"), { recursive: true });
-    await fs.mkdir(path.join(opensprintDir, "conversations"), { recursive: true });
-    await fs.mkdir(path.join(opensprintDir, "feedback"), { recursive: true });
-    await fs.mkdir(path.join(opensprintDir, "active"), { recursive: true });
+    // Keep .opensprint root marker, but canonical project state now lives in the DB.
+    await fs.mkdir(opensprintDir, { recursive: true });
 
     // Write initial SPEC.md (Sketch phase output) with all sections
     const emptySection = () => ({ content: "", version: 0, updatedAt: now });
@@ -420,17 +400,6 @@ export class ProjectService {
     };
     const specPath = path.join(repoPath, SPEC_MD);
     await fs.writeFile(specPath, prdToSpecMarkdown(initialPrd), "utf-8");
-    const metaPath = path.join(repoPath, SPEC_METADATA_PATH);
-    await fs.mkdir(path.dirname(metaPath), { recursive: true });
-    await fs.writeFile(
-      metaPath,
-      JSON.stringify(
-        { version: 0, changeLog: [], sectionVersions: buildSectionVersions() },
-        null,
-        2
-      ),
-      "utf-8"
-    );
 
     // Write settings (deployment and HIL normalized per PRD §6.4, §6.5)
     const deployment = normalizeDeployment(input.deployment);

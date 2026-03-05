@@ -9,7 +9,6 @@ import { taskStore } from "../services/task-store.service.js";
 import {
   API_PREFIX,
   DEFAULT_HIL_CONFIG,
-  OPENSPRINT_PATHS,
   SPEC_MD,
   SPEC_METADATA_PATH,
   specMarkdownToPrd,
@@ -710,22 +709,39 @@ A simple marketing site for OpenSprint.
     expect(res.body.error?.code).toBe("INVALID_INPUT");
   });
 
-  it("conversation should be stored in .opensprint/conversations/", async () => {
+  it("returns MIGRATION_REQUIRED when legacy conversation files exist and DB row is missing", async () => {
+    const legacyDir = path.join(repoPath, ".opensprint", "conversations");
+    await fs.mkdir(legacyDir, { recursive: true });
+    await fs.writeFile(
+      path.join(legacyDir, "sketch.json"),
+      JSON.stringify({ id: "legacy-conv", context: "sketch", messages: [] }),
+      "utf-8"
+    );
+
+    const res = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/chat`)
+      .send({ message: "hello from migrated app" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error?.code).toBe("MIGRATION_REQUIRED");
+  });
+
+  it("conversation should be stored in project_conversations table", async () => {
     await request(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Test message" });
 
-    const convDir = path.join(repoPath, OPENSPRINT_PATHS.conversations);
-    const files = await fs.readdir(convDir);
-    expect(files.length).toBeGreaterThan(0);
-    expect(files.some((f) => f.endsWith(".json"))).toBe(true);
-
-    const jsonFile = files.find((f) => f.endsWith(".json"));
-    const content = await fs.readFile(path.join(convDir, jsonFile!), "utf-8");
-    const conv = JSON.parse(content);
-    expect(conv.id).toBeDefined();
-    expect(conv.context).toBe("sketch");
-    expect(conv.messages).toHaveLength(2);
+    const db = await taskStore.getDb();
+    const row = await db.queryOne(
+      "SELECT conversation_id, context, messages FROM project_conversations WHERE project_id = $1 AND context = $2",
+      [projectId, "sketch"]
+    );
+    expect(row).toBeDefined();
+    expect(String(row?.conversation_id ?? "")).toBeTruthy();
+    expect(row?.context).toBe("sketch");
+    const messages = JSON.parse(String(row?.messages ?? "[]"));
+    expect(Array.isArray(messages)).toBe(true);
+    expect(messages).toHaveLength(2);
   });
 
   describe("Design phase agent registry", () => {

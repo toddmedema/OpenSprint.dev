@@ -7,7 +7,6 @@ import type {
 import { getAgentForPlanningRole, AGENT_ROLE_LABELS, OPENSPRINT_PATHS } from "@opensprint/shared";
 import path from "path";
 import fs from "fs/promises";
-import os from "os";
 import { fileURLToPath } from "url";
 import { ProjectService } from "./project.service.js";
 import { PrdService } from "./prd.service.js";
@@ -19,7 +18,7 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
-import { writeJsonAtomic } from "../utils/file-utils.js";
+import { assertMigrationCompleteForResource } from "./migration-guard.service.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
 
 const log = createLogger("help-chat");
@@ -69,11 +68,16 @@ function truncate(s: string, max: number): string {
 }
 
 const HELP_CHAT_FILENAME = "help.json";
+const HELP_CHAT_HOMEPAGE_SCOPE = "homepage";
 
 export class HelpChatService {
   private projectService = new ProjectService();
   private prdService = new PrdService();
   private planService = new PlanService();
+
+  private getScopeKey(projectId: string | null): string {
+    return projectId ? `project:${projectId}` : HELP_CHAT_HOMEPAGE_SCOPE;
+  }
 
   /** Clear project list cache (for tests that overwrite projects.json). */
   clearProjectListCacheForTesting(): void {
@@ -86,41 +90,70 @@ export class HelpChatService {
     return path.join(project.repoPath, OPENSPRINT_PATHS.conversations, HELP_CHAT_FILENAME);
   }
 
-  /** Path for homepage help chat (in ~/.opensprint/). Use OPENSPRINT_HOME in tests to pin the path. */
-  private getHomepageHelpChatPath(): string {
-    const home =
-      process.env.OPENSPRINT_HOME ??
-      process.env.HOME ??
-      process.env.USERPROFILE ??
-      os.tmpdir();
-    return path.join(home, ".opensprint", "help-chat.json");
-  }
-
   /** Load help chat history (per-project or homepage) */
   async getHistory(projectId: string | null): Promise<HelpChatHistory> {
+    const scopeKey = this.getScopeKey(projectId);
+    const client = await taskStore.getDb();
+    const row = await client.queryOne(
+      "SELECT messages FROM help_chat_histories WHERE scope_key = $1",
+      [scopeKey]
+    );
+
+    if (!row) {
+      if (projectId) {
+        const legacyPath = await this.getProjectHelpChatPath(projectId);
+        await assertMigrationCompleteForResource({
+          hasDbRecord: false,
+          resource: "Help chat history",
+          legacyPaths: [legacyPath],
+          projectId,
+        });
+      }
+      return { messages: [] };
+    }
+
     try {
-      const filePath = projectId
-        ? await this.getProjectHelpChatPath(projectId)
-        : this.getHomepageHelpChatPath();
-      const data = await fs.readFile(filePath, "utf-8");
-      const parsed = JSON.parse(data) as HelpChatHistory;
-      if (Array.isArray(parsed?.messages)) {
-        return { messages: parsed.messages };
+      const parsed = JSON.parse(String(row.messages ?? "[]")) as unknown;
+      if (Array.isArray(parsed)) {
+        return { messages: parsed as HelpChatHistory["messages"] };
       }
     } catch {
-      // File missing or invalid — return empty
+      // invalid JSON in row -> treat as empty
     }
+
     return { messages: [] };
   }
 
   /** Save help chat history */
   private async saveHistory(projectId: string | null, history: HelpChatHistory): Promise<void> {
-    const filePath = projectId
-      ? await this.getProjectHelpChatPath(projectId)
-      : this.getHomepageHelpChatPath();
-    const dir = path.dirname(filePath);
-    await fs.mkdir(dir, { recursive: true });
-    await writeJsonAtomic(filePath, history);
+    const scopeKey = this.getScopeKey(projectId);
+    const existing = await taskStore
+      .getDb()
+      .then((client) =>
+        client.queryOne("SELECT 1 FROM help_chat_histories WHERE scope_key = $1", [scopeKey])
+      );
+
+    if (!existing && projectId) {
+      const legacyPath = await this.getProjectHelpChatPath(projectId);
+      await assertMigrationCompleteForResource({
+        hasDbRecord: false,
+        resource: "Help chat history",
+        legacyPaths: [legacyPath],
+        projectId,
+      });
+    }
+
+    const now = new Date().toISOString();
+    await taskStore.runWrite(async (client) => {
+      await client.execute(
+        `INSERT INTO help_chat_histories (scope_key, messages, updated_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT(scope_key) DO UPDATE SET
+           messages = excluded.messages,
+           updated_at = excluded.updated_at`,
+        [scopeKey, JSON.stringify(history.messages ?? []), now]
+      );
+    });
   }
 
   /** Build project-scoped context: PRD, plans, tasks, active agents */

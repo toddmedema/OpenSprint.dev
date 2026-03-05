@@ -90,6 +90,8 @@ describe.skipIf(!helpPostgresOk)("Help chat API", () => {
       hilConfig: DEFAULT_HIL_CONFIG,
     });
     projectId = project.id;
+    const db = await taskStore.getDb();
+    await db.execute("DELETE FROM help_chat_histories");
     helpChatService.clearProjectListCacheForTesting();
   });
 
@@ -210,6 +212,20 @@ describe.skipIf(!helpPostgresOk)("Help chat API", () => {
     const res = await request(app).get(`${API_PREFIX}/help/chat/history?projectId=${projectId}`);
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({ messages: [] });
+  });
+
+  it("GET /help/chat/history returns MIGRATION_REQUIRED when legacy help.json exists", async () => {
+    const legacyConversationsDir = path.join(repoPath, ".opensprint", "conversations");
+    await fs.mkdir(legacyConversationsDir, { recursive: true });
+    await fs.writeFile(
+      path.join(legacyConversationsDir, "help.json"),
+      JSON.stringify({ messages: [{ role: "assistant", content: "legacy" }] }),
+      "utf-8"
+    );
+
+    const res = await request(app).get(`${API_PREFIX}/help/chat/history?projectId=${projectId}`);
+    expect(res.status).toBe(409);
+    expect(res.body.error?.code).toBe("MIGRATION_REQUIRED");
   });
 
   it("POST /help/chat persists messages; GET /help/chat/history returns them (project)", async () => {
@@ -389,7 +405,9 @@ describe.skipIf(!helpPostgresOk)("Help chat API", () => {
 
     const logRes = await request(app).get(`${API_PREFIX}/help/agent-log?projectId=${projectId}`);
     expect(logRes.status).toBe(200);
-    const entry = logRes.body.data.find((e: { role: string; durationMs: number }) => e.role === "Coder" && e.durationMs === 60000);
+    const entry = logRes.body.data.find(
+      (e: { role: string; durationMs: number }) => e.role === "Coder" && e.durationMs === 60000
+    );
     expect(entry).toBeDefined();
     expect(entry.sessionId).toBeDefined();
     expect(typeof entry.sessionId).toBe("number");

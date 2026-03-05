@@ -1,21 +1,24 @@
 /**
  * Declarative workflow engine.
  *
- * Loads a WorkflowDefinition (from disk or built-in default), validates the
+ * Loads a WorkflowDefinition (from DB or built-in default), validates the
  * step graph, and resolves which step should execute next based on current
  * execution state. Replaces the hardcoded `idle → coding → review → done`
  * state machine with a configurable DAG.
  */
 
 import fs from "fs/promises";
-import path from "path";
 import type {
   WorkflowDefinition,
   WorkflowStep,
   WorkflowExecutionState,
   StepStatus,
 } from "@opensprint/shared";
+import path from "path";
 import { OPENSPRINT_DIR } from "@opensprint/shared";
+import { ProjectService } from "./project.service.js";
+import { taskStore } from "./task-store.service.js";
+import { assertMigrationCompleteForResource } from "./migration-guard.service.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("workflow-engine");
@@ -67,24 +70,62 @@ export class WorkflowValidationError extends Error {
 }
 
 export class WorkflowEngineService {
-  /**
-   * Load a workflow definition from the project's `.opensprint/workflow.json`,
-   * falling back to the built-in default.
-   */
-  async loadWorkflow(repoPath: string): Promise<WorkflowDefinition> {
+  private projectService = new ProjectService();
+
+  private async loadWorkflowFromLegacyFile(repoPath: string): Promise<WorkflowDefinition> {
     const workflowPath = path.join(repoPath, OPENSPRINT_DIR, "workflow.json");
     try {
       const raw = await fs.readFile(workflowPath, "utf-8");
       const workflow = JSON.parse(raw) as WorkflowDefinition;
       this.validate(workflow);
-      log.info("Loaded custom workflow", { id: workflow.id, steps: workflow.steps.length });
+      log.info("Loaded custom workflow from legacy file", {
+        id: workflow.id,
+        steps: workflow.steps.length,
+      });
       return workflow;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
         return DEFAULT_WORKFLOW;
       }
       if (err instanceof WorkflowValidationError) throw err;
-      log.warn("Failed to load custom workflow, using default", { err });
+      log.warn("Failed to load custom legacy workflow, using default", { err });
+      return DEFAULT_WORKFLOW;
+    }
+  }
+
+  /**
+   * Load a workflow definition from project_workflows,
+   * falling back to the built-in default.
+   */
+  async loadWorkflow(repoPath: string): Promise<WorkflowDefinition> {
+    const project = await this.projectService.getProjectByRepoPath(repoPath);
+    if (!project) {
+      return this.loadWorkflowFromLegacyFile(repoPath);
+    }
+
+    const client = await taskStore.getDb();
+    const row = await client.queryOne(
+      "SELECT workflow FROM project_workflows WHERE project_id = $1",
+      [project.id]
+    );
+    if (!row) {
+      await assertMigrationCompleteForResource({
+        hasDbRecord: false,
+        resource: "Project workflow",
+        legacyPaths: [path.join(repoPath, OPENSPRINT_DIR, "workflow.json")],
+        projectId: project.id,
+      });
+      return DEFAULT_WORKFLOW;
+    }
+
+    try {
+      const workflow = JSON.parse(String(row.workflow ?? "{}")) as WorkflowDefinition;
+      this.validate(workflow);
+      log.info("Loaded custom workflow", { id: workflow.id, steps: workflow.steps.length });
+      return workflow;
+    } catch (err) {
+      if (err instanceof WorkflowValidationError) throw err;
+      log.warn("Failed to load custom workflow from DB, using default", { err });
       return DEFAULT_WORKFLOW;
     }
   }

@@ -1,4 +1,3 @@
-import fs from "fs/promises";
 import path from "path";
 import { randomUUID } from "node:crypto";
 import type {
@@ -15,11 +14,11 @@ import { PrdService } from "./prd.service.js";
 import { agentService } from "./agent.service.js";
 import { notificationService } from "./notification.service.js";
 import { taskStore } from "./task-store.service.js";
+import { assertMigrationCompleteForResource } from "./migration-guard.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { hilService } from "./hil-service.js";
 import { broadcastToProject } from "../websocket/index.js";
-import { writeJsonAtomic } from "../utils/file-utils.js";
 import { syncPlanTasksFromContent } from "./plan-task-sync.service.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
@@ -210,47 +209,82 @@ export class ChatService {
   private projectService = new ProjectService();
   private prdService = new PrdService();
 
-  /** Get conversations directory for a project */
-  private async getConversationsDir(projectId: string): Promise<string> {
+  private parseMessages(raw: unknown): ConversationMessage[] {
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(
+      (entry): entry is ConversationMessage =>
+        typeof entry === "object" &&
+        entry != null &&
+        (entry as ConversationMessage).role != null &&
+        typeof (entry as ConversationMessage).content === "string" &&
+        typeof (entry as ConversationMessage).timestamp === "string"
+    );
+  }
+
+  private async guardLegacyConversationFiles(projectId: string): Promise<void> {
     const project = await this.projectService.getProject(projectId);
-    return path.join(project.repoPath, OPENSPRINT_PATHS.conversations);
+    await assertMigrationCompleteForResource({
+      hasDbRecord: false,
+      resource: "Chat conversations",
+      legacyPaths: [path.join(project.repoPath, OPENSPRINT_PATHS.conversations)],
+      projectId,
+    });
   }
 
   private async getOrCreateConversation(projectId: string, context: string): Promise<Conversation> {
-    const dir = await this.getConversationsDir(projectId);
-
-    try {
-      const files = await fs.readdir(dir);
-      for (const file of files) {
-        if (file.endsWith(".json")) {
-          const data = await fs.readFile(path.join(dir, file), "utf-8");
-          const conv = JSON.parse(data) as Conversation;
-          if (conv.context === context) {
-            return conv;
-          }
+    const client = await taskStore.getDb();
+    const existing = await client.queryOne(
+      "SELECT conversation_id, messages FROM project_conversations WHERE project_id = $1 AND context = $2",
+      [projectId, context]
+    );
+    if (existing) {
+      const parsed = (() => {
+        try {
+          return JSON.parse(String(existing.messages ?? "[]")) as unknown;
+        } catch {
+          return [];
         }
-      }
-    } catch {
-      // Directory may not exist yet
+      })();
+      return {
+        id: String(existing.conversation_id),
+        context: context as Conversation["context"],
+        messages: this.parseMessages(parsed),
+      };
     }
+
+    await this.guardLegacyConversationFiles(projectId);
 
     const conversation: Conversation = {
       id: randomUUID(),
       context: context as Conversation["context"],
       messages: [],
     };
-
-    await fs.mkdir(dir, { recursive: true });
     await this.saveConversation(projectId, conversation);
 
     return conversation;
   }
 
-  /** Save a conversation to disk */
+  /** Save a conversation to DB */
   private async saveConversation(projectId: string, conversation: Conversation): Promise<void> {
-    const dir = await this.getConversationsDir(projectId);
-    const finalPath = path.join(dir, `${conversation.id}.json`);
-    await writeJsonAtomic(finalPath, conversation);
+    const now = new Date().toISOString();
+    await taskStore.runWrite(async (client) => {
+      await client.execute(
+        `INSERT INTO project_conversations (project_id, context, conversation_id, messages, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT(project_id, context) DO UPDATE SET
+           conversation_id = excluded.conversation_id,
+           messages = excluded.messages,
+           updated_at = excluded.updated_at`,
+        [
+          projectId,
+          conversation.context,
+          conversation.id,
+          JSON.stringify(conversation.messages),
+          now,
+          now,
+        ]
+      );
+    });
   }
 
   async startPlanDraftConversation(
@@ -512,22 +546,22 @@ export class ChatService {
         ? `execute-chat-${projectId}-${taskId}-${conversation.id}-${Date.now()}`
         : isPlanDraftContext && draftId
           ? `plan-draft-chat-${projectId}-${draftId}-${conversation.id}-${Date.now()}`
-        : isPlanContext && planId
-          ? `plan-chat-${projectId}-${planId}-${conversation.id}-${Date.now()}`
-          : `design-chat-${projectId}-${conversation.id}-${Date.now()}`;
-    const phase = isExecuteContext ? "execute" : isPlanContext || isPlanDraftContext ? "plan" : "sketch";
+          : isPlanContext && planId
+            ? `plan-chat-${projectId}-${planId}-${conversation.id}-${Date.now()}`
+            : `design-chat-${projectId}-${conversation.id}-${Date.now()}`;
+    const phase = isExecuteContext
+      ? "execute"
+      : isPlanContext || isPlanDraftContext
+        ? "plan"
+        : "sketch";
     const label = isExecuteContext
       ? "Execute task chat"
       : isPlanDraftContext
         ? "Draft plan generation chat"
-      : isPlanContext
-        ? "Plan chat"
-        : "Sketch chat";
-    const trackingRole = isExecuteContext
-      ? "analyst"
-      : isPlanDraftContext
-        ? "planner"
-        : "dreamer";
+        : isPlanContext
+          ? "Plan chat"
+          : "Sketch chat";
+    const trackingRole = isExecuteContext ? "analyst" : isPlanDraftContext ? "planner" : "dreamer";
     try {
       log.info("Invoking planning agent", {
         type: agentConfig.type,
@@ -582,8 +616,7 @@ export class ChatService {
         throw new AppError(
           400,
           ErrorCodes.DECOMPOSE_PARSE_FAILED,
-          "Planning agent did not return a valid plan. Response: " +
-            responseContent.slice(0, 500),
+          "Planning agent did not return a valid plan. Response: " + responseContent.slice(0, 500),
           { responsePreview: responseContent.slice(0, 500) }
         );
       }

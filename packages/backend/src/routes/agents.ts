@@ -1,11 +1,10 @@
 import { Router, Request } from "express";
-import path from "path";
-import fs from "fs/promises";
 import type { ApiResponse, ActiveAgent } from "@opensprint/shared";
-import { AGENT_ROLE_CANONICAL_ORDER, OPENSPRINT_PATHS } from "@opensprint/shared";
+import { AGENT_ROLE_CANONICAL_ORDER } from "@opensprint/shared";
 import type { AgentRole } from "@opensprint/shared";
 import { orchestratorService } from "../services/orchestrator.service.js";
 import { ProjectService } from "../services/project.service.js";
+import { agentInstructionsService } from "../services/agent-instructions.service.js";
 
 export const agentsRouter = Router({ mergeParams: true });
 
@@ -22,15 +21,8 @@ function isValidRole(role: string): role is AgentRole {
 // GET /projects/:projectId/agents/instructions — Read AGENTS.md
 agentsRouter.get("/instructions", async (req: Request<ProjectParams>, res, next) => {
   try {
-    const project = await projectService.getProject(req.params.projectId);
-    const filePath = path.join(project.repoPath, "AGENTS.md");
-    let content = "";
-    try {
-      content = await fs.readFile(filePath, "utf-8");
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT") throw err;
-    }
+    await projectService.getProject(req.params.projectId);
+    const content = await agentInstructionsService.getGeneralInstructions(req.params.projectId);
     const body: ApiResponse<{ content: string }> = { data: { content } };
     res.json(body);
   } catch (err) {
@@ -47,16 +39,18 @@ agentsRouter.put("/instructions", async (req: Request<ProjectParams>, res, next)
       });
       return;
     }
-    const project = await projectService.getProject(req.params.projectId);
-    const filePath = path.join(project.repoPath, "AGENTS.md");
-    await fs.writeFile(filePath, String(req.body.content), "utf-8");
+    await projectService.getProject(req.params.projectId);
+    await agentInstructionsService.setGeneralInstructions(
+      req.params.projectId,
+      String(req.body.content)
+    );
     res.status(200).json({ data: { saved: true } });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /projects/:projectId/agents/instructions/:role — Read .opensprint/agents/<role>.md
+// GET /projects/:projectId/agents/instructions/:role — Read DB-backed role instructions
 agentsRouter.get("/instructions/:role", async (req: Request<RoleParams>, res, next) => {
   try {
     if (!isValidRole(req.params.role)) {
@@ -69,15 +63,11 @@ agentsRouter.get("/instructions/:role", async (req: Request<RoleParams>, res, ne
       });
       return;
     }
-    const project = await projectService.getProject(req.params.projectId);
-    const filePath = path.join(project.repoPath, OPENSPRINT_PATHS.agents, `${req.params.role}.md`);
-    let content = "";
-    try {
-      content = await fs.readFile(filePath, "utf-8");
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT") throw err;
-    }
+    await projectService.getProject(req.params.projectId);
+    const content = await agentInstructionsService.getRoleInstructions(
+      req.params.projectId,
+      req.params.role
+    );
     const body: ApiResponse<{ content: string }> = { data: { content } };
     res.json(body);
   } catch (err) {
@@ -85,7 +75,7 @@ agentsRouter.get("/instructions/:role", async (req: Request<RoleParams>, res, ne
   }
 });
 
-// PUT /projects/:projectId/agents/instructions/:role — Write .opensprint/agents/<role>.md
+// PUT /projects/:projectId/agents/instructions/:role — Write DB-backed role instructions
 agentsRouter.put("/instructions/:role", async (req: Request<RoleParams>, res, next) => {
   try {
     if (!isValidRole(req.params.role)) {
@@ -104,11 +94,12 @@ agentsRouter.put("/instructions/:role", async (req: Request<RoleParams>, res, ne
       });
       return;
     }
-    const project = await projectService.getProject(req.params.projectId);
-    const agentsDir = path.join(project.repoPath, OPENSPRINT_PATHS.agents);
-    await fs.mkdir(agentsDir, { recursive: true });
-    const filePath = path.join(agentsDir, `${req.params.role}.md`);
-    await fs.writeFile(filePath, String(req.body.content), "utf-8");
+    await projectService.getProject(req.params.projectId);
+    await agentInstructionsService.setRoleInstructions(
+      req.params.projectId,
+      req.params.role,
+      String(req.body.content)
+    );
     res.status(200).json({ data: { saved: true } });
   } catch (err) {
     next(err);

@@ -13,6 +13,7 @@ const mockListPlans = vi.fn();
 const mockTaskListAll = vi.fn();
 const mockGetActiveAgents = vi.fn();
 const mockInvokePlanningAgent = vi.fn();
+const helpHistoryByScope = new Map<string, string>();
 
 vi.mock("../services/project.service.js", () => ({
   ProjectService: class {
@@ -38,6 +39,33 @@ vi.mock("../services/plan.service.js", () => ({
 vi.mock("../services/task-store.service.js", () => ({
   taskStore: {
     listAll: (...args: unknown[]) => mockTaskListAll(...args),
+    getDb: async () => ({
+      queryOne: async (sql: string, params?: unknown[]) => {
+        if (sql.includes("FROM help_chat_histories")) {
+          const scopeKey = String(params?.[0] ?? "");
+          const messages = helpHistoryByScope.get(scopeKey);
+          return messages ? { messages } : undefined;
+        }
+        return undefined;
+      },
+    }),
+    runWrite: async (
+      fn: (client: {
+        execute: (sql: string, params?: unknown[]) => Promise<number>;
+      }) => Promise<void>
+    ) => {
+      await fn({
+        execute: async (sql: string, params?: unknown[]) => {
+          if (sql.includes("INSERT INTO help_chat_histories")) {
+            const scopeKey = String(params?.[0] ?? "");
+            const messages = String(params?.[1] ?? "[]");
+            helpHistoryByScope.set(scopeKey, messages);
+            return 1;
+          }
+          return 0;
+        },
+      });
+    },
   },
 }));
 
@@ -70,6 +98,7 @@ describe("HelpChatService", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    helpHistoryByScope.clear();
     tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-help-chat-"));
     originalHome = process.env.HOME;
     process.env.HOME = tempHome;
@@ -106,7 +135,13 @@ describe("HelpChatService", () => {
     ]);
     mockTaskListAll.mockResolvedValue([
       { id: "epic-a", issue_type: "epic", title: "Epic", status: "blocked" },
-      { id: "epic-a.1", issue_type: "task", title: "Implement API", status: "open", assignee: null },
+      {
+        id: "epic-a.1",
+        issue_type: "task",
+        title: "Implement API",
+        status: "open",
+        assignee: null,
+      },
     ]);
     mockGetActiveAgents.mockResolvedValue([{ role: "planner", label: "Gandalf", phase: "plan" }]);
 
@@ -130,9 +165,7 @@ describe("HelpChatService", () => {
     expect(call.systemPrompt).toContain("Planner: Gandalf");
     expect(call.systemPrompt).toContain("[... truncated for context length]");
 
-    const saved = JSON.parse(
-      await fs.readFile(path.join(repoPath, ".opensprint", "conversations", "help.json"), "utf-8")
-    );
+    const saved = await service.getHistory("proj-1");
     expect(saved.messages).toHaveLength(3);
     expect(saved.messages[2].content).toBe("Help answer");
   });

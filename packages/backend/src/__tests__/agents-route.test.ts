@@ -200,14 +200,12 @@ describe("Agents API", () => {
   });
 
   describe("GET /projects/:projectId/agents/instructions/:role", () => {
-    it("should return content when role file exists", async () => {
-      const repoPath = path.join(tempDir, "my-project");
-      const agentsDir = path.join(repoPath, OPENSPRINT_PATHS.agents);
-      await fs.mkdir(agentsDir, { recursive: true });
-      await fs.writeFile(
-        path.join(agentsDir, "coder.md"),
-        "# Coder Instructions\n\nPrefer TypeScript.",
-        "utf-8"
+    it("should return content when role instructions exist in DB", async () => {
+      const db = testClientRef.current!;
+      await db.execute(
+        `INSERT INTO agent_instructions (project_id, role, content, updated_at)
+         VALUES ($1, $2, $3, $4)`,
+        [projectId, "coder", "# Coder Instructions\n\nPrefer TypeScript.", new Date().toISOString()]
       );
 
       const res = await request(app).get(
@@ -218,6 +216,20 @@ describe("Agents API", () => {
       expect(res.body.data).toEqual({
         content: "# Coder Instructions\n\nPrefer TypeScript.",
       });
+    });
+
+    it("should return migration-required when only legacy role file exists", async () => {
+      const repoPath = path.join(tempDir, "my-project");
+      const agentsDir = path.join(repoPath, OPENSPRINT_PATHS.agents);
+      await fs.mkdir(agentsDir, { recursive: true });
+      await fs.writeFile(path.join(agentsDir, "coder.md"), "# Legacy Coder", "utf-8");
+
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/agents/instructions/coder`
+      );
+
+      expect(res.status).toBe(409);
+      expect(res.body.error?.code).toBe("MIGRATION_REQUIRED");
     });
 
     it("should return empty content when role file is missing", async () => {
@@ -250,9 +262,7 @@ describe("Agents API", () => {
   });
 
   describe("PUT /projects/:projectId/agents/instructions/:role", () => {
-    it("should create agents dir and write role file", async () => {
-      const repoPath = path.join(tempDir, "my-project");
-
+    it("should write role instructions to DB", async () => {
       const res = await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/agents/instructions/coder`)
         .send({ content: "# Coder\n\nUse strict mode." });
@@ -260,11 +270,12 @@ describe("Agents API", () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ saved: true });
 
-      const written = await fs.readFile(
-        path.join(repoPath, OPENSPRINT_PATHS.agents, "coder.md"),
-        "utf-8"
+      const db = testClientRef.current!;
+      const row = await db.queryOne(
+        "SELECT content FROM agent_instructions WHERE project_id = $1 AND role = $2",
+        [projectId, "coder"]
       );
-      expect(written).toBe("# Coder\n\nUse strict mode.");
+      expect(row?.content).toBe("# Coder\n\nUse strict mode.");
     });
 
     it("should return 400 when content is missing", async () => {
