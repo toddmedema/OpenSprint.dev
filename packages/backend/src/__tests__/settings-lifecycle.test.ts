@@ -295,6 +295,23 @@ describe("Settings API lifecycle", () => {
     expect(settings.teamMembers).toEqual(teamMembers);
   });
 
+  it("PUT /api/v1/projects/:id/settings accepts teamMembers with empty name (add-then-edit flow)", async () => {
+    const teamMembers = [{ id: "uuid-new-member", name: "" }];
+    const putRes = await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({ teamMembers });
+
+    expect(putRes.status).toBe(200);
+    expect(putRes.body.data.teamMembers).toEqual(teamMembers);
+
+    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.teamMembers).toEqual(teamMembers);
+
+    const settings = await readProjectFromGlobalStore(tempDir, projectId);
+    expect(settings.teamMembers).toEqual(teamMembers);
+  });
+
   it("PUT /api/v1/projects/:id/settings accepts and persists gitWorkingMode", async () => {
     const res = await request(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)

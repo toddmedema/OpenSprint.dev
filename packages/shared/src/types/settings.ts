@@ -576,17 +576,21 @@ function parseReviewAngles(raw: unknown): ReviewAngle[] | undefined {
   return filtered.length > 0 ? filtered : undefined;
 }
 
-/** Parse and validate teamMembers array. Filters invalid entries, trims id/name. Exported for use in project.service. */
+/** Parse and validate teamMembers array. Filters invalid entries, trims id/name. Allows empty name when id is present (for add-then-edit flow). Exported for use in project.service. */
 export function parseTeamMembers(raw: unknown): Array<{ id: string; name: string }> | undefined {
-  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  if (!Array.isArray(raw)) return undefined;
+  if (raw.length === 0) return [];
   const result: Array<{ id: string; name: string }> = [];
   for (const item of raw) {
-    if (item && typeof item === "object" && "id" in item && "name" in item) {
+    if (item && typeof item === "object" && "id" in item) {
       const obj = item as Record<string, unknown>;
       const id = obj.id;
       const name = obj.name;
-      if (typeof id === "string" && id.trim() && typeof name === "string" && name.trim()) {
-        result.push({ id: id.trim(), name: name.trim() });
+      if (typeof id === "string" && id.trim()) {
+        result.push({
+          id: id.trim(),
+          name: typeof name === "string" ? name.trim() : "",
+        });
       }
     }
   }

@@ -74,7 +74,7 @@ const TAB_PARAM = "tab";
 function parseTabFromSearch(search: string): SettingsSubTab | null {
   const params = new URLSearchParams(search);
   const t = params.get(TAB_PARAM);
-  const valid: SettingsSubTab[] = ["basics", "agents", "deployment", "hil"];
+  const valid: SettingsSubTab[] = ["basics", "agents", "deployment", "hil", "team"];
   if (t && valid.includes(t as SettingsSubTab)) return t as SettingsSubTab;
   return null;
 }
@@ -280,6 +280,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
       reviewAngles: ReviewAngle[];
       maxConcurrentCoders: number;
       unknownScopeStrategy: UnknownScopeStrategy;
+      teamMembers: Array<{ id: string; name: string }>;
     }>;
 
     const persistSettings = useCallback(
@@ -292,6 +293,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
         const effDeployment = overrides?.deployment ?? deployment;
         const effAiAutonomy = overrides?.aiAutonomyLevel ?? aiAutonomyLevel;
         const effGitMode = overrides?.gitWorkingMode ?? gitWorkingMode;
+        const effTeamMembers = overrides?.teamMembers ?? settings?.teamMembers ?? [];
         const effSettings = overrides ? { ...settings } : settings;
         if (effSimple.type === "custom" && !(effSimple.cliCommand ?? "").trim()) return;
         if (effComplex.type === "custom" && !(effComplex.cliCommand ?? "").trim()) return;
@@ -342,6 +344,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
               gitWorkingMode: effGitMode,
               worktreeBaseBranch:
                 overrides?.worktreeBaseBranch ?? effSettings?.worktreeBaseBranch ?? "main",
+              teamMembers: effTeamMembers,
             }),
           ]);
           if (notifyOnComplete) onSaved?.();
@@ -376,6 +379,18 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
         onSaved,
       ]
     );
+
+    const teamMembers = settings?.teamMembers ?? [];
+
+    const updateTeamMembers = (
+      next: Array<{ id: string; name: string }>,
+      options?: { immediate?: boolean }
+    ) => {
+      setSettings((s) => (s ? { ...s, teamMembers: next } : null));
+      if (options?.immediate !== false) {
+        void persistSettings(undefined, { teamMembers: next });
+      }
+    };
 
     useImperativeHandle(
       ref,
@@ -1540,6 +1555,77 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                         </div>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {activeTab === "team" && (
+                  <div className="space-y-4" data-testid="team-tab-content">
+                    <h3 className="text-sm font-semibold text-theme-text">Team Members</h3>
+                    <p className="text-xs text-theme-muted mb-3">
+                      Add teammates who can be assigned to tasks. Each member has an ID and display
+                      name.
+                    </p>
+                    <div className="space-y-3">
+                      {teamMembers.map((member, i) => (
+                        <div
+                          key={member.id}
+                          className="flex flex-wrap items-center gap-2 p-3 rounded-lg border border-theme-border bg-theme-surface"
+                          data-testid="team-member-row"
+                        >
+                          <input
+                            type="text"
+                            className="input flex-1 min-w-[100px] font-mono text-sm"
+                            placeholder="ID"
+                            value={member.id}
+                            onChange={(e) => {
+                              const next = [...teamMembers];
+                              next[i] = { ...member, id: e.target.value };
+                              updateTeamMembers(next, { immediate: false });
+                            }}
+                            onBlur={scheduleSaveOnBlur}
+                            data-testid="team-member-id-input"
+                          />
+                          <input
+                            type="text"
+                            className="input flex-1 min-w-[100px] text-sm"
+                            placeholder="Name"
+                            value={member.name}
+                            onChange={(e) => {
+                              const next = [...teamMembers];
+                              next[i] = { ...member, name: e.target.value };
+                              updateTeamMembers(next, { immediate: false });
+                            }}
+                            onBlur={scheduleSaveOnBlur}
+                            data-testid="team-member-name-input"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = teamMembers.filter((_, j) => j !== i);
+                              updateTeamMembers(next);
+                            }}
+                            className="text-theme-error-text hover:opacity-80 text-sm px-2"
+                            data-testid="team-member-remove"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = [
+                          ...teamMembers,
+                          { id: crypto.randomUUID(), name: "" },
+                        ];
+                        updateTeamMembers(next);
+                      }}
+                      className="btn-secondary text-sm"
+                      data-testid="team-member-add"
+                    >
+                      + Add member
+                    </button>
                   </div>
                 )}
               </>

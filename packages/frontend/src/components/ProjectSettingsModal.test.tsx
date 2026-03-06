@@ -144,6 +144,7 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByText("Agent Config")).toBeInTheDocument();
     expect(screen.getByText("Deliver")).toBeInTheDocument();
     expect(screen.getByText("Autonomy")).toBeInTheDocument();
+    expect(screen.getByText("Team")).toBeInTheDocument();
   });
 
   it("content area has min-h-0 and overflow-y-auto for proper scroll behavior on Agent Config", async () => {
@@ -429,6 +430,104 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByText("Major scope changes only")).toBeInTheDocument();
     expect(screen.getByText("Full autonomy")).toBeInTheDocument();
     expect(screen.getByTestId("ai-autonomy-slider")).toBeInTheDocument();
+  });
+
+  it("Team tab shows team members list and add button", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      teamMembers: [{ id: "user-1", name: "Alice" }],
+    });
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const teamTab = screen.getByRole("button", { name: "Team" });
+    await userEvent.click(teamTab);
+
+    expect(screen.getByTestId("team-tab-content")).toBeInTheDocument();
+    expect(screen.getByText("Team Members")).toBeInTheDocument();
+    expect(screen.getByTestId("team-member-add")).toBeInTheDocument();
+    const idInput = screen.getByTestId("team-member-id-input");
+    const nameInput = screen.getByTestId("team-member-name-input");
+    expect(idInput).toHaveValue("user-1");
+    expect(nameInput).toHaveValue("Alice");
+  });
+
+  it("Team tab: add member persists to backend", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      teamMembers: [],
+    });
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const teamTab = screen.getByRole("button", { name: "Team" });
+    await userEvent.click(teamTab);
+
+    const addBtn = screen.getByTestId("team-member-add");
+    await userEvent.click(addBtn);
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          teamMembers: expect.arrayContaining([
+            expect.objectContaining({ id: expect.any(String), name: "" }),
+          ]),
+        })
+      )
+    );
+  });
+
+  it("Team tab: edit member persists to backend", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      teamMembers: [{ id: "user-1", name: "Alice" }],
+    });
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const teamTab = screen.getByRole("button", { name: "Team" });
+    await userEvent.click(teamTab);
+
+    const nameInput = screen.getByTestId("team-member-name-input");
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "Alice Smith");
+    nameInput.blur();
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          teamMembers: expect.arrayContaining([
+            expect.objectContaining({ id: "user-1", name: "Alice Smith" }),
+          ]),
+        })
+      )
+    );
+  });
+
+  it("Team tab: remove member persists to backend", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      teamMembers: [{ id: "user-1", name: "Alice" }],
+    });
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const teamTab = screen.getByRole("button", { name: "Team" });
+    await userEvent.click(teamTab);
+
+    const removeBtn = screen.getByTestId("team-member-remove");
+    await userEvent.click(removeBtn);
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          teamMembers: [],
+        })
+      )
+    );
   });
 
   it("Deliver tab shows auto-deploy per environment", async () => {

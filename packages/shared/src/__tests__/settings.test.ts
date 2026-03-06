@@ -286,16 +286,19 @@ describe("parseSettings", () => {
         { id: "no-name" },
         { name: "No id" },
         { id: "  trimmed  ", name: "  Trimmed Name  " },
+        { id: "uuid-123", name: "" },
       ],
     };
     const parsed = parseSettings(raw);
     expect(parsed.teamMembers).toEqual([
       { id: "valid-id", name: "Valid" },
+      { id: "no-name", name: "" },
       { id: "trimmed", name: "Trimmed Name" },
+      { id: "uuid-123", name: "" },
     ]);
   });
 
-  it("should return undefined for teamMembers when array is empty", () => {
+  it("should return empty array for teamMembers when array is empty (explicit clear)", () => {
     const raw = {
       simpleComplexityAgent: lowAgent,
       complexComplexityAgent: highAgent,
@@ -305,7 +308,7 @@ describe("parseSettings", () => {
       teamMembers: [],
     };
     const parsed = parseSettings(raw);
-    expect(parsed.teamMembers).toBeUndefined();
+    expect(parsed.teamMembers).toEqual([]);
   });
 
   it("should preserve a valid aiAutonomyLevel", () => {
