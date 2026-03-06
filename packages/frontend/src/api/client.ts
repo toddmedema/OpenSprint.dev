@@ -351,7 +351,7 @@ export const api = {
     updateTask: (
       projectId: string,
       taskId: string,
-      updates: { priority?: number; complexity?: number }
+      updates: { priority?: number; complexity?: number; assignee?: string | null }
     ) =>
       request<Task>(`/projects/${projectId}/tasks/${taskId}`, {
         method: "PATCH",
