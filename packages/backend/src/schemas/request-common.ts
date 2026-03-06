@@ -34,10 +34,17 @@ export const taskPatchBodySchema = z
       .min(1, { message: "complexity must be 1–10" })
       .max(10, { message: "complexity must be 1–10" })
       .optional(),
+    assignee: z.union([z.string().trim(), z.null()]).optional(),
   })
-  .refine((data) => Object.keys(data).length > 0, {
-    message: "At least one of priority or complexity is required",
-  });
+  .refine(
+    (data) =>
+      data.priority !== undefined ||
+      data.complexity !== undefined ||
+      data.assignee !== undefined,
+    {
+      message: "At least one of priority, complexity, or assignee is required",
+    }
+  );
 
 export const dependencyBodySchema = z
   .object({

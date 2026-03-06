@@ -176,10 +176,15 @@ export function createTasksRouter(taskService: TaskService): Router {
     validateBody(taskPatchBodySchema),
     async (req: Request<TaskParams>, res, next) => {
       try {
-        const { priority, complexity } = req.body as { priority?: number; complexity?: number };
-        const updates: { priority?: number; complexity?: number } = {};
+        const { priority, complexity, assignee } = req.body as {
+          priority?: number;
+          complexity?: number;
+          assignee?: string | null;
+        };
+        const updates: { priority?: number; complexity?: number; assignee?: string | null } = {};
         if (priority !== undefined) updates.priority = priority;
         if (complexity !== undefined) updates.complexity = complexity;
+        if (assignee !== undefined) updates.assignee = assignee;
         const task = await taskService.updateTask(req.params.projectId, req.params.taskId, updates);
         const body: ApiResponse<Task> = { data: task };
         res.json(body);

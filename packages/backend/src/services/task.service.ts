@@ -305,7 +305,7 @@ export class TaskService {
       type: this.normalizeType((issue.issue_type ?? issue.type) as string | undefined),
       status: (issue.status as "open" | "in_progress" | "closed" | "blocked") ?? "open",
       priority: Math.min(4, Math.max(0, (issue.priority as number) ?? 1)) as 0 | 1 | 2 | 3 | 4,
-      assignee: (issue.assignee as string) ?? null,
+      assignee: ((issue.assignee as string) ?? "").trim() || null,
       labels: (issue.labels as string[]) ?? [],
       dependencies,
       epicId,
@@ -528,11 +528,11 @@ export class TaskService {
     return { taskDeleted: true };
   }
 
-  /** Update a task's priority (0–4) and/or complexity (1–10). */
+  /** Update a task's priority (0–4), complexity (1–10), and/or assignee. */
   async updateTask(
     projectId: string,
     taskId: string,
-    updates: { priority?: number; complexity?: number }
+    updates: { priority?: number; complexity?: number; assignee?: string | null }
   ): Promise<Task> {
     await this.projectService.getProject(projectId);
     if (updates.priority !== undefined) {
@@ -546,11 +546,22 @@ export class TaskService {
         throw new AppError(400, ErrorCodes.INVALID_INPUT, "Complexity must be an integer 1–10");
       }
     }
-    const updatePayload: { priority?: number; complexity?: number | null } = {};
+    // assignee: empty string or null = unassign; any non-empty string allowed (team member id/name or free-form)
+    let assigneeValue: string | undefined;
+    if (updates.assignee !== undefined) {
+      const v = updates.assignee;
+      assigneeValue = v === null || (typeof v === "string" && v.trim() === "") ? "" : v.trim();
+    }
+    const updatePayload: {
+      priority?: number;
+      complexity?: number | null;
+      assignee?: string;
+    } = {};
     if (updates.priority !== undefined) updatePayload.priority = updates.priority;
     if (updates.complexity !== undefined) {
       updatePayload.complexity = clampTaskComplexity(updates.complexity) ?? null;
     }
+    if (assigneeValue !== undefined) updatePayload.assignee = assigneeValue;
     if (Object.keys(updatePayload).length === 0) {
       return this.getTask(projectId, taskId);
     }

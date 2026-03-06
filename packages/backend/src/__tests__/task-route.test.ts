@@ -721,7 +721,7 @@ Test review prompt generation.
     expect(res.body.error?.message).toMatch(/1–10/i);
   });
 
-  it("PATCH /tasks/:taskId returns 400 when neither priority nor complexity provided", async () => {
+  it("PATCH /tasks/:taskId returns 400 when neither priority, complexity, nor assignee provided", async () => {
     const _project = await projectService.getProject(projectId);
     const task = await taskStore.create(projectId, "Task", { type: "task", priority: 1 });
 
@@ -731,7 +731,74 @@ Test review prompt generation.
       .send({});
 
     expect(res.status).toBe(400);
-    expect(res.body.error?.message).toMatch(/priority or complexity/i);
+    expect(res.body.error?.message).toMatch(/priority, complexity, or assignee/i);
+  });
+
+  it("PATCH /tasks/:taskId updates assignee and GET returns it", async () => {
+    const _project = await projectService.getProject(projectId);
+    const task = await taskStore.create(projectId, "Assignee Update Test Task", {
+      type: "task",
+      priority: 1,
+    });
+
+    const patchRes = await request(app)
+      .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
+      .set("Content-Type", "application/json")
+      .send({ assignee: "Alice" });
+
+    expect(patchRes.status).toBe(200);
+    expect(patchRes.body.data).toBeDefined();
+    expect(patchRes.body.data.id).toBe(task.id);
+    expect(patchRes.body.data.assignee).toBe("Alice");
+
+    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.assignee).toBe("Alice");
+
+    const showAfter = await taskStore.show(projectId, task.id);
+    expect((showAfter as { assignee?: string }).assignee).toBe("Alice");
+  });
+
+  it("PATCH /tasks/:taskId with assignee=null unassigns", async () => {
+    const _project = await projectService.getProject(projectId);
+    const task = await taskStore.create(projectId, "Unassign Test Task", {
+      type: "task",
+      priority: 1,
+    });
+    await taskStore.update(projectId, task.id, { assignee: "Bob" });
+
+    const res = await request(app)
+      .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
+      .set("Content-Type", "application/json")
+      .send({ assignee: null });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.assignee).toBeNull();
+
+    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.assignee).toBeNull();
+  });
+
+  it("PATCH /tasks/:taskId with assignee='' unassigns", async () => {
+    const _project = await projectService.getProject(projectId);
+    const task = await taskStore.create(projectId, "Unassign Empty Test Task", {
+      type: "task",
+      priority: 1,
+    });
+    await taskStore.update(projectId, task.id, { assignee: "Carol" });
+
+    const res = await request(app)
+      .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
+      .set("Content-Type", "application/json")
+      .send({ assignee: "" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.assignee).toBeNull();
+
+    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.assignee).toBeNull();
   });
 
   it("GET /tasks/:taskId returns complexity when task has it", async () => {
