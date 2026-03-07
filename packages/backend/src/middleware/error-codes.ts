@@ -59,6 +59,7 @@ export const ErrorCodes = {
   CURSOR_API_ERROR: "CURSOR_API_ERROR",
   OPENAI_API_ERROR: "OPENAI_API_ERROR",
   GOOGLE_API_ERROR: "GOOGLE_API_ERROR",
+  LM_STUDIO_UNREACHABLE: "LM_STUDIO_UNREACHABLE",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

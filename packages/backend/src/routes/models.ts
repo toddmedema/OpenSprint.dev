@@ -1,6 +1,6 @@
 import { Router, Request } from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import type { ApiResponse } from "@opensprint/shared";
+import type { ApiErrorResponse, ApiResponse } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import * as modelListCache from "../services/model-list-cache.js";
@@ -17,6 +17,31 @@ export const modelsRouter = Router();
 const CURSOR_MODELS_URL = "https://api.cursor.com/v0/models";
 const OPENAI_MODELS_URL = "https://api.openai.com/v1/models";
 const GOOGLE_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const LM_STUDIO_DEFAULT_BASE_URL = "http://localhost:1234";
+
+/** Validate and normalize LM Studio baseUrl: http/https only, trim, no trailing slash. */
+function normalizeLmStudioBaseUrl(
+  raw: string | undefined
+): { ok: true; normalized: string } | { ok: false; error: string } {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) {
+    return { ok: true, normalized: LM_STUDIO_DEFAULT_BASE_URL };
+  }
+  const lower = trimmed.toLowerCase();
+  if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
+    return { ok: false, error: "baseUrl must use http or https" };
+  }
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol !== "http:" && u.protocol !== "https:") {
+      return { ok: false, error: "baseUrl must use http or https" };
+    }
+    const normalized = u.origin.replace(/\/$/, "");
+    return { ok: true, normalized };
+  } catch {
+    return { ok: false, error: "baseUrl is not a valid URL" };
+  }
+}
 
 /** Validate an API key via minimal API call. Reused by POST /env/keys/validate. */
 export async function validateApiKey(
@@ -235,6 +260,42 @@ async function fetchGoogleModels(apiKey: string): Promise<ModelOption[]> {
     });
 }
 
+async function fetchLmStudioModels(baseUrl: string): Promise<ModelOption[]> {
+  const url = `${baseUrl.replace(/\/$/, "")}/v1/models`;
+  let response: Response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const isConnectionError =
+      msg.includes("ECONNREFUSED") ||
+      msg.includes("ETIMEDOUT") ||
+      msg.includes("fetch failed") ||
+      msg.includes("Failed to fetch");
+    throw new AppError(
+      502,
+      ErrorCodes.LM_STUDIO_UNREACHABLE,
+      isConnectionError
+        ? "LM Studio is not reachable. Ensure it is running and the server URL is correct."
+        : `LM Studio request failed: ${msg}`,
+      { baseUrl: baseUrl.replace(/\/$/, ""), cause: msg }
+    );
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new AppError(
+      502,
+      ErrorCodes.LM_STUDIO_UNREACHABLE,
+      "LM Studio is not reachable. Ensure it is running and the server URL is correct.",
+      { status: response.status, responsePreview: text.slice(0, 200) }
+    );
+  }
+
+  const body = (await response.json()) as { data?: { id: string }[] };
+  return (body.data ?? []).filter((m) => m.id).map((m) => ({ id: m.id, displayName: m.id }));
+}
+
 /**
  * Fetch models for a provider with request coalescing.
  * Concurrent requests for the same provider share a single API call to avoid rate limits.
@@ -243,23 +304,34 @@ async function getModelsWithCoalescing(
   provider: "claude" | "cursor" | "openai" | "google",
   fetchFn: () => Promise<ModelOption[]>
 ): Promise<ModelOption[]> {
-  const cached = modelListCache.get<ModelOption[]>(provider);
+  return getModelsWithCoalescingByKey(provider, fetchFn);
+}
+
+/**
+ * Fetch models with an arbitrary cache key (e.g. "lmstudio:" + baseUrl).
+ * Used for LM Studio where the key depends on baseUrl.
+ */
+async function getModelsWithCoalescingByKey(
+  cacheKey: string,
+  fetchFn: () => Promise<ModelOption[]>
+): Promise<ModelOption[]> {
+  const cached = modelListCache.get<ModelOption[]>(cacheKey);
   if (cached !== undefined) return cached;
 
-  let promise = inFlightFetches.get(provider);
+  let promise = inFlightFetches.get(cacheKey);
   if (!promise) {
     promise = fetchFn().then(
       (models) => {
-        modelListCache.set(provider, models);
-        inFlightFetches.delete(provider);
+        modelListCache.set(cacheKey, models);
+        inFlightFetches.delete(cacheKey);
         return models;
       },
       (err) => {
-        inFlightFetches.delete(provider);
+        inFlightFetches.delete(cacheKey);
         throw err;
       }
     );
-    inFlightFetches.set(provider, promise);
+    inFlightFetches.set(cacheKey, promise);
   }
   return promise;
 }
@@ -345,6 +417,23 @@ modelsRouter.get("/", async (req: Request, res, next) => {
       }
 
       const models = await getModelsWithCoalescing("google", () => fetchGoogleModels(apiKey));
+      res.json({ data: models } as ApiResponse<ModelOption[]>);
+      return;
+    }
+
+    if (provider === "lmstudio") {
+      const baseUrlRaw = req.query.baseUrl as string | undefined;
+      const parsed = normalizeLmStudioBaseUrl(baseUrlRaw);
+      if (!parsed.ok) {
+        res.status(400).json({
+          error: { code: ErrorCodes.INVALID_INPUT, message: parsed.error },
+        } as ApiErrorResponse);
+        return;
+      }
+      const cacheKey = `lmstudio:${parsed.normalized}`;
+      const models = await getModelsWithCoalescingByKey(cacheKey, () =>
+        fetchLmStudioModels(parsed.normalized)
+      );
       res.json({ data: models } as ApiResponse<ModelOption[]>);
       return;
     }

@@ -118,6 +118,130 @@ describe("Models API", () => {
       expect(res.body.data).toEqual([]);
     });
 
+    it("fetches and returns LM Studio models when server is up (default baseUrl)", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            data: [
+              { id: "local-model-1", object: "model" },
+              { id: "local-model-2", object: "model" },
+            ],
+          }),
+      });
+
+      const res = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([
+        { id: "local-model-1", displayName: "local-model-1" },
+        { id: "local-model-2", displayName: "local-model-2" },
+      ]);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:1234/v1/models",
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
+    });
+
+    it("fetches LM Studio models from custom baseUrl query param", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: [{ id: "custom-model" }] }),
+      });
+
+      const res = await request(app).get(
+        `${API_PREFIX}/models?provider=lmstudio&baseUrl=http://192.168.1.10:1234`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([{ id: "custom-model", displayName: "custom-model" }]);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://192.168.1.10:1234/v1/models",
+        expect.any(Object)
+      );
+    });
+
+    it("normalizes LM Studio baseUrl trailing slash", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: [] }),
+      });
+
+      await request(app).get(
+        `${API_PREFIX}/models?provider=lmstudio&baseUrl=http://localhost:1234/`
+      );
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:1234/v1/models",
+        expect.any(Object)
+      );
+    });
+
+    it("trims LM Studio baseUrl and fetches from normalized URL", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: [{ id: "trimmed-model" }] }),
+      });
+
+      const res = await request(app).get(
+        `${API_PREFIX}/models?provider=lmstudio&baseUrl=%20%20http://localhost:1234%20%20`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([{ id: "trimmed-model", displayName: "trimmed-model" }]);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:1234/v1/models",
+        expect.any(Object)
+      );
+    });
+
+    it("returns 400 for LM Studio with invalid baseUrl (non-http(s))", async () => {
+      const res = await request(app).get(
+        `${API_PREFIX}/models?provider=lmstudio&baseUrl=ftp://localhost:1234`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+      expect(res.body.error?.message).toMatch(/http or https/);
+    });
+
+    it("returns 502 when LM Studio is unreachable (connection refused)", async () => {
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error("fetch failed: ECONNREFUSED"));
+
+      const res = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      expect(res.status).toBe(502);
+      expect(res.body.error?.code).toBe("LM_STUDIO_UNREACHABLE");
+      expect(res.body.error?.message).toContain("LM Studio is not reachable");
+    });
+
+    it("returns 502 when LM Studio returns non-2xx", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve("Internal Server Error"),
+      });
+
+      const res = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      expect(res.status).toBe(502);
+      expect(res.body.error?.code).toBe("LM_STUDIO_UNREACHABLE");
+      expect(res.body.error?.message).toContain("LM Studio is not reachable");
+    });
+
+    it("uses cache on second LM Studio request (same baseUrl)", async () => {
+      const mockJson = vi.fn().mockResolvedValue({
+        data: [{ id: "cached-model" }],
+      });
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: mockJson,
+      });
+
+      const res1 = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      expect(res1.status).toBe(200);
+      expect(res1.body.data).toHaveLength(1);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+      const res2 = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      expect(res2.status).toBe(200);
+      expect(res2.body.data).toHaveLength(1);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
     it("fetches and returns Claude models when API key is set", async () => {
       process.env.ANTHROPIC_API_KEY = "sk-ant-test";
       async function* gen() {
