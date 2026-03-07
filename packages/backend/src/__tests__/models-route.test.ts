@@ -118,6 +118,21 @@ describe("Models API", () => {
       expect(res.body.data).toEqual([]);
     });
 
+    it("GET /models?provider=lmstudio: returns 200 and ModelOption[] when LM Studio returns OpenAI-style list", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: [{ id: "model-1" }] }),
+      });
+
+      const res = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([{ id: "model-1", displayName: "model-1" }]);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:1234/v1/models",
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
+    });
+
     it("fetches and returns LM Studio models when server is up (default baseUrl)", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
