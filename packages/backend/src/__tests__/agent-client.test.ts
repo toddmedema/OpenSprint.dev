@@ -557,6 +557,17 @@ describe("AgentClient", () => {
       expect(mockGetNextKey).not.toHaveBeenCalled();
     });
 
+    it("should throw user-facing message when LM Studio returns generic Connection error", async () => {
+      mockOpenAICreate.mockRejectedValue(new Error("Connection error."));
+
+      await expect(
+        client.invoke({
+          config: { type: "lmstudio", model: "local", cliCommand: null },
+          prompt: "Hello",
+        })
+      ).rejects.toThrow("LM Studio is not running");
+    });
+
     it("should stream LM Studio response when onChunk is provided", async () => {
       mockOpenAICreate.mockImplementation(async (opts: { stream?: boolean }) => {
         if (opts?.stream) {

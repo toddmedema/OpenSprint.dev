@@ -110,6 +110,22 @@ function getLMStudioBaseUrl(configBaseUrl?: string | null): string {
   return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
 }
 
+/** True when the error indicates LM Studio server is unreachable (refused, network, etc.). */
+function isLMStudioConnectionError(error: unknown, msg: string): boolean {
+  if (error instanceof Error && (error as NodeJS.ErrnoException).code === "ECONNREFUSED") {
+    return true;
+  }
+  const lower = msg.toLowerCase();
+  return (
+    lower.includes("econnrefused") ||
+    lower.includes("fetch failed") ||
+    lower.includes("enotfound") ||
+    lower.includes("connection error") ||
+    lower.includes("socket hang up") ||
+    lower.includes("network")
+  );
+}
+
 function getStructuredAgentErrorMessage(obj: unknown): string | null {
   if (obj === null || typeof obj !== "object") return null;
 
@@ -958,11 +974,7 @@ export class AgentClient {
         return Promise.resolve(onExit(0)).catch((e) => log.error("onExit failed", { err: e }));
       } catch (error: unknown) {
         const msg = getErrorMessage(error);
-        const isConnectionError =
-          msg.includes("ECONNREFUSED") ||
-          msg.includes("fetch failed") ||
-          msg.includes("ENOTFOUND") ||
-          (error instanceof Error && (error as NodeJS.ErrnoException).code === "ECONNREFUSED");
+        const isConnectionError = isLMStudioConnectionError(error, msg);
         const userMsg = isConnectionError ? LM_STUDIO_NOT_RUNNING_MESSAGE : msg;
         emit(`[Agent error: ${userMsg}]\n`);
         return Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
@@ -1831,11 +1843,7 @@ export class AgentClient {
       return { content };
     } catch (error: unknown) {
       const msg = getErrorMessage(error);
-      const isConnectionError =
-        msg.includes("ECONNREFUSED") ||
-        msg.includes("fetch failed") ||
-        msg.includes("ENOTFOUND") ||
-        (error instanceof Error && (error as NodeJS.ErrnoException).code === "ECONNREFUSED");
+      const isConnectionError = isLMStudioConnectionError(error, msg);
       throw new AppError(
         502,
         ErrorCodes.AGENT_INVOKE_FAILED,
