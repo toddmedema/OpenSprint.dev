@@ -729,6 +729,9 @@ describe("getProviderForAgentType", () => {
     expect(getProviderForAgentType("claude-cli")).toBe(null);
     expect(getProviderForAgentType("custom")).toBe(null);
   });
+  it("returns null for lmstudio (excluded from API key provider resolution)", () => {
+    expect(getProviderForAgentType("lmstudio")).toBe(null);
+  });
 });
 
 describe("API_KEY_PROVIDERS", () => {
@@ -1188,6 +1191,23 @@ describe("getProvidersInUse", () => {
     expect(result).toContain("OPENAI_API_KEY");
     expect(result).toContain("CURSOR_API_KEY");
   });
+
+  it("does not add a provider for lmstudio (excluded from API key resolution)", () => {
+    const settings = makeSettings({
+      simpleComplexityAgent: {
+        type: "lmstudio",
+        model: "local-model",
+        cliCommand: null,
+        baseUrl: "http://localhost:1234",
+      },
+      complexComplexityAgent: {
+        type: "lmstudio",
+        model: "local-model",
+        cliCommand: null,
+      },
+    });
+    expect(getProvidersInUse(settings)).toEqual([]);
+  });
 });
 
 describe("getProvidersRequiringApiKeys", () => {
@@ -1240,5 +1260,13 @@ describe("getProvidersRequiringApiKeys", () => {
     expect(result).toHaveLength(2);
     expect(result).toContain("ANTHROPIC_API_KEY");
     expect(result).toContain("OPENAI_API_KEY");
+  });
+
+  it("does not add a provider for lmstudio (excluded from API key resolution)", () => {
+    const agents = [
+      { type: "lmstudio" as const, model: "local-model", cliCommand: null },
+      { type: "lmstudio" as const, model: "other-model", cliCommand: null, baseUrl: "http://localhost:1234" },
+    ];
+    expect(getProvidersRequiringApiKeys(agents)).toEqual([]);
   });
 });

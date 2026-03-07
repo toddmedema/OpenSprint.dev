@@ -829,7 +829,7 @@ export function getProvidersInUse(settings: ProjectSettings): ApiKeyProvider[] {
 }
 
 /**
- * Map agent type to API key provider. Returns null for claude-cli/custom (CLI uses local auth).
+ * Map agent type to API key provider. Returns null for claude-cli/custom/lmstudio (CLI uses local auth; LM Studio runs locally without API key).
  */
 export function getProviderForAgentType(agentType: AgentConfig["type"]): ApiKeyProvider | null {
   switch (agentType) {
@@ -841,6 +841,8 @@ export function getProviderForAgentType(agentType: AgentConfig["type"]): ApiKeyP
       return "OPENAI_API_KEY";
     case "google":
       return "GOOGLE_API_KEY";
+    case "lmstudio":
+      return null;
     default:
       return null;
   }
