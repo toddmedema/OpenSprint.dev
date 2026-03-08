@@ -61,6 +61,17 @@ export interface MergeToMainResult {
   autoResolvedFiles: string[];
 }
 
+/**
+ * Options for creating a task or epic worktree.
+ * When worktreeKey (and optionally branchName) are set, creates or reuses an epic worktree.
+ */
+export interface CreateTaskWorktreeOptions {
+  /** Branch to use (e.g. opensprint/epic_<epicId>). When set with worktreeKey, first task creates branch, later tasks reuse same worktree/branch. */
+  branchName?: string;
+  /** Worktree path key: taskId for per-task, or epic key (e.g. epic_<epicId>) for shared epic worktree. */
+  worktreeKey?: string;
+}
+
 /** Max time (ms) for npm install when ensuring node_modules exists */
 const NPM_INSTALL_TIMEOUT_MS = 120_000;
 
@@ -162,6 +173,24 @@ export class BranchManager {
       await this.checkout(repoPath, branchName);
     } catch {
       await this.createBranch(repoPath, branchName, baseBranch);
+    }
+  }
+
+  /**
+   * Ensure a branch exists (create from baseBranch if not). Does not change HEAD in repoPath.
+   * Used for epic branches so the main repo can stay on main while we add a worktree for the epic branch.
+   * @param baseBranch - Base branch to create from when branch doesn't exist (default: "main")
+   */
+  async ensureBranchExists(
+    repoPath: string,
+    branchName: string,
+    baseBranch: string = "main"
+  ): Promise<void> {
+    await this.waitForGitReady(repoPath);
+    try {
+      await shellExec(`git rev-parse --verify ${branchName}`, { cwd: repoPath });
+    } catch {
+      await this.git(repoPath, `branch ${branchName} ${baseBranch}`);
     }
   }
 
@@ -749,10 +778,11 @@ export class BranchManager {
   }
 
   /**
-   * Get the filesystem path for a task's worktree.
+   * Get the filesystem path for a worktree by key.
+   * @param key - Task ID (per-task worktree) or epic key (e.g. epic_<epicId> for shared epic worktree).
    */
-  getWorktreePath(taskId: string): string {
-    return path.join(this.getWorktreeBasePath(), taskId);
+  getWorktreePath(key: string): string {
+    return path.join(this.getWorktreeBasePath(), key);
   }
 
   /**
@@ -822,23 +852,24 @@ export class BranchManager {
   }
 
   /**
-   * Create an isolated git worktree for a task.
-   * Creates the branch from the base branch if it doesn't exist, removes stale worktrees,
-   * then creates a fresh worktree at /tmp/opensprint-worktrees/<taskId>.
-   * If the branch is already in use by another path (e.g. leftover from a crash),
-   * that worktree is removed first so the branch can be reused.
-   * After creation, symlinks node_modules from the main repo so dependencies
-   * (vitest, etc.) are available for test execution.
+   * Create an isolated git worktree for a task or epic.
+   * When options.worktreeKey is set (epic mode): uses getWorktreePath(worktreeKey) and options.branchName;
+   * first task creates branch via ensureBranchExists, later tasks reuse the same worktree/branch.
+   * When not set (per-task): worktree at getWorktreePath(taskId), branch opensprint/<taskId>; creates branch if not exist.
+   * If the branch is already in use by another path (e.g. leftover from a crash), that worktree is removed first.
+   * After creation, symlinks node_modules from the main repo.
    * Returns the worktree path.
-   * @param baseBranch - Base branch to create task branch from (default: "main")
+   * @param baseBranch - Base branch to create task/epic branch from (default: "main")
    */
   async createTaskWorktree(
     repoPath: string,
     taskId: string,
-    baseBranch: string = "main"
+    baseBranch: string = "main",
+    options?: CreateTaskWorktreeOptions
   ): Promise<string> {
-    const branchName = `opensprint/${taskId}`;
-    const wtPath = this.getWorktreePath(taskId);
+    const worktreeKey = options?.worktreeKey ?? taskId;
+    const branchName = options?.branchName ?? `opensprint/${taskId}`;
+    const wtPath = this.getWorktreePath(worktreeKey);
     const currentBranch = await this.getCurrentBranch(repoPath).catch(() => "");
 
     if (currentBranch === branchName) {
@@ -850,15 +881,35 @@ export class BranchManager {
 
     await ensureRepoHasInitialCommit(repoPath, baseBranch);
 
-    // Create branch from base branch if it doesn't exist
-    try {
-      await shellExec(`git rev-parse --verify ${branchName}`, { cwd: repoPath });
-    } catch {
-      await this.git(repoPath, `branch ${branchName} ${baseBranch}`);
+    const isEpic = options?.worktreeKey != null;
+
+    if (isEpic) {
+      // Epic: ensure branch exists without checking out in main repo (so main stays on main and we can add worktree).
+      await this.ensureBranchExists(repoPath, branchName, baseBranch);
+    } else {
+      // Per-task: create branch if it doesn't exist.
+      try {
+        await shellExec(`git rev-parse --verify ${branchName}`, { cwd: repoPath });
+      } catch {
+        await this.git(repoPath, `branch ${branchName} ${baseBranch}`);
+      }
+    }
+
+    // Epic: reuse existing worktree at wtPath if it is on the right branch.
+    if (isEpic) {
+      const existing = await this.getWorktreePathForBranch(repoPath, branchName);
+      if (existing !== null) {
+        const resolvedExisting = await fs.realpath(existing).catch(() => path.resolve(existing));
+        const resolvedWt = await fs.realpath(wtPath).catch(() => path.resolve(wtPath));
+        if (resolvedExisting === resolvedWt) {
+          await this.symlinkNodeModules(repoPath, wtPath);
+          return wtPath;
+        }
+      }
     }
 
     // Remove stale worktree at our path if it exists
-    await this.removeTaskWorktree(repoPath, taskId);
+    await this.removeTaskWorktree(repoPath, worktreeKey);
 
     // If branch is checked out in a different path (stale/wrong entry), free it
     await this.freeBranchIfUsedElsewhere(repoPath, branchName, wtPath);
@@ -879,6 +930,33 @@ export class BranchManager {
     await this.symlinkNodeModules(repoPath, wtPath);
 
     return wtPath;
+  }
+
+  /**
+   * Return the worktree path that has the given branch checked out, or null if none.
+   */
+  private async getWorktreePathForBranch(
+    repoPath: string,
+    branchName: string
+  ): Promise<string | null> {
+    const branchRef = `refs/heads/${branchName}`;
+    const { stdout } = await shellExec("git worktree list --porcelain", { cwd: repoPath });
+    let worktreePath: string | null = null;
+    for (const line of stdout.split("\n")) {
+      if (line.startsWith("worktree ")) {
+        worktreePath = line.slice(9).trim();
+        continue;
+      }
+      if (
+        line.startsWith("branch ") &&
+        line.trim() === `branch ${branchRef}` &&
+        worktreePath != null
+      ) {
+        return worktreePath;
+      }
+      if (line === "" || line.startsWith("worktree ")) worktreePath = null;
+    }
+    return null;
   }
 
   /**
@@ -1025,19 +1103,24 @@ export class BranchManager {
   }
 
   /**
-   * Remove a task's worktree. Safe to call even if the worktree doesn't exist.
+   * Remove a task or epic worktree. Safe to call even if the worktree doesn't exist.
    * Logs errors so stale worktrees can be diagnosed; always attempts cleanup.
+   * @param worktreeKey - Task ID (per-task) or worktree key (e.g. epic_<epicId>) for epic worktree.
    * @param actualPath - When provided (e.g. from assignment or git worktree list), use this path
-   *   instead of getWorktreePath(taskId). Critical when os.tmpdir() changes between process runs,
+   *   instead of getWorktreePath(worktreeKey). Critical when os.tmpdir() changes between process runs,
    *   which would otherwise leave orphaned worktrees.
    */
-  async removeTaskWorktree(repoPath: string, taskId: string, actualPath?: string): Promise<void> {
-    const wtPath = actualPath ?? this.getWorktreePath(taskId);
-    const registeredPath = await this.resolveRegisteredWorktreePath(repoPath, taskId, wtPath);
+  async removeTaskWorktree(
+    repoPath: string,
+    worktreeKey: string,
+    actualPath?: string
+  ): Promise<void> {
+    const wtPath = actualPath ?? this.getWorktreePath(worktreeKey);
+    const registeredPath = await this.resolveRegisteredWorktreePath(repoPath, worktreeKey, wtPath);
     if (!registeredPath) {
       await this.removeWorktreeDirectorySafely(
         repoPath,
-        taskId,
+        worktreeKey,
         wtPath,
         "Refusing to remove unregistered worktree path"
       );
@@ -1048,13 +1131,13 @@ export class BranchManager {
     try {
       safeRegisteredPath = await this.validateDisposableWorktreePath(
         repoPath,
-        taskId,
+        worktreeKey,
         registeredPath,
         "Refusing to remove registered worktree path"
       );
     } catch (err) {
       log.error("Refusing unsafe registered worktree cleanup target", {
-        taskId,
+        worktreeKey,
         registeredPath,
         err: err instanceof Error ? err.message : String(err),
       });
@@ -1065,19 +1148,19 @@ export class BranchManager {
       await this.git(repoPath, `worktree remove ${shQuote(safeRegisteredPath)} --force`);
     } catch (err) {
       log.warn("worktree remove failed, attempting manual cleanup", {
-        taskId,
+        worktreeKey,
         wtPath: safeRegisteredPath,
         err: err instanceof Error ? err.message : String(err),
       });
       const removed = await this.removeWorktreeDirectorySafely(
         repoPath,
-        taskId,
+        worktreeKey,
         safeRegisteredPath,
         "Manual worktree cleanup"
       );
       if (!removed) {
         log.warn("Manual worktree cleanup failed", {
-          taskId,
+          worktreeKey,
           wtPath: safeRegisteredPath,
         });
       }

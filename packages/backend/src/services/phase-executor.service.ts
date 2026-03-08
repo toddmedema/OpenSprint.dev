@@ -152,7 +152,16 @@ export class PhaseExecutorService {
         if (!retryContext?.useExistingBranch) {
           await this.host.branchManager.syncMainWithOrigin(repoPath, baseBranch);
         }
-        wtPath = await this.host.branchManager.createTaskWorktree(repoPath, task.id, baseBranch);
+        const worktreeOptions =
+          slot.worktreeKey != null
+            ? { worktreeKey: slot.worktreeKey, branchName: slot.branchName }
+            : undefined;
+        wtPath = await this.host.branchManager.createTaskWorktree(
+          repoPath,
+          task.id,
+          baseBranch,
+          worktreeOptions
+        );
         assertSafeTaskWorktreePath(repoPath, task.id, wtPath);
       }
       (slot as { worktreePath: string | null }).worktreePath = wtPath;

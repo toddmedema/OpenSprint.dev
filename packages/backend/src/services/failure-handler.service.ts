@@ -100,6 +100,8 @@ export interface FailureSlot {
   infraRetries: number;
   worktreePath: string | null;
   branchName: string;
+  /** When set (per_epic + epic task), worktree key for removeTaskWorktree (e.g. epic_<epicId>). */
+  worktreeKey?: string;
   phaseResult: {
     codingDiff: string;
     codingSummary: string;
@@ -636,7 +638,11 @@ export class FailureHandlerService {
       return;
     }
     if (slot.worktreePath) {
-      await this.host.branchManager.removeTaskWorktree(repoPath, taskId, slot.worktreePath);
+      await this.host.branchManager.removeTaskWorktree(
+        repoPath,
+        slot.worktreeKey ?? taskId,
+        slot.worktreePath
+      );
       slot.worktreePath = null;
     }
     if (options?.deleteBranch) {

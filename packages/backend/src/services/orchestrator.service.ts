@@ -28,7 +28,11 @@ import {
   type PlanComplexity,
   type AgentSuspendReason,
 } from "@opensprint/shared";
-import { taskStore as taskStoreSingleton, type StoredTask } from "./task-store.service.js";
+import {
+  taskStore as taskStoreSingleton,
+  resolveEpicId,
+  type StoredTask,
+} from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
 import { agentService, createProcessGroupHandle } from "./agent.service.js";
 import { BranchManager, WorktreeBranchInUseError } from "./branch-manager.js";
@@ -169,6 +173,8 @@ export interface AgentSlot {
   taskId: string;
   taskTitle: string | null;
   branchName: string;
+  /** When set (per_epic + epic task), worktree is keyed by this (e.g. epic_<epicId>); else worktree key is taskId. */
+  worktreeKey?: string;
   worktreePath: string | null;
   agent: AgentRunState;
   phase: "coding" | "review";
@@ -288,12 +294,14 @@ export class OrchestratorService {
     taskTitle: string | null,
     branchName: string,
     attempt: number,
-    assignee?: string
+    assignee?: string,
+    worktreeKey?: string
   ): AgentSlot {
     return {
       taskId,
       taskTitle,
       branchName,
+      ...(worktreeKey != null && { worktreeKey }),
       worktreePath: null,
       agent: {
         activeProcess: null,
@@ -577,7 +585,7 @@ export class OrchestratorService {
       await heartbeatService.deleteHeartbeat(wtPath, taskId).catch(() => {});
       if (slot?.worktreePath && slot.worktreePath !== repoPath) {
         try {
-          await this.branchManager.removeTaskWorktree(repoPath, taskId, slot.worktreePath);
+          await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? taskId, slot.worktreePath);
         } catch {
           // Best effort; worktree may already be gone
         }
@@ -635,7 +643,7 @@ export class OrchestratorService {
       await heartbeatService.deleteHeartbeat(wtPath, taskId);
       if (slot.worktreePath && slot.worktreePath !== repoPath) {
         try {
-          await this.branchManager.removeTaskWorktree(repoPath, taskId, slot.worktreePath);
+          await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? taskId, slot.worktreePath);
         } catch {
           // Best effort; worktree may already be gone
         }
@@ -702,7 +710,7 @@ export class OrchestratorService {
       await heartbeatService.deleteHeartbeat(wtPath, taskId);
       if (slot.worktreePath && slot.worktreePath !== repoPath) {
         try {
-          await this.branchManager.removeTaskWorktree(repoPath, taskId, slot.worktreePath);
+          await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? taskId, slot.worktreePath);
         } catch {
           // Best effort; worktree may already be gone
         }
@@ -826,12 +834,16 @@ export class OrchestratorService {
 
     log.info("Recovery: re-attaching to running agent", { taskId: task.id });
     const assignee = task.assignee ?? getAgentName(0);
+    const worktreeKey = assignment.branchName.startsWith("opensprint/epic_")
+      ? assignment.branchName.slice("opensprint/".length)
+      : undefined;
     const slot = this.createSlot(
       task.id,
       task.title ?? null,
       assignment.branchName,
       assignment.attempt,
-      assignee
+      assignee,
+      worktreeKey
     );
     slot.worktreePath = assignment.worktreePath;
     slot.agent.startedAt = assignment.createdAt;
@@ -977,12 +989,16 @@ export class OrchestratorService {
       state.nextReviewerIndex = Math.max(state.nextReviewerIndex, reviewerIdx + 1);
     else state.nextReviewerIndex += 1;
 
+    const worktreeKey = assignment.branchName.startsWith("opensprint/epic_")
+      ? assignment.branchName.slice("opensprint/".length)
+      : undefined;
     const slot = this.createSlot(
       task.id,
       task.title ?? null,
       assignment.branchName,
       assignment.attempt,
-      reviewerAssignee
+      reviewerAssignee,
+      worktreeKey
     );
     slot.worktreePath = assignment.worktreePath;
     slot.agent.startedAt = assignment.createdAt;
@@ -1121,7 +1137,7 @@ export class OrchestratorService {
         await heartbeatService.deleteHeartbeat(wtPath, taskId);
         if (slot.worktreePath && slot.worktreePath !== repoPath) {
           try {
-            await this.branchManager.removeTaskWorktree(repoPath, taskId, slot.worktreePath);
+            await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? taskId, slot.worktreePath);
           } catch {
             // Best effort; worktree may already be gone
           }
@@ -1390,14 +1406,24 @@ export class OrchestratorService {
       assignee,
     });
     const cumulativeAttempts = this.taskStore.getCumulativeAttemptsFromIssue(task);
-    const branchName = `opensprint/${task.id}`;
+    const settings = await this.projectService.getSettings(projectId);
+    const mergeStrategy = settings.mergeStrategy ?? "per_task";
+    const allIssues = await this.taskStore.listAll(projectId);
+    const epicId = resolveEpicId(task.id, allIssues);
+    const useEpicBranch =
+      mergeStrategy === "per_epic" && epicId != null;
+    const branchName = useEpicBranch
+      ? `opensprint/epic_${epicId}`
+      : `opensprint/${task.id}`;
+    const worktreeKey = useEpicBranch ? `epic_${epicId}` : undefined;
 
     const slot = this.createSlot(
       task.id,
       task.title ?? null,
       branchName,
       cumulativeAttempts + 1,
-      assignee
+      assignee,
+      worktreeKey
     );
     slot.fileScope = await this.fileScopeAnalyzer.predict(
       projectId,
@@ -1417,7 +1443,6 @@ export class OrchestratorService {
     });
 
     await this.persistCounters(projectId, repoPath);
-    const settings = await this.projectService.getSettings(projectId);
     const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
     await this.branchManager.ensureOnMain(repoPath, baseBranch);
     await this.executeCodingPhase(projectId, repoPath, task, slot, undefined);
@@ -1718,7 +1743,7 @@ export class OrchestratorService {
     await heartbeatService.deleteHeartbeat(wtPath, task.id).catch(() => {});
     if (slot.worktreePath && slot.worktreePath !== repoPath) {
       try {
-        await this.branchManager.removeTaskWorktree(repoPath, task.id, slot.worktreePath);
+        await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? task.id, slot.worktreePath);
       } catch {
         // Best effort
       }
@@ -1920,7 +1945,7 @@ export class OrchestratorService {
         await heartbeatService.deleteHeartbeat(wtPath, task.id).catch(() => {});
         if (slot.worktreePath && slot.worktreePath !== repoPath) {
           try {
-            await this.branchManager.removeTaskWorktree(repoPath, task.id, slot.worktreePath);
+            await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? task.id, slot.worktreePath);
           } catch {
             // Best effort
           }

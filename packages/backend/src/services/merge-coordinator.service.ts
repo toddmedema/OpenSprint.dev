@@ -37,6 +37,8 @@ export interface MergeSlot {
   attempt: number;
   worktreePath: string | null;
   branchName: string;
+  /** When set (per_epic + epic task), worktree key for removeTaskWorktree (e.g. epic_<epicId>). */
+  worktreeKey?: string;
   phaseResult: {
     codingDiff: string;
     codingSummary: string;
@@ -51,6 +53,8 @@ interface CleanupTarget {
   branchName: string;
   worktreePath: string | null;
   gitWorkingMode: "worktree" | "branches";
+  /** When set (per_epic + epic task), key for removeTaskWorktree (e.g. epic_<epicId>). */
+  worktreeKey?: string;
 }
 
 type PushCompletionStatus = "published" | "local_only" | "publish_failed";
@@ -174,9 +178,10 @@ export class MergeCoordinatorService {
       });
       try {
         if (target.gitWorkingMode !== "branches") {
+          const key = target.worktreeKey ?? target.taskId;
           await this.host.branchManager.removeTaskWorktree(
             repoPath,
-            target.taskId,
+            key,
             target.worktreePath ?? undefined
           );
         }
@@ -378,6 +383,7 @@ export class MergeCoordinatorService {
         branchName,
         worktreePath: wtPath,
         gitWorkingMode: settings.gitWorkingMode === "branches" ? "branches" : "worktree",
+        worktreeKey: slot.worktreeKey,
       });
       this.host.nudge(projectId);
       this.postCompletionAsync(projectId, repoPath, task.id).catch((err) => {
@@ -478,6 +484,7 @@ export class MergeCoordinatorService {
       branchName,
       worktreePath: wtPath,
       gitWorkingMode: settings.gitWorkingMode === "branches" ? "branches" : "worktree",
+      worktreeKey: slot.worktreeKey,
     });
     await this.releaseMergeSlot(projectId, repoPath, "complete", task.id);
 

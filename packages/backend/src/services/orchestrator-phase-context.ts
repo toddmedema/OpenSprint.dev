@@ -31,6 +31,8 @@ export interface AgentSlotLike {
   taskId: string;
   taskTitle: string | null;
   branchName: string;
+  /** When set (per_epic + epic task), worktree key for createTaskWorktree (e.g. epic_<epicId>). */
+  worktreeKey?: string;
   worktreePath: string | null;
   attempt: number;
   phase: "coding" | "review";

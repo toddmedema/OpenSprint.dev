@@ -642,6 +642,110 @@ describe("BranchManager", () => {
       const developSha = (await execAsync("git rev-parse develop", { cwd: repoPath })).stdout.trim();
       expect(stdout.trim()).toBe(developSha);
     });
+
+    it("epic: first task creates epic branch and worktree at getWorktreePath(epic_<id>)", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const epicId = `epic-${Date.now()}`;
+      const epicKey = `epic_${epicId}`;
+      const branchName = `opensprint/${epicKey}`;
+      const expectedPath = branchManager.getWorktreePath(epicKey);
+
+      const wtPath = await branchManager.createTaskWorktree(repoPath, "os-task-1", "main", {
+        worktreeKey: epicKey,
+        branchName,
+      });
+      worktreePaths.push(wtPath);
+
+      expect(wtPath).toBe(expectedPath);
+      await fs.access(wtPath);
+      const { stdout } = await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: wtPath });
+      expect(stdout.trim()).toBe(branchName);
+    });
+
+    it("epic: second task reuses same worktree and branch", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const epicId = `epic-${Date.now()}`;
+      const epicKey = `epic_${epicId}`;
+      const branchName = `opensprint/${epicKey}`;
+
+      const wtPath1 = await branchManager.createTaskWorktree(repoPath, "os-task-1", "main", {
+        worktreeKey: epicKey,
+        branchName,
+      });
+      worktreePaths.push(wtPath1);
+      await fs.writeFile(path.join(wtPath1, "first.txt"), "from task 1");
+      await execAsync('git add first.txt && git commit -m "task 1"', { cwd: wtPath1 });
+
+      const wtPath2 = await branchManager.createTaskWorktree(repoPath, "os-task-2", "main", {
+        worktreeKey: epicKey,
+        branchName,
+      });
+
+      expect(wtPath2).toBe(wtPath1);
+      await expect(fs.readFile(path.join(wtPath2, "first.txt"), "utf-8")).resolves.toBe(
+        "from task 1"
+      );
+      const { stdout } = await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: wtPath2 });
+      expect(stdout.trim()).toBe(branchName);
+    });
+
+    it("epic: removeTaskWorktree cleans epic worktree by key and optional actualPath", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const epicKey = `epic_clean-${Date.now()}`;
+      const branchName = `opensprint/${epicKey}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, "os-any", "main", {
+        worktreeKey: epicKey,
+        branchName,
+      });
+      await fs.access(wtPath);
+
+      await branchManager.removeTaskWorktree(repoPath, epicKey);
+
+      await expect(fs.access(wtPath)).rejects.toThrow();
+      const list = await branchManager.listTaskWorktrees(repoPath);
+      expect(list.some((w) => w.taskId === epicKey)).toBe(false);
+    });
+
+    it("epic: removeTaskWorktree with actualPath cleans epic worktree when path is passed", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const epicKey = `epic_actualPath-${Date.now()}`;
+      const branchName = `opensprint/${epicKey}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, "os-any", "main", {
+        worktreeKey: epicKey,
+        branchName,
+      });
+      await fs.access(wtPath);
+
+      await branchManager.removeTaskWorktree(repoPath, epicKey, wtPath);
+
+      await expect(fs.access(wtPath)).rejects.toThrow();
+      const list = await branchManager.listTaskWorktrees(repoPath);
+      expect(list.some((w) => w.taskId === epicKey)).toBe(false);
+    });
   });
 
   describe("pushMain squash commit message", () => {
