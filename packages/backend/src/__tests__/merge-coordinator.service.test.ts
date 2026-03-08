@@ -299,6 +299,25 @@ describe("MergeCoordinatorService", () => {
     );
   });
 
+  it("calls triggerDeployForEvent(projectId, 'each_task') when merge to main occurs (per_task mode)", async () => {
+    mockGetSettings.mockResolvedValue({
+      simpleComplexityAgent: { type: "cursor", model: null },
+      complexComplexityAgent: { type: "cursor", model: null },
+      deployment: {},
+      gitWorkingMode: "worktree",
+      mergeStrategy: "per_task",
+    });
+    hostState.slots = new Map([[taskId, makeSlot("/tmp/worktree")]]);
+    mockHost.getState = vi.fn().mockImplementation(() => hostState);
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    const { triggerDeployForEvent } = await import("../services/deploy-trigger.service.js");
+    await vi.waitFor(() => {
+      expect(triggerDeployForEvent).toHaveBeenCalledWith(projectId, "each_task");
+    });
+  });
+
   it("passes worktreeBaseBranch to enqueueAndWait when worktree mode", async () => {
     mockGetSettings.mockResolvedValue({
       simpleComplexityAgent: { type: "cursor", model: null },

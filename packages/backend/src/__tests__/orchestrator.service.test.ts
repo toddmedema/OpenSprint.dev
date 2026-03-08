@@ -145,7 +145,8 @@ vi.mock("../websocket/index.js", () => ({
   sendAgentOutputToProject: (...args: unknown[]) => mockSendAgentOutputToProject(...args),
 }));
 
-vi.mock("../services/task-store.service.js", async () => {
+vi.mock("../services/task-store.service.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/task-store.service.js")>();
   const { createMockDbClient } = await import("./test-db-helper.js");
   const mockDb = createMockDbClient({
     queryOne: vi.fn().mockResolvedValue({ total_done: 0, total_failed: 0, queue_depth: 0 }),
@@ -186,10 +187,16 @@ vi.mock("../services/task-store.service.js", async () => {
     getStatusMap: mockTaskStoreGetStatusMap,
     listAll: mockTaskStoreListAll,
     getBlockersFromIssue: mockTaskStoreGetBlockersFromIssue,
+    getParentId: vi.fn().mockImplementation((taskId: string) => {
+      const lastDot = taskId.lastIndexOf(".");
+      return lastDot > 0 ? taskId.slice(0, lastDot) : null;
+    }),
+    planGetByEpicId: vi.fn().mockResolvedValue(null),
   };
   return {
     TaskStoreService: vi.fn().mockImplementation(() => mockInstance),
     taskStore: mockInstance,
+    resolveEpicId: actual.resolveEpicId,
   };
 });
 
@@ -814,7 +821,66 @@ describe("OrchestratorService (slot-based model)", () => {
       });
 
       expect(mockCreateTaskWorktree).toHaveBeenCalledTimes(1);
-      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, "task-1", "main");
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, "task-1", "main", undefined);
+    });
+
+    it("uses epic branch and worktreeKey when mergeStrategy is per_epic and task has epic parent", async () => {
+      const epicId = "os-abc";
+      const childTaskId = "os-abc.1";
+      const epic = {
+        ...makeTask(epicId),
+        id: epicId,
+        title: "Epic",
+        issue_type: "epic",
+        type: "epic",
+      };
+      const childTask = makeTask(childTaskId);
+      (childTask as { issue_type: string }).issue_type = "task";
+
+      mockGetSettings.mockResolvedValue({
+        ...defaultSettings,
+        mergeStrategy: "per_epic",
+      });
+      mockTaskStoreReady.mockResolvedValueOnce([childTask]);
+      // listAll is called inside pickTask for resolveEpicId; must include epic so branch is epic_os-abc
+      mockTaskStoreListAll.mockResolvedValueOnce([epic, childTask]);
+      mockCreateTaskWorktree.mockResolvedValue(`/tmp/opensprint-worktrees/epic_${epicId}`);
+      mockGetActiveDir.mockImplementation((base: string, tid: string) =>
+        path.join(base, ".opensprint", "active", tid)
+      );
+      mockWriteJsonAtomic.mockResolvedValue(undefined);
+      mockInvokeCodingAgent.mockImplementation(
+        (_prompt: string, _config: unknown, _opts: { onExit: (code: number | null) => void }) => ({
+          kill: vi.fn(),
+          pid: 12345,
+        })
+      );
+
+      await orchestrator.ensureRunning(projectId);
+
+      // Slot contains opensprint/epic_<epicId>: phase executor calls createTaskWorktree with worktreeKey and branchName
+      await vi.waitFor(
+        () => {
+          expect(mockCreateTaskWorktree).toHaveBeenCalledWith(
+            repoPath,
+            childTaskId,
+            "main",
+            { worktreeKey: "epic_os-abc", branchName: "opensprint/epic_os-abc" }
+          );
+        },
+        { timeout: 8000 }
+      );
+
+      // assignment.json written by phase executor contains epic branch
+      const assignmentCall = vi.mocked(mockWriteJsonAtomic).mock.calls.find((c) =>
+        String(c[0]).endsWith("assignment.json")
+      );
+      expect(assignmentCall).toBeDefined();
+      expect(assignmentCall![1]).toMatchObject({
+        taskId: childTaskId,
+        phase: "coding",
+        branchName: "opensprint/epic_os-abc",
+      });
     });
   });
 

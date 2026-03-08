@@ -49,10 +49,16 @@ export function getSafeTaskActiveDir(repoPath: string, taskId: string): string {
 
 export function isTaskWorktreePath(taskId: string, candidatePath: string): boolean {
   const resolved = path.resolve(candidatePath);
-  return (
-    path.basename(resolved) === taskId &&
-    path.basename(path.dirname(resolved)) === "opensprint-worktrees"
-  );
+  const parentBase = path.basename(path.dirname(resolved));
+  if (parentBase !== "opensprint-worktrees") return false;
+  const basename = path.basename(resolved);
+  if (basename === taskId) return true;
+  // per_epic: worktree key is epic_<epicId>, taskId is e.g. os-abc.1 (child of epic os-abc)
+  if (basename.startsWith("epic_")) {
+    const epicId = basename.slice(5);
+    return taskId === epicId || taskId.startsWith(epicId + ".");
+  }
+  return false;
 }
 
 export function assertSafeTaskWorktreePath(
