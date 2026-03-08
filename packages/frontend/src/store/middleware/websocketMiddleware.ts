@@ -26,6 +26,7 @@ import {
   taskUpdated,
   taskCreated,
   taskClosed,
+  fetchTasksByIds,
 } from "../slices/executeSlice";
 import { updateFeedbackItem, updateFeedbackItemResolved } from "../slices/evalSlice";
 import { appendDeliverOutput, deliverStarted, deliverCompleted } from "../slices/deliverSlice";
@@ -365,7 +366,11 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         const ev = event as FeedbackMappedEvent | FeedbackUpdatedEvent;
         if (ev.item) {
           d(updateFeedbackItem(ev.item));
-          if (ev.item.createdTaskIds?.length) {
+          const taskIds = [
+            ...new Set([...(ev.item.createdTaskIds ?? []), ...(ev.taskIds ?? [])]),
+          ].filter((id): id is string => typeof id === "string" && id.length > 0);
+          if (taskIds.length > 0) {
+            void d(fetchTasksByIds({ projectId, taskIds }));
             void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
           }
         } else {

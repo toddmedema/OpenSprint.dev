@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect, memo } from "react";
 import { useNavigate } from "react-router-dom";
-import type { FeedbackItem, Notification } from "@opensprint/shared";
+import type { FeedbackItem, Notification, Task } from "@opensprint/shared";
 import { PRIORITY_LABELS } from "@opensprint/shared";
 import {
   loadFeedbackFormDraft,
@@ -68,6 +68,7 @@ export const EVALUATE_FEEDBACK_FILTER_KEY = "opensprint.evaluateFeedbackFilter";
 export const FEEDBACK_LOADING_DEBOUNCE_MS = 300;
 /** Reconcile feedback list while Analyst categorization is still in flight. */
 export const FEEDBACK_CATEGORIZATION_POLL_INTERVAL_MS = 2000;
+const SHOULD_LOG_FEEDBACK_TASK_FETCH_FAILURES = import.meta.env.MODE !== "test";
 
 function getFeedbackCollapsedKey(projectId: string): string {
   return `${FEEDBACK_COLLAPSED_KEY_PREFIX}-${projectId}`;
@@ -951,6 +952,7 @@ export function EvalPhase({
   const feedbackEmpty = feedback.length === 0;
   const { showSpinner: showFeedbackSpinner, showEmptyState: showFeedbackEmptyState } =
     usePhaseLoadingState(feedbackQuery.isLoading, feedbackEmpty, FEEDBACK_LOADING_DEBOUNCE_MS);
+  const feedbackTaskFetchInFlightRef = useRef<Set<string>>(new Set());
 
   /* Fetch missing tasks for feedback cards (createdTaskIds) and merge into query cache so list stays in sync */
   const taskIdsFromFeedback = useMemo(() => {
@@ -962,31 +964,77 @@ export function EvalPhase({
   }, [feedback]);
 
   useEffect(() => {
+    feedbackTaskFetchInFlightRef.current.clear();
+  }, [projectId]);
+
+  useEffect(() => {
     if (!projectId || taskIdsFromFeedback.size === 0) return;
     const listIds = new Set(tasksList.map((t) => t.id));
-    const missing = [...taskIdsFromFeedback].filter((id) => !listIds.has(id));
+    const inFlight = feedbackTaskFetchInFlightRef.current;
+    const missing = [...taskIdsFromFeedback].filter((id) => !listIds.has(id) && !inFlight.has(id));
     if (missing.length === 0) return;
-    let cancelled = false;
-    (async () => {
-      const fetched = await Promise.all(
-        missing.map((taskId) =>
-          queryClient.fetchQuery({
-            queryKey: queryKeys.tasks.detail(projectId, taskId),
-            queryFn: () => api.tasks.get(projectId, taskId),
-          })
-        )
-      );
-      if (cancelled) return;
-      queryClient.setQueryData(queryKeys.tasks.list(projectId), (prev: unknown) => {
-        const prevList = Array.isArray(prev) ? prev : [];
-        const byId = new Map(prevList.map((t: { id: string }) => [t.id, t]));
-        for (const t of fetched) byId.set(t.id, t);
-        return [...byId.values()];
-      });
+    for (const taskId of missing) inFlight.add(taskId);
+
+    void (async () => {
+      try {
+        const fetchedResults = await Promise.allSettled(
+          missing.map((taskId) =>
+            queryClient.fetchQuery({
+              queryKey: queryKeys.tasks.detail(projectId, taskId),
+              queryFn: () => api.tasks.get(projectId, taskId),
+            })
+          )
+        );
+        const fetchedTasks: Task[] = [];
+        fetchedResults.forEach((result, index) => {
+          const taskId = missing[index];
+          if (result.status === "fulfilled") {
+            fetchedTasks.push(result.value);
+            return;
+          }
+          if (SHOULD_LOG_FEEDBACK_TASK_FETCH_FAILURES) {
+            console.warn("Failed to fetch feedback-linked task", {
+              projectId,
+              taskId,
+              error: result.reason,
+            });
+          }
+        });
+        if (fetchedTasks.length === 0) return;
+
+        queryClient.setQueryData(queryKeys.tasks.list(projectId), (prev: unknown) => {
+          const mergeIntoList = (current: Task[]): Task[] => {
+            const byId = new Map(current.map((t) => [t.id, t]));
+            for (const task of fetchedTasks) byId.set(task.id, task);
+            return [...byId.values()];
+          };
+
+          if (Array.isArray(prev)) {
+            return mergeIntoList(prev as Task[]);
+          }
+
+          if (prev && typeof prev === "object" && "items" in (prev as Record<string, unknown>)) {
+            const paginatedPrev = prev as { items?: Task[]; total?: number };
+            const mergedItems = mergeIntoList(
+              Array.isArray(paginatedPrev.items) ? paginatedPrev.items : []
+            );
+            return {
+              ...paginatedPrev,
+              items: mergedItems,
+              ...(typeof paginatedPrev.total === "number"
+                ? { total: Math.max(paginatedPrev.total, mergedItems.length) }
+                : {}),
+            };
+          }
+
+          return mergeIntoList([]);
+        });
+      } finally {
+        for (const taskId of missing) {
+          inFlight.delete(taskId);
+        }
+      }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [projectId, taskIdsFromFeedback, tasksList, queryClient]);
 
   /* Auto-focus feedback input when Evaluate tab activates */

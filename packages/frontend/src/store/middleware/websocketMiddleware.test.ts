@@ -1022,8 +1022,58 @@ describe("websocketMiddleware", () => {
       await vi.waitFor(() => {
         expect(store.getState().eval.feedback[0]).toEqual(updatedItem);
       });
+      await vi.waitFor(() => {
+        expect(api.tasks.get).toHaveBeenCalledTimes(2);
+      });
+      expect(api.tasks.get).toHaveBeenCalledWith("proj-1", "task-1");
+      expect(api.tasks.get).toHaveBeenCalledWith("proj-1", "task-2");
+      await vi.waitFor(() => {
+        const tasks = selectTasks(store.getState());
+        expect(tasks.some((t) => t.id === "task-1")).toBe(true);
+        expect(tasks.some((t) => t.id === "task-2")).toBe(true);
+      });
       expect(mockInvalidateQueries).toHaveBeenCalledWith({
         queryKey: queryKeys.tasks.list("proj-1"),
+      });
+    });
+
+    it("uses event taskIds fallback when feedback item has no createdTaskIds", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      const { api } = await import("../../api/client");
+      vi.mocked(api.tasks.get).mockClear();
+      vi.mocked(api.tasks.get).mockResolvedValueOnce({
+        id: "task-fallback",
+        title: "Fallback task",
+        kanbanColumn: "backlog",
+        priority: 1,
+      } as never);
+
+      wsInstance!.simulateMessage({
+        type: "feedback.updated",
+        feedbackId: "fb-1",
+        planId: "plan-1",
+        taskIds: ["task-fallback"],
+        item: {
+          id: "fb-1",
+          text: "Bug report",
+          category: "bug",
+          mappedPlanId: "plan-1",
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+      });
+
+      await vi.waitFor(() => {
+        expect(api.tasks.get).toHaveBeenCalledWith("proj-1", "task-fallback");
+      });
+      await vi.waitFor(() => {
+        const tasks = selectTasks(store.getState());
+        expect(tasks.some((t) => t.id === "task-fallback")).toBe(true);
       });
     });
 

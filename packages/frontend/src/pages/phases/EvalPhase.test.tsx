@@ -22,6 +22,7 @@ import {
   fetchTasks,
   fetchTasksByIds,
   toTasksByIdAndOrder,
+  setTasks,
 } from "../../store/slices/executeSlice";
 import { updateFeedbackItem } from "../../store/slices/evalSlice";
 import type { FeedbackItem, Notification, Task } from "@opensprint/shared";
@@ -207,6 +208,33 @@ function createStore(overrides?: {
     };
   }
   return createTestStore(preloadedState);
+}
+
+function syncTasksListQueryToRedux(
+  store: ReturnType<typeof createStore>,
+  queryClient: QueryClient
+): () => void {
+  const tasksListKey = queryKeys.tasks.list("proj-1");
+  let lastSyncedData: unknown = null;
+  const applyTasks = () => {
+    const cached = queryClient.getQueryData(tasksListKey);
+    if (!Array.isArray(cached) || cached === lastSyncedData) return;
+    lastSyncedData = cached;
+    store.dispatch(setTasks(cached));
+  };
+  applyTasks();
+  return queryClient.getQueryCache().subscribe((event) => {
+    const key = event?.query?.queryKey;
+    if (
+      !Array.isArray(key) ||
+      key[0] !== tasksListKey[0] ||
+      key[1] !== tasksListKey[1] ||
+      key[2] !== tasksListKey[2]
+    ) {
+      return;
+    }
+    applyTasks();
+  });
 }
 
 const mockFeedbackItems: FeedbackItem[] = [
@@ -2455,6 +2483,120 @@ describe("EvalPhase feedback form", () => {
 
       expect(screen.getByText("Fix login button")).toBeInTheDocument();
       expect(api.feedback.list).not.toHaveBeenCalled();
+    });
+
+    it("keeps live backfill stable during heavy tasks-list churn (no duplicate fetches)", async () => {
+      const feedbackItem: FeedbackItem = {
+        id: "fb-large",
+        text: "Large project live update",
+        category: "bug",
+        mappedPlanId: "plan-1",
+        createdTaskIds: ["os-big-1"],
+        status: "pending",
+        createdAt: "2024-01-01T00:00:01Z",
+      };
+      const store = createStore({
+        evalFeedback: [feedbackItem],
+        executeTasks: [],
+      });
+      const queryClient = createQueryClientWithFeedbackPreloaded([feedbackItem]);
+      const unsubscribe = syncTasksListQueryToRedux(store, queryClient);
+
+      const { api } = await import("../../api/client");
+      vi.mocked(api.tasks.get).mockClear();
+      let resolveTask: ((task: Task) => void) | null = null;
+      const delayedTask = new Promise<Task>((resolve) => {
+        resolveTask = resolve;
+      });
+      vi.mocked(api.tasks.get).mockImplementation(() => delayedTask);
+
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+        { store, queryClient }
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("os-big-1")).toBeInTheDocument();
+      });
+      await waitFor(() => {
+        expect(api.tasks.get).toHaveBeenCalledTimes(1);
+      });
+
+      await act(async () => {
+        for (let i = 0; i < 8; i++) {
+          queryClient.setQueryData(queryKeys.tasks.list("proj-1"), [
+            createMockTask({ id: `existing-${i}`, title: `Existing ${i}` }),
+          ]);
+        }
+      });
+      expect(api.tasks.get).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveTask?.(
+          createMockTask({
+            id: "os-big-1",
+            title: "Fix high-volume sync issue",
+            kanbanColumn: "backlog",
+          })
+        );
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Fix high-volume sync issue")).toBeInTheDocument();
+      });
+
+      unsubscribe();
+    });
+
+    it("backfills available tasks even when some feedback-linked task fetches fail", async () => {
+      const feedbackItem: FeedbackItem = {
+        id: "fb-partial",
+        text: "Partial task fetch failures",
+        category: "bug",
+        mappedPlanId: "plan-1",
+        createdTaskIds: ["task-good", "task-missing"],
+        status: "pending",
+        createdAt: "2024-01-01T00:00:01Z",
+      };
+      const store = createStore({
+        evalFeedback: [feedbackItem],
+        executeTasks: [],
+      });
+      const queryClient = createQueryClientWithFeedbackPreloaded([feedbackItem]);
+      const unsubscribe = syncTasksListQueryToRedux(store, queryClient);
+
+      const { api } = await import("../../api/client");
+      vi.mocked(api.tasks.get).mockClear();
+      vi.mocked(api.tasks.get).mockImplementation(async (_projectId: string, taskId: string) => {
+        if (taskId === "task-good") {
+          return createMockTask({
+            id: "task-good",
+            title: "Task fetched successfully",
+            kanbanColumn: "backlog",
+          });
+        }
+        throw new Error("Task not found");
+      });
+
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+        { store, queryClient }
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Task fetched successfully")).toBeInTheDocument();
+      });
+      expect(screen.getByText("task-missing")).toBeInTheDocument();
+      unsubscribe();
     });
 
     it("updates category badge when Analyst categorizes (bug→feature) without full refetch", async () => {
