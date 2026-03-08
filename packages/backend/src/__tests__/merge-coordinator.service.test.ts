@@ -455,4 +455,139 @@ describe("MergeCoordinatorService", () => {
     );
     expect(nudge).toHaveBeenCalled();
   });
+
+  describe("per_epic intermediate completion", () => {
+    const epicTaskId = "os-abc.1";
+    const epicBranchName = "opensprint/epic_os-abc";
+
+    const makeEpicTask = (): StoredTask => ({
+      id: epicTaskId,
+      title: "Epic task 1",
+      status: "open",
+      priority: 2,
+      issue_type: "task",
+      type: "task",
+      labels: [],
+      assignee: null,
+      description: "",
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+    });
+
+    it("skips merge to main when mergeStrategy is per_epic and task has epic and not all impl tasks closed", async () => {
+      mockGetSettings.mockResolvedValue({
+        simpleComplexityAgent: { type: "cursor", model: null },
+        complexComplexityAgent: { type: "cursor", model: null },
+        deployment: {},
+        gitWorkingMode: "worktree",
+        mergeStrategy: "per_epic",
+      });
+      hostState.slots = new Map([
+        [
+          epicTaskId,
+          {
+            ...makeSlot("/tmp/epic-wt"),
+            taskId: epicTaskId,
+            branchName: epicBranchName,
+          },
+        ],
+      ]);
+      mockHost.getState = vi.fn().mockImplementation(() => hostState);
+
+      const epicAndTasks = [
+        { id: "os-abc", title: "Epic", status: "open", issue_type: "epic" } as StoredTask,
+        { id: "os-abc.1", title: "Task 1", status: "open", issue_type: "task" } as StoredTask,
+        { id: "os-abc.2", title: "Task 2", status: "open", issue_type: "task" } as StoredTask,
+      ];
+      mockHost.taskStore.listAll
+        .mockResolvedValueOnce(epicAndTasks)
+        .mockResolvedValueOnce([
+          { ...epicAndTasks[0] },
+          { ...epicAndTasks[1], status: "closed" },
+          { ...epicAndTasks[2], status: "open" },
+        ]);
+
+      await coordinator.performMergeAndDone(
+        projectId,
+        repoPath,
+        makeEpicTask(),
+        epicBranchName
+      );
+
+      expect(mockGitQueueEnqueueAndWait).not.toHaveBeenCalled();
+      expect(mockHost.taskStore.close).toHaveBeenCalledWith(
+        projectId,
+        epicTaskId,
+        expect.any(String)
+      );
+      expect(mockHost.feedbackService.checkAutoResolveOnTaskDone).toHaveBeenCalledWith(
+        projectId,
+        epicTaskId
+      );
+      expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
+      expect(mockDeleteBranch).not.toHaveBeenCalled();
+      const { triggerDeployForEvent } = await import("../services/deploy-trigger.service.js");
+      expect(triggerDeployForEvent).not.toHaveBeenCalled();
+    });
+
+    it("merges epic branch to main when mergeStrategy is per_epic and last task in epic completes", async () => {
+      const lastTaskId = "os-abc.2";
+      mockGetSettings.mockResolvedValue({
+        simpleComplexityAgent: { type: "cursor", model: null },
+        complexComplexityAgent: { type: "cursor", model: null },
+        deployment: {},
+        gitWorkingMode: "worktree",
+        mergeStrategy: "per_epic",
+      });
+      hostState.slots = new Map([
+        [
+          lastTaskId,
+          {
+            ...makeSlot("/tmp/epic-wt"),
+            taskId: lastTaskId,
+            branchName: epicBranchName,
+          },
+        ],
+      ]);
+      mockHost.getState = vi.fn().mockImplementation(() => hostState);
+
+      const epicAndTasks = [
+        { id: "os-abc", title: "Epic", status: "open", issue_type: "epic" } as StoredTask,
+        { id: "os-abc.1", title: "Task 1", status: "closed", issue_type: "task" } as StoredTask,
+        { id: "os-abc.2", title: "Task 2", status: "open", issue_type: "task" } as StoredTask,
+      ];
+      mockHost.taskStore.listAll
+        .mockResolvedValueOnce(epicAndTasks)
+        .mockResolvedValueOnce([
+          { ...epicAndTasks[0] },
+          { ...epicAndTasks[1] },
+          { ...epicAndTasks[2], status: "closed" },
+        ]);
+
+      const lastTask = (): StoredTask => ({
+        ...makeEpicTask(),
+        id: lastTaskId,
+        title: "Epic task 2",
+      });
+
+      await coordinator.performMergeAndDone(
+        projectId,
+        repoPath,
+        lastTask(),
+        epicBranchName
+      );
+
+      expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "worktree_merge",
+          branchName: epicBranchName,
+          taskId: lastTaskId,
+        })
+      );
+      await vi.waitFor(() => {
+        expect(mockRemoveTaskWorktree).toHaveBeenCalled();
+        expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, epicBranchName);
+      });
+    });
+  });
 });

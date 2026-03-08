@@ -23,6 +23,7 @@ import type {
   AiAutonomyLevel,
   DeploymentMode,
   GitWorkingMode,
+  MergeStrategy,
   ReviewAngle,
   ReviewMode,
   UnknownScopeStrategy,
@@ -248,6 +249,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     const deployment = settings?.deployment ?? { mode: "custom" as DeploymentMode };
     const aiAutonomyLevel = settings?.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL;
     const gitWorkingMode = settings?.gitWorkingMode ?? "worktree";
+    const mergeStrategy = settings?.mergeStrategy ?? "per_task";
     const gitRemoteModeText =
       settings?.gitRemoteMode === "publishable"
         ? "Remote configured"
@@ -274,6 +276,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
       deployment: typeof deployment;
       aiAutonomyLevel: AiAutonomyLevel;
       gitWorkingMode: GitWorkingMode;
+      mergeStrategy: MergeStrategy;
       worktreeBaseBranch: string;
       testCommand: string | null;
       reviewMode: ReviewMode;
@@ -293,6 +296,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
         const effDeployment = overrides?.deployment ?? deployment;
         const effAiAutonomy = overrides?.aiAutonomyLevel ?? aiAutonomyLevel;
         const effGitMode = overrides?.gitWorkingMode ?? gitWorkingMode;
+        const effMergeStrategy = overrides?.mergeStrategy ?? mergeStrategy;
         const effTeamMembers = overrides?.teamMembers ?? settings?.teamMembers ?? [];
         const effSettings = overrides ? { ...settings } : settings;
         if (effSimple.type === "custom" && !(effSimple.cliCommand ?? "").trim()) return;
@@ -348,6 +352,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                 effSettings?.unknownScopeStrategy ??
                 "optimistic",
               gitWorkingMode: effGitMode,
+              mergeStrategy: effMergeStrategy,
               worktreeBaseBranch:
                 overrides?.worktreeBaseBranch ?? effSettings?.worktreeBaseBranch ?? "main",
               teamMembers: effTeamMembers,
@@ -381,6 +386,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
         deployment,
         aiAutonomyLevel,
         gitWorkingMode,
+        mergeStrategy,
         loading,
         onSaved,
       ]
@@ -1023,6 +1029,32 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                           data-testid="worktree-base-branch-input"
                         />
                       </div>
+                    </div>
+                    <hr />
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-semibold text-theme-text">
+                          Merge strategy
+                        </h3>
+                        <p className="text-xs text-theme-muted">
+                          When to merge to the base branch: Per task merges each task branch to
+                          main when the task completes. Per epic uses a shared branch for all tasks
+                          in an epic and merges to main only when the entire epic is done.
+                        </p>
+                      </div>
+                      <select
+                        className="input w-48 shrink-0"
+                        value={mergeStrategy}
+                        onChange={(e) => {
+                          const strategy = e.target.value as MergeStrategy;
+                          setSettings((s) => (s ? { ...s, mergeStrategy: strategy } : null));
+                          void persistSettings(undefined, { mergeStrategy: strategy });
+                        }}
+                        data-testid="merge-strategy-select"
+                      >
+                        <option value="per_task">Per task</option>
+                        <option value="per_epic">Per epic</option>
+                      </select>
                     </div>
                     {gitWorkingMode === "worktree" ? (
                       <div>

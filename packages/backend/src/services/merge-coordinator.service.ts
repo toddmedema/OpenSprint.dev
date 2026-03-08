@@ -136,6 +136,7 @@ export interface MergeCoordinatorHost {
       gitWorkingMode?: "worktree" | "branches";
       worktreeBaseBranch?: string;
       unknownScopeStrategy?: "conservative" | "optimistic";
+      mergeStrategy?: "per_task" | "per_epic";
     }>;
   };
   transition(projectId: string, t: { to: "complete" | "fail"; taskId: string }): void;
@@ -249,6 +250,141 @@ export class MergeCoordinatorService {
     await this.waitForPushComplete(projectId);
     const settings = await this.host.projectService.getSettings(projectId);
     const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
+    const mergeStrategy = settings.mergeStrategy ?? "per_task";
+    const allIssuesForEpic = await this.host.taskStore.listAll(projectId);
+    const epicId = resolveEpicId(task.id, allIssuesForEpic);
+
+    const isPerEpicIntermediate =
+      mergeStrategy === "per_epic" && epicId != null;
+
+    if (isPerEpicIntermediate) {
+      // per_epic + epic task: do not merge to main; close task, commit already on epic branch (commitWip above), archive, release slot
+      const closeReason = slot.phaseResult.codingSummary || "Implemented and tested";
+      await this.host.taskStore.close(projectId, task.id, closeReason);
+
+      const agentConfig = settings.simpleComplexityAgent;
+      agentIdentityService
+        .recordAttempt(repoPath, {
+          taskId: task.id,
+          agentId: `${agentConfig.type}-${agentConfig.model ?? "default"}`,
+          role: "coder",
+          model: agentConfig.model ?? "unknown",
+          attempt: slot.attempt,
+          startedAt: slot.agent.startedAt,
+          completedAt: new Date().toISOString(),
+          outcome: "success",
+          durationMs: Date.now() - new Date(slot.agent.startedAt).getTime(),
+        })
+        .catch((err) => log.warn("Failed to record attempt", { err }));
+
+      const session = await this.host.sessionManager.createSession(repoPath, {
+        taskId: task.id,
+        attempt: slot.attempt,
+        agentType: agentConfig.type,
+        agentModel: agentConfig.model || "",
+        gitBranch: branchName,
+        status: "approved",
+        outputLog: slot.agent.outputLog.join(""),
+        gitDiff: slot.phaseResult.codingDiff,
+        summary: slot.phaseResult.codingSummary || undefined,
+        testResults: slot.phaseResult.testResults ?? undefined,
+        startedAt: slot.agent.startedAt,
+      });
+      await this.host.sessionManager.archiveSession(
+        repoPath,
+        task.id,
+        slot.attempt,
+        session,
+        wtPath
+      );
+
+      try {
+        const changedFiles = await this.host.branchManager.getChangedFiles(
+          repoPath,
+          branchName,
+          baseBranch
+        );
+        await this.host.fileScopeAnalyzer.recordActual(
+          projectId,
+          repoPath,
+          task.id,
+          changedFiles,
+          this.host.taskStore
+        );
+      } catch {
+        // best-effort
+      }
+
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: task.id,
+          event: "task.completed",
+          data: { attempt: slot.attempt },
+        })
+        .catch(() => {});
+
+      broadcastToProject(projectId, {
+        type: "agent.completed",
+        taskId: task.id,
+        status: "approved",
+        testResults: slot.phaseResult.testResults,
+      });
+
+      await this.host.feedbackService.checkAutoResolveOnTaskDone(projectId, task.id).catch((err) => {
+        log.warn("Auto-resolve feedback on task done failed", { taskId: task.id, err });
+      });
+
+      await this.releaseMergeSlot(projectId, repoPath, "complete", task.id);
+      this.host.nudge(projectId);
+
+      // Check if all implementation tasks in epic are closed; if not, return (next task uses same epic worktree)
+      const freshIssues = await this.host.taskStore.listAll(projectId);
+      const implTasks = freshIssues.filter(
+        (i) =>
+          i.id.startsWith(epicId + ".") &&
+          !i.id.endsWith(".0") &&
+          (i.issue_type ?? (i as { type?: string }).type) !== "epic"
+      );
+      const allImplClosed =
+        implTasks.length > 0 &&
+        implTasks.every((i) => (i.status as string) === "closed");
+
+      if (!allImplClosed) {
+        return;
+      }
+
+      // Last task in epic: merge epic branch to main, then push and cleanup via postCompletionAsync
+      try {
+        await gitCommitQueue.drain();
+        await gitCommitQueue.enqueueAndWait({
+          type: "worktree_merge",
+          repoPath,
+          worktreePath: wtPath,
+          branchName,
+          taskId: task.id,
+          taskTitle: task.title || task.id,
+          baseBranch,
+        });
+      } catch (mergeErr) {
+        log.warn("Merge epic to main failed", { taskId: task.id, branchName, mergeErr });
+        await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, mergeErr as Error);
+        return;
+      }
+
+      this.registerPendingCleanup(projectId, {
+        taskId: task.id,
+        branchName,
+        worktreePath: wtPath,
+        gitWorkingMode: settings.gitWorkingMode === "branches" ? "branches" : "worktree",
+      });
+      this.host.nudge(projectId);
+      this.postCompletionAsync(projectId, repoPath, task.id).catch((err) => {
+        log.warn("Post-completion async work failed", { taskId: task.id, err });
+      });
+      return;
+    }
 
     // 2. Attempt merge inside the serialized queue. Rebase now happens there.
     try {

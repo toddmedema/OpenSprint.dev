@@ -142,3 +142,45 @@ Replace all references to `prd.json` with `SPEC.md`. The Sketch phase PRD is sto
 ## Open Questions
 
 All previously identified questions have been resolved and documented in the Resolved Decisions section of the full PRD. No open questions at this time.
+
+## Competitive Landscape
+
+### Overview
+
+OpenSprint sits in the “AI-assisted product development” space. Alternatives range from no-code chat-to-app builders to IDE-centric coding agents. The comparison below focuses on full-lifecycle and “idea to working product” tools rather than single-step UI generators (e.g. v0, Locofy).
+
+### Lovable (lovable.dev)
+
+- **Positioning:** No-code app builder; “build apps and websites by chatting with AI.”
+- **Strengths:** Fast iteration, low friction for non-engineers, chat-first UX.
+- **Limitations:** Centered on UI/app generation from conversation; no explicit PRD/spec phase, no dependency-aware task graph or Evaluate → Execute feedback loop. Tied to their hosted experience.
+- **OpenSprint differentiator:** Full SPEED lifecycle with a written spec (SPEC.md), dependency-aware planning, human-in-the-loop, and optional use of your repo + local or custom agents (including offline).
+
+### Bolt (bolt.new)
+
+- **Positioning:** “Vibe coding” and professional coding agents; chat-to-build with integrated frontier models, testing/refactoring, and Bolt Cloud (hosting, DB, auth, SEO).
+- **Strengths:** Single UI for multiple AI backends, built-in testing and iteration, cloud backend and scaling story.
+- **Limitations:** Emphasis on “build in one place” with their stack; less focus on a formal spec phase or on flowing a single PRD through plan → execute → evaluate. Primarily cloud-hosted.
+- **OpenSprint differentiator:** SPEC.md as the single source of truth, explicit Sketch → Plan → Execute → Evaluate → Deliver workflow, worktree/branch-based workflow with merger handling, and ability to run fully offline with LM Studio or other local agents.
+
+### Gas Town (gastown.io)
+
+- **Positioning:** AI-powered product or development workflow tool in the idea-to-ship space.
+- **OpenSprint differentiator:** OpenSprint emphasizes a phased lifecycle (Sketch/Plan/Execute/Evaluate/Deliver), a file-based spec at repo root, and orchestration that respects task dependencies and feedback loops rather than ad-hoc prompting.
+
+### Other Adjacent Tools
+
+- **Cursor / IDE coding assistants:** Strong for in-editor coding; they do not provide a shared PRD, multi-phase workflow, or structured Evaluate → Execute loop.
+- **Replit Agent, etc.:** Often centered on in-environment generation and deployment; typically no first-class spec or dependency-aware task orchestration.
+
+### Summary Table
+
+| Dimension            | OpenSprint                    | Lovable / Bolt-style builders   |
+|---------------------|-------------------------------|----------------------------------|
+| Spec / PRD          | SPEC.md at repo root; first-class phase | Implicit or lightweight         |
+| Lifecycle           | Sketch → Plan → Execute → Evaluate → Deliver | Chat → build (and optionally ship) |
+| Task orchestration  | Dependency-aware, priority-ordered tasks | Largely prompt/session-driven   |
+| Feedback loop       | Evaluate maps to tasks; fixes re-enter Execute | Manual or tool-specific         |
+| Agent choice        | Claude, Cursor, OpenAI, LM Studio, custom CLI | Typically vendor’s models/hosted |
+| Offline             | Supported (e.g. LM Studio)    | Generally requires cloud        |
+| Repo / Git          | Works with existing repos; worktree + merger | Often tied to platform repos    |

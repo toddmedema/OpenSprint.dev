@@ -1048,4 +1048,50 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByTestId("worktree-base-branch-input")).toBeInTheDocument();
     expect(screen.getByTestId("worktree-base-branch-input")).toHaveValue("main");
   });
+
+  it("Agent Config tab shows Merge strategy select defaulting to Per task with help text", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    const select = screen.getByTestId("merge-strategy-select");
+    expect(select).toBeInTheDocument();
+    expect(select).toHaveValue("per_task");
+    expect(
+      screen.getByText(/When to merge to the base branch: Per task merges each task branch/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Per epic uses a shared branch for all tasks in an epic/)).toBeInTheDocument();
+  });
+
+  it("saves mergeStrategy when changed to Per epic", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    const select = screen.getByTestId("merge-strategy-select");
+    await userEvent.selectOptions(select, "per_epic");
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({ mergeStrategy: "per_epic" })
+      )
+    );
+  });
+
+  it("shows Merge strategy as Per epic when settings have mergeStrategy per_epic", async () => {
+    mockGetSettings.mockResolvedValueOnce({ ...mockSettings, mergeStrategy: "per_epic" });
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    const select = screen.getByTestId("merge-strategy-select");
+    expect(select).toHaveValue("per_epic");
+  });
 });
