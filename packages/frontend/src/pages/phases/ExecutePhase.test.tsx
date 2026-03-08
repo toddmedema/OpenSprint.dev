@@ -1048,6 +1048,66 @@ describe("ExecutePhase top bar", () => {
   });
 });
 
+describe("ExecutePhase epic merge mode indicator", () => {
+  beforeEach(() => {
+    localStorage.setItem("opensprint.executeView", "kanban");
+  });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows epic merge mode indicator when project settings have mergeStrategy per_epic", async () => {
+    mockGetSettings.mockResolvedValue({ teamMembers: [], mergeStrategy: "per_epic" });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks);
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+    const indicator = await screen.findByTestId("execute-epic-merge-indicator");
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveTextContent("Epic merge mode: changes merge when plan is complete");
+  });
+
+  it("does not show epic merge mode indicator when mergeStrategy is per_task or missing", async () => {
+    mockGetSettings.mockResolvedValue({ teamMembers: [], mergeStrategy: "per_task" });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks);
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("execute-filter-toolbar")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("execute-epic-merge-indicator")).not.toBeInTheDocument();
+  });
+});
+
 describe("ExecutePhase expandable search bar", () => {
   beforeEach(() => {
     localStorage.setItem("opensprint.executeView", "kanban");

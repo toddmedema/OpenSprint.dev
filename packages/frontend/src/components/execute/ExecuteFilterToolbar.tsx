@@ -54,6 +54,8 @@ interface ExecuteFilterToolbarProps {
   handleSearchKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   viewMode: "kanban" | "timeline";
   onViewModeChange: (mode: "kanban" | "timeline") => void;
+  /** When "per_epic", show epic merge mode indicator. Omit or "per_task" = no indicator. */
+  mergeStrategy?: "per_task" | "per_epic";
 }
 
 export function ExecuteFilterToolbar({
@@ -70,7 +72,10 @@ export function ExecuteFilterToolbar({
   handleSearchKeyDown,
   viewMode,
   onViewModeChange,
+  mergeStrategy,
 }: ExecuteFilterToolbarProps) {
+  const showEpicMergeIndicator = mergeStrategy === "per_epic";
+
   return (
     <div
       className="w-full px-4 sm:px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0"
@@ -106,6 +111,15 @@ export function ExecuteFilterToolbar({
           {awaitingApproval && (
             <span className="ml-2 text-sm font-medium text-theme-warning-text shrink-0">
               Awaiting approval…
+            </span>
+          )}
+          {showEpicMergeIndicator && (
+            <span
+              className="ml-2 text-xs text-theme-muted shrink-0"
+              data-testid="execute-epic-merge-indicator"
+              title="Changes merge to main when the plan (epic) is complete"
+            >
+              Epic merge mode: changes merge when plan is complete
             </span>
           )}
         </div>

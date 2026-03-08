@@ -329,6 +329,7 @@ export function ExecutePhase({
           handleSearchKeyDown={handleSearchKeyDown}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
+          mergeStrategy={projectSettingsQuery.data?.mergeStrategy}
         />
 
         <div
