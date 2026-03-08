@@ -319,6 +319,57 @@ describe("parseSettings", () => {
     expect(parsed.aiAutonomyLevel).toBe("major_only");
   });
 
+  describe("mergeStrategy", () => {
+    it("should default to per_task when parseSettings receives empty object", () => {
+      const parsed = parseSettings({});
+      expect(parsed.mergeStrategy).toBe("per_task");
+    });
+
+    it("should yield per_epic when mergeStrategy is per_epic", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        mergeStrategy: "per_epic",
+      });
+      expect(parsed.mergeStrategy).toBe("per_epic");
+    });
+
+    it("should yield per_task when mergeStrategy is per_task", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        mergeStrategy: "per_task",
+      });
+      expect(parsed.mergeStrategy).toBe("per_task");
+    });
+
+    it("should normalize invalid mergeStrategy to per_task", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        mergeStrategy: "invalid",
+      });
+      expect(parsed.mergeStrategy).toBe("per_task");
+    });
+
+    it("should normalize non-string mergeStrategy to per_task", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        mergeStrategy: 123,
+      });
+      expect(parsed.mergeStrategy).toBe("per_task");
+    });
+
+    it("should default to per_task when mergeStrategy is missing", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+      });
+      expect(parsed.mergeStrategy).toBe("per_task");
+    });
+  });
+
   describe("worktreeBaseBranch", () => {
     it("should default to main when parseSettings receives empty object", () => {
       const parsed = parseSettings({});

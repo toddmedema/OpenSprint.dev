@@ -320,6 +320,12 @@ export type UnknownScopeStrategy = "conservative" | "optimistic";
 /** Git working mode: worktree (parallel worktrees) or branches (single branch in main repo) */
 export type GitWorkingMode = "worktree" | "branches";
 
+/** Per-project merge strategy: per_task (one branch per task) or per_epic (shared branch per epic) */
+export type MergeStrategy = "per_task" | "per_epic";
+
+/** Valid merge strategy values for parsing/validation */
+export const VALID_MERGE_STRATEGIES: MergeStrategy[] = ["per_task", "per_epic"];
+
 /** API key provider env var names (used as keys in apiKeys) */
 export type ApiKeyProvider =
   | "ANTHROPIC_API_KEY"
@@ -503,6 +509,8 @@ export interface ProjectSettings {
   unknownScopeStrategy?: UnknownScopeStrategy;
   /** Git working mode: "worktree" (parallel worktrees) or "branches" (single branch in main repo). Default: "worktree". */
   gitWorkingMode?: GitWorkingMode;
+  /** Merge strategy: "per_task" (one branch per task, merge on task completion) or "per_epic" (shared epic branch, merge when epic completes). Default: "per_task". */
+  mergeStrategy?: MergeStrategy;
   /** Project base branch (task branches are created from and merged into this). Persisted under the legacy field name for backward compatibility. */
   worktreeBaseBranch?: string;
   /** Read-only runtime status: whether the repo can publish to origin, is local-only, or has a remote configured but currently unreachable. */
@@ -618,6 +626,11 @@ export function parseSettings(raw: unknown): ProjectSettings {
       ? (r.gitWorkingMode as "worktree" | "branches")
       : "worktree";
 
+  const mergeStrategy =
+    typeof r?.mergeStrategy === "string" && VALID_MERGE_STRATEGIES.includes(r.mergeStrategy as MergeStrategy)
+      ? (r.mergeStrategy as MergeStrategy)
+      : "per_task";
+
   let aiAutonomyLevel: AiAutonomyLevel = DEFAULT_AI_AUTONOMY_LEVEL;
   const rawLevel = r?.aiAutonomyLevel;
   if (
@@ -639,6 +652,7 @@ export function parseSettings(raw: unknown): ProjectSettings {
     hilConfig,
     testFramework: (r?.testFramework as string | null) ?? null,
     gitWorkingMode,
+    mergeStrategy,
     worktreeBaseBranch: normalizeWorktreeBaseBranch(r?.worktreeBaseBranch),
     reviewAngles: parseReviewAngles(r?.reviewAngles),
     teamMembers: parseTeamMembers(r?.teamMembers),
