@@ -77,7 +77,7 @@ export function TaskPriorityDropdown({
         type="button"
         onClick={() => setPriorityDropdownOpen((o) => !o)}
         disabled={priorityUpdateLoading}
-        className="dropdown-trigger inline-flex items-center gap-2 rounded py-1 text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+        className="dropdown-trigger pl-3 pr-0 inline-flex items-center gap-2 rounded py-1 text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
         aria-haspopup="listbox"
         aria-expanded={priorityDropdownOpen}
         aria-busy={priorityUpdateLoading}
@@ -87,9 +87,9 @@ export function TaskPriorityDropdown({
         <PriorityIcon priority={displayPriority} size="sm" />
         <span>{PRIORITY_LABELS[displayPriority] ?? "Medium"}</span>
         {priorityUpdateLoading ? (
-          <span className="text-[10px] opacity-70 pr-2 animate-pulse">Updating…</span>
+          <span className="text-[10px] opacity-70 animate-pulse">Updating…</span>
         ) : (
-          <span className="text-[10px] opacity-70 pr-2">
+          <span className="text-[10px] opacity-70">
             {priorityDropdownOpen ? "▲" : "▼"}
           </span>
         )}
