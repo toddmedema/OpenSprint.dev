@@ -118,12 +118,12 @@ export function AssigneeSelector({
     : "text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors";
 
   return (
-    <div ref={dropdownRef} className="relative inline-block">
+    <div ref={dropdownRef} className="relative inline-flex items-center">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={loading}
-        className={`dropdown-trigger inline-flex items-center gap-2 rounded py-1 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed ${triggerTypography}`}
+        className={`dropdown-trigger inline-flex items-center gap-2 rounded py-0.5 leading-tight cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed ${triggerTypography}`}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-busy={loading}

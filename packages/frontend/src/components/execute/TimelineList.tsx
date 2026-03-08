@@ -110,7 +110,7 @@ function TimelineRow({
           <span className="text-xs text-theme-muted shrink-0 tabular-nums">{relativeTime}</span>
         </button>
         <span
-          className="shrink-0 tabular-nums"
+          className="shrink-0 tabular-nums inline-flex items-center"
           data-testid="task-row-assignee"
           onClick={(e) => e.stopPropagation()}
         >
