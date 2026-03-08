@@ -531,7 +531,11 @@ describe("MergeCoordinatorService", () => {
     });
 
     it("merges epic branch to main when mergeStrategy is per_epic and last task in epic completes", async () => {
+      const { finalReviewService } = await import("../services/final-review.service.js");
+      vi.mocked(finalReviewService.runFinalReview).mockResolvedValue(null);
+
       const lastTaskId = "os-abc.2";
+      const epicWorktreeKey = "epic_os-abc";
       mockGetSettings.mockResolvedValue({
         simpleComplexityAgent: { type: "cursor", model: null },
         complexComplexityAgent: { type: "cursor", model: null },
@@ -546,6 +550,7 @@ describe("MergeCoordinatorService", () => {
             ...makeSlot("/tmp/epic-wt"),
             taskId: lastTaskId,
             branchName: epicBranchName,
+            worktreeKey: epicWorktreeKey,
           },
         ],
       ]);
@@ -556,13 +561,15 @@ describe("MergeCoordinatorService", () => {
         { id: "os-abc.1", title: "Task 1", status: "closed", issue_type: "task" } as StoredTask,
         { id: "os-abc.2", title: "Task 2", status: "open", issue_type: "task" } as StoredTask,
       ];
+      const allImplClosedList = [
+        { ...epicAndTasks[0] },
+        { ...epicAndTasks[1] },
+        { ...epicAndTasks[2], status: "closed" },
+      ];
       mockHost.taskStore.listAll
         .mockResolvedValueOnce(epicAndTasks)
-        .mockResolvedValueOnce([
-          { ...epicAndTasks[0] },
-          { ...epicAndTasks[1] },
-          { ...epicAndTasks[2], status: "closed" },
-        ]);
+        .mockResolvedValueOnce(allImplClosedList)
+        .mockResolvedValue(allImplClosedList);
 
       const lastTask = (): StoredTask => ({
         ...makeEpicTask(),
@@ -585,8 +592,18 @@ describe("MergeCoordinatorService", () => {
         })
       );
       await vi.waitFor(() => {
-        expect(mockRemoveTaskWorktree).toHaveBeenCalled();
+        expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
+          repoPath,
+          epicWorktreeKey,
+          "/tmp/epic-wt"
+        );
         expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, epicBranchName);
+      });
+
+      const { triggerDeployForEvent } = await import("../services/deploy-trigger.service.js");
+      await vi.waitFor(() => {
+        expect(triggerDeployForEvent).toHaveBeenCalledWith(projectId, "each_task");
+        expect(triggerDeployForEvent).toHaveBeenCalledWith(projectId, "each_epic");
       });
     });
   });
