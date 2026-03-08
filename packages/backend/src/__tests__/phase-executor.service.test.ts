@@ -222,7 +222,12 @@ describe("PhaseExecutorService", () => {
 
       await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot);
 
-      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, task.id, "main");
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(
+        repoPath,
+        task.id,
+        "main",
+        undefined
+      );
       expect(mockCreateOrCheckoutBranch).not.toHaveBeenCalled();
       expect(mockEnsureRepoNodeModules).not.toHaveBeenCalled();
       expect(slot.worktreePath).not.toBe(repoPath);
@@ -274,7 +279,12 @@ describe("PhaseExecutorService", () => {
 
       await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot);
 
-      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, task.id, "main");
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(
+        repoPath,
+        task.id,
+        "main",
+        undefined
+      );
       expect(mockCreateOrCheckoutBranch).not.toHaveBeenCalled();
     });
 
@@ -300,8 +310,51 @@ describe("PhaseExecutorService", () => {
       await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot);
 
       expect(mockSyncMainWithOrigin).toHaveBeenCalledWith(repoPath, "develop");
-      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, task.id, "develop");
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(
+        repoPath,
+        task.id,
+        "develop",
+        undefined
+      );
       expect(mockCreateOrCheckoutBranch).not.toHaveBeenCalled();
+    });
+
+    it("uses epic worktree when slot has worktreeKey and epic branchName", async () => {
+      mockGetSettings.mockResolvedValue({
+        testFramework: "vitest",
+        simpleComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+        complexComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+        reviewMode: "never",
+        deployment: {
+          mode: "custom",
+          autoResolveFeedbackOnTaskCompletion: false,
+        },
+        maxConcurrentCoders: 1,
+        gitWorkingMode: "worktree",
+      });
+      const epicId = "os-epic1";
+      const task = { ...makeTask(), id: `${epicId}.1` };
+      const slot = {
+        ...makeSlot(),
+        taskId: task.id,
+        branchName: `opensprint/epic_${epicId}`,
+        worktreeKey: `epic_${epicId}`,
+      };
+      const slots = new Map([[task.id, slot]]);
+      mockGetState.mockReturnValue({ slots, status: { queueDepth: 0 } });
+      const epicWtPath = path.join(os.tmpdir(), "opensprint-worktrees", `epic_${epicId}`);
+      mockCreateTaskWorktree.mockResolvedValue(epicWtPath);
+
+      await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot);
+
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(
+        repoPath,
+        task.id,
+        "main",
+        { worktreeKey: `epic_${epicId}`, branchName: `opensprint/epic_${epicId}` }
+      );
+      expect(mockCreateOrCheckoutBranch).not.toHaveBeenCalled();
+      expect(slot.worktreePath).toBe(epicWtPath);
     });
   });
 
