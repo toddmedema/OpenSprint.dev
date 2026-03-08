@@ -773,10 +773,10 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
         </ResizableSidebar>
       ) : null}
 
-      {/* Center: live PRD document — full width on mobile when sidebars collapsed */}
+      {/* Center: live PRD document — full width on mobile when sidebars collapsed. No top padding on wrapper so header height stays consistent when scrolled (no padding scrolling away). */}
       <div ref={prdScrollContainerRef} className="flex-1 min-w-0 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 md:px-6 py-6 md:py-8 pb-24">
-          <div className="flex items-center justify-between mb-6 md:mb-8 sticky top-0 bg-theme-bg/95 backdrop-blur-sm py-3 -mx-4 md:-mx-6 px-4 md:px-6 z-20 border-b border-theme-border">
+        <div className="max-w-4xl mx-auto px-4 md:px-6 pb-24">
+          <div className="flex items-center justify-between min-h-[3.5rem] mb-6 md:mb-8 sticky top-0 bg-theme-bg/95 backdrop-blur-sm py-3 -mx-4 md:-mx-6 px-4 md:px-6 z-20 border-b border-theme-border">
             <h1 className="text-2xl font-bold text-theme-text tracking-tight">
               Product Requirements Document
             </h1>
