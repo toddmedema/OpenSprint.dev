@@ -601,6 +601,52 @@ describe.skipIf(!projectServicePostgresOk)("ProjectService", () => {
     expect(settings.teamMembers).toEqual(teamMembers);
   });
 
+  it("should accept and persist mergeStrategy in updateSettings", async () => {
+    const repoPath = path.join(tempDir, "merge-strategy");
+    const project = await projectService.createProject({
+      name: "Merge Strategy",
+      repoPath,
+      simpleComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      complexComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    const first = await projectService.getSettings(project.id);
+    expect(first.mergeStrategy).toBe("per_task");
+
+    const updated = await projectService.updateSettings(project.id, { mergeStrategy: "per_epic" });
+    expect(updated.mergeStrategy).toBe("per_epic");
+
+    const reloaded = await projectService.getSettings(project.id);
+    expect(reloaded.mergeStrategy).toBe("per_epic");
+
+    const settings = await readSettingsFromGlobalStore(tempDir, project.id);
+    expect(settings.mergeStrategy).toBe("per_epic");
+  });
+
+  it("should reject invalid mergeStrategy in updateSettings", async () => {
+    const repoPath = path.join(tempDir, "merge-strategy-invalid");
+    const project = await projectService.createProject({
+      name: "Merge Strategy Invalid",
+      repoPath,
+      simpleComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      complexComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    await expect(
+      projectService.updateSettings(project.id, {
+        mergeStrategy: "invalid" as "per_task",
+      })
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: "INVALID_INPUT",
+      message: expect.stringMatching(/per_task|per_epic/),
+    });
+  });
+
   it("should strip testFailuresAndRetries from hilConfig when reading settings (PRD §6.5.1)", async () => {
     const repoPath = path.join(tempDir, "hil-read-strip");
     const project = await projectService.createProject({

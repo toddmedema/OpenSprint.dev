@@ -24,6 +24,7 @@ import {
   parseSettings,
   parseTeamMembers,
   getProvidersRequiringApiKeys,
+  VALID_MERGE_STRATEGIES,
 } from "@opensprint/shared";
 import type { ApiKeyProvider } from "@opensprint/shared";
 import { getGlobalSettings } from "./global-settings.service.js";
@@ -135,6 +136,7 @@ function buildDefaultSettings(): ProjectSettings {
     testCommand: null,
     reviewMode: DEFAULT_REVIEW_MODE,
     gitWorkingMode: "worktree",
+    mergeStrategy: "per_task",
     worktreeBaseBranch: "main",
   };
 }
@@ -155,6 +157,7 @@ function toCanonicalSettings(s: ProjectSettings): ProjectSettings {
     ...(s.maxConcurrentCoders !== undefined && { maxConcurrentCoders: s.maxConcurrentCoders }),
     ...(s.unknownScopeStrategy !== undefined && { unknownScopeStrategy: s.unknownScopeStrategy }),
     gitWorkingMode: s.gitWorkingMode ?? "worktree",
+    mergeStrategy: s.mergeStrategy ?? "per_task",
     worktreeBaseBranch: s.worktreeBaseBranch ?? "main",
     ...(s.teamMembers && s.teamMembers.length > 0 && { teamMembers: s.teamMembers }),
   };
@@ -894,6 +897,22 @@ export class ProjectService {
         : (current.gitWorkingMode ?? "worktree");
     const teamMembers =
       updates.teamMembers !== undefined ? parseTeamMembers(updates.teamMembers) : current.teamMembers;
+    if (
+      updates.mergeStrategy !== undefined &&
+      (typeof updates.mergeStrategy !== "string" ||
+        !VALID_MERGE_STRATEGIES.includes(updates.mergeStrategy as "per_task" | "per_epic"))
+    ) {
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "mergeStrategy must be 'per_task' or 'per_epic'"
+      );
+    }
+    const mergeStrategy =
+      updates.mergeStrategy !== undefined &&
+      VALID_MERGE_STRATEGIES.includes(updates.mergeStrategy as "per_task" | "per_epic")
+        ? (updates.mergeStrategy as "per_task" | "per_epic")
+        : (current.mergeStrategy ?? "per_task");
     const effectiveSettings: ProjectSettings = {
       ...current,
       ...updates,
@@ -903,6 +922,7 @@ export class ProjectService {
       hilConfig,
       gitWorkingMode,
       teamMembers,
+      mergeStrategy,
     };
     const updated: ProjectSettings = {
       ...effectiveSettings,

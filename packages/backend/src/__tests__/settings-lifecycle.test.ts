@@ -191,6 +191,7 @@ describe("Settings lifecycle — service-level", () => {
     expect(secondParsed.testFramework).toEqual(firstParsed.testFramework);
     expect(secondParsed.reviewMode).toEqual(firstParsed.reviewMode ?? DEFAULT_REVIEW_MODE);
     expect(secondParsed.gitWorkingMode).toEqual(firstParsed.gitWorkingMode ?? "worktree");
+    expect(secondParsed.mergeStrategy).toEqual(firstParsed.mergeStrategy ?? "per_task");
   });
 });
 
@@ -233,7 +234,7 @@ describe("Settings API lifecycle", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("GET /api/v1/projects/:id/settings returns two-tier shape and gitWorkingMode", async () => {
+  it("GET /api/v1/projects/:id/settings returns two-tier shape, gitWorkingMode, and mergeStrategy", async () => {
     const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
 
     expect(res.status).toBe(200);
@@ -243,6 +244,7 @@ describe("Settings API lifecycle", () => {
     expect(res.body.data.complexComplexityAgent).toBeDefined();
     expect(res.body.data.complexComplexityAgent.type).toBe("claude");
     expect(res.body.data.gitWorkingMode).toBe("worktree");
+    expect(res.body.data.mergeStrategy).toBe("per_task");
     expect(res.body.data.gitRuntimeStatus).toEqual({
       lastCheckedAt: null,
       stale: true,
@@ -325,6 +327,35 @@ describe("Settings API lifecycle", () => {
 
     const settings = await readProjectFromGlobalStore(tempDir, projectId);
     expect(settings.gitWorkingMode).toBe("branches");
+  });
+
+  it("GET /api/v1/projects/:id/settings returns mergeStrategy; PUT accepts and persists mergeStrategy (round-trip)", async () => {
+    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.mergeStrategy).toBe("per_task");
+
+    const putRes = await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({ mergeStrategy: "per_epic" });
+
+    expect(putRes.status).toBe(200);
+    expect(putRes.body.data.mergeStrategy).toBe("per_epic");
+
+    const getRes2 = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    expect(getRes2.body.data.mergeStrategy).toBe("per_epic");
+
+    const settings = await readProjectFromGlobalStore(tempDir, projectId);
+    expect(settings.mergeStrategy).toBe("per_epic");
+  });
+
+  it("PUT /api/v1/projects/:id/settings rejects invalid mergeStrategy with 400", async () => {
+    const res = await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({ mergeStrategy: "invalid" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error?.code).toBe("INVALID_INPUT");
+    expect(res.body.error?.message).toMatch(/per_task|per_epic/);
   });
 
   it("PUT /api/v1/projects/:id/settings returns refreshing runtime status when worktreeBaseBranch changes", async () => {
