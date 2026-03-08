@@ -105,7 +105,7 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden max-w-[1800px] mx-auto w-full bg-theme-surface px-4 sm:px-6 py-4">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden max-w-[1440px] mx-auto w-full bg-theme-surface px-4 sm:px-6 py-4">
           {activeTab === "ask" && (
             <div
               id="help-tabpanel-ask"
