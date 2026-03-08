@@ -1651,8 +1651,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                   <div className="space-y-4" data-testid="team-tab-content">
                     <h3 className="text-sm font-semibold text-theme-text">Team Members</h3>
                     <p className="text-xs text-theme-muted mb-3">
-                      Add teammates who can be assigned to tasks. Each member has an ID and display
-                      name.
+                      Add teammates who can be assigned to tasks. Each member has a display name.
                     </p>
                     <div className="space-y-3">
                       {teamMembers.map((member, i) => (
@@ -1661,19 +1660,6 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                           className="flex flex-wrap items-center gap-2 p-3 rounded-lg border border-theme-border bg-theme-surface"
                           data-testid="team-member-row"
                         >
-                          <input
-                            type="text"
-                            className="input flex-1 min-w-[100px] font-mono text-sm"
-                            placeholder="ID"
-                            value={member.id}
-                            onChange={(e) => {
-                              const next = [...teamMembers];
-                              next[i] = { ...member, id: e.target.value };
-                              updateTeamMembers(next, { immediate: false });
-                            }}
-                            onBlur={scheduleSaveOnBlur}
-                            data-testid="team-member-id-input"
-                          />
                           <input
                             type="text"
                             className="input flex-1 min-w-[100px] text-sm"

@@ -446,10 +446,12 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByTestId("team-tab-content")).toBeInTheDocument();
     expect(screen.getByText("Team Members")).toBeInTheDocument();
     expect(screen.getByTestId("team-member-add")).toBeInTheDocument();
-    const idInput = screen.getByTestId("team-member-id-input");
     const nameInput = screen.getByTestId("team-member-name-input");
-    expect(idInput).toHaveValue("user-1");
     expect(nameInput).toHaveValue("Alice");
+    expect(screen.queryByTestId("team-member-id-input")).not.toBeInTheDocument();
+    // No ID column or visible member ID: only display name is shown
+    expect(screen.queryByText("user-1")).not.toBeInTheDocument();
+    expect(screen.getByText(/Each member has a display name/)).toBeInTheDocument();
   });
 
   it("Team tab: add member persists to backend", async () => {
