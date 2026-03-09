@@ -383,11 +383,71 @@ describe("EpicCard", () => {
 
     expect(screen.getByText("In review")).toBeInTheDocument();
     expect(
-      screen.getByText(/All tasks are done. Review in Evaluate and mark this plan complete to ship./)
+      screen.getByText(/All tasks are done. Mark this plan complete to ship, or review in Evaluate./)
     ).toBeInTheDocument();
   });
 
-  it("shows Mark complete in Evaluate button when in_review and onGoToEvaluate provided", async () => {
+  it("shows Mark complete button when in_review and onMarkComplete provided", async () => {
+    const onMarkComplete = vi.fn();
+    const user = userEvent.setup();
+    const plan: Plan = {
+      ...basePlan,
+      status: "in_review",
+      taskCount: 3,
+      doneTaskCount: 3,
+    };
+    renderWithStore(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onMarkComplete={onMarkComplete}
+      />
+    );
+
+    const btn = screen.getByTestId("plan-mark-complete-button");
+    expect(btn).toBeInTheDocument();
+    expect(btn).toHaveTextContent(/^Mark complete$/);
+    await user.click(btn);
+    expect(onMarkComplete).toHaveBeenCalledTimes(1);
+    expect(onMarkComplete).toHaveBeenCalledWith("auth-feature");
+  });
+
+  it("shows Marking complete… and disables button when in_review and isMarkCompletePending", () => {
+    const plan: Plan = {
+      ...basePlan,
+      status: "in_review",
+      taskCount: 3,
+      doneTaskCount: 3,
+    };
+    renderWithStore(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onMarkComplete={vi.fn()}
+        isMarkCompletePending
+      />
+    );
+
+    const btn = screen.getByTestId("plan-mark-complete-button");
+    expect(btn).toHaveTextContent(/marking complete…/i);
+    expect(btn).toBeDisabled();
+  });
+
+  it("shows Review in Evaluate button when in_review and onGoToEvaluate provided", async () => {
     const onGoToEvaluate = vi.fn();
     const user = userEvent.setup();
     const plan: Plan = {
@@ -413,7 +473,7 @@ describe("EpicCard", () => {
 
     const cta = screen.getByTestId("go-to-evaluate-button");
     expect(cta).toBeInTheDocument();
-    expect(cta).toHaveTextContent(/mark complete in evaluate/i);
+    expect(cta).toHaveTextContent(/review in evaluate/i);
     await user.click(cta);
     expect(onGoToEvaluate).toHaveBeenCalledTimes(1);
   });

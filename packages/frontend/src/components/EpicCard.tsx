@@ -23,6 +23,10 @@ export interface EpicCardProps {
   onClearError?: () => void;
   /** When provided, in_review plans show a CTA to navigate to Evaluate (e.g. "Mark complete in Evaluate"). */
   onGoToEvaluate?: () => void;
+  /** When provided, in_review plans show a "Mark complete" button that calls this with planId (same API as Evaluate). */
+  onMarkComplete?: (planId: string) => void;
+  /** When true, the Mark complete button shows loading state (e.g. mutation pending). */
+  isMarkCompletePending?: boolean;
 }
 
 const statusConfig: Record<string, { badge: string; accent: string; icon: React.ReactNode }> = {
@@ -136,6 +140,8 @@ export function EpicCard({
   onReship,
   onClearError,
   onGoToEvaluate,
+  onMarkComplete,
+  isMarkCompletePending = false,
 }: EpicCardProps) {
   const tasksFromRedux = useAppSelector(
     (s) => selectTasksForEpic(s, plan.metadata.epicId),
@@ -376,8 +382,23 @@ export function EpicCard({
         {plan.status === "in_review" && (
           <div className="space-y-2">
             <p className="text-xs text-theme-muted">
-              All tasks are done. Review in Evaluate and mark this plan complete to ship.
+              All tasks are done. Mark this plan complete to ship, or review in Evaluate.
             </p>
+            {onMarkComplete && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMarkComplete(plan.metadata.planId);
+                }}
+                disabled={isMarkCompletePending}
+                className="btn-primary text-xs w-full py-2 rounded-lg font-medium inline-flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed"
+                data-testid="plan-mark-complete-button"
+                aria-label="Mark plan complete"
+              >
+                {isMarkCompletePending ? "Marking complete…" : "Mark complete"}
+              </button>
+            )}
             {onGoToEvaluate && (
               <button
                 type="button"
@@ -385,10 +406,10 @@ export function EpicCard({
                   e.stopPropagation();
                   onGoToEvaluate();
                 }}
-                className="btn-primary text-xs w-full py-2 rounded-lg font-medium inline-flex items-center justify-center"
+                className="btn-secondary text-xs w-full py-2 rounded-lg font-medium inline-flex items-center justify-center"
                 data-testid="go-to-evaluate-button"
               >
-                Mark complete in Evaluate
+                Review in Evaluate
               </button>
             )}
           </div>

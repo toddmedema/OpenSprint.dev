@@ -26,7 +26,7 @@ import {
 } from "../../store/slices/planSlice";
 import { addNotification } from "../../store/slices/notificationSlice";
 import { addNotification as addOpenQuestionNotification } from "../../store/slices/openQuestionsSlice";
-import { usePlanChat, useSinglePlan, usePlans } from "../../api/hooks";
+import { usePlanChat, useSinglePlan, usePlans, useMarkPlanComplete } from "../../api/hooks";
 import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
 import { PhaseLoadingSpinner } from "../../components/PhaseLoadingSpinner";
 import { queryKeys } from "../../api/queryKeys";
@@ -201,6 +201,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
 
   /* ── TanStack Query for loading state (data synced to Redux by ProjectShell) ── */
   const plansQuery = usePlans(projectId);
+  const markPlanCompleteMutation = useMarkPlanComplete(projectId);
 
   /* ── Redux state (needed for hook args) ── */
   const selectedPlanId = useAppSelector((s) => s.plan.selectedPlanId);
@@ -914,6 +915,11 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                       onReship={() => handleReship(plan.metadata.planId)}
                       onClearError={() => dispatch(clearExecuteError())}
                       onGoToEvaluate={() => navigate(getProjectPhasePath(projectId, "eval"))}
+                      onMarkComplete={(planId) => markPlanCompleteMutation.mutate(planId)}
+                      isMarkCompletePending={
+                        markPlanCompleteMutation.isPending &&
+                        markPlanCompleteMutation.variables === plan.metadata.planId
+                      }
                     />
                   ))}
                 </div>

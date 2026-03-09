@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
 import { PlanPhase, getPlanChatMessageDisplay } from "./PlanPhase";
 import { api } from "../../api/client";
+import { queryKeys } from "../../api/queryKeys";
 import projectReducer from "../../store/slices/projectSlice";
 import planReducer, { setPlansAndGraph, setSelectedPlanId } from "../../store/slices/planSlice";
 import executeReducer, { taskUpdated, toTasksByIdAndOrder } from "../../store/slices/executeSlice";
@@ -134,6 +135,19 @@ const mockPlanTasks = vi.fn().mockResolvedValue({
   doneTaskCount: 0,
   dependencyCount: 0,
 });
+const mockMarkPlanComplete = vi.fn().mockResolvedValue({
+  metadata: {
+    planId: "in-review-feature",
+    epicId: "epic-1",
+    complexity: "medium",
+    reviewedAt: new Date().toISOString(),
+  },
+  content: "# In Review Feature\n\nContent.",
+  status: "complete",
+  taskCount: 2,
+  doneTaskCount: 2,
+  dependencyCount: 0,
+});
 vi.mock("../../api/client", () => ({
   api: {
     plans: {
@@ -148,6 +162,7 @@ vi.mock("../../api/client", () => ({
       reExecute: (...args: unknown[]) => mockReExecute(...args),
       generate: (...args: unknown[]) => mockGenerate(...args),
       planTasks: (...args: unknown[]) => mockPlanTasks(...args),
+      markPlanComplete: (...args: unknown[]) => mockMarkPlanComplete(...args),
     },
     tasks: { list: vi.fn().mockResolvedValue([]) },
     chat: {
@@ -1994,6 +2009,50 @@ describe("PlanPhase plan sorting and status filter", () => {
       const pos = order[i].compareDocumentPosition(order[i + 1]);
       expect(pos & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     }
+  });
+
+  it("Mark complete button on in_review plan calls markPlanComplete and invalidates list", async () => {
+    const plans = [
+      {
+        ...basePlan,
+        metadata: { ...basePlan.metadata, planId: "in-review-feature" },
+        status: "in_review" as const,
+        taskCount: 2,
+        doneTaskCount: 2,
+      },
+    ];
+    mockPlansList.mockResolvedValue({ plans, edges: [] });
+    const store = createStore(plans);
+    const queryClient = createPlanPhaseQueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <PlanPhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>,
+      { wrapper }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("In Review Feature")).toBeInTheDocument();
+    });
+    const markCompleteBtn = screen.getByTestId("plan-mark-complete-button");
+    expect(markCompleteBtn).toBeInTheDocument();
+    expect(markCompleteBtn).toHaveTextContent(/^Mark complete$/);
+    await user.click(markCompleteBtn);
+    await waitFor(() => {
+      expect(mockMarkPlanComplete).toHaveBeenCalledWith("proj-1", "in-review-feature");
+    });
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: queryKeys.plans.list("proj-1") })
+      );
+    });
   });
 
   it("renders status filter chips when plans exist", () => {
