@@ -1520,7 +1520,7 @@ describe("EvalPhase feedback form", () => {
       expect(heading.textContent).not.toMatch(/\(\d+\)/);
     });
 
-    it("each dropdown option displays its count (All, Pending = pending+mapped, Resolved)", async () => {
+    it("each dropdown option displays its count (All, Pending = pending + in_review plans, Resolved = resolved + complete plans)", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
       renderWithProviders(

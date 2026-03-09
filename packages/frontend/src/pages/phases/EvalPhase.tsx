@@ -118,12 +118,12 @@ function countByStatus(feedback: FeedbackItem[], filter: FeedbackStatusFilter): 
   return feedback.filter((item) => matchesStatusFilter(item, filter)).length;
 }
 
-/** Count for Pending filter: pending feedback + plans in_review */
+/** Count for Pending filter: pending feedback length + in_review plans length (dropdown label). */
 function countPending(feedback: FeedbackItem[], plansInReview: Plan[]): number {
   return countByStatus(feedback, "pending") + plansInReview.length;
 }
 
-/** Count for Resolved filter: resolved feedback + plans complete */
+/** Count for Resolved filter: resolved feedback length + complete plans length (dropdown label). */
 function countResolved(feedback: FeedbackItem[], plansComplete: Plan[]): number {
   return countByStatus(feedback, "resolved") + plansComplete.length;
 }
