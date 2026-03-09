@@ -163,7 +163,11 @@ export function Navbar({
             </span>
           </Link>
 
-          <div className="relative flex items-center min-w-0" ref={dropdownRef}>
+          <div
+            data-testid="navbar-project-select"
+            className="relative hidden min-[800px]:flex items-center min-w-0"
+            ref={dropdownRef}
+          >
             <span className="hidden min-[1000px]:inline text-theme-muted shrink-0 pr-1">/</span>
             <button
               ref={projectTriggerRef}

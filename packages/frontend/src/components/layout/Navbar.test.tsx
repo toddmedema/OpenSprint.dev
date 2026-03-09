@@ -238,6 +238,13 @@ describe("Navbar", () => {
     expect(spacer).toHaveClass("min-[1000px]:inline");
   });
 
+  it("hides project select below 800px breakpoint (uses hidden min-[800px]:flex)", () => {
+    renderNavbar(<Navbar project={null} />);
+    const projectSelect = screen.getByTestId("navbar-project-select");
+    expect(projectSelect).toHaveClass("hidden");
+    expect(projectSelect).toHaveClass("min-[800px]:flex");
+  });
+
   it("has fixed height matching NAVBAR_HEIGHT on homepage (project=null)", () => {
     renderNavbar(<Navbar project={null} />);
     const nav = screen.getByRole("navigation");
