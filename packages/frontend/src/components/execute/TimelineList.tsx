@@ -18,8 +18,8 @@ import { AssigneeSelector } from "./AssigneeSelector";
 import type { StatusFilter } from "../../lib/executeTaskFilter";
 
 const ROW_HEIGHT = 44;
-/** Header content + border + gap to first row (same as row-to-row spacing: 11px below border so header-to-first = 21px). */
-const HEADER_HEIGHT = 40;
+/** Header content + border + gap to first row (2px padding + 7px margin below border). */
+const HEADER_HEIGHT = 38;
 const VIRTUALIZE_THRESHOLD = 25;
 
 export interface TimelineListProps {
@@ -311,7 +311,7 @@ export function TimelineList({
         ({ key, tasks: sectionTasks }) =>
           sectionTasks.length > 0 && (
             <section key={key} data-testid={`timeline-section-${key}`}>
-              <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase px-4 pt-4 pb-0 mb-[11px] border-b border-theme-border-subtle">
+              <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase px-4 pt-4 pb-[2px] mb-[7px] border-b border-theme-border-subtle">
                 {SECTION_LABELS[key]}
               </h3>
               <ul className="divide-y divide-theme-border-subtle">
@@ -368,7 +368,7 @@ export function TimelineList({
                   transform: `translateY(${virtualRow.start - virtualizer.options.scrollMargin}px)`,
                 }}
               >
-                <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase px-4 pt-4 pb-0 mb-[11px] border-b border-theme-border-subtle">
+                <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase px-4 pt-4 pb-[2px] mb-[7px] border-b border-theme-border-subtle">
                   {item.label}
                 </h3>
               </div>
