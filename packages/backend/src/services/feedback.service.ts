@@ -1011,7 +1011,6 @@ export class FeedbackService {
         : undefined;
 
     const project = await this.projectService.getProject(projectId);
-    const repoPath = project.repoPath;
 
     // Resolve parent epic: mappedEpicId (from AI or plan) or look up from plan (PRD §12.3.4)
     let parentEpicId: string | undefined;
@@ -1100,7 +1099,7 @@ export class FeedbackService {
             if (feedbackSourceTaskId) {
               try {
                 await this.taskStore.addDependency(
-                  repoPath,
+                  project.id,
                   issue.id,
                   feedbackSourceTaskId,
                   "discovered-from"
@@ -1180,7 +1179,16 @@ export class FeedbackService {
     }
 
     if (createdIds.length > 0 && parentEpicId) {
-      await this.getPlanService().clearReviewedAtIfNewTasksAdded(projectId, parentEpicId);
+      // Best-effort metadata refresh. Task creation should not fail if this secondary update fails.
+      try {
+        await this.getPlanService().clearReviewedAtIfNewTasksAdded(projectId, parentEpicId);
+      } catch (err) {
+        log.warn("Could not clear reviewedAt after feedback task creation", {
+          projectId,
+          epicId: parentEpicId,
+          err,
+        });
+      }
     }
     return createdIds;
   }

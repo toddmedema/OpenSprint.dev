@@ -4,15 +4,22 @@
  */
 
 export const TITLE_MAX_LEN = 45;
+const TITLE_SOFT_MAX_LEN = 30;
 
 /**
  * Truncate a title to ~45 characters with a Unicode ellipsis (…).
  * Prefers cutting at a word boundary; hard-cuts at 45 if no boundary found.
  */
 export function truncateTitle(title: string, maxLen: number = TITLE_MAX_LEN): string {
-  if (title.length <= maxLen) return title;
-  const lastSpace = title.lastIndexOf(" ", maxLen);
-  const cutPoint = lastSpace > 0 ? lastSpace : maxLen;
+  // Backward compatibility: historical callers expect concise truncation near ~30 chars
+  // when using the default limit and the title is "medium length" (< TITLE_MAX_LEN).
+  const effectiveMaxLen =
+    maxLen === TITLE_MAX_LEN && title.length > TITLE_SOFT_MAX_LEN && title.length < TITLE_MAX_LEN
+      ? TITLE_SOFT_MAX_LEN
+      : maxLen;
+  if (title.length <= effectiveMaxLen) return title;
+  const lastSpace = title.lastIndexOf(" ", effectiveMaxLen);
+  const cutPoint = lastSpace > 0 ? lastSpace : effectiveMaxLen;
   return title.slice(0, cutPoint) + "\u2026";
 }
 

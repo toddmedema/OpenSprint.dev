@@ -29,6 +29,13 @@ const SQLITE_CONNECTION_CODES = new Set([
   "SQLITE_NOTADB",
 ]);
 
+function isSqliteConnectionCode(code: string): boolean {
+  if (!code.startsWith("SQLITE_")) return false;
+  return Array.from(SQLITE_CONNECTION_CODES).some(
+    (prefix) => code === prefix || code.startsWith(`${prefix}_`)
+  );
+}
+
 function getErrorCode(err: unknown): string {
   const code =
     (err as NodeJS.ErrnoException).code ??
@@ -42,13 +49,13 @@ export function isDbConnectionError(err: unknown): boolean {
   if (DB_UNREACHABLE_CODES.has(code) || DB_AUTH_CONFIG_CODES.has(code)) {
     return true;
   }
-  if (SQLITE_CONNECTION_CODES.has(code) || code.startsWith("SQLITE_")) {
+  if (isSqliteConnectionCode(code)) {
     return true;
   }
 
   const msg = err instanceof Error ? err.message : String(err);
   return (
-    /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|connection refused|getaddrinfo|connect EHOSTUNREACH|password authentication failed|role .* does not exist|database .* does not exist|permission denied|relation .* does not exist|SQLITE_/i.test(
+    /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|connection refused|getaddrinfo|connect EHOSTUNREACH|password authentication failed|role .* does not exist|database .* does not exist|permission denied|relation .* does not exist|SQLITE_CANTOPEN|SQLITE_READONLY|SQLITE_BUSY|SQLITE_LOCKED|SQLITE_IOERR|SQLITE_CORRUPT|SQLITE_NOTADB/i.test(
       msg
     )
   );
@@ -61,10 +68,10 @@ export function classifyDbConnectionError(
   const code = getErrorCode(err);
   const msg = err instanceof Error ? err.message : String(err);
 
-  if (SQLITE_CONNECTION_CODES.has(code) || code.startsWith("SQLITE_")) {
+  if (isSqliteConnectionCode(code)) {
     if (code === "SQLITE_CANTOPEN") return "Cannot open SQLite database file.";
     if (code === "SQLITE_READONLY") return "SQLite database is read-only.";
-    if (code === "SQLITE_BUSY" || code === "SQLITE_LOCKED")
+    if (code.startsWith("SQLITE_BUSY") || code.startsWith("SQLITE_LOCKED"))
       return "SQLite database is locked or busy.";
     return "SQLite database error.";
   }

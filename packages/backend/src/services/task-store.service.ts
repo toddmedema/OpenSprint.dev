@@ -685,7 +685,9 @@ export class TaskStoreService {
     options: { status?: string; assignee?: string; claim?: boolean },
     issueId: string
   ): void {
-    if (options.claim || options.assignee === undefined) return;
+    const claimLikeTransition =
+      options.status === "in_progress" && options.assignee !== undefined;
+    if (options.claim || claimLikeTransition || options.assignee === undefined) return;
     const reopening = options.status === "open";
     if (currentStatus === "in_progress" && !reopening) {
       throw new AppError(

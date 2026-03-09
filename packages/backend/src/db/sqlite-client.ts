@@ -58,11 +58,23 @@ async function withErrorHandling<T>(fn: () => Promise<T>): Promise<T> {
  */
 export function resolveSqlitePath(databaseUrl: string): string {
   const trimmed = databaseUrl.trim();
+  if (
+    trimmed === ":memory:" ||
+    trimmed === "sqlite://:memory:" ||
+    trimmed === "sqlite:///:memory:" ||
+    trimmed === "file::memory:" ||
+    trimmed === "file://:memory:" ||
+    trimmed === "file:///:memory:"
+  ) {
+    return ":memory:";
+  }
   if (/^sqlite:\/\//i.test(trimmed)) {
     try {
       const u = new URL(trimmed);
       const p = u.pathname || u.hostname || "";
-      return path.resolve(decodeURIComponent(p.replace(/^\//, "")));
+      const decoded = decodeURIComponent(p.replace(/^\//, ""));
+      if (decoded === ":memory:") return ":memory:";
+      return path.resolve(decoded);
     } catch {
       return path.resolve(trimmed.replace(/^sqlite:\/\/\/?/i, ""));
     }
@@ -70,7 +82,9 @@ export function resolveSqlitePath(databaseUrl: string): string {
   if (/^file:\/\//i.test(trimmed)) {
     try {
       const u = new URL(trimmed);
-      return path.resolve(decodeURIComponent(u.pathname));
+      const decoded = decodeURIComponent(u.pathname);
+      if (decoded === ":memory:" || decoded === "/:memory:") return ":memory:";
+      return path.resolve(decoded);
     } catch {
       return path.resolve(trimmed.replace(/^file:\/\/\/?/i, ""));
     }
@@ -86,11 +100,15 @@ export async function openSqliteDatabase(
   databaseUrl: string
 ): Promise<{ db: import("better-sqlite3").Database; close: () => void }> {
   const absPath = resolveSqlitePath(databaseUrl);
-  const dir = path.dirname(absPath);
-  await fs.mkdir(dir, { recursive: true });
+  if (absPath !== ":memory:") {
+    const dir = path.dirname(absPath);
+    await fs.mkdir(dir, { recursive: true });
+  }
   const { default: Database } = await import("better-sqlite3");
   const db = new Database(absPath);
-  db.pragma("journal_mode = WAL");
+  if (absPath !== ":memory:") {
+    db.pragma("journal_mode = WAL");
+  }
   return {
     db,
     close: () => {
@@ -107,8 +125,11 @@ export function createSqliteDbClient(db: import("better-sqlite3").Database): DbC
   const runQuery = (sql: string, params: unknown[]): DbRow[] => {
     const { sql: s, params: p } = toSqliteSqlAndParams(sql, params);
     const stmt = db.prepare(s);
-    const rows = stmt.all(...p) as DbRow[];
-    return rows;
+    if (stmt.reader) {
+      return stmt.all(...p) as DbRow[];
+    }
+    stmt.run(...p);
+    return [];
   };
 
   const runExecute = (sql: string, params: unknown[]): number => {

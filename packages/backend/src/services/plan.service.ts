@@ -1095,17 +1095,10 @@ export class PlanService {
   /** Rebuild an updated Plan — PRD §7.2.2: Auditor performs capability audit and delta task generation */
   async reshipPlan(projectId: string, planId: string): Promise<Plan> {
     const plan = await this.getPlan(projectId, planId);
-    if (plan.status !== "complete") {
-      throw new AppError(
-        400,
-        ErrorCodes.INVALID_INPUT,
-        "Re-execute is only available for plans that have been marked complete."
-      );
-    }
     const repoPath = await this.getRepoPath(projectId);
     const epicId = plan.metadata.epicId;
 
-    // Verify all existing tasks are Done or none started
+    // Validate task-state preconditions first so callers get specific errors.
     if (epicId) {
       const allIssues = await this.taskStore.listAll(projectId);
       const children = allIssues.filter(
@@ -1126,6 +1119,13 @@ export class PlanService {
       const noneStarted = children.every((issue: StoredTask) => issue.status === "open");
 
       if (noneStarted && children.length > 0) {
+        if (plan.status !== "complete") {
+          throw new AppError(
+            400,
+            ErrorCodes.INVALID_INPUT,
+            "Re-execute is only available for plans that have been marked complete."
+          );
+        }
         const toDelete = allIssues.filter(
           (i: StoredTask) => i.id.startsWith(epicId + ".") && (i.issue_type ?? i.type) !== "epic"
         );
@@ -1141,6 +1141,14 @@ export class PlanService {
           "All tasks must be Done before rebuilding (or none started)"
         );
       }
+    }
+
+    if (plan.status !== "complete") {
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "Re-execute is only available for plans that have been marked complete."
+      );
     }
 
     // All done: Auditor audits capabilities and generates delta tasks (PRD §12.3.6)
