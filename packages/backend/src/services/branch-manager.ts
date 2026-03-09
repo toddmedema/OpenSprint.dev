@@ -355,7 +355,7 @@ export class BranchManager {
   /**
    * Squash all local-only commits (ahead of base) into a single commit.
    * Prevents accumulation of WIP/metadata commits that make rebase O(n) and fragile.
-   * Uses "Closed <taskId>: <title truncated to ~30 chars>" when task info is available;
+   * Uses "Closed <taskId>: <title truncated to ~45 chars>" when task info is available;
    * otherwise falls back to "squash N local commits for rebase".
    */
   private async squashLocalCommits(repoPath: string, base: string): Promise<void> {

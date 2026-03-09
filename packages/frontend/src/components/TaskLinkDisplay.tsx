@@ -1,9 +1,8 @@
+import { COMMIT_MESSAGE_TITLE_MAX_LENGTH } from "@opensprint/shared";
 import { useAppSelector } from "../store";
 import { selectTaskTitle } from "../store/slices/executeSlice";
 
-const TITLE_MAX_LENGTH = 30;
-
-function truncateTitle(title: string, maxLen: number = TITLE_MAX_LENGTH): string {
+function truncateTitle(title: string, maxLen: number = COMMIT_MESSAGE_TITLE_MAX_LENGTH): string {
   if (title.length <= maxLen) return title;
   return title.slice(0, maxLen) + "…";
 }
@@ -16,7 +15,7 @@ export interface TaskLinkDisplayProps {
 }
 
 /**
- * Displays a task's title truncated to 30 characters for use as link text.
+ * Displays a task's title truncated to 45 characters for use as link text.
  * Uses execute.tasks (titleFromStore) or cachedTitle when available; otherwise shows taskId.
  * Does not fetch task detail (avoids N requests for stale IDs from feedback/plan and wrong-ID sidebar errors).
  */

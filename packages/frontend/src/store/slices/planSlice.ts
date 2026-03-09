@@ -42,7 +42,7 @@ export interface PlanState {
   deletingPlanId: string | null;
   /** Plan IDs currently queued or active for plan-tasks (AI generate tasks) — for loading state */
   planTasksPlanIds: string[];
-  /** Optimistic plan cards shown immediately on Generate Plan click (title = first 30 chars, tempId for matching) */
+  /** Optimistic plan cards shown immediately on Generate Plan click (title = first 45 chars, tempId for matching) */
   optimisticPlans: Array<{ tempId: string; title: string }>;
   error: string | null;
   /** Per-plan error for Execute! failures (shown inline on the card) */

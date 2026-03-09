@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
+import { COMMIT_MESSAGE_TITLE_MAX_LENGTH } from "@opensprint/shared";
 import { TaskLinkDisplay } from "./TaskLinkDisplay";
 import executeReducer from "../store/slices/executeSlice";
 import type { Task } from "@opensprint/shared";
@@ -85,10 +86,14 @@ describe("TaskLinkDisplay", () => {
     expect(mockTasksGet).not.toHaveBeenCalled();
   });
 
-  it("truncates cached title to 30 characters with ellipsis", () => {
+  it("truncates cached title to 45 characters with ellipsis", () => {
     const longTitle = "This is a very long task title that exceeds thirty characters";
     renderWithStore(<TaskLinkDisplay projectId="proj-1" taskId="task-1" cachedTitle={longTitle} />);
-    expect(screen.getByText("This is a very long task title…")).toBeInTheDocument();
+    const expected =
+      longTitle.length > COMMIT_MESSAGE_TITLE_MAX_LENGTH
+        ? longTitle.slice(0, COMMIT_MESSAGE_TITLE_MAX_LENGTH) + "…"
+        : longTitle;
+    expect(screen.getByText(expected)).toBeInTheDocument();
   });
 
   it("does not call api.tasks.get when title is in execute.tasks", () => {
@@ -129,7 +134,7 @@ describe("TaskLinkDisplay", () => {
     expect(mockTasksGet).not.toHaveBeenCalled();
   });
 
-  it("does not truncate title under 30 characters", () => {
+  it("does not truncate title under 45 characters", () => {
     renderWithStore(
       <TaskLinkDisplay projectId="proj-1" taskId="task-1" cachedTitle="Short title" />
     );

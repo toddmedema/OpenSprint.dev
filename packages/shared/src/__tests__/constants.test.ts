@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AGENT_NAMES_BY_ROLE,
   AUTO_RETRY_BLOCKED_INTERVAL_MS,
+  COMMIT_MESSAGE_TITLE_MAX_LENGTH,
   TECHNICAL_BLOCK_REASONS,
   getAgentName,
   getAgentNameForRole,
@@ -10,6 +11,12 @@ import {
   isBlockedByTechnicalError,
   resolveTestCommand,
 } from "../constants/index.js";
+
+describe("COMMIT_MESSAGE_TITLE_MAX_LENGTH", () => {
+  it("is 45 for commit message / task title display truncation", () => {
+    expect(COMMIT_MESSAGE_TITLE_MAX_LENGTH).toBe(45);
+  });
+});
 
 describe("getTestCommandForFramework", () => {
   it.each([

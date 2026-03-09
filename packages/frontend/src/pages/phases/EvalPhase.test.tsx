@@ -25,7 +25,13 @@ import {
   setTasks,
 } from "../../store/slices/executeSlice";
 import { updateFeedbackItem } from "../../store/slices/evalSlice";
-import type { FeedbackItem, Notification, Plan, Task } from "@opensprint/shared";
+import {
+  COMMIT_MESSAGE_TITLE_MAX_LENGTH,
+  type FeedbackItem,
+  type Notification,
+  type Plan,
+  type Task,
+} from "@opensprint/shared";
 import { queryKeys } from "../../api/queryKeys";
 
 /**
@@ -2403,7 +2409,7 @@ describe("EvalPhase feedback form", () => {
       expect(screen.queryByText("task-1")).not.toBeInTheDocument();
     });
 
-    it("truncates task title to 30 characters with ellipsis when longer", async () => {
+    it("truncates task title to 45 characters with ellipsis when longer", async () => {
       const longTitle = "This is a very long task title that exceeds thirty characters";
       const feedbackWithTasks: FeedbackItem[] = [
         {
@@ -2434,7 +2440,11 @@ describe("EvalPhase feedback form", () => {
         expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
       });
 
-      expect(screen.getByText("This is a very long task title…")).toBeInTheDocument();
+      const expectedTruncated =
+        longTitle.length > COMMIT_MESSAGE_TITLE_MAX_LENGTH
+          ? longTitle.slice(0, COMMIT_MESSAGE_TITLE_MAX_LENGTH) + "…"
+          : longTitle;
+      expect(screen.getByText(expectedTruncated)).toBeInTheDocument();
       expect(screen.queryByText(longTitle)).not.toBeInTheDocument();
     });
 
@@ -2469,7 +2479,11 @@ describe("EvalPhase feedback form", () => {
         expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
       });
 
-      const link = screen.getByText("This is a very long task title…");
+      const expectedTruncated =
+        longTitle.length > COMMIT_MESSAGE_TITLE_MAX_LENGTH
+          ? longTitle.slice(0, COMMIT_MESSAGE_TITLE_MAX_LENGTH) + "…"
+          : longTitle;
+      const link = screen.getByText(expectedTruncated);
       const user = userEvent.setup();
       await user.hover(link);
 

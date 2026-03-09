@@ -655,7 +655,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
       const trimmed = description.trim();
       if (!trimmed) return;
 
-      const title = trimmed.slice(0, 30);
+      const title = trimmed.slice(0, 45);
       const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
       dispatch(addOptimisticPlan({ tempId, title }));

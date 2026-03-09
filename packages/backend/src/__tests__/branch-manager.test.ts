@@ -792,7 +792,7 @@ describe("BranchManager", () => {
       expect(stdout.trim()).toContain("Add feature");
     });
 
-    it("should normalize long title to ~30 chars when squashing Closed commit", async () => {
+    it("should normalize long title to ~45 chars when squashing Closed commit", async () => {
       await execAsync("git init", { cwd: repoPath });
       await execAsync("git branch -M main", { cwd: repoPath });
       await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
@@ -885,7 +885,7 @@ describe("BranchManager", () => {
       expect(stdout.trim()).toMatch(/^squash \d+ local commits for rebase$/);
     });
 
-    it("should truncate long title to ~30 chars when deriving from merge commit", async () => {
+    it("should truncate long title to ~45 chars when deriving from merge commit", async () => {
       await execAsync("git init", { cwd: repoPath });
       await execAsync("git branch -M main", { cwd: repoPath });
       await execAsync('git config user.email "test@test.com"', { cwd: repoPath });

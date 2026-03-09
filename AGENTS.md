@@ -71,7 +71,7 @@ So: one merger attempt per merge failure; no infinite merger loop.
    git fetch origin
    git rebase origin/main
    git reset --soft origin/main
-   git commit -m "Closed <task-id>: <task name ~30 chars>"
+   git commit -m "Closed <task-id>: <task name ~45 chars>"
    git checkout main
    git pull --rebase origin main
    git merge opensprint/<task-id>

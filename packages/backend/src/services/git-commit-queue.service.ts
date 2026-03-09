@@ -42,7 +42,7 @@ export class MergeJobError extends Error {
 /** Job types for main-branch git operations.
  * Commit message patterns per PRD §5.9:
  * - prd: updated after Plan <plan-id> built | prd: Sketch session update
- * - Closed <task-id>: <task title truncated to ~30 chars>
+ * - Closed <task-id>: <task title truncated to ~45 chars>
  */
 export type GitCommitJobType = "prd_update" | "worktree_merge";
 

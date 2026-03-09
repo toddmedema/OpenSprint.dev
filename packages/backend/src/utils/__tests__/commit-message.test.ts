@@ -18,17 +18,17 @@ describe("commit-message utils", () => {
     });
 
     it("truncates at word boundary with ellipsis", () => {
-      const title = "Add agent heartbeat monitoring and reporting";
+      const title = "Add agent heartbeat monitoring and reporting to dashboard";
       const result = truncateTitle(title);
-      expect(result).toBe("Add agent heartbeat monitoring\u2026");
-      expect(result.length).toBeLessThanOrEqual(31);
+      expect(result).toBe("Add agent heartbeat monitoring and reporting\u2026");
+      expect(result.length).toBeLessThanOrEqual(46);
     });
 
     it("hard-cuts when no word boundary found before limit", () => {
-      const title = "Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbb";
+      const title = "A".repeat(50);
       const result = truncateTitle(title);
-      expect(result).toBe("Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\u2026");
-      expect(result.length).toBe(31);
+      expect(result).toBe("A".repeat(45) + "\u2026");
+      expect(result.length).toBe(46);
     });
 
     it("respects custom maxLen", () => {
@@ -41,14 +41,14 @@ describe("commit-message utils", () => {
   });
 
   describe("formatClosedCommitMessage", () => {
-    it("matches squash commit spec: Closed [task ID]: [task name ~30 chars]", () => {
+    it("matches squash commit spec: Closed [task ID]: [task name ~45 chars]", () => {
       const msg = formatClosedCommitMessage(
         "opensprint.dev-81r.6",
-        "Use descriptive squash commit format"
+        "Use descriptive squash commit format when landing the plane"
       );
       expect(msg).toMatch(/^Closed opensprint\.dev-81r\.6: /);
       const titlePart = msg.replace(/^Closed [^:]+: /, "");
-      expect(titlePart.length).toBeLessThanOrEqual(31); // ~30 chars + ellipsis
+      expect(titlePart.length).toBeLessThanOrEqual(46); // ~45 chars + ellipsis
       expect(msg).toContain("Use descriptive squash");
     });
 
@@ -58,27 +58,25 @@ describe("commit-message utils", () => {
       );
     });
 
-    it("truncates long titles to ~30 chars", () => {
-      const msg = formatClosedCommitMessage(
-        "opensprint.dev-zar.3",
-        "Add agent heartbeat monitoring and reporting"
-      );
-      expect(msg).toBe("Closed opensprint.dev-zar.3: Add agent heartbeat monitoring\u2026");
-      expect(msg).not.toContain("and reporting");
+    it("truncates long titles to ~45 chars", () => {
+      const longTitle = "Add agent heartbeat monitoring and reporting to dashboard and API";
+      const msg = formatClosedCommitMessage("opensprint.dev-zar.3", longTitle);
+      expect(msg).toMatch(/^Closed opensprint\.dev-zar\.3: .+\u2026$/);
+      expect(msg).not.toContain("and API");
     });
 
     it("preserves short titles exactly", () => {
       expect(formatClosedCommitMessage("bd-x.1", "Fix typo")).toBe("Closed bd-x.1: Fix typo");
     });
 
-    it("format matches spec: Closed [task ID]: [task name ~30 chars]", () => {
+    it("format matches spec: Closed [task ID]: [task name ~45 chars]", () => {
       const taskId = "opensprint.dev-81r.6";
-      const longTitle = "Use descriptive squash commit format when landing";
+      const longTitle = "Use descriptive squash commit format when landing the plane";
       const msg = formatClosedCommitMessage(taskId, longTitle);
       expect(msg).toMatch(/^Closed [^:]+: .+$/);
       const [, id, title] = msg.match(/^Closed ([^:]+): (.+)$/)!;
       expect(id).toBe(taskId);
-      expect(title.length).toBeLessThanOrEqual(31);
+      expect(title.length).toBeLessThanOrEqual(46);
       expect(msg.startsWith("Closed ")).toBe(true);
     });
   });

@@ -1,13 +1,13 @@
 /**
  * Commit message utilities for PRD §5.9 format:
- * Closed [task ID]: [task name truncated to ~30 chars]
+ * Closed [task ID]: [task name truncated to ~45 chars]
  */
 
-export const TITLE_MAX_LEN = 30;
+export const TITLE_MAX_LEN = 45;
 
 /**
- * Truncate a title to ~30 characters with a Unicode ellipsis (…).
- * Prefers cutting at a word boundary; hard-cuts at 30 if no boundary found.
+ * Truncate a title to ~45 characters with a Unicode ellipsis (…).
+ * Prefers cutting at a word boundary; hard-cuts at 45 if no boundary found.
  */
 export function truncateTitle(title: string, maxLen: number = TITLE_MAX_LEN): string {
   if (title.length <= maxLen) return title;
