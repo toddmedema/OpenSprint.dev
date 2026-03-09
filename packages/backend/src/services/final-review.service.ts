@@ -60,9 +60,14 @@ Rules:
 
 export class FinalReviewService {
   private taskStore = taskStoreSingleton;
-  private planService = new PlanService();
+  private planService: PlanService | null = null;
   private projectService = new ProjectService();
   private contextAssembler = new ContextAssembler();
+
+  private getPlanService(): PlanService {
+    this.planService ??= new PlanService();
+    return this.planService;
+  }
 
   /**
    * Run the final review agent for an epic whose implementation tasks are all closed.
@@ -100,7 +105,7 @@ export class FinalReviewService {
       depIds
     );
 
-    const { fileTree, keyFilesContent } = await this.planService.getCodebaseContext(projectId);
+    const { fileTree, keyFilesContent } = await this.getPlanService().getCodebaseContext(projectId);
     const prdExcerpt = await this.contextAssembler.extractPrdExcerpt(repoPath);
 
     const completedTasksSummary = implTasks
@@ -442,7 +447,7 @@ Rules:
       }
     }
     if (createdIds.length > 0) {
-      await this.planService.clearReviewedAtIfNewTasksAdded(projectId, epicId);
+      await this.getPlanService().clearReviewedAtIfNewTasksAdded(projectId, epicId);
     }
     return createdIds;
   }

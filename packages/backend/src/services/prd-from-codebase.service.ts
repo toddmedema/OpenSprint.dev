@@ -39,13 +39,18 @@ Guidelines:
 - Output multiple PRD_UPDATE blocks so the PRD is populated with as many sections as you can confidently derive.`;
 
 export class PrdFromCodebaseService {
-  private planService = new PlanService();
+  private planService: PlanService | null = null;
   private chatService = new ChatService();
   private prdService = new PrdService();
   private projectService = new ProjectService();
 
+  private getPlanService(): PlanService {
+    this.planService ??= new PlanService();
+    return this.planService;
+  }
+
   async generatePrdFromCodebase(projectId: string): Promise<void> {
-    const { fileTree, keyFilesContent } = await this.planService.getCodebaseContext(projectId);
+    const { fileTree, keyFilesContent } = await this.getPlanService().getCodebaseContext(projectId);
 
     const userPrompt = `Analyze the following codebase and produce a PRD that describes the existing application.
 

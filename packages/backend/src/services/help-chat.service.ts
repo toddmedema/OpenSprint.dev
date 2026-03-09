@@ -73,7 +73,12 @@ const HELP_CHAT_HOMEPAGE_SCOPE = "homepage";
 export class HelpChatService {
   private projectService = new ProjectService();
   private prdService = new PrdService();
-  private planService = new PlanService();
+  private planService: PlanService | null = null;
+
+  private getPlanService(): PlanService {
+    this.planService ??= new PlanService();
+    return this.planService;
+  }
 
   private getScopeKey(projectId: string | null): string {
     return projectId ? `project:${projectId}` : HELP_CHAT_HOMEPAGE_SCOPE;
@@ -161,7 +166,7 @@ export class HelpChatService {
     const [project, prdResult, plansResult, tasksResult, agents] = await Promise.all([
       this.projectService.getProject(projectId),
       this.prdService.getPrd(projectId).catch(() => null),
-      this.planService.listPlans(projectId).catch(() => []),
+      this.getPlanService().listPlans(projectId).catch(() => []),
       taskStore.listAll(projectId).catch(() => []),
       orchestratorService.getActiveAgents(projectId).catch(() => []),
     ]);

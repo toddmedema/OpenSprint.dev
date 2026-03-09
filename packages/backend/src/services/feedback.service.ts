@@ -112,9 +112,14 @@ export class FeedbackService {
   private projectService = new ProjectService();
   private hilService = hilService;
   private chatService = new ChatService();
-  private planService = new PlanService();
+  private planService: PlanService | null = null;
   private prdService = new PrdService();
   private taskStore = taskStoreSingleton;
+
+  private getPlanService(): PlanService {
+    this.planService ??= new PlanService();
+    return this.planService;
+  }
 
   /**
    * Enqueue a feedback item for Analyst processing (Gastown-style mailbox).
@@ -279,7 +284,7 @@ export class FeedbackService {
   /** Build plan context for AI mapping (planId, epicId, title from first heading) */
   private async getPlanContextForCategorization(projectId: string): Promise<string> {
     try {
-      const plans = await this.planService.listPlans(projectId);
+      const plans = await this.getPlanService().listPlans(projectId);
       if (plans.length === 0)
         return "No plans exist yet. Use mapped_plan_id: null, mapped_epic_id: null.";
       const lines = plans.map((p) => {
@@ -373,7 +378,7 @@ export class FeedbackService {
 
     let plans: { metadata: { planId: string } }[] = [];
     try {
-      plans = await this.planService.listPlans(projectId);
+      plans = await this.getPlanService().listPlans(projectId);
     } catch {
       // Ignore
     }
@@ -442,7 +447,7 @@ export class FeedbackService {
           item.mappedEpicId = rawMappedEpicId.trim();
         } else if (item.mappedPlanId) {
           try {
-            const plan = await this.planService.getPlan(projectId, item.mappedPlanId);
+            const plan = await this.getPlanService().getPlan(projectId, item.mappedPlanId);
             if (plan.metadata.epicId) {
               item.mappedEpicId = plan.metadata.epicId;
             }
@@ -597,7 +602,10 @@ export class FeedbackService {
         // Large-scope feedback: route to Planner to create new Epic/Plan (PRD §7.4.2)
         if (item.isLargeScope) {
           try {
-            const generated = await this.planService.generatePlanFromDescription(projectId, item.text);
+            const generated = await this.getPlanService().generatePlanFromDescription(
+              projectId,
+              item.text
+            );
             if (generated.status !== "created") {
               await this.enqueueForCategorization(projectId, item.id);
               return;
@@ -634,12 +642,12 @@ export class FeedbackService {
                 item.id
               );
               if (approved) {
-                await this.planService.shipPlan(projectId, plan.metadata.planId);
+                await this.getPlanService().shipPlan(projectId, plan.metadata.planId);
                 orchestratorService.nudge(projectId);
               }
             } else {
               // automated or notify_and_proceed: auto-execute
-              await this.planService.shipPlan(projectId, plan.metadata.planId);
+              await this.getPlanService().shipPlan(projectId, plan.metadata.planId);
               orchestratorService.nudge(projectId);
             }
 
@@ -1011,7 +1019,7 @@ export class FeedbackService {
       parentEpicId = item.mappedEpicId;
     } else if (item.mappedPlanId) {
       try {
-        const plan = await this.planService.getPlan(projectId, item.mappedPlanId);
+        const plan = await this.getPlanService().getPlan(projectId, item.mappedPlanId);
         if (plan.metadata.epicId) {
           parentEpicId = plan.metadata.epicId;
         }
@@ -1172,7 +1180,7 @@ export class FeedbackService {
     }
 
     if (createdIds.length > 0 && parentEpicId) {
-      await this.planService.clearReviewedAtIfNewTasksAdded(projectId, parentEpicId);
+      await this.getPlanService().clearReviewedAtIfNewTasksAdded(projectId, parentEpicId);
     }
     return createdIds;
   }

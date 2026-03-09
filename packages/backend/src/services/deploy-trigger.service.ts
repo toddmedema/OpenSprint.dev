@@ -4,7 +4,6 @@ import { getDefaultDeploymentTarget, getTargetsForDeployEvent } from "@opensprin
 import { ProjectService } from "./project.service.js";
 import { deployStorageService } from "./deploy-storage.service.js";
 import { broadcastToProject } from "../websocket/index.js";
-import { runDeployAsync } from "../routes/deliver.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("deploy");
@@ -60,6 +59,7 @@ async function doDeploy(
 
     await deployStorageService.updateRecord(projectId, record.id, { status: "running" });
 
+    const { runDeployAsync } = await import("../routes/deliver.js");
     const deployPromise = runDeployAsync(
       projectId,
       record.id,
