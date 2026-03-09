@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from "react";
-import { useNavigate, useLocation, useParams } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getProjectPhasePath } from "../lib/phaseRouting";
 import type { ProjectPhase } from "@opensprint/shared";
 
@@ -9,6 +9,15 @@ const PHASE_BY_DIGIT: Record<string, ProjectPhase> = {
   "3": "execute",
   "4": "eval",
   "5": "deliver",
+};
+
+/** Digit key codes (main keyboard and numpad when NumLock on). */
+const PHASE_BY_CODE: Record<string, ProjectPhase> = {
+  Digit1: "sketch",
+  Digit2: "plan",
+  Digit3: "execute",
+  Digit4: "eval",
+  Digit5: "deliver",
 };
 
 function isEditableElement(target: EventTarget | null): boolean {
@@ -25,10 +34,19 @@ function isEditableElement(target: EventTarget | null): boolean {
  * - ~ (Backquote): go to home
  * - Escape: open settings (project settings if in a project, else global)
  */
+/** Parse projectId from pathname when under /projects/:projectId/... (ElectronShortcuts is outside Routes so useParams is empty). */
+function projectIdFromPathname(pathname: string): string | undefined {
+  const m = pathname.match(/^\/projects\/([^/]+)(?:\/|$)/);
+  if (!m) return undefined;
+  const id = m[1];
+  if (id === "add-existing" || id === "create-new") return undefined;
+  return id;
+}
+
 export function ElectronShortcuts() {
   const navigate = useNavigate();
   const location = useLocation();
-  const params = useParams<{ projectId?: string }>();
+  const projectId = projectIdFromPathname(location.pathname);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -36,30 +54,33 @@ export function ElectronShortcuts() {
       if (isEditableElement(e.target)) return;
 
       const key = e.key;
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
 
-      // 1–5: phase tabs (only when we're under a project)
-      if (key >= "1" && key <= "5") {
-        const projectId = params.projectId;
-        if (projectId) {
-          const phase = PHASE_BY_DIGIT[key];
-          if (phase) {
+      // 1–5: phase tabs (only when we're under a project; no modifiers so we don't steal Cmd+1 etc.)
+      if (!hasModifier) {
+        const phaseByKey = PHASE_BY_DIGIT[key];
+        const phaseByCode = e.code in PHASE_BY_CODE ? PHASE_BY_CODE[e.code] : undefined;
+        const phase = phaseByKey ?? phaseByCode;
+        if (phase) {
+          if (projectId) {
             e.preventDefault();
+            e.stopPropagation();
             navigate(getProjectPhasePath(projectId, phase));
           }
+          return;
         }
-        return;
       }
 
-      // ~ (Backquote): home
-      if (key === "`" || key === "~") {
+      // ~ (Backquote): home (no modifiers)
+      if (!hasModifier && (key === "`" || key === "~")) {
         e.preventDefault();
+        e.stopPropagation();
         navigate("/");
         return;
       }
 
       // Escape: settings (project if in project, else global)
       if (key === "Escape") {
-        const projectId = params.projectId;
         if (projectId) {
           e.preventDefault();
           navigate(`/projects/${projectId}/settings`);
@@ -69,12 +90,12 @@ export function ElectronShortcuts() {
         }
       }
     },
-    [navigate, params.projectId]
+    [navigate, projectId]
   );
 
   useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [handleKeyDown]);
 
   return null;
