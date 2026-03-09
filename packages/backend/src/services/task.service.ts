@@ -562,13 +562,20 @@ export class TaskService {
     if (Object.keys(updatePayload).length === 0) {
       return this.getTask(projectId, taskId);
     }
-    // When assigning to a human (non-agent), add to project teamMembers if not already present (Technical Approach §4).
+    // When assigning to a human (non-agent), require enableHumanTeammates and optionally add to teamMembers.
     if (
       assigneeValue &&
       assigneeValue.length > 0 &&
       !isAgentAssignee(assigneeValue)
     ) {
       const settings = await this.projectService.getSettings(projectId);
+      if (!settings.enableHumanTeammates) {
+        throw new AppError(
+          400,
+          ErrorCodes.INVALID_INPUT,
+          "Assignee cannot be set when human teammates are disabled. Enable human teammates in project settings."
+        );
+      }
       const teamMembers = settings.teamMembers ?? [];
       const alreadyInTeam = teamMembers.some(
         (m) => m.name.trim().toLowerCase() === assigneeValue!.trim().toLowerCase()

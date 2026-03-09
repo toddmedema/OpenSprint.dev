@@ -853,6 +853,7 @@ describe("TaskService", () => {
       const projectService = new ProjectService();
       vi.mocked(projectService.getSettings).mockResolvedValue({
         gitWorkingMode: "worktree",
+        enableHumanTeammates: true,
         teamMembers: [],
       } as never);
       vi.mocked(projectService.updateSettings).mockResolvedValue({} as never);
@@ -885,6 +886,7 @@ describe("TaskService", () => {
       const projectService = new ProjectService();
       vi.mocked(projectService.getSettings).mockResolvedValue({
         gitWorkingMode: "worktree",
+        enableHumanTeammates: true,
         teamMembers: [{ id: "alice", name: "Alice" }],
       } as never);
       vi.mocked(projectService.updateSettings).mockResolvedValue({} as never);
@@ -911,10 +913,38 @@ describe("TaskService", () => {
       );
     });
 
+    it("rejects human assignee when enableHumanTeammates is false", async () => {
+      const projectService = new ProjectService();
+      vi.mocked(projectService.getSettings).mockResolvedValue({
+        gitWorkingMode: "worktree",
+        enableHumanTeammates: false,
+        teamMembers: [],
+      } as never);
+
+      const svc = new TaskService(
+        projectService,
+        taskStore,
+        new FeedbackService(),
+        new SessionManager(),
+        new ContextAssembler(),
+        new BranchManager(),
+        mockOrchestrator
+      );
+
+      vi.mocked(taskStore.update).mockClear();
+      await expect(svc.updateTask("proj-1", "task-1", { assignee: "Alice" })).rejects.toMatchObject({
+        statusCode: 400,
+        code: "INVALID_INPUT",
+        message: expect.stringMatching(/human teammates are disabled/i),
+      });
+      expect(taskStore.update).not.toHaveBeenCalled();
+    });
+
     it("does not add agent assignee to teamMembers", async () => {
       const projectService = new ProjectService();
       vi.mocked(projectService.getSettings).mockResolvedValue({
         gitWorkingMode: "worktree",
+        enableHumanTeammates: true,
         teamMembers: [],
       } as never);
       vi.mocked(projectService.updateSettings).mockResolvedValue({} as never);

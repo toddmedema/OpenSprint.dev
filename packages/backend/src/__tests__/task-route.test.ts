@@ -775,11 +775,20 @@ Test review prompt generation.
   });
 
   it("PATCH /tasks/:taskId updates assignee and GET returns it", async () => {
+    await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .set("Content-Type", "application/json")
+      .send({ enableHumanTeammates: true });
     const _project = await projectService.getProject(projectId);
+    const blocker = await taskStore.create(projectId, "Blocker task", {
+      type: "task",
+      priority: 0,
+    });
     const task = await taskStore.create(projectId, "Assignee Update Test Task", {
       type: "task",
       priority: 1,
     });
+    await taskStore.addDependency(projectId, task.id, blocker.id);
 
     const patchRes = await request(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
@@ -842,6 +851,10 @@ Test review prompt generation.
   });
 
   it("PATCH /tasks/:taskId returns 400 when changing assignee on in-progress task", async () => {
+    await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .set("Content-Type", "application/json")
+      .send({ enableHumanTeammates: true });
     const _project = await projectService.getProject(projectId);
     const task = await taskStore.create(projectId, "In progress task", {
       type: "task",
@@ -857,6 +870,21 @@ Test review prompt generation.
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("ASSIGNEE_LOCKED");
     expect(res.body.error?.message).toMatch(/cannot change assignee while task is in progress/i);
+  });
+
+  it("PATCH /tasks/:taskId returns 400 when setting human assignee and enableHumanTeammates is false", async () => {
+    const _project = await projectService.getProject(projectId);
+    const task = await taskStore.create(projectId, "Human assignee disabled", {
+      type: "task",
+      priority: 1,
+    });
+    const res = await request(app)
+      .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
+      .set("Content-Type", "application/json")
+      .send({ assignee: "Alice" });
+    expect(res.status).toBe(400);
+    expect(res.body.error?.code).toBe("INVALID_INPUT");
+    expect(res.body.error?.message).toMatch(/human teammates are disabled/i);
   });
 
   it("GET /tasks/:taskId returns complexity when task has it", async () => {
