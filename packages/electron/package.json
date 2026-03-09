@@ -1,0 +1,53 @@
+{
+  "name": "@opensprint/electron",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:dir": "electron-builder --dir",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.opensprint.app",
+    "productName": "Open Sprint",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "extraResources": [
+      {
+        "from": "desktop-resources/backend",
+        "to": "backend"
+      },
+      {
+        "from": "desktop-resources/frontend",
+        "to": "frontend"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": ["dmg"],
+      "icon": "../frontend/public/logo-512x512.png"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "../frontend/public/logo-512x512.png"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "../frontend/public/logo-512x512.png"
+    }
+  }
+}

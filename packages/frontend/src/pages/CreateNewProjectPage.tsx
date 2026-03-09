@@ -467,8 +467,20 @@ export function CreateNewProjectPage() {
               <SimplifiedAgentsStep
                 simpleComplexityAgent={simpleComplexityAgent}
                 complexComplexityAgent={complexComplexityAgent}
-                onSimpleComplexityAgentChange={setSimpleComplexityAgent}
-                onComplexComplexityAgentChange={setComplexComplexityAgent}
+                onSimpleComplexityAgentChange={(config) =>
+                  setSimpleComplexityAgent((prev) => ({
+                    ...prev,
+                    ...config,
+                    baseUrl: config.baseUrl ?? prev.baseUrl ?? "",
+                  }))
+                }
+                onComplexComplexityAgentChange={(config) =>
+                  setComplexComplexityAgent((prev) => ({
+                    ...prev,
+                    ...config,
+                    baseUrl: config.baseUrl ?? prev.baseUrl ?? "",
+                  }))
+                }
                 envKeys={envKeys}
                 keyInput={keyInput}
                 onKeyInputChange={(key, value) => setKeyInput((p) => ({ ...p, [key]: value }))}

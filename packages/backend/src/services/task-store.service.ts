@@ -1,8 +1,6 @@
 import crypto from "crypto";
-import pg from "pg";
-import type { Pool } from "pg";
 import type { TaskType, TaskPriority } from "@opensprint/shared";
-import { clampTaskComplexity } from "@opensprint/shared";
+import { clampTaskComplexity, getDatabaseDialect } from "@opensprint/shared";
 import {
   isAgentAssignee,
   isBlockedByTechnicalError,
@@ -12,10 +10,9 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { createLogger } from "../utils/logger.js";
 import type { DbClient } from "../db/client.js";
-import { createPostgresDbClient, getPoolConfig } from "../db/client.js";
 import { classifyDbConnectionError, isDbConnectionError } from "../db/db-errors.js";
-import { runSchema } from "../db/schema.js";
 import type { AppDb } from "../db/app-db.js";
+import { initAppDb } from "../db/app-db.js";
 import { PlanStore, type PlanInsertData } from "./plan-store.service.js";
 import {
   AuditorRunStore,
@@ -125,8 +122,9 @@ export function resolveEpicId(
 
 export class TaskStoreService {
   private client: DbClient | null = null;
-  private pool: Pool | null = null;
   private appDb: AppDb | null = null;
+  /** When true, this service created appDb in runInitInternal and should close it in closePool. */
+  private ownAppDb = false;
   private writeLock: Promise<void> = Promise.resolve();
   private injectedClient: DbClient | null = null;
   /** Serializes init so only one run runs at a time; concurrent callers await the same promise. */
@@ -189,7 +187,14 @@ export class TaskStoreService {
         (err instanceof AppError && err.code === ErrorCodes.DATABASE_UNAVAILABLE) ||
         isDbConnectionError(err)
       ) {
-        throw new AppError(503, ErrorCodes.DATABASE_UNAVAILABLE, classifyDbConnectionError(err));
+        const dialect = databaseUrl
+          ? getDatabaseDialect(databaseUrl)
+          : getDatabaseDialect(await getDatabaseUrl().catch(() => "postgresql://"));
+        throw new AppError(
+          503,
+          ErrorCodes.DATABASE_UNAVAILABLE,
+          classifyDbConnectionError(err, dialect)
+        );
       }
       const msg =
         err instanceof Error
@@ -206,7 +211,7 @@ export class TaskStoreService {
   private async runInitInternal(databaseUrl?: string): Promise<void> {
     const url = databaseUrl ?? (await getDatabaseUrl());
 
-    if (process.env.VITEST) {
+    if (process.env.VITEST && getDatabaseDialect(url) === "postgres") {
       try {
         const dbName = new URL(url).pathname.replace(/^\/+|\/+$/g, "") || "opensprint";
         if (dbName === "opensprint") {
@@ -222,30 +227,31 @@ export class TaskStoreService {
       }
     }
 
-    const pool = new pg.Pool(getPoolConfig(url));
-    this.pool = pool;
-    this.client = createPostgresDbClient(pool);
-
-    await runSchema(this.client);
-    log.info("Task store initialized with Postgres");
+    const appDbInstance = await initAppDb(url);
+    this.appDb = appDbInstance;
+    this.ownAppDb = true;
+    this.client = await appDbInstance.getClient();
+    const dialect = getDatabaseDialect(url);
+    log.info("Task store initialized", { dialect });
   }
 
   /**
    * Close the database pool. Call on shutdown so connections are released.
-   * When using AppDb, only clears the reference; caller must call appDb.close().
+   * When using AppDb from app init, only clears the reference; caller must call appDb.close().
+   * When this service created AppDb (ownAppDb), closes it here.
    * No-op when using an injected client (tests).
    */
   async closePool(): Promise<void> {
     if (this.appDb) {
+      if (this.ownAppDb) {
+        await this.appDb.close();
+        this.ownAppDb = false;
+      }
       this.appDb = null;
       this.client = null;
       return;
     }
-    if (this.pool) {
-      await this.pool.end();
-      this.pool = null;
-      this.client = null;
-    }
+    this.client = null;
   }
 
   protected ensureClient(): DbClient {
@@ -260,7 +266,7 @@ export class TaskStoreService {
   }
 
   /**
-   * Check PostgreSQL connectivity. Used by GET /db-status for homepage error banner.
+   * Check database connectivity. Used by GET /db-status for homepage error banner.
    * Returns { ok: true } when connected, or { ok: false, message } when not.
    */
   async checkConnection(): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -269,7 +275,9 @@ export class TaskStoreService {
       await client.query("SELECT 1");
       return { ok: true };
     } catch (err) {
-      return { ok: false, message: classifyDbConnectionError(err) };
+      const url = await getDatabaseUrl().catch(() => "");
+      const dialect = url ? getDatabaseDialect(url) : "postgres";
+      return { ok: false, message: classifyDbConnectionError(err, dialect) };
     }
   }
 
@@ -544,6 +552,20 @@ export class TaskStoreService {
   async listInProgressWithAgentAssignee(projectId: string): Promise<StoredTask[]> {
     const all = await this.list(projectId);
     return all.filter((t) => t.status === "in_progress" && isAgentAssignee(t.assignee));
+  }
+
+  /**
+   * List project IDs that have at least one task with status in_progress.
+   * Used by scripts (e.g. reset in-progress tasks to open).
+   */
+  async listProjectIdsWithInProgressTasks(): Promise<string[]> {
+    await this.ensureInitialized();
+    const client = this.ensureClient();
+    const rows = await client.query(
+      toPgParams("SELECT DISTINCT project_id FROM tasks WHERE status = ?"),
+      ["in_progress"]
+    );
+    return rows.map((r) => r.project_id as string).filter(Boolean);
   }
 
   /**
@@ -873,7 +895,8 @@ export class TaskStoreService {
             [id, projectId]
           );
           const currentStatus = statusRow?.status as string | undefined;
-          if (currentStatus === "in_progress") {
+          const reopening = options.status === "open";
+          if (currentStatus === "in_progress" && !reopening) {
             throw new AppError(
               400,
               ErrorCodes.ASSIGNEE_LOCKED,
@@ -883,6 +906,10 @@ export class TaskStoreService {
           }
           sets.push("assignee = $" + paramIdx++);
           vals.push(options.assignee);
+          if (reopening && (options.assignee === "" || options.assignee == null)) {
+            sets.push("started_at = $" + paramIdx++);
+            vals.push(null);
+          }
         }
       }
 
@@ -986,7 +1013,8 @@ export class TaskStoreService {
               [u.id, projectId]
             );
             const currentStatus = statusRow?.status as string | undefined;
-            if (currentStatus === "in_progress") {
+            const reopening = u.status === "open";
+            if (currentStatus === "in_progress" && !reopening) {
               throw new AppError(
                 400,
                 ErrorCodes.ASSIGNEE_LOCKED,
@@ -1003,10 +1031,14 @@ export class TaskStoreService {
             sets.push(`status = $${paramIdx++}`);
             vals.push(u.status);
           }
-          if (u.assignee != null) {
+          if (u.assignee !== undefined) {
             sets.push(`assignee = $${paramIdx++}`);
-            vals.push(u.assignee);
-            if (u.assignee.trim() !== "") {
+            vals.push(u.assignee ?? null);
+            const reopening = u.status === "open" && (u.assignee === "" || u.assignee == null);
+            if (reopening) {
+              sets.push(`started_at = $${paramIdx++}`);
+              vals.push(null);
+            } else if (u.assignee != null && u.assignee.trim() !== "") {
               const row = await tx.queryOne(
                 toPgParams("SELECT started_at FROM tasks WHERE id = ? AND project_id = ?"),
                 [u.id, projectId]
@@ -1722,7 +1754,10 @@ export class TaskStoreService {
         cutoffId,
       ]);
 
-      await client.execute("VACUUM agent_sessions");
+      const url = await getDatabaseUrl().catch(() => "");
+      const dialect = url ? getDatabaseDialect(url) : "postgres";
+      const vacuumSql = dialect === "sqlite" ? "VACUUM" : "VACUUM agent_sessions";
+      await client.execute(vacuumSql);
       if (pruned > 0) {
         log.info("Pruned agent_sessions", { pruned, retained: 100 });
       }

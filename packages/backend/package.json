@@ -9,6 +9,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
+    "reset-in-progress-tasks": "tsx src/scripts/reset-in-progress-tasks.ts",
     "test": "node ../../node_modules/vitest/vitest.mjs run",
     "test:coverage": "node ../../node_modules/vitest/vitest.mjs run --coverage",
     "test:watch": "vitest",
@@ -20,8 +21,10 @@
     "@anthropic-ai/sdk": "^0.74.0",
     "@google/genai": "^1.43.0",
     "@opensprint/shared": "*",
+    "better-sqlite3": "^11.6.0",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.38.0",
     "express": "^4.21.0",
     "mammoth": "^1.11.0",
     "multer": "^2.0.2",
@@ -32,6 +35,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/multer": "^2.0.0",

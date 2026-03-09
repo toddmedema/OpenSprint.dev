@@ -6,8 +6,13 @@ import { queryKeys } from "../../api/queryKeys";
 import projectReducer from "../slices/projectSlice";
 
 const mockInvalidateQueries = vi.fn().mockResolvedValue(undefined);
+const mockSetQueryData = vi.fn();
 vi.mock("../../queryClient", () => ({
-  getQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }) as unknown as QueryClient,
+  getQueryClient: () =>
+    ({
+      invalidateQueries: mockInvalidateQueries,
+      setQueryData: mockSetQueryData,
+    }) as unknown as QueryClient,
 }));
 import websocketReducer from "../slices/websocketSlice";
 import sketchReducer from "../slices/sketchSlice";
@@ -101,6 +106,7 @@ describe("websocketMiddleware", () => {
   beforeEach(() => {
     wsInstance = null;
     mockInvalidateQueries.mockClear();
+    mockSetQueryData.mockClear();
     MockWS = class extends MockWebSocket {
       constructor(url: string) {
         super(url);
@@ -1032,7 +1038,22 @@ describe("websocketMiddleware", () => {
         expect(tasks.some((t) => t.id === "task-1")).toBe(true);
         expect(tasks.some((t) => t.id === "task-2")).toBe(true);
       });
-      expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      // Middleware syncs fetched tasks to React Query cache instead of invalidating (avoids duplicate refetches)
+      await vi.waitFor(() => {
+        expect(mockSetQueryData).toHaveBeenCalledWith(
+          queryKeys.tasks.list("proj-1"),
+          expect.any(Function)
+        );
+        expect(mockSetQueryData).toHaveBeenCalledWith(
+          queryKeys.tasks.detail("proj-1", "task-1"),
+          expect.objectContaining({ id: "task-1", title: "Fix bug" })
+        );
+        expect(mockSetQueryData).toHaveBeenCalledWith(
+          queryKeys.tasks.detail("proj-1", "task-2"),
+          expect.objectContaining({ id: "task-2", title: "Add test" })
+        );
+      });
+      expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
         queryKey: queryKeys.tasks.list("proj-1"),
       });
     });
@@ -1117,6 +1138,23 @@ describe("websocketMiddleware", () => {
         ])
       );
 
+      const { api } = await import("../../api/client");
+      vi.mocked(api.tasks.get).mockResolvedValue({
+        id: "task-auth",
+        title: "Fix auth",
+        description: "",
+        type: "task",
+        status: "open",
+        priority: 1,
+        assignee: null,
+        labels: [],
+        dependencies: [],
+        epicId: null,
+        kanbanColumn: "backlog",
+        createdAt: "",
+        updatedAt: "",
+      } as never);
+
       wsInstance!.simulateMessage({
         type: "feedback.updated",
         feedbackId: "fb-1",
@@ -1133,10 +1171,12 @@ describe("websocketMiddleware", () => {
         },
       });
 
+      // feedback.updated syncs fetched tasks to React Query cache (no invalidate)
       await vi.waitFor(() => {
-        expect(mockInvalidateQueries).toHaveBeenCalledWith({
-          queryKey: queryKeys.tasks.list("proj-1"),
-        });
+        expect(mockSetQueryData).toHaveBeenCalledWith(
+          queryKeys.tasks.list("proj-1"),
+          expect.any(Function)
+        );
       });
 
       wsInstance!.simulateMessage({

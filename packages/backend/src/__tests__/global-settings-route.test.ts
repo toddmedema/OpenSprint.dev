@@ -77,9 +77,8 @@ describe("Global Settings API", () => {
       const res = await request(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
-      expect(res.body.data.databaseUrl).toBe(
-        "postgresql://opensprint:***@localhost:5432/opensprint"
-      );
+      expect(res.body.data.databaseUrl).toContain("opensprint.sqlite");
+      expect(res.body.data.databaseDialect).toBe("sqlite");
     });
 
     it("returns masked databaseUrl with password redacted", async () => {

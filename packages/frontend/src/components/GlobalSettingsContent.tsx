@@ -99,6 +99,14 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
   const [setupTablesDialogOpen, setSetupTablesDialogOpen] = useState(false);
   const [setupTablesLoading, setSetupTablesLoading] = useState(false);
   const [setupTablesError, setSetupTablesError] = useState<string | null>(null);
+  const [databaseDialect, setDatabaseDialect] = useState<"sqlite" | "postgres" | undefined>(
+    undefined
+  );
+  const [showNotificationDotInMenuBar, setShowNotificationDotInMenuBar] = useState(true);
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
+  const [upgradePostgresUrl, setUpgradePostgresUrl] = useState("");
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const initialLoadRef = useRef(true);
 
   const notifySaveState = useCallback(
@@ -144,9 +152,11 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
       .get()
       .then((res) => {
         setDatabaseUrl(res.databaseUrl ?? "");
+        setDatabaseDialect(res.databaseDialect);
         setApiKeys(res.apiKeys);
         setExpoTokenConfigured(res.expoTokenConfigured ?? false);
         setExpoToken(res.expoTokenConfigured ? "••••••••" : "");
+        setShowNotificationDotInMenuBar(res.showNotificationDotInMenuBar !== false);
       })
       .catch(() => {
         setDatabaseUrl("");
@@ -174,6 +184,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
         .put({ databaseUrl: trimmed })
         .then((res) => {
           setDatabaseUrl(res.databaseUrl);
+          if (res.databaseDialect !== undefined) setDatabaseDialect(res.databaseDialect);
           void queryClient.invalidateQueries({ queryKey: DB_STATUS_QUERY_KEY });
           scheduleSaveComplete(startTime);
         })
@@ -300,6 +311,32 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
 
   const showSetupTablesButton = databaseUrl.trim().length > 0 && !databaseUrl.includes("***");
 
+  const handleMigrateToPostgresConfirm = useCallback(async () => {
+    const trimmed = upgradePostgresUrl.trim();
+    if (!trimmed) return;
+    setUpgradeError(null);
+    setUpgradeLoading(true);
+    try {
+      await api.globalSettings.migrateToPostgres(trimmed);
+      setUpgradeDialogOpen(false);
+      setUpgradePostgresUrl("");
+      void queryClient.invalidateQueries({ queryKey: DB_STATUS_QUERY_KEY });
+      const res = await api.globalSettings.get();
+      setDatabaseUrl(res.databaseUrl ?? "");
+      setDatabaseDialect(res.databaseDialect);
+    } catch (err) {
+      setUpgradeError(
+        isConnectionError(err)
+          ? "Unable to connect. Please check your network and try again."
+          : err instanceof Error
+            ? err.message
+            : "Migration failed"
+      );
+    } finally {
+      setUpgradeLoading(false);
+    }
+  }, [upgradePostgresUrl, queryClient]);
+
   return (
     <div className="space-y-6" data-testid="global-settings-content">
       <div data-testid="api-keys-section-wrapper">
@@ -390,11 +427,36 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
           </p>
         )}
       </div>
+      {databaseDialect === "sqlite" && (
+        <div
+          className="rounded-xl border border-theme-border bg-theme-bg-elevated p-4"
+          data-testid="upgrade-to-postgres-card"
+        >
+          <h3 className="text-sm font-semibold text-theme-text">Upgrade to PostgreSQL</h3>
+          <p className="text-xs text-theme-muted mt-1 mb-3">
+            You&apos;re using SQLite. Migrate your data to PostgreSQL for production or
+            multi-user use.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setUpgradeError(null);
+              setUpgradePostgresUrl("");
+              setUpgradeDialogOpen(true);
+            }}
+            className="btn-primary"
+            data-testid="upgrade-to-postgres-button"
+          >
+            Migrate data to PostgreSQL
+          </button>
+        </div>
+      )}
       <div data-testid="database-url-section">
-        <h3 className="text-sm font-semibold text-theme-text">Database URL</h3>
+        <h3 className="text-sm font-semibold text-theme-text">Database</h3>
         <p className="text-xs text-theme-muted mb-3">
-          PostgreSQL connection URL for tasks, feedback, and sessions. Default: local Docker. Use a
-          remote URL (e.g. Supabase) for hosted deployments. Password is hidden in display.
+          {databaseDialect === "sqlite"
+            ? "Using SQLite by default. Enter a PostgreSQL URL to switch, or use the upgrade button above to migrate data."
+            : "PostgreSQL connection URL for tasks, feedback, and sessions. Password is hidden in display."}
         </p>
         <div className="flex gap-2 items-end">
           <div className="flex-1">
@@ -505,6 +567,72 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
           </div>
         </div>
       )}
+      {upgradeDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          data-testid="upgrade-to-postgres-dialog"
+        >
+          <div
+            className="absolute inset-0 bg-theme-overlay backdrop-blur-sm"
+            onClick={() => !upgradeLoading && setUpgradeDialogOpen(false)}
+          />
+          <div
+            className="relative bg-theme-surface rounded-xl shadow-2xl w-full max-w-lg mx-4 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
+              <h2 className="text-lg font-semibold text-theme-text">Upgrade to PostgreSQL</h2>
+              <CloseButton
+                onClick={() => !upgradeLoading && setUpgradeDialogOpen(false)}
+                ariaLabel="Close upgrade dialog"
+              />
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-theme-text">
+                Enter your PostgreSQL connection URL. All data will be copied from SQLite to the
+                new database, then the app will switch to it.
+              </p>
+              <input
+                type="text"
+                className="input font-mono text-sm w-full"
+                placeholder="postgresql://user:password@host:5432/database"
+                value={upgradePostgresUrl}
+                onChange={(e) => {
+                  setUpgradePostgresUrl(e.target.value);
+                  setUpgradeError(null);
+                }}
+                disabled={upgradeLoading}
+                autoComplete="off"
+                data-testid="upgrade-postgres-url-input"
+              />
+              {upgradeError && (
+                <p className="text-sm text-theme-error-text" role="alert">
+                  {upgradeError}
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-theme-border bg-theme-bg rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => !upgradeLoading && setUpgradeDialogOpen(false)}
+                className="btn-secondary"
+                disabled={upgradeLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleMigrateToPostgresConfirm()}
+                disabled={upgradeLoading || !upgradePostgresUrl.trim()}
+                className="btn-primary disabled:opacity-50"
+                data-testid="upgrade-to-postgres-confirm"
+              >
+                {upgradeLoading ? "Copying data…" : "Migrate and switch"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div>
         <h3 className="text-sm font-semibold text-theme-text">Theme</h3>
         <p className="text-xs text-theme-muted mb-3">
@@ -547,6 +675,35 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
           ))}
         </select>
       </div>
+      {typeof window !== "undefined" && window.electron?.isElectron && (
+        <div data-testid="desktop-notification-dot-section">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showNotificationDotInMenuBar}
+              onChange={async (e) => {
+                const value = e.target.checked;
+                setShowNotificationDotInMenuBar(value);
+                const startTime = Date.now();
+                notifySaveState("saving");
+                try {
+                  await api.globalSettings.put({ showNotificationDotInMenuBar: value });
+                  scheduleSaveComplete(startTime);
+                } catch {
+                  setShowNotificationDotInMenuBar(!value);
+                  scheduleSaveComplete(startTime);
+                }
+              }}
+              data-testid="show-notification-dot-in-menu-bar"
+              className="rounded border-theme-border"
+            />
+            <span className="text-sm text-theme-text">Show notification dot in menu bar</span>
+          </label>
+          <p className="text-xs text-theme-muted mt-1 ml-6">
+            When unchecked, the tray icon will not show a dot when you have pending notifications.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import path from "path";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { createLogger } from "../utils/logger.js";
 import { waitForGitReady as waitForGitReadyUtil } from "../utils/git-lock.js";
+import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
 import { shellExec } from "../utils/shell-exec.js";
 import { ensureRepoHasInitialCommit, getOriginUrl } from "../utils/git-repo-state.js";
 import { formatClosedCommitMessage, parseClosedCommitMessage } from "../utils/commit-message.js";
@@ -75,7 +76,11 @@ export interface CreateTaskWorktreeOptions {
 /** Max time (ms) for npm install when ensuring node_modules exists */
 const NPM_INSTALL_TIMEOUT_MS = 120_000;
 
-function shQuote(value: string): string {
+/** Cross-platform shell quoting: cmd.exe double-quote on Windows, bash single-quote elsewhere. */
+function shellQuote(value: string): string {
+  if (process.platform === "win32") {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
@@ -321,8 +326,9 @@ export class BranchManager {
       await this.squashLocalCommits(repoPath, originRef);
 
       try {
+        const noHooks = getGitNoHooksPath();
         await shellExec(
-          `git -c core.hooksPath=/dev/null rebase --empty=drop ${originRef}`,
+          `git -c core.hooksPath="${noHooks}" rebase --empty=drop ${originRef}`,
           {
             cwd: repoPath,
             timeout: 120000,
@@ -342,7 +348,8 @@ export class BranchManager {
       });
     }
 
-    await this.git(repoPath, `-c core.hooksPath=/dev/null push origin ${baseBranch}`);
+    const noHooks = getGitNoHooksPath();
+    await this.git(repoPath, `-c core.hooksPath="${noHooks}" push origin ${baseBranch}`);
   }
 
   /**
@@ -383,7 +390,8 @@ export class BranchManager {
       log.info(`Squashing ${localCount} local commits before rebase`, { repoPath, localCount });
       await shellExec(`git reset --soft ${base}`, { cwd: repoPath, timeout: 10000 });
       const escaped = commitMessage.replace(/"/g, '\\"');
-      await shellExec(`git -c core.hooksPath=/dev/null commit -m "${escaped}"`, {
+      const noHooksSquash = getGitNoHooksPath();
+      await shellExec(`git -c core.hooksPath="${noHooksSquash}" commit -m "${escaped}"`, {
         cwd: repoPath,
         timeout: 30000,
       });
@@ -463,7 +471,8 @@ export class BranchManager {
       return;
     }
     await this.commitWip(repoPath, "pre-push");
-    await this.git(repoPath, `-c core.hooksPath=/dev/null push origin ${baseBranch}`);
+    const noHooksPush = getGitNoHooksPath();
+    await this.git(repoPath, `-c core.hooksPath="${noHooksPush}" push origin ${baseBranch}`);
   }
 
   /**
@@ -584,7 +593,8 @@ export class BranchManager {
       });
       if (!statusAfter.trim()) return false;
 
-      await shellExec(`git -c core.hooksPath=/dev/null commit -m "WIP: ${taskId}"`, {
+      const noHooksWip = getGitNoHooksPath();
+      await shellExec(`git -c core.hooksPath="${noHooksWip}" commit -m "WIP: ${taskId}"`, {
         cwd: repoPath,
         timeout: 30000,
       });
@@ -712,13 +722,20 @@ export class BranchManager {
     // local modifications. Don't delete or untrack — that creates
     // modify/delete conflicts when branches have these files committed.
     try {
-      await shellExec(
-        [
-          'git ls-files .opensprint/ 2>/dev/null | while IFS= read -r f; do git update-index --no-assume-unchanged "$f" --no-skip-worktree "$f" 2>/dev/null; done',
-          "git checkout -f HEAD -- .opensprint/ 2>/dev/null || true",
-        ].join("; "),
-        { cwd: repoPath, timeout: 10000 }
-      );
+      if (process.platform === "win32") {
+        await shellExec("git checkout -f HEAD -- .opensprint/", {
+          cwd: repoPath,
+          timeout: 10000,
+        });
+      } else {
+        await shellExec(
+          [
+            'git ls-files .opensprint/ 2>/dev/null | while IFS= read -r f; do git update-index --no-assume-unchanged "$f" --no-skip-worktree "$f" 2>/dev/null; done',
+            "git checkout -f HEAD -- .opensprint/ 2>/dev/null || true",
+          ].join("; "),
+          { cwd: repoPath, timeout: 10000 }
+        );
+      }
     } catch {
       // Best-effort cleanup; merge may still succeed without it
     }
@@ -836,7 +853,7 @@ export class BranchManager {
           ourPath,
         });
         try {
-          await this.git(repoPath, `worktree remove ${shQuote(safeOtherPath)} --force`);
+          await this.git(repoPath, `worktree remove ${shellQuote(safeOtherPath)} --force`);
         } catch {
           await this.removeWorktreeDirectorySafely(
             repoPath,
@@ -917,8 +934,9 @@ export class BranchManager {
     // Create worktree with hooks disabled so post-checkout hooks do not run
     // in the worktree; task store operations only run from the main repo.
     await fs.mkdir(path.dirname(wtPath), { recursive: true });
+    const noHooksWorktree = getGitNoHooksPath();
     await shellExec(
-      `git -c core.hooksPath=/dev/null worktree add ${shQuote(wtPath)} ${shQuote(branchName)}`,
+      `git -c core.hooksPath="${noHooksWorktree}" worktree add ${shellQuote(wtPath)} ${shellQuote(branchName)}`,
       {
         cwd: repoPath,
         timeout: 30000,
@@ -1145,7 +1163,7 @@ export class BranchManager {
     }
 
     try {
-      await this.git(repoPath, `worktree remove ${shQuote(safeRegisteredPath)} --force`);
+      await this.git(repoPath, `worktree remove ${shellQuote(safeRegisteredPath)} --force`);
     } catch (err) {
       log.warn("worktree remove failed, attempting manual cleanup", {
         worktreeKey,
@@ -1329,10 +1347,13 @@ export class BranchManager {
       });
 
       for (const file of infraFiles) {
-        await shellExec(`git rm -f "${file}" 2>/dev/null || git add "${file}"`, {
-          cwd: repoPath,
-          timeout: 5000,
-        });
+        try {
+          await shellExec(`git rm -f ${shellQuote(file)}`, { cwd: repoPath, timeout: 5000 });
+        } catch {
+          await shellExec(`git add ${shellQuote(file)}`, { cwd: repoPath, timeout: 5000 }).catch(
+            () => {}
+          );
+        }
       }
       autoResolvedFiles = infraFiles;
 
@@ -1347,13 +1368,23 @@ export class BranchManager {
 
     // Strip .opensprint/ runtime paths from the staged merge result (sessions, active, pending-commits).
     await shellExec(
-      [
-        "git rm -r --cached --ignore-unmatch .opensprint/pending-commits.json .opensprint/sessions .opensprint/active 2>/dev/null || true",
-        "rm -f .opensprint/pending-commits.json",
-        "rm -rf .opensprint/sessions .opensprint/active",
-      ].join("; "),
+      "git rm -r --cached --ignore-unmatch .opensprint/pending-commits.json .opensprint/sessions .opensprint/active",
       { cwd: repoPath, timeout: 10000 }
     ).catch(() => {});
+    const runtimePaths = [
+      path.join(repoPath, ".opensprint", "pending-commits.json"),
+      path.join(repoPath, ".opensprint", "sessions"),
+      path.join(repoPath, ".opensprint", "active"),
+    ];
+    for (const p of runtimePaths) {
+      try {
+        const stat = await fs.stat(p);
+        if (stat.isFile()) await fs.unlink(p);
+        else if (stat.isDirectory()) await fs.rm(p, { recursive: true, force: true });
+      } catch {
+        // Path may not exist
+      }
+    }
     return { autoResolvedFiles };
   }
 

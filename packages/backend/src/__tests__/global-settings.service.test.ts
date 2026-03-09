@@ -12,7 +12,7 @@ import {
   getDatabaseUrl,
   ensureDefaultDatabaseUrl,
 } from "../services/global-settings.service.js";
-import { DEFAULT_DATABASE_URL } from "@opensprint/shared";
+import { getDefaultDatabaseUrl } from "@opensprint/shared";
 
 describe("global-settings.service", () => {
   let tempDir: string;
@@ -95,7 +95,7 @@ describe("global-settings.service", () => {
       expect(settings.databaseUrl).toBeUndefined();
 
       const url = await getDatabaseUrl();
-      expect(url).toBe(DEFAULT_DATABASE_URL);
+      expect(url).toBe(getDefaultDatabaseUrl());
     });
   });
 
@@ -105,7 +105,7 @@ describe("global-settings.service", () => {
 
       const raw = await fs.readFile(getFilePath(), "utf-8");
       const parsed = JSON.parse(raw);
-      expect(parsed.databaseUrl).toBe(DEFAULT_DATABASE_URL);
+      expect(parsed.databaseUrl).toBe(getDefaultDatabaseUrl());
     });
 
     it("adds databaseUrl when file exists but databaseUrl is missing", async () => {
@@ -114,7 +114,7 @@ describe("global-settings.service", () => {
       await ensureDefaultDatabaseUrl();
 
       const settings = await getGlobalSettings();
-      expect(settings.databaseUrl).toBe(DEFAULT_DATABASE_URL);
+      expect(settings.databaseUrl).toBe(getDefaultDatabaseUrl());
       expect(settings.useCustomCli).toBe(true);
     });
 
@@ -133,14 +133,15 @@ describe("global-settings.service", () => {
       await ensureDefaultDatabaseUrl();
 
       const settings = await getGlobalSettings();
-      expect(settings.databaseUrl).toBe(DEFAULT_DATABASE_URL);
+      expect(settings.databaseUrl).toBe(getDefaultDatabaseUrl());
     });
   });
 
   describe("getDatabaseUrl", () => {
-    it("returns DEFAULT_DATABASE_URL when databaseUrl is not set", async () => {
+    it("returns default SQLite path when databaseUrl is not set", async () => {
       const url = await getDatabaseUrl();
-      expect(url).toBe(DEFAULT_DATABASE_URL);
+      expect(url).toBe(getDefaultDatabaseUrl());
+      expect(url).toContain("opensprint.sqlite");
     });
 
     it("returns configured databaseUrl when set", async () => {
@@ -219,7 +220,7 @@ describe("global-settings.service", () => {
 
     it("throws when databaseUrl has invalid format", async () => {
       await expect(setGlobalSettings({ databaseUrl: "mysql://localhost/db" })).rejects.toThrow(
-        "databaseUrl must start with postgres:// or postgresql://"
+        /databaseUrl must start with postgres/
       );
     });
   });
@@ -297,7 +298,7 @@ describe("global-settings.service", () => {
       await setGlobalSettings({ useCustomCli: true });
 
       await expect(updateGlobalSettings({ databaseUrl: "invalid-url" })).rejects.toThrow(
-        "databaseUrl must start with postgres:// or postgresql://"
+        /databaseUrl must start with postgres/
       );
     });
   });

@@ -5,6 +5,7 @@ import { ProjectSetup } from "./pages/ProjectSetup";
 import { CreateNewProjectPage } from "./pages/CreateNewProjectPage";
 import { ProjectShell } from "./pages/ProjectShell";
 import { ProjectView } from "./pages/ProjectView";
+import { ElectronShortcuts } from "./components/ElectronShortcuts";
 
 const SettingsPage = lazy(() =>
   import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage }))
@@ -37,7 +38,9 @@ function LazyRoute({ children }: { children: ReactNode }) {
 
 export function App() {
   return (
-    <Routes>
+    <>
+      <ElectronShortcuts />
+      <Routes>
       <Route path="/" element={<Home />} />
       <Route
         path="/settings"
@@ -78,5 +81,6 @@ export function App() {
         <Route path=":phase" element={<ProjectView />} />
       </Route>
     </Routes>
+    </>
   );
 }

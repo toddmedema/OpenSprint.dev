@@ -1,4 +1,4 @@
-/** Node.js/network codes: Postgres server unreachable */
+/** Node.js/network codes: server unreachable */
 const DB_UNREACHABLE_CODES = new Set([
   "ECONNREFUSED",
   "ETIMEDOUT",
@@ -18,6 +18,17 @@ const DB_AUTH_CONFIG_CODES = new Set([
   "42P01", // undefined_table (schema not applied)
 ]);
 
+/** SQLite error codes that indicate connection/open or config issues */
+const SQLITE_CONNECTION_CODES = new Set([
+  "SQLITE_CANTOPEN",
+  "SQLITE_READONLY",
+  "SQLITE_BUSY",
+  "SQLITE_LOCKED",
+  "SQLITE_IOERR",
+  "SQLITE_CORRUPT",
+  "SQLITE_NOTADB",
+]);
+
 function getErrorCode(err: unknown): string {
   const code =
     (err as NodeJS.ErrnoException).code ??
@@ -31,32 +42,49 @@ export function isDbConnectionError(err: unknown): boolean {
   if (DB_UNREACHABLE_CODES.has(code) || DB_AUTH_CONFIG_CODES.has(code)) {
     return true;
   }
+  if (SQLITE_CONNECTION_CODES.has(code) || code.startsWith("SQLITE_")) {
+    return true;
+  }
 
   const msg = err instanceof Error ? err.message : String(err);
   return (
-    /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|connection refused|getaddrinfo|connect EHOSTUNREACH|password authentication failed|role .* does not exist|database .* does not exist|permission denied|relation .* does not exist/i.test(
+    /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|connection refused|getaddrinfo|connect EHOSTUNREACH|password authentication failed|role .* does not exist|database .* does not exist|permission denied|relation .* does not exist|SQLITE_/i.test(
       msg
     )
   );
 }
 
-export function classifyDbConnectionError(err: unknown): string {
+export function classifyDbConnectionError(
+  err: unknown,
+  dialect: "postgres" | "sqlite" = "postgres"
+): string {
   const code = getErrorCode(err);
+  const msg = err instanceof Error ? err.message : String(err);
+
+  if (SQLITE_CONNECTION_CODES.has(code) || code.startsWith("SQLITE_")) {
+    if (code === "SQLITE_CANTOPEN") return "Cannot open SQLite database file.";
+    if (code === "SQLITE_READONLY") return "SQLite database is read-only.";
+    if (code === "SQLITE_BUSY" || code === "SQLITE_LOCKED")
+      return "SQLite database is locked or busy.";
+    return "SQLite database error.";
+  }
 
   if (DB_UNREACHABLE_CODES.has(code)) {
-    return "No PostgreSQL server running";
+    return dialect === "sqlite"
+      ? "Cannot open SQLite database."
+      : "No PostgreSQL server running";
   }
   if (DB_AUTH_CONFIG_CODES.has(code)) {
     return "PostgreSQL server is running but wrong user or database setup";
   }
-
-  const msg = err instanceof Error ? err.message : String(err);
   if (
     /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|connection refused|getaddrinfo|connect EHOSTUNREACH/i.test(
       msg
     )
   ) {
-    return "No PostgreSQL server running";
+    return dialect === "sqlite"
+      ? "Cannot open SQLite database."
+      : "No PostgreSQL server running";
   }
   if (
     /password authentication failed|role .* does not exist|database .* does not exist|permission denied|relation .* does not exist/i.test(
@@ -66,5 +94,7 @@ export function classifyDbConnectionError(err: unknown): string {
     return "PostgreSQL server is running but wrong user or database setup";
   }
 
-  return "Server is unable to connect to PostgreSQL database.";
+  return dialect === "sqlite"
+    ? "Unable to connect to SQLite database."
+    : "Server is unable to connect to PostgreSQL database.";
 }

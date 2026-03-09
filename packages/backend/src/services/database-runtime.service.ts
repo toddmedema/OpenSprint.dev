@@ -3,7 +3,9 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { createLogger } from "../utils/logger.js";
 import { getPoolConfig } from "../db/client.js";
+import { openSqliteDatabase } from "../db/sqlite-client.js";
 import { classifyDbConnectionError, isDbConnectionError } from "../db/db-errors.js";
+import { getDatabaseDialect } from "@opensprint/shared";
 import {
   getEffectiveDatabaseConfig,
   type DatabaseUrlSource,
@@ -56,6 +58,16 @@ function toIsoNow(): string {
 }
 
 async function probeDatabase(databaseUrl: string): Promise<void> {
+  const dialect = getDatabaseDialect(databaseUrl);
+  if (dialect === "sqlite") {
+    const { db, close } = await openSqliteDatabase(databaseUrl);
+    try {
+      db.prepare("SELECT 1").get();
+    } finally {
+      close();
+    }
+    return;
+  }
   const pool = new pg.Pool(getPoolConfig(databaseUrl));
   try {
     await pool.query("SELECT 1");
@@ -65,6 +77,7 @@ async function probeDatabase(databaseUrl: string): Promise<void> {
 }
 
 function getDatabaseName(databaseUrl: string): string | null {
+  if (getDatabaseDialect(databaseUrl) === "sqlite") return null;
   try {
     return new URL(databaseUrl).pathname.replace(/^\/+|\/+$/g, "") || null;
   } catch {
@@ -97,7 +110,7 @@ export class DatabaseRuntimeService {
         : {
             ok: false,
             state: "disconnected",
-            message: "Connecting to PostgreSQL...",
+            message: "Connecting to database...",
             lastCheckedAt: null,
             lastSuccessAt: null,
           });
@@ -129,10 +142,10 @@ export class DatabaseRuntimeService {
       return;
     }
     void this.triggerConnect("require-database");
-    throw new AppError(
+      throw new AppError(
       503,
       ErrorCodes.DATABASE_UNAVAILABLE,
-      this.snapshot.message ?? "Server is unable to connect to PostgreSQL database."
+      this.snapshot.message ?? "Server is unable to connect to database."
     );
   }
 
@@ -143,10 +156,13 @@ export class DatabaseRuntimeService {
     ) {
       return;
     }
+    const dialect = this.lastConfig
+      ? getDatabaseDialect(this.lastConfig.databaseUrl)
+      : "postgres";
     const message =
       err instanceof AppError && err.code === ErrorCodes.DATABASE_UNAVAILABLE
         ? err.message
-        : classifyDbConnectionError(err);
+        : classifyDbConnectionError(err, dialect);
     void this.transitionToDisconnected({
       reason: "runtime-failure",
       message,
@@ -177,7 +193,7 @@ export class DatabaseRuntimeService {
     if (this.snapshot.state === "connected") {
       await this.transitionToDisconnected({
         reason,
-        message: "Reconnecting to PostgreSQL...",
+        message: "Reconnecting to database...",
         source: this.lastConfig?.source ?? "default",
         databaseUrl: this.lastConfig?.databaseUrl ?? "",
       });
@@ -216,6 +232,7 @@ export class DatabaseRuntimeService {
   private async runConnect(reason: string): Promise<void> {
     const config = await this.deps.resolveConfig();
     this.lastConfig = config;
+    const dialect = getDatabaseDialect(config.databaseUrl);
 
     const databaseName = getDatabaseName(config.databaseUrl);
     if (databaseName === TEST_DB_NAME) {
@@ -228,7 +245,7 @@ export class DatabaseRuntimeService {
       return;
     }
 
-    this.transitionToConnecting(config, reason);
+    this.transitionToConnecting(config, reason, dialect);
 
     try {
       await this.deps.probe(config.databaseUrl);
@@ -252,7 +269,7 @@ export class DatabaseRuntimeService {
       const message =
         err instanceof AppError && err.code === ErrorCodes.DATABASE_UNAVAILABLE
           ? err.message
-          : classifyDbConnectionError(err);
+          : classifyDbConnectionError(err, dialect);
       await this.transitionToDisconnected({
         ...config,
         reason,
@@ -261,14 +278,19 @@ export class DatabaseRuntimeService {
     }
   }
 
-  private transitionToConnecting(config: DatabaseRuntimeConfig, reason: string): void {
+  private transitionToConnecting(
+    config: DatabaseRuntimeConfig,
+    reason: string,
+    dialect: "postgres" | "sqlite" = "postgres"
+  ): void {
+    const dbLabel = dialect === "sqlite" ? "database" : "PostgreSQL";
     this.snapshot = {
       ...this.snapshot,
       ok: false,
       state: "connecting",
       message: this.snapshot.lastSuccessAt
-        ? "Reconnecting to PostgreSQL..."
-        : "Connecting to PostgreSQL...",
+        ? `Reconnecting to ${dbLabel}...`
+        : `Connecting to ${dbLabel}...`,
       lastCheckedAt: toIsoNow(),
     };
     log.info("database.connecting", {

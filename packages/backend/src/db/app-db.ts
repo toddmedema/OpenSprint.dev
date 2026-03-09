@@ -2,6 +2,8 @@ import pg from "pg";
 import type { DbClient } from "./client.js";
 import { createPostgresDbClient, getPoolConfig } from "./client.js";
 import { runSchema } from "./schema.js";
+import { createSqliteDbClient, openSqliteDatabase } from "./sqlite-client.js";
+import { getDatabaseDialect } from "@opensprint/shared";
 
 export interface AppDb {
   getClient(): Promise<DbClient>;
@@ -20,11 +22,11 @@ function addApplicationName(url: string, name: string): string {
   }
 }
 
-export async function initAppDb(databaseUrl: string): Promise<AppDb> {
+async function initPostgresAppDb(databaseUrl: string): Promise<AppDb> {
   const urlWithAppName = addApplicationName(databaseUrl, "opensprint-app");
   const pool = new pg.Pool(getPoolConfig(urlWithAppName));
   const client = createPostgresDbClient(pool);
-  await runSchema(client);
+  await runSchema(client, "postgres");
 
   return {
     async getClient(): Promise<DbClient> {
@@ -37,4 +39,30 @@ export async function initAppDb(databaseUrl: string): Promise<AppDb> {
       await pool.end();
     },
   };
+}
+
+async function initSqliteAppDb(databaseUrl: string): Promise<AppDb> {
+  const { db, close } = await openSqliteDatabase(databaseUrl);
+  const client = createSqliteDbClient(db);
+  await runSchema(client, "sqlite");
+
+  return {
+    async getClient(): Promise<DbClient> {
+      return client;
+    },
+    async runWrite<T>(fn: (client: DbClient) => Promise<T>): Promise<T> {
+      return client.runInTransaction(fn);
+    },
+    async close(): Promise<void> {
+      close();
+    },
+  };
+}
+
+export async function initAppDb(databaseUrl: string): Promise<AppDb> {
+  const dialect = getDatabaseDialect(databaseUrl);
+  if (dialect === "sqlite") {
+    return initSqliteAppDb(databaseUrl);
+  }
+  return initPostgresAppDb(databaseUrl);
 }

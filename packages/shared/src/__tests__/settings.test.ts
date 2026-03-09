@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   DEFAULT_HIL_CONFIG,
   DEFAULT_DATABASE_URL,
+  getDefaultDatabaseUrl,
   getAgentForComplexity,
   getAgentForPlanningRole,
   parseSettings,
@@ -12,6 +13,7 @@ import {
   getDeploymentTargetsForUi,
   API_KEY_PROVIDERS,
   validateApiKeyEntry,
+  getDatabaseDialect,
   validateDatabaseUrl,
   maskDatabaseUrl,
   isLocalDatabaseUrl,
@@ -1124,10 +1126,19 @@ describe("maskApiKeysForResponse", () => {
 });
 
 describe("DEFAULT_DATABASE_URL", () => {
-  it("is the local Docker Postgres URL", () => {
+  it("is the local Docker Postgres URL (deprecated, use getDefaultDatabaseUrl for default)", () => {
     expect(DEFAULT_DATABASE_URL).toBe(
       "postgresql://opensprint:opensprint@localhost:5432/opensprint"
     );
+  });
+});
+
+describe("getDefaultDatabaseUrl", () => {
+  it("returns path under homedir ending in opensprint.sqlite", () => {
+    const url = getDefaultDatabaseUrl();
+    expect(url).toContain(".opensprint");
+    expect(url).toContain("opensprint.sqlite");
+    expect(url).not.toMatch(/^postgres/);
   });
 });
 
@@ -1161,13 +1172,26 @@ describe("validateDatabaseUrl", () => {
     );
   });
 
-  it("throws when scheme is not postgres/postgresql", () => {
+  it("throws when scheme is not postgres/postgresql or SQLite path", () => {
     expect(() => validateDatabaseUrl("mysql://localhost/db")).toThrow(
-      "databaseUrl must start with postgres:// or postgresql://"
+      /databaseUrl must start with postgres:\/\/ or postgresql:\/\//
     );
     expect(() => validateDatabaseUrl("https://localhost/db")).toThrow(
-      "databaseUrl must start with postgres:// or postgresql://"
+      /databaseUrl must start with postgres:\/\/ or postgresql:\/\//
     );
+  });
+
+  it("accepts SQLite URLs and paths", () => {
+    expect(validateDatabaseUrl("sqlite:///path/to/db.sqlite")).toBe("sqlite:///path/to/db.sqlite");
+    expect(validateDatabaseUrl("file:///abs/path/db.sqlite")).toBe("file:///abs/path/db.sqlite");
+    expect(validateDatabaseUrl("./data/opensprint.sqlite")).toBe("./data/opensprint.sqlite");
+    expect(validateDatabaseUrl("/var/lib/opensprint/db.db")).toBe("/var/lib/opensprint/db.db");
+    expect(validateDatabaseUrl("file.db")).toBe("file.db");
+  });
+
+  it("throws for sqlite:// or file:// without path", () => {
+    expect(() => validateDatabaseUrl("sqlite://")).toThrow(/path for SQLite/);
+    expect(() => validateDatabaseUrl("file://")).toThrow(/path for SQLite/);
   });
 
   it("throws when URL is malformed (missing host)", () => {
@@ -1178,6 +1202,20 @@ describe("validateDatabaseUrl", () => {
     expect(() => validateDatabaseUrl("postgresql://exa mple.com/db")).toThrow(
       "databaseUrl must be a valid PostgreSQL connection URL"
     );
+  });
+});
+
+describe("getDatabaseDialect", () => {
+  it("returns postgres for postgres/postgresql URLs", () => {
+    expect(getDatabaseDialect("postgresql://localhost/db")).toBe("postgres");
+    expect(getDatabaseDialect("postgres://user:pass@host:5432/db")).toBe("postgres");
+  });
+  it("returns sqlite for sqlite/file URLs and paths", () => {
+    expect(getDatabaseDialect("sqlite:///path/db.sqlite")).toBe("sqlite");
+    expect(getDatabaseDialect("file:///abs/db.db")).toBe("sqlite");
+    expect(getDatabaseDialect("./data/db.sqlite")).toBe("sqlite");
+    expect(getDatabaseDialect("/var/db.sqlite")).toBe("sqlite");
+    expect(getDatabaseDialect("file.db")).toBe("sqlite");
   });
 });
 
@@ -1200,6 +1238,12 @@ describe("maskDatabaseUrl", () => {
 
   it("returns *** for invalid URL", () => {
     expect(maskDatabaseUrl("not-a-url")).toBe("***");
+  });
+
+  it("masks SQLite URLs without exposing full path", () => {
+    expect(maskDatabaseUrl("sqlite:///path/to/db.sqlite")).toContain("sqlite:");
+    expect(maskDatabaseUrl("file:///abs/db.db")).toContain("file:");
+    expect(maskDatabaseUrl("./data/db.sqlite")).toBe("sqlite:./data/db.sqlite");
   });
 });
 

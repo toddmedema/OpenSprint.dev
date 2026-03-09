@@ -6,7 +6,8 @@
   "workspaces": [
     "packages/shared",
     "packages/backend",
-    "packages/frontend"
+    "packages/frontend",
+    "packages/electron"
   ],
   "scripts": {
     "dev": "npm run build -w packages/shared && bash scripts/ensure-postgres-running.sh && concurrently \"npm run dev -w packages/shared\" \"npm run dev:backend\" \"npm run dev:frontend\"",
@@ -29,7 +30,9 @@
     "perf:baseline": "npx tsx scripts/perf.ts --baseline",
     "perf:compare": "npx tsx scripts/perf.ts --compare",
     "delete-hil-notifications": "npx tsx scripts/delete-hil-notifications.ts",
-    "migrate:opensprint": "npx tsx scripts/migrate-opensprint-to-db.ts"
+    "migrate:opensprint": "npx tsx scripts/migrate-opensprint-to-db.ts",
+    "build:desktop": "npm run build && node packages/electron/scripts/prepare-desktop-resources.js && npm run build -w packages/electron",
+    "start:desktop": "npm run build && electron packages/electron"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -4,7 +4,8 @@ import {
   maskDatabaseUrl,
   maskApiKeysForResponse,
   validateDatabaseUrl,
-  DEFAULT_DATABASE_URL,
+  getDefaultDatabaseUrl,
+  getDatabaseDialect,
   API_KEY_PROVIDERS,
   type GlobalSettingsResponse,
   type ApiKeyProvider,
@@ -12,23 +13,29 @@ import {
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import type { GlobalSettings } from "@opensprint/shared";
-import { getGlobalSettings, updateGlobalSettings } from "../services/global-settings.service.js";
+import {
+  getGlobalSettings,
+  updateGlobalSettings,
+  getEffectiveDatabaseConfig,
+} from "../services/global-settings.service.js";
+import { migrateSqliteToPostgres } from "../services/migrate-to-postgres.service.js";
 import { clearLimitHit } from "../services/api-key-resolver.service.js";
 import { clearExhaustedForProviderAcrossAllProjects } from "../services/api-key-exhausted.service.js";
 import { orchestratorService } from "../services/orchestrator.service.js";
 import { getProjects } from "../services/project-index.js";
-import { runSchema } from "../db/schema.js";
-import { createPostgresDbClientFromUrl } from "../db/client.js";
+import { initAppDb } from "../db/app-db.js";
 import { databaseRuntime } from "../services/database-runtime.service.js";
 
 export const globalSettingsRouter = Router();
 
 function buildResponse(settings: GlobalSettings) {
-  const effectiveUrl = settings.databaseUrl ?? DEFAULT_DATABASE_URL;
+  const effectiveUrl = settings.databaseUrl ?? getDefaultDatabaseUrl();
   return {
     databaseUrl: maskDatabaseUrl(effectiveUrl),
+    databaseDialect: getDatabaseDialect(effectiveUrl),
     ...(settings.apiKeys && { apiKeys: maskApiKeysForResponse(settings.apiKeys) }),
     expoTokenConfigured: Boolean(settings.expoToken && settings.expoToken.trim()),
+    showNotificationDotInMenuBar: settings.showNotificationDotInMenuBar !== false,
   };
 }
 
@@ -77,6 +84,49 @@ globalSettingsRouter.post("/clear-limit-hit/:provider/:id", async (req, res, nex
   }
 });
 
+// POST /global-settings/migrate-to-postgres — Copy data from current DB (SQLite) to target Postgres, then switch.
+globalSettingsRouter.post("/migrate-to-postgres", async (req: Request, res, next) => {
+  try {
+    const body = req.body as { databaseUrl?: string };
+    if (body.databaseUrl === undefined || typeof body.databaseUrl !== "string") {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "databaseUrl must be a string");
+    }
+    const trimmed = body.databaseUrl.trim();
+    if (!trimmed) {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "databaseUrl cannot be empty");
+    }
+    let targetUrl: string;
+    try {
+      targetUrl = validateDatabaseUrl(trimmed);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Invalid database URL";
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, msg);
+    }
+    if (getDatabaseDialect(targetUrl) !== "postgres") {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Target must be a PostgreSQL URL");
+    }
+
+    const { databaseUrl: sourceUrl } = await getEffectiveDatabaseConfig();
+    if (getDatabaseDialect(sourceUrl) === "postgres") {
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "Already using PostgreSQL. Change database URL in Settings if needed."
+      );
+    }
+
+    await migrateSqliteToPostgres(sourceUrl, targetUrl);
+    await updateGlobalSettings({ databaseUrl: targetUrl });
+    databaseRuntime.requestReconnect("migrate-to-postgres");
+
+    res.json({
+      data: { ok: true, message: "Migration complete. Reconnecting..." },
+    } as ApiResponse<{ ok: boolean; message: string }>);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /global-settings/setup-tables — Runs schema setup against provided databaseUrl. Session-only; does not persist URL.
 globalSettingsRouter.post("/setup-tables", async (req: Request, res, next) => {
   try {
@@ -95,11 +145,11 @@ globalSettingsRouter.post("/setup-tables", async (req: Request, res, next) => {
       const msg = err instanceof Error ? err.message : "Invalid database URL";
       throw new AppError(400, ErrorCodes.INVALID_INPUT, msg);
     }
-    const { client, pool } = await createPostgresDbClientFromUrl(databaseUrl);
+    const appDb = await initAppDb(databaseUrl);
     try {
-      await runSchema(client);
+      await appDb.getClient();
     } finally {
-      await pool.end();
+      await appDb.close();
     }
     databaseRuntime.requestReconnect("setup-tables");
     res.json({ data: { ok: true } } as ApiResponse<{ ok: boolean }>);
@@ -120,11 +170,21 @@ globalSettingsRouter.get("/", async (_req, res, next) => {
   }
 });
 
-// PUT /global-settings — Accepts databaseUrl, apiKeys, expoToken. Validates and sanitizes. Merge apiKeys with existing (preserve value when id exists and value omitted).
+// PUT /global-settings — Accepts databaseUrl, apiKeys, expoToken, showNotificationDotInMenuBar. Validates and sanitizes. Merge apiKeys with existing (preserve value when id exists and value omitted).
 globalSettingsRouter.put("/", async (req: Request, res, next) => {
   try {
-    const body = req.body as { databaseUrl?: string; apiKeys?: unknown; expoToken?: string };
-    const updates: { databaseUrl?: string; apiKeys?: unknown; expoToken?: string } = {};
+    const body = req.body as {
+      databaseUrl?: string;
+      apiKeys?: unknown;
+      expoToken?: string;
+      showNotificationDotInMenuBar?: boolean;
+    };
+    const updates: {
+      databaseUrl?: string;
+      apiKeys?: unknown;
+      expoToken?: string;
+      showNotificationDotInMenuBar?: boolean;
+    } = {};
     const previous = await getGlobalSettings();
 
     if (body.databaseUrl !== undefined) {
@@ -149,6 +209,10 @@ globalSettingsRouter.put("/", async (req: Request, res, next) => {
 
     if (body.expoToken !== undefined) {
       updates.expoToken = typeof body.expoToken === "string" ? body.expoToken : "";
+    }
+
+    if (body.showNotificationDotInMenuBar !== undefined) {
+      updates.showNotificationDotInMenuBar = Boolean(body.showNotificationDotInMenuBar);
     }
 
     if (Object.keys(updates).length === 0) {

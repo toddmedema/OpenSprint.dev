@@ -10,7 +10,10 @@
 import fs from "fs/promises";
 import path from "path";
 
-const DEFAULT_DATABASE_URL = "postgresql://opensprint:opensprint@localhost:5432/opensprint";
+function getDefaultDatabaseUrl(): string {
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
+  return path.join(home, ".opensprint", "data", "opensprint.sqlite");
+}
 
 function getGlobalSettingsPath(): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
@@ -20,8 +23,9 @@ function getGlobalSettingsPath(): string {
 async function main(): Promise<void> {
   const file = getGlobalSettingsPath();
   const dir = path.dirname(file);
+  const dataDir = path.join(dir, "data");
 
-  await fs.mkdir(dir, { recursive: true });
+  await fs.mkdir(dataDir, { recursive: true });
 
   let settings: Record<string, unknown> = {};
   try {
@@ -35,7 +39,7 @@ async function main(): Promise<void> {
   }
 
   if (!settings.databaseUrl || typeof settings.databaseUrl !== "string") {
-    settings.databaseUrl = DEFAULT_DATABASE_URL;
+    settings.databaseUrl = getDefaultDatabaseUrl();
     await fs.writeFile(file, JSON.stringify(settings, null, 2) + "\n", "utf-8");
   }
 }

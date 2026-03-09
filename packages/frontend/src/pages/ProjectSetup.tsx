@@ -322,8 +322,20 @@ export function ProjectSetup() {
               <AgentsStep
                 simpleComplexityAgent={simpleComplexityAgent}
                 complexComplexityAgent={complexComplexityAgent}
-                onSimpleComplexityAgentChange={setSimpleComplexityAgent}
-                onComplexComplexityAgentChange={setComplexComplexityAgent}
+                onSimpleComplexityAgentChange={(config) =>
+                  setSimpleComplexityAgent((prev) => ({
+                    ...prev,
+                    ...config,
+                    baseUrl: config.baseUrl ?? prev.baseUrl ?? "",
+                  }))
+                }
+                onComplexComplexityAgentChange={(config) =>
+                  setComplexComplexityAgent((prev) => ({
+                    ...prev,
+                    ...config,
+                    baseUrl: config.baseUrl ?? prev.baseUrl ?? "",
+                  }))
+                }
                 envKeys={envKeys}
                 modelRefreshTrigger={modelRefreshTrigger}
                 maxConcurrentCoders={maxConcurrentCoders}

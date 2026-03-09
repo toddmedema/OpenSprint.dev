@@ -13,7 +13,7 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("project-index");
 
 function getProjectIndexPaths(): { dir: string; file: string } {
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? os.homedir();
   const dir = path.join(home, ".opensprint");
   return { dir, file: path.join(dir, "projects.json") };
 }

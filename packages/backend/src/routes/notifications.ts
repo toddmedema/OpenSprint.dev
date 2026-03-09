@@ -162,6 +162,16 @@ globalNotificationsRouter.delete("/", async (_req, res, next) => {
   }
 });
 
+// GET /notifications/pending-count — Count of pending human notifications (for desktop tray badge)
+globalNotificationsRouter.get("/pending-count", async (_req, res, next) => {
+  try {
+    const list = await notificationService.listGlobal();
+    res.json({ data: { count: list.length } } as ApiResponse<{ count: number }>);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /notifications — List unresolved notifications across all projects (global)
 globalNotificationsRouter.get("/", async (_req, res, next) => {
   try {

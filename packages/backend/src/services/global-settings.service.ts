@@ -5,18 +5,19 @@
  * databaseUrl is stored only in this JSON file; never in the database.
  */
 import fs from "fs/promises";
+import os from "os";
 import path from "path";
 import type { GlobalSettings } from "@opensprint/shared";
 import {
   sanitizeApiKeys,
   mergeApiKeysWithCurrent,
-  DEFAULT_DATABASE_URL,
+  getDefaultDatabaseUrl,
   validateDatabaseUrl,
 } from "@opensprint/shared";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 
 function getGlobalSettingsPath(): string {
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? os.homedir();
   return path.join(home, ".opensprint", "global-settings.json");
 }
 
@@ -47,11 +48,14 @@ async function load(): Promise<GlobalSettings> {
         obj.expoToken != null && typeof obj.expoToken === "string" && obj.expoToken.trim()
           ? obj.expoToken.trim()
           : undefined;
+      const showNotificationDotInMenuBar =
+        obj.showNotificationDotInMenuBar === false ? false : obj.showNotificationDotInMenuBar === true ? true : undefined;
       return {
         ...(apiKeys && { apiKeys }),
         ...(useCustomCli !== undefined && { useCustomCli }),
         ...(databaseUrl && { databaseUrl }),
         ...(expoToken && { expoToken }),
+        ...(showNotificationDotInMenuBar !== undefined && { showNotificationDotInMenuBar }),
       };
     }
   } catch {
@@ -108,7 +112,7 @@ export async function getEffectiveDatabaseConfig(): Promise<{
     };
   }
   return {
-    databaseUrl: DEFAULT_DATABASE_URL,
+    databaseUrl: getDefaultDatabaseUrl(),
     source: "default",
   };
 }
@@ -130,6 +134,9 @@ export async function setGlobalSettings(settings: GlobalSettings): Promise<void>
   }
   if (settings.expoToken !== undefined) {
     sanitized.expoToken = settings.expoToken.trim() || undefined;
+  }
+  if (settings.showNotificationDotInMenuBar !== undefined) {
+    sanitized.showNotificationDotInMenuBar = settings.showNotificationDotInMenuBar;
   }
   await save(sanitized);
 }
@@ -157,6 +164,9 @@ export async function updateGlobalSettings(
   if (updates.expoToken !== undefined) {
     merged.expoToken = updates.expoToken.trim() || undefined;
   }
+  if (updates.showNotificationDotInMenuBar !== undefined) {
+    merged.showNotificationDotInMenuBar = updates.showNotificationDotInMenuBar;
+  }
 
   await save(merged);
   return merged;
@@ -172,7 +182,7 @@ let atomicLock: Promise<void> = Promise.resolve();
 export async function ensureDefaultDatabaseUrl(): Promise<void> {
   const current = await load();
   if (!current.databaseUrl) {
-    await updateGlobalSettings({ databaseUrl: DEFAULT_DATABASE_URL });
+    await updateGlobalSettings({ databaseUrl: getDefaultDatabaseUrl() });
   }
 }
 

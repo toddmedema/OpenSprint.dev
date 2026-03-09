@@ -8,6 +8,7 @@ import type {
   FeedbackMappedEvent,
   FeedbackUpdatedEvent,
   FeedbackResolvedEvent,
+  Task,
   TaskEventPayload,
   TaskPriority,
   Notification,
@@ -34,10 +35,41 @@ import {
   appendAuditorOutput,
   setAuditorOutputBackfill,
 } from "../slices/planSlice";
+import type { QueryClient } from "@tanstack/react-query";
 import { getQueryClient } from "../../queryClient";
 import { queryKeys } from "../../api/queryKeys";
 
 type StoreDispatch = ThunkDispatch<unknown, unknown, UnknownAction>;
+
+/** Merge fetched tasks into the tasks list cache and set each task's detail cache. Avoids duplicate refetches after feedback.updated. */
+function syncTasksToQueryCache(qc: QueryClient, projectId: string, tasks: Task[]): void {
+  if (tasks.length === 0) return;
+  qc.setQueryData(queryKeys.tasks.list(projectId), (prev: unknown) => {
+    const mergeIntoList = (current: Task[]): Task[] => {
+      const byId = new Map(current.map((t) => [t.id, t]));
+      for (const task of tasks) byId.set(task.id, task);
+      return [...byId.values()];
+    };
+    if (Array.isArray(prev)) return mergeIntoList(prev as Task[]);
+    if (prev && typeof prev === "object" && "items" in (prev as Record<string, unknown>)) {
+      const paginatedPrev = prev as { items?: Task[]; total?: number };
+      const mergedItems = mergeIntoList(
+        Array.isArray(paginatedPrev.items) ? paginatedPrev.items : []
+      );
+      return {
+        ...paginatedPrev,
+        items: mergedItems,
+        ...(typeof paginatedPrev.total === "number"
+          ? { total: Math.max(paginatedPrev.total, mergedItems.length) }
+          : {}),
+      };
+    }
+    return mergeIntoList([]);
+  });
+  for (const task of tasks) {
+    qc.setQueryData(queryKeys.tasks.detail(projectId, task.id), task);
+  }
+}
 
 export const wsConnect = createAction<{ projectId: string }>("ws/connect");
 export const wsConnectHome = createAction("ws/connectHome");
@@ -370,8 +402,16 @@ export const websocketMiddleware: Middleware = (storeApi) => {
             ...new Set([...(ev.item.createdTaskIds ?? []), ...(ev.taskIds ?? [])]),
           ].filter((id): id is string => typeof id === "string" && id.length > 0);
           if (taskIds.length > 0) {
-            void d(fetchTasksByIds({ projectId, taskIds }));
-            void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+            d(fetchTasksByIds({ projectId, taskIds })).then((result) => {
+              if (fetchTasksByIds.fulfilled.match(result) && result.payload.length > 0) {
+                try {
+                  syncTasksToQueryCache(qc, projectId, result.payload);
+                } catch {
+                  // QueryClient may not be set in tests
+                }
+              }
+            });
+            // Do not invalidate tasks list — we sync fetched tasks to the cache above to avoid duplicate refetches
           }
         } else {
           void qc.invalidateQueries({ queryKey: queryKeys.feedback.list(projectId) });

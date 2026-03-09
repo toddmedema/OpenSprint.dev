@@ -12,6 +12,7 @@ import { ProjectService } from "./project.service.js";
 import { agentService } from "./agent.service.js";
 import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
+import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
 import { waitForGitReady } from "../utils/git-lock.js";
 import { shellExec } from "../utils/shell-exec.js";
 const log = createLogger("git-commit-queue");
@@ -385,8 +386,9 @@ class GitCommitQueueImpl implements GitCommitQueueService {
               try {
                 const msg = formatMergeCommitMessage(job.taskId, taskTitle);
                 await waitForGitReady(repoPath);
+                const noHooks = getGitNoHooksPath();
                 await shellExec(
-                  `git add -A && git -c core.hooksPath=/dev/null commit -m "${msg.replace(/"/g, '\\"')}"`,
+                  `git add -A && git -c core.hooksPath="${noHooks}" commit -m "${msg.replace(/"/g, '\\"')}"`,
                   {
                     cwd: repoPath,
                     timeout: 30_000,
@@ -441,7 +443,8 @@ class GitCommitQueueImpl implements GitCommitQueueService {
 
         const msg = formatMergeCommitMessage(job.taskId, taskTitle);
         await waitForGitReady(repoPath);
-        await shellExec(`git -c core.hooksPath=/dev/null commit -m "${msg.replace(/"/g, '\\"')}"`, {
+        const noHooksMerge = getGitNoHooksPath();
+        await shellExec(`git -c core.hooksPath="${noHooksMerge}" commit -m "${msg.replace(/"/g, '\\"')}"`, {
           cwd: repoPath,
           timeout: 30_000,
         });

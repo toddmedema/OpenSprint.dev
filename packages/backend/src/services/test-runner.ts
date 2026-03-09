@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import type { TestResults, TestResultDetail } from "@opensprint/shared";
 import { registerAgentProcess, unregisterAgentProcess } from "./agent-process-registry.js";
+import { signalProcessGroup } from "../utils/process-group.js";
 
 const TEST_TIMEOUT_MS = 300_000;
 const MAX_BUFFER_BYTES = 10 * 1024 * 1024;
@@ -145,13 +146,13 @@ export class TestRunner {
       const killProcessGroup = () => {
         if (!child.pid) return;
         try {
-          process.kill(-child.pid, "SIGTERM");
+          signalProcessGroup(child.pid, "SIGTERM");
         } catch {
           /* already gone */
         }
         setTimeout(() => {
           try {
-            process.kill(-child.pid!, "SIGKILL");
+            signalProcessGroup(child.pid!, "SIGKILL");
           } catch {
             /* already gone */
           }

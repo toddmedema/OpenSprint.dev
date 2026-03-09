@@ -448,7 +448,15 @@ export async function runDeployAsync(
 
     let testResult: Awaited<ReturnType<typeof testRunner.runTestsWithOutput>>;
     if (repoInTempDir) {
-      testResult = { passed: 1, failed: 0, skipped: 0, total: 1, details: [], rawOutput: "" };
+      testResult = {
+        passed: 1,
+        failed: 0,
+        skipped: 0,
+        total: 1,
+        details: [],
+        rawOutput: "",
+        executedCommand: null,
+      };
     } else {
       const testCommand = resolveTestCommand(settings);
       emit("Running pre-deployment tests...\n");

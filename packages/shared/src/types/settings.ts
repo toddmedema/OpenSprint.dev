@@ -1,3 +1,5 @@
+import os from "os";
+import path from "path";
 import type { AgentType } from "./agent.js";
 import type { PlanComplexity } from "./plan.js";
 
@@ -357,25 +359,47 @@ export interface ApiKeyUpdateEntry {
 /** Partial API key update payload keyed by provider. */
 export type ApiKeysUpdate = Partial<Record<ApiKeyProvider, ApiKeyUpdateEntry[]>>;
 
-/** Default PostgreSQL URL when databaseUrl is not configured */
+/**
+ * Default database path relative to ~/.opensprint (used by scripts that cannot import shared).
+ * Full default URL is getDefaultDatabaseUrl().
+ */
+export const DEFAULT_DATABASE_PATH_RELATIVE = "data/opensprint.sqlite";
+
+/**
+ * Return the default database URL (SQLite under ~/.opensprint/data/opensprint.sqlite).
+ * Use when no databaseUrl is configured in env or global-settings.
+ * Node only (uses os.homedir and path).
+ */
+export function getDefaultDatabaseUrl(): string {
+  const homedir = os.homedir();
+  return path.join(homedir, ".opensprint", "data", "opensprint.sqlite");
+}
+
+/** @deprecated Use getDefaultDatabaseUrl() for default. Kept for tests that need a fixed string. */
 export const DEFAULT_DATABASE_URL = "postgresql://opensprint:opensprint@localhost:5432/opensprint";
 
 /** Global settings stored at ~/.opensprint/global-settings.json */
 export interface GlobalSettings {
   apiKeys?: ApiKeys;
   useCustomCli?: boolean;
-  /** PostgreSQL connection URL. Never stored in the database; only in this JSON file. */
+  /** PostgreSQL or SQLite connection URL or path. Never stored in the database; only in this JSON file. */
   databaseUrl?: string;
   /** Expo access token (EXPO_TOKEN) for EAS deploy. Stored only in this JSON file. */
   expoToken?: string;
+  /** When true (default), show a notification dot on the desktop tray/menu bar icon when human notifications are pending. Desktop only. */
+  showNotificationDotInMenuBar?: boolean;
 }
 
 /** Response shape for GET /global-settings (apiKeys masked, expoToken masked) */
 export interface GlobalSettingsResponse {
   databaseUrl: string;
+  /** Current database dialect so UI can show "Using SQLite" / "Upgrade to PostgreSQL" */
+  databaseDialect?: "sqlite" | "postgres";
   apiKeys?: MaskedApiKeys;
   /** Whether expoToken is configured (value never exposed) */
   expoTokenConfigured?: boolean;
+  /** When true (default), show notification dot in menu bar when notifications pending. Desktop only. */
+  showNotificationDotInMenuBar?: boolean;
 }
 
 /** Request body for PUT /global-settings */
@@ -384,6 +408,8 @@ export interface GlobalSettingsPutRequest {
   apiKeys?: ApiKeysUpdate;
   /** Expo access token (EXPO_TOKEN). Set to empty string to remove. */
   expoToken?: string;
+  /** When false, do not show notification dot in menu bar. Default true. */
+  showNotificationDotInMenuBar?: boolean;
 }
 
 /** Read-only runtime cache/probe status for Git fields returned by project settings APIs. */
@@ -393,9 +419,23 @@ export interface GitRuntimeStatus {
   refreshing: boolean;
 }
 
+export type DatabaseDialect = "postgres" | "sqlite";
+
 /**
- * Validate that a string is a valid PostgreSQL URL format.
- * Accepts postgres:// or postgresql:// schemes.
+ * Return the database dialect from a validated database URL.
+ * Use after validateDatabaseUrl so the URL is known to be valid.
+ */
+export function getDatabaseDialect(url: string): DatabaseDialect {
+  const trimmed = url.trim();
+  if (/^postgres(ql)?:\/\//i.test(trimmed)) return "postgres";
+  if (/^sqlite:\/\//i.test(trimmed) || /^file:\/\//i.test(trimmed)) return "sqlite";
+  if (/^[./]|\.(sqlite3?|db)$/i.test(trimmed)) return "sqlite";
+  return "postgres";
+}
+
+/**
+ * Validate that a string is a valid database URL (PostgreSQL or SQLite).
+ * Accepts postgres://, postgresql://, sqlite://<path>, file://<path>, or a path to a .sqlite/.db file.
  * @throws Error if invalid
  */
 export function validateDatabaseUrl(url: string): string {
@@ -403,34 +443,76 @@ export function validateDatabaseUrl(url: string): string {
     throw new Error("databaseUrl must be a non-empty string");
   }
   const trimmed = url.trim();
-  if (!/^postgres(ql)?:\/\//i.test(trimmed)) {
-    throw new Error("databaseUrl must start with postgres:// or postgresql://");
+
+  if (/^postgres(ql)?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
+        throw new Error("databaseUrl must use postgres or postgresql scheme");
+      }
+      if (!parsed.hostname) {
+        throw new Error("databaseUrl must have a host");
+      }
+      return trimmed;
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("databaseUrl")) {
+        throw err;
+      }
+      throw new Error("databaseUrl must be a valid PostgreSQL connection URL");
+    }
   }
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
-      throw new Error("databaseUrl must use postgres or postgresql scheme");
+
+  if (/^sqlite:\/\//i.test(trimmed) || /^file:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      const pathPart = parsed.pathname || parsed.hostname || "";
+      if (!pathPart || pathPart === "/") {
+        throw new Error("databaseUrl must include a path for SQLite");
+      }
+      return trimmed;
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("databaseUrl")) {
+        throw err;
+      }
+      throw new Error("databaseUrl must be a valid SQLite/file URL");
     }
-    if (!parsed.hostname) {
-      throw new Error("databaseUrl must have a host");
-    }
+  }
+
+  if (/^[./]|\.(sqlite3?|db)$/i.test(trimmed)) {
     return trimmed;
-  } catch (err) {
-    if (err instanceof Error && err.message.startsWith("databaseUrl")) {
-      throw err;
-    }
-    throw new Error("databaseUrl must be a valid PostgreSQL connection URL");
   }
+
+  throw new Error(
+    "databaseUrl must start with postgres:// or postgresql://, or be a SQLite path (sqlite://, file://, or path ending in .sqlite/.db)"
+  );
 }
 
 /**
- * Mask a database URL for API responses: host/port visible, password redacted.
- * Returns e.g. postgresql://user:***@localhost:5432/dbname
+ * Mask a database URL for API responses: host/port visible, password redacted for Postgres;
+ * for SQLite/file URLs returns a short label (e.g. "sqlite:./data/db.sqlite") without full path.
  */
 export function maskDatabaseUrl(url: string): string {
   if (typeof url !== "string" || !url.trim()) return "";
+  const trimmed = url.trim();
+  if (getDatabaseDialect(trimmed) === "sqlite") {
+    try {
+      if (/^sqlite:\/\//i.test(trimmed)) {
+        const parsed = new URL(trimmed);
+        const path = (parsed.pathname || parsed.hostname || "").replace(/^\//, "") || "db";
+        return `sqlite:${path}`;
+      }
+      if (/^file:\/\//i.test(trimmed)) {
+        const parsed = new URL(trimmed);
+        const path = parsed.pathname?.replace(/^\//, "") || "db";
+        return `file:${path}`;
+      }
+      return trimmed.startsWith("/") ? `file:${trimmed}` : `sqlite:${trimmed}`;
+    } catch {
+      return "sqlite:***";
+    }
+  }
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(trimmed);
     if (parsed.password) {
       parsed.password = "***";
     }

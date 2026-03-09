@@ -48,6 +48,7 @@ import { parseAgentConfig, type AgentConfigInput } from "../schemas/agent-config
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
 import { assertSupportedRepoPath } from "../utils/repo-path-policy.js";
+import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
 import { shellExec } from "../utils/shell-exec.js";
 import {
   assertGitIdentityConfigured,
@@ -195,8 +196,9 @@ export class ProjectService {
     await shellExec(`git add -A -- ${quoted}`, { cwd: repoPath });
     const staged = await shellExec("git diff --cached --name-only", { cwd: repoPath });
     if (!staged.stdout.trim()) return false;
+    const noHooks = getGitNoHooksPath();
     await shellExec(
-      `git -c core.hooksPath=/dev/null commit -m "${ProjectService.BOOTSTRAP_COMMIT_MESSAGE}"`,
+      `git -c core.hooksPath="${noHooks}" commit -m "${ProjectService.BOOTSTRAP_COMMIT_MESSAGE}"`,
       { cwd: repoPath, timeout: 30_000 }
     );
     return true;
@@ -210,8 +212,9 @@ export class ProjectService {
       const hasChanges = await hasWorkingTreeChanges(repoPath);
       if (!hasChanges) return false;
       await shellExec("git add -A", { cwd: repoPath });
+      const noHooksBootstrap = getGitNoHooksPath();
       await shellExec(
-        `git -c core.hooksPath=/dev/null commit -m "${ProjectService.BOOTSTRAP_COMMIT_MESSAGE}"`,
+        `git -c core.hooksPath="${noHooksBootstrap}" commit -m "${ProjectService.BOOTSTRAP_COMMIT_MESSAGE}"`,
         { cwd: repoPath, timeout: 30_000 }
       );
       return true;

@@ -1,3 +1,4 @@
+import path from "path";
 import express from "express";
 import cors from "cors";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -23,6 +24,7 @@ import { dbStatusRouter } from "./routes/db-status.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { requestIdMiddleware } from "./middleware/request-id.js";
 import { requireDatabase } from "./middleware/require-database.js";
+import { activeAgentsService } from "./services/active-agents.service.js";
 
 export function createApp() {
   const app = express();
@@ -37,7 +39,12 @@ export function createApp() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // API routes
+  // API routes (global agents count for desktop tray; must be before /projects so :projectId does not capture "agents")
+  app.get(`${API_PREFIX}/agents/active-count`, (_req, res) => {
+    const count = activeAgentsService.list().length;
+    res.json({ data: { count } });
+  });
+
   app.use(`${API_PREFIX}/db-status`, dbStatusRouter);
   app.use(`${API_PREFIX}/models`, modelsRouter);
   app.use(`${API_PREFIX}/env`, envRouter);
@@ -69,6 +76,17 @@ export function createApp() {
   );
   app.use(`${API_PREFIX}/notifications`, requireDatabase, globalNotificationsRouter);
   app.use(`${API_PREFIX}/fs`, fsRouter);
+
+  // Desktop mode: serve built frontend and SPA fallback (after all API routes so /api and /ws are untouched)
+  if (process.env.OPENSPRINT_DESKTOP === "1") {
+    const frontendDist = process.env.OPENSPRINT_FRONTEND_DIST;
+    if (frontendDist) {
+      app.use(express.static(frontendDist));
+      app.get("*", (_req, res) => {
+        res.sendFile(path.join(frontendDist, "index.html"));
+      });
+    }
+  }
 
   // Error handling: API-error notification middleware runs first (creates human-blocked notifications)
   app.use(apiErrorNotificationMiddleware);

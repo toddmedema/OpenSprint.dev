@@ -165,6 +165,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ databaseUrl }),
       }),
+    migrateToPostgres: (databaseUrl: string) =>
+      request<{ ok: boolean; message: string }>("/global-settings/migrate-to-postgres", {
+        method: "POST",
+        body: JSON.stringify({ databaseUrl }),
+      }),
   },
   env: {
     getRuntime: () => request<EnvRuntimeResponse>("/env/runtime"),

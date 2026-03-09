@@ -4,8 +4,9 @@
  * Images are stored under ~/.opensprint/feedback-assets/<project_id>/<feedback_id>/.
  */
 
-import path from "path";
 import fs from "fs/promises";
+import os from "os";
+import path from "path";
 import type { FeedbackItem, ProposedTask } from "@opensprint/shared";
 import { taskStore } from "./task-store.service.js";
 import { AppError } from "../middleware/error-handler.js";
@@ -15,7 +16,7 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("feedback-store");
 
 function getFeedbackAssetsBaseDir(): string {
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? os.homedir();
   return path.join(home, ".opensprint", "feedback-assets");
 }
 

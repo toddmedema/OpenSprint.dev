@@ -34,6 +34,7 @@ import { notificationService } from "./notification.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { registerAgentProcess, unregisterAgentProcess } from "./agent-process-registry.js";
 import { createLogger } from "../utils/logger.js";
+import { signalProcessGroup } from "../utils/process-group.js";
 
 const execAsync = promisify(exec);
 const log = createLogger("agent-client");
@@ -1180,7 +1181,7 @@ export class AgentClient {
             log.error("onExit callback failed (result.json path)", { err });
           });
           try {
-            process.kill(-child.pid!, "SIGTERM");
+            signalProcessGroup(child.pid!, "SIGTERM");
           } catch {
             child.kill("SIGTERM");
           }
@@ -1188,7 +1189,7 @@ export class AgentClient {
           sigkillAfterTermTimer = setTimeout(() => {
             sigkillAfterTermTimer = null;
             try {
-              process.kill(-child.pid!, "SIGKILL");
+              signalProcessGroup(child.pid!, "SIGKILL");
             } catch {
               try {
                 if (!child.killed) child.kill("SIGKILL");
@@ -1284,7 +1285,7 @@ export class AgentClient {
       pid: child.pid ?? null,
       kill: () => {
         try {
-          process.kill(-child.pid!, "SIGTERM");
+          signalProcessGroup(child.pid!, "SIGTERM");
         } catch {
           child.kill("SIGTERM");
         }
@@ -1292,7 +1293,7 @@ export class AgentClient {
           killTimer = null;
           try {
             if (!child.killed) {
-              process.kill(-child.pid!, "SIGKILL");
+              signalProcessGroup(child.pid!, "SIGKILL");
             }
           } catch {
             if (!child.killed) {
@@ -1365,7 +1366,7 @@ export class AgentClient {
         if (child.killed) return;
         try {
           if (options?.processGroup && child.pid) {
-            process.kill(-child.pid, signal);
+            signalProcessGroup(child.pid, signal);
           } else {
             child.kill(signal);
           }

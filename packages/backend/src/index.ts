@@ -1,5 +1,6 @@
-import path from "path";
 import fs from "fs";
+import os from "os";
+import path from "path";
 import { config } from "dotenv";
 import { createServer } from "http";
 import { createApp } from "./app.js";
@@ -48,7 +49,7 @@ const logShutdown = createLogger("shutdown");
 const port = parseInt(process.env.PORT || String(DEFAULT_API_PORT), 10);
 
 // --- PID file management ---
-const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
+const home = process.env.HOME ?? process.env.USERPROFILE ?? os.homedir();
 const pidDir = path.join(home, ".opensprint");
 const pidFile = path.join(pidDir, `server-${port}.pid`);
 
@@ -363,20 +364,22 @@ server.listen(port, () => {
   startProcessReaper();
   databaseRuntime.start();
 
-  // Auto-open frontend if no browser reconnects within 15s
-  setTimeout(() => {
-    if (hasClientConnected()) return;
-    const url = `http://localhost:${FRONTEND_PORT}`;
-    logStartup.info("No WebSocket client connected — opening frontend", { url });
-    void openBrowser(url).then((result) => {
-      if (result.status === "failed") {
-        logStartup.warn("Could not open browser", { url, err: result.error });
-      }
-      if (result.status === "logged") {
-        logStartup.info("Open the frontend manually if it did not launch automatically", { url });
-      }
-    });
-  }, 15_000);
+  // Auto-open frontend if no browser reconnects within 15s (skip when running under Electron desktop)
+  if (process.env.OPENSPRINT_DESKTOP !== "1") {
+    setTimeout(() => {
+      if (hasClientConnected()) return;
+      const url = `http://localhost:${FRONTEND_PORT}`;
+      logStartup.info("No WebSocket client connected — opening frontend", { url });
+      void openBrowser(url).then((result) => {
+        if (result.status === "failed") {
+          logStartup.warn("Could not open browser", { url, err: result.error });
+        }
+        if (result.status === "logged") {
+          logStartup.info("Open the frontend manually if it did not launch automatically", { url });
+        }
+      });
+    }, 15_000);
+  }
 });
 
 process.on("SIGINT", shutdown);

@@ -1,6 +1,7 @@
 import { normalizeWorktreeBaseBranch } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
+import { getGitNoHooksPath } from "./git-no-hooks.js";
 import { shellExec } from "./shell-exec.js";
 
 const GIT_TIMEOUT_MS = 5_000;
@@ -295,8 +296,9 @@ export async function ensureRepoHasInitialCommit(
     cwd: repoPath,
     timeout: GIT_TIMEOUT_MS,
   });
+  const noHooks = getGitNoHooksPath();
   await shellExec(
-    `git -c core.hooksPath=/dev/null commit --allow-empty -m "${OPENSPRINT_BOOTSTRAP_COMMIT_MESSAGE}"`,
+    `git -c core.hooksPath="${noHooks}" commit --allow-empty -m "${OPENSPRINT_BOOTSTRAP_COMMIT_MESSAGE}"`,
     {
       cwd: repoPath,
       timeout: GIT_COMMIT_TIMEOUT_MS,

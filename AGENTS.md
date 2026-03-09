@@ -1,6 +1,6 @@
 # Agent Instructions — OpenSprint
 
-Task tracking is handled internally by `TaskStoreService` backed by PostgreSQL. The connection URL is resolved in order: **`DATABASE_URL`** env (12-factor), then **`databaseUrl`** in `~/.opensprint/global-settings.json`, then the default local URL. There is no external CLI for task management.
+Task tracking is handled internally by `TaskStoreService` backed by **SQLite (default)** or **PostgreSQL**. The connection is resolved in order: **`DATABASE_URL`** env (12-factor), then **`databaseUrl`** in `~/.opensprint/global-settings.json`, then the default SQLite path (`~/.opensprint/data/opensprint.sqlite`). Use a Postgres URL (`postgres://` or `postgresql://`) for PostgreSQL, or a SQLite path/URL (`sqlite://<path>`, `file://<path>`, or a path ending in `.sqlite`/`.db`) for SQLite. There is no external CLI for task management.
 
 ## Project Overview
 
@@ -19,9 +19,9 @@ Work state is persisted before agent spawn via `assignment.json` in `.opensprint
 
 ## Task Store
 
-Tasks are stored in PostgreSQL. Schema is applied on init via `runSchema` (CREATE TABLE IF NOT EXISTS in `packages/backend/src/db/schema.ts`). For versioned, reversible schema changes in the future, consider adding a migration runner (e.g. node-pg-migrate).
+Tasks are stored in the configured database (SQLite or PostgreSQL). Schema is applied on init via `runSchema(client, dialect)` in `packages/backend/src/db/schema.ts` (Postgres and SQLite DDL). The same `DbClient` abstraction is used for both; dialect is chosen from the database URL.
 
-**Tests and production:** Backend tests use a separate test DB (`opensprint_test` or `TEST_DATABASE_URL`). The app never reads `TEST_DATABASE_URL`. For future test-only or prod-only behavior, run tests with `NODE_ENV=test` (or similar) and gate logic so production never runs test-only code.
+**Tests and production:** Backend tests use a separate test DB (`opensprint_test` or `TEST_DATABASE_URL` for Postgres). The app never reads `TEST_DATABASE_URL`. For future test-only or prod-only behavior, run tests with `NODE_ENV=test` (or similar) and gate logic so production never runs test-only code.
 
 The `TaskStoreService` provides:
 

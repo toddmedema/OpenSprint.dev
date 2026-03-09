@@ -5,6 +5,7 @@
  * apiKeys are never read or written; they live in global-settings.json only.
  */
 import fs from "fs/promises";
+import os from "os";
 import path from "path";
 import type { ProjectSettings } from "@opensprint/shared";
 import { writeJsonAtomic } from "../utils/file-utils.js";
@@ -16,7 +17,7 @@ function stripApiKeys<T extends Record<string, unknown>>(obj: T): Omit<T, "apiKe
 }
 
 function getSettingsStorePath(): string {
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? os.homedir();
   return path.join(home, ".opensprint", "settings.json");
 }
 

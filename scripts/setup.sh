@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time setup: install npm dependencies, ensure ~/.opensprint exists,
-# install/start local PostgreSQL, create opensprint user and database,
-# write default databaseUrl to global-settings if missing, apply schema.
+# write default SQLite databaseUrl to global-settings if missing, apply schema.
+# Optional: set USE_POSTGRES=1 to install/start local PostgreSQL and create user/DB.
 # Run from repo root: npm run setup
 # Idempotent; safe to run again.
 
@@ -26,6 +26,7 @@ npx tsx scripts/ensure-global-settings.ts
 # Backend setup helpers import @opensprint/shared, whose dist output is not present
 # on a fresh install until we build it explicitly.
 npm run build -w packages/shared
+npm run build -w packages/backend
 
 is_wsl() {
   [ -n "${WSL_DISTRO_NAME:-}" ] || [ -n "${WSL_INTEROP:-}" ] || \
@@ -259,29 +260,29 @@ if [ "$UNAME" = "Linux" ] && is_wsl; then
   IS_WSL=1
 fi
 
-case "$UNAME" in
-  Darwin)
-    install_and_start_postgres_mac || true
-    ;;
-  Linux)
-    if [ "$IS_WSL" -eq 1 ]; then
-      echo "==> WSL detected. Skipping package-manager and service-manager PostgreSQL setup."
-      bootstrap_wsl_local_postgres_if_possible
-    else
-      install_and_start_postgres_linux || true
-    fi
-    ;;
-  MINGW*|MSYS*|CYGWIN*)
-    echo "==> Native Windows execution is unsupported."
-    echo "==> Install WSL2, open a WSL terminal, clone this repo into your Linux home directory, and run npm run setup there."
-    exit 1
-    ;;
-  *)
-    echo "==> Unsupported OS. Install PostgreSQL and set databaseUrl in ~/.opensprint/global-settings.json"
-    ;;
-esac
+# Optional: install and start PostgreSQL (set USE_POSTGRES=1 to enable)
+if [ "${USE_POSTGRES:-0}" = "1" ]; then
+  case "$UNAME" in
+    Darwin)
+      install_and_start_postgres_mac || true
+      ;;
+    Linux)
+      if [ "$IS_WSL" -eq 1 ]; then
+        echo "==> WSL detected. Skipping package-manager and service-manager PostgreSQL setup."
+        bootstrap_wsl_local_postgres_if_possible
+      else
+        install_and_start_postgres_linux || true
+      fi
+      ;;
+    *)
+      echo "==> Unsupported OS for PostgreSQL. Use SQLite (default) or set databaseUrl in Settings."
+      ;;
+  esac
+else
+  echo "==> Using SQLite by default (data in ~/.opensprint/data/opensprint.sqlite). Set USE_POSTGRES=1 to install PostgreSQL."
+fi
 
-# Apply database schema (tables and indexes) so the backend can start without errors
+# Apply database schema (SQLite or PostgreSQL per global-settings) so the backend can start
 echo "==> Applying database schema..."
 if [ "$IS_WSL" -eq 1 ]; then
   if npx tsx scripts/ensure-db-schema.ts; then
@@ -294,7 +295,7 @@ else
   if npx tsx scripts/ensure-db-schema.ts 2>/dev/null; then
     echo "==> Database schema applied"
   else
-    echo "==> Could not apply schema (is Postgres running and user/db created?). Backend will apply schema on first start."
+    echo "==> Could not apply schema. Backend will apply schema on first start."
   fi
 fi
 
@@ -303,3 +304,4 @@ if [ "$IS_WSL" -eq 1 ]; then
 else
   echo "==> Setup complete. Run: npm run dev"
 fi
+echo "==> To use PostgreSQL instead of SQLite, see Settings in the app or set databaseUrl in ~/.opensprint/global-settings.json"
