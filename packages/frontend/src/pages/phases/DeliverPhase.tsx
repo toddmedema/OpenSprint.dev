@@ -237,7 +237,7 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <div
-          className="w-full px-4 sm:px-6 min-h-[48px] flex items-center justify-end py-2 border-b border-theme-border bg-theme-surface shrink-0"
+          className="w-full px-4 sm:px-6 min-h-[48px] flex items-center justify-end py-2 bg-theme-surface shrink-0"
           data-testid="deliver-top-bar"
         >
           <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
@@ -345,7 +345,7 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
               className="flex-1 flex flex-col min-h-0 min-w-0 bg-theme-bg overflow-hidden"
               data-testid="delivery-history-mobile-main"
             >
-              <div className="px-4 sm:px-6 py-2 border-b border-theme-border flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
                 <h3 className="text-sm font-medium text-theme-text">Delivery History</h3>
                 {history.length > 0 && (
                   <div className="relative shrink-0" ref={filterDropdownRef}>
@@ -490,7 +490,7 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
               responsive
             >
               <div className="h-full flex flex-col border-r border-theme-border bg-theme-bg">
-                <div className="px-3 py-2 border-b border-theme-border flex items-center justify-between gap-2">
+                <div className="px-3 py-2 flex items-center justify-between gap-2">
                   <h3 className="text-sm font-medium text-theme-text">Delivery History</h3>
                   {history.length > 0 && (
                     <div className="relative shrink-0" ref={filterDropdownRef}>
@@ -632,7 +632,7 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
           {/* Desktop: detail inline. Mobile: detail only when deploy selected (rendered as overlay below). */}
           {!isMobile && (
           <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-theme-surface">
-            <div className="px-4 sm:px-6 py-2 border-b border-theme-border flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div className="px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
               <h3 className="text-sm font-medium text-theme-text">
                 {selectedRecord ? `Delivery ${formatDate(selectedRecord.startedAt)}` : "Live Log"}
               </h3>
@@ -726,7 +726,7 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                   aria-label="Close deployment detail (backdrop)"
                 />
                 <div className="absolute inset-x-0 bottom-0 top-1/4 bg-theme-surface rounded-t-xl shadow-xl flex flex-col max-h-[90vh]">
-                  <div className="px-4 py-2 border-b border-theme-border flex flex-wrap items-center justify-between gap-2 shrink-0">
+                  <div className="px-4 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
                     <h3 className="text-sm font-medium text-theme-text">
                       {selectedRecord ? `Delivery ${formatDate(selectedRecord.startedAt)}` : "Live Log"}
                     </h3>
