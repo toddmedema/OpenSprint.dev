@@ -1633,6 +1633,89 @@ Feature that depends on auth.
 
   describe("POST /projects/:id/plans/:planId/mark-complete", () => {
     it(
+      "integration: create plan, Execute!, close all tasks, plan is in_review then mark-complete yields complete",
+      { timeout: 15000 },
+      async () => {
+        const planBody = {
+          title: "In Review Flow Plan",
+          content: "# In Review Flow\n\nContent.",
+          complexity: "medium",
+          tasks: [
+            { title: "Task One", description: "First", priority: 0, dependsOn: [] },
+            { title: "Task Two", description: "Second", priority: 1, dependsOn: [] },
+          ],
+        };
+
+        const createRes = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/plans`)
+          .send(planBody);
+        expect(createRes.status).toBe(201);
+        const planId = createRes.body.data.metadata.planId;
+        const epicId = createRes.body.data.metadata.epicId;
+
+        const shipRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
+        );
+        expect(shipRes.status).toBe(200);
+
+        const _project = await projectService.getProject(projectId);
+        const allIssues = await taskStore.listAll(projectId);
+        const planTasks = allIssues.filter(
+          (i: { id: string; issue_type?: string; type?: string }) =>
+            i.id.startsWith(epicId + ".") && (i.issue_type ?? i.type) !== "epic"
+        );
+        for (const task of planTasks) {
+          await taskStore.close(projectId, (task as { id: string }).id, "Done");
+        }
+
+        // Plan must be in_review (all tasks closed, not yet marked complete)
+        const getBeforeRes = await request(app).get(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}`
+        );
+        expect(getBeforeRes.status).toBe(200);
+        expect(getBeforeRes.body.data).toBeDefined();
+        expect(getBeforeRes.body.data.status).toBe("in_review");
+        expect(getBeforeRes.body.data.metadata.reviewedAt).toBeFalsy();
+
+        // List plans: plan appears with in_review (Evaluate Pending)
+        const listBeforeRes = await request(app).get(
+          `${API_PREFIX}/projects/${projectId}/plans`
+        );
+        expect(listBeforeRes.status).toBe(200);
+        const planInListBefore = listBeforeRes.body.data?.plans?.find(
+          (p: { metadata?: { planId?: string } }) => p.metadata?.planId === planId
+        );
+        expect(planInListBefore).toBeDefined();
+        expect(planInListBefore.status).toBe("in_review");
+
+        const markRes = await request(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
+        );
+        expect(markRes.status).toBe(200);
+        expect(markRes.body.data.status).toBe("complete");
+        expect(markRes.body.data.metadata.reviewedAt).toBeDefined();
+
+        // Plan must be complete after mark-complete
+        const getAfterRes = await request(app).get(
+          `${API_PREFIX}/projects/${projectId}/plans/${planId}`
+        );
+        expect(getAfterRes.status).toBe(200);
+        expect(getAfterRes.body.data.status).toBe("complete");
+
+        // List plans: plan appears complete (Evaluate Resolved/Done)
+        const listAfterRes = await request(app).get(
+          `${API_PREFIX}/projects/${projectId}/plans`
+        );
+        expect(listAfterRes.status).toBe(200);
+        const planInListAfter = listAfterRes.body.data?.plans?.find(
+          (p: { metadata?: { planId?: string } }) => p.metadata?.planId === planId
+        );
+        expect(planInListAfter).toBeDefined();
+        expect(planInListAfter.status).toBe("complete");
+      }
+    );
+
+    it(
       "returns 200 and plan status complete when all epic tasks are closed",
       { timeout: 15000 },
       async () => {
