@@ -71,6 +71,29 @@ describe("PlanFilterToolbar", () => {
     expect(props.setStatusFilter).toHaveBeenCalledWith("complete");
   });
 
+  it("hides Generate All Tasks when autoExecutePlans is true", () => {
+    render(
+      <PlanFilterToolbar
+        statusFilter="all"
+        setStatusFilter={vi.fn()}
+        planCountByStatus={{ all: 4, planning: 2, building: 0, in_review: 0, complete: 2 }}
+        viewMode="card"
+        onViewModeChange={vi.fn()}
+        plansWithNoTasksCount={2}
+        plansReadyToExecuteCount={0}
+        planAllInProgress={false}
+        executeAllInProgress={false}
+        executingPlanId={null}
+        planTasksPlanIds={[]}
+        onPlanAllTasks={vi.fn()}
+        onExecuteAll={vi.fn()}
+        onAddPlan={vi.fn()}
+        autoExecutePlans={true}
+      />
+    );
+    expect(screen.queryByTestId("plan-all-tasks-button")).not.toBeInTheDocument();
+  });
+
   it("shows Generate All Tasks and Execute All only when their thresholds are met", () => {
     const { rerender } = render(
       <PlanFilterToolbar

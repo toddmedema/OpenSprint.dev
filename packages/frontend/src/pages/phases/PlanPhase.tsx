@@ -27,7 +27,7 @@ import {
 import { addNotification } from "../../store/slices/notificationSlice";
 import { addNotification as addOpenQuestionNotification } from "../../store/slices/openQuestionsSlice";
 import { clearPhaseUnread } from "../../store/slices/unreadPhaseSlice";
-import { usePlanChat, useSinglePlan, usePlans, useMarkPlanComplete } from "../../api/hooks";
+import { usePlanChat, useSinglePlan, usePlans, useMarkPlanComplete, useProjectSettings } from "../../api/hooks";
 import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
 import { PhaseLoadingSpinner } from "../../components/PhaseLoadingSpinner";
 import { queryKeys } from "../../api/queryKeys";
@@ -207,6 +207,8 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   /* ── TanStack Query for loading state (data synced to Redux by ProjectShell) ── */
   const plansQuery = usePlans(projectId);
   const markPlanCompleteMutation = useMarkPlanComplete(projectId);
+  const { data: projectSettings } = useProjectSettings(projectId);
+  const autoExecutePlans = projectSettings?.autoExecutePlans === true;
 
   /* ── Redux state (needed for hook args) ── */
   const selectedPlanId = useAppSelector((s) => s.plan.selectedPlanId);
@@ -440,6 +442,17 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     return ids;
   }, [plansReadyToExecute, dependencyGraph?.edges]);
 
+  /** When autoExecutePlans: all planning plans in dependency order (no-task plans get generate+execute, others just execute). */
+  const plansEligibleForExecuteAllOrderedIds = useMemo(() => {
+    const ids = plans
+      .filter((p) => p.status === "planning")
+      .map((p) => p.metadata.planId);
+    if (dependencyGraph?.edges?.length) {
+      return topologicalPlanOrder(ids, dependencyGraph.edges);
+    }
+    return ids;
+  }, [plans, dependencyGraph?.edges]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -514,6 +527,31 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     );
     if (executePlan.fulfilled.match(result)) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+    }
+  };
+
+  /** When autoExecutePlans: generate tasks then execute in one step for a single plan. */
+  const handleShipOrGenerateAndShip = async (plan: Plan) => {
+    if (plan.taskCount === 0) {
+      dispatch(setExecutingPlanId(plan.metadata.planId));
+      const result = await dispatch(planTasks({ projectId, planId: plan.metadata.planId }));
+      if (!planTasks.fulfilled.match(result)) {
+        dispatch(setExecutingPlanId(null));
+        dispatch(
+          addNotification({
+            message: result.error?.message ?? "Failed to generate tasks",
+            severity: "error",
+          })
+        );
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.plans.detail(projectId, plan.metadata.planId),
+      });
+      await handleShip(plan.metadata.planId);
+    } else {
+      await handleShip(plan.metadata.planId, plan.lastExecutedVersionNumber);
     }
   };
 
@@ -616,6 +654,58 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         }
         const plan = plansReadyToExecute.find((p) => p.metadata.planId === planId);
         const versionNumber = plan?.lastExecutedVersionNumber;
+        const result = await dispatch(
+          executePlan({
+            projectId,
+            planId,
+            prerequisitePlanIds:
+              deps.prerequisitePlanIds.length > 0 ? deps.prerequisitePlanIds : undefined,
+            version_number: versionNumber,
+          })
+        );
+        void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+        if (executePlan.rejected.match(result)) break;
+      }
+    } finally {
+      setExecuteAllInProgress(false);
+    }
+  };
+
+  /** When autoExecutePlans: generate-then-execute for no-task plans, execute for rest; in dependency order. */
+  const handleExecuteAllOrGenerateAndExecute = async () => {
+    if (
+      plansEligibleForExecuteAllOrderedIds.length === 0 ||
+      executeAllInProgress ||
+      !!executingPlanId
+    )
+      return;
+    setExecuteAllInProgress(true);
+    const batchSet = new Set(plansEligibleForExecuteAllOrderedIds);
+    try {
+      for (const planId of plansEligibleForExecuteAllOrderedIds) {
+        const plan = plans.find((p) => p.metadata.planId === planId);
+        if (!plan) continue;
+        if (plan.taskCount === 0) {
+          const ptResult = await dispatch(planTasks({ projectId, planId }));
+          if (!planTasks.fulfilled.match(ptResult)) {
+            dispatch(
+              addNotification({
+                message: ptResult.error?.message ?? "Failed to generate tasks",
+                severity: "error",
+              })
+            );
+            break;
+          }
+          void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+        }
+        const deps = await api.plans.getCrossEpicDependencies(projectId, planId);
+        const outsideBatch = deps.prerequisitePlanIds.filter((id) => !batchSet.has(id));
+        if (outsideBatch.length > 0) {
+          setCrossEpicModal({ planId, prerequisitePlanIds: deps.prerequisitePlanIds });
+          break;
+        }
+        const currentPlan = plans.find((p) => p.metadata.planId === planId);
+        const versionNumber = currentPlan?.lastExecutedVersionNumber;
         const result = await dispatch(
           executePlan({
             projectId,
@@ -754,13 +844,20 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           viewMode={viewMode}
           onViewModeChange={setViewMode}
           plansWithNoTasksCount={plansWithNoTasks.length}
-          plansReadyToExecuteCount={plansReadyToExecute.length}
+          plansReadyToExecuteCount={
+            autoExecutePlans
+              ? plansEligibleForExecuteAllOrderedIds.length
+              : plansReadyToExecute.length
+          }
           planAllInProgress={planAllInProgress}
           executeAllInProgress={executeAllInProgress}
           executingPlanId={executingPlanId}
           planTasksPlanIds={planTasksPlanIds ?? []}
           onPlanAllTasks={handlePlanAllTasks}
-          onExecuteAll={handleExecuteAll}
+          onExecuteAll={
+            autoExecutePlans ? handleExecuteAllOrGenerateAndExecute : handleExecuteAll
+          }
+          autoExecutePlans={autoExecutePlans}
           onAddPlan={() => setAddPlanModalOpen(true)}
           searchExpanded={searchExpanded}
           searchInputValue={searchInputValue}
@@ -920,7 +1017,12 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                       planTasksPlanIds={planTasksPlanIds}
                       executeError={executeError}
                       onSelect={() => handleSelectPlan(plan)}
-                      onShip={() => handleShip(plan.metadata.planId, plan.lastExecutedVersionNumber)}
+                      onShip={
+                        autoExecutePlans
+                          ? () => handleShipOrGenerateAndShip(plan)
+                          : () =>
+                              handleShip(plan.metadata.planId, plan.lastExecutedVersionNumber)
+                      }
                       onPlanTasks={() => handlePlanTasks(plan.metadata.planId)}
                       onReship={() => handleReship(plan.metadata.planId)}
                       onClearError={() => dispatch(clearExecuteError())}
@@ -930,6 +1032,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                         markPlanCompleteMutation.isPending &&
                         markPlanCompleteMutation.variables === plan.metadata.planId
                       }
+                      autoExecutePlans={autoExecutePlans}
                     />
                   ))}
                 </div>
@@ -1115,11 +1218,33 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                         <div className="px-4 pb-4 space-y-2">
                           {selectedPlanTasks.length === 0 ? (
                             <div className="space-y-2">
-                              <p className="text-sm text-theme-muted">
-                                Use the chat to refine the plan, then click Generate Tasks when
-                                you&apos;re ready to break it down into specific tickets
-                              </p>
-                              {(planTasksPlanIds ?? []).includes(selectedPlan.metadata.planId) ? (
+                              {!autoExecutePlans && (
+                                <p className="text-sm text-theme-muted">
+                                  Use the chat to refine the plan, then click Generate Tasks when
+                                  you&apos;re ready to break it down into specific tickets
+                                </p>
+                              )}
+                              {autoExecutePlans ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    selectedPlan && handleShipOrGenerateAndShip(selectedPlan)
+                                  }
+                                  disabled={
+                                    !!executingPlanId ||
+                                    (planTasksPlanIds ?? []).includes(selectedPlan.metadata.planId)
+                                  }
+                                  className="btn-primary text-sm w-full py-2 rounded-lg font-medium inline-flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed"
+                                  data-testid="execute-button-sidebar"
+                                >
+                                  {(planTasksPlanIds ?? []).includes(selectedPlan.metadata.planId) ||
+                                  executingPlanId === selectedPlan.metadata.planId
+                                    ? "Generating & executing…"
+                                    : "Execute"}
+                                </button>
+                              ) : (planTasksPlanIds ?? []).includes(
+                                  selectedPlan.metadata.planId
+                                ) ? (
                                 <p
                                   className="text-sm text-theme-muted"
                                   aria-busy="true"

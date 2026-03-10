@@ -297,6 +297,29 @@ describe("EpicCard", () => {
     expect(screen.queryByTestId("execute-button")).not.toBeInTheDocument();
   });
 
+  it("when autoExecutePlans is true and plan has zero tasks, shows Execute button instead of Generate Tasks", () => {
+    const plan: Plan = { ...basePlan, status: "planning", taskCount: 0, doneTaskCount: 0 };
+    renderWithStore(
+      <EpicCard
+        plan={plan}
+        tasks={[]}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        autoExecutePlans={true}
+      />
+    );
+
+    expect(screen.queryByTestId("plan-tasks-button")).not.toBeInTheDocument();
+    expect(screen.queryByText("Generate Tasks")).not.toBeInTheDocument();
+    expect(screen.getByTestId("execute-button")).toBeInTheDocument();
+    expect(screen.getByText("Execute")).toBeInTheDocument();
+  });
+
   it("calls onPlanTasks when Generate Tasks is clicked", async () => {
     const onPlanTasks = vi.fn();
     const user = userEvent.setup();

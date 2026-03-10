@@ -27,6 +27,8 @@ export interface EpicCardProps {
   onMarkComplete?: (planId: string) => void;
   /** When true, the Mark complete button shows loading state (e.g. mutation pending). */
   isMarkCompletePending?: boolean;
+  /** When true, show single "Execute" for plans with no tasks (generate+execute in one step); hide "Generate Tasks". */
+  autoExecutePlans?: boolean;
 }
 
 const statusConfig: Record<string, { badge: string; accent: string; icon: React.ReactNode }> = {
@@ -142,6 +144,7 @@ export function EpicCard({
   onGoToEvaluate,
   onMarkComplete,
   isMarkCompletePending = false,
+  autoExecutePlans = false,
 }: EpicCardProps) {
   const tasksFromRedux = useAppSelector(
     (s) => selectTasksForEpic(s, plan.metadata.epicId),
@@ -278,7 +281,7 @@ export function EpicCard({
         {/* Action buttons */}
         {plan.status === "planning" && (
           <>
-            {plan.taskCount === 0 ? (
+            {plan.taskCount === 0 && !autoExecutePlans ? (
               <div className="space-y-2">
                 <p className="text-xs text-theme-muted">
                   No tasks yet. Generate tasks from this plan, or use the AI chat to refine it
@@ -298,18 +301,26 @@ export function EpicCard({
                   </button>
                 )}
               </div>
-            ) : (
+            ) : (plan.taskCount > 0 || autoExecutePlans) ? (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onShip();
                 }}
-                disabled={!!executingPlanId}
+                disabled={
+                  !!executingPlanId ||
+                  (autoExecutePlans &&
+                    plan.taskCount === 0 &&
+                    (planTasksPlanIds.includes(plan.metadata.planId) || isOptimistic))
+                }
                 className="btn-primary text-xs w-full py-2 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg font-medium inline-flex items-center justify-center"
                 data-testid="execute-button"
               >
-                {executingPlanId === plan.metadata.planId ? (
+                {executingPlanId === plan.metadata.planId ||
+                (autoExecutePlans &&
+                  plan.taskCount === 0 &&
+                  planTasksPlanIds.includes(plan.metadata.planId)) ? (
                   <>
                     <svg
                       className="animate-spin -ml-0.5 mr-1.5 h-3.5 w-3.5"
@@ -332,7 +343,9 @@ export function EpicCard({
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                       />
                     </svg>
-                    Executing…
+                    {plan.taskCount === 0 && planTasksPlanIds.includes(plan.metadata.planId)
+                      ? "Generating tasks…"
+                      : "Executing…"}
                   </>
                 ) : plan.lastExecutedVersionNumber != null ? (
                   `Execute v${plan.lastExecutedVersionNumber}`
@@ -340,7 +353,7 @@ export function EpicCard({
                   "Execute"
                 )}
               </button>
-            )}
+            ) : null}
             {executeError?.planId === plan.metadata.planId && (
               <div
                 className="mt-2 text-xs text-theme-error-text bg-theme-error-bg border border-theme-error-border rounded-lg p-2 flex items-start gap-2"

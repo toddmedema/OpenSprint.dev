@@ -68,6 +68,8 @@ interface PlanFilterToolbarProps {
   handleSearchExpand?: () => void;
   handleSearchClose?: () => void;
   handleSearchKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  /** When true, hide "Generate All Tasks" and use single "Execute All" (generate+execute in one step). */
+  autoExecutePlans?: boolean;
 }
 
 export function PlanFilterToolbar({
@@ -92,6 +94,7 @@ export function PlanFilterToolbar({
   handleSearchExpand,
   handleSearchClose,
   handleSearchKeyDown,
+  autoExecutePlans = false,
 }: PlanFilterToolbarProps) {
   const chipConfig = [
     { label: "All", filter: "all" as const, count: planCountByStatus.all },
@@ -130,7 +133,7 @@ export function PlanFilterToolbar({
               </button>
             );
           })}
-          {plansWithNoTasksCount >= 2 && (
+          {!autoExecutePlans && plansWithNoTasksCount >= 2 && (
             <button
               type="button"
               onClick={onPlanAllTasks}
