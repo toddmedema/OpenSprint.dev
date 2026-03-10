@@ -418,6 +418,95 @@ describe("ProjectSettingsModal", () => {
     expect(securityCheckbox).toHaveClass("border-0");
   });
 
+  it("shows Self-improvement section with help text and frequency dropdown defaulting to Never", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Self-improvement");
+    expect(
+      screen.getByText(/When the codebase has changed since the last run, a review runs using your code review lenses and creates improvement tasks\./)
+    ).toBeInTheDocument();
+    const select = screen.getByTestId("self-improvement-frequency-select");
+    expect(select).toBeInTheDocument();
+    expect(select).toHaveValue("never");
+  });
+
+  it("saves selfImprovementFrequency when dropdown is changed", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, selfImprovementFrequency: "never" });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByTestId("self-improvement-frequency-select");
+    await userEvent.selectOptions(
+      screen.getByTestId("self-improvement-frequency-select"),
+      "daily"
+    );
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          selfImprovementFrequency: "daily",
+        })
+      )
+    );
+  });
+
+  it("loads and displays persisted selfImprovementFrequency", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, selfImprovementFrequency: "weekly" });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    const select = await screen.findByTestId("self-improvement-frequency-select");
+    expect(select).toHaveValue("weekly");
+  });
+
+  it("shows After each Plan help text when that frequency is selected", async () => {
+    mockGetSettings.mockResolvedValue({
+      ...mockSettings,
+      selfImprovementFrequency: "after_each_plan",
+    });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Self-improvement");
+    expect(
+      screen.getByText(/Runs once after a plan's execution is fully complete/)
+    ).toBeInTheDocument();
+  });
+
+  it("shows Last run when selfImprovementLastRunAt is set", async () => {
+    mockGetSettings.mockResolvedValue({
+      ...mockSettings,
+      selfImprovementLastRunAt: "2025-03-01T14:30:00Z",
+    });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    const lastRun = await screen.findByTestId("self-improvement-last-run");
+    expect(lastRun).toHaveTextContent("Last run:");
+    expect(lastRun.textContent).toMatch(/\d/);
+  });
+
   it("Autonomy tab shows AI Autonomy slider with three levels", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await waitForModalReady();

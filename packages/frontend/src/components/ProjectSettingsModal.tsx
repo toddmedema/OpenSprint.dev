@@ -26,6 +26,7 @@ import type {
   MergeStrategy,
   ReviewAngle,
   ReviewMode,
+  SelfImprovementFrequency,
   UnknownScopeStrategy,
 } from "@opensprint/shared";
 import {
@@ -36,6 +37,7 @@ import {
   getDeploymentTargetsForUi,
   AUTO_DEPLOY_TRIGGER_OPTIONS,
   REVIEW_AGENT_OPTIONS,
+  SELF_IMPROVEMENT_FREQUENCY_OPTIONS,
   normalizeWorktreeBaseBranch,
   type AutoDeployTrigger,
 } from "@opensprint/shared";
@@ -285,6 +287,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
       unknownScopeStrategy: UnknownScopeStrategy;
       enableHumanTeammates?: boolean;
       teamMembers: Array<{ id: string; name: string }>;
+      selfImprovementFrequency?: SelfImprovementFrequency;
     }>;
 
     const persistSettings = useCallback(
@@ -359,6 +362,10 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                 overrides?.worktreeBaseBranch ?? effSettings?.worktreeBaseBranch ?? "main",
               enableHumanTeammates: effEnableHumanTeammates,
               teamMembers: effTeamMembers,
+              selfImprovementFrequency:
+                overrides?.selfImprovementFrequency ??
+                effSettings?.selfImprovementFrequency ??
+                "never",
             }),
           ]);
           if (notifyOnComplete) onSaved?.();
@@ -963,6 +970,59 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                           })}
                         </div>
                       </div>
+                    </div>
+                    <hr />
+                    <div data-testid="self-improvement-section">
+                      <h3 className="text-sm font-semibold text-theme-text mb-1">
+                        Self-improvement
+                      </h3>
+                      <p className="text-xs text-theme-muted mb-2">
+                        When the codebase has changed since the last run, a review runs using your
+                        code review lenses and creates improvement tasks.
+                      </p>
+                      {((settings?.selfImprovementFrequency ?? "never") === "after_each_plan" && (
+                        <p className="text-xs text-theme-muted mb-2">
+                          Runs once after a plan&apos;s execution is fully complete (all tasks done
+                          and merged), not when you click Execute.
+                        </p>
+                      ))}
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label className="block text-xs font-medium text-theme-muted">
+                          Self-improvement frequency
+                        </label>
+                        <select
+                          data-testid="self-improvement-frequency-select"
+                          className="input w-48"
+                          value={settings?.selfImprovementFrequency ?? "never"}
+                          onChange={(e) => {
+                            const value = e.target.value as SelfImprovementFrequency;
+                            setSettings((s) =>
+                              s ? { ...s, selfImprovementFrequency: value } : null
+                            );
+                            void persistSettings(undefined, {
+                              selfImprovementFrequency: value,
+                            });
+                          }}
+                        >
+                          {SELF_IMPROVEMENT_FREQUENCY_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {settings?.selfImprovementLastRunAt && (
+                        <p
+                          className="text-xs text-theme-muted mt-2"
+                          data-testid="self-improvement-last-run"
+                        >
+                          Last run:{" "}
+                          {new Date(settings.selfImprovementLastRunAt).toLocaleString(undefined, {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}
+                        </p>
+                      )}
                     </div>
                     <hr />
                     <div className="flex items-center justify-between gap-4">
