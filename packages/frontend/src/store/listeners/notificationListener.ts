@@ -1,7 +1,7 @@
 import { createListenerMiddleware, isRejected, isFulfilled } from "@reduxjs/toolkit";
 import type { SerializedError } from "@reduxjs/toolkit";
 import { DEDUP_SKIP } from "../dedup";
-import { addNotification } from "../slices/notificationSlice";
+import { addNotification, dismissNotification } from "../slices/notificationSlice";
 import { setConnectionError } from "../slices/connectionSlice";
 import { clearDeliverToast } from "../slices/websocketSlice";
 import { isConnectionError } from "../../api/client";
@@ -116,8 +116,12 @@ notificationListener.startListening({
     const code = (payloadCode ?? error?.code) as string | undefined;
     const actionType = (action as { type?: string }).type;
 
-    // Connection errors → single global banner, no per-request notifications
+    // Connection errors → single global banner, no per-request notifications.
+    // Debounce re-show to avoid duplicate toasts when connection flickers.
     if (isConnectionError(error ?? { message: msg })) {
+      const lastRecovered = listenerApi.getState().connection?.lastRecoveredAt;
+      const RECOVERED_DEBOUNCE_MS = 2000;
+      if (lastRecovered != null && Date.now() - lastRecovered < RECOVERED_DEBOUNCE_MS) return;
       listenerApi.dispatch(setConnectionError(true));
       listenerApi.dispatch(clearDeliverToast());
       return;
@@ -155,7 +159,11 @@ notificationListener.startListening({
   },
 });
 
-/** Clear connection error when any API thunk succeeds (server is reachable). */
+/** Message patterns for connection/DB error toasts that should auto-dismiss when connection is restored. */
+export const CONNECTION_TOAST_MESSAGE_PATTERN =
+  /failed to connect|reconnecting to postgres|postgres.*unavailable|server.*unreachable|open sprint server/i;
+
+/** Clear connection error and dismiss any connection/PostgreSQL toasts when any API thunk succeeds (server is reachable). */
 notificationListener.startListening({
   predicate: (action): boolean => {
     if (!isFulfilled(action)) return false;
@@ -164,5 +172,11 @@ notificationListener.startListening({
   },
   effect: (_, listenerApi) => {
     listenerApi.dispatch(setConnectionError(false));
+    const items = listenerApi.getState().notification?.items ?? [];
+    for (const n of items) {
+      if (CONNECTION_TOAST_MESSAGE_PATTERN.test(n.message)) {
+        listenerApi.dispatch(dismissNotification(n.id));
+      }
+    }
   },
 });

@@ -1,0 +1,236 @@
+{
+  "open_questions": [
+    "Concurrent edit and execute: should we auto-save current edits as a new version and then execute, or prompt the user to save first and then enable Execute? (Plan allows either.)",
+    "Compare with current: the plan mentions an optional 'Compare with current' diff view in a future iteration. Confirm this is out of scope for this breakdown."
+  ],
+  "tasks": [
+    {
+      "title": "Add plan_versions table and plan version columns to schema",
+      "description": "Add plan versioning schema in packages/backend/src/db/schema.ts for both Postgres (SCHEMA_SQL) and SQLite (SCHEMA_SQL_SQLITE): (1) New table plan_versions with columns: id (SERIAL/INTEGER PK), project_id (TEXT), plan_id (TEXT), version_number (INTEGER), title (TEXT), content (TEXT), metadata (TEXT), created_at (TEXT), is_executed_version (INTEGER for SQLite, BOOLEAN or INTEGER for Postgres). Add unique constraint or index on (project_id, plan_id, version_number). (2) Add to plans table: current_version_number (INTEGER, default 1), last_executed_version_number (INTEGER, nullable). In packages/backend/src/db/drizzle-schema-pg.ts add plan_versions table and currentVersionNumber/lastExecutedVersionNumber to plansTable so Drizzle reads/writes work. Acceptance: plan_versions table and new plan columns exist in both dialects; runSchema succeeds. Verification: Run npm test in packages/backend (tests that touch DB).",
+      "priority": 0,
+      "dependsOn": [],
+      "complexity": 3,
+      "files": {
+        "modify": ["packages/backend/src/db/schema.ts", "packages/backend/src/db/drizzle-schema-pg.ts"],
+        "create": [],
+        "test": []
+      }
+    },
+    {
+      "title": "Implement plan version store (insert, list, get by version number)",
+      "description": "Create plan version persistence in packages/backend/src/services/plan-version-store.service.ts (or extend PlanStore in plan-store.service.ts): insert a version (project_id, plan_id, version_number, title, content, metadata, is_executed_version), list versions for a plan ordered by version_number DESC, get a single version by (project_id, plan_id, version_number). Title derived from content (first # heading) or stored explicitly. Support both SQLite and Postgres via existing DbClient/toPgParams. Export interfaces: stored version row and list item (id, version_number, created_at, is_executed_version). Method to set is_executed_version for one version and clear for others. Acceptance: Insert version, list versions, get by version number; 404 when version does not exist. Verification: Unit tests in packages/backend/src/__tests__/plan-version-store.service.test.ts; run npm test.",
+      "priority": 0,
+      "dependsOn": ["Add plan_versions table and plan version columns to schema"],
+      "complexity": 4,
+      "files": {
+        "modify": [],
+        "create": ["packages/backend/src/services/plan-version-store.service.ts", "packages/backend/src/__tests__/plan-version-store.service.test.ts"],
+        "test": ["packages/backend/src/__tests__/plan-version-store.service.test.ts"]
+      }
+    },
+    {
+      "title": "Add current_version_number and last_executed_version_number to plan read/write paths",
+      "description": "Wire new plan columns: (1) In PlanStore (packages/backend/src/services/plan-store.service.ts): planGet and any plan row select must return current_version_number and last_executed_version_number; planInsert sets current_version_number=1 and last_executed_version_number=null. (2) Drizzle plansTable usage: ensure selects/updates include currentVersionNumber and lastExecutedVersionNumber. (3) StoredPlan interface and places that build Plan from store must include these fields so PlanService.getPlan can expose them. Acceptance: Reading a plan returns current_version_number and last_executed_version_number; new plans get current_version_number=1. Verification: Run npm test in packages/backend; existing plan-store and plan tests still pass.",
+      "priority": 0,
+      "dependsOn": ["Add plan_versions table and plan version columns to schema"],
+      "complexity": 3,
+      "files": {
+        "modify": ["packages/backend/src/services/plan-store.service.ts", "packages/backend/src/db/drizzle-schema-pg.ts"],
+        "create": [],
+        "test": []
+      }
+    },
+    {
+      "title": "Migrate existing plans to version 1 and set version columns",
+      "description": "One-time migration: for every row in plans where current_version_number is null or missing (legacy), (1) insert one row into plan_versions with version_number=1, title from first # line of content, content and metadata from plan, created_at=updated_at, is_executed_version=1 if plan has shipped_content/shippedAt else 0; (2) set plans.current_version_number=1 and plans.last_executed_version_number=1 if executed else null. Idempotent: only migrate rows where current_version_number IS NULL. Add packages/backend/src/services/migrate-plan-versions.service.ts and invoke from app init or a dedicated startup step. Acceptance: Existing plans get exactly one version (v1); re-running migration does not duplicate versions. Verification: Unit test in packages/backend/src/__tests__/migrate-plan-versions.service.test.ts; run npm test.",
+      "priority": 0,
+      "dependsOn": ["Implement plan version store (insert, list, get by version number)", "Add current_version_number and last_executed_version_number to plan read/write paths"],
+      "complexity": 4,
+      "files": {
+        "modify": ["packages/backend/src/app.ts"],
+        "create": ["packages/backend/src/services/migrate-plan-versions.service.ts", "packages/backend/src/__tests__/migrate-plan-versions.service.test.ts"],
+        "test": ["packages/backend/src/__tests__/migrate-plan-versions.service.test.ts"]
+      }
+    },
+    {
+      "title": "Create plan version on Execute and set last-executed version",
+      "description": "In PlanService.shipPlan (packages/backend/src/services/plan.service.ts): (1) Before unblocking epic, persist current plan state as a version: if content changed since last version, insert new version with next version_number and set plans.current_version_number; otherwise ensure current version row exists. (2) Mark that version as executed: set is_executed_version=1 for this version, clear for other versions of this plan; set plans.last_executed_version_number to this version. (3) Use that version's content for planSetShippedContent and downstream (PRD sync). Acceptance: First Execute creates version 1 and sets last_executed_version_number=1; subsequent Execute with unchanged content reuses same version; edit then Execute creates new version. Verification: Unit tests in packages/backend/src/__tests__/plan-service.test.ts; run npm test.",
+      "priority": 1,
+      "dependsOn": ["Implement plan version store (insert, list, get by version number)", "Add current_version_number and last_executed_version_number to plan read/write paths", "Migrate existing plans to version 1 and set version columns"],
+      "complexity": 5,
+      "files": {
+        "modify": ["packages/backend/src/services/plan.service.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/plan-service.test.ts"]
+      }
+    },
+    {
+      "title": "Create new plan version on plan content update (save)",
+      "description": "When plan content is updated via PlanService.updatePlan (PUT plan): (1) Insert a new plan version with version_number = current_version_number + 1, title from content, content and metadata, is_executed_version=0. (2) Update plans.content and plans.current_version_number. Do not change last_executed_version_number. If plan has no versions yet (legacy), ensure version 1 exists first. Acceptance: Each save creates a new version; current_version_number increments; last_executed_version_number unchanged. Verification: Unit test: update plan content twice, list versions, assert version count; run npm test.",
+      "priority": 1,
+      "dependsOn": ["Implement plan version store (insert, list, get by version number)", "Add current_version_number and last_executed_version_number to plan read/write paths"],
+      "complexity": 4,
+      "files": {
+        "modify": ["packages/backend/src/services/plan.service.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/plan-service.test.ts"]
+      }
+    },
+    {
+      "title": "Add GET list versions and GET version by number API routes",
+      "description": "In packages/backend/src/routes/plans.ts register (before :planId so /versions is not captured): (1) GET /projects/:projectId/plans/:planId/versions — list versions. Response: { data: { versions: [{ id, version_number, created_at, is_executed_version }] } } newest first. (2) GET /projects/:projectId/plans/:planId/versions/:versionNumber — full version. Response: { data: { version_number, title, content, metadata, created_at, is_executed_version } }. Return 404 if plan or version does not exist. Acceptance: List returns all versions; get by number returns full content; 404 for invalid version. Verification: Tests in packages/backend/src/__tests__/plan-route.test.ts; run npm test.",
+      "priority": 1,
+      "dependsOn": ["Implement plan version store (insert, list, get by version number)"],
+      "complexity": 3,
+      "files": {
+        "modify": ["packages/backend/src/routes/plans.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/plan-route.test.ts"]
+      }
+    },
+    {
+      "title": "Extend GET plan response with version fields",
+      "description": "GET /projects/:id/plans/:planId (and list plans response): Include in Plan object current_version_number and last_executed_version_number. Ensure PlanService.getPlan and listPlansWithEdges attach these from store. Shared Plan type must include these fields (next task). Acceptance: GET plan and list plans return currentVersionNumber and lastExecutedVersionNumber. Verification: Plan route tests; run npm test.",
+      "priority": 1,
+      "dependsOn": ["Add current_version_number and last_executed_version_number to plan read/write paths"],
+      "complexity": 2,
+      "files": {
+        "modify": ["packages/backend/src/services/plan.service.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/plan-route.test.ts"]
+      }
+    },
+    {
+      "title": "Add shared types for plan versions and extend Plan type",
+      "description": "In packages/shared/src/types/plan.ts: Add PlanVersionSummary { id, version_number, created_at, is_executed_version? }. Add PlanVersionContent { version_number, title, content, metadata?, created_at, is_executed_version? }. Extend Plan with currentVersionNumber?: number and lastExecutedVersionNumber?: number. Export for API contracts. Acceptance: Backend and frontend can import these types; Plan includes version fields. Verification: TypeScript build in packages/shared.",
+      "priority": 1,
+      "dependsOn": [],
+      "complexity": 2,
+      "files": {
+        "modify": ["packages/shared/src/types/plan.ts"],
+        "create": [],
+        "test": []
+      }
+    },
+    {
+      "title": "POST execute and re-execute accept version_number and use version content",
+      "description": "POST /projects/:id/plans/:planId/execute: Accept optional body { prerequisitePlanIds?: string[], version_number?: number }. If version_number provided, load that version's content from plan_versions, set as last_executed_version_number and is_executed_version, then run ship using that content (planSetShippedContent, PRD sync, etc.). If omitted, use current plan content and existing create-version-on-execute behavior. POST re-execute: Accept optional version_number; otherwise use plan's last_executed_version_number. Use version content for reshipPlan/shipPlan when version_number is specified. Acceptance: Execute with version_number runs that version and sets it as last executed; re-execute uses last or specified version. Verification: Integration tests in plan-route.test.ts and plan-service.test.ts; run npm test.",
+      "priority": 1,
+      "dependsOn": ["Create plan version on Execute and set last-executed version", "Add GET list versions and GET version by number API routes", "Extend GET plan response with version fields"],
+      "complexity": 5,
+      "files": {
+        "modify": ["packages/backend/src/routes/plans.ts", "packages/backend/src/services/plan.service.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/plan-route.test.ts", "packages/backend/src/__tests__/plan-service.test.ts"]
+      }
+    },
+    {
+      "title": "Add frontend API client methods for versions and execute with version",
+      "description": "In packages/frontend/src/api/client.ts: Add plans.listVersions(projectId, planId), plans.getVersion(projectId, planId, versionNumber). Extend plans.execute to accept optional { prerequisitePlanIds?, version_number? }. Use shared types PlanVersionSummary, PlanVersionContent. Acceptance: Client can call listVersions, getVersion, execute with version_number. Verification: TypeScript compiles; run npm test in packages/frontend if api tests exist.",
+      "priority": 2,
+      "dependsOn": ["Add shared types for plan versions and extend Plan type"],
+      "complexity": 2,
+      "files": {
+        "modify": ["packages/frontend/src/api/client.ts"],
+        "create": [],
+        "test": []
+      }
+    },
+    {
+      "title": "Add React Query hooks for plan versions and execute with version",
+      "description": "In packages/frontend/src/api/hooks (e.g. plans hooks): Add usePlanVersions(projectId, planId) and usePlanVersion(projectId, planId, versionNumber). Extend execute plan mutation to accept optional version_number in request body. Add query keys for versions list and single version. Invalidate version list on execute success. Acceptance: Components can fetch versions and execute with version_number. Verification: Run npm test in packages/frontend.",
+      "priority": 2,
+      "dependsOn": ["Add frontend API client methods for versions and execute with version"],
+      "complexity": 3,
+      "files": {
+        "modify": ["packages/frontend/src/api/hooks/plans.ts", "packages/frontend/src/api/queryKeys.ts"],
+        "create": [],
+        "test": []
+      }
+    },
+    {
+      "title": "Plan sidebar: version dropdown and display current/last-executed version",
+      "description": "In Plan phase sidebar (PlanDetailContent or parent in PlanPhase.tsx): Add version selector — dropdown listing all versions from usePlanVersions, newest first. Display current version label (e.g. 'v3') and indicate last-executed version (e.g. badge 'Executed'). Use plan.currentVersionNumber and plan.lastExecutedVersionNumber. Selecting a version loads that version (read-only in next task). Acceptance: Sidebar shows current version; dropdown lists versions with last-executed indicator; selecting loads that version. Verification: PlanPhase or PlanDetailContent tests; run npm test.",
+      "priority": 2,
+      "dependsOn": ["Add React Query hooks for plan versions and execute with version"],
+      "complexity": 4,
+      "files": {
+        "modify": ["packages/frontend/src/pages/phases/PlanPhase.tsx", "packages/frontend/src/components/plan/PlanDetailContent.tsx"],
+        "create": [],
+        "test": ["packages/frontend/src/pages/phases/PlanPhase.test.tsx", "packages/frontend/src/components/plan/PlanDetailContent.test.tsx"]
+      }
+    },
+    {
+      "title": "Plan sidebar: read-only view when viewing a past version",
+      "description": "When user selects a past version from the version dropdown, show that version's content in read-only mode: use usePlanVersion(projectId, planId, versionNumber) and render title and content without edit controls. Show indicator (e.g. 'Viewing v2'). Provide 'Back to current' or switch to current. When viewing current version, keep existing editable behavior. Acceptance: Selecting vN shows vN read-only; current remains editable. Verification: PlanDetailContent or PlanPhase tests; run npm test.",
+      "priority": 2,
+      "dependsOn": ["Plan sidebar: version dropdown and display current/last-executed version"],
+      "complexity": 3,
+      "files": {
+        "modify": ["packages/frontend/src/components/plan/PlanDetailContent.tsx", "packages/frontend/src/pages/phases/PlanPhase.tsx"],
+        "create": [],
+        "test": ["packages/frontend/src/components/plan/PlanDetailContent.test.tsx"]
+      }
+    },
+    {
+      "title": "Execute button label: show Execute vs Execute vN",
+      "description": "In EpicCard and any Plan-phase execute button: When lastExecutedVersionNumber is unset show 'Execute'. When set show 'Execute vN' (e.g. 'Execute v7'). Use plan.lastExecutedVersionNumber from GET plan/list. Clicking 'Execute vN' calls execute with version_number: N. Acceptance: New plan shows 'Execute'; after execute shows 'Execute v1'; click runs with correct version. Verification: EpicCard.test.tsx and PlanPhase.test.tsx; run npm test.",
+      "priority": 2,
+      "dependsOn": ["Add React Query hooks for plan versions and execute with version", "Extend GET plan response with version fields"],
+      "complexity": 3,
+      "files": {
+        "modify": ["packages/frontend/src/components/EpicCard.tsx", "packages/frontend/src/pages/phases/PlanPhase.tsx"],
+        "create": [],
+        "test": ["packages/frontend/src/components/EpicCard.test.tsx", "packages/frontend/src/pages/phases/PlanPhase.test.tsx"]
+      }
+    },
+    {
+      "title": "Re-execute button and execute-with-version wiring",
+      "description": "Ensure Re-execute (plan complete and lastModified > shippedAt) uses last_executed_version_number: call execute with version_number = plan.lastExecutedVersionNumber so re-execute runs the same version. If frontend uses separate reExecute endpoint, ensure it passes version_number or backend re-execute uses last_executed_version_number. Unify so 'Execute vN' and 'Re-execute' both use correct version content. Acceptance: Re-execute runs last-executed version; Execute vN runs version N. Verification: PlanPhase tests; run npm test.",
+      "priority": 2,
+      "dependsOn": ["Execute button label: show Execute vs Execute vN", "POST execute and re-execute accept version_number and use version content"],
+      "complexity": 4,
+      "files": {
+        "modify": ["packages/frontend/src/api/hooks/plans.ts", "packages/frontend/src/pages/phases/PlanPhase.tsx", "packages/backend/src/routes/plans.ts", "packages/backend/src/services/plan.service.ts"],
+        "create": [],
+        "test": ["packages/frontend/src/pages/phases/PlanPhase.test.tsx"]
+      }
+    },
+    {
+      "title": "Integration tests for plan version API and execute with version",
+      "description": "Add or extend tests in packages/backend: (1) List versions after create/update/execute; (2) Get version content returns correct title/content; (3) Execute with version_number stores and uses that version; (4) Re-execute uses last_executed_version_number; (5) 404 for non-existent version. Use plan-route.test.ts and plan-service.test.ts patterns. Acceptance: Version and execute-with-version flows covered. Verification: Run npm test in packages/backend.",
+      "priority": 2,
+      "dependsOn": ["POST execute and re-execute accept version_number and use version content", "Add GET list versions and GET version by number API routes"],
+      "complexity": 4,
+      "files": {
+        "modify": ["packages/backend/src/__tests__/plan-route.test.ts", "packages/backend/src/__tests__/plan-service.test.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/plan-route.test.ts", "packages/backend/src/__tests__/plan-service.test.ts"]
+      }
+    },
+    {
+      "title": "Edge case: first execution, no versions, invalid version 404",
+      "description": "Handle edge cases: (1) First execution: no last_executed yet; show 'Execute'; on click create version 1 and set last_executed. (2) Plan with no versions (e.g. migration missed): on first execute or first load, ensure version 1 is created from current content. (3) Invalid version: GET version returns 404; UI dropdown falls back to current version or shows error. (4) Concurrent edit and execute: document or implement auto-save as new version then execute so Execute captures consistent snapshot. Add tests for 404 and first-execution path. Acceptance: First execute creates v1; invalid version 404; no corrupt state. Verification: Unit/integration tests; run npm test.",
+      "priority": 3,
+      "dependsOn": ["Create plan version on Execute and set last-executed version", "Create new plan version on plan content update (save)", "Add GET list versions and GET version by number API routes"],
+      "complexity": 4,
+      "files": {
+        "modify": ["packages/backend/src/services/plan.service.ts", "packages/backend/src/routes/plans.ts", "packages/frontend/src/components/plan/PlanDetailContent.tsx"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/plan-route.test.ts", "packages/backend/src/__tests__/plan-service.test.ts"]
+      }
+    },
+    {
+      "title": "E2E: plan version flow (execute, edit, version dropdown, Execute vN)",
+      "description": "E2E test: Create plan, execute (v1 locked), edit plan (v2 created), open version dropdown, select v1, see read-only v1 content; click 'Execute v1' and confirm execution uses v1 content. Use existing E2E patterns in the repo. Acceptance: Full user flow passes. Verification: Run E2E test suite.",
+      "priority": 4,
+      "dependsOn": ["Plan sidebar: read-only view when viewing a past version", "Execute button label: show Execute vs Execute vN", "Re-execute button and execute-with-version wiring"],
+      "complexity": 5,
+      "files": {
+        "modify": [],
+        "create": ["packages/frontend/src/__tests__/plan-version.e2e.test.tsx"],
+        "test": ["packages/frontend/src/__tests__/plan-version.e2e.test.tsx"]
+      }
+    }
+  ]
+}
