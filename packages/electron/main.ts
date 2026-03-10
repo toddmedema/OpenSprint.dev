@@ -415,15 +415,17 @@ function setupSessionSecurity(): void {
     callback(allowed.includes(permission));
   });
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const backendOrigin = `http://127.0.0.1:${BACKEND_PORT}`;
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         "Content-Security-Policy": [
-          "default-src 'self' http://127.0.0.1:" +
-            BACKEND_PORT +
+          "default-src 'self' " +
+            backendOrigin +
             "; script-src 'self'; connect-src 'self' ws://127.0.0.1:" +
             BACKEND_PORT +
-            "; style-src 'self' 'unsafe-inline'",
+            "; style-src 'self' 'unsafe-inline'; img-src 'self' data: " +
+            backendOrigin,
         ],
       },
     });
