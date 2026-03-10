@@ -24,7 +24,7 @@ export function SettingsPage() {
   return (
     <Layout>
       <div
-        className="flex-1 min-h-0 flex flex-col overflow-hidden"
+        className="flex-1 min-h-0 flex flex-col overflow-hidden bg-theme-surface"
         data-testid="settings-page"
       >
         <SettingsTopBar saveStatus={saveStatus} />

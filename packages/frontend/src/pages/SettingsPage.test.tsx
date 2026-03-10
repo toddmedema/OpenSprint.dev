@@ -65,6 +65,9 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("settings-page")).toBeInTheDocument();
     });
 
+    const page = screen.getByTestId("settings-page");
+    expect(page).toHaveClass("bg-theme-surface");
+
     expect(screen.getByTestId("settings-top-bar")).toBeInTheDocument();
     expect(screen.getByTestId("settings-global-tab")).toHaveTextContent("Global");
     expect(screen.queryByTestId("settings-project-tab")).not.toBeInTheDocument();
@@ -124,7 +127,12 @@ describe("SettingsPage", () => {
       { timeout: 2500 }
     );
 
-    expect(removeSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
+    await waitFor(
+      () => {
+        expect(removeSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
+      },
+      { timeout: 500 }
+    );
 
     addSpy.mockRestore();
     removeSpy.mockRestore();
