@@ -411,6 +411,20 @@ export class NotificationService {
   }
 
   /**
+   * Get a notification by ID (read-only). Returns null when not found.
+   * Used by the proposed-diff endpoint to fetch a hil_approval notification by requestId.
+   */
+  async getById(projectId: string, notificationId: string): Promise<Notification | null> {
+    const client = await taskStore.getDb();
+    const row = await client.queryOne(
+      "SELECT * FROM open_questions WHERE id = $1 AND project_id = $2",
+      [notificationId, projectId]
+    );
+    if (!row) return null;
+    return rowToNotification(row as Record<string, unknown>);
+  }
+
+  /**
    * Resolve a notification by ID. Project ID is required for scoping.
    */
   async resolve(projectId: string, notificationId: string): Promise<Notification> {

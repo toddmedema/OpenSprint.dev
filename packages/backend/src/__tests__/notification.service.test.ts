@@ -383,6 +383,48 @@ describe.skipIf(!notifPostgresOk)("NotificationService", () => {
     });
   });
 
+  describe("getById", () => {
+    it("returns the notification when it exists", async () => {
+      const created = await service.createHilApproval({
+        projectId: "proj-get",
+        source: "eval",
+        sourceId: "fb-1",
+        description: "Approve SPEC changes?",
+        category: "scopeChanges",
+        scopeChangeMetadata: {
+          scopeChangeSummary: "Update feature_list",
+          scopeChangeProposedUpdates: [
+            { section: "feature_list", changeLogEntry: "Add item", content: "1. A\n2. B" },
+          ],
+        },
+      });
+
+      const found = await service.getById("proj-get", created.id);
+      expect(found).not.toBeNull();
+      expect(found!.id).toBe(created.id);
+      expect(found!.projectId).toBe("proj-get");
+      expect(found!.kind).toBe("hil_approval");
+      expect(found!.scopeChangeMetadata).toEqual(created.scopeChangeMetadata);
+    });
+
+    it("returns null when not found", async () => {
+      const found = await service.getById("proj-get", "oq-nonexistent");
+      expect(found).toBeNull();
+    });
+
+    it("returns null when project ID does not match", async () => {
+      const created = await service.create({
+        projectId: "proj-owner",
+        source: "plan",
+        sourceId: "p1",
+        questions: [{ id: "q1", text: "Q1" }],
+      });
+
+      const found = await service.getById("proj-other", created.id);
+      expect(found).toBeNull();
+    });
+  });
+
   describe("resolve", () => {
     it("marks notification as resolved", async () => {
       const created = await service.create({
