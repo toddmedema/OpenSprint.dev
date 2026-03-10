@@ -170,9 +170,13 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
       expect(res.body.data.diff).toBeDefined();
       expect(res.body.data.diff.lines).toBeDefined();
       expect(Array.isArray(res.body.data.diff.lines)).toBe(true);
+      for (const line of res.body.data.diff.lines) {
+        expect(["add", "remove", "context"]).toContain(line.type);
+        expect(typeof line.text).toBe("string");
+      }
       expect(res.body.data.diff.summary).toBeDefined();
-      expect(res.body.data.diff.summary.additions).toBeDefined();
-      expect(res.body.data.diff.summary.deletions).toBeDefined();
+      expect(typeof res.body.data.diff.summary.additions).toBe("number");
+      expect(typeof res.body.data.diff.summary.deletions).toBe("number");
     });
 
     it("returns 404 when fromVersion has no snapshot", async () => {
@@ -242,9 +246,13 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
       expect(res.body.data.diff).toBeDefined();
       expect(res.body.data.diff.lines).toBeDefined();
       expect(Array.isArray(res.body.data.diff.lines)).toBe(true);
+      for (const line of res.body.data.diff.lines) {
+        expect(["add", "remove", "context"]).toContain(line.type);
+        expect(typeof line.text).toBe("string");
+      }
       expect(res.body.data.diff.summary).toBeDefined();
-      expect(res.body.data.diff.summary.additions).toBeDefined();
-      expect(res.body.data.diff.summary.deletions).toBeDefined();
+      expect(typeof res.body.data.diff.summary.additions).toBe("number");
+      expect(typeof res.body.data.diff.summary.deletions).toBe("number");
     });
 
     it("returns 404 for invalid requestId", async () => {
@@ -254,6 +262,26 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
 
       expect(res.status).toBe(404);
       expect(res.body.error?.code).toBe("NOT_FOUND");
+    });
+
+    it("returns 404 when requestId refers to non-hil_approval notification", async () => {
+      const { notificationService } = await import(
+        "../services/notification.service.js"
+      );
+      const openQuestion = await notificationService.create({
+        projectId,
+        source: "plan",
+        sourceId: "test-1",
+        questions: [{ id: "q1", text: "Clarification?" }],
+      });
+
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${openQuestion.id}`
+      );
+
+      expect(res.status).toBe(404);
+      expect(res.body.error?.code).toBe("NOT_FOUND");
+      expect(res.body.error?.message).toContain("not found");
     });
 
     it("returns 400 when requestId is missing", async () => {
