@@ -165,7 +165,7 @@ export function Navbar({
 
   return (
     <nav
-      className="relative z-[60] flex items-center bg-theme-surface shrink-0"
+      className="relative z-[60] flex items-stretch bg-theme-surface shrink-0"
       style={{ height: NAVBAR_HEIGHT }}
     >
       {/* Bottom border overlay — ensures continuous line across full width, above phase buttons */}
@@ -174,8 +174,8 @@ export function Navbar({
         className="absolute bottom-0 left-0 right-0 h-px bg-theme-border pointer-events-none z-10"
         aria-hidden="true"
       />
-      {/* Edge spacing: pl/pr-4 (mobile), pl/pr-6 (md+) so logo left and Settings right match */}
-      <div className="flex w-full items-center justify-between gap-2 min-w-0 pl-4 md:pl-6 pr-4 md:pr-6">
+      {/* Edge spacing: pl/pr-4 (mobile), pl/pr-6 (md+) so logo left and Settings right match. items-stretch so phase tab row fills height and no 1px strip shows above nav buttons. */}
+      <div className="flex w-full items-stretch justify-between gap-2 min-w-0 pl-4 md:pl-6 pr-4 md:pr-6">
         <div className="flex items-center gap-2 md:gap-4 min-w-0 shrink-0">
           {/* Left: Logo + Project Selector */}
           <Link to="/" className="flex items-center gap-2" data-testid="navbar-logo-link">
@@ -270,11 +270,11 @@ export function Navbar({
           </div>
         </div>
 
-        {/* Center: Phase Tabs — horizontally scrollable on mobile */}
+        {/* Center: Phase Tabs — horizontally scrollable on mobile; stretch so tablist fills bar height (no gap above) */}
         {project && currentPhase && onPhaseChange && (
-          <div className="flex flex-1 min-w-0 md:flex-initial overflow-x-auto px-1 md:px-0 [&::-webkit-scrollbar]:h-1">
+          <div className="flex flex-1 min-w-0 md:flex-initial overflow-x-auto px-1 md:px-0 items-stretch [&::-webkit-scrollbar]:h-1">
             <div
-              className="flex items-center gap-1 bg-theme-border-subtle rounded-lg p-1 shrink-0"
+              className="flex items-center gap-1 bg-theme-border-subtle rounded-lg p-1 shrink-0 self-stretch min-h-0"
               role="tablist"
               aria-label="Phase navigation"
             >
