@@ -416,6 +416,43 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
     }
   );
 
+  it("PUT /projects/:id/plans/:planId creates new plan version on each save; list versions returns incremented count", async () => {
+    const planBody = {
+      title: "Versioned Feature",
+      content: "# Versioned Feature\n\n## Overview\n\nInitial content.",
+      complexity: "low",
+    };
+    const createRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send(planBody);
+    expect(createRes.status).toBe(201);
+    const planId = createRes.body.data.metadata.planId;
+
+    await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
+      .send({ content: "# Versioned Feature\n\n## Overview\n\nFirst save." });
+    await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
+      .send({ content: "# Versioned Feature\n\n## Overview\n\nSecond save." });
+
+    const versionsRes = await request(app).get(
+      `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
+    );
+    expect(versionsRes.status).toBe(200);
+    expect(versionsRes.body.data.versions).toHaveLength(3);
+    const versions = versionsRes.body.data.versions as Array<{ version_number: number }>;
+    const numbers = versions.map((v) => v.version_number).sort((a, b) => a - b);
+    expect(numbers).toEqual([1, 2, 3]);
+  });
+
+  it("PUT /projects/:id/plans/:planId returns 404 when plan does not exist", async () => {
+    const putRes = await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/plans/nonexistent-plan-xyz`)
+      .send({ content: "# Nonexistent\n\nBody." });
+    expect(putRes.status).toBe(404);
+    expect(putRes.body.error?.code).toBe("PLAN_NOT_FOUND");
+  });
+
   it("PUT /projects/:id/plans/:planId syncs ## Tasks section to task store task titles and descriptions", async () => {
     const planBody = {
       title: "Sync Test Feature",

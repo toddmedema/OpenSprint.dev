@@ -239,12 +239,25 @@ export class PlanStore {
     return rows.map((r) => r.plan_id as string);
   }
 
-  async planUpdateContent(projectId: string, planId: string, content: string): Promise<void> {
+  async planUpdateContent(
+    projectId: string,
+    planId: string,
+    content: string,
+    currentVersionNumber?: number
+  ): Promise<void> {
     const db = this.getDrizzle ? await this.getDrizzle() : null;
+    const now = new Date().toISOString();
     if (db) {
+      const setPayload: { content: string; updatedAt: string; currentVersionNumber?: number } = {
+        content,
+        updatedAt: now,
+      };
+      if (currentVersionNumber != null) {
+        setPayload.currentVersionNumber = currentVersionNumber;
+      }
       const result = await db
         .update(plansTable)
-        .set({ content, updatedAt: new Date().toISOString() })
+        .set(setPayload)
         .where(and(eq(plansTable.projectId, projectId), eq(plansTable.planId, planId)));
       if (result.rowCount === 0) {
         throw new AppError(404, ErrorCodes.PLAN_NOT_FOUND, `Plan ${planId} not found`, { planId });
@@ -259,13 +272,21 @@ export class PlanStore {
     if (!existing) {
       throw new AppError(404, ErrorCodes.PLAN_NOT_FOUND, `Plan ${planId} not found`, { planId });
     }
-    const now = new Date().toISOString();
-    await client.execute(
-      toPgParams(
-        "UPDATE plans SET content = ?, updated_at = ? WHERE project_id = ? AND plan_id = ?"
-      ),
-      [content, now, projectId, planId]
-    );
+    if (currentVersionNumber != null) {
+      await client.execute(
+        toPgParams(
+          "UPDATE plans SET content = ?, updated_at = ?, current_version_number = ? WHERE project_id = ? AND plan_id = ?"
+        ),
+        [content, now, currentVersionNumber, projectId, planId]
+      );
+    } else {
+      await client.execute(
+        toPgParams(
+          "UPDATE plans SET content = ?, updated_at = ? WHERE project_id = ? AND plan_id = ?"
+        ),
+        [content, now, projectId, planId]
+      );
+    }
   }
 
   async planUpdateMetadata(

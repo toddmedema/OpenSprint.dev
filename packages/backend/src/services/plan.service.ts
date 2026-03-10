@@ -38,6 +38,7 @@ import { triggerDeployForEvent } from "./deploy-trigger.service.js";
 import { broadcastToProject, sendPlanAgentOutputToProject } from "../websocket/index.js";
 import { appendPlanAgentOutput, clearPlanAgentOutput } from "./plan-agent-output-buffer.service.js";
 import { assertMigrationCompleteForResource } from "./migration-guard.service.js";
+import { titleFromFirstHeading } from "./migrate-plan-versions.service.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { createLogger } from "../utils/logger.js";
@@ -878,9 +879,46 @@ export class PlanService {
     return plan;
   }
 
-  /** Update a Plan's markdown */
+  /** Update a Plan's markdown. Creates a new plan version on each save; updates plans.content and current_version_number. */
   async updatePlan(projectId: string, planId: string, body: { content: string }): Promise<Plan> {
-    await this.taskStore.planUpdateContent(projectId, planId, body.content);
+    const row = await this.taskStore.planGet(projectId, planId);
+    if (!row) {
+      throw new AppError(404, ErrorCodes.PLAN_NOT_FOUND, `Plan '${planId}' not found`, {
+        planId,
+      });
+    }
+
+    const currentVersion = row.current_version_number ?? 1;
+    const metadataJson =
+      typeof row.metadata === "string" ? row.metadata : JSON.stringify(row.metadata ?? {});
+
+    const versions = await this.taskStore.listPlanVersions(projectId, planId);
+    if (versions.length === 0) {
+      const titleV1 = titleFromFirstHeading(row.content);
+      await this.taskStore.planVersionInsert({
+        project_id: projectId,
+        plan_id: planId,
+        version_number: 1,
+        title: titleV1 ?? null,
+        content: row.content,
+        metadata: metadataJson,
+        is_executed_version: false,
+      });
+    }
+
+    const nextVersion = currentVersion + 1;
+    const title = titleFromFirstHeading(body.content);
+    await this.taskStore.planVersionInsert({
+      project_id: projectId,
+      plan_id: planId,
+      version_number: nextVersion,
+      title: title ?? null,
+      content: body.content,
+      metadata: metadataJson,
+      is_executed_version: false,
+    });
+
+    await this.taskStore.planUpdateContent(projectId, planId, body.content, nextVersion);
 
     // Validate against template (warn only, don't block) — PRD §7.2.3
     const validation = validatePlanContent(body.content);

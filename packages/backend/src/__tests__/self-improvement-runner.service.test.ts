@@ -379,6 +379,100 @@ describe("concurrency guard and isSelfImprovementRunInProgress", () => {
   });
 });
 
+describe("concurrency guard and isSelfImprovementRunInProgress", () => {
+  const projectId = "proj-guard";
+
+  it("isSelfImprovementRunInProgress is false when no run is active", () => {
+    expect(isSelfImprovementRunInProgress(projectId)).toBe(false);
+  });
+
+  it("two concurrent triggers yield one run and one skip", async () => {
+    const { agentService } = await import("../services/agent.service.js");
+    const { taskStore } = await import("../services/task-store.service.js");
+    vi.mocked(taskStore.create).mockResolvedValue({ id: "os-1", title: "Task" } as never);
+
+    let resolveAgent: (v: { content: string }) => void;
+    const agentPromise = new Promise<{ content: string }>((resolve) => {
+      resolveAgent = resolve;
+    });
+    vi.mocked(agentService.invokePlanningAgent).mockReturnValue(agentPromise as never);
+
+    const service = new SelfImprovementRunnerService();
+    const run1Promise = service.runSelfImprovement(projectId, { runId: "run-1" });
+
+    await vi.waitFor(() => {
+      expect(isSelfImprovementRunInProgress(projectId)).toBe(true);
+    });
+
+    const run2Result = await service.runSelfImprovement(projectId, { runId: "run-2" });
+    expect(run2Result).toEqual({ tasksCreated: 0, skipped: "run_in_progress" });
+
+    resolveAgent!({ content: '[{"title":"One"}]' });
+    const run1Result = await run1Promise;
+    expect(run1Result).toMatchObject({ tasksCreated: 1, runId: "run-1" });
+
+    expect(isSelfImprovementRunInProgress(projectId)).toBe(false);
+  });
+
+  it("isSelfImprovementRunInProgress is true only while run is active", async () => {
+    const { agentService } = await import("../services/agent.service.js");
+    const { taskStore } = await import("../services/task-store.service.js");
+    vi.mocked(taskStore.create).mockResolvedValue({ id: "os-1", title: "Task" } as never);
+
+    let resolveAgent: (v: { content: string }) => void;
+    const agentPromise = new Promise<{ content: string }>((resolve) => {
+      resolveAgent = resolve;
+    });
+    vi.mocked(agentService.invokePlanningAgent).mockReturnValue(agentPromise as never);
+
+    const service = new SelfImprovementRunnerService();
+    expect(service.isSelfImprovementRunInProgress(projectId)).toBe(false);
+
+    const runPromise = service.runSelfImprovement(projectId);
+    await vi.waitFor(() => {
+      expect(service.isSelfImprovementRunInProgress(projectId)).toBe(true);
+    });
+    resolveAgent!({ content: "[]" });
+    await runPromise;
+    expect(service.isSelfImprovementRunInProgress(projectId)).toBe(false);
+  });
+
+  it("releases guard when run throws so a subsequent run can proceed", async () => {
+    const { ProjectService } = await import("../services/project.service.js");
+    vi.mocked(ProjectService).mockImplementation(
+      () =>
+        ({
+          getProject: vi.fn().mockRejectedValue(new Error("getProject failed")),
+          getSettings: vi.fn().mockResolvedValue({}),
+        }) as never
+    );
+    const service1 = new SelfImprovementRunnerService();
+    await expect(service1.runSelfImprovement(projectId)).rejects.toThrow("getProject failed");
+    expect(isSelfImprovementRunInProgress(projectId)).toBe(false);
+    // Restore mock so a new service gets a resolving ProjectService
+    vi.mocked(ProjectService).mockImplementation(
+      () =>
+        ({
+          getProject: vi.fn().mockResolvedValue({ id: "proj-1", repoPath: "/tmp/repo" }),
+          getSettings: vi.fn().mockResolvedValue({
+            simpleComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+            complexComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+            reviewAngles: undefined as string[] | undefined,
+          }),
+        }) as never
+    );
+    const { agentService } = await import("../services/agent.service.js");
+    const { taskStore } = await import("../services/task-store.service.js");
+    vi.mocked(taskStore.create).mockResolvedValue({ id: "os-1", title: "Task" } as never);
+    vi.mocked(agentService.invokePlanningAgent).mockResolvedValue({
+      content: '[{"title":"One"}]',
+    } as never);
+    const service2 = new SelfImprovementRunnerService();
+    const result = await service2.runSelfImprovement(projectId, { runId: "after-throw" });
+    expect(result).toMatchObject({ tasksCreated: 1, runId: "after-throw" });
+  });
+});
+
 describe("runSelfImprovement", () => {
   beforeEach(async () => {
     vi.clearAllMocks();

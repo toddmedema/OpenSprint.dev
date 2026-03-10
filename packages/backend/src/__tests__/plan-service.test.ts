@@ -61,16 +61,79 @@ const mockPlanListIds = vi.fn().mockImplementation(async (projectId: string) => 
   const proj = mockPlanStore.get(projectId);
   return proj ? Array.from(proj.keys()) : [];
 });
+const mockPlanVersionsStore = new Map<
+  string,
+  Map<string, Array<{ version_number: number; content: string; title: string | null }>>
+>();
+const mockListPlanVersions = vi
+  .fn()
+  .mockImplementation(
+    async (projectId: string, planId: string): Promise<Array<{ version_number: number }>> => {
+      const proj = mockPlanVersionsStore.get(projectId);
+      const versions = proj?.get(planId) ?? [];
+      return versions
+        .slice()
+        .sort((a, b) => b.version_number - a.version_number)
+        .map((v) => ({ version_number: v.version_number }));
+    }
+  );
+const mockPlanVersionInsert = vi
+  .fn()
+  .mockImplementation(
+    async (data: {
+      project_id: string;
+      plan_id: string;
+      version_number: number;
+      title?: string | null;
+      content: string;
+      metadata?: string | null;
+      is_executed_version?: boolean;
+    }) => {
+      let proj = mockPlanVersionsStore.get(data.project_id);
+      if (!proj) {
+        proj = new Map();
+        mockPlanVersionsStore.set(data.project_id, proj);
+      }
+      const list = proj.get(data.plan_id) ?? [];
+      list.push({
+        version_number: data.version_number,
+        content: data.content,
+        title: data.title ?? null,
+      });
+      proj.set(data.plan_id, list);
+      return {
+        id: list.length,
+        project_id: data.project_id,
+        plan_id: data.plan_id,
+        version_number: data.version_number,
+        title: data.title ?? null,
+        content: data.content,
+        metadata: data.metadata ?? null,
+        created_at: new Date().toISOString(),
+        is_executed_version: Boolean(data.is_executed_version),
+      };
+    }
+  );
 const mockPlanUpdateContent = vi
   .fn()
-  .mockImplementation(async (projectId: string, planId: string, content: string) => {
-    const proj = mockPlanStore.get(projectId);
-    const row = proj?.get(planId);
-    if (row) {
-      row.content = content;
-      row.updated_at = new Date().toISOString();
+  .mockImplementation(
+    async (
+      projectId: string,
+      planId: string,
+      content: string,
+      currentVersionNumber?: number
+    ) => {
+      const proj = mockPlanStore.get(projectId);
+      const row = proj?.get(planId);
+      if (row) {
+        row.content = content;
+        row.updated_at = new Date().toISOString();
+        if (currentVersionNumber != null) {
+          row.current_version_number = currentVersionNumber;
+        }
+      }
     }
-  });
+  );
 const mockPlanUpdateMetadata = vi
   .fn()
   .mockImplementation(
@@ -133,6 +196,8 @@ vi.mock("../services/task-store.service.js", () => {
     planGetByEpicId: (...args: unknown[]) => mockPlanGetByEpicId(...args),
     planListIds: (...args: unknown[]) => mockPlanListIds(...args),
     planUpdateContent: (...args: unknown[]) => mockPlanUpdateContent(...args),
+    listPlanVersions: (...args: unknown[]) => mockListPlanVersions(...args),
+    planVersionInsert: (...args: unknown[]) => mockPlanVersionInsert(...args),
     planUpdateMetadata: (...args: unknown[]) => mockPlanUpdateMetadata(...args),
     planSetShippedContent: (...args: unknown[]) => mockPlanSetShippedContent(...args),
     planGetShippedContent: (...args: unknown[]) => mockPlanGetShippedContent(...args),
@@ -176,6 +241,7 @@ describe("PlanService createWithRetry usage", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mockPlanStore.clear();
+    mockPlanVersionsStore.clear();
     mockInvokePlanningAgent.mockResolvedValue({
       content: JSON.stringify({ complexity: "medium" }),
     });
@@ -1446,6 +1512,49 @@ describe("PlanService createWithRetry usage", () => {
     const plan = await planService.getPlan(projectId, planId);
     expect(plan.currentVersionNumber).toBe(3);
     expect(plan.lastExecutedVersionNumber).toBe(2);
+  });
+
+  it("updatePlan creates new plan version on each save; two saves yield three versions", async () => {
+    const plan = await planService.createPlan(projectId, {
+      title: "V Plan",
+      content: "# V Plan\n\nInitial.",
+      complexity: "low",
+    });
+    const planId = plan.metadata.planId as string;
+    await planService.updatePlan(projectId, planId, { content: "# V Plan\n\nFirst save." });
+    await planService.updatePlan(projectId, planId, { content: "# V Plan\n\nSecond save." });
+    const versions = await mockListPlanVersions(projectId, planId);
+    expect(versions).toHaveLength(3);
+    const numbers = versions.map((v) => v.version_number).sort((a, b) => a - b);
+    expect(numbers).toEqual([1, 2, 3]);
+    const after = await planService.getPlan(projectId, planId);
+    expect(after.currentVersionNumber).toBe(3);
+    expect(after.content).toBe("# V Plan\n\nSecond save.");
+    expect(after.lastExecutedVersionNumber).toBeUndefined();
+  });
+
+  it("updatePlan leaves last_executed_version_number unchanged", async () => {
+    const plan = await planService.createPlan(projectId, {
+      title: "Executed Plan",
+      content: "# Executed Plan\n\nInitial.",
+      complexity: "low",
+    });
+    const planId = plan.metadata.planId as string;
+    const proj = mockPlanStore.get(projectId);
+    const row = proj?.get(planId);
+    expect(row).toBeDefined();
+    row!.last_executed_version_number = 2;
+
+    await planService.updatePlan(projectId, planId, { content: "# Executed Plan\n\nEdited." });
+    const after = await planService.getPlan(projectId, planId);
+    expect(after.currentVersionNumber).toBe(2);
+    expect(after.lastExecutedVersionNumber).toBe(2);
+  });
+
+  it("updatePlan throws 404 PLAN_NOT_FOUND when plan does not exist", async () => {
+    await expect(
+      planService.updatePlan(projectId, "nonexistent-plan-id", { content: "# X\n\nBody." })
+    ).rejects.toMatchObject({ statusCode: 404, code: "PLAN_NOT_FOUND" });
   });
 
   it("createPlan writes metadata with reviewedAt null", async () => {

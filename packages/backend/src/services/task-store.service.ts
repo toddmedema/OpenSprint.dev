@@ -1726,10 +1726,20 @@ export class TaskStoreService {
     return this.planStore.planListIds(projectId);
   }
 
-  async planUpdateContent(projectId: string, planId: string, content: string): Promise<void> {
+  async planUpdateContent(
+    projectId: string,
+    planId: string,
+    content: string,
+    currentVersionNumber?: number
+  ): Promise<void> {
     return this.withWriteLock(async () => {
       await this.ensureInitialized();
-      await this.planStore.planUpdateContent(projectId, planId, content);
+      await this.planStore.planUpdateContent(
+        projectId,
+        planId,
+        content,
+        currentVersionNumber
+      );
     });
   }
 
