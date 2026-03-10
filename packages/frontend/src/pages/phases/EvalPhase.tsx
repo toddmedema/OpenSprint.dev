@@ -42,6 +42,7 @@ import { CONTENT_CONTAINER_CLASS, MOBILE_BREAKPOINT } from "../../lib/constants"
 import { shouldRightAlignDropdown } from "../../lib/dropdownViewport";
 import { getProjectPhasePath } from "../../lib/phaseRouting";
 import { formatPlanIdAsTitle } from "../../lib/formatting";
+import { parsePlanContent } from "../../lib/planContentUtils";
 import { HilApprovalBlock } from "../../components/HilApprovalBlock";
 import { OpenQuestionsBlock } from "../../components/OpenQuestionsBlock";
 import { useViewportWidth } from "../../hooks/useViewportWidth";
@@ -1039,11 +1040,15 @@ function PlanReviewCard({
 }) {
   const navigate = useNavigate();
   const isComplete = (plan.status as string) === "complete";
-  const title = formatPlanIdAsTitle(plan.metadata.planId);
   const planId = plan.metadata.planId;
+  const { title: contentTitle } = parsePlanContent(plan.content ?? "");
+  const displayTitle = contentTitle.trim()
+    ? contentTitle
+    : formatPlanIdAsTitle(plan.metadata.planId);
+  const linkTitle = formatPlanIdAsTitle(plan.metadata.planId);
   const total = plan.taskCount ?? 0;
   const done = plan.doneTaskCount ?? 0;
-  const summary =
+  const taskSummary =
     total > 0 && done === total ? `All ${total} tasks done` : `${done} of ${total} tasks done`;
 
   return (
@@ -1052,7 +1057,7 @@ function PlanReviewCard({
       data-testid={`plan-review-card-${planId}`}
       data-plan-status={plan.status}
     >
-      {/* Content: badge + summary (same pattern as Feedback card content) */}
+      {/* Content: badge + plan title (primary), task summary (secondary) */}
       <div className="mb-2 overflow-hidden">
         <span
           className="float-right ml-2 mb-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-theme-border-subtle text-theme-muted flex-shrink-0"
@@ -1060,7 +1065,14 @@ function PlanReviewCard({
         >
           Plan
         </span>
-        <p className="text-sm text-theme-text min-w-0">{summary}</p>
+        <p className="text-sm text-theme-text font-medium min-w-0" data-testid="plan-review-card-title">
+          {displayTitle}
+        </p>
+        {total > 0 && (
+          <p className="text-xs text-theme-muted mt-0.5 min-w-0" data-testid="plan-review-card-task-summary">
+            {taskSummary}
+          </p>
+        )}
       </div>
       {/* Same layout as Feedback card: embedded link left, Resolve + Reply right */}
       <div
@@ -1077,10 +1089,10 @@ function PlanReviewCard({
               navigate(getProjectPhasePath(projectId, "plan", { plan: planId }))
             }
             className="inline-flex items-center gap-1.5 rounded bg-theme-border-subtle px-1.5 py-0.5 text-xs font-mono text-brand-600 hover:bg-theme-info-bg hover:text-theme-info-text underline transition-colors"
-            title={`View plan: ${title}`}
-            aria-label={`View plan ${title}`}
+            title={`View plan: ${linkTitle}`}
+            aria-label={`View plan ${linkTitle}`}
           >
-            Plan: {title}
+            Plan: {linkTitle}
           </button>
         </div>
         <div className="flex gap-2 flex-shrink-0 ml-auto">
@@ -1093,7 +1105,7 @@ function PlanReviewCard({
               disabled={isMarking}
               className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs text-theme-success-text hover:bg-theme-success-bg transition-colors"
               title="Mark as complete"
-              aria-label={`Mark plan complete: ${title}`}
+              aria-label={`Mark plan complete: ${displayTitle}`}
               data-testid="plan-mark-complete-button"
             >
               {isMarking ? "Marking…" : "Mark complete"}
@@ -1105,7 +1117,7 @@ function PlanReviewCard({
               onClick={() => onReplyToPlan(planId)}
               className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text transition-colors"
               title="Reply to plan (chat with planning agent)"
-              aria-label={`Reply to plan ${title}`}
+              aria-label={`Reply to plan ${displayTitle}`}
               data-testid="plan-reply-button"
             >
               <ReplyIcon className="w-4 h-4" />

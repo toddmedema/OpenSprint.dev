@@ -58,7 +58,11 @@ function createQueryClientWithFeedbackAndPlans(
   return client;
 }
 
-function createMockPlan(opts: { planId: string; status: Plan["status"] }): Plan {
+function createMockPlan(opts: {
+  planId: string;
+  status: Plan["status"];
+  content?: string;
+}): Plan {
   return {
     metadata: {
       planId: opts.planId,
@@ -67,7 +71,7 @@ function createMockPlan(opts: { planId: string; status: Plan["status"] }): Plan 
       reviewedAt: opts.status === "complete" ? "2024-01-01T12:00:00Z" : null,
       complexity: "medium",
     },
-    content: "# Plan",
+    content: opts.content ?? "# Plan",
     status: opts.status,
     taskCount: 3,
     doneTaskCount: 3,
@@ -1871,14 +1875,39 @@ describe("EvalPhase feedback form", () => {
         expect(screen.getByTestId("plan-review-card-my-feature-plan")).toBeInTheDocument();
         expect(screen.getByTestId("plan-review-card-actions-row")).toBeInTheDocument();
         expect(screen.getByTestId("plan-review-card-plan-link")).toBeInTheDocument();
-        expect(screen.getByText("Plan")).toBeInTheDocument();
+        expect(screen.getByLabelText("Plan")).toBeInTheDocument(); // Plan badge
+        // Primary card text is plan title (from content "# Plan" in mock)
+        expect(screen.getByTestId("plan-review-card-title")).toHaveTextContent("Plan");
+        expect(screen.getByTestId("plan-review-card-task-summary")).toHaveTextContent("All 3 tasks done");
         expect(screen.getByRole("button", { name: /View plan My Feature Plan/i })).toBeInTheDocument();
-        expect(screen.getByText("All 3 tasks done")).toBeInTheDocument();
-        const markCompleteBtn = screen.getByRole("button", { name: /Mark plan complete: My Feature Plan/i });
+        const markCompleteBtn = screen.getByRole("button", { name: /Mark plan complete: Plan/i });
         expect(markCompleteBtn).toBeInTheDocument();
-        expect(markCompleteBtn).toHaveAttribute("aria-label", "Mark plan complete: My Feature Plan");
-        expect(screen.getByRole("button", { name: /Reply to plan My Feature Plan/i })).toBeInTheDocument();
+        expect(markCompleteBtn).toHaveAttribute("aria-label", "Mark plan complete: Plan");
+        expect(screen.getByRole("button", { name: /Reply to plan Plan/i })).toBeInTheDocument();
         expect(screen.getByTestId("plan-reply-button")).toBeInTheDocument();
+      });
+
+      it("plan review card uses formatPlanIdAsTitle as primary text when plan content has no # title", async () => {
+        const planInReview = createMockPlan({
+          planId: "auth-and-deploy",
+          status: "in_review",
+          content: "## Steps\nDo the thing.",
+        });
+        const queryClient = createQueryClientWithFeedbackAndPlans([], [planInReview]);
+        const store = createStore({ evalFeedback: [] });
+        localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "pending");
+
+        renderWithProviders(
+          <MemoryRouter>
+            <EvalPhase projectId="proj-1" />
+          </MemoryRouter>,
+          { store, queryClient }
+        );
+
+        await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+
+        expect(screen.getByTestId("plan-review-card-title")).toHaveTextContent("Auth And Deploy");
+        expect(screen.getByTestId("plan-review-card-task-summary")).toHaveTextContent("All 3 tasks done");
       });
 
       it("combined review list has role list and aria-label for accessibility", async () => {
@@ -1919,7 +1948,7 @@ describe("EvalPhase feedback form", () => {
         await waitFor(() => expect(screen.getByTestId("plan-mark-complete-button")).toBeInTheDocument());
 
         const user = userEvent.setup();
-        await user.click(screen.getByRole("button", { name: /Mark plan complete: Review Plan/i }));
+        await user.click(screen.getByRole("button", { name: /Mark plan complete: Plan/i }));
 
         await waitFor(() => {
           expect(api.plans.markPlanComplete).toHaveBeenCalledWith("proj-1", "review-plan");
