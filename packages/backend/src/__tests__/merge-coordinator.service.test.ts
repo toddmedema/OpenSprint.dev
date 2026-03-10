@@ -6,13 +6,37 @@ import {
 } from "../services/merge-coordinator.service.js";
 import type { StoredTask } from "../services/task-store.service.js";
 
-vi.mock("../services/task-store.service.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../services/task-store.service.js")>();
-  return {
-    taskStore: {},
-    resolveEpicId: actual.resolveEpicId,
-  };
-});
+// Full mock to avoid loading task-store (which pulls in drizzle). resolveEpicId implemented inline.
+function resolveEpicId(
+  taskId: string | undefined | null,
+  idToIssue?: Map<string, StoredTask> | StoredTask[]
+): string | null {
+  if (taskId == null || typeof taskId !== "string") return null;
+  const map =
+    idToIssue instanceof Map
+      ? idToIssue
+      : Array.isArray(idToIssue)
+        ? new Map(idToIssue.map((t) => [t.id, t]))
+        : undefined;
+  if (!map) return null;
+  let current: string | null = taskId;
+  while (current) {
+    const lastDot = current.lastIndexOf(".");
+    if (lastDot <= 0) return null;
+    const parentId = current.slice(0, lastDot);
+    const parent = map.get(parentId);
+    if (parent && (parent.issue_type ?? (parent as { type?: string }).type) === "epic") {
+      return parentId;
+    }
+    current = parentId;
+  }
+  return null;
+}
+
+vi.mock("../services/task-store.service.js", () => ({
+  taskStore: {},
+  resolveEpicId,
+}));
 
 vi.mock("../services/branch-manager.js", () => {
   class RebaseConflictError extends Error {
@@ -109,12 +133,6 @@ vi.mock("../services/final-review.service.js", () => ({
 vi.mock("../services/self-improvement.service.js", () => ({
   selfImprovementService: {
     runIfDue: vi.fn().mockResolvedValue(undefined),
-  },
-}));
-
-vi.mock("../services/notification.service.js", () => ({
-  notificationService: {
-    create: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -490,9 +508,11 @@ describe("MergeCoordinatorService", () => {
       "os-abc",
       "All tasks done; final review passed"
     );
-    expect(selfImprovementService.runIfDue).toHaveBeenCalledWith(projectId, {
-      trigger: "after_each_plan",
-      planId: "plan-1",
+    await vi.waitFor(() => {
+      expect(selfImprovementService.runIfDue).toHaveBeenCalledWith(projectId, {
+        trigger: "after_each_plan",
+        planId: "plan-1",
+      });
     });
   });
 
@@ -535,6 +555,59 @@ describe("MergeCoordinatorService", () => {
     await vi.waitFor(() => {
       expect(mockHost.taskStore.close).toHaveBeenCalledWith(projectId, "os-xyz", "All tasks done");
     });
+    expect(selfImprovementService.runIfDue).not.toHaveBeenCalled();
+  });
+
+  it("invokes runIfDue when final review returns null but plan exists (after_each_plan hook)", async () => {
+    const { finalReviewService } = await import("../services/final-review.service.js");
+    const { selfImprovementService } = await import("../services/self-improvement.service.js");
+    vi.mocked(finalReviewService.runFinalReview).mockResolvedValue(null);
+    mockHost.taskStore.listAll.mockResolvedValue([
+      { id: "os-xyz", title: "Epic", status: "open", issue_type: "epic" } as never,
+      { id: "os-xyz.1", title: "Task 1", status: "closed", issue_type: "task" } as never,
+    ]);
+    vi.mocked(mockHost.taskStore.planGetByEpicId).mockResolvedValue({
+      plan_id: "plan-3",
+      content: "",
+      metadata: {},
+      shipped_content: null,
+      updated_at: new Date().toISOString(),
+    });
+
+    await coordinator.postCompletionAsync(projectId, repoPath, "os-xyz.1");
+
+    await vi.waitFor(() => {
+      expect(mockHost.taskStore.close).toHaveBeenCalledWith(projectId, "os-xyz", "All tasks done");
+    });
+    await vi.waitFor(() => {
+      expect(selfImprovementService.runIfDue).toHaveBeenCalledWith(projectId, {
+        trigger: "after_each_plan",
+        planId: "plan-3",
+      });
+    });
+  });
+
+  it("does not invoke runIfDue when task has no epic (Execute click alone does not trigger)", async () => {
+    const { selfImprovementService } = await import("../services/self-improvement.service.js");
+    mockHost.taskStore.listAll.mockResolvedValue([
+      { id: "os-standalone", title: "Top-level task", status: "closed", issue_type: "task" } as never,
+    ]);
+
+    await coordinator.postCompletionAsync(projectId, repoPath, "os-standalone");
+
+    expect(selfImprovementService.runIfDue).not.toHaveBeenCalled();
+  });
+
+  it("does not invoke runIfDue when not all impl tasks closed (plan execution not complete)", async () => {
+    const { selfImprovementService } = await import("../services/self-improvement.service.js");
+    mockHost.taskStore.listAll.mockResolvedValue([
+      { id: "os-abc", title: "Epic", status: "open", issue_type: "epic" } as never,
+      { id: "os-abc.1", title: "Task 1", status: "closed", issue_type: "task" } as never,
+      { id: "os-abc.2", title: "Task 2", status: "open", issue_type: "task" } as never,
+    ]);
+
+    await coordinator.postCompletionAsync(projectId, repoPath, "os-abc.1");
+
     expect(selfImprovementService.runIfDue).not.toHaveBeenCalled();
   });
 

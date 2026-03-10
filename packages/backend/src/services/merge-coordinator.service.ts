@@ -787,6 +787,8 @@ export class MergeCoordinatorService {
           }
           const planRow = await this.host.taskStore.planGetByEpicId(projectId, epicId);
           if (planRow) {
+            // Self-improvement (frequency after_each_plan): run once when plan execution is fully complete.
+            // runIfDue checks frequency, hasCodeChangesSince(lastRunAt, baseBranch), and no run in progress.
             selfImprovementService
               .runIfDue(projectId, { trigger: "after_each_plan", planId: planRow.plan_id })
               .catch((err) => log.warn("Self-improvement after plan completion failed", { projectId, epicId, err }));
@@ -828,6 +830,7 @@ export class MergeCoordinatorService {
       }
       const planRow = await this.host.taskStore.planGetByEpicId(projectId, epicId);
       if (planRow) {
+        // Self-improvement (after_each_plan): runIfDue does change detection and run-in-progress check.
         selfImprovementService
           .runIfDue(projectId, { trigger: "after_each_plan", planId: planRow.plan_id })
           .catch((err) => log.warn("Self-improvement after plan completion failed", { projectId, epicId, err }));
@@ -845,6 +848,7 @@ export class MergeCoordinatorService {
       }
       const planRow = await this.host.taskStore.planGetByEpicId(projectId, epicId);
       if (planRow) {
+        // Self-improvement (after_each_plan): runIfDue does change detection and run-in-progress check.
         selfImprovementService
           .runIfDue(projectId, { trigger: "after_each_plan", planId: planRow.plan_id })
           .catch((err) => log.warn("Self-improvement after plan completion failed", { projectId, epicId, err }));
