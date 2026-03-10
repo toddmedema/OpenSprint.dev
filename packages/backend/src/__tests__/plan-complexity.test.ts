@@ -17,6 +17,10 @@ import { createTestProjectId } from "./test-db-helper.js";
 /** Unique project ID so other test files (e.g. task-store) don't wipe our data. */
 let TEST_PROJECT_ID = createTestProjectId("plan-complexity-test-project");
 
+// Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
+vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
+
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/task-store.service.js")>();
   const { createTestPostgresClient } = await import("./test-db-helper.js");

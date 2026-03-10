@@ -12,6 +12,10 @@ import {
   prdToSpecMarkdown,
 } from "@opensprint/shared";
 
+// Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
+vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
+
 // Mock TaskStoreService so tests don't require bd CLI or shell
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/task-store.service.js")>();
@@ -197,6 +201,67 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("INVALID_INPUT");
+    });
+  });
+
+  describe("GET /projects/:id/prd/proposed-diff", () => {
+    it("returns 200 and diff when hil_approval notification has scopeChangeMetadata", async () => {
+      await request(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Current content" });
+
+      const { notificationService } = await import(
+        "../services/notification.service.js"
+      );
+      const notif = await notificationService.createHilApproval({
+        projectId,
+        source: "eval",
+        sourceId: "fb-1",
+        description: "Approve scope change?",
+        category: "scopeChanges",
+        scopeChangeMetadata: {
+          scopeChangeSummary: "Update executive summary",
+          scopeChangeProposedUpdates: [
+            {
+              section: "executive_summary",
+              changeLogEntry: "Proposed update",
+              content: "Proposed content",
+            },
+          ],
+        },
+      });
+
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${notif.id}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.requestId).toBe(notif.id);
+      expect(res.body.diff).toBeDefined();
+      expect(res.body.diff.lines).toBeDefined();
+      expect(Array.isArray(res.body.diff.lines)).toBe(true);
+      expect(res.body.diff.summary).toBeDefined();
+      expect(res.body.diff.summary.additions).toBeDefined();
+      expect(res.body.diff.summary.deletions).toBeDefined();
+    });
+
+    it("returns 404 for invalid requestId", async () => {
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=hil-nonexistent`
+      );
+
+      expect(res.status).toBe(404);
+      expect(res.body.error?.code).toBe("NOT_FOUND");
+    });
+
+    it("returns 400 when requestId is missing", async () => {
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+      expect(res.body.error?.message).toContain("requestId");
     });
   });
 

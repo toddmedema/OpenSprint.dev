@@ -6,6 +6,10 @@ import { OrchestratorService, formatReviewFeedback } from "../services/orchestra
 import { heartbeatService } from "../services/heartbeat.service.js";
 import type { ReviewAgentResult } from "@opensprint/shared";
 
+// Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
+vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
+
 // ─── Mocks ───
 
 const {

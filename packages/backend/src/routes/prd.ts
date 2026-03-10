@@ -6,6 +6,7 @@ import { PrdService } from "../services/prd.service.js";
 import { ChatService } from "../services/chat.service.js";
 import { prdFromCodebaseService } from "../services/prd-from-codebase.service.js";
 import { broadcastToProject } from "../websocket/index.js";
+import { notificationService } from "../services/notification.service.js";
 import { computeLineDiff } from "../utils/diff.js";
 import { prdToSpecMarkdown } from "@opensprint/shared";
 import type { ApiResponse, Prd, PrdSection, PrdChangeLogEntry } from "@opensprint/shared";
@@ -114,6 +115,58 @@ prdRouter.get("/diff", async (req: Request<ProjectParams>, res, next) => {
     res.json({
       fromVersion: String(fromVersion),
       toVersion: resolvedToVersion,
+      diff: { lines: diff.lines, summary: diff.summary },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /projects/:projectId/prd/proposed-diff?requestId=<id>
+// Returns diff between current SPEC and proposed SPEC for a hil_approval request. Register before /:section.
+prdRouter.get("/proposed-diff", async (req: Request<ProjectParams>, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const requestId = req.query.requestId as string | undefined;
+
+    if (requestId === undefined || requestId === "") {
+      res.status(400).json({
+        error: { code: "INVALID_INPUT", message: "Query parameter 'requestId' is required" },
+      });
+      return;
+    }
+
+    const notification = await notificationService.getById(projectId, requestId);
+    if (
+      !notification ||
+      notification.kind !== "hil_approval" ||
+      !notification.scopeChangeMetadata
+    ) {
+      res.status(404).json({
+        error: { code: "NOT_FOUND", message: "HIL approval request not found or has no proposed scope changes" },
+      });
+      return;
+    }
+
+    const currentPrd = await prdService.getPrd(projectId);
+    const proposedPrd = JSON.parse(JSON.stringify(currentPrd)) as Prd;
+    const now = new Date().toISOString();
+
+    for (const u of notification.scopeChangeMetadata.scopeChangeProposedUpdates) {
+      const existing = proposedPrd.sections[u.section];
+      proposedPrd.sections[u.section] = {
+        content: u.content,
+        version: existing ? existing.version + 1 : 1,
+        updatedAt: now,
+      };
+    }
+
+    const currentSpec = prdToSpecMarkdown(currentPrd);
+    const proposedSpec = prdToSpecMarkdown(proposedPrd);
+    const diff = computeLineDiff(currentSpec, proposedSpec);
+
+    res.json({
+      requestId,
       diff: { lines: diff.lines, summary: diff.summary },
     });
   } catch (err) {

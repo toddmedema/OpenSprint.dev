@@ -10,6 +10,10 @@ import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
+// Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
+vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
+
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/task-store.service.js")>();
   const { createTestPostgresClient, truncateTestDbTables } = await import("./test-db-helper.js");

@@ -5,12 +5,16 @@
  * - When LM Studio is unavailable: asserts connection error and that user-facing message
  *   mentions starting LM Studio or checking URL (tests always run, use unreachable URL).
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { AgentClient } from "../services/agent-client.js";
 import type { AgentConfig } from "@opensprint/shared";
+
+// Avoid loading drizzle-orm/pg-core (vitest resolution can fail in some workspaces)
+vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 const LM_STUDIO_URL = process.env.LM_STUDIO_URL;
 const LM_STUDIO_MODEL = process.env.LM_STUDIO_MODEL ?? "local";

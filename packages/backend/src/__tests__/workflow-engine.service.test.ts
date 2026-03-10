@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -8,6 +8,10 @@ import {
   WorkflowValidationError,
   DEFAULT_WORKFLOW,
 } from "../services/workflow-engine.service.js";
+
+// Avoid loading drizzle-orm/pg-core (vitest resolution can fail in some workspaces)
+vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 describe("WorkflowEngineService", () => {
   let service: WorkflowEngineService;

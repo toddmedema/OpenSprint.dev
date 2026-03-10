@@ -18,6 +18,10 @@ const mockInvoke = vi.fn();
 const mockRegister = vi.fn();
 const mockUnregister = vi.fn();
 
+// Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
+vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
+
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/task-store.service.js")>();
   const { createTestPostgresClient, truncateTestDbTables } = await import("./test-db-helper.js");

@@ -1,11 +1,14 @@
 /**
  * Tests for SQLite-backed AppDb and DbClient (initAppDb with sqlite dialect).
+ * Skipped when better-sqlite3 is not available (e.g. in worktrees where native module resolution fails).
  */
 import { describe, it, expect } from "vitest";
 import { initAppDb } from "../db/app-db.js";
 import { randomUUID } from "crypto";
 
-describe.sequential("initAppDb (SQLite)", () => {
+const betterSqlite3Available = await import("better-sqlite3").then(() => true).catch(() => false);
+
+describe.sequential.skipIf(!betterSqlite3Available)("initAppDb (SQLite)", () => {
   it("initializes with in-memory SQLite and runs schema", async () => {
     const appDb = await initAppDb("sqlite://:memory:");
     try {
