@@ -340,9 +340,6 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         const result = await dispatch(generatePlan({ projectId, description, tempId }));
         if (generatePlan.fulfilled.match(result)) {
           if (result.payload.status === "created") {
-            dispatch(
-              addNotification({ message: "Plan generated successfully", severity: "success" })
-            );
             void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
           } else {
             dispatch(addOpenQuestionNotification(result.payload.notification));
@@ -835,12 +832,6 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                       if (result.payload.response.planGenerated?.planId) {
                         const planId = result.payload.response.planGenerated.planId;
                         dispatch(setSelectedPlanId(planId));
-                        dispatch(
-                          addNotification({
-                            message: "Plan generated successfully",
-                            severity: "success",
-                          })
-                        );
                         void queryClient.invalidateQueries({
                           queryKey: queryKeys.plans.list(projectId),
                         });

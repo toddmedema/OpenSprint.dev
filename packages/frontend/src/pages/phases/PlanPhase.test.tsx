@@ -2687,31 +2687,6 @@ describe("PlanPhase Generate Plan", () => {
     expect(screen.queryByTestId("add-plan-modal")).not.toBeInTheDocument();
   });
 
-  it("shows success notification after plan is generated", async () => {
-    const store = createStore();
-    const user = userEvent.setup();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    await user.click(screen.getByTestId("add-plan-button"));
-    await user.type(screen.getByTestId("feature-description-input"), "Feature idea");
-    await user.click(screen.getByTestId("generate-plan-button"));
-
-    await waitFor(() => {
-      const notifications = store.getState().notification.items;
-      const successToast = notifications.find(
-        (n: { message: string }) => n.message === "Plan generated successfully"
-      );
-      expect(successToast).toBeDefined();
-    });
-  });
-
   it("shows error notification when generation fails", async () => {
     mockGenerate.mockRejectedValueOnce(new Error("Agent unavailable"));
     const store = createStore();
