@@ -123,12 +123,18 @@ export const executePlan = createAsyncThunk(
     projectId,
     planId,
     prerequisitePlanIds,
+    version_number,
   }: {
     projectId: string;
     planId: string;
     prerequisitePlanIds?: string[];
+    version_number?: number;
   }) => {
-    await api.plans.execute(projectId, planId, prerequisitePlanIds);
+    const options =
+      prerequisitePlanIds?.length || version_number != null
+        ? { prerequisitePlanIds, version_number }
+        : undefined;
+    await api.plans.execute(projectId, planId, options);
   }
 );
 

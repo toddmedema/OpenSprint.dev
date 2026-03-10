@@ -1681,10 +1681,9 @@ describe("PlanPhase executePlan thunk", () => {
     await user.click(screen.getByRole("button", { name: /Proceed/ }));
 
     await waitFor(() => {
-      expect(mockExecute).toHaveBeenCalledWith("proj-1", "archive-test-feature", [
-        "user-auth",
-        "feature-base",
-      ]);
+      expect(mockExecute).toHaveBeenCalledWith("proj-1", "archive-test-feature", {
+        prerequisitePlanIds: ["user-auth", "feature-base"],
+      });
     });
   });
 });

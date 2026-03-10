@@ -42,6 +42,10 @@ import type {
   ExecuteTaskContext,
   EnvRuntimeResponse,
 } from "@opensprint/shared";
+import type {
+  PlanVersionSummary,
+  PlanVersionContent,
+} from "../../../shared/src/types/plan.js";
 import type { TaskListResponse } from "./taskList";
 
 /** API base; set VITE_API_BASE for production/staging (e.g. empty for same-origin, or full origin). */
@@ -304,6 +308,16 @@ export const api = {
       }),
     get: (projectId: string, planId: string) =>
       request<Plan>(`/projects/${projectId}/plans/${planId}`),
+    listVersions: async (projectId: string, planId: string) => {
+      const res = await request<{ versions: PlanVersionSummary[] }>(
+        `/projects/${projectId}/plans/${planId}/versions`
+      );
+      return res.versions;
+    },
+    getVersion: (projectId: string, planId: string, versionNumber: number) =>
+      request<PlanVersionContent>(
+        `/projects/${projectId}/plans/${planId}/versions/${versionNumber}`
+      ),
     create: (projectId: string, data: CreatePlanRequest) =>
       request<Plan>(`/projects/${projectId}/plans`, {
         method: "POST",
@@ -324,11 +338,19 @@ export const api = {
       request<Plan>(`/projects/${projectId}/plans/${planId}/plan-tasks`, {
         method: "POST",
       }),
-    execute: (projectId: string, planId: string, prerequisitePlanIds?: string[]) =>
-      request<Plan>(`/projects/${projectId}/plans/${planId}/execute`, {
+    execute: (
+      projectId: string,
+      planId: string,
+      options?: { prerequisitePlanIds?: string[]; version_number?: number }
+    ) => {
+      const body: { prerequisitePlanIds?: string[]; version_number?: number } = {};
+      if (options?.prerequisitePlanIds?.length) body.prerequisitePlanIds = options.prerequisitePlanIds;
+      if (options?.version_number != null) body.version_number = options.version_number;
+      return request<Plan>(`/projects/${projectId}/plans/${planId}/execute`, {
         method: "POST",
-        body: JSON.stringify(prerequisitePlanIds?.length ? { prerequisitePlanIds } : {}),
-      }),
+        body: JSON.stringify(body),
+      });
+    },
     reExecute: (projectId: string, planId: string) =>
       request<Plan>(`/projects/${projectId}/plans/${planId}/re-execute`, {
         method: "POST",

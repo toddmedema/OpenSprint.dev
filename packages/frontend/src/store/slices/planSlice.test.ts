@@ -29,6 +29,8 @@ vi.mock("../../api/client", () => ({
   api: {
     plans: {
       list: vi.fn(),
+      listVersions: vi.fn(),
+      getVersion: vi.fn(),
       decompose: vi.fn(),
       generate: vi.fn(),
       execute: vi.fn(),
@@ -72,6 +74,8 @@ const mockGraph: PlanDependencyGraph = {
 describe("planSlice", () => {
   beforeEach(() => {
     vi.mocked(api.plans.list).mockReset();
+    vi.mocked(api.plans.listVersions).mockReset();
+    vi.mocked(api.plans.getVersion).mockReset();
     vi.mocked(api.plans.decompose).mockReset();
     vi.mocked(api.plans.generate).mockReset();
     vi.mocked(api.plans.execute).mockReset();
@@ -491,10 +495,43 @@ describe("planSlice", () => {
         })
       );
 
-      expect(api.plans.execute).toHaveBeenCalledWith("proj-1", "plan-123", [
-        "user-auth",
-        "feature-base",
-      ]);
+      expect(api.plans.execute).toHaveBeenCalledWith("proj-1", "plan-123", {
+        prerequisitePlanIds: ["user-auth", "feature-base"],
+      });
+    });
+
+    it("passes version_number when provided", async () => {
+      vi.mocked(api.plans.execute).mockResolvedValue(undefined);
+      const store = createStore();
+      await store.dispatch(
+        executePlan({
+          projectId: "proj-1",
+          planId: "plan-123",
+          version_number: 5,
+        })
+      );
+
+      expect(api.plans.execute).toHaveBeenCalledWith("proj-1", "plan-123", {
+        version_number: 5,
+      });
+    });
+
+    it("passes both prerequisitePlanIds and version_number when provided", async () => {
+      vi.mocked(api.plans.execute).mockResolvedValue(undefined);
+      const store = createStore();
+      await store.dispatch(
+        executePlan({
+          projectId: "proj-1",
+          planId: "plan-123",
+          prerequisitePlanIds: ["plan-a"],
+          version_number: 3,
+        })
+      );
+
+      expect(api.plans.execute).toHaveBeenCalledWith("proj-1", "plan-123", {
+        prerequisitePlanIds: ["plan-a"],
+        version_number: 3,
+      });
     });
 
     it("clears executingPlanId and sets error on rejected", async () => {

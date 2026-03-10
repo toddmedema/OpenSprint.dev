@@ -91,10 +91,12 @@ export function useExecutePlan(projectId: string) {
     mutationFn: ({
       planId,
       prerequisitePlanIds,
+      version_number,
     }: {
       planId: string;
       prerequisitePlanIds?: string[];
-    }) => api.plans.execute(projectId, planId, prerequisitePlanIds),
+      version_number?: number;
+    }) => api.plans.execute(projectId, planId, { prerequisitePlanIds, version_number }),
     onSuccess: (_, { planId }) => {
       void qc.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
       void qc.invalidateQueries({ queryKey: queryKeys.plans.detail(projectId, planId) });

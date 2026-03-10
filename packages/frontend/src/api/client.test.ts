@@ -302,6 +302,93 @@ describe("api client", () => {
         expect.objectContaining({ method: "POST" })
       );
     });
+
+    it("listVersions calls GET /projects/:projectId/plans/:planId/versions and returns versions array", async () => {
+      const versions = [
+        { id: "v1", version_number: 1, created_at: "2025-01-01T00:00:00Z", is_executed_version: true },
+        { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z" },
+      ];
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { versions } }),
+      } as Response);
+
+      const result = await api.plans.listVersions("proj-1", "plan-abc");
+      expect(result).toEqual(versions);
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/projects/proj-1/plans/plan-abc/versions"),
+        expect.any(Object)
+      );
+    });
+
+    it("getVersion calls GET /projects/:projectId/plans/:planId/versions/:versionNumber and returns version content", async () => {
+      const content = {
+        version_number: 3,
+        title: "My Plan",
+        content: "# Plan v3\n\nBody",
+        created_at: "2025-01-03T00:00:00Z",
+        is_executed_version: false,
+      };
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: content }),
+      } as Response);
+
+      const result = await api.plans.getVersion("proj-1", "plan-abc", 3);
+      expect(result).toEqual(content);
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/projects/proj-1/plans/plan-abc/versions/3"),
+        expect.any(Object)
+      );
+    });
+
+    it("execute sends POST with optional version_number in body", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: {} }),
+      } as Response);
+
+      await api.plans.execute("proj-1", "plan-1", { version_number: 7 });
+      const call = vi.mocked(fetch).mock.calls[0];
+      expect(call[0]).toContain("/projects/proj-1/plans/plan-1/execute");
+      const body = JSON.parse(call[1]?.body as string);
+      expect(body).toEqual({ version_number: 7 });
+    });
+
+    it("execute sends POST with prerequisitePlanIds and version_number when both provided", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: {} }),
+      } as Response);
+
+      await api.plans.execute("proj-1", "plan-2", {
+        prerequisitePlanIds: ["plan-a", "plan-b"],
+        version_number: 2,
+      });
+      const call = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(call[1]?.body as string);
+      expect(body).toEqual({
+        prerequisitePlanIds: ["plan-a", "plan-b"],
+        version_number: 2,
+      });
+    });
+
+    it("execute sends POST with no body when no options provided", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: {} }),
+      } as Response);
+
+      await api.plans.execute("proj-1", "plan-1");
+      const call = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(call[1]?.body as string);
+      expect(body).toEqual({});
+    });
   });
 
   describe("models", () => {
