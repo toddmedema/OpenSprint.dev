@@ -18,7 +18,10 @@ import { agentIdentityService, type AttemptOutcome } from "./agent-identity.serv
 import { eventLogService } from "./event-log.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { createLogger } from "../utils/logger.js";
-import { classifyAgentApiError } from "../utils/error-utils.js";
+import {
+  classifyAgentApiError,
+  type AgentApiErrorKind,
+} from "../utils/error-utils.js";
 import { notificationService } from "./notification.service.js";
 import {
   buildTaskLastExecutionSummary,
@@ -238,92 +241,94 @@ export class FailureHandlerService {
       reason: effectiveReason,
     });
 
-    // Surface failures in the notification system so the user sees the error without digging through logs
-    const apiErrorKind = classifyAgentApiError(new Error(effectiveReason));
-    if (apiErrorKind) {
-      try {
-        const notification = await notificationService.createApiBlocked({
-          projectId,
-          source: "execute",
-          sourceId: task.id,
-          message: effectiveReason.slice(0, 500),
-          errorCode: apiErrorKind,
-        });
-        broadcastToProject(projectId, {
-          type: "notification.added",
-          notification: {
-            id: notification.id,
-            projectId: notification.projectId,
-            source: notification.source,
-            sourceId: notification.sourceId,
-            questions: notification.questions.map((q) => ({
-              id: q.id,
-              text: q.text,
-              createdAt: q.createdAt,
-            })),
-            status: "open",
-            createdAt: notification.createdAt,
-            resolvedAt: null,
-            kind: "api_blocked",
-            errorCode: notification.errorCode,
-          },
-        });
-      } catch (notifErr) {
-        log.warn("Failed to create API-blocked notification", { err: notifErr });
-      }
-    } else {
-      try {
-        const notification = await notificationService.createAgentFailed({
-          projectId,
-          source: "execute",
-          sourceId: task.id,
-          message: effectiveReason.slice(0, 2000),
-        });
-        broadcastToProject(projectId, {
-          type: "notification.added",
-          notification: {
-            id: notification.id,
-            projectId: notification.projectId,
-            source: notification.source,
-            sourceId: notification.sourceId,
-            questions: notification.questions.map((q) => ({
-              id: q.id,
-              text: q.text,
-              createdAt: q.createdAt,
-            })),
-            status: "open",
-            createdAt: notification.createdAt,
-            resolvedAt: null,
-            kind: "agent_failed",
-          },
-        });
-      } catch (notifErr) {
-        log.warn("Failed to create agent-failed notification", { err: notifErr });
+    const apiErrorKind = classifyAgentApiError(new Error(effectiveReason)) as AgentApiErrorKind | null;
+    // Surface failures in the notification system only when not a review-phase failure, or when
+    // we will block (review notifications are created in blockTask when retries exceed limit).
+    if (slot.phase !== "review") {
+      if (apiErrorKind) {
+        try {
+          const notification = await notificationService.createApiBlocked({
+            projectId,
+            source: "execute",
+            sourceId: task.id,
+            message: effectiveReason.slice(0, 500),
+            errorCode: apiErrorKind,
+          });
+          broadcastToProject(projectId, {
+            type: "notification.added",
+            notification: {
+              id: notification.id,
+              projectId: notification.projectId,
+              source: notification.source,
+              sourceId: notification.sourceId,
+              questions: notification.questions.map((q) => ({
+                id: q.id,
+                text: q.text,
+                createdAt: q.createdAt,
+              })),
+              status: "open",
+              createdAt: notification.createdAt,
+              resolvedAt: null,
+              kind: "api_blocked",
+              errorCode: notification.errorCode,
+            },
+          });
+        } catch (notifErr) {
+          log.warn("Failed to create API-blocked notification", { err: notifErr });
+        }
+      } else {
+        try {
+          const notification = await notificationService.createAgentFailed({
+            projectId,
+            source: "execute",
+            sourceId: task.id,
+            message: effectiveReason.slice(0, 2000),
+          });
+          broadcastToProject(projectId, {
+            type: "notification.added",
+            notification: {
+              id: notification.id,
+              projectId: notification.projectId,
+              source: notification.source,
+              sourceId: notification.sourceId,
+              questions: notification.questions.map((q) => ({
+                id: q.id,
+                text: q.text,
+                createdAt: q.createdAt,
+              })),
+              status: "open",
+              createdAt: notification.createdAt,
+              resolvedAt: null,
+              kind: "agent_failed",
+            },
+          });
+        } catch (notifErr) {
+          log.warn("Failed to create agent-failed notification", { err: notifErr });
+        }
       }
     }
 
     const failSettings = await this.host.projectService.getSettings(projectId);
     const agentConfig = failSettings.simpleComplexityAgent;
 
-    if (failureType !== "review_rejection") {
-      eventLogService
-        .append(repoPath, {
-          timestamp: new Date().toISOString(),
-          projectId,
-          taskId: task.id,
-          event: "task.failed",
-          data: {
-            attempt: cumulativeAttempts,
-            phase: slot.phase,
-            failureType,
-            model: agentConfig.model ?? null,
-            reason: effectiveReason.slice(0, 500),
-            summary: failureSummary,
-            nextAction,
-          },
-        })
-        .catch(() => {});
-    }
+    // Log all failures (including review rejections) to event log for Execution Diagnostics
+    eventLogService
+      .append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId: task.id,
+        event: "task.failed",
+        data: {
+          attempt: cumulativeAttempts,
+          phase: slot.phase,
+          failureType,
+          model: agentConfig.model ?? null,
+          reason: effectiveReason.slice(0, 500),
+          summary: failureSummary,
+          nextAction,
+        },
+      })
+      .catch(() => {});
 
     const gitWorkingMode = failSettings.gitWorkingMode ?? "worktree";
     const agentRole = slot.phase === "review" ? "reviewer" : "coder";
@@ -452,7 +457,8 @@ export class FailureHandlerService {
         effectiveReason,
         failureType,
         slot.phase,
-        agentConfig.model ?? null
+        agentConfig.model ?? null,
+        slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined
       );
       return;
     }
@@ -476,7 +482,8 @@ export class FailureHandlerService {
         effectiveReason,
         failureType,
         slot.phase,
-        agentConfig.model ?? null
+        agentConfig.model ?? null,
+        slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined
       );
       return;
     }
@@ -606,7 +613,8 @@ export class FailureHandlerService {
           effectiveReason,
           failureType,
           slot.phase,
-          agentConfig.model ?? null
+          agentConfig.model ?? null,
+          slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined
         );
       } else {
         const newPriority = currentPriority + 1;
@@ -705,7 +713,8 @@ export class FailureHandlerService {
     reason: string,
     failureType: FailureType,
     phase: "coding" | "review",
-    model?: string | null
+    model?: string | null,
+    notificationContext?: { effectiveReason: string; apiErrorKind: AgentApiErrorKind | null }
   ): Promise<void> {
     log.info(`Blocking ${task.id} after ${cumulativeAttempts} cumulative failures at max priority`);
     const blockSummary = buildTaskLastExecutionSummary({
@@ -766,6 +775,68 @@ export class FailureHandlerService {
       testResults: null,
       reason: reason.slice(0, 300),
     });
+
+    // For review-phase failures that exceeded retry limit, surface notification so user is alerted
+    if (phase === "review" && notificationContext) {
+      const { effectiveReason: msg, apiErrorKind: kind } = notificationContext;
+      try {
+        if (kind) {
+          const notification = await notificationService.createApiBlocked({
+            projectId,
+            source: "execute",
+            sourceId: task.id,
+            message: msg.slice(0, 500),
+            errorCode: kind,
+          });
+          broadcastToProject(projectId, {
+            type: "notification.added",
+            notification: {
+              id: notification.id,
+              projectId: notification.projectId,
+              source: notification.source,
+              sourceId: notification.sourceId,
+              questions: notification.questions.map((q) => ({
+                id: q.id,
+                text: q.text,
+                createdAt: q.createdAt,
+              })),
+              status: "open",
+              createdAt: notification.createdAt,
+              resolvedAt: null,
+              kind: "api_blocked",
+              errorCode: notification.errorCode,
+            },
+          });
+        } else {
+          const notification = await notificationService.createAgentFailed({
+            projectId,
+            source: "execute",
+            sourceId: task.id,
+            message: msg.slice(0, 2000),
+          });
+          broadcastToProject(projectId, {
+            type: "notification.added",
+            notification: {
+              id: notification.id,
+              projectId: notification.projectId,
+              source: notification.source,
+              sourceId: notification.sourceId,
+              questions: notification.questions.map((q) => ({
+                id: q.id,
+                text: q.text,
+                createdAt: q.createdAt,
+              })),
+              status: "open",
+              createdAt: notification.createdAt,
+              resolvedAt: null,
+              kind: "agent_failed",
+            },
+          });
+        }
+      } catch (notifErr) {
+        log.warn("Failed to create review-failure notification after block", { err: notifErr });
+      }
+    }
 
     this.host.nudge(projectId);
   }

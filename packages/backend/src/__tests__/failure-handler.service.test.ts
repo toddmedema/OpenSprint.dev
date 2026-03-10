@@ -5,6 +5,8 @@ import {
   type FailureHandlerHost,
   type FailureSlot,
 } from "../services/failure-handler.service.js";
+import { eventLogService } from "../services/event-log.service.js";
+import { notificationService } from "../services/notification.service.js";
 
 vi.mock("../services/event-log.service.js", () => ({
   eventLogService: { append: vi.fn().mockResolvedValue(undefined) },
@@ -517,6 +519,94 @@ describe("FailureHandlerService", () => {
               phase: "coding",
               failureType: "test_failure",
             }),
+          }),
+        })
+      );
+    });
+  });
+
+  describe("review failure notifications and execution diagnostics", () => {
+    it("does not create notification for review-phase failure when requeuing (retries not exceeded)", async () => {
+      const slot = makeSlot("/tmp/worktree");
+      slot.phase = "review";
+      slot.attempt = 1;
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        "Review agent crashed",
+        null,
+        "agent_crash"
+      );
+
+      expect(notificationService.createAgentFailed).not.toHaveBeenCalled();
+      expect(notificationService.createApiBlocked).not.toHaveBeenCalled();
+    });
+
+    it("creates notification when review-phase failure blocks (retries exceeded)", async () => {
+      const slot = makeSlot("/tmp/worktree");
+      slot.phase = "review";
+      slot.attempt = 3;
+      slot.infraRetries = 0;
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+      const task = makeTask();
+      (task as { priority?: number }).priority = 4;
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        task,
+        branchName,
+        "Review failed: tests did not pass",
+        null,
+        "test_failure"
+      );
+
+      expect(notificationService.createAgentFailed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId,
+          sourceId: taskId,
+          message: expect.stringContaining("Review failed"),
+        })
+      );
+    });
+
+    it("logs all review failures to event log for Execution Diagnostics (including review_rejection)", async () => {
+      const slot = makeSlot("/tmp/worktree");
+      slot.phase = "review";
+      slot.attempt = 1;
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        "Review rejected",
+        "Fix the bug in foo.ts",
+        "review_rejection"
+      );
+
+      expect(eventLogService.append).toHaveBeenCalledWith(
+        repoPath,
+        expect.objectContaining({
+          event: "task.failed",
+          data: expect.objectContaining({
+            phase: "review",
+            failureType: "review_rejection",
+            reason: "Review rejected",
           }),
         })
       );
