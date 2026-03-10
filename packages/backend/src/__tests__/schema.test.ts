@@ -70,4 +70,20 @@ describe("schema", () => {
     expect(SCHEMA_SQL_SQLITE).toContain("current_version_number");
     expect(SCHEMA_SQL_SQLITE).toContain("last_executed_version_number");
   });
+
+  it("Postgres and SQLite schemas include prd_snapshots table", () => {
+    const pg = getSchemaSql("postgres");
+    const sqlite = getSchemaSql("sqlite");
+    for (const sql of [pg, sqlite]) {
+      expect(sql).toContain("CREATE TABLE IF NOT EXISTS prd_snapshots");
+      expect(sql).toContain("project_id");
+      expect(sql).toContain("version");
+      expect(sql).toContain("content");
+      expect(sql).toContain("created_at");
+      expect(sql).toContain("PRIMARY KEY (project_id, version)");
+      expect(sql).toContain("idx_prd_snapshots_project_id");
+    }
+    expect(SCHEMA_SQL).toContain("prd_snapshots");
+    expect(SCHEMA_SQL_SQLITE).toContain("prd_snapshots");
+  });
 });

@@ -197,6 +197,15 @@ CREATE TABLE IF NOT EXISTS prd_metadata (
     updated_at        TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS prd_snapshots (
+    project_id   TEXT NOT NULL,
+    version      INTEGER NOT NULL,
+    content      TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    PRIMARY KEY (project_id, version)
+);
+CREATE INDEX IF NOT EXISTS idx_prd_snapshots_project_id ON prd_snapshots(project_id);
+
 CREATE TABLE IF NOT EXISTS project_conversations (
     project_id       TEXT NOT NULL,
     context          TEXT NOT NULL,
