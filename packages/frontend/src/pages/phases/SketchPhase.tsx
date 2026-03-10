@@ -831,6 +831,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
           />
 
           <PrdChangeLog
+            projectId={projectId}
             entries={prdHistory}
             expanded={historyExpanded}
             onToggle={() => setHistoryExpanded(!historyExpanded)}

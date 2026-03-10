@@ -37,6 +37,7 @@ const mockPrdGetHistory = vi.fn();
 const mockPrdUpdateSection = vi.fn();
 const mockPrdUpload = vi.fn();
 const mockPrdGenerateFromCodebase = vi.fn();
+const mockPrdGetVersionDiff = vi.fn();
 const mockPlansDecompose = vi.fn();
 const mockRefetchNotifications = vi.fn();
 const mockGetSketchContext = vi.fn();
@@ -90,6 +91,7 @@ vi.mock("../../api/client", () => ({
     prd: {
       get: (...args: unknown[]) => mockPrdGet(...args),
       getHistory: (...args: unknown[]) => mockPrdGetHistory(...args),
+      getVersionDiff: (...args: unknown[]) => mockPrdGetVersionDiff(...args),
       updateSection: (...args: unknown[]) => mockPrdUpdateSection(...args),
       upload: (...args: unknown[]) => mockPrdUpload(...args),
       generateFromCodebase: (...args: unknown[]) => mockPrdGenerateFromCodebase(...args),
