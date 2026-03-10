@@ -146,6 +146,7 @@ export function AssigneeSelector({
   const triggerTypography = matchTaskNameTypography
     ? "text-xs text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors"
     : "text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors";
+  const triggerGap = matchTaskNameTypography ? "gap-1.5" : "gap-2";
 
   const dropdownMenu = open ? (
     <ul
@@ -238,7 +239,7 @@ export function AssigneeSelector({
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={loading}
-        className={`dropdown-trigger inline-flex items-center gap-2 rounded py-0.5 leading-tight cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed min-w-0 ${triggerTypography}`}
+        className={`dropdown-trigger inline-flex items-center ${triggerGap} rounded py-0.5 leading-tight cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed min-w-0 ${triggerTypography}`}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-busy={loading}

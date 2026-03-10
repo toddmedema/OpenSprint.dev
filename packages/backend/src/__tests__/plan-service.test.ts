@@ -6,6 +6,11 @@ import { PlanService } from "../services/plan.service.js";
 import { ProjectService } from "../services/project.service.js";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
+/** Hoisted so vi.mock() can reference it without duplicate declaration */
+const { mockPlanVersionInsert } = vi.hoisted(() => ({
+  mockPlanVersionInsert: vi.fn(),
+}));
+
 const mockTaskStoreCreate = vi.fn();
 const mockTaskStoreCreateWithRetry = vi.fn();
 const mockTaskStoreCreateMany = vi.fn();
@@ -226,7 +231,7 @@ const mockPlanVersionGetByVersionNumber = vi
     }
   );
 
-const mockPlanVersionInsert = vi.fn().mockImplementation(async (data: {
+mockPlanVersionInsert.mockImplementation(async (data: {
   project_id: string;
   plan_id: string;
   version_number: number;

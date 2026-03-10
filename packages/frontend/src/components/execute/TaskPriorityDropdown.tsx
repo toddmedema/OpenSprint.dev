@@ -70,7 +70,7 @@ export function TaskPriorityDropdown({
   if (isDoneTask) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 text-theme-muted/80 cursor-default"
+        className="inline-flex items-center gap-1.5 text-xs text-theme-muted cursor-default"
         data-testid="priority-read-only"
         aria-label={`Priority: ${PRIORITY_LABELS[displayPriority] ?? "Medium"}`}
       >
@@ -87,7 +87,7 @@ export function TaskPriorityDropdown({
         type="button"
         onClick={() => setPriorityDropdownOpen((o) => !o)}
         disabled={priorityUpdateLoading}
-        className="dropdown-trigger pl-3 pr-0 inline-flex items-center gap-2 rounded py-1 text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+        className="dropdown-trigger inline-flex items-center gap-1.5 rounded py-1 text-xs text-theme-muted hover:bg-theme-border-subtle/50 hover:text-theme-text transition-colors cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
         aria-haspopup="listbox"
         aria-expanded={priorityDropdownOpen}
         aria-busy={priorityUpdateLoading}

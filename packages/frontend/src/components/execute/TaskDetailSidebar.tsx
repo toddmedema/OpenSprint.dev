@@ -673,9 +673,9 @@ function TaskDetailSidebarInner({
         <div className="px-4 pt-2 pb-4">
           {task && (
             <>
-              {/* Row 1: Status and priority on a single row */}
+              {/* Row 1: Status, priority, complexity, assignee — single font size and icon-to-text gap */}
               <div
-                className="flex flex-wrap items-center gap-2 mb-3 text-xs text-theme-muted"
+                className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 mb-3 text-xs text-theme-muted"
                 data-testid="task-detail-priority-state-row"
               >
                 <span className="inline-flex items-center gap-1.5">
@@ -692,7 +692,7 @@ function TaskDetailSidebarInner({
                   isDoneTask={isDoneTask}
                 />
                 <span
-                  className="inline-flex items-center gap-1.5 text-theme-muted/80"
+                  className="inline-flex items-center gap-1.5"
                   data-testid="task-complexity"
                   aria-label={displayLabel ? `Complexity: ${displayLabel}` : "Complexity: not set"}
                   title={
@@ -714,9 +714,10 @@ function TaskDetailSidebarInner({
                     teamMembers={teamMembers}
                     readOnly={isDoneTask || isInProgressTask}
                     isAgentAssignee={!!task.assignee && isAgentAssignee(task.assignee)}
+                    matchTaskNameTypography
                   />
                 ) : (
-                  <span className="text-sm text-theme-muted">
+                  <span className="inline-flex items-center gap-1.5 text-xs text-theme-muted">
                     {task.assignee?.trim() ? task.assignee : "—"}
                   </span>
                 )}
@@ -725,7 +726,7 @@ function TaskDetailSidebarInner({
                     const duration = formatTaskDuration(task.startedAt, task.completedAt);
                     return duration ? (
                       <span
-                        className="inline-flex items-center text-theme-muted/80"
+                        className="inline-flex items-center gap-1.5 text-theme-muted"
                         data-testid="task-duration"
                         aria-label={`Took ${duration}`}
                       >
