@@ -25,7 +25,9 @@ import {
   parseTeamMembers,
   getProvidersRequiringApiKeys,
   VALID_MERGE_STRATEGIES,
+  VALID_SELF_IMPROVEMENT_FREQUENCIES,
 } from "@opensprint/shared";
+import type { SelfImprovementFrequency } from "@opensprint/shared";
 import type { ApiKeyProvider } from "@opensprint/shared";
 import { getGlobalSettings } from "./global-settings.service.js";
 import type { AiAutonomyLevel, DeploymentConfig, HilConfig } from "@opensprint/shared";
@@ -139,6 +141,7 @@ function buildDefaultSettings(): ProjectSettings {
     gitWorkingMode: "worktree",
     mergeStrategy: "per_task",
     worktreeBaseBranch: "main",
+    selfImprovementFrequency: "never",
   };
 }
 
@@ -162,6 +165,11 @@ function toCanonicalSettings(s: ProjectSettings): ProjectSettings {
     worktreeBaseBranch: s.worktreeBaseBranch ?? "main",
     enableHumanTeammates: s.enableHumanTeammates === true,
     ...(s.teamMembers && s.teamMembers.length > 0 && { teamMembers: s.teamMembers }),
+    selfImprovementFrequency: s.selfImprovementFrequency ?? "never",
+    ...(s.selfImprovementLastRunAt !== undefined && { selfImprovementLastRunAt: s.selfImprovementLastRunAt }),
+    ...(s.selfImprovementLastCommitSha !== undefined && {
+      selfImprovementLastCommitSha: s.selfImprovementLastCommitSha,
+    }),
   };
 }
 
@@ -844,13 +852,23 @@ export class ProjectService {
     await this.getRepoPath(projectId);
     const current = await this.getSettings(projectId);
 
+    // Client cannot set self-improvement run metadata; only internal runs update these.
+    const {
+      selfImprovementLastRunAt: _stripLastRunAt,
+      selfImprovementLastCommitSha: _stripLastSha,
+      ...sanitizedUpdates
+    } = updates as Partial<ProjectSettings> & {
+      selfImprovementLastRunAt?: unknown;
+      selfImprovementLastCommitSha?: unknown;
+    };
+
     // Validate agent config if provided (accept new or legacy keys)
-    const raw = updates as Partial<ProjectSettings> & {
+    const raw = sanitizedUpdates as Partial<ProjectSettings> & {
       lowComplexityAgent?: unknown;
       highComplexityAgent?: unknown;
     };
-    const simpleUpdate = updates.simpleComplexityAgent ?? raw.lowComplexityAgent;
-    const complexUpdate = updates.complexComplexityAgent ?? raw.highComplexityAgent;
+    const simpleUpdate = sanitizedUpdates.simpleComplexityAgent ?? raw.lowComplexityAgent;
+    const complexUpdate = sanitizedUpdates.complexComplexityAgent ?? raw.highComplexityAgent;
     let simpleComplexityAgent = current.simpleComplexityAgent;
     let complexComplexityAgent = current.complexComplexityAgent;
     if (simpleUpdate !== undefined) {
@@ -890,21 +908,23 @@ export class ProjectService {
     }
 
     const aiAutonomyLevel =
-      typeof updates.aiAutonomyLevel === "string" &&
-      VALID_AI_AUTONOMY_LEVELS.includes(updates.aiAutonomyLevel)
-        ? updates.aiAutonomyLevel
+      typeof sanitizedUpdates.aiAutonomyLevel === "string" &&
+      VALID_AI_AUTONOMY_LEVELS.includes(sanitizedUpdates.aiAutonomyLevel)
+        ? sanitizedUpdates.aiAutonomyLevel
         : (current.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL);
     const hilConfig = hilConfigFromAiAutonomyLevel(aiAutonomyLevel);
     const gitWorkingMode =
-      updates.gitWorkingMode === "worktree" || updates.gitWorkingMode === "branches"
-        ? updates.gitWorkingMode
+      sanitizedUpdates.gitWorkingMode === "worktree" || sanitizedUpdates.gitWorkingMode === "branches"
+        ? sanitizedUpdates.gitWorkingMode
         : (current.gitWorkingMode ?? "worktree");
     const teamMembers =
-      updates.teamMembers !== undefined ? parseTeamMembers(updates.teamMembers) : current.teamMembers;
+      sanitizedUpdates.teamMembers !== undefined
+        ? parseTeamMembers(sanitizedUpdates.teamMembers)
+        : current.teamMembers;
     if (
-      updates.mergeStrategy !== undefined &&
-      (typeof updates.mergeStrategy !== "string" ||
-        !VALID_MERGE_STRATEGIES.includes(updates.mergeStrategy as "per_task" | "per_epic"))
+      sanitizedUpdates.mergeStrategy !== undefined &&
+      (typeof sanitizedUpdates.mergeStrategy !== "string" ||
+        !VALID_MERGE_STRATEGIES.includes(sanitizedUpdates.mergeStrategy as "per_task" | "per_epic"))
     ) {
       throw new AppError(
         400,
@@ -913,13 +933,33 @@ export class ProjectService {
       );
     }
     const mergeStrategy =
-      updates.mergeStrategy !== undefined &&
-      VALID_MERGE_STRATEGIES.includes(updates.mergeStrategy as "per_task" | "per_epic")
-        ? (updates.mergeStrategy as "per_task" | "per_epic")
+      sanitizedUpdates.mergeStrategy !== undefined &&
+      VALID_MERGE_STRATEGIES.includes(sanitizedUpdates.mergeStrategy as "per_task" | "per_epic")
+        ? (sanitizedUpdates.mergeStrategy as "per_task" | "per_epic")
         : (current.mergeStrategy ?? "per_task");
+    if (
+      sanitizedUpdates.selfImprovementFrequency !== undefined &&
+      (typeof sanitizedUpdates.selfImprovementFrequency !== "string" ||
+        !VALID_SELF_IMPROVEMENT_FREQUENCIES.includes(
+          sanitizedUpdates.selfImprovementFrequency as SelfImprovementFrequency
+        ))
+    ) {
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "selfImprovementFrequency must be one of: never, after_each_plan, daily, weekly"
+      );
+    }
+    const selfImprovementFrequency =
+      sanitizedUpdates.selfImprovementFrequency !== undefined &&
+      VALID_SELF_IMPROVEMENT_FREQUENCIES.includes(
+        sanitizedUpdates.selfImprovementFrequency as SelfImprovementFrequency
+      )
+        ? (sanitizedUpdates.selfImprovementFrequency as SelfImprovementFrequency)
+        : (current.selfImprovementFrequency ?? "never");
     const effectiveSettings: ProjectSettings = {
       ...current,
-      ...updates,
+      ...sanitizedUpdates,
       simpleComplexityAgent,
       complexComplexityAgent,
       aiAutonomyLevel,
@@ -927,6 +967,7 @@ export class ProjectService {
       gitWorkingMode,
       teamMembers,
       mergeStrategy,
+      selfImprovementFrequency,
     };
     const updated: ProjectSettings = {
       ...effectiveSettings,

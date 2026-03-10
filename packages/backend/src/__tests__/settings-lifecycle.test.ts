@@ -74,6 +74,22 @@ async function readProjectFromGlobalStore(
   return (entry?.settings ?? entry ?? {}) as Record<string, unknown>;
 }
 
+/** Write project settings into the global store (for tests that seed lastRunAt/lastSha). */
+async function writeProjectToGlobalStore(
+  tempDir: string,
+  projectId: string,
+  patch: Record<string, unknown>
+): Promise<void> {
+  const storePath = getProjectSettingsPath(tempDir);
+  const raw = await fs.readFile(storePath, "utf-8");
+  const store = JSON.parse(raw) as Record<string, { settings: Record<string, unknown>; updatedAt: string }>;
+  const entry = store[projectId];
+  if (entry?.settings) {
+    Object.assign(entry.settings, patch);
+    await fs.writeFile(storePath, JSON.stringify(store), "utf-8");
+  }
+}
+
 describe("Settings lifecycle — service-level", () => {
   let projectService: ProjectService;
   let tempDir: string;
@@ -234,7 +250,7 @@ describe("Settings API lifecycle", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("GET /api/v1/projects/:id/settings returns two-tier shape, gitWorkingMode, and mergeStrategy", async () => {
+  it("GET /api/v1/projects/:id/settings returns two-tier shape, gitWorkingMode, mergeStrategy, and self-improvement fields", async () => {
     const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
 
     expect(res.status).toBe(200);
@@ -245,11 +261,27 @@ describe("Settings API lifecycle", () => {
     expect(res.body.data.complexComplexityAgent.type).toBe("claude");
     expect(res.body.data.gitWorkingMode).toBe("worktree");
     expect(res.body.data.mergeStrategy).toBe("per_task");
+    expect(res.body.data.selfImprovementFrequency).toBeDefined();
+    expect(res.body.data.selfImprovementFrequency).toBe("never");
+    // selfImprovementLastRunAt and selfImprovementLastCommitSha are optional; present only when set by internal runs
     expect(res.body.data.gitRuntimeStatus).toEqual({
       lastCheckedAt: null,
       stale: true,
       refreshing: true,
     });
+  });
+
+  it("GET /api/v1/projects/:id/settings returns selfImprovementLastRunAt and selfImprovementLastCommitSha when set in store", async () => {
+    await writeProjectToGlobalStore(tempDir, projectId, {
+      selfImprovementLastRunAt: "2025-02-01T10:00:00Z",
+      selfImprovementLastCommitSha: "abc123def",
+    });
+
+    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.selfImprovementLastRunAt).toBe("2025-02-01T10:00:00Z");
+    expect(res.body.data.selfImprovementLastCommitSha).toBe("abc123def");
   });
 
   it("PUT /api/v1/projects/:id/settings with new field names succeeds", async () => {
@@ -498,5 +530,54 @@ describe("Settings API lifecycle", () => {
 
     const settings = await readProjectFromGlobalStore(tempDir, res.body.data.id);
     expect(settings.gitWorkingMode).toBe("branches");
+  });
+
+  it("PUT /api/v1/projects/:id/settings accepts and persists selfImprovementFrequency; GET returns it", async () => {
+    const getRes0 = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    expect(getRes0.body.data.selfImprovementFrequency).toBe("never");
+
+    const putRes = await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({ selfImprovementFrequency: "daily" });
+
+    expect(putRes.status).toBe(200);
+    expect(putRes.body.data.selfImprovementFrequency).toBe("daily");
+
+    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.selfImprovementFrequency).toBe("daily");
+
+    const settings = await readProjectFromGlobalStore(tempDir, projectId);
+    expect(settings.selfImprovementFrequency).toBe("daily");
+  });
+
+  it("PUT /api/v1/projects/:id/settings ignores selfImprovementLastRunAt and selfImprovementLastCommitSha from client", async () => {
+    const putRes = await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({
+        selfImprovementFrequency: "weekly",
+        selfImprovementLastRunAt: "2025-01-15T12:00:00Z",
+        selfImprovementLastCommitSha: "client-set-sha",
+      });
+
+    expect(putRes.status).toBe(200);
+    expect(putRes.body.data.selfImprovementFrequency).toBe("weekly");
+    expect(putRes.body.data.selfImprovementLastRunAt).toBeUndefined();
+    expect(putRes.body.data.selfImprovementLastCommitSha).toBeUndefined();
+
+    const settings = await readProjectFromGlobalStore(tempDir, projectId);
+    expect(settings.selfImprovementFrequency).toBe("weekly");
+    expect(settings.selfImprovementLastRunAt).toBeUndefined();
+    expect(settings.selfImprovementLastCommitSha).toBeUndefined();
+  });
+
+  it("PUT /api/v1/projects/:id/settings rejects invalid selfImprovementFrequency with 400", async () => {
+    const res = await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({ selfImprovementFrequency: "invalid" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error?.code).toBe("INVALID_INPUT");
+    expect(res.body.error?.message).toMatch(/selfImprovementFrequency|never|after_each_plan|daily|weekly/);
   });
 });
