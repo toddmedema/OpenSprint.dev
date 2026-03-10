@@ -19,7 +19,6 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { hilService } from "./hil-service.js";
 import { broadcastToProject } from "../websocket/index.js";
-import { syncPlanTasksFromContent } from "./plan-task-sync.service.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { createLogger } from "../utils/logger.js";
@@ -602,6 +601,7 @@ export class ChatService {
     let displayContent: string;
     const prdChanges: ChatResponse["prdChanges"] = [];
     let planGenerated: ChatResponse["planGenerated"];
+    let planUpdate: string | undefined;
 
     if (isExecuteContext) {
       // Execute task chat: no structured blocks; use response as-is
@@ -656,15 +656,14 @@ export class ChatService {
         displayContent = "Plan generated";
       }
     } else if (isPlanContext && planId) {
-      // Plan context: parse PLAN_UPDATE, apply, strip from display
-      const planUpdate = this.parsePlanUpdate(responseContent);
+      // Plan context: parse PLAN_UPDATE; return in response so client applies via PATCH (versioning)
+      const planUpdateContent = this.parsePlanUpdate(responseContent);
       const stripped = this.stripPlanUpdate(responseContent).trim();
       // When response is only PLAN_UPDATE, show "Plan updated" instead of full plan content
-      displayContent = stripped ? stripped : planUpdate ? "Plan updated" : responseContent;
-      if (planUpdate) {
-        await this.writePlanContent(projectId, planId, planUpdate);
-        await syncPlanTasksFromContent(projectId, planId, planUpdate);
-        broadcastToProject(projectId, { type: "plan.updated", planId });
+      displayContent = stripped ? stripped : planUpdateContent ? "Plan updated" : responseContent;
+      // Return planUpdate so client can PATCH plan (creates new version + syncs tasks)
+      if (planUpdateContent) {
+        planUpdate = planUpdateContent;
       }
     } else {
       // Sketch context: parse PRD updates, apply to storage, strip from display
@@ -709,6 +708,7 @@ export class ChatService {
     return {
       message: displayContent,
       planGenerated,
+      planUpdate,
       prdChanges: prdChanges.length > 0 ? prdChanges : undefined,
     };
   }

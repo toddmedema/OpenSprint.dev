@@ -218,7 +218,7 @@ Updated auth flow with OAuth support.
     expect(historyRes.body.data.messages[1].content).toBe("Plan updated");
   });
 
-  it("Plan chat with PLAN_UPDATE syncs plan markdown and associated tasks", async () => {
+  it("Plan chat with PLAN_UPDATE returns planUpdate for client to apply (versioning)", async () => {
     const epic = await taskStore.create(projectId, "Auth Epic", { type: "epic" });
     await taskStore.create(projectId, "Original task 1", {
       parentId: epic.id,
@@ -263,26 +263,15 @@ Updated description for second task.
 
     expect(sendRes.status).toBe(200);
     expect(sendRes.body.data.message).toBe("Plan updated");
-
+    // Client applies planUpdate via PATCH plan (versioning + task sync); backend only returns it
+    expect(sendRes.body.data.planUpdate).toBeDefined();
+    expect(sendRes.body.data.planUpdate).toContain("OAuth support");
+    expect(sendRes.body.data.planUpdate).toContain("Refined task one");
+    expect(sendRes.body.data.planUpdate).toContain("Refined task two");
+    // Backend does not write plan or broadcast; client does PATCH
     const planRow = await taskStore.planGet(projectId, "auth-plan");
-    expect(planRow).not.toBeNull();
-    expect(planRow!.content).toContain("OAuth support");
-    expect(planRow!.content).toContain("Refined task one");
-    expect(planRow!.content).toContain("Refined task two");
-
-    const allTasks = await taskStore.listAll(projectId);
-    const childTasks = allTasks.filter(
-      (t: { id: string; issue_type: string }) =>
-        t.id.startsWith(epic.id + ".") && t.issue_type !== "epic"
-    );
-    expect(childTasks).toHaveLength(2);
-    expect(childTasks.map((t: { title: string }) => t.title)).toContain("Refined task one");
-    expect(childTasks.map((t: { title: string }) => t.title)).toContain("Refined task two");
-    expect(childTasks.map((t: { description: string }) => t.description)).toContain(
-      "Updated description for first task."
-    );
-
-    expect(mockBroadcastToProject).toHaveBeenCalledWith(
+    expect(planRow!.content).toBe("# Auth Plan\n\nOriginal content.");
+    expect(mockBroadcastToProject).not.toHaveBeenCalledWith(
       projectId,
       expect.objectContaining({ type: "plan.updated", planId: "auth-plan" })
     );

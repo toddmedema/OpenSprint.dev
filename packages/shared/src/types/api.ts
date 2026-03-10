@@ -67,6 +67,8 @@ export interface ChatResponse {
   planGenerated?: {
     planId: string;
   };
+  /** When Plan chat returns [PLAN_UPDATE], the client should PATCH plan with this content (versioning applied). */
+  planUpdate?: string;
   prdChanges?: Array<{
     section: string;
     previousVersion: number;

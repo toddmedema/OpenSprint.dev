@@ -15,13 +15,13 @@ import {
   sendPlanMessage,
   updatePlan,
   setSelectedPlanId,
+  setPlanChatMessages,
   generatePlan,
   setPlanError,
   setExecutingPlanId,
   clearExecuteError,
   enqueuePlanTasksId,
   addOptimisticPlan,
-  setPlanChatMessages,
   setSinglePlan,
 } from "../../store/slices/planSlice";
 import { addNotification } from "../../store/slices/notificationSlice";
@@ -808,6 +808,13 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     );
 
     if (sendPlanMessage.fulfilled.match(result)) {
+      const response = result.payload?.response;
+      if (response?.planUpdate && selectedPlanId) {
+        await dispatch(
+          updatePlan({ projectId, planId: selectedPlanId, content: response.planUpdate })
+        );
+        void queryClient.invalidateQueries({ queryKey: queryKeys.plans.versions(projectId, selectedPlanId) });
+      }
       void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
       if (selectedPlanId) {
         void queryClient.invalidateQueries({

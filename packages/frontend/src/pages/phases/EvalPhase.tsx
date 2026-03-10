@@ -17,8 +17,13 @@ import {
   recategorizeFeedback,
   fetchFeedback,
 } from "../../store/slices/evalSlice";
+import {
+  sendPlanMessage,
+  updatePlan,
+  setPlanChatMessages,
+} from "../../store/slices/planSlice";
 import { selectTaskSummariesForFeedback } from "../../store/slices/executeSlice";
-import { useTasks, useFeedback, usePlans, useMarkPlanComplete } from "../../api/hooks";
+import { useTasks, useFeedback, usePlans, useMarkPlanComplete, usePlanChat } from "../../api/hooks";
 import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
 import { PhaseLoadingSpinner } from "../../components/PhaseLoadingSpinner";
 import { queryKeys } from "../../api/queryKeys";
@@ -41,6 +46,8 @@ import { HilApprovalBlock } from "../../components/HilApprovalBlock";
 import { OpenQuestionsBlock } from "../../components/OpenQuestionsBlock";
 import { useViewportWidth } from "../../hooks/useViewportWidth";
 import { CloseButton } from "../../components/CloseButton";
+import { ChatInput } from "../../components/ChatInput";
+import { getPlanChatMessageDisplay } from "./PlanPhase";
 
 /** Reply icon (message turn / corner up-right) */
 function ReplyIcon({ className }: { className?: string }) {
@@ -1022,11 +1029,13 @@ function PlanReviewCard({
   projectId,
   onMarkComplete,
   isMarking,
+  onReplyToPlan,
 }: {
   plan: Plan;
   projectId: string;
   onMarkComplete: () => void;
   isMarking: boolean;
+  onReplyToPlan?: (planId: string) => void;
 }) {
   const navigate = useNavigate();
   const isComplete = (plan.status as string) === "complete";
@@ -1069,6 +1078,19 @@ function PlanReviewCard({
             {isMarking ? "Marking…" : "Mark complete"}
           </button>
         )}
+        {onReplyToPlan && (
+          <button
+            type="button"
+            onClick={() => onReplyToPlan(planId)}
+            className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text transition-colors"
+            title="Reply to plan (chat with planning agent)"
+            aria-label={`Reply to plan ${title}`}
+            data-testid="plan-reply-to-plan-button"
+          >
+            <ReplyIcon className="w-4 h-4" />
+            Reply to plan
+          </button>
+        )}
         <a
           href={getProjectPhasePath(projectId, "plan", { plan: planId })}
           onClick={(e) => {
@@ -1099,6 +1121,14 @@ export function EvalPhase({
   const plansQuery = usePlans(projectId);
   const markPlanCompleteMutation = useMarkPlanComplete(projectId);
   const plans = plansQuery.data?.plans ?? [];
+  const [planChatPlanId, setPlanChatPlanId] = useState<string | null>(null);
+  const [planChatSending, setPlanChatSending] = useState(false);
+  const [planChatInput, setPlanChatInput] = useState("");
+  const planChatContext = planChatPlanId ? `plan:${planChatPlanId}` : undefined;
+  const planChatQuery = usePlanChat(projectId, planChatContext);
+  const planChatMessages = useAppSelector((s) =>
+    planChatContext ? (s.plan.chatMessages[planChatContext] ?? []) : []
+  );
   const plansInReview = useMemo(
     () => plans.filter((p) => (p.status as string) === "in_review"),
     [plans]
@@ -1462,6 +1492,18 @@ export function EvalPhase({
   );
 
   // When navigating with ?feedback=id (e.g. from Analyst dropdown), ensure visibility, expand ancestors, and scroll
+  /* Sync plan chat history into Redux when reply-to-Plan panel is open (so messages display). */
+  useEffect(() => {
+    if (planChatQuery.data && planChatContext) {
+      dispatch(
+        setPlanChatMessages({
+          context: planChatContext,
+          messages: planChatQuery.data.messages,
+        })
+      );
+    }
+  }, [planChatQuery.data, planChatContext, dispatch]);
+
   useEffect(() => {
     if (!feedbackIdFromUrl || feedbackQuery.isLoading || feedback.length === 0) return;
     const targetItem = feedback.find((f) => f.id === feedbackIdFromUrl);
@@ -1630,6 +1672,33 @@ export function EvalPhase({
       }
     },
     [projectId, refetchNotifications]
+  );
+
+  const handleSendPlanChat = useCallback(
+    async (text: string) => {
+      const trimmed = text?.trim();
+      if (!trimmed || !planChatContext || !planChatPlanId || planChatSending) return;
+      setPlanChatSending(true);
+      setPlanChatInput("");
+      const result = await dispatch(
+        sendPlanMessage({ projectId, message: trimmed, context: planChatContext })
+      );
+      if (sendPlanMessage.fulfilled.match(result) && result.payload?.response?.planUpdate) {
+        await dispatch(
+          updatePlan({ projectId, planId: planChatPlanId, content: result.payload.response.planUpdate })
+        );
+        void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.plans.detail(projectId, planChatPlanId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.plans.versions(projectId, planChatPlanId),
+        });
+      }
+      void planChatQuery.refetch();
+      setPlanChatSending(false);
+    },
+    [dispatch, projectId, planChatContext, planChatPlanId, planChatSending, queryClient, planChatQuery]
   );
 
   /* ── RENDER: Loading spinner during fetch (no fake page content) ── */
@@ -1890,6 +1959,7 @@ export function EvalPhase({
                         markPlanCompleteMutation.isPending &&
                         markPlanCompleteMutation.variables === entry.plan.metadata.planId
                       }
+                      onReplyToPlan={setPlanChatPlanId}
                     />
                   </div>
                 ) : (
@@ -1934,6 +2004,84 @@ export function EvalPhase({
           )}
         </div>
       </div>
+
+      {/* Reply-to-Plan chat panel (slide-over from right) */}
+      {planChatPlanId && (
+        <div
+          className="fixed inset-0 z-40 flex flex-col sm:flex-row"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Reply to plan"
+          data-testid="eval-plan-chat-panel"
+        >
+          <div
+            className="absolute inset-0 bg-theme-overlay/60 sm:bg-transparent"
+            onClick={() => setPlanChatPlanId(null)}
+            aria-hidden="true"
+          />
+          <div className="relative w-full sm:w-[420px] sm:max-w-[100vw] flex flex-col bg-theme-bg border-l border-theme-border shadow-xl ml-auto h-full">
+            <div className="flex-none flex items-center justify-between px-4 py-3 border-b border-theme-border">
+              <h3 className="text-sm font-semibold text-theme-text truncate">
+                Reply to plan: {formatPlanIdAsTitle(planChatPlanId)}
+              </h3>
+              <CloseButton
+                onClick={() => setPlanChatPlanId(null)}
+                ariaLabel="Close plan chat"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text transition-colors"
+                size="w-5 h-5"
+              />
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col">
+              <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide mb-3">
+                Refine with AI
+              </h4>
+              <div className="space-y-3">
+                {planChatMessages.length === 0 && !planChatQuery.isLoading && (
+                  <p className="text-sm text-theme-muted">
+                    Chat with the planning agent to refine this plan. Your reply is sent in the context of this plan and the plan markdown may be updated.
+                  </p>
+                )}
+                {planChatMessages.map((msg, i) => (
+                  <div
+                    key={`${msg.role}-${i}-${msg.timestamp ?? i}`}
+                    data-testid={`eval-plan-chat-message-${msg.role}`}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                        msg.role === "user"
+                          ? "border border-theme-border bg-theme-surface text-theme-text shadow-sm"
+                          : "bg-theme-surface border border-theme-border text-theme-text"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap">
+                        {getPlanChatMessageDisplay(msg.content)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {planChatSending && (
+                  <div className="flex justify-start">
+                    <div className="bg-theme-surface border border-theme-border rounded-2xl px-3 py-2 text-sm text-theme-muted">
+                      Thinking...
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex-none border-t border-theme-border p-4 bg-theme-bg">
+              <ChatInput
+                value={planChatInput}
+                onChange={setPlanChatInput}
+                onSend={() => handleSendPlanChat(planChatInput)}
+                sendDisabled={planChatSending || !planChatInput.trim()}
+                placeholder="Refine this plan..."
+                aria-label="Refine this plan"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile feedback detail overlay */}
       {isMobile && selectedFeedbackIdForOverlay && (() => {
