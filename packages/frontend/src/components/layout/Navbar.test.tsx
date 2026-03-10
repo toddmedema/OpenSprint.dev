@@ -303,11 +303,14 @@ describe("Navbar", () => {
     expect(nonSelectedOption).toHaveClass("hover:bg-theme-info-bg");
   });
 
-  it("uses responsive padding (px-4 on mobile, px-6 on md+)", () => {
+  it("uses responsive edge spacing (pl/pr-4 on mobile, pl/pr-6 on md+) so logo left matches Settings right", () => {
     renderNavbar(<Navbar project={null} />);
     const nav = screen.getByRole("navigation");
-    expect(nav).toHaveClass("px-4");
-    expect(nav).toHaveClass("md:px-6");
+    const content = nav.children[1];
+    expect(content).toHaveClass("pl-4");
+    expect(content).toHaveClass("pr-4");
+    expect(content).toHaveClass("md:pl-6");
+    expect(content).toHaveClass("md:pr-6");
   });
 
   it("phase tabs container is horizontally scrollable on mobile (overflow-x-auto)", () => {

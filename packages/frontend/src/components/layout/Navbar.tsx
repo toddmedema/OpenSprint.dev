@@ -165,7 +165,7 @@ export function Navbar({
 
   return (
     <nav
-      className="relative z-[60] flex items-center bg-theme-surface px-4 md:px-6 shrink-0"
+      className="relative z-[60] flex items-center bg-theme-surface shrink-0"
       style={{ height: NAVBAR_HEIGHT }}
     >
       {/* Bottom border overlay — ensures continuous line across full width, above phase buttons */}
@@ -174,9 +174,10 @@ export function Navbar({
         className="absolute bottom-0 left-0 right-0 h-px bg-theme-border pointer-events-none z-10"
         aria-hidden="true"
       />
-      <div className="flex w-full items-center justify-between gap-2 min-w-0">
-        {/* Left: Logo + Project Selector */}
+      {/* Edge spacing: pl/pr-4 (mobile), pl/pr-6 (md+) so logo left and Settings right match */}
+      <div className="flex w-full items-center justify-between gap-2 min-w-0 pl-4 md:pl-6 pr-4 md:pr-6">
         <div className="flex items-center gap-2 md:gap-4 min-w-0 shrink-0">
+          {/* Left: Logo + Project Selector */}
           <Link to="/" className="flex items-center gap-2" data-testid="navbar-logo-link">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -312,8 +313,8 @@ export function Navbar({
           </div>
         )}
 
-        {/* Right: Active agents + Help + Status + Settings — padding only, no margin; 8px right spacing */}
-        <div className="flex items-center shrink-0 pr-2 [&>*:not(:first-child)]:pl-1 md:[&>*:not(:first-child)]:pl-3">
+        {/* Right: Active agents + Help + Status + Settings — pr matches pl above */}
+        <div className="flex items-center shrink-0 [&>*:not(:first-child)]:pl-1 md:[&>*:not(:first-child)]:pl-3">
           {project ? (
             <>
               {showAgentDropdown && <ActiveAgentsList projectId={project.id} />}
@@ -335,7 +336,7 @@ export function Navbar({
                 active={isSettingsActive}
                 tone="accent"
                 variant="icon"
-                className="shrink-0"
+                className="shrink-0 !pr-0"
                 aria-label="Project settings"
                 title="Project settings"
               >
@@ -379,7 +380,7 @@ export function Navbar({
                 active={isSettingsActive}
                 tone="accent"
                 variant="icon"
-                className="shrink-0"
+                className="shrink-0 !pr-0"
                 aria-label="Settings"
                 title="Settings"
               >
@@ -421,7 +422,7 @@ export function Navbar({
                 active={isSettingsActive}
                 tone="accent"
                 variant="icon"
-                className="shrink-0"
+                className="shrink-0 !pr-0"
                 aria-label="Settings"
                 title="Settings"
               >
