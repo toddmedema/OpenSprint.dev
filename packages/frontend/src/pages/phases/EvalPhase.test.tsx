@@ -465,6 +465,80 @@ describe("EvalPhase feedback form", () => {
     expect(toolbar).toHaveClass("flex", "flex-col", "sm:flex-row", "sm:flex-wrap");
   });
 
+  describe("EvalPhase expandable search", () => {
+    it("renders search icon left of filter dropdown when feedback or plans exist", () => {
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+        { store, queryClient }
+      );
+      const expandBtn = screen.getByTestId("eval-search-expand");
+      expect(expandBtn).toBeInTheDocument();
+      expect(expandBtn).toHaveAttribute("aria-label", "Expand search");
+      expect(screen.queryByTestId("eval-search-expanded")).not.toBeInTheDocument();
+      const filter = screen.getByTestId("feedback-status-filter");
+      expect(expandBtn.compareDocumentPosition(filter)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+
+    it("expands into search input when search icon is clicked", async () => {
+      const user = userEvent.setup();
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+        { store, queryClient }
+      );
+      await user.click(screen.getByTestId("eval-search-expand"));
+      expect(screen.getByTestId("eval-search-expanded")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Search feedback…")).toBeInTheDocument();
+      expect(screen.getByTestId("eval-search-close")).toBeInTheDocument();
+      expect(screen.queryByTestId("eval-search-expand")).not.toBeInTheDocument();
+    });
+
+    it("clicking close clears input and reverts to icon", async () => {
+      const user = userEvent.setup();
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+        { store, queryClient }
+      );
+      await user.click(screen.getByTestId("eval-search-expand"));
+      const input = screen.getByPlaceholderText("Search feedback…");
+      await user.type(input, "bug");
+      await user.click(screen.getByTestId("eval-search-close"));
+      expect(screen.getByTestId("eval-search-expand")).toBeInTheDocument();
+      expect(screen.queryByTestId("eval-search-expanded")).not.toBeInTheDocument();
+      expect(screen.queryByDisplayValue("bug")).not.toBeInTheDocument();
+    });
+
+    it("Escape key closes search and reverts to icon", async () => {
+      const user = userEvent.setup();
+      const store = createStore({ evalFeedback: mockFeedbackItems });
+      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+        { store, queryClient }
+      );
+      await user.click(screen.getByTestId("eval-search-expand"));
+      const input = screen.getByPlaceholderText("Search feedback…");
+      fireEvent.keyDown(input, { key: "Escape" });
+      await waitFor(() => {
+        expect(screen.getByTestId("eval-search-expand")).toBeInTheDocument();
+        expect(screen.queryByTestId("eval-search-expanded")).not.toBeInTheDocument();
+      });
+    });
+  });
+
   it("feedback content uses CONTENT_CONTAINER_CLASS", () => {
     const store = createStore();
     const queryClient = createQueryClientWithFeedbackPreloaded();

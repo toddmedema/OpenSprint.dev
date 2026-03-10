@@ -67,6 +67,8 @@ export const EVALUATE_FEEDBACK_FILTER_KEY = "opensprint.evaluateFeedbackFilter";
 
 /** Debounce before showing loading spinner or empty state (avoids flicker on fast responses) */
 export const FEEDBACK_LOADING_DEBOUNCE_MS = 300;
+/** Debounce for Evaluate search input (matches Execute phase). */
+const EVAL_SEARCH_DEBOUNCE_MS = 150;
 /** Reconcile feedback list while Analyst categorization is still in flight. */
 export const FEEDBACK_CATEGORIZATION_POLL_INTERVAL_MS = 2000;
 const SHOULD_LOG_FEEDBACK_TASK_FETCH_FAILURES = import.meta.env.MODE !== "test";
@@ -180,6 +182,21 @@ function buildUnifiedReviewList(
     return dateB.localeCompare(dateA);
   });
   return combined;
+}
+
+/** True if any feedback in the node tree (root or replies) has text matching the query (case-insensitive). */
+function feedbackNodeMatchesQuery(node: FeedbackTreeNode, queryLower: string): boolean {
+  if ((node.item.text ?? "").toLowerCase().includes(queryLower)) return true;
+  return node.children.some((child) => feedbackNodeMatchesQuery(child, queryLower));
+}
+
+/** True if the unified list entry matches the search query (feedback text or plan title). */
+function unifiedItemMatchesQuery(entry: UnifiedReviewItem, queryLower: string): boolean {
+  if (entry.kind === "plan") {
+    const title = formatPlanIdAsTitle(entry.plan.metadata.planId);
+    return title.toLowerCase().includes(queryLower);
+  }
+  return feedbackNodeMatchesQuery(entry.node, queryLower);
 }
 
 function loadFeedbackStatusFilter(): FeedbackStatusFilter {
@@ -1232,6 +1249,58 @@ export function EvalPhase({
   const [statusFilter, setStatusFilter] = useState<FeedbackStatusFilter>(() =>
     loadFeedbackStatusFilter()
   );
+  /* Expand-on-click search (mirrors Execute phase): icon by default, expand to input on click. */
+  const [evalSearchExpanded, setEvalSearchExpanded] = useState(false);
+  const [evalSearchInputValue, setEvalSearchInputValue] = useState("");
+  const [evalSearchQuery, setEvalSearchQuery] = useState("");
+  const evalSearchInputRef = useRef<HTMLInputElement>(null);
+  const evalSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (evalSearchExpanded) {
+      evalSearchInputRef.current?.focus();
+    }
+  }, [evalSearchExpanded]);
+  useEffect(() => {
+    if (evalSearchDebounceRef.current) {
+      clearTimeout(evalSearchDebounceRef.current);
+      evalSearchDebounceRef.current = null;
+    }
+    if (evalSearchInputValue === "") {
+      setEvalSearchQuery("");
+      return;
+    }
+    const id = setTimeout(() => {
+      evalSearchDebounceRef.current = null;
+      setEvalSearchQuery(evalSearchInputValue);
+    }, EVAL_SEARCH_DEBOUNCE_MS);
+    evalSearchDebounceRef.current = id;
+    return () => {
+      clearTimeout(id);
+      if (evalSearchDebounceRef.current === id) evalSearchDebounceRef.current = null;
+    };
+  }, [evalSearchInputValue]);
+  const handleEvalSearchExpand = useCallback(() => {
+    setEvalSearchExpanded(true);
+  }, []);
+  const handleEvalSearchClose = useCallback(() => {
+    setEvalSearchInputValue("");
+    setEvalSearchQuery("");
+    if (evalSearchDebounceRef.current) {
+      clearTimeout(evalSearchDebounceRef.current);
+      evalSearchDebounceRef.current = null;
+    }
+    evalSearchInputRef.current?.blur();
+    setEvalSearchExpanded(false);
+  }, []);
+  const handleEvalSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handleEvalSearchClose();
+      }
+    },
+    [handleEvalSearchClose]
+  );
   /** IDs of items animating out (resolved but still visible during collapse). Keeps them in the tree when filter would hide them. */
   const [animatingOutIds, setAnimatingOutIds] = useState<Set<string>>(new Set());
   /** On mobile: feedback ID shown in detail overlay (null = no overlay) */
@@ -1458,6 +1527,11 @@ export function EvalPhase({
       ),
     [statusFilter, feedbackTree, plansInReview, plansComplete]
   );
+  const filteredUnifiedList = useMemo(() => {
+    const q = evalSearchQuery.trim().toLowerCase();
+    if (q === "") return unifiedList;
+    return unifiedList.filter((entry) => unifiedItemMatchesQuery(entry, q));
+  }, [unifiedList, evalSearchQuery]);
 
   useEffect(() => {
     if (reconcilingFeedbackIds.size === 0) return;
@@ -1695,32 +1769,89 @@ export function EvalPhase({
           >
             <h3 className="text-sm font-semibold text-theme-text">Feedback &amp; plan reviews</h3>
             {(feedback.length > 0 || plans.length > 0) && (
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  const value = e.target.value as FeedbackStatusFilter;
-                  setStatusFilter(value);
-                  saveFeedbackStatusFilter(value);
-                }}
-                className="input text-sm min-h-[44px] min-w-[44px] py-1.5 pl-3 w-auto min-w-[7rem] bg-theme-input-bg text-theme-input-text ring-theme-ring"
-                aria-label="Filter feedback and plan reviews by status"
-                data-testid="feedback-status-filter"
-              >
-                <option value="all">
-                  All ({countAll(feedback, plansInReview, plansComplete)})
-                </option>
-                <option value="pending">
-                  Pending ({countPending(feedback, plansInReview)})
-                </option>
-                <option value="resolved">
-                  Resolved ({countResolved(feedback, plansComplete)})
-                </option>
-                {feedback.some((f) => f.status === "cancelled") && (
-                  <option value="cancelled">
-                    Cancelled ({countByStatus(feedback, "cancelled")})
-                  </option>
+              <div className="flex items-center gap-2">
+                {evalSearchExpanded ? (
+                  <div
+                    className="flex items-center gap-1 animate-fade-in"
+                    data-testid="eval-search-expanded"
+                  >
+                    <input
+                      ref={evalSearchInputRef}
+                      type="text"
+                      value={evalSearchInputValue}
+                      onChange={(e) => setEvalSearchInputValue(e.target.value)}
+                      onKeyDown={handleEvalSearchKeyDown}
+                      placeholder="Search feedback…"
+                      className="w-36 sm:w-48 md:w-56 px-3 py-1.5 text-sm bg-theme-surface-muted rounded-md text-theme-text placeholder:text-theme-muted border border-theme-border focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+                      aria-label="Search feedback"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleEvalSearchClose}
+                      className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
+                      aria-label="Close search"
+                      data-testid="eval-search-close"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleEvalSearchExpand}
+                    className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
+                    aria-label="Expand search"
+                    data-testid="eval-search-expand"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.35-4.35" />
+                    </svg>
+                  </button>
                 )}
-              </select>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    const value = e.target.value as FeedbackStatusFilter;
+                    setStatusFilter(value);
+                    saveFeedbackStatusFilter(value);
+                  }}
+                  className="input text-sm min-h-[44px] min-w-[44px] py-1.5 pl-3 w-auto min-w-[7rem] bg-theme-input-bg text-theme-input-text ring-theme-ring"
+                  aria-label="Filter feedback and plan reviews by status"
+                  data-testid="feedback-status-filter"
+                >
+                  <option value="all">
+                    All ({countAll(feedback, plansInReview, plansComplete)})
+                  </option>
+                  <option value="pending">
+                    Pending ({countPending(feedback, plansInReview)})
+                  </option>
+                  <option value="resolved">
+                    Resolved ({countResolved(feedback, plansComplete)})
+                  </option>
+                  {feedback.some((f) => f.status === "cancelled") && (
+                    <option value="cancelled">
+                      Cancelled ({countByStatus(feedback, "cancelled")})
+                    </option>
+                  )}
+                </select>
+              </div>
             )}
           </div>
 
@@ -1728,15 +1859,17 @@ export function EvalPhase({
             <div className="text-center py-10 text-theme-muted text-sm">
               No feedback submitted yet. Test your app and report findings above.
             </div>
-          ) : unifiedList.length === 0 ? (
+          ) : filteredUnifiedList.length === 0 ? (
             <div className="text-center py-10 text-theme-muted text-sm">
-              {statusFilter === "all"
-                ? "No feedback or plans in review yet."
-                : statusFilter === "pending"
-                  ? "No pending feedback or plans in review."
-                  : statusFilter === "resolved"
-                    ? "No resolved feedback or completed plans."
-                    : "No cancelled feedback yet."}
+              {evalSearchQuery.trim() !== ""
+                ? "No feedback or plan reviews match your search."
+                : statusFilter === "all"
+                  ? "No feedback or plans in review yet."
+                  : statusFilter === "pending"
+                    ? "No pending feedback or plans in review."
+                    : statusFilter === "resolved"
+                      ? "No resolved feedback or completed plans."
+                      : "No cancelled feedback yet."}
             </div>
           ) : (
             <div
@@ -1744,7 +1877,7 @@ export function EvalPhase({
               role="list"
               aria-label="Combined review queue: feedback and plans"
             >
-              {unifiedList.map((entry) =>
+              {filteredUnifiedList.map((entry) =>
                 entry.kind === "plan" ? (
                   <div key={`plan-${entry.plan.metadata.planId}`} role="listitem">
                     <PlanReviewCard
