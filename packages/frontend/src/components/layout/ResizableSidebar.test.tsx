@@ -147,7 +147,7 @@ describe("ResizableSidebar", () => {
     expect(handle).toHaveAttribute("aria-valuemax", "800");
   });
 
-  it("has expanded hit zone (w-8) for resize handle while visible dragger stays small", () => {
+  it("has expanded hit zone (w-8) for resize handle and visible dragger runs full height", () => {
     render(
       <ResizableSidebar storageKey={STORAGE_KEY}>
         <span>Content</span>
@@ -156,7 +156,7 @@ describe("ResizableSidebar", () => {
 
     const handle = screen.getByRole("slider", { name: "Resize sidebar" });
     expect(handle).toHaveClass("w-8");
-    const visibleDragger = handle.querySelector(".w-1.h-12");
+    const visibleDragger = handle.querySelector(".w-1.min-h-full");
     expect(visibleDragger).toBeInTheDocument();
   });
 
