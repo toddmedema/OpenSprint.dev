@@ -177,6 +177,18 @@ export function isSelfImprovementRunInProgress(projectId: string): boolean {
   return inProgressProjects.has(projectId);
 }
 
+/**
+ * Test-only: set in-progress state for a project so tests can assert execute status.
+ * Use in afterEach to clear state and avoid leaking across tests.
+ */
+export function setSelfImprovementRunInProgressForTest(projectId: string, inProgress: boolean): void {
+  if (inProgress) {
+    inProgressProjects.add(projectId);
+  } else {
+    inProgressProjects.delete(projectId);
+  }
+}
+
 export class SelfImprovementRunnerService {
   private taskStore = taskStoreSingleton;
   private projectService = new ProjectService();

@@ -114,6 +114,8 @@ export interface ExecuteStatusEvent {
   worktreePath?: string | null;
   /** Feedback items awaiting categorization */
   pendingFeedbackCategorizations?: Array<{ feedbackId: string; category?: string }>;
+  /** True when a self-improvement run is in progress for this project */
+  selfImprovementRunInProgress?: boolean;
 }
 
 export interface HilRequestEvent {

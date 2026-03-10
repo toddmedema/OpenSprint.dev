@@ -391,6 +391,7 @@ export class OrchestratorService {
           type: "execute.status",
           activeTasks: this.buildActiveTasks(state),
           queueDepth: t.queueDepth,
+          selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
         });
         break;
       }
@@ -411,6 +412,7 @@ export class OrchestratorService {
           type: "execute.status",
           activeTasks: this.buildActiveTasks(state),
           queueDepth: t.queueDepth,
+          selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
         });
         break;
       }
@@ -422,6 +424,7 @@ export class OrchestratorService {
           type: "execute.status",
           activeTasks: this.buildActiveTasks(state),
           queueDepth: state.status.queueDepth,
+          selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
         });
         break;
 
@@ -432,6 +435,7 @@ export class OrchestratorService {
           type: "execute.status",
           activeTasks: this.buildActiveTasks(state),
           queueDepth: state.status.queueDepth,
+          selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
         });
         break;
     }
@@ -661,6 +665,7 @@ export class OrchestratorService {
         type: "execute.status",
         activeTasks: this.buildActiveTasks(state),
         queueDepth: state.status.queueDepth,
+        selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
       });
     }
   }
@@ -732,6 +737,7 @@ export class OrchestratorService {
       type: "execute.status",
       activeTasks: this.buildActiveTasks(state),
       queueDepth: state.status.queueDepth,
+      selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
     });
     this.nudge(projectId);
   }
@@ -778,6 +784,7 @@ export class OrchestratorService {
       type: "execute.status",
       activeTasks: this.buildActiveTasks(state),
       queueDepth: state.status.queueDepth,
+      selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
     });
   }
 
@@ -1500,6 +1507,7 @@ export class OrchestratorService {
             type: "execute.status",
             activeTasks: status.activeTasks,
             queueDepth: status.queueDepth,
+            selfImprovementRunInProgress: status.selfImprovementRunInProgress,
             ...(status.pendingFeedbackCategorizations && {
               pendingFeedbackCategorizations: status.pendingFeedbackCategorizations,
             }),
@@ -1547,6 +1555,7 @@ export class OrchestratorService {
           type: "execute.status",
           activeTasks: this.buildActiveTasks(state),
           queueDepth: state.status.queueDepth,
+          selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
         });
         return;
       }
@@ -1616,6 +1625,7 @@ export class OrchestratorService {
           type: "execute.status",
           activeTasks: this.buildActiveTasks(state),
           queueDepth: state.status.queueDepth,
+          selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
         });
         return;
       }
@@ -1661,6 +1671,7 @@ export class OrchestratorService {
               type: "execute.status",
               activeTasks: this.buildActiveTasks(state),
               queueDepth: state.status.queueDepth,
+              selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
             });
             continue;
           }
@@ -1762,6 +1773,7 @@ export class OrchestratorService {
       type: "execute.status",
       activeTasks: this.buildActiveTasks(state),
       queueDepth: state.status.queueDepth,
+      selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
     });
     await this.persistCounters(projectId, repoPath);
   }
@@ -1964,6 +1976,7 @@ export class OrchestratorService {
           type: "execute.status",
           activeTasks: this.buildActiveTasks(state),
           queueDepth: state.status.queueDepth,
+          selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
         });
         await this.persistCounters(projectId, repoPath);
         return;

@@ -5,6 +5,7 @@ import path from "path";
 import os from "os";
 import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
+import { setSelfImprovementRunInProgressForTest } from "../services/self-improvement-runner.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
@@ -97,6 +98,25 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
       expect(res.body.error.code).toBe("PROJECT_NOT_FOUND");
+    });
+
+    it("returns selfImprovementRunInProgress true only while a self-improvement run is active", async () => {
+      const resInactive = await request(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+      expect(resInactive.status).toBe(200);
+      expect(resInactive.body.data.selfImprovementRunInProgress).toBe(false);
+
+      setSelfImprovementRunInProgressForTest(projectId, true);
+      try {
+        const resActive = await request(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+        expect(resActive.status).toBe(200);
+        expect(resActive.body.data.selfImprovementRunInProgress).toBe(true);
+      } finally {
+        setSelfImprovementRunInProgressForTest(projectId, false);
+      }
+
+      const resAfter = await request(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+      expect(resAfter.status).toBe(200);
+      expect(resAfter.body.data.selfImprovementRunInProgress).toBe(false);
     });
   });
 
