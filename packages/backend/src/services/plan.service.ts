@@ -718,6 +718,32 @@ export class PlanService {
     };
   }
 
+  /**
+   * Ensure the plan has at least one version. When there are no versions (e.g. first load),
+   * create version 1 from current plan content so the version dropdown and execute flow are consistent.
+   */
+  async ensurePlanHasAtLeastOneVersion(projectId: string, planId: string): Promise<void> {
+    const versions = await this.taskStore.listPlanVersions(projectId, planId);
+    if (versions.length > 0) return;
+    const row = await this.taskStore.planGet(projectId, planId);
+    if (!row) return;
+    const metadataJson =
+      typeof row.metadata === "string" ? row.metadata : JSON.stringify(row.metadata ?? {});
+    const title = titleFromFirstHeading(row.content);
+    await this.taskStore.planVersionInsert({
+      project_id: projectId,
+      plan_id: planId,
+      version_number: 1,
+      title: title ?? null,
+      content: row.content,
+      metadata: metadataJson,
+      is_executed_version: false,
+    });
+    await this.taskStore.planUpdateVersionNumbers(projectId, planId, {
+      current_version_number: 1,
+    });
+  }
+
   /** Create a new Plan with epic (epic-blocked model: no gate task) */
   async createPlan(
     projectId: string,
@@ -1275,7 +1301,9 @@ export class PlanService {
       }
     }
 
-    // Resolve version to execute and content: either from param or create/reuse current version
+    // Resolve version to execute and content: either from param or create/reuse current version.
+    // Concurrent edit and execute: when the user clicks Execute with unsaved edits, we persist current
+    // plan content as a new version (if it differs from latest) then execute that version — no corrupt state.
     if (versionNumberParam == null) {
       const versions = await this.taskStore.planVersionList(projectId, planId);
       const latest = versions[0];

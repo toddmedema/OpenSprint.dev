@@ -65,9 +65,10 @@ export function PlanDetailContent({
     enabled: Boolean(projectId && planId && isViewingPastVersion),
   });
   const versionContent = versionQuery.data;
+  const versionLoadError = versionQuery.isError && isViewingPastVersion;
 
   const { viewTitle, viewBody, isReadOnly } = useMemo(() => {
-    if (isViewingPastVersion && versionContent) {
+    if (isViewingPastVersion && versionContent && !versionQuery.isError) {
       const parsed = parsePlanContent(versionContent.content ?? "");
       return {
         viewTitle: (versionContent.title ?? parsed.title) || formatPlanIdAsTitle(plan.metadata.planId),
@@ -80,7 +81,7 @@ export function PlanDetailContent({
       viewBody: (body ?? "").trim() || "_No content yet_",
       isReadOnly: false,
     };
-  }, [isViewingPastVersion, versionContent, plan.metadata.planId, displayTitle, body]);
+  }, [isViewingPastVersion, versionContent, versionQuery.isError, plan.metadata.planId, displayTitle, body]);
 
   const [titleValue, setTitleValue] = useState(displayTitle);
   const [savedRecently, setSavedRecently] = useState(false);
@@ -253,6 +254,15 @@ export function PlanDetailContent({
 
   const bodySlot = (
     <div className="px-4 pt-4 pb-4">
+      {versionLoadError && (
+        <div
+          className="mb-3 px-3 py-2 rounded-lg border border-theme-error-border bg-theme-error-bg/50 text-theme-error-text text-sm"
+          data-testid="plan-version-not-found"
+          role="alert"
+        >
+          Version not found. Showing current version.
+        </div>
+      )}
       <div
         data-testid="plan-markdown-editor"
         className="prose prose-sm max-w-none bg-theme-surface px-4 pt-4 pb-4 rounded-lg border border-theme-border text-theme-text text-xs [&>div>:first-child]:!mt-0"

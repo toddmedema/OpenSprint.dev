@@ -1838,7 +1838,7 @@ Feature that depends on auth.
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
       );
       expect(listAfterCreate.status).toBe(200);
-      expect(listAfterCreate.body.data.versions).toHaveLength(0);
+      expect(listAfterCreate.body.data.versions).toHaveLength(1);
 
       const executeRes = await request(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
@@ -1872,7 +1872,7 @@ Feature that depends on auth.
       expect(executed.version_number).toBe(1);
     });
 
-    it("returns 200 with empty versions when plan has no versions", async () => {
+    it("creates version 1 from current content when plan has no versions (first load)", async () => {
       const planBody = {
         title: "Versions List Test",
         content: "# Versions List Test\n\n## Overview\n\nContent.",
@@ -1888,7 +1888,9 @@ Feature that depends on auth.
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
       );
       expect(listRes.status).toBe(200);
-      expect(listRes.body.data).toEqual({ versions: [] });
+      expect(listRes.body.data.versions).toHaveLength(1);
+      expect(listRes.body.data.versions[0].version_number).toBe(1);
+      expect(listRes.body.data.versions[0].is_executed_version).toBe(false);
     });
 
     it("returns 200 with versions newest first when versions exist", async () => {
@@ -2076,6 +2078,38 @@ Feature that depends on auth.
       const planBRow = await taskStore.planGet(projectId, planBId);
       expect(planARow?.metadata.shippedAt).toBeTruthy();
       expect(planBRow?.metadata.shippedAt).toBeTruthy();
+    });
+  });
+
+  describe("POST /projects/:id/plans/:planId/execute first execution", () => {
+    it("creates version 1 and sets last_executed when plan has no versions", async () => {
+      const planBody = {
+        title: "First Execute Plan",
+        content: "# First Execute\n\n## Overview\n\nContent.",
+        complexity: "low",
+        tasks: [{ title: "Task A", description: "First", priority: 0, dependsOn: [] }],
+      };
+      const createRes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
+      expect(createRes.status).toBe(201);
+      const planId = createRes.body.data.metadata.planId;
+
+      const versionsBefore = await taskStore.listPlanVersions(projectId, planId);
+      expect(versionsBefore).toHaveLength(0);
+
+      const executeRes = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
+      );
+      expect(executeRes.status).toBe(200);
+
+      const planRow = await taskStore.planGet(projectId, planId);
+      expect(planRow?.last_executed_version_number).toBe(1);
+
+      const versionsAfter = await taskStore.listPlanVersions(projectId, planId);
+      expect(versionsAfter).toHaveLength(1);
+      expect(versionsAfter[0].version_number).toBe(1);
+      expect(versionsAfter[0].is_executed_version).toBe(true);
     });
   });
 

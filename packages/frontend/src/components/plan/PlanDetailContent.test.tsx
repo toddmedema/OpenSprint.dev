@@ -496,5 +496,37 @@ describe("PlanDetailContent", () => {
       expect(screen.queryByTestId("plan-viewing-version")).not.toBeInTheDocument();
       expect(screen.queryByTestId("plan-back-to-current")).not.toBeInTheDocument();
     });
+
+    it("shows version not found and falls back to current content when GET version returns 404", () => {
+      vi.mocked(usePlanVersions).mockReturnValue({
+        data: [
+          { id: "v1", version_number: 1, created_at: "2025-01-01T00:00:00Z", is_executed_version: false },
+          { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z", is_executed_version: true },
+        ],
+      } as ReturnType<typeof usePlanVersions>);
+      vi.mocked(usePlanVersion).mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isError: true,
+      } as ReturnType<typeof usePlanVersion>);
+      const planWithVersion: Plan = {
+        ...mockPlan,
+        content: "# Current\n\nCurrent body.",
+        currentVersionNumber: 2,
+        lastExecutedVersionNumber: 2,
+      };
+      render(
+        <PlanDetailContent
+          plan={planWithVersion}
+          onContentSave={onContentSave}
+          projectId="proj-1"
+          planId="plan-1"
+          selectedVersionNumber={99}
+          onVersionSelect={vi.fn()}
+        />
+      );
+      expect(screen.getByTestId("plan-version-not-found")).toHaveTextContent("Version not found");
+      expect(screen.getByText("Version not found. Showing current version.")).toBeInTheDocument();
+    });
   });
 });

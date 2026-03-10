@@ -134,10 +134,12 @@ plansRouter.post("/:planId/mark-complete", async (req: Request<PlanParams>, res,
 
 type VersionParams = PlanParams & { versionNumber: string };
 
-// GET /projects/:projectId/plans/:planId/versions — List plan versions (newest first)
+// GET /projects/:projectId/plans/:planId/versions — List plan versions (newest first).
+// When the plan has no versions (first load), create version 1 from current content so UI and execute flow are consistent.
 plansRouter.get("/:planId/versions", async (req: Request<PlanParams>, res, next) => {
   try {
     await planService.getPlan(req.params.projectId, req.params.planId);
+    await planService.ensurePlanHasAtLeastOneVersion(req.params.projectId, req.params.planId);
     const list = await taskStore.listPlanVersions(req.params.projectId, req.params.planId);
     const versions = list.map((v) => ({
       id: v.id,
