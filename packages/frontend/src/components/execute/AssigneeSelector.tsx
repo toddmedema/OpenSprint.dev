@@ -232,13 +232,13 @@ export function AssigneeSelector({
   ) : null;
 
   return (
-    <div ref={dropdownRef} className="relative inline-flex items-center">
+    <div ref={dropdownRef} className="relative inline-flex items-center min-w-0">
       <button
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={loading}
-        className={`dropdown-trigger inline-flex items-center gap-2 rounded py-0.5 leading-tight cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed ${triggerTypography}`}
+        className={`dropdown-trigger inline-flex items-center gap-2 rounded py-0.5 leading-tight cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed min-w-0 ${triggerTypography}`}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-busy={loading}
