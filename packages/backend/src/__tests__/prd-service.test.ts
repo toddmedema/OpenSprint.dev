@@ -292,4 +292,22 @@ describe("PrdService", () => {
     expect(snapshot.content).toContain("New summary");
     expect(snapshot.content).toContain("New problem");
   });
+
+  it("getSnapshot returns content when snapshot exists", async () => {
+    await prdService.updateSection(
+      "test-project",
+      "executive_summary",
+      "Snapshot content",
+      "sketch"
+    );
+
+    const content = await prdService.getSnapshot("test-project", 1);
+    expect(content).not.toBeNull();
+    expect(content).toContain("Snapshot content");
+  });
+
+  it("getSnapshot returns null when version has no snapshot", async () => {
+    const content = await prdService.getSnapshot("test-project", 999);
+    expect(content).toBeNull();
+  });
 });

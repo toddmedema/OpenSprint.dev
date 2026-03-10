@@ -6,6 +6,8 @@ import { PrdService } from "../services/prd.service.js";
 import { ChatService } from "../services/chat.service.js";
 import { prdFromCodebaseService } from "../services/prd-from-codebase.service.js";
 import { broadcastToProject } from "../websocket/index.js";
+import { computeLineDiff } from "../utils/diff.js";
+import { prdToSpecMarkdown } from "@opensprint/shared";
 import type { ApiResponse, Prd, PrdSection, PrdChangeLogEntry } from "@opensprint/shared";
 
 const prdService = new PrdService();
@@ -45,6 +47,75 @@ prdRouter.post("/generate-from-codebase", async (req: Request<ProjectParams>, re
   try {
     await prdFromCodebaseService.generatePrdFromCodebase(req.params.projectId);
     res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /projects/:projectId/prd/diff?fromVersion=<versionId>&toVersion=<versionId|'current'>
+// Returns diff between two SPEC.md versions. toVersion defaults to 'current' (current SPEC.md from disk).
+prdRouter.get("/diff", async (req: Request<ProjectParams>, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const fromVersionParam = req.query.fromVersion;
+    const toVersionParam = req.query.toVersion as string | undefined;
+
+    if (fromVersionParam === undefined || fromVersionParam === "") {
+      res.status(400).json({
+        error: { code: "INVALID_INPUT", message: "Query parameter 'fromVersion' is required" },
+      });
+      return;
+    }
+
+    const fromVersion = Number(fromVersionParam);
+    if (!Number.isInteger(fromVersion) || fromVersion < 0) {
+      res.status(400).json({
+        error: { code: "INVALID_INPUT", message: "Query parameter 'fromVersion' must be a non-negative integer" },
+      });
+      return;
+    }
+
+    const fromContent = await prdService.getSnapshot(projectId, fromVersion);
+    if (fromContent === null) {
+      res.status(404).json({
+        error: { code: "NOT_FOUND", message: `No snapshot found for version ${fromVersion}` },
+      });
+      return;
+    }
+
+    const useCurrent = toVersionParam === undefined || toVersionParam === "" || toVersionParam === "current";
+    let toContent: string;
+    let resolvedToVersion: string;
+
+    if (useCurrent) {
+      const prd = await prdService.getPrd(projectId);
+      toContent = prdToSpecMarkdown(prd);
+      resolvedToVersion = "current";
+    } else {
+      const toVersion = Number(toVersionParam);
+      if (!Number.isInteger(toVersion) || toVersion < 0) {
+        res.status(400).json({
+          error: { code: "INVALID_INPUT", message: "Query parameter 'toVersion' must be 'current' or a non-negative integer" },
+        });
+        return;
+      }
+      const snapshot = await prdService.getSnapshot(projectId, toVersion);
+      if (snapshot === null) {
+        res.status(404).json({
+          error: { code: "NOT_FOUND", message: `No snapshot found for version ${toVersion}` },
+        });
+        return;
+      }
+      toContent = snapshot;
+      resolvedToVersion = String(toVersion);
+    }
+
+    const diff = computeLineDiff(fromContent, toContent);
+    res.json({
+      fromVersion: String(fromVersion),
+      toVersion: resolvedToVersion,
+      diff: { lines: diff.lines, summary: diff.summary },
+    });
   } catch (err) {
     next(err);
   }

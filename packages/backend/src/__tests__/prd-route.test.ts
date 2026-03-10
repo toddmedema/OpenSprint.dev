@@ -145,6 +145,61 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     expect(res.body.data[0].diff).toBeDefined();
   });
 
+  describe("GET /projects/:id/prd/diff", () => {
+    it("returns diff between fromVersion and current after PRD update", async () => {
+      await request(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "First version" });
+
+      await request(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Second version" });
+
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.fromVersion).toBe("1");
+      expect(res.body.toVersion).toBe("current");
+      expect(res.body.diff).toBeDefined();
+      expect(res.body.diff.lines).toBeDefined();
+      expect(Array.isArray(res.body.diff.lines)).toBe(true);
+      expect(res.body.diff.summary).toBeDefined();
+      expect(res.body.diff.summary.additions).toBeDefined();
+      expect(res.body.diff.summary.deletions).toBeDefined();
+    });
+
+    it("returns 404 when fromVersion has no snapshot", async () => {
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=99`
+      );
+
+      expect(res.status).toBe(404);
+      expect(res.body.error?.code).toBe("NOT_FOUND");
+      expect(res.body.error?.message).toContain("99");
+    });
+
+    it("returns 400 when fromVersion is missing", async () => {
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+      expect(res.body.error?.message).toContain("fromVersion");
+    });
+
+    it("returns 400 when fromVersion is not a valid integer", async () => {
+      const res = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=abc`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+    });
+  });
+
   it("GET /projects/:id/prd/:section should return specific section", async () => {
     const repoPath = path.join(tempDir, "my-project");
     const prd = {

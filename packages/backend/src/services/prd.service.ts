@@ -434,4 +434,18 @@ export class PrdService {
     const prd = await this.loadPrd(projectId);
     return prd.changeLog;
   }
+
+  /**
+   * Get stored SPEC.md content for a given document version (for diff/history).
+   * Returns null if no snapshot exists for (project_id, version).
+   */
+  async getSnapshot(projectId: string, version: number): Promise<string | null> {
+    const client = await taskStore.getDb();
+    const row = await client.queryOne(
+      "SELECT content FROM prd_snapshots WHERE project_id = $1 AND version = $2",
+      [projectId, version]
+    );
+    if (!row || row.content == null) return null;
+    return String(row.content);
+  }
 }
