@@ -189,9 +189,6 @@ export function Navbar({
               <polygon points="22,10 54,40 22,70" fill="#a1a1aa" />
               <polygon points="40,10 72,40 40,70" fill="#0071e3" />
             </svg>
-            <span className="hidden min-[1000px]:inline font-sans font-semibold text-lg text-theme-text">
-              Open Sprint
-            </span>
           </Link>
 
           <div
@@ -199,7 +196,6 @@ export function Navbar({
             className="relative hidden min-[800px]:flex items-center min-w-0"
             ref={dropdownRef}
           >
-            <span className="hidden min-[1000px]:inline text-theme-muted shrink-0 pr-1">/</span>
             <button
               ref={projectTriggerRef}
               type="button"

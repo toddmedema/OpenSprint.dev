@@ -236,14 +236,11 @@ describe("Navbar", () => {
     expect(svg).toHaveAttribute("viewBox", "0 0 80 80");
   });
 
-  it("hides Open Sprint title and spacer below 1000px breakpoint (uses hidden min-[1000px]:inline)", () => {
+  it("shows only logo and project picker in top-left (no Open Sprint text)", () => {
     renderNavbar(<Navbar project={null} />);
-    const titleSpan = screen.getByText("Open Sprint");
-    expect(titleSpan).toHaveClass("hidden");
-    expect(titleSpan).toHaveClass("min-[1000px]:inline");
-    const spacer = screen.getByText("/");
-    expect(spacer).toHaveClass("hidden");
-    expect(spacer).toHaveClass("min-[1000px]:inline");
+    expect(screen.getByTestId("navbar-logo-link")).toBeInTheDocument();
+    expect(screen.getByTestId("navbar-project-select")).toBeInTheDocument();
+    expect(screen.queryByText("Open Sprint")).not.toBeInTheDocument();
   });
 
   it("hides project select below 800px breakpoint (uses hidden min-[800px]:flex)", () => {
