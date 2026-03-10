@@ -76,12 +76,20 @@ export function Navbar({
 
   const phaseTabs = useMemo(
     () =>
-      (["sketch", "plan", "execute", "eval", "deliver"] as const).map((key) => ({
-        key,
-        label: PHASE_LABELS[key],
-        showUnreadDot:
-          key === "plan" ? phaseUnread.plan : key === "sketch" ? phaseUnread.sketch : key === "execute" ? phaseUnread.execute : false,
-      })),
+      (["sketch", "plan", "execute", "eval", "deliver"] as const).map((key) => {
+        const label = PHASE_LABELS[key];
+        const showUnreadDot =
+          key === "plan" ? phaseUnread.plan : key === "sketch" ? phaseUnread.sketch : key === "execute" ? phaseUnread.execute : false;
+        const ariaLabel =
+          showUnreadDot && key === "plan"
+            ? "Plan has updates"
+            : showUnreadDot && key === "sketch"
+              ? "Sketch has updates"
+              : showUnreadDot && key === "execute"
+                ? "Execute has blocked tasks"
+                : `Switch to ${label} phase`;
+        return { key, label, showUnreadDot, ariaLabel };
+      }),
     [phaseUnread.plan, phaseUnread.sketch, phaseUnread.execute]
   );
   const showDbBackedChrome = dbStatus?.ok === true;
@@ -287,7 +295,7 @@ export function Navbar({
                         onPhaseChange(phaseTabs[index + 1].key);
                       }
                     }}
-                    aria-label={`Switch to ${phase.label} phase`}
+                    aria-label={phase.ariaLabel}
                     aria-selected={isActive}
                     aria-current={isActive ? "page" : undefined}
                   >

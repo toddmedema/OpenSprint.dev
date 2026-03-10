@@ -540,7 +540,7 @@ describe("Navbar", () => {
       store
     );
 
-    const executeTab = screen.getByRole("tab", { name: /Switch to Execute phase/ });
+    const executeTab = screen.getByRole("tab", { name: "Execute has blocked tasks" });
     expect(executeTab).toHaveTextContent("Execute");
     expect(executeTab.querySelector("[data-testid=nav-button-unread-dot]")).toBeInTheDocument();
   });
@@ -583,7 +583,7 @@ describe("Navbar", () => {
       store
     );
 
-    const planTab = screen.getByRole("tab", { name: /Switch to Plan phase/ });
+    const planTab = screen.getByRole("tab", { name: "Plan has updates" });
     expect(planTab).toHaveTextContent("Plan");
     expect(planTab.querySelector("[data-testid=nav-button-unread-dot]")).toBeInTheDocument();
   });
@@ -605,7 +605,7 @@ describe("Navbar", () => {
       store
     );
 
-    const sketchTab = screen.getByRole("tab", { name: /Switch to Sketch phase/ });
+    const sketchTab = screen.getByRole("tab", { name: "Sketch has updates" });
     expect(sketchTab).toHaveTextContent("Sketch");
     expect(sketchTab.querySelector("[data-testid=nav-button-unread-dot]")).toBeInTheDocument();
   });
