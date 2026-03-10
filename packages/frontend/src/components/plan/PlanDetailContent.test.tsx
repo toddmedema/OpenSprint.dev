@@ -269,7 +269,13 @@ describe("PlanDetailContent", () => {
       expect(screen.queryByTestId("plan-version-selector")).not.toBeInTheDocument();
     });
 
-    it("shows current version label when projectId and planId are provided", () => {
+    it("shows version row with Version label and dropdown when projectId and planId are provided", () => {
+      vi.mocked(usePlanVersions).mockReturnValue({
+        data: [
+          { id: "v3", version_number: 3, created_at: "2025-01-03T00:00:00Z", is_executed_version: false },
+          { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z", is_executed_version: true },
+        ],
+      } as ReturnType<typeof usePlanVersions>);
       const planWithVersion: Plan = {
         ...mockPlan,
         currentVersionNumber: 3,
@@ -284,7 +290,9 @@ describe("PlanDetailContent", () => {
         />
       );
       expect(screen.getByTestId("plan-version-selector")).toBeInTheDocument();
-      expect(screen.getByTestId("plan-current-version")).toHaveTextContent("v3");
+      expect(screen.getByText("Version:")).toBeInTheDocument();
+      const dropdown = screen.getByTestId("plan-version-dropdown");
+      expect(dropdown).toHaveValue("3");
     });
 
     it("shows version dropdown with versions newest first and executed indicator", async () => {
@@ -362,7 +370,7 @@ describe("PlanDetailContent", () => {
       expect(onVersionSelect).toHaveBeenCalledWith(1);
     });
 
-    it("shows read-only view with Viewing vN and Back to current when viewing a past version", async () => {
+    it("shows read-only view with version in dropdown and Back to current when viewing a past version", async () => {
       vi.mocked(usePlanVersions).mockReturnValue({
         data: [
           { id: "v1", version_number: 1, created_at: "2025-01-01T00:00:00Z", is_executed_version: false },
@@ -393,7 +401,7 @@ describe("PlanDetailContent", () => {
           onVersionSelect={vi.fn()}
         />
       );
-      expect(screen.getByTestId("plan-viewing-version")).toHaveTextContent("Viewing v1");
+      expect(screen.getByTestId("plan-version-dropdown")).toHaveValue("1");
       expect(screen.getByTestId("plan-viewing-title")).toHaveTextContent("Past version title");
       expect(screen.getByTestId("plan-back-to-current")).toHaveTextContent("Back to current");
       expect(screen.queryByRole("textbox", { name: /title/i })).not.toBeInTheDocument();
@@ -493,7 +501,6 @@ describe("PlanDetailContent", () => {
       expect(screen.getByRole("textbox", { name: /title/i })).not.toBeDisabled();
       const saveButton = screen.getByRole("button", { name: /save body/i });
       expect(saveButton).not.toBeDisabled();
-      expect(screen.queryByTestId("plan-viewing-version")).not.toBeInTheDocument();
       expect(screen.queryByTestId("plan-back-to-current")).not.toBeInTheDocument();
     });
 

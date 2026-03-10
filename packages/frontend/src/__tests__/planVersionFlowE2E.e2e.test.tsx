@@ -229,17 +229,17 @@ describe("E2E: Plan version flow (execute, edit, version dropdown, Execute vN)",
       expect(screen.getByTestId("plan-version-selector")).toBeInTheDocument();
     });
     await waitFor(() => {
-      expect(screen.getByTestId("plan-current-version")).toHaveTextContent("v2");
+      const d = screen.getByTestId("plan-version-dropdown");
+      expect(d).toHaveValue("2");
     });
 
     // Open version dropdown and select v1
     const dropdown = screen.getByTestId("plan-version-dropdown");
-    expect(dropdown).toBeInTheDocument();
     await user.selectOptions(dropdown, "1");
 
-    // See read-only v1: "Viewing v1" and v1 content
+    // See read-only v1: version shown in dropdown and v1 content
     await waitFor(() => {
-      expect(screen.getByTestId("plan-viewing-version")).toHaveTextContent("Viewing v1");
+      expect(dropdown).toHaveValue("1");
     });
     await waitFor(() => {
       expect(screen.getByTestId("plan-viewing-title")).toHaveTextContent("Plan v1 (executed)");

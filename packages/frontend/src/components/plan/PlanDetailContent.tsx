@@ -204,24 +204,14 @@ export function PlanDetailContent({
         <div className="flex items-center gap-2 flex-wrap" data-testid="plan-version-selector">
           <span className="text-xs text-theme-muted shrink-0">Version:</span>
           {isViewingPastVersion && (
-            <>
-              <span className="text-xs font-medium text-theme-muted shrink-0" data-testid="plan-viewing-version">
-                Viewing v{effectiveSelectedVersion}
-              </span>
-              <button
-                type="button"
-                onClick={() => onVersionSelect?.(null)}
-                className="text-xs text-theme-info hover:underline shrink-0"
-                data-testid="plan-back-to-current"
-              >
-                Back to current
-              </button>
-            </>
-          )}
-          {!isViewingPastVersion && (
-            <span className="text-xs font-medium text-theme-text shrink-0" data-testid="plan-current-version">
-              v{currentVersion}
-            </span>
+            <button
+              type="button"
+              onClick={() => onVersionSelect?.(null)}
+              className="text-xs text-theme-info hover:underline shrink-0"
+              data-testid="plan-back-to-current"
+            >
+              Back to current
+            </button>
           )}
           {versions.length > 0 && (
             <select
