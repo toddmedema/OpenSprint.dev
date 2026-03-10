@@ -28,6 +28,7 @@ export function HilApprovalBlock({
   hideDiffInBlock = false,
 }: HilApprovalBlockProps) {
   const [loading, setLoading] = useState(false);
+  const [diffErrorDismissed, setDiffErrorDismissed] = useState(false);
 
   const hasPrdApprovalScope =
     notification.kind === "hil_approval" &&
@@ -39,7 +40,12 @@ export function HilApprovalBlock({
     enabled: !hideDiffInBlock && hasPrdApprovalScope,
   });
 
-  const { data: proposedDiffData, isSuccess: proposedDiffSuccess } = useQuery({
+  const {
+    data: proposedDiffData,
+    isSuccess: proposedDiffSuccess,
+    isError: proposedDiffError,
+    error: proposedDiffErr,
+  } = useQuery({
     queryKey: queryKeys.prd.proposedDiff(projectId, notification.id),
     queryFn: () => api.prd.getProposedDiff(projectId, notification.id),
     enabled: !hideDiffInBlock && hasPrdApprovalScope,
@@ -74,6 +80,9 @@ export function HilApprovalBlock({
   const proposedUpdates = notification.scopeChangeMetadata?.scopeChangeProposedUpdates ?? [];
   const hasPrdDiff = !hideDiffInBlock && proposedUpdates.length > 0;
   const useServerDiff = hasPrdDiff && proposedDiffSuccess && proposedDiffData?.diff;
+  const showDiffError = hasPrdDiff && proposedDiffError && !diffErrorDismissed;
+  const diffErrorMessage =
+    proposedDiffErr instanceof Error ? proposedDiffErr.message : "Could not load proposed diff";
 
   return (
     <div
@@ -97,6 +106,18 @@ export function HilApprovalBlock({
                 fromVersion="current"
                 toVersion="proposed"
               />
+            ) : showDiffError ? (
+              <div className="rounded border border-theme-error-border bg-theme-error-bg/50 p-3" data-testid="hil-diff-error">
+                <p className="text-sm text-theme-error mb-2">{diffErrorMessage}</p>
+                <button
+                  type="button"
+                  onClick={() => setDiffErrorDismissed(true)}
+                  className="text-sm px-3 py-1.5 rounded border border-theme-border bg-theme-surface text-theme-text hover:bg-theme-border-subtle"
+                  data-testid="hil-diff-error-dismiss"
+                >
+                  Dismiss
+                </button>
+              </div>
             ) : (
               <PrdDiffView
                 currentPrd={currentPrd ?? null}

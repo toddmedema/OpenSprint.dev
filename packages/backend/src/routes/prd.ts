@@ -112,11 +112,14 @@ prdRouter.get("/diff", async (req: Request<ProjectParams>, res, next) => {
     }
 
     const diff = computeLineDiff(fromContent, toContent);
-    res.json({
-      fromVersion: String(fromVersion),
-      toVersion: resolvedToVersion,
-      diff: { lines: diff.lines, summary: diff.summary },
-    });
+    const body: ApiResponse<{ fromVersion: string; toVersion: string; diff: { lines: typeof diff.lines; summary: typeof diff.summary } }> = {
+      data: {
+        fromVersion: String(fromVersion),
+        toVersion: resolvedToVersion,
+        diff: { lines: diff.lines, summary: diff.summary },
+      },
+    };
+    res.json(body);
   } catch (err) {
     next(err);
   }
@@ -165,10 +168,10 @@ prdRouter.get("/proposed-diff", async (req: Request<ProjectParams>, res, next) =
     const proposedSpec = prdToSpecMarkdown(proposedPrd);
     const diff = computeLineDiff(currentSpec, proposedSpec);
 
-    res.json({
-      requestId,
-      diff: { lines: diff.lines, summary: diff.summary },
-    });
+    const body: ApiResponse<{ requestId: string; diff: { lines: typeof diff.lines; summary: typeof diff.summary } }> = {
+      data: { requestId, diff: { lines: diff.lines, summary: diff.summary } },
+    };
+    res.json(body);
   } catch (err) {
     next(err);
   }

@@ -12,6 +12,8 @@ vi.mock("../../api/client", () => ({
       getVersionDiff: (...args: unknown[]) => mockGetVersionDiff(...args),
     },
   },
+  isApiError: (err: unknown) =>
+    err !== null && typeof err === "object" && "code" in err && (err as { code: string }).code === "NOT_FOUND",
 }));
 
 const entryWithDocVersion: PrdHistoryEntry = {
@@ -197,5 +199,52 @@ describe("PrdChangeLog", () => {
 
     await user.click(screen.getByTestId("compare-to-current"));
     expect(await screen.findByTestId("version-diff-error")).toHaveTextContent("Network error");
+  });
+
+  it("shows Version not found and Close when getVersionDiff returns 404", async () => {
+    const user = userEvent.setup();
+    const notFoundError = Object.assign(new Error("No snapshot found for version 99"), {
+      code: "NOT_FOUND",
+    });
+    mockGetVersionDiff.mockRejectedValue(notFoundError);
+
+    render(
+      <PrdChangeLog
+        projectId="proj-1"
+        entries={[entryWithDocVersion]}
+        expanded={true}
+        onToggle={() => {}}
+      />
+    );
+
+    await user.click(screen.getByTestId("compare-to-current"));
+    expect(await screen.findByTestId("version-diff-error-block")).toBeInTheDocument();
+    expect(screen.getByTestId("version-diff-error")).toHaveTextContent("Version not found.");
+    expect(screen.getByTestId("version-diff-error-close")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("version-diff-error-close"));
+    expect(screen.queryByTestId("version-diff-modal-content")).not.toBeInTheDocument();
+  });
+
+  it("shows No changes in diff when version diff returns empty lines", async () => {
+    const user = userEvent.setup();
+    mockGetVersionDiff.mockResolvedValue({
+      fromVersion: "3",
+      toVersion: "current",
+      diff: { lines: [], summary: { additions: 0, deletions: 0 } },
+    });
+
+    render(
+      <PrdChangeLog
+        projectId="proj-1"
+        entries={[entryWithDocVersion]}
+        expanded={true}
+        onToggle={() => {}}
+      />
+    );
+
+    await user.click(screen.getByTestId("compare-to-current"));
+    expect(await screen.findByTestId("server-diff-view")).toBeInTheDocument();
+    expect(screen.getByTestId("server-diff-no-changes")).toHaveTextContent("No changes");
   });
 });

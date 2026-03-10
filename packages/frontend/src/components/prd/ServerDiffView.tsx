@@ -108,7 +108,7 @@ export function ServerDiffView({
         }}
       >
         {lines.length === 0 ? (
-          <div className="p-3 text-theme-muted">(No changes)</div>
+          <div className="p-3 text-theme-muted" data-testid="server-diff-no-changes">No changes</div>
         ) : (
           <pre className="m-0 p-0 whitespace-pre-wrap break-words">
             {lines.map((line, i) => {

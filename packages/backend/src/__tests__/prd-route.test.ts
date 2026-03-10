@@ -164,14 +164,15 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.fromVersion).toBe("1");
-      expect(res.body.toVersion).toBe("current");
-      expect(res.body.diff).toBeDefined();
-      expect(res.body.diff.lines).toBeDefined();
-      expect(Array.isArray(res.body.diff.lines)).toBe(true);
-      expect(res.body.diff.summary).toBeDefined();
-      expect(res.body.diff.summary.additions).toBeDefined();
-      expect(res.body.diff.summary.deletions).toBeDefined();
+      expect(res.body.data).toBeDefined();
+      expect(res.body.data.fromVersion).toBe("1");
+      expect(res.body.data.toVersion).toBe("current");
+      expect(res.body.data.diff).toBeDefined();
+      expect(res.body.data.diff.lines).toBeDefined();
+      expect(Array.isArray(res.body.data.diff.lines)).toBe(true);
+      expect(res.body.data.diff.summary).toBeDefined();
+      expect(res.body.data.diff.summary.additions).toBeDefined();
+      expect(res.body.data.diff.summary.deletions).toBeDefined();
     });
 
     it("returns 404 when fromVersion has no snapshot", async () => {
@@ -236,13 +237,14 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.body.requestId).toBe(notif.id);
-      expect(res.body.diff).toBeDefined();
-      expect(res.body.diff.lines).toBeDefined();
-      expect(Array.isArray(res.body.diff.lines)).toBe(true);
-      expect(res.body.diff.summary).toBeDefined();
-      expect(res.body.diff.summary.additions).toBeDefined();
-      expect(res.body.diff.summary.deletions).toBeDefined();
+      expect(res.body.data).toBeDefined();
+      expect(res.body.data.requestId).toBe(notif.id);
+      expect(res.body.data.diff).toBeDefined();
+      expect(res.body.data.diff.lines).toBeDefined();
+      expect(Array.isArray(res.body.data.diff.lines)).toBe(true);
+      expect(res.body.data.diff.summary).toBeDefined();
+      expect(res.body.data.diff.summary.additions).toBeDefined();
+      expect(res.body.data.diff.summary.deletions).toBeDefined();
     });
 
     it("returns 404 for invalid requestId", async () => {

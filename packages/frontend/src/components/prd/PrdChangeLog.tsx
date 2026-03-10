@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatSectionKey, formatTimestamp } from "../../lib/formatting";
 import { getPrdSourceColor, PRD_SOURCE_LABELS } from "../../lib/constants";
-import { api } from "../../api/client";
+import { api, isApiError } from "../../api/client";
 import { ServerDiffView } from "./ServerDiffView";
 import type { ServerDiffResult } from "./ServerDiffView";
 
@@ -49,7 +49,13 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
         });
       })
       .catch((err) => {
-        setDiffError(err instanceof Error ? err.message : "Failed to load diff");
+        const message =
+          isApiError(err) && err.code === "NOT_FOUND"
+            ? "Version not found."
+            : err instanceof Error
+              ? err.message
+              : "Failed to load diff";
+        setDiffError(message);
       })
       .finally(() => {
         setDiffLoading(false);
@@ -151,7 +157,17 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
                 <p className="text-sm text-theme-muted" data-testid="version-diff-loading">Loading diff…</p>
               )}
               {diffError && (
-                <p className="text-sm text-theme-error" data-testid="version-diff-error">{diffError}</p>
+                <div className="rounded border border-theme-error-border bg-theme-error-bg/50 p-3" data-testid="version-diff-error-block">
+                  <p className="text-sm text-theme-error mb-2" data-testid="version-diff-error">{diffError}</p>
+                  <button
+                    type="button"
+                    onClick={closeDiffModal}
+                    className="text-sm px-3 py-1.5 rounded border border-theme-border bg-theme-surface text-theme-text hover:bg-theme-border-subtle"
+                    data-testid="version-diff-error-close"
+                  >
+                    Close
+                  </button>
+                </div>
               )}
               {!diffLoading && !diffError && diffResult && (
                 <ServerDiffView

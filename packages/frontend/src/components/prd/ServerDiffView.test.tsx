@@ -50,9 +50,9 @@ describe("ServerDiffView", () => {
     expect(screen.getByText(/\+1 −1/)).toBeInTheDocument();
   });
 
-  it("renders (No changes) when lines are empty", () => {
+  it("renders No changes when lines are empty", () => {
     render(<ServerDiffView diff={{ lines: [] }} />);
-    expect(screen.getByText("(No changes)")).toBeInTheDocument();
+    expect(screen.getByTestId("server-diff-no-changes")).toHaveTextContent("No changes");
   });
 
   it("uses aria labels for added/removed/context lines", () => {

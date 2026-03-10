@@ -16,6 +16,7 @@ vi.mock("../api/client", () => ({
       getProposedDiff: vi.fn(),
     },
   },
+  isApiError: vi.fn(() => false),
 }));
 
 function renderWithProviders(ui: React.ReactNode) {
@@ -174,6 +175,85 @@ describe("HilApprovalBlock", () => {
     expect(screen.getByText(/## New section/)).toBeInTheDocument();
     expect(screen.getByTestId("hil-approve-btn")).toBeInTheDocument();
     expect(screen.getByTestId("hil-reject-btn")).toBeInTheDocument();
+  });
+
+  it("shows No changes and Approve/Reject when proposed-diff returns empty diff", async () => {
+    vi.mocked(api.prd.getProposedDiff).mockResolvedValue({
+      requestId: "hil-abc123",
+      diff: {
+        lines: [],
+        summary: { additions: 0, deletions: 0 },
+      },
+    } as never);
+    const notificationWithDiff = {
+      ...mockNotification,
+      scopeChangeMetadata: {
+        scopeChangeSummary: "• feature_list: No change",
+        scopeChangeProposedUpdates: [
+          {
+            section: "feature_list",
+            changeLogEntry: "No change",
+            content: "Same content",
+          },
+        ],
+      },
+    };
+    renderWithProviders(
+      <HilApprovalBlock
+        notification={notificationWithDiff}
+        projectId="proj-1"
+        onResolved={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("server-diff-view")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("server-diff-no-changes")).toHaveTextContent("No changes");
+    expect(screen.getByTestId("hil-approve-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("hil-reject-btn")).toBeInTheDocument();
+  });
+
+  it("shows error and Dismiss when proposed-diff fails (e.g. 404)", async () => {
+    vi.mocked(api.prd.getProposedDiff).mockRejectedValue(
+      Object.assign(new Error("HIL approval request not found"), { code: "NOT_FOUND" })
+    );
+    const notificationWithDiff = {
+      ...mockNotification,
+      scopeChangeMetadata: {
+        scopeChangeSummary: "• feature_list: Add mobile app",
+        scopeChangeProposedUpdates: [
+          {
+            section: "feature_list",
+            changeLogEntry: "Add mobile app",
+            content: "1. Web dashboard\n2. Mobile app",
+          },
+        ],
+      },
+    };
+    const user = userEvent.setup();
+    renderWithProviders(
+      <HilApprovalBlock
+        notification={notificationWithDiff}
+        projectId="proj-1"
+        onResolved={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("hil-diff-error")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("hil-diff-error")).toHaveTextContent("HIL approval request not found");
+    expect(screen.getByTestId("hil-diff-error-dismiss")).toBeInTheDocument();
+    expect(screen.getByTestId("hil-approve-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("hil-reject-btn")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("hil-diff-error-dismiss"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("hil-diff-error")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("prd-diff-section-feature_list")).toBeInTheDocument();
+    expect(screen.getByTestId("hil-approve-btn")).toBeInTheDocument();
   });
 
   it("hides PRD diff when hideDiffInBlock is true", async () => {
