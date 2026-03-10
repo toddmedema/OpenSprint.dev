@@ -552,7 +552,7 @@ describe("parseSettings", () => {
       expect(parsed.selfImprovementFrequency).toBe("never");
     });
 
-    it("should not set selfImprovementLastRunAt or selfImprovementLastCommitSha from client input", () => {
+    it("should pass through selfImprovementLastRunAt and selfImprovementLastCommitSha when present", () => {
       const parsed = parseSettings({
         simpleComplexityAgent: lowAgent,
         complexComplexityAgent: highAgent,
@@ -561,6 +561,18 @@ describe("parseSettings", () => {
         selfImprovementLastCommitSha: "abc123",
       });
       expect(parsed.selfImprovementFrequency).toBe("daily");
+      expect(parsed.selfImprovementLastRunAt).toBe("2025-01-01T00:00:00Z");
+      expect(parsed.selfImprovementLastCommitSha).toBe("abc123");
+    });
+
+    it("should leave selfImprovementLastRunAt and selfImprovementLastCommitSha undefined when missing or invalid", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        selfImprovementFrequency: "weekly",
+        selfImprovementLastRunAt: "",
+        selfImprovementLastCommitSha: 123,
+      });
       expect(parsed.selfImprovementLastRunAt).toBeUndefined();
       expect(parsed.selfImprovementLastCommitSha).toBeUndefined();
     });

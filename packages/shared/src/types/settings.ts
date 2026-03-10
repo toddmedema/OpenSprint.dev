@@ -787,8 +787,14 @@ export function parseSettings(raw: unknown): ProjectSettings {
     enableHumanTeammates,
     teamMembers: parseTeamMembers(r?.teamMembers),
     selfImprovementFrequency,
-    selfImprovementLastRunAt: undefined,
-    selfImprovementLastCommitSha: undefined,
+    selfImprovementLastRunAt:
+      typeof r?.selfImprovementLastRunAt === "string" && r.selfImprovementLastRunAt.trim()
+        ? (r.selfImprovementLastRunAt as string).trim()
+        : undefined,
+    selfImprovementLastCommitSha:
+      typeof r?.selfImprovementLastCommitSha === "string" && r.selfImprovementLastCommitSha.trim()
+        ? (r.selfImprovementLastCommitSha as string).trim()
+        : undefined,
   };
 
   const { apiKeys: _omitApiKeys, ...rest } = r as Partial<ProjectSettings> & { apiKeys?: unknown };
