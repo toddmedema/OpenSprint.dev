@@ -4,6 +4,7 @@ import { createPostgresDbClient, getPoolConfig } from "./client.js";
 import { runSchema } from "./schema.js";
 import { createSqliteDbClient, openSqliteDatabase } from "./sqlite-client.js";
 import { getDatabaseDialect } from "@opensprint/shared";
+import { migratePlanVersions } from "../services/migrate-plan-versions.service.js";
 
 // Drizzle is loaded dynamically in initPostgresAppDb so Vitest can load this file without resolving drizzle-orm.
 // Type matches the return of drizzle({ client, schema }) from drizzle-orm/node-postgres.
@@ -39,6 +40,7 @@ async function initPostgresAppDb(databaseUrl: string): Promise<AppDb> {
   const pool = new pg.Pool(getPoolConfig(urlWithAppName));
   const client = createPostgresDbClient(pool);
   await runSchema(client, "postgres");
+  await migratePlanVersions(client);
 
   const drizzleInstance = drizzle({ client: pool, schema: schemaModule });
 
@@ -62,6 +64,7 @@ async function initSqliteAppDb(databaseUrl: string): Promise<AppDb> {
   const { db, close } = await openSqliteDatabase(databaseUrl);
   const client = createSqliteDbClient(db);
   await runSchema(client, "sqlite");
+  await migratePlanVersions(client);
 
   return {
     async getClient(): Promise<DbClient> {
