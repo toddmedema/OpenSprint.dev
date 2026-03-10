@@ -283,22 +283,19 @@ html[data-theme="dark"] {
     @apply px-3;
   }
 
-  /* Select chevron right padding — chevron cramped against right edge (feedback udrzqd).
-   * Native select arrow ignores padding, so we use appearance:none + custom arrow with
-   * background-position inset from the right. Only targets native <select>;
-   * Evaluate Priority dropdown is a <button> and is unchanged. */
-  select.input {
+  /* Select chevron: visible down-arrow on all native <select> (Evaluate filter, settings, etc.).
+   * Priority (optional) and custom dropdowns are <button> and use their own chevron. */
+  select.input,
+  [data-testid="settings-modal"] select,
+  [data-testid="feedback-status-filter"] {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
     padding-right: 2.5rem !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 0.75rem center;
-    background-size: 0.65rem auto;
-  }
-  [data-testid="settings-modal"] select.input {
-    padding-right: 2.5rem !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M6 8L2 4h8z'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 0.75rem center !important;
+    background-size: 0.65rem auto !important;
   }
   /* Running agents display mode: size to content, no min-width (feedback u5d6y3) */
   [data-testid="running-agents-display-mode"] {
