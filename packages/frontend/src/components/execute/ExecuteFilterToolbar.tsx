@@ -84,6 +84,7 @@ export function ExecuteFilterToolbar({
   const left = (
     <>
       <SegmentedControl
+        size="phase"
         dataTestId="execute-filter-segmented"
         value={statusFilter}
         onChange={(next) => {
@@ -146,7 +147,7 @@ export function ExecuteFilterToolbar({
           <button
             type="button"
             onClick={handleSearchClose}
-            className="p-1.5 min-h-[44px] min-w-[44px] rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
+            className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
             aria-label="Close search"
             data-testid="execute-search-close"
           >
@@ -165,7 +166,7 @@ export function ExecuteFilterToolbar({
         <button
           type="button"
           onClick={handleSearchExpand}
-          className="p-1.5 min-h-[44px] min-w-[44px] rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
+          className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
           aria-label="Expand search"
           data-testid="execute-search-expand"
         >
@@ -185,6 +186,7 @@ export function ExecuteFilterToolbar({
       )}
 
       <ViewToggle
+        compact
         options={[
           { value: "kanban", icon: <GridIcon className="w-3 h-3" />, label: "Kanban view" },
           {
@@ -199,5 +201,12 @@ export function ExecuteFilterToolbar({
     </>
   );
 
-  return <FilterBar left={left} right={right} dataTestId="execute-filter-toolbar" />;
+  return (
+    <FilterBar
+      variant="phase"
+      left={left}
+      right={right}
+      dataTestId="execute-filter-toolbar"
+    />
+  );
 }

@@ -152,6 +152,7 @@ export function PlanFilterToolbar({
 
   const left = (
     <SegmentedControl
+      size="phase"
       dataTestId="plan-filter-segmented"
       value={statusFilter}
       onChange={(next) => {
@@ -173,7 +174,7 @@ export function PlanFilterToolbar({
       <button
         type="button"
         onClick={onAddPlan}
-        className="btn-primary text-sm py-1.5 px-2.5 min-h-[44px] min-w-[44px] hover:bg-brand-800 inline-flex items-center justify-center"
+        className="btn-primary text-sm py-0.5 px-2.5 min-h-[32px] min-w-[32px] rounded-sm hover:bg-brand-800 inline-flex items-center justify-center"
         data-testid="add-plan-button"
       >
         New Plan
@@ -184,7 +185,7 @@ export function PlanFilterToolbar({
           <button
             type="button"
             onClick={() => setBulkMenuOpen((open) => !open)}
-            className="btn-secondary px-2.5 min-h-[44px] min-w-[44px] inline-flex items-center gap-1"
+            className="btn-secondary px-2.5 min-h-[32px] min-w-[32px] rounded-sm inline-flex items-center gap-1"
             data-testid="plan-bulk-actions-button"
             aria-label="Open bulk actions"
             aria-expanded={bulkMenuOpen}
@@ -254,7 +255,7 @@ export function PlanFilterToolbar({
             <button
               type="button"
               onClick={handleSearchClose}
-              className="p-1.5 min-h-[44px] min-w-[44px] rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
+              className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
               aria-label="Close search"
               data-testid="plan-search-close"
             >
@@ -273,7 +274,7 @@ export function PlanFilterToolbar({
           <button
             type="button"
             onClick={handleSearchExpand}
-            className="p-1.5 min-h-[44px] min-w-[44px] rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
+            className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
             aria-label="Expand search"
             data-testid="plan-search-expand"
           >
@@ -294,6 +295,7 @@ export function PlanFilterToolbar({
       ) : null}
 
       <ViewToggle
+        compact
         options={[
           { value: "card", icon: <CardIcon className="w-3 h-3" />, label: "Card view" },
           { value: "graph", icon: <GraphIcon className="w-3 h-3" />, label: "Graph view" },
@@ -304,5 +306,12 @@ export function PlanFilterToolbar({
     </>
   );
 
-  return <FilterBar left={left} right={right} dataTestId="plan-filter-toolbar" />;
+  return (
+    <FilterBar
+      variant="phase"
+      left={left}
+      right={right}
+      dataTestId="plan-filter-toolbar"
+    />
+  );
 }
