@@ -3,6 +3,7 @@ import { shallowEqual } from "react-redux";
 import { useAppSelector } from "../store";
 import { selectTasksForEpic } from "../store/slices/executeSlice";
 import { formatPlanIdAsTitle } from "../lib/formatting";
+import { isSelfImprovementTask } from "../lib/executeTaskFilter";
 import { COLUMN_LABELS } from "./kanban/TaskStatusBadge";
 import { ComplexityIcon } from "./ComplexityIcon";
 
@@ -272,6 +273,15 @@ export function EpicCard({
                     }`}
                   />
                   <span className="truncate flex-1 min-w-0">{task.title}</span>
+                  {isSelfImprovementTask(task) && (
+                    <span
+                      className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium bg-theme-surface-muted text-theme-muted"
+                      title="Created by self-improvement"
+                      data-testid="task-badge-self-improvement"
+                    >
+                      Self-improvement
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

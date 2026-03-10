@@ -231,6 +231,34 @@ describe("EpicCard", () => {
     expect(screen.getByText("Add session timeout")).toBeInTheDocument();
   });
 
+  it("shows Self-improvement badge for tasks with source self-improvement", () => {
+    const tasksWithSelfImprovement: Task[] = [
+      ...tasks,
+      {
+        ...tasks[0],
+        id: "epic-1.4",
+        title: "Improve test coverage",
+        source: "self-improvement",
+      } as Task,
+    ];
+    renderWithStore(
+      <EpicCard
+        plan={basePlan}
+        tasks={tasksWithSelfImprovement}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        onSelect={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+      />
+    );
+    const badges = screen.getAllByTestId("task-badge-self-improvement");
+    expect(badges.length).toBeGreaterThanOrEqual(1);
+    expect(badges.some((el) => el.textContent === "Self-improvement")).toBe(true);
+  });
+
   it("calls onSelect when card is clicked", async () => {
     const onSelect = vi.fn();
     const user = userEvent.setup();

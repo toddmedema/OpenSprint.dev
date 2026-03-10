@@ -1,4 +1,5 @@
 import type { StatusFilter } from "../../lib/executeTaskFilter";
+import { PHASE_TOOLBAR_HEIGHT, PHASE_TOOLBAR_BUTTON_SIZE } from "../../lib/constants";
 import { ViewToggle } from "./ViewToggle";
 
 function GridIcon({ className }: { className?: string }) {
@@ -81,11 +82,12 @@ export function ExecuteFilterToolbar({
 
   return (
     <div
-      className="w-full px-4 sm:px-6 min-h-[48px] flex items-center py-2 border-b border-theme-border bg-theme-surface shrink-0"
+      className="phase-toolbar w-full px-4 sm:px-6 flex items-center py-0.5 border-b border-theme-border bg-theme-surface shrink-0"
+      style={{ height: PHASE_TOOLBAR_HEIGHT }}
       data-testid="execute-filter-toolbar"
     >
-      <div className="flex w-full items-center justify-between gap-2 sm:gap-4">
-        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto overflow-y-visible flex-nowrap py-1 pl-4">
+      <div className="flex w-full items-center justify-between gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto overflow-y-visible flex-nowrap py-0.5 pl-2">
           {chipConfig.filter((c) => c.filter === "all" || c.count > 0).map(({ label, filter, count }) => {
             const isActive = statusFilter === filter;
             const isAll = filter === "all";
@@ -98,9 +100,10 @@ export function ExecuteFilterToolbar({
                 type="button"
                 onClick={handleClick}
                 data-testid={`filter-chip-${filter}`}
-                className={`inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 min-h-[44px] min-w-[44px] text-sm font-medium transition-colors shrink-0 ${
+                style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                className={`inline-flex items-center justify-center gap-1 rounded-sm px-2 py-0.5 text-sm font-medium transition-colors shrink-0 ${
                   isActive
-                    ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-2 ring-offset-theme-bg"
+                    ? "bg-brand-600 text-white ring-2 ring-brand-500 ring-offset-1 ring-offset-theme-bg"
                     : "bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle"
                 }`}
                 aria-pressed={isActive}
@@ -148,18 +151,19 @@ export function ExecuteFilterToolbar({
                 onChange={(e) => setSearchInputValue(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder="Search tickets…"
-                className="w-36 sm:w-48 md:w-56 px-3 py-1.5 text-sm bg-theme-surface-muted rounded-md text-theme-text placeholder:text-theme-muted border border-theme-border focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+                className="w-36 sm:w-48 md:w-56 px-2.5 py-1 text-sm bg-theme-surface-muted rounded-sm text-theme-text placeholder:text-theme-muted border border-theme-border focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
                 aria-label="Search tickets"
               />
               <button
                 type="button"
                 onClick={handleSearchClose}
-                className="p-1.5 min-h-[44px] min-w-[44px] rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
+                style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                className="p-1 rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
                 aria-label="Close search"
                 data-testid="execute-search-close"
               >
                 <svg
-                  className="w-5 h-5"
+                  className="w-4 h-4"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -173,12 +177,13 @@ export function ExecuteFilterToolbar({
             <button
               type="button"
               onClick={handleSearchExpand}
-              className="p-1.5 min-h-[44px] min-w-[44px] rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
+              style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+              className="p-1 rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
               aria-label="Expand search"
               data-testid="execute-search-expand"
             >
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -203,6 +208,7 @@ export function ExecuteFilterToolbar({
               ]}
               value={viewMode}
               onChange={onViewModeChange}
+              compact
             />
           </div>
         </div>

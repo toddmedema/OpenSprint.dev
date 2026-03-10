@@ -5,6 +5,7 @@ import {
   HOMEPAGE_CONTAINER_CLASS,
   MOBILE_BREAKPOINT,
   NAVBAR_HEIGHT,
+  PHASE_TOOLBAR_BUTTON_SIZE,
   PHASE_TOOLBAR_HEIGHT,
   SETTINGS_HELP_CONTAINER_CLASS,
   TABLET_BREAKPOINT,
@@ -24,6 +25,12 @@ describe("constants", () => {
   describe("PHASE_TOOLBAR_HEIGHT", () => {
     it("matches NAVBAR_HEIGHT for consistent second-level nav bar", () => {
       expect(PHASE_TOOLBAR_HEIGHT).toBe(NAVBAR_HEIGHT);
+    });
+  });
+
+  describe("PHASE_TOOLBAR_BUTTON_SIZE", () => {
+    it("is 32px for proportionally smaller buttons in phase toolbars", () => {
+      expect(PHASE_TOOLBAR_BUTTON_SIZE).toBe(32);
     });
   });
 

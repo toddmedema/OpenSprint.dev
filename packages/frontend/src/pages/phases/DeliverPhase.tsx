@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { DeploymentRecord, DeploymentConfig } from "@opensprint/shared";
 import { getDeploymentTargetConfig } from "@opensprint/shared";
 import { getProjectPhasePath } from "../../lib/phaseRouting";
-import { MOBILE_BREAKPOINT } from "../../lib/constants";
+import { MOBILE_BREAKPOINT, PHASE_TOOLBAR_BUTTON_SIZE, PHASE_TOOLBAR_HEIGHT } from "../../lib/constants";
 import { shouldRightAlignDropdown } from "../../lib/dropdownViewport";
 import { useAppDispatch, useAppSelector } from "../../store";
 import {
@@ -237,10 +237,11 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <div
-          className="w-full px-4 sm:px-6 min-h-[48px] flex items-center justify-end py-2 bg-theme-surface shrink-0"
+          className="phase-toolbar w-full px-4 sm:px-6 flex items-center justify-end py-0.5 bg-theme-surface shrink-0 border-b border-theme-border"
+          style={{ height: PHASE_TOOLBAR_HEIGHT }}
           data-testid="deliver-top-bar"
         >
-          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+          <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
             {settings?.deployment?.mode === "expo" ? (
               isDeploying ? (
                 <>
@@ -248,7 +249,8 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                     type="button"
                     onClick={handleResetDeliver}
                     disabled={resetLoading}
-                    className="btn-secondary min-h-[44px] min-w-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                    className="btn-secondary rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     data-testid="cancel-deployment-button"
                   >
                     {resetLoading ? "Cancelling…" : "Cancel Deployment"}
@@ -264,7 +266,8 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                   <button
                     type="button"
                     onClick={handleDeployToBeta}
-                    className="btn-secondary min-h-[44px] min-w-[44px]"
+                    style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                    className="btn-secondary rounded-sm"
                     data-testid="deploy-beta-button"
                   >
                     Deploy to Staging
@@ -272,7 +275,8 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                   <button
                     type="button"
                     onClick={handleDeployToProd}
-                    className="btn-primary min-h-[44px] min-w-[44px]"
+                    style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                    className="btn-primary rounded-sm"
                     data-testid="deploy-prod-button"
                   >
                     Deploy to Production
@@ -280,12 +284,13 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                 </>
               )
             ) : isDeploying ? (
-              <>
+                <>
                 <button
                   type="button"
                   onClick={handleResetDeliver}
                   disabled={resetLoading}
-                  className="btn-secondary min-h-[44px] min-w-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                  className="btn-secondary rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   data-testid="cancel-deployment-button"
                 >
                   {resetLoading ? "Cancelling…" : "Cancel Deployment"}
@@ -311,7 +316,8 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                           key={t.name}
                           type="button"
                           onClick={() => dispatch(triggerDeliver({ projectId, target: t.name }))}
-                          className={`min-h-[44px] min-w-[44px] ${t.isDefault ? "btn-primary" : "btn-secondary"}`}
+                          style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                          className={`rounded-sm ${t.isDefault ? "btn-primary" : "btn-secondary"}`}
                           data-testid={`deploy-to-${t.name}-button`}
                         >
                           Deploy to {t.name}

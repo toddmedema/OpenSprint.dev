@@ -4,9 +4,21 @@ export interface ViewToggleProps<T extends string> {
   options: { value: T; icon: React.ReactNode; label: string }[];
   value: T;
   onChange: (value: T) => void;
+  /** When true, use smaller buttons for phase toolbar (matches NAVBAR_HEIGHT). */
+  compact?: boolean;
 }
 
-export function ViewToggle<T extends string>({ options, value, onChange }: ViewToggleProps<T>) {
+const compactButtonClass =
+  "p-1 min-h-[32px] min-w-[32px] transition-colors rounded-sm inline-flex items-center justify-center";
+const defaultButtonClass =
+  "p-1 min-h-[44px] min-w-[44px] transition-colors rounded-md inline-flex items-center justify-center";
+
+export function ViewToggle<T extends string>({
+  options,
+  value,
+  onChange,
+  compact = false,
+}: ViewToggleProps<T>) {
   const currentIndex = options.findIndex((o) => o.value === value);
   const safeIndex = currentIndex >= 0 ? currentIndex : 0;
 
@@ -28,7 +40,7 @@ export function ViewToggle<T extends string>({ options, value, onChange }: ViewT
       aria-label="View mode"
       data-testid="view-toggle"
       tabIndex={0}
-      className="inline-flex rounded-lg border border-theme-border bg-theme-surface-muted p-0.5"
+      className={`inline-flex border border-theme-border bg-theme-surface-muted p-0.5 ${compact ? "rounded-sm" : "rounded-lg"}`}
       onKeyDown={handleKeyDown}
     >
       {options.map((option) => {
@@ -42,7 +54,7 @@ export function ViewToggle<T extends string>({ options, value, onChange }: ViewT
             aria-label={option.label}
             data-testid={`view-toggle-${option.value}`}
             onClick={() => onChange(option.value)}
-            className={`p-1 min-h-[44px] min-w-[44px] transition-colors rounded-md inline-flex items-center justify-center ${
+            className={`${compact ? compactButtonClass : defaultButtonClass} ${
               isActive
                 ? "bg-theme-surface shadow-sm ring-1 ring-theme-border text-theme-text"
                 : "text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle/50"

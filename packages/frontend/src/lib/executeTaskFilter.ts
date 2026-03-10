@@ -24,7 +24,8 @@ export function matchesStatusFilter(kanbanColumn: string, filter: StatusFilter):
 
 /** True when task was created by self-improvement (extra.source === 'self-improvement'). */
 export function isSelfImprovementTask(task: Task): boolean {
-  return (task as Task & { source?: string }).source === "self-improvement";
+  const t = task as Task & { source?: string; extra?: { source?: string } };
+  return t.source === "self-improvement" || t.extra?.source === "self-improvement";
 }
 
 /** Returns true if the task's parent plan has status "planning" (not yet executed). */

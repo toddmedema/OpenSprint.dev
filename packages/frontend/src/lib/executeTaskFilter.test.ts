@@ -76,6 +76,12 @@ describe("executeTaskFilter", () => {
       expect(isSelfImprovementTask({ ...baseTask, source: "self-improvement" })).toBe(true);
     });
 
+    it("returns true when task.extra.source is 'self-improvement'", () => {
+      expect(
+        isSelfImprovementTask({ ...baseTask, extra: { source: "self-improvement" } } as Task)
+      ).toBe(true);
+    });
+
     it("returns false when task.source is missing or other", () => {
       expect(isSelfImprovementTask(baseTask)).toBe(false);
       expect(isSelfImprovementTask({ ...baseTask, source: "plan" })).toBe(false);
