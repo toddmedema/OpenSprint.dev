@@ -1,0 +1,184 @@
+{
+  "tasks": [
+    {
+      "title": "Add shared diff response types and line-based diff types",
+      "description": "Define shared TypeScript types for the two diff API responses. Add PrdDiffLine: { type: 'add'|'remove'|'context'; text: string; oldLineNumber?: number; newLineNumber?: number }. Add PrdDiffResult: { lines: PrdDiffLine[]; summary?: { additions: number; deletions: number } }. Add PrdProposedDiffResponse: { requestId: string; diff: PrdDiffResult }. Add PrdVersionDiffResponse: { fromVersion: string; toVersion: string; diff: PrdDiffResult }. Export from packages/shared (e.g. types/prd.ts or types/diff.ts). No backend or frontend logic yet. Verification: Run npm run build in packages/shared.",
+      "priority": 0,
+      "dependsOn": [],
+      "complexity": 2,
+      "files": {
+        "create": ["packages/shared/src/types/diff.ts"],
+        "modify": ["packages/shared/src/types/prd.ts"],
+        "test": []
+      }
+    },
+    {
+      "title": "Add prd_snapshots table and schema migration",
+      "description": "Add a new table prd_snapshots to store full SPEC.md content per document version. Columns: project_id TEXT, version INTEGER, content TEXT, created_at TEXT. Primary key (project_id, version). Add DDL in packages/backend/src/db/schema.ts (Postgres) and packages/backend/src/db/schema-sqlite.ts (SQLite). Ensure runSchema applies the new table. No application code yet. Verification: Run backend tests that use the DB (e.g. npm test in packages/backend).",
+      "priority": 0,
+      "dependsOn": [],
+      "complexity": 3,
+      "files": {
+        "modify": ["packages/backend/src/db/schema.ts", "packages/backend/src/db/schema-sqlite.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/prd-service.test.ts"]
+      }
+    },
+    {
+      "title": "Persist SPEC.md snapshot on each save in PrdService",
+      "description": "In PrdService.savePrd, after writing SPEC.md to disk and saveMetadataToDb, insert or upsert a row into prd_snapshots with (project_id, version = prd.version, content = markdown, created_at). Use the same markdown string already computed (prdToSpecMarkdown(prd)). Add a private method saveSnapshot(projectId, version, content) and call it from savePrd. Handle both Postgres and SQLite via the existing DbClient abstraction. Verification: Unit test that after updateSection or savePrd a snapshot exists for that version; run npm test in packages/backend.",
+      "priority": 0,
+      "dependsOn": ["Add prd_snapshots table and schema migration"],
+      "complexity": 4,
+      "files": {
+        "modify": ["packages/backend/src/services/prd.service.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/prd-service.test.ts"]
+      }
+    },
+    {
+      "title": "Add documentVersion to PRD change log entries and history response",
+      "description": "Add optional documentVersion: number to PrdChangeLogEntry in packages/shared/src/types/prd.ts (the document version after that change). In PrdService, when appending to prd.changeLog (updateSection and updateSections), set documentVersion to the current prd.version after the update. When loading changeLog from DB, preserve documentVersion if present; when migrating or reading legacy entries without it, leave undefined or infer from order. GET /projects/:id/prd/history response already returns changeLog; no route change needed. Frontend PrdHistoryEntry / PrdChangeLog can accept documentVersion for the version-diff feature. Verification: Run npm test in packages/backend and packages/shared; history response includes documentVersion for new entries.",
+      "priority": 0,
+      "dependsOn": [],
+      "complexity": 4,
+      "files": {
+        "modify": ["packages/shared/src/types/prd.ts", "packages/backend/src/services/prd.service.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/prd-service.test.ts", "packages/backend/src/__tests__/prd-route.test.ts"]
+      }
+    },
+    {
+      "title": "Implement server-side line-based diff helper",
+      "description": "Add a backend utility that takes two strings (oldContent, newContent) and returns the shared PrdDiffResult format: lines array with type add|remove|context, text, oldLineNumber, newLineNumber, and summary { additions, deletions }. Use a line-based diff library (e.g. diff or diff-match-patch) in packages/backend. Prefer the same algorithm as the frontend PrdDiffView (diff library) for consistency. Place in packages/backend/src/utils/diff.ts or packages/backend/src/services/prd-diff.service.ts. Unit test with additions only, deletions only, mixed, empty, and identical content. Verification: Run npm test in packages/backend.",
+      "priority": 0,
+      "dependsOn": ["Add shared diff response types and line-based diff types"],
+      "complexity": 4,
+      "files": {
+        "create": ["packages/backend/src/utils/diff.ts"],
+        "modify": [],
+        "test": ["packages/backend/src/__tests__/diff.test.ts"]
+      }
+    },
+    {
+      "title": "Add NotificationService.getById for read-only notification lookup",
+      "description": "Add a method getById(projectId: string, notificationId: string): Promise<Notification | null> to NotificationService that runs SELECT * FROM open_questions WHERE id = $1 AND project_id = $2 and returns rowToNotification(row) or null. Used by the proposed-diff endpoint to fetch a hil_approval notification by requestId (notification id). Verification: Unit test that getById returns the notification when it exists and null when not found; run npm test in packages/backend.",
+      "priority": 1,
+      "dependsOn": [],
+      "complexity": 2,
+      "files": {
+        "modify": ["packages/backend/src/services/notification.service.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/notification.service.test.ts"]
+      }
+    },
+    {
+      "title": "Implement GET /projects/:id/prd/proposed-diff endpoint",
+      "description": "Add GET /projects/:projectId/prd/proposed-diff?requestId=<id>. Register route before the /:section route so 'proposed-diff' is not captured as a section. Handler: resolve requestId and projectId; call NotificationService.getById(projectId, requestId); if not found or kind !== 'hil_approval' or missing scopeChangeMetadata, return 404; load current PRD (PrdService.getPrd); build proposed full SPEC by applying scopeChangeProposedUpdates to current PRD sections then prdToSpecMarkdown; get current SPEC markdown (read file or prdToSpecMarkdown(currentPrd)); compute diff via the line-based diff helper; return 200 with body { requestId, diff: { lines, summary } }. Verification: Integration test with a created hil_approval notification and scopeChangeMetadata; invalid requestId returns 404. Run npm test in packages/backend.",
+      "priority": 1,
+      "dependsOn": ["Implement server-side line-based diff helper", "Add NotificationService.getById for read-only notification lookup"],
+      "complexity": 6,
+      "files": {
+        "modify": ["packages/backend/src/routes/prd.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/prd-route.test.ts"]
+      }
+    },
+    {
+      "title": "Implement GET /projects/:id/prd/diff endpoint and snapshot retrieval",
+      "description": "Add PrdService.getSnapshot(projectId, version): Promise<string | null> that reads from prd_snapshots for (project_id, version) and returns content or null. Add GET /projects/:projectId/prd/diff?fromVersion=<versionId>&toVersion=<versionId|'current'>. Register before /:section. Handler: parse fromVersion (required); toVersion optional, default 'current'. Load snapshot for fromVersion; if null return 404. If toVersion is 'current' or omitted, load current SPEC.md from disk (or getPrd + prdToSpecMarkdown); else load snapshot for toVersion (404 if missing). Compute diff between from content and to content; return 200 with { fromVersion, toVersion (resolved string), diff: { lines, summary } }. Verification: After saving a PRD update, snapshot exists; GET diff?fromVersion=<n> returns correct diff; invalid fromVersion returns 404. Run npm test in packages/backend.",
+      "priority": 1,
+      "dependsOn": ["Persist SPEC.md snapshot on each save in PrdService", "Implement server-side line-based diff helper"],
+      "complexity": 5,
+      "files": {
+        "modify": ["packages/backend/src/services/prd.service.ts", "packages/backend/src/routes/prd.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/prd-route.test.ts", "packages/backend/src/__tests__/prd-service.test.ts"]
+      }
+    },
+    {
+      "title": "Add API client methods for proposed-diff and version diff",
+      "description": "In packages/frontend/src/api/client.ts, add prd.getProposedDiff(projectId, requestId) calling GET /projects/:id/prd/proposed-diff?requestId= and returning the response type (PrdProposedDiffResponse or equivalent). Add prd.getVersionDiff(projectId, fromVersion, toVersion?) calling GET /projects/:id/prd/diff?fromVersion=&toVersion= and returning PrdVersionDiffResponse. Use the shared diff types from @opensprint/shared. Add query keys in queryKeys if needed for React Query. Verification: Run npm run build in monorepo; no type errors.",
+      "priority": 1,
+      "dependsOn": ["Add shared diff response types and line-based diff types"],
+      "complexity": 2,
+      "files": {
+        "modify": ["packages/frontend/src/api/client.ts", "packages/frontend/src/api/queryKeys.ts"],
+        "create": [],
+        "test": []
+      }
+    },
+    {
+      "title": "Create reusable DiffView component for server diff format",
+      "description": "Create a React component (e.g. packages/frontend/src/components/prd/ServerDiffView.tsx) that accepts diff: { lines: Array<{ type, text, oldLineNumber?, newLineNumber? }>; summary? } and optionally summary props (fromVersion, toVersion for title). Render a monospace, line-numbered view with clear visual distinction: added lines (e.g. green background or left border), removed (red), context (neutral). Support theme (light/dark) via existing theme classes (e.g. theme-success-bg, theme-error-bg). Include accessibility: aria labels for added/removed/context lines, keyboard navigation. Do not duplicate PrdDiffView; this component consumes the API response format. Verification: Render with mock diff lines; run frontend tests and npm run build.",
+      "priority": 1,
+      "dependsOn": ["Add shared diff response types and line-based diff types"],
+      "complexity": 5,
+      "files": {
+        "create": ["packages/frontend/src/components/prd/ServerDiffView.tsx"],
+        "modify": ["packages/frontend/src/components/prd/index.ts"],
+        "test": ["packages/frontend/src/components/prd/ServerDiffView.test.tsx"]
+      }
+    },
+    {
+      "title": "HIL approval UI: fetch and display proposed-diff in DiffView",
+      "description": "When the HIL approval block is for a PRD/SPEC approval (notification.kind === 'hil_approval' and notification.scopeChangeMetadata present), optionally fetch the full proposed diff via api.prd.getProposedDiff(projectId, notification.id) and display it using the new ServerDiffView. Keep existing PrdDiffView as fallback or replace with ServerDiffView when the proposed-diff API is used. Ensure Approve/Reject buttons remain visible (sticky or above fold for short diffs). File: packages/frontend/src/components/HilApprovalBlock.tsx. Verification: With a pending PRD approval notification, open the approval UI and confirm diff is shown and matches expected; approve/reject still work. Run npm test for HilApprovalBlock.",
+      "priority": 2,
+      "dependsOn": ["Implement GET /projects/:id/prd/proposed-diff endpoint", "Create reusable DiffView component for server diff format", "Add API client methods for proposed-diff and version diff"],
+      "complexity": 5,
+      "files": {
+        "modify": ["packages/frontend/src/components/HilApprovalBlock.tsx"],
+        "create": [],
+        "test": ["packages/frontend/src/components/HilApprovalBlock.test.tsx"]
+      }
+    },
+    {
+      "title": "Sketch version list: add Compare to current and version diff modal",
+      "description": "In PrdChangeLog (packages/frontend/src/components/prd/PrdChangeLog.tsx), add a 'Compare to current' (or 'View diff') control per history entry. Use documentVersion from the entry (PrdChangeLogEntry from API) as fromVersion; if documentVersion is missing, skip the button or use a fallback. On click, open a modal or inline panel that fetches api.prd.getVersionDiff(projectId, String(entry.documentVersion)) and renders ServerDiffView. Title the modal e.g. 'Diff: v{fromVersion} → current'. Include a Close button. Ensure PrdHistoryEntry type includes documentVersion (from PrdChangeLogEntry). Verification: On Sketch page, version list shows Compare to current; clicking opens diff modal with correct content. Run npm test for SketchPhase and PrdChangeLog.",
+      "priority": 2,
+      "dependsOn": ["Implement GET /projects/:id/prd/diff endpoint and snapshot retrieval", "Create reusable DiffView component for server diff format", "Add documentVersion to PRD change log entries and history response", "Add API client methods for proposed-diff and version diff"],
+      "complexity": 6,
+      "files": {
+        "modify": ["packages/frontend/src/components/prd/PrdChangeLog.tsx", "packages/frontend/src/pages/phases/SketchPhase.tsx"],
+        "create": [],
+        "test": ["packages/frontend/src/components/prd/PrdChangeLog.test.tsx", "packages/frontend/src/pages/phases/SketchPhase.test.tsx"]
+      }
+    },
+    {
+      "title": "Handle empty/identical diff and 404 in UI",
+      "description": "When proposed-diff or version-diff returns successfully but diff has no changes (identical content), show a message like 'No changes' and still allow Approve or Close. When the API returns 404 (invalid requestId or fromVersion), show an error message in the UI with option to dismiss or close the diff view. Apply in HilApprovalBlock and in the version-diff modal. Verification: Manual or unit tests for empty diff and 404 handling.",
+      "priority": 2,
+      "dependsOn": ["HIL approval UI: fetch and display proposed-diff in DiffView", "Sketch version list: add Compare to current and version diff modal"],
+      "complexity": 3,
+      "files": {
+        "modify": ["packages/frontend/src/components/HilApprovalBlock.tsx", "packages/frontend/src/components/prd/PrdChangeLog.tsx"],
+        "create": [],
+        "test": []
+      }
+    },
+    {
+      "title": "Backend integration tests for proposed-diff and version diff endpoints",
+      "description": "Add integration tests in packages/backend/src/__tests__/prd-route.test.ts (or a dedicated prd-diff-route.test.ts): (1) GET proposed-diff with valid requestId (create hil_approval notification with scopeChangeMetadata, then GET) returns 200 and correct diff shape; invalid requestId returns 404; non-hil_approval notification returns 404. (2) GET diff with valid fromVersion returns 200 and correct diff; invalid fromVersion returns 404. Use the test DB helper and existing project/prd setup. Verification: Run npm test in packages/backend.",
+      "priority": 3,
+      "dependsOn": ["Implement GET /projects/:id/prd/proposed-diff endpoint", "Implement GET /projects/:id/prd/diff endpoint and snapshot retrieval"],
+      "complexity": 5,
+      "files": {
+        "modify": ["packages/backend/src/__tests__/prd-route.test.ts"],
+        "create": [],
+        "test": ["packages/backend/src/__tests__/prd-route.test.ts"]
+      }
+    },
+    {
+      "title": "Optional: virtualize or cap very large diff for performance",
+      "description": "If SPEC.md is very large, the diff payload and DOM can hurt performance. Add optional cap (e.g. first N lines + 'Show more' or section-by-section expand) in ServerDiffView or in the backend (cap diff lines returned). Document in code. Defer full virtualization if scope is tight. Verification: No regression on normal-sized SPEC; optional test with large content.",
+      "priority": 4,
+      "dependsOn": ["Create reusable DiffView component for server diff format"],
+      "complexity": 5,
+      "files": {
+        "modify": ["packages/frontend/src/components/prd/ServerDiffView.tsx"],
+        "create": [],
+        "test": []
+      }
+    }
+  ]
+}

@@ -67,7 +67,7 @@ describe("SettingsPage", () => {
 
     expect(screen.getByTestId("settings-top-bar")).toBeInTheDocument();
     expect(screen.getByTestId("settings-global-tab")).toHaveTextContent("Global");
-    expect(screen.getByTestId("settings-project-tab")).toHaveTextContent("Project");
+    expect(screen.queryByTestId("settings-project-tab")).not.toBeInTheDocument();
     expect(screen.getByTestId("global-settings-content")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Back to home" })).not.toBeInTheDocument();
     expect(screen.getByTestId("settings-save-indicator")).toHaveTextContent("Saved");

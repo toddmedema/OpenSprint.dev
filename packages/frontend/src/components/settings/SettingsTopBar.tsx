@@ -51,14 +51,16 @@ export function SettingsTopBar({ projectId, saveStatus }: SettingsTopBarProps) {
         >
           Global
         </NavButton>
-        <NavButton
-          to={projectHref}
-          active={!isGlobal}
-          tone="accent"
-          data-testid="settings-project-tab"
-        >
-          Project
-        </NavButton>
+        {projectId != null && (
+          <NavButton
+            to={projectHref}
+            active={!isGlobal}
+            tone="accent"
+            data-testid="settings-project-tab"
+          >
+            Project
+          </NavButton>
+        )}
       </div>
       <div className="flex-1 min-w-0 flex justify-end">
         <SaveIndicator status={saveStatus} data-testid="settings-save-indicator" />
