@@ -310,6 +310,34 @@ describe("Navbar", () => {
     expect(content).toHaveClass("md:pr-6");
   });
 
+  it("uses flush layout (no gap above nav buttons): nav and inner content have py-0, phase tablist has items-stretch", () => {
+    renderNavbar(<Navbar project={null} />);
+    const nav = screen.getByRole("navigation");
+    expect(nav).toHaveClass("py-0");
+    expect(nav).toHaveClass("overflow-hidden");
+    const content = nav.children[1] as HTMLElement;
+    expect(content).toHaveClass("py-0");
+    expect(content).toHaveClass("items-stretch");
+  });
+
+  it("phase tab row and buttons use flush layout (no gap above): tablist py-0/items-stretch, tabs min-h-0 h-full", () => {
+    const mockProject = {
+      id: "proj-1",
+      name: "Test",
+      repoPath: "/path",
+      currentPhase: "sketch" as const,
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
+    renderNavbar(<Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />);
+    const tablist = screen.getByRole("tablist", { name: "Phase navigation" });
+    expect(tablist).toHaveClass("py-0");
+    expect(tablist).toHaveClass("items-stretch");
+    const sketchTab = screen.getByRole("tab", { name: /Sketch/ });
+    expect(sketchTab).toHaveClass("min-h-0");
+    expect(sketchTab).toHaveClass("h-full");
+  });
+
   it("phase tabs container is horizontally scrollable on mobile (overflow-x-auto)", () => {
     const mockProject = {
       id: "proj-1",

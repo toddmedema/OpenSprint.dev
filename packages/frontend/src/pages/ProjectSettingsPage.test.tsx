@@ -221,6 +221,9 @@ describe("ProjectSettingsPage", () => {
     const topBar = screen.getByTestId("settings-top-bar");
     const subTabsBar = screen.getByTestId("settings-sub-tabs-bar");
 
+    expect(topBar).toHaveClass("py-0");
+    expect(topBar).toHaveClass("items-stretch");
+
     // Tabs must not be descendants of the modal container
     expect(modal).not.toContainElement(topBar);
     expect(modal).not.toContainElement(subTabsBar);

@@ -37,16 +37,17 @@ export function SettingsTopBar({ projectId, saveStatus }: SettingsTopBarProps) {
 
   return (
     <div
-      className="px-4 sm:px-6 flex items-center justify-between bg-theme-surface shrink-0"
+      className="px-4 sm:px-6 flex items-stretch justify-between bg-theme-surface shrink-0 py-0"
       style={{ height: NAVBAR_HEIGHT }}
       data-testid="settings-top-bar"
     >
       <div className="flex-1 min-w-0" aria-hidden="true" />
-      <div className="flex items-center justify-center gap-1 rounded-xl border border-theme-border-subtle p-1 shrink-0">
+      <div className="flex items-stretch gap-1 rounded-xl border border-theme-border-subtle py-0 px-1 shrink-0">
         <NavButton
           to={globalHref}
           active={isGlobal}
           tone="accent"
+          className="min-h-0 h-full"
           data-testid="settings-global-tab"
         >
           Global
@@ -56,6 +57,7 @@ export function SettingsTopBar({ projectId, saveStatus }: SettingsTopBarProps) {
             to={projectHref}
             active={!isGlobal}
             tone="accent"
+            className="min-h-0 h-full"
             data-testid="settings-project-tab"
           >
             Project

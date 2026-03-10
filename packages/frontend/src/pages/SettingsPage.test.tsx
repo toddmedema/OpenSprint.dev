@@ -68,7 +68,10 @@ describe("SettingsPage", () => {
     const page = screen.getByTestId("settings-page");
     expect(page).toHaveClass("bg-theme-surface");
 
-    expect(screen.getByTestId("settings-top-bar")).toBeInTheDocument();
+    const topBar = screen.getByTestId("settings-top-bar");
+    expect(topBar).toBeInTheDocument();
+    expect(topBar).toHaveClass("py-0");
+    expect(topBar).toHaveClass("items-stretch");
     expect(screen.getByTestId("settings-global-tab")).toHaveTextContent("Global");
     expect(screen.queryByTestId("settings-project-tab")).not.toBeInTheDocument();
     expect(screen.getByTestId("global-settings-content")).toBeInTheDocument();
