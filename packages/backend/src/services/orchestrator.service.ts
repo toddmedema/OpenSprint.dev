@@ -88,6 +88,7 @@ import {
   buildOrchestratorTestStatusContent,
   getOrchestratorTestStatusFsPath,
 } from "./orchestrator-test-status.js";
+import { isSelfImprovementRunInProgress } from "./self-improvement-runner.service.js";
 
 const log = createLogger("orchestrator");
 
@@ -1269,6 +1270,7 @@ export class OrchestratorService {
       worktreePath:
         state.slots.size === 1 ? ([...state.slots.values()][0]?.worktreePath ?? null) : null,
       pendingFeedbackCategorizations,
+      selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
     };
   }
 

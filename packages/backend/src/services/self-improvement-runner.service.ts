@@ -35,6 +35,11 @@ export interface RunSelfImprovementOptions {
   lastCommitSha?: string;
 }
 
+/** Result of runSelfImprovement: success with counts or skip when run already in progress. */
+export type RunSelfImprovementResult =
+  | { tasksCreated: number; runId: string }
+  | { tasksCreated: 0; skipped: "run_in_progress" };
+
 const SELF_IMPROVEMENT_SYSTEM_PROMPT = `You are the Self-Improvement reviewer for OpenSprint. Your job is to review the codebase (SPEC, file tree, and key files) and produce a structured list of improvement tasks.
 
 Output MUST be one of:
@@ -152,20 +157,49 @@ export function parseImprovementList(content: string): ImprovementItem[] {
   return [{ title: "Self-improvement review: parse failed", description: content.slice(0, 500) }];
 }
 
+/** Per-project in-progress guard: projectIds currently running self-improvement. */
+const inProgressProjects = new Set<string>();
+
+/** Returns true when a self-improvement run is in progress for the given project. */
+export function isSelfImprovementRunInProgress(projectId: string): boolean {
+  return inProgressProjects.has(projectId);
+}
+
 export class SelfImprovementRunnerService {
   private taskStore = taskStoreSingleton;
   private projectService = new ProjectService();
   private planService = new PlanService();
   private contextAssembler = new ContextAssembler();
 
+  /** Returns true when a self-improvement run is in progress for the given project. */
+  isSelfImprovementRunInProgress(projectId: string): boolean {
+    return isSelfImprovementRunInProgress(projectId);
+  }
+
   /**
    * Run self-improvement: build context, run one review per lens (or one general), parse output,
    * create tasks with extra.source and optional planId/runId, update last run only on success.
+   * If a run is already in progress for this project, skips with { tasksCreated: 0, skipped: 'run_in_progress' }.
    */
   async runSelfImprovement(
     projectId: string,
     options?: RunSelfImprovementOptions
-  ): Promise<{ created: number; runId: string }> {
+  ): Promise<RunSelfImprovementResult> {
+    if (inProgressProjects.has(projectId)) {
+      return { tasksCreated: 0, skipped: "run_in_progress" };
+    }
+    inProgressProjects.add(projectId);
+    try {
+      return await this.runSelfImprovementInner(projectId, options);
+    } finally {
+      inProgressProjects.delete(projectId);
+    }
+  }
+
+  private async runSelfImprovementInner(
+    projectId: string,
+    options?: RunSelfImprovementOptions
+  ): Promise<RunSelfImprovementResult> {
     const runId = options?.runId ?? `si-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     const project = await this.projectService.getProject(projectId);
     const repoPath = project.repoPath;
@@ -273,7 +307,7 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
       ...(lastCommitSha && { selfImprovementLastCommitSha: lastCommitSha }),
     }));
 
-    return { created: createdCount, runId };
+    return { tasksCreated: createdCount, runId };
   }
 }
 
@@ -283,6 +317,6 @@ export const selfImprovementRunnerService = new SelfImprovementRunnerService();
 export async function runSelfImprovement(
   projectId: string,
   options?: RunSelfImprovementOptions
-): Promise<{ created: number; runId: string }> {
+): Promise<RunSelfImprovementResult> {
   return selfImprovementRunnerService.runSelfImprovement(projectId, options);
 }

@@ -86,6 +86,9 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
       });
       // Always-on orchestrator: no `running` field (PRDv2 §5.7)
       expect(res.body.data.running).toBeUndefined();
+      // Execute status includes self-improvement run state
+      expect(res.body.data).toHaveProperty("selfImprovementRunInProgress");
+      expect(typeof res.body.data.selfImprovementRunInProgress).toBe("boolean");
     });
 
     it("should return 404 for non-existent project", async () => {

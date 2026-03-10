@@ -73,6 +73,7 @@ const {
   mockEnsureBaseBranchExists,
   mockAssertGitIdentityConfigured,
   mockResolveBaseBranch,
+  mockIsSelfImprovementRunInProgress,
 } = vi.hoisted(() => ({
   mockBroadcastToProject: vi.fn(),
   mockSendAgentOutputToProject: vi.fn(),
@@ -138,6 +139,7 @@ const {
   mockEnsureBaseBranchExists: vi.fn(),
   mockAssertGitIdentityConfigured: vi.fn(),
   mockResolveBaseBranch: vi.fn(),
+  mockIsSelfImprovementRunInProgress: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("../websocket/index.js", () => ({
@@ -379,6 +381,11 @@ vi.mock("../services/feedback.service.js", () => ({
     removeFromInbox: vi.fn().mockResolvedValue(undefined),
     checkAutoResolveOnTaskDone: vi.fn().mockResolvedValue(undefined),
   })),
+}));
+
+vi.mock("../services/self-improvement-runner.service.js", () => ({
+  isSelfImprovementRunInProgress: (...args: unknown[]) =>
+    mockIsSelfImprovementRunInProgress(...args),
 }));
 
 // ─── Tests ───
@@ -1052,6 +1059,18 @@ describe("OrchestratorService (slot-based model)", () => {
       const status = await orchestrator.getStatus(projectId);
       expect(status).toHaveProperty("activeTasks");
       expect(Array.isArray(status.activeTasks)).toBe(true);
+    });
+
+    it("includes selfImprovementRunInProgress from self-improvement runner", async () => {
+      mockTaskStoreReady.mockResolvedValue([]);
+      await orchestrator.ensureRunning(projectId);
+      mockIsSelfImprovementRunInProgress.mockReturnValue(false);
+      const statusInactive = await orchestrator.getStatus(projectId);
+      expect(statusInactive.selfImprovementRunInProgress).toBe(false);
+
+      mockIsSelfImprovementRunInProgress.mockReturnValue(true);
+      const statusActive = await orchestrator.getStatus(projectId);
+      expect(statusActive.selfImprovementRunInProgress).toBe(true);
     });
   });
 

@@ -321,4 +321,6 @@ export interface OrchestratorStatus {
   worktreePath?: string | null;
   /** Feedback items awaiting categorization */
   pendingFeedbackCategorizations?: PendingFeedbackCategorization[];
+  /** True when a self-improvement run is in progress for this project */
+  selfImprovementRunInProgress?: boolean;
 }
