@@ -21,14 +21,17 @@ const BACKEND_PORT = 3100;
 const HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/health`;
 const HEALTH_POLL_MS = 200;
 const HEALTH_TIMEOUT_MS = 30000;
+const BACKEND_FORCE_KILL_MS = 5000;
 const API_BASE = `http://127.0.0.1:${BACKEND_PORT}/api/v1`;
 const TRAY_REFRESH_MS = 10000;
 
 let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;
+let backendShutdownPromise: Promise<void> | null = null;
 let tray: Tray | null = null;
 let trayRefreshInterval: ReturnType<typeof setInterval> | null = null;
 let isQuitting = false;
+let quitAfterBackendStop = false;
 
 app.setName(APP_NAME);
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -183,6 +186,10 @@ function startBackend(): ChildProcess {
     console.error("Backend process error:", err);
   });
   child.on("exit", (code, signal) => {
+    if (backendProcess === child) {
+      backendProcess = null;
+      backendShutdownPromise = null;
+    }
     if (isQuitting) return;
     if (code != null && code !== 0) {
       console.error("Backend exited with code", code);
@@ -408,19 +415,75 @@ function setApplicationMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-function killBackend(): void {
-  if (!backendProcess || backendProcess.killed) return;
+function isProcessAlive(pid: number | undefined): boolean {
+  if (!pid || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function killBackend(): Promise<void> {
+  if (!backendProcess) return Promise.resolve();
+  if (backendShutdownPromise) return backendShutdownPromise;
+
   const proc = backendProcess;
-  backendProcess = null;
-  proc.kill("SIGTERM");
-  const killTimer = setTimeout(() => {
-    try {
-      if (!proc.killed) proc.kill("SIGKILL");
-    } catch {
-      // ignore
+  const pid = proc.pid;
+  backendShutdownPromise = new Promise((resolve) => {
+    let forceKillTimer: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      if (backendProcess === proc) {
+        backendProcess = null;
+      }
+      backendShutdownPromise = null;
+      resolve();
+    };
+
+    if (
+      !pid ||
+      proc.exitCode !== null ||
+      proc.signalCode !== null ||
+      !isProcessAlive(pid)
+    ) {
+      finish();
+      return;
     }
-  }, 5000);
-  proc.once("exit", () => clearTimeout(killTimer));
+
+    const onExit = () => {
+      finish();
+    };
+    proc.once("exit", onExit);
+
+    try {
+      proc.kill("SIGTERM");
+    } catch {
+      finish();
+      return;
+    }
+
+    forceKillTimer = setTimeout(() => {
+      if (isProcessAlive(pid)) {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          // ignore
+        }
+      }
+      if (!isProcessAlive(pid)) {
+        proc.removeListener("exit", onExit);
+        finish();
+      }
+    }, BACKEND_FORCE_KILL_MS);
+  });
+
+  return backendShutdownPromise;
 }
 
 app.on("second-instance", () => {
@@ -467,7 +530,7 @@ app.whenReady().then(async () => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(message);
-    killBackend();
+    await killBackend();
     dialog.showErrorBox(
       "Backend Failed to Start",
       `The backend could not start: ${message}. Check that port ${BACKEND_PORT} is not in use.`
@@ -515,12 +578,20 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
   isQuitting = true;
   globalShortcut.unregisterAll();
   if (trayRefreshInterval) {
     clearInterval(trayRefreshInterval);
     trayRefreshInterval = null;
   }
-  killBackend();
+
+  if (quitAfterBackendStop) return;
+  if (!backendProcess) return;
+
+  event.preventDefault();
+  quitAfterBackendStop = true;
+  void killBackend().finally(() => {
+    app.quit();
+  });
 });
