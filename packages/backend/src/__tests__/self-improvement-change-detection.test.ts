@@ -137,32 +137,24 @@ describe("hasCodeChangesSince", () => {
   });
 
   it("returns false and does not throw when sinceCommitSha is invalid", async () => {
-    await execAsync("git init", { cwd: tempDir });
-    await execAsync("git config user.email test@test.com", { cwd: tempDir });
-    await execAsync("git config user.name Test", { cwd: tempDir });
-    await execAsync("git checkout -b main", { cwd: tempDir });
-    await fs.writeFile(path.join(tempDir, "f"), "a");
-    await execAsync("git add f && git commit -m first", { cwd: tempDir });
+    await initRepo();
+    commitAt("2024-06-01T10:00:00Z", "only");
 
-    await expect(
-      hasRepoChangedSince(tempDir, { sinceCommitSha: "deadbeef1234567890" })
-    ).resolves.toBe(false);
+    const result = await hasCodeChangesSince(repoPath, {
+      sinceCommitSha: "deadbeef1234567890",
+    });
+    expect(result).toBe(false);
   });
 
   it("returns false and does not throw when baseBranch does not exist", async () => {
-    await execAsync("git init", { cwd: tempDir });
-    await execAsync("git config user.email test@test.com", { cwd: tempDir });
-    await execAsync("git config user.name Test", { cwd: tempDir });
-    await execAsync("git checkout -b main", { cwd: tempDir });
-    await fs.writeFile(path.join(tempDir, "f"), "a");
-    await execAsync("git add f && git commit -m first", { cwd: tempDir });
-    const sha = await runGit(tempDir, "git rev-parse HEAD");
+    await initRepo();
+    commitAt("2024-06-01T10:00:00Z", "only");
+    const sha = execSync("git rev-parse HEAD", { cwd: repoPath, encoding: "utf-8" }).trim();
 
-    await expect(
-      hasRepoChangedSince(tempDir, {
-        sinceCommitSha: sha,
-        baseBranch: "branch-does-not-exist",
-      })
-    ).resolves.toBe(false);
+    const result = await hasCodeChangesSince(repoPath, {
+      sinceCommitSha: sha,
+      baseBranch: "branch-does-not-exist",
+    });
+    expect(result).toBe(false);
   });
 });

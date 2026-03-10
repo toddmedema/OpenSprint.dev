@@ -62,7 +62,12 @@ Focus on actionable improvements: code quality, test coverage, documentation, pe
 /** Parse agent response into improvement items. Tries JSON array first, then markdown list; on failure returns one fallback task. */
 export function parseImprovementList(content: string): ImprovementItem[] {
   if (!content || !content.trim()) {
-    return [{ title: "Self-improvement review: parse empty response", description: "Review produced no parseable output." }];
+    return [
+      {
+        title: "Self-improvement review failed to parse — please review agent output",
+        description: "Review produced no parseable output.",
+      },
+    ];
   }
 
   // Try bare JSON array (extractJsonFromAgentResponse only finds {...} objects)
@@ -154,7 +159,12 @@ export function parseImprovementList(content: string): ImprovementItem[] {
   }
   if (items.length > 0) return items;
 
-  return [{ title: "Self-improvement review: parse failed", description: content.slice(0, 500) }];
+  return [
+    {
+      title: "Self-improvement review failed to parse — please review agent output",
+      description: content.slice(0, 500),
+    },
+  ];
 }
 
 /** Per-project in-progress guard: projectIds currently running self-improvement. */
@@ -238,6 +248,7 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
     };
 
     let allItems: ImprovementItem[] = [];
+    let atLeastOneReviewSucceeded = false;
 
     for (const lens of lenses) {
       const angleLabel =
@@ -271,6 +282,7 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
         for (const item of items) {
           allItems.push(item);
         }
+        atLeastOneReviewSucceeded = true;
       } catch (err) {
         log.warn("Self-improvement agent run failed", { projectId, lens, err });
         allItems.push({
@@ -289,23 +301,27 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
       });
       createdCount += 1;
     }
-    const now = new Date().toISOString();
-    let lastCommitSha: string | undefined = options?.lastCommitSha;
-    if (lastCommitSha === undefined) {
-      try {
-        const out = await shellExec("git rev-parse HEAD", { cwd: repoPath });
-        lastCommitSha = out.stdout?.trim() || undefined;
-      } catch {
-        // optional
-      }
-    }
 
-    const current = await getSettingsFromStore(projectId, settings as ProjectSettings);
-    await updateSettingsInStore(projectId, current, (s) => ({
-      ...s,
-      selfImprovementLastRunAt: now,
-      ...(lastCommitSha && { selfImprovementLastCommitSha: lastCommitSha }),
-    }));
+    // Only update lastRun when at least one Reviewer invocation succeeded (no failure/timeout).
+    if (atLeastOneReviewSucceeded) {
+      const now = new Date().toISOString();
+      let lastCommitSha: string | undefined = options?.lastCommitSha;
+      if (lastCommitSha === undefined) {
+        try {
+          const out = await shellExec("git rev-parse HEAD", { cwd: repoPath });
+          lastCommitSha = out.stdout?.trim() || undefined;
+        } catch {
+          // optional
+        }
+      }
+
+      const current = await getSettingsFromStore(projectId, settings as ProjectSettings);
+      await updateSettingsInStore(projectId, current, (s) => ({
+        ...s,
+        selfImprovementLastRunAt: now,
+        ...(lastCommitSha && { selfImprovementLastCommitSha: lastCommitSha }),
+      }));
+    }
 
     return { tasksCreated: createdCount, runId };
   }

@@ -77,7 +77,9 @@ describe("parseImprovementList", () => {
   it("returns one fallback task on parse failure", () => {
     const items = parseImprovementList("not json or list");
     expect(items).toHaveLength(1);
-    expect(items[0]!.title).toMatch(/parse failed|empty response/);
+    expect(items[0]!.title).toBe(
+      "Self-improvement review failed to parse — please review agent output"
+    );
     expect(items[0]!.description).toBeDefined();
   });
 
@@ -89,7 +91,9 @@ describe("parseImprovementList", () => {
   it("returns fallback for empty content", () => {
     const items = parseImprovementList("");
     expect(items).toHaveLength(1);
-    expect(items[0]!.title).toMatch(/empty response/);
+    expect(items[0]!.title).toBe(
+      "Self-improvement review failed to parse — please review agent output"
+    );
   });
 
   it("parses markdown list with bold title and em-dash description", () => {
@@ -239,6 +243,7 @@ describe("SelfImprovementRunnerService", () => {
     const { ProjectService } = await import("../services/project.service.js");
     const { agentService } = await import("../services/agent.service.js");
     const { taskStore } = await import("../services/task-store.service.js");
+    const { updateSettingsInStore } = await import("../services/settings-store.service.js");
     vi.mocked(ProjectService).mockImplementation(
       () =>
         ({
@@ -263,6 +268,20 @@ describe("SelfImprovementRunnerService", () => {
         extra: expect.objectContaining({ source: "self-improvement" }),
       })
     );
+    // On Reviewer failure we do not update lastRunAt.
+    expect(updateSettingsInStore).not.toHaveBeenCalled();
+  });
+
+  it("does not update lastRunAt when all Reviewer invocations fail", async () => {
+    const { agentService } = await import("../services/agent.service.js");
+    const { updateSettingsInStore } = await import("../services/settings-store.service.js");
+    vi.mocked(agentService.invokePlanningAgent).mockRejectedValue(new Error("timeout"));
+
+    const service = new SelfImprovementRunnerService();
+    const result = await service.runSelfImprovement(projectId);
+
+    expect(result).toMatchObject({ tasksCreated: 1, runId: expect.any(String) });
+    expect(updateSettingsInStore).not.toHaveBeenCalled();
   });
 });
 
