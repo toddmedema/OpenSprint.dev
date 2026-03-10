@@ -650,7 +650,6 @@ describe("PlanPhase archive", () => {
     const titleInput = screen.getByRole("textbox", { name: /title/i });
     const headerContainer = titleInput.closest(".shrink-0");
     expect(headerContainer).toBeInTheDocument();
-    expect(headerContainer).toHaveClass("border-b");
     // Scrollable body is the header's next sibling within the sidebar (not main content)
     const scrollableBody = headerContainer?.nextElementSibling;
     expect(scrollableBody).toBeInTheDocument();

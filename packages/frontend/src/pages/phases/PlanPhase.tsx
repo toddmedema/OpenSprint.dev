@@ -1051,7 +1051,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
             >
               {({ header, body }) => (
                 <>
-                  <div className="shrink-0 bg-theme-bg border-b border-theme-border">{header}</div>
+                  <div className="shrink-0 bg-theme-bg">{header}</div>
                   <div
                     ref={sidebarScrollRef}
                     className="flex-1 overflow-y-auto min-h-0 flex flex-col"
@@ -1265,7 +1265,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
             </PlanDetailContent>
           ) : (
             <>
-              <div className="shrink-0 bg-theme-bg border-b border-theme-border p-4 flex items-center justify-between">
+              <div className="shrink-0 bg-theme-bg p-4 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-theme-text truncate">
                   {selectedPlanId ? formatPlanIdAsTitle(selectedPlanId) : "Plan"}
                 </h3>

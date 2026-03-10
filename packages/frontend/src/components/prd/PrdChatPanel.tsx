@@ -143,7 +143,7 @@ export function PrdChatPanel({
           <>
             {/* Chat header — sticky so toggle stays pinned to top when container scrolls */}
             <div
-              className="flex items-center justify-between px-4 py-3 border-b border-theme-border bg-theme-bg shrink-0 sticky top-0 z-10"
+              className="flex items-center justify-between px-4 py-3 bg-theme-bg shrink-0 sticky top-0 z-10 border-b-0"
               data-testid="prd-chat-header"
             >
               <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -263,7 +263,7 @@ export function PrdChatPanel({
   return (
     <div className={containerClass}>
       {/* Chat header */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-theme-border bg-theme-surface shrink-0">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 bg-theme-surface shrink-0 border-b-0">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <SparklesIcon className="w-4 h-4 text-brand-500 shrink-0" />
           <span className="text-sm font-semibold text-theme-text">Chatting with {agentLabel}</span>
