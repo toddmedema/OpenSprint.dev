@@ -89,6 +89,47 @@ interface NormalizedPlannerTask {
   files?: { modify?: string[]; create?: string[]; test?: string[] };
 }
 
+/** First found tasks array in planner JSON, with source path for diagnostics. */
+interface ExtractedPlannerTaskArray {
+  key: "tasks" | "task_list" | "taskList";
+  path: string;
+  value: unknown[];
+}
+
+/**
+ * Find a planner tasks array recursively.
+ * Accepts nested shapes like { result: { tasks: [...] } } in addition to top-level arrays.
+ */
+function findPlannerTaskArray(value: unknown, path = "$"): ExtractedPlannerTaskArray | null {
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      const found = findPlannerTaskArray(value[i], `${path}[${i}]`);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+
+  if (Array.isArray(record.tasks)) {
+    return { key: "tasks", path: `${path}.tasks`, value: record.tasks };
+  }
+  if (Array.isArray(record.task_list)) {
+    return { key: "task_list", path: `${path}.task_list`, value: record.task_list };
+  }
+  if (Array.isArray(record.taskList)) {
+    return { key: "taskList", path: `${path}.taskList`, value: record.taskList };
+  }
+
+  for (const [key, child] of Object.entries(record)) {
+    const found = findPlannerTaskArray(child, `${path}.${key}`);
+    if (found) return found;
+  }
+
+  return null;
+}
+
 /**
  * Normalize a single Planner task: accept title/task_title, description/task_description,
  * priority, and dependsOn/depends_on (strings or indices when tasksArray provided).
@@ -320,7 +361,32 @@ Respond with ONLY valid JSON (you may wrap in a markdown json code block):
     ]
   }
 
+Do not include any prose before or after the JSON. Do not include comments. Use standard JSON with double quotes and no trailing commas.
+
 Task-level complexity: integer 1-10 (1=simplest, 10=most complex) — assign per task based on implementation difficulty (1-3: routine, isolated; 4-6: moderate; 7-10: challenging, many integrations).`;
+
+const TASK_GENERATION_RETRY_PROMPT = `Your previous reply could not be parsed for task generation.
+
+Return ONLY a single valid JSON object, exactly this shape:
+{
+  "tasks": [
+    {
+      "title": "Task title",
+      "description": "Detailed implementation spec with acceptance criteria",
+      "priority": 1,
+      "dependsOn": [],
+      "complexity": 3,
+      "files": { "modify": [], "create": [], "test": [] }
+    }
+  ]
+}
+
+Rules:
+- No markdown fences
+- No explanation text
+- No comments
+- No trailing commas
+- Use double-quoted JSON keys and strings only`;
 
 const AUTO_REVIEW_SYSTEM_PROMPT = `You are an auto-review agent for OpenSprint. After a plan is decomposed from a PRD, you review the generated plans and tasks against the existing codebase to identify what is already implemented.
 
@@ -836,11 +902,21 @@ export class PlanService {
     projectId: string,
     repoPath: string,
     plan: Plan
-  ): Promise<{ count: number; taskRefs: Array<{ id: string; title: string }> }> {
+  ): Promise<{
+    count: number;
+    taskRefs: Array<{ id: string; title: string }>;
+    parseFailureReason?: string;
+  }> {
     const settings = await this.projectService.getSettings(projectId);
     const epicId = plan.metadata.epicId;
 
-    if (!epicId) return { count: 0, taskRefs: [] };
+    if (!epicId) {
+      return {
+        count: 0,
+        taskRefs: [],
+        parseFailureReason: "Plan has no epic to attach generated tasks.",
+      };
+    }
 
     // Build prompt with plan content + PRD context
     const prdContext = await this.buildPrdContext(projectId);
@@ -855,10 +931,56 @@ export class PlanService {
         : TASK_GENERATION_SYSTEM_PROMPT;
     })();
     const taskGenSystemPrompt = `${taskGenPrompt}\n\n${await getCombinedInstructions(repoPath, "planner")}`;
+    const plannerConfig = getAgentForPlanningRole(settings, "planner", plan.metadata.complexity);
+
+    const parseTaskGenerationContent = (
+      content: unknown
+    ):
+      | { ok: true; rawTasks: Array<Record<string, unknown>> }
+      | { ok: false; parseFailureReason: string } => {
+      if (typeof content !== "string" || content.trim().length === 0) {
+        return { ok: false, parseFailureReason: "Planner returned no text content." };
+      }
+
+      const parsed =
+        extractJsonFromAgentResponse<unknown>(content, "tasks") ??
+        extractJsonFromAgentResponse<unknown>(content, "task_list") ??
+        extractJsonFromAgentResponse<unknown>(content, "taskList") ??
+        extractJsonFromAgentResponse<unknown>(content);
+      if (!parsed) {
+        return { ok: false, parseFailureReason: "Planner response was not valid JSON." };
+      }
+
+      const extractedTaskArray = findPlannerTaskArray(parsed);
+      if (!extractedTaskArray) {
+        return {
+          ok: false,
+          parseFailureReason: "Planner JSON did not include a tasks/task_list/taskList array.",
+        };
+      }
+
+      const rawTasks = extractedTaskArray.value.filter(
+        (t): t is Record<string, unknown> => t != null && typeof t === "object"
+      );
+      if (rawTasks.length === 0) {
+        return {
+          ok: false,
+          parseFailureReason:
+            `Planner ${extractedTaskArray.key} at ${extractedTaskArray.path} was empty ` +
+            "or contained no task objects.",
+        };
+      }
+
+      return { ok: true, rawTasks };
+    };
+
+    const initialMessages: Array<{ role: "user" | "assistant"; content: string }> = [
+      { role: "user", content: prompt },
+    ];
     const response = await agentService.invokePlanningAgent({
       projectId,
-      config: getAgentForPlanningRole(settings, "planner", plan.metadata.complexity),
-      messages: [{ role: "user", content: prompt }],
+      config: plannerConfig,
+      messages: initialMessages,
       systemPrompt: taskGenSystemPrompt,
       cwd: repoPath,
       tracking: {
@@ -871,37 +993,64 @@ export class PlanService {
       },
     });
 
-    const content = response?.content;
-    if (content == null || typeof content !== "string") {
-      log.warn("Task generation agent did not return content, shipping without tasks");
-      return { count: 0, taskRefs: [] };
+    let parsedOutput = parseTaskGenerationContent(response?.content);
+    const firstParseFailureReason = !parsedOutput.ok ? parsedOutput.parseFailureReason : undefined;
+    if (!parsedOutput.ok) {
+      log.warn("Task generation parse failed on first attempt; retrying once", {
+        planId: plan.metadata.planId,
+        reason: parsedOutput.parseFailureReason,
+      });
+
+      const retryMessages: Array<{ role: "user" | "assistant"; content: string }> = [
+        ...initialMessages,
+      ];
+      if (typeof response?.content === "string" && response.content.trim().length > 0) {
+        retryMessages.push({ role: "assistant", content: response.content });
+      }
+      retryMessages.push({
+        role: "user",
+        content:
+          `${TASK_GENERATION_RETRY_PROMPT}\n\n` +
+          `Previous parse failure: ${parsedOutput.parseFailureReason}`,
+      });
+
+      const retryResponse = await agentService.invokePlanningAgent({
+        projectId,
+        config: plannerConfig,
+        messages: retryMessages,
+        systemPrompt: taskGenSystemPrompt,
+        cwd: repoPath,
+        tracking: {
+          id: `${agentId}-retry`,
+          projectId,
+          phase: "plan",
+          role: "planner",
+          label: "Task generation",
+          planId: plan.metadata.planId,
+        },
+      });
+      parsedOutput = parseTaskGenerationContent(retryResponse?.content);
     }
 
-    // Parse tasks from agent response — accept "tasks" or "task_list" (Planner may use either)
-    const parsed =
-      extractJsonFromAgentResponse<{ tasks?: unknown[]; task_list?: unknown[] }>(
-        content,
-        "tasks"
-      ) ??
-      extractJsonFromAgentResponse<{ tasks?: unknown[]; task_list?: unknown[] }>(
-        content,
-        "task_list"
-      );
-    if (!parsed) {
-      log.warn("Task generation agent did not return valid JSON, shipping without tasks");
-      return { count: 0, taskRefs: [] };
+    if (!parsedOutput.ok) {
+      const finalParseFailureReason =
+        parsedOutput.parseFailureReason === "Planner returned no text content." &&
+        firstParseFailureReason
+          ? firstParseFailureReason
+          : parsedOutput.parseFailureReason;
+      log.warn("Task generation agent did not return valid task JSON after retry", {
+        planId: plan.metadata.planId,
+        reason: finalParseFailureReason,
+        retryReason: parsedOutput.parseFailureReason,
+      });
+      return {
+        count: 0,
+        taskRefs: [],
+        parseFailureReason: finalParseFailureReason,
+      };
     }
 
-    const rawTasksInput = (parsed.tasks ?? parsed.task_list ?? []) as unknown[];
-    const rawTasks = Array.isArray(rawTasksInput)
-      ? rawTasksInput.filter(
-          (t): t is Record<string, unknown> => t != null && typeof t === "object"
-        )
-      : [];
-    if (rawTasks.length === 0) {
-      log.warn("Task generation returned no tasks");
-      return { count: 0, taskRefs: [] };
-    }
+    const rawTasks = parsedOutput.rawTasks;
 
     // Normalize: accept camelCase and snake_case from Planner (title/task_title, dependsOn/depends_on, indices)
     const tasks = rawTasks.map((t) => normalizePlannerTask(t, rawTasks));
@@ -999,10 +1148,12 @@ export class PlanService {
 
     let tasksGenerated = 0;
     let _taskRefs: Array<{ id: string; title: string }> = [];
+    let parseFailureReason: string | undefined;
     try {
       const genResult = await this.generateAndCreateTasks(projectId, repoPath, plan);
       tasksGenerated = genResult.count;
       _taskRefs = genResult.taskRefs;
+      parseFailureReason = genResult.parseFailureReason;
       if (tasksGenerated > 0) {
         const updatedPlan = await this.getPlan(projectId, planId);
         await this.autoReviewPlanAgainstRepo(projectId, [updatedPlan]);
@@ -1013,10 +1164,14 @@ export class PlanService {
     }
 
     if (tasksGenerated === 0) {
+      const reason = parseFailureReason?.trim();
       throw new AppError(
         400,
         ErrorCodes.DECOMPOSE_PARSE_FAILED,
-        "Planner did not return valid tasks. Try refining the plan content."
+        reason
+          ? `Planner did not return valid tasks (${reason}). Try refining the plan content.`
+          : "Planner did not return valid tasks. Try refining the plan content.",
+        reason ? { parseFailureReason: reason } : undefined
       );
     }
 

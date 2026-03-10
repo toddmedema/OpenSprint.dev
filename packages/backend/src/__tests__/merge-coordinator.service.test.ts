@@ -532,6 +532,17 @@ describe("MergeCoordinatorService", () => {
     const pushMainToOrigin =
       mockHost.branchManager.pushMainToOrigin as unknown as ReturnType<typeof vi.fn>;
     const rebaseAbort = mockHost.branchManager.rebaseAbort as unknown as ReturnType<typeof vi.fn>;
+    mockInspectGitRepoState.mockResolvedValue({
+      isGitRepo: true,
+      hasHead: true,
+      currentBranch: "main",
+      baseBranch: "main",
+      hasOrigin: true,
+      originReachable: true,
+      remoteMode: "remote",
+      originUrl: "git@github.com:opensprint/opensprint.git",
+      identity: { name: "Test", email: "test@test.com", valid: true },
+    });
 
     pushMain.mockRejectedValueOnce(new RebaseConflictError(["first.ts"]));
     rebaseContinue
@@ -570,6 +581,17 @@ describe("MergeCoordinatorService", () => {
       mockHost.branchManager.pushMainToOrigin as unknown as ReturnType<typeof vi.fn>;
     const rebaseAbort = mockHost.branchManager.rebaseAbort as unknown as ReturnType<typeof vi.fn>;
     const merger = mockHost.runMergerAgentAndWait as unknown as ReturnType<typeof vi.fn>;
+    mockInspectGitRepoState.mockResolvedValue({
+      isGitRepo: true,
+      hasHead: true,
+      currentBranch: "main",
+      baseBranch: "main",
+      hasOrigin: true,
+      originReachable: true,
+      remoteMode: "remote",
+      originUrl: "git@github.com:opensprint/opensprint.git",
+      identity: { name: "Test", email: "test@test.com", valid: true },
+    });
 
     pushMain.mockRejectedValueOnce(new RebaseConflictError(["first.ts"]));
     rebaseContinue.mockRejectedValue(new RebaseConflictError(["next.ts"]));

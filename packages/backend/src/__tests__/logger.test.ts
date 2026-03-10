@@ -18,12 +18,14 @@ describe("createLogger", () => {
   });
 
   it("prefixes messages with [namespace]", () => {
+    process.env.LOG_LEVEL = "info";
     const log = createLogger("orchestrator");
     log.info("Test message");
     expect(console.log).toHaveBeenCalledWith("[orchestrator] Test message");
   });
 
   it("appends context as JSON when provided", () => {
+    process.env.LOG_LEVEL = "info";
     const log = createLogger("plan");
     log.info("Task created", { taskId: "bd-a3f8.1", projectId: "proj-1" });
     expect(console.log).toHaveBeenCalledWith(
@@ -32,6 +34,7 @@ describe("createLogger", () => {
   });
 
   it("does not append empty context", () => {
+    process.env.LOG_LEVEL = "info";
     const log = createLogger("feedback");
     log.info("No context", {});
     expect(console.log).toHaveBeenCalledWith("[feedback] No context");
@@ -57,8 +60,8 @@ describe("createLogger", () => {
     expect(console.log).toHaveBeenCalledWith("[test] Debug message");
   });
 
-  it("debug is suppressed when LOG_LEVEL=info (default)", () => {
-    delete process.env.LOG_LEVEL;
+  it("debug is suppressed when LOG_LEVEL=info", () => {
+    process.env.LOG_LEVEL = "info";
     resetLogLevelCache();
     const log = createLogger("test");
     log.debug("Debug message");

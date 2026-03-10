@@ -27,14 +27,22 @@ vi.mock("../services/beads.service.js", () => ({
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/task-store.service.js")>();
-  const { createTestPostgresClient } = await import("./test-db-helper.js");
+  const { createTestPostgresClient, truncateTestDbTables } = await import("./test-db-helper.js");
   const dbResult = await createTestPostgresClient();
   if (!dbResult) {
-    return { ...actual, taskStore: null, _postgresAvailable: false };
+    return { ...actual, taskStore: null, _postgresAvailable: false, _resetSharedDb: () => {} };
   }
   const store = new actual.TaskStoreService(dbResult.client);
   await store.init();
-  return { ...actual, taskStore: store, _postgresAvailable: true };
+  return {
+    ...actual,
+    taskStore: store,
+    _postgresAvailable: true,
+    _testPool: dbResult.pool,
+    _resetSharedDb: async () => {
+      await truncateTestDbTables(dbResult.client);
+    },
+  };
 });
 
 const mockInvokePlanningAgent = vi.fn();
@@ -88,10 +96,20 @@ const chatRoutePostgresOk =
 describe.skipIf(!chatRoutePostgresOk)("Chat REST API", () => {
   let app: ReturnType<typeof createApp>;
   let projectService: ProjectService;
-  let tempDir: string;
+  let suiteTempDir: string;
+  let currentRepoPath: string;
   let projectId: string;
   let repoPath: string;
   let originalHome: string | undefined;
+  let caseCounter = 0;
+
+  beforeAll(async () => {
+    app = createApp();
+    projectService = new ProjectService();
+    suiteTempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-chat-route-suite-"));
+    originalHome = process.env.HOME;
+    process.env.HOME = suiteTempDir;
+  });
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -99,12 +117,13 @@ describe.skipIf(!chatRoutePostgresOk)("Chat REST API", () => {
       content: "I'd be happy to help you design your product. What are your main goals?",
     });
 
-    app = createApp();
-    projectService = new ProjectService();
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-chat-route-test-"));
-    originalHome = process.env.HOME;
-    process.env.HOME = tempDir;
-    repoPath = path.join(tempDir, "my-project");
+    const mod = (await import("../services/task-store.service.js")) as {
+      _resetSharedDb?: () => void | Promise<void>;
+    };
+    await mod._resetSharedDb?.();
+
+    currentRepoPath = path.join(suiteTempDir, `my-project-${++caseCounter}`);
+    repoPath = currentRepoPath;
 
     const project = await projectService.createProject({
       name: "Test Project",
@@ -118,12 +137,20 @@ describe.skipIf(!chatRoutePostgresOk)("Chat REST API", () => {
   });
 
   afterEach(async () => {
-    process.env.HOME = originalHome;
     try {
-      await fs.rm(tempDir, { recursive: true, force: true });
+      await fs.rm(currentRepoPath, { recursive: true, force: true });
     } catch {
       // Ignore ENOTEMPTY and similar on some systems when removing .git
     }
+  });
+
+  afterAll(async () => {
+    process.env.HOME = originalHome;
+    await fs.rm(suiteTempDir, { recursive: true, force: true });
+    const mod = (await import("../services/task-store.service.js")) as {
+      _testPool?: { end: () => Promise<void> };
+    };
+    if (mod._testPool) await mod._testPool.end();
   });
 
   it("GET /projects/:id/chat/history should return empty conversation when none exists", async () => {

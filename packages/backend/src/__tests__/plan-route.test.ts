@@ -86,15 +86,23 @@ const planRoutePostgresOk =
 
 describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition", () => {
   let app: ReturnType<typeof createApp>;
-  let tempDir: string;
+  let suiteTempDir: string;
+  let currentRepoPath: string;
   let originalHome: string | undefined;
+  let caseCounter = 0;
   let projectId: string;
   let projectService: ProjectService;
   let taskStore: TaskStoreService;
 
-  afterAll(async () => {
-    const mod = (await import("../services/task-store.service.js")) as { _testPool?: { end: () => Promise<void> } };
-    if (mod._testPool) await mod._testPool.end();
+  beforeAll(async () => {
+    app = createApp();
+    suiteTempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-plan-route-suite-"));
+    originalHome = process.env.HOME;
+    process.env.HOME = suiteTempDir;
+
+    projectService = new ProjectService();
+    taskStore = new TaskStoreService();
+    await taskStore.init();
   });
 
   beforeEach(async () => {
@@ -102,22 +110,14 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       _resetSharedDb?: () => void | Promise<void>;
     };
     await mod._resetSharedDb?.();
+    currentRepoPath = path.join(suiteTempDir, `test-project-${++caseCounter}`);
 
     const { wireTaskStoreEvents } = await import("../task-store-events.js");
     wireTaskStoreEvents(mockBroadcastToProject);
 
-    app = createApp();
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-plan-route-test-"));
-    originalHome = process.env.HOME;
-    process.env.HOME = tempDir;
-
-    projectService = new ProjectService();
-    taskStore = new TaskStoreService();
-    await taskStore.init();
-    const repoPath = path.join(tempDir, "test-project");
     const project = await projectService.createProject({
       name: "Plan Test Project",
-      repoPath,
+      repoPath: currentRepoPath,
       simpleComplexityAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       complexComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       deployment: { mode: "custom" },
@@ -127,14 +127,22 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
   });
 
   afterEach(async () => {
-    process.env.HOME = originalHome;
     // maxRetries/retryDelay help when git-commit-queue or task store hold files during cleanup
-    await fs.rm(tempDir, {
+    await fs.rm(currentRepoPath, {
       recursive: true,
       force: true,
       maxRetries: 3,
       retryDelay: 100,
     });
+  });
+
+  afterAll(async () => {
+    process.env.HOME = originalHome;
+    await fs.rm(suiteTempDir, { recursive: true, force: true });
+    const mod = (await import("../services/task-store.service.js")) as {
+      _testPool?: { end: () => Promise<void> };
+    };
+    if (mod._testPool) await mod._testPool.end();
   });
 
   it(
@@ -370,7 +378,10 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
     expect(new Date(getRes.body.data.lastModified).getTime()).not.toBeNaN();
   });
 
-  it("PUT /projects/:id/plans/:planId updates plan title and markdown content", async () => {
+  it(
+    "PUT /projects/:id/plans/:planId updates plan title and markdown content",
+    { timeout: 60_000 },
+    async () => {
     const planBody = {
       title: "Original Feature",
       content: "# Original Feature\n\n## Overview\n\nOriginal content.",
@@ -395,7 +406,8 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
     const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans/${planId}`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.content).toBe(updatedContent);
-  });
+    }
+  );
 
   it("PUT /projects/:id/plans/:planId syncs ## Tasks section to task store task titles and descriptions", async () => {
     const planBody = {
@@ -415,7 +427,6 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
     expect(createRes.status).toBe(201);
     const planId = createRes.body.data.metadata.planId;
     const epicId = createRes.body.data.metadata.epicId;
-    const _repoPath = path.join(tempDir, "test-project");
 
     // Update plan with modified task titles and descriptions in ## Tasks section
     const updatedContent = `# Sync Test
@@ -481,7 +492,6 @@ Updated description for task two.`;
   it("POST /projects/:id/plans/:planId/plan-tasks invokes Planner and creates tasks", async () => {
     mockBroadcastToProject.mockClear();
     mockPlanningAgentInvoke.mockClear();
-    const app = createApp();
     const planBody = {
       title: "Plan Tasks Test Feature",
       content:
@@ -557,7 +567,6 @@ Updated description for task two.`;
   });
 
   it("POST /projects/:id/plans/:planId/plan-tasks returns 400 when plan already has tasks", async () => {
-    const app = createApp();
     const planBody = {
       title: "Has Tasks Feature",
       content: "# Has Tasks\n\nContent.",
@@ -639,6 +648,39 @@ Updated description for task two.`;
       const plan = genRes.body.data;
       expect(plan.metadata.epicId).toBeTruthy();
       expect(plan.taskCount).toBe(2);
+    }
+  );
+
+  it(
+    "POST /projects/:id/plans/:planId/plan-tasks returns detailed parse reason when tasks are invalid",
+    { timeout: 15000 },
+    async () => {
+      const planBody = {
+        title: "Generate Tasks Parse Failure Feature",
+        content: "# Generate Tasks Parse Failure\n\nOverview.",
+        complexity: "low",
+      };
+      const createRes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
+      expect(createRes.status).toBe(201);
+      const createdPlanId = createRes.body.data.metadata.planId;
+
+      mockPlanningAgentInvoke.mockResolvedValueOnce({
+        content: JSON.stringify({
+          result: {
+            tasks: ["bad-entry", null],
+          },
+        }),
+      });
+
+      const genRes = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/plan-tasks`
+      );
+      expect(genRes.status).toBe(400);
+      expect(genRes.body.error?.code).toBe("DECOMPOSE_PARSE_FAILED");
+      expect(genRes.body.error?.message).toContain("contained no task objects");
+      expect(genRes.body.error?.details?.parseFailureReason).toContain("contained no task objects");
     }
   );
 

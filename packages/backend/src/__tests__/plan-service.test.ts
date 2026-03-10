@@ -663,6 +663,183 @@ describe("PlanService createWithRetry usage", () => {
     );
   });
 
+  it("generateAndCreateTasks accepts taskList (camelCase) from Planner", async () => {
+    mockInvokePlanningAgent.mockImplementation((opts: { tracking?: { label?: string } }) => {
+      if (opts.tracking?.label === "Task generation") {
+        return Promise.resolve({
+          content: JSON.stringify({
+            taskList: [
+              { title: "Task One", description: "First", priority: 1, dependsOn: [] },
+              { title: "Task Two", description: "Second", priority: 2, dependsOn: ["Task One"] },
+            ],
+          }),
+        });
+      }
+      return Promise.resolve({ content: JSON.stringify({ complexity: "medium" }) });
+    });
+    mockTaskStoreCreateMany.mockResolvedValue([
+      { id: "epic-123.1", title: "Task One", type: "task" },
+      { id: "epic-123.2", title: "Task Two", type: "task" },
+    ]);
+    mockTaskStoreAddDependencies.mockResolvedValue(undefined);
+
+    const plan = await planService.createPlan(projectId, {
+      title: "TaskList Plan",
+      content: "# TaskList Plan\n\n## Overview\n\nContent.",
+      complexity: "low",
+    });
+
+    const result = await planService.planTasks(projectId, plan.metadata.planId);
+
+    expect(result.metadata.epicId).toBeTruthy();
+    expect(mockTaskStoreCreateMany).toHaveBeenCalledWith(
+      projectId,
+      expect.arrayContaining([
+        expect.objectContaining({ title: "Task One", description: "First" }),
+        expect.objectContaining({ title: "Task Two", description: "Second" }),
+      ])
+    );
+  });
+
+  it("planTasks retries task generation once in same conversation context", async () => {
+    const firstReply = "I drafted tasks, but not as JSON.";
+    mockInvokePlanningAgent.mockImplementation((opts: {
+      tracking?: { label?: string };
+      messages?: Array<{ role: string; content: string }>;
+    }) => {
+      if (opts.tracking?.label === "Task generation") {
+        const userMessages = opts.messages?.filter((m) => m.role === "user") ?? [];
+        if (userMessages.length > 1) {
+          return Promise.resolve({
+            content: JSON.stringify({
+              tasks: [
+                { title: "Retry Task A", description: "First", priority: 1, dependsOn: [] },
+                {
+                  title: "Retry Task B",
+                  description: "Second",
+                  priority: 2,
+                  dependsOn: ["Retry Task A"],
+                },
+              ],
+            }),
+          });
+        }
+        return Promise.resolve({ content: firstReply });
+      }
+      return Promise.resolve({ content: JSON.stringify({ taskIdsToClose: [] }) });
+    });
+    mockTaskStoreCreateMany.mockResolvedValue([
+      { id: "epic-123.1", title: "Retry Task A", type: "task" },
+      { id: "epic-123.2", title: "Retry Task B", type: "task" },
+    ]);
+    mockTaskStoreAddDependencies.mockResolvedValue(undefined);
+
+    const plan = await planService.createPlan(projectId, {
+      title: "Retry Plan",
+      content: "# Retry Plan\n\n## Overview\n\nContent.",
+      complexity: "low",
+    });
+
+    const result = await planService.planTasks(projectId, plan.metadata.planId);
+
+    expect(result.metadata.epicId).toBeTruthy();
+    expect(mockTaskStoreCreateMany).toHaveBeenCalled();
+    const taskGenCalls = mockInvokePlanningAgent.mock.calls
+      .map((call) => call[0] as { tracking?: { label?: string }; messages?: unknown[] })
+      .filter((opts) => opts.tracking?.label === "Task generation");
+    expect(taskGenCalls.length).toBe(2);
+    const retryMessages = taskGenCalls[1]?.messages as Array<{ role: string; content: string }>;
+    expect(retryMessages).toHaveLength(3);
+    expect(retryMessages[1]?.role).toBe("assistant");
+    expect(retryMessages[1]?.content).toBe(firstReply);
+    expect(retryMessages[2]?.role).toBe("user");
+    expect(retryMessages[2]?.content).toContain("Return ONLY a single valid JSON object");
+    expect(retryMessages[2]?.content).toContain("Previous parse failure");
+  });
+
+  it("generateAndCreateTasks accepts nested planner tasks arrays", async () => {
+    mockInvokePlanningAgent.mockImplementation((opts: { tracking?: { label?: string } }) => {
+      if (opts.tracking?.label === "Task generation") {
+        return Promise.resolve({
+          content: JSON.stringify({
+            result: {
+              planner_output: {
+                tasks: [
+                  { title: "Nested Task A", description: "First", priority: 1, dependsOn: [] },
+                  {
+                    title: "Nested Task B",
+                    description: "Second",
+                    priority: 2,
+                    dependsOn: ["Nested Task A"],
+                  },
+                ],
+              },
+            },
+          }),
+        });
+      }
+      return Promise.resolve({ content: JSON.stringify({ complexity: "medium" }) });
+    });
+    mockTaskStoreCreateMany.mockResolvedValue([
+      { id: "epic-123.1", title: "Nested Task A", type: "task" },
+      { id: "epic-123.2", title: "Nested Task B", type: "task" },
+    ]);
+    mockTaskStoreAddDependencies.mockResolvedValue(undefined);
+
+    const plan = await planService.createPlan(projectId, {
+      title: "Nested Tasks Plan",
+      content: "# Nested Tasks Plan\n\n## Overview\n\nContent.",
+      complexity: "low",
+    });
+
+    const result = await planService.planTasks(projectId, plan.metadata.planId);
+
+    expect(result.metadata.epicId).toBeTruthy();
+    expect(mockTaskStoreCreateMany).toHaveBeenCalledWith(
+      projectId,
+      expect.arrayContaining([
+        expect.objectContaining({ title: "Nested Task A", description: "First" }),
+        expect.objectContaining({ title: "Nested Task B", description: "Second" }),
+      ])
+    );
+    expect(mockTaskStoreAddDependencies).toHaveBeenCalled();
+  });
+
+  it("planTasks includes parse failure reason when planner tasks are invalid", async () => {
+    mockInvokePlanningAgent.mockImplementation((opts: { tracking?: { label?: string } }) => {
+      if (opts.tracking?.label === "Task generation") {
+        return Promise.resolve({
+          content: JSON.stringify({
+            result: {
+              tasks: ["not-an-object", null, 42],
+            },
+          }),
+        });
+      }
+      return Promise.resolve({ content: JSON.stringify({ complexity: "medium" }) });
+    });
+
+    const plan = await planService.createPlan(projectId, {
+      title: "Invalid Planner Tasks Plan",
+      content: "# Invalid Planner Tasks Plan\n\n## Overview\n\nContent.",
+      complexity: "low",
+    });
+
+    await expect(planService.planTasks(projectId, plan.metadata.planId)).rejects.toMatchObject({
+      statusCode: 400,
+      code: "DECOMPOSE_PARSE_FAILED",
+      message: expect.stringContaining("contained no task objects"),
+      details: expect.objectContaining({
+        parseFailureReason: expect.stringContaining("contained no task objects"),
+      }),
+    });
+    const taskGenCalls = mockInvokePlanningAgent.mock.calls
+      .map((call) => call[0] as { tracking?: { label?: string } })
+      .filter((opts) => opts.tracking?.label === "Task generation");
+    expect(taskGenCalls.length).toBe(2);
+    expect(mockTaskStoreCreateMany).not.toHaveBeenCalled();
+  });
+
   it("reshipPlan (re-execute path) uses createWithRetry for delta tasks (no gate)", async () => {
     mockInvokePlanningAgent.mockImplementation((opts: { tracking?: { label?: string } }) => {
       if (opts.tracking?.label === "Re-execute: audit & delta tasks") {

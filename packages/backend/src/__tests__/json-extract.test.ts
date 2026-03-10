@@ -121,6 +121,28 @@ Let me know if you want changes.`;
       expect(result!.x).toBe(42);
     });
 
+    it("recovers JSON-like output when string values contain raw newlines", () => {
+      const content = `\`\`\`json
+{
+  "title": "Self-Improvement Code Review Setting",
+  "content": "# Self-Improvement Code Review Setting
+
+## Overview
+Raise review quality with stricter defaults.",
+  "complexity": "medium",
+  "mockups": [{ "title": "Settings", "content": "+-----------------+" }]
+}
+\`\`\``;
+      const result = extractJsonFromAgentResponse<{ title: string; content: string }>(
+        content,
+        "title"
+      );
+      expect(result).not.toBeNull();
+      expect(result!.title).toBe("Self-Improvement Code Review Setting");
+      expect(result!.content).toContain("## Overview");
+      expect(result!.content).toContain("stricter defaults");
+    });
+
     it("ignores braces inside JSON string values", () => {
       const content =
         '{"title":"Feature","content":"# Heading\\n\\nExample payload: {\\\\\\"ok\\\\\\":true}\\n\\n## Acceptance Criteria\\n- done","complexity":"medium","mockups":[{"title":"Wireframe","content":"{ box }"}]}';

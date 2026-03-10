@@ -9,6 +9,10 @@ const parallelism =
   typeof os.availableParallelism === "function"
     ? os.availableParallelism()
     : os.cpus().length;
+const coverageReporters =
+  process.env.CI === "true" || process.env.CI === "1"
+    ? ["text-summary", "json-summary", "lcovonly"]
+    : ["text", "html", "json-summary"];
 
 export default defineConfig({
   resolve: {
@@ -48,6 +52,7 @@ export default defineConfig({
     coverage: {
       all: true,
       provider: "v8",
+      reporter: coverageReporters,
       include: [
         "src/services/**/*.ts",
         "src/routes/**/*.ts",

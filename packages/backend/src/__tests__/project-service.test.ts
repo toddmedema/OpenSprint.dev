@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -55,14 +55,21 @@ async function readSettingsFromGlobalStore(
 
 describe.skipIf(!projectServicePostgresOk)("ProjectService", () => {
   let projectService: ProjectService;
+  let suiteTempDir: string;
   let tempDir: string;
   let originalHome: string | undefined;
 
-  beforeEach(async () => {
-    projectService = new ProjectService();
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-project-test-"));
+  beforeAll(async () => {
+    suiteTempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-project-suite-"));
     originalHome = process.env.HOME;
-    process.env.HOME = tempDir;
+    process.env.HOME = suiteTempDir;
+  });
+
+  beforeEach(async () => {
+    await fs.rm(suiteTempDir, { recursive: true, force: true });
+    await fs.mkdir(suiteTempDir, { recursive: true });
+    tempDir = suiteTempDir;
+    projectService = new ProjectService();
     await setGlobalSettings({
       apiKeys: {
         ANTHROPIC_API_KEY: [{ id: "test-ant", value: "sk-ant-test" }],
@@ -71,9 +78,9 @@ describe.skipIf(!projectServicePostgresOk)("ProjectService", () => {
     });
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     process.env.HOME = originalHome;
-    await fs.rm(tempDir, { recursive: true, force: true });
+    await fs.rm(suiteTempDir, { recursive: true, force: true });
   });
 
   it("should create a project with full setup flow", async () => {

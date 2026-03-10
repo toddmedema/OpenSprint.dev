@@ -42,7 +42,9 @@ const { mockDbClient } = vi.hoisted(() => {
     query: vi.fn().mockResolvedValue([]),
     queryOne: vi.fn().mockResolvedValue(undefined),
     execute: vi.fn().mockResolvedValue(0),
-    runInTransaction: vi.fn().mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(client)),
+    runInTransaction: vi
+      .fn()
+      .mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(client)),
   };
   return { mockDbClient: client };
 });
@@ -60,7 +62,9 @@ vi.mock("../services/task-store.service.js", () => ({
     addDependency: vi.fn().mockResolvedValue(undefined),
     syncForPush: vi.fn().mockResolvedValue(undefined),
     getDb: vi.fn().mockResolvedValue(mockDbClient),
-    runWrite: vi.fn().mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(mockDbClient)),
+    runWrite: vi
+      .fn()
+      .mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(mockDbClient)),
   },
   TaskStoreService: vi.fn(),
   SCHEMA_SQL: "",
@@ -161,6 +165,131 @@ describe("AgentService", () => {
         undefined,
         undefined
       );
+    });
+  });
+
+  describe("agent_stats recording", () => {
+    it("records planning invocations with tracking role into agent_stats", async () => {
+      mockGetNextKey.mockResolvedValue({ key: "sk-ant-test", keyId: "k1", source: "global" });
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: "text", text: "Plan response" }],
+      });
+
+      await service.invokePlanningAgent({
+        projectId: "proj-plan-stats",
+        config: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+        messages: [{ role: "user", content: "Plan this" }],
+        tracking: {
+          id: "plan-run-1",
+          projectId: "proj-plan-stats",
+          phase: "plan",
+          role: "planner",
+          label: "Planner run",
+        },
+      });
+
+      const insertCall = mockDbClient.execute.mock.calls.find(
+        (call) => typeof call[0] === "string" && call[0].includes("INSERT INTO agent_stats")
+      );
+      expect(insertCall).toBeDefined();
+      expect(insertCall?.[1]).toEqual(
+        expect.arrayContaining([
+          "proj-plan-stats",
+          "plan-run-1",
+          "planner-claude-claude-sonnet-4",
+          "planner",
+          "claude-sonnet-4",
+          1,
+          "success",
+        ])
+      );
+    });
+
+    it("records merger runs via invokeCodingAgent role tracking", () => {
+      mockSpawnWithTaskFile.mockImplementation(
+        (
+          _config: unknown,
+          _path: unknown,
+          _cwd: unknown,
+          _onOutput: unknown,
+          onExit: (code: number | null) => void
+        ) => {
+          onExit(0);
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      service.invokeMergerAgent(
+        "/tmp/prompt.md",
+        { type: "cursor", model: null, cliCommand: null },
+        {
+          cwd: "/tmp/repo",
+          onOutput: vi.fn(),
+          onExit: vi.fn(),
+          projectId: "proj-merge-stats",
+          tracking: {
+            id: "merge-run-1",
+            projectId: "proj-merge-stats",
+            phase: "execute",
+            role: "merger",
+            label: "Merger",
+          },
+        }
+      );
+
+      const insertCall = mockDbClient.execute.mock.calls.find(
+        (call) => typeof call[0] === "string" && call[0].includes("INSERT INTO agent_stats")
+      );
+      expect(insertCall).toBeDefined();
+      expect(insertCall?.[1]).toEqual(
+        expect.arrayContaining([
+          "proj-merge-stats",
+          "merge-run-1",
+          "merger-cursor-default",
+          "merger",
+          "unknown",
+          1,
+          "success",
+        ])
+      );
+    });
+
+    it("does not duplicate coder/reviewer task stats from invokeCodingAgent wrapper", () => {
+      mockSpawnWithTaskFile.mockImplementation(
+        (
+          _config: unknown,
+          _path: unknown,
+          _cwd: unknown,
+          _onOutput: unknown,
+          onExit: (code: number | null) => void
+        ) => {
+          onExit(0);
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      service.invokeCodingAgent(
+        "/tmp/prompt.md",
+        { type: "cursor", model: null, cliCommand: null },
+        {
+          cwd: "/tmp/repo",
+          onOutput: vi.fn(),
+          onExit: vi.fn(),
+          projectId: "proj-coder-stats",
+          tracking: {
+            id: "coder-run-1",
+            projectId: "proj-coder-stats",
+            phase: "execute",
+            role: "coder",
+            label: "Coder",
+          },
+        }
+      );
+
+      const insertCalls = mockDbClient.execute.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0].includes("INSERT INTO agent_stats")
+      );
+      expect(insertCalls).toHaveLength(0);
     });
   });
 
@@ -331,12 +460,8 @@ describe("AgentService", () => {
         baseBranch: "develop",
       });
 
-      const logCalls = mockShellExec.mock.calls.filter((c) =>
-        String(c[0]).includes("git log")
-      );
-      const diffCalls = mockShellExec.mock.calls.filter((c) =>
-        String(c[0]).includes("git diff")
-      );
+      const logCalls = mockShellExec.mock.calls.filter((c) => String(c[0]).includes("git log"));
+      const diffCalls = mockShellExec.mock.calls.filter((c) => String(c[0]).includes("git diff"));
       expect(logCalls.some((c) => String(c[0]).includes("develop"))).toBe(true);
       expect(diffCalls.some((c) => String(c[0]).includes("develop"))).toBe(true);
     });

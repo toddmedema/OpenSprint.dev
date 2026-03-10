@@ -28,6 +28,10 @@ import {
   ENV_FALLBACK_KEY_ID,
 } from "./api-key-resolver.service.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
+import { taskStore } from "./task-store.service.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("agent-service");
 
 /** Message for planning agent (user or assistant) */
 export interface PlanningMessage {
@@ -178,6 +182,15 @@ export interface RunMergerAgentOptions {
   baseBranch?: string;
 }
 
+type AgentRunStatParams = {
+  tracking?: AgentTrackingInfo;
+  config: AgentConfig;
+  projectId?: string;
+  startedAt: string;
+  completedAt: string;
+  outcome: "success" | "failed";
+};
+
 /** Create a handle for a detached agent process group after backend restart. */
 export function createProcessGroupHandle(processGroupLeaderPid: number): CodingAgentHandle {
   return {
@@ -212,6 +225,7 @@ export function createProcessGroupHandle(processGroupLeaderPid: number): CodingA
 export class AgentService {
   private agentClient = new AgentClient();
   private static readonly MERGER_MAIN_LOG_LIMIT = 5;
+  private static readonly AGENT_STATS_RETENTION = 500;
 
   /**
    * Invoke the planning agent with messages.
@@ -220,6 +234,8 @@ export class AgentService {
    */
   async invokePlanningAgent(options: InvokePlanningAgentOptions): Promise<PlanningAgentResponse> {
     const { tracking } = options;
+    const startedAt = new Date().toISOString();
+    let outcome: "success" | "failed" = "failed";
     if (tracking) {
       activeAgentsService.register(
         tracking.id,
@@ -227,7 +243,7 @@ export class AgentService {
         tracking.phase,
         tracking.role,
         tracking.label,
-        new Date().toISOString(),
+        startedAt,
         tracking.branchName,
         tracking.planId,
         undefined,
@@ -235,8 +251,22 @@ export class AgentService {
       );
     }
     try {
-      return await this._invokePlanningAgentInner(options);
+      const result = await this._invokePlanningAgentInner(options);
+      outcome = "success";
+      return result;
     } finally {
+      const completedAt = new Date().toISOString();
+      const recordAgentRunStat = (this as { recordAgentRunStat?: unknown }).recordAgentRunStat;
+      if (typeof recordAgentRunStat === "function") {
+        await recordAgentRunStat.call(this, {
+          tracking,
+          config: options.config,
+          projectId: options.projectId,
+          startedAt,
+          completedAt,
+          outcome,
+        } satisfies AgentRunStatParams);
+      }
       if (tracking) activeAgentsService.unregister(tracking.id);
     }
   }
@@ -298,6 +328,7 @@ export class AgentService {
     options: InvokeCodingAgentOptions
   ): CodingAgentHandle {
     const { tracking } = options;
+    const startedAt = new Date().toISOString();
     if (tracking) {
       activeAgentsService.register(
         tracking.id,
@@ -305,7 +336,7 @@ export class AgentService {
         tracking.phase,
         tracking.role,
         tracking.label,
-        new Date().toISOString(),
+        startedAt,
         tracking.branchName,
         tracking.planId,
         undefined,
@@ -314,12 +345,32 @@ export class AgentService {
     }
 
     const originalOnExit = options.onExit;
-    const wrappedOnExit = tracking
-      ? (code: number | null) => {
-          activeAgentsService.unregister(tracking.id);
-          return originalOnExit(code);
-        }
-      : originalOnExit;
+    const shouldRecordStats =
+      tracking != null && tracking.role !== "coder" && tracking.role !== "reviewer";
+    const wrappedOnExit =
+      tracking || shouldRecordStats
+        ? (code: number | null) => {
+            if (shouldRecordStats) {
+              const completedAt = new Date().toISOString();
+              const recordAgentRunStat = (this as { recordAgentRunStat?: unknown })
+                .recordAgentRunStat;
+              if (typeof recordAgentRunStat === "function") {
+                void recordAgentRunStat.call(this, {
+                  tracking,
+                  config,
+                  projectId: tracking?.projectId ?? options.projectId,
+                  startedAt,
+                  completedAt,
+                  outcome: code === 0 ? "success" : "failed",
+                } satisfies AgentRunStatParams);
+              }
+            }
+            if (tracking) {
+              activeAgentsService.unregister(tracking.id);
+            }
+            return originalOnExit(code);
+          }
+        : originalOnExit;
 
     return this.agentClient.spawnWithTaskFile(
       config,
@@ -365,21 +416,70 @@ export class AgentService {
     });
   }
 
+  private async recordAgentRunStat(params: AgentRunStatParams): Promise<void> {
+    const { tracking, config, projectId, startedAt, completedAt, outcome } = params;
+    const targetProjectId = tracking?.projectId ?? projectId;
+    if (!tracking?.role || !targetProjectId) return;
+
+    const model = config.model?.trim() ? config.model : "unknown";
+    const agentId = `${tracking.role}-${config.type}-${config.model ?? "default"}`;
+    const taskId = tracking.id;
+    const durationMs = Math.max(0, new Date(completedAt).getTime() - new Date(startedAt).getTime());
+
+    try {
+      await taskStore.runWrite(async (client) => {
+        await client.execute(
+          `INSERT INTO agent_stats (project_id, task_id, agent_id, role, model, attempt, started_at, completed_at, outcome, duration_ms)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            targetProjectId,
+            taskId,
+            agentId,
+            tracking.role,
+            model,
+            1,
+            startedAt,
+            completedAt,
+            outcome,
+            durationMs,
+          ]
+        );
+        const countRow = await client.queryOne(
+          "SELECT COUNT(*)::int as c FROM agent_stats WHERE project_id = $1",
+          [targetProjectId]
+        );
+        const count = (countRow?.c as number) ?? 0;
+        if (count > AgentService.AGENT_STATS_RETENTION) {
+          await client.execute(
+            `DELETE FROM agent_stats WHERE id IN (
+               SELECT id FROM agent_stats WHERE project_id = $1 ORDER BY id ASC LIMIT $2
+             )`,
+            [targetProjectId, count - AgentService.AGENT_STATS_RETENTION]
+          );
+        }
+      });
+    } catch (err) {
+      log.warn("Failed to record agent run stat", {
+        projectId: targetProjectId,
+        role: tracking.role,
+        err: getErrorMessage(err),
+      });
+    }
+  }
+
   private async buildMergerPrompt(options: RunMergerAgentOptions): Promise<string> {
     const baseBranch = options.baseBranch ?? "main";
-    const [agentInstructions, statusShort, diffFilterU, mainLog, branchDiffStat] = await Promise.all([
-      getCombinedInstructions(options.cwd, "merger"),
-      this.captureGitOutput(options.cwd, "git status --short"),
-      this.captureGitOutput(options.cwd, "git diff --name-only --diff-filter=U"),
-      this.captureGitOutput(
-        options.cwd,
-        `git log --oneline -${AgentService.MERGER_MAIN_LOG_LIMIT} ${baseBranch}`
-      ),
-      this.captureGitOutput(
-        options.cwd,
-        `git diff --stat ${baseBranch}...${options.branchName}`
-      ),
-    ]);
+    const [agentInstructions, statusShort, diffFilterU, mainLog, branchDiffStat] =
+      await Promise.all([
+        getCombinedInstructions(options.cwd, "merger"),
+        this.captureGitOutput(options.cwd, "git status --short"),
+        this.captureGitOutput(options.cwd, "git diff --name-only --diff-filter=U"),
+        this.captureGitOutput(
+          options.cwd,
+          `git log --oneline -${AgentService.MERGER_MAIN_LOG_LIMIT} ${baseBranch}`
+        ),
+        this.captureGitOutput(options.cwd, `git diff --stat ${baseBranch}...${options.branchName}`),
+      ]);
 
     const conflictedFiles =
       options.conflictedFiles.length > 0 ? options.conflictedFiles.join("\n") : "(none reported)";
@@ -474,6 +574,14 @@ ${branchDiffStat || "(no output)"}
           onOutput: () => {},
           onExit: (code) => resolve(code === 0),
           projectId: options.projectId,
+          tracking: {
+            id: `merger-${options.projectId}-${options.taskId}-${Date.now()}`,
+            projectId: options.projectId,
+            phase: "execute",
+            role: "merger",
+            label: "Merger conflict resolution",
+            branchName: options.branchName,
+          },
         });
       });
       if (!exitedCleanly) {
@@ -602,12 +710,7 @@ ${branchDiffStat || "(no output)"}
           isLimitError: Boolean(lastError && isLimitError(lastError)),
           ...(lastError && isLimitError(lastError) ? { allKeysExhausted: true } : {}),
         });
-        throw new AppError(
-          400,
-          ErrorCodes.ANTHROPIC_API_KEY_MISSING,
-          details.userMessage,
-          details
-        );
+        throw new AppError(400, ErrorCodes.ANTHROPIC_API_KEY_MISSING, details.userMessage, details);
       }
 
       const { key, keyId, source } = resolved;
@@ -622,12 +725,7 @@ ${branchDiffStat || "(no output)"}
           isLimitError: true,
           allKeysExhausted: true,
         });
-        throw new AppError(
-          502,
-          ErrorCodes.AGENT_INVOKE_FAILED,
-          details.userMessage,
-          details
-        );
+        throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, details.userMessage, details);
       }
       triedKeyIds.add(keyId);
 
@@ -690,12 +788,7 @@ ${branchDiffStat || "(no output)"}
               ...buildAgentApiFailureMessages("claude", "rate_limit"),
               isLimitError: true,
             });
-            throw new AppError(
-              502,
-              ErrorCodes.AGENT_INVOKE_FAILED,
-              details.userMessage,
-              details
-            );
+            throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, details.userMessage, details);
           }
           await recordLimitHit(projectId, "ANTHROPIC_API_KEY", keyId, source);
           continue;
@@ -709,12 +802,7 @@ ${branchDiffStat || "(no output)"}
           notificationMessage: "Claude needs attention in Settings before work can continue.",
           isLimitError: false,
         });
-        throw new AppError(
-          502,
-          ErrorCodes.AGENT_INVOKE_FAILED,
-          details.userMessage,
-          details
-        );
+        throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, details.userMessage, details);
       }
     }
   }
@@ -777,12 +865,7 @@ ${branchDiffStat || "(no output)"}
           isLimitError: Boolean(lastError && isLimitError(lastError)),
           ...(lastError && isLimitError(lastError) ? { allKeysExhausted: true } : {}),
         });
-        throw new AppError(
-          400,
-          ErrorCodes.OPENAI_API_ERROR,
-          details.userMessage,
-          details
-        );
+        throw new AppError(400, ErrorCodes.OPENAI_API_ERROR, details.userMessage, details);
       }
 
       const { key, keyId, source } = resolved;
@@ -796,12 +879,7 @@ ${branchDiffStat || "(no output)"}
           isLimitError: true,
           allKeysExhausted: true,
         });
-        throw new AppError(
-          502,
-          ErrorCodes.AGENT_INVOKE_FAILED,
-          details.userMessage,
-          details
-        );
+        throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, details.userMessage, details);
       }
       triedKeyIds.add(keyId);
 
@@ -870,12 +948,7 @@ ${branchDiffStat || "(no output)"}
               ...buildAgentApiFailureMessages("openai", "rate_limit"),
               isLimitError: true,
             });
-            throw new AppError(
-              502,
-              ErrorCodes.AGENT_INVOKE_FAILED,
-              details.userMessage,
-              details
-            );
+            throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, details.userMessage, details);
           }
           await recordLimitHit(projectId, "OPENAI_API_KEY", keyId, source);
           continue;
@@ -889,12 +962,7 @@ ${branchDiffStat || "(no output)"}
           notificationMessage: "OpenAI needs attention in Settings before work can continue.",
           isLimitError: false,
         });
-        throw new AppError(
-          502,
-          ErrorCodes.AGENT_INVOKE_FAILED,
-          details.userMessage,
-          details
-        );
+        throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, details.userMessage, details);
       }
     }
   }

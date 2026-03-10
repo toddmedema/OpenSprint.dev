@@ -52,13 +52,25 @@ const postgresAvailable =
 
 describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping", () => {
   let app: ReturnType<typeof createApp>;
-  let tempDir: string;
+  let suiteTempDir: string;
+  let currentRepoPath: string;
   let originalHome: string | undefined;
+  let caseCounter = 0;
   let projectId: string;
   let projectService: ProjectService;
   let taskStore: TaskStoreService;
 
+  beforeAll(async () => {
+    app = createApp();
+    suiteTempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-task-route-suite-"));
+    originalHome = process.env.HOME;
+    process.env.HOME = suiteTempDir;
+    projectService = new ProjectService();
+  });
+
   afterAll(async () => {
+    process.env.HOME = originalHome;
+    await fs.rm(suiteTempDir, { recursive: true, force: true });
     const mod = (await import("../services/task-store.service.js")) as { _testPool?: { end: () => Promise<void> } };
     if (mod._testPool) await mod._testPool.end();
   });
@@ -69,18 +81,12 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
       taskStore: TaskStoreService;
     };
     await mod._resetSharedDb?.();
+    currentRepoPath = path.join(suiteTempDir, `test-project-${++caseCounter}`);
 
-    app = createApp();
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-task-route-test-"));
-    originalHome = process.env.HOME;
-    process.env.HOME = tempDir;
-
-    projectService = new ProjectService();
     taskStore = mod.taskStore;
-    const repoPath = path.join(tempDir, "test-project");
     const project = await projectService.createProject({
       name: "Task Mapping Test",
-      repoPath,
+      repoPath: currentRepoPath,
       simpleComplexityAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       complexComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       deployment: { mode: "custom" },
@@ -90,9 +96,8 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
   });
 
   afterEach(async () => {
-    process.env.HOME = originalHome;
     try {
-      await fs.rm(tempDir, { recursive: true, force: true });
+      await fs.rm(currentRepoPath, { recursive: true, force: true });
     } catch {
       // Ignore ENOTEMPTY and similar on some systems when removing .git
     }

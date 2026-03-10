@@ -188,9 +188,18 @@ const feedbackServicePostgresOk =
 describe.skipIf(!feedbackServicePostgresOk)("FeedbackService", () => {
   let feedbackService: FeedbackService;
   let projectService: ProjectService;
+  let suiteTempDir: string;
   let tempDir: string;
+  let currentRepoPath: string;
   let projectId: string;
   let originalHome: string | undefined;
+  let caseCounter = 0;
+
+  beforeAll(async () => {
+    suiteTempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-feedback-suite-"));
+    originalHome = process.env.HOME;
+    process.env.HOME = suiteTempDir;
+  });
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -213,13 +222,12 @@ describe.skipIf(!feedbackServicePostgresOk)("FeedbackService", () => {
     taskStoreCreateCallCount = 0;
     feedbackService = new FeedbackService();
     projectService = new ProjectService();
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-feedback-test-"));
-    originalHome = process.env.HOME;
-    process.env.HOME = tempDir;
+    tempDir = suiteTempDir;
+    currentRepoPath = path.join(tempDir, `my-project-${++caseCounter}`);
 
     const project = await projectService.createProject({
       name: "Test Project",
-      repoPath: path.join(tempDir, "my-project"),
+      repoPath: currentRepoPath,
       simpleComplexityAgent: { type: "cursor", model: "claude-sonnet-4", cliCommand: null },
       complexComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
       deployment: { mode: "custom" },
@@ -232,8 +240,12 @@ describe.skipIf(!feedbackServicePostgresOk)("FeedbackService", () => {
   });
 
   afterEach(async () => {
+    await fs.rm(currentRepoPath, { recursive: true, force: true });
+  });
+
+  afterAll(async () => {
     process.env.HOME = originalHome;
-    await fs.rm(tempDir, { recursive: true, force: true });
+    await fs.rm(suiteTempDir, { recursive: true, force: true });
   });
 
   it("should list feedback items with createdTaskIds for Build tab navigation", async () => {

@@ -202,14 +202,75 @@ export async function createTestPostgresClient(): Promise<{
   }
 }
 
+const FULL_TRUNCATE_TABLES = [
+  "task_dependencies",
+  "tasks",
+  "feedback_inbox",
+  "feedback",
+  "agent_sessions",
+  "agent_stats",
+  "orchestrator_events",
+  "orchestrator_counters",
+  "deployments",
+  "plans",
+  "auditor_runs",
+  "open_questions",
+  "prd_metadata",
+  "project_conversations",
+  "planning_runs",
+  "agent_instructions",
+  "project_workflows",
+  "help_chat_histories",
+  "repo_file_migrations",
+];
+
 /**
- * Truncate task/plan tables used by test reset. Faster than DELETE.
- * Clears task_dependencies (via CASCADE), tasks, plans, auditor_runs.
+ * Truncate integration-test tables used by shared test DB reset.
+ * Faster and safer than ad hoc per-table cleanup between tests.
  */
 export async function truncateTestDbTables(client: DbClient): Promise<void> {
-  await client.execute(
-    "TRUNCATE tasks, plans, auditor_runs RESTART IDENTITY CASCADE"
-  );
+  const tables = FULL_TRUNCATE_TABLES.join(", ");
+  await client.execute(`TRUNCATE ${tables} RESTART IDENTITY CASCADE`);
+}
+
+/**
+ * Delete all rows associated with one project id while keeping other projects intact.
+ * Useful for suites that reuse a DB/schema and a stable test project across cases.
+ */
+export async function resetProjectScopedTestData(
+  client: DbClient,
+  projectId: string
+): Promise<void> {
+  const taskRows = await client.query("SELECT id FROM tasks WHERE project_id = $1", [projectId]);
+  const taskIds = taskRows.map((r) => String((r as { id?: unknown }).id ?? "")).filter(Boolean);
+  for (const taskId of taskIds) {
+    await client.execute(
+      "DELETE FROM task_dependencies WHERE task_id = $1 OR depends_on_id = $2",
+      [taskId, taskId]
+    );
+  }
+
+  await client.execute("DELETE FROM tasks WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM feedback WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM feedback_inbox WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM agent_sessions WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM agent_stats WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM orchestrator_events WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM orchestrator_counters WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM deployments WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM plans WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM auditor_runs WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM open_questions WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM prd_metadata WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM project_conversations WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM planning_runs WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM agent_instructions WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM project_workflows WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM repo_file_migrations WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM help_chat_histories WHERE scope_key = $1 OR scope_key = $2", [
+    `project:${projectId}`,
+    projectId,
+  ]);
 }
 
 /** Create a mock DbClient for tests that don't need real DB. */
