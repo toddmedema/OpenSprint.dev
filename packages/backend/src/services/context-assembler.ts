@@ -33,10 +33,10 @@ export const REVIEW_ANGLE_CHECKLISTS: Record<ReviewAngle, string[]> = {
     "No obvious memory leaks or unbounded growth",
   ],
   test_coverage: [
-    "New/changed behavior has tests",
-    "Edge cases and error paths are covered",
-    "Tests are meaningful (not just coverage metrics)",
-    "Added and changed tests look correct and deterministic",
+    "Target 80–90% coverage for new/changed code — do not demand near-100%.",
+    "Tests verify overall behavior aligned with the spec and acceptance criteria.",
+    "Critical paths, main flows, and important edge/error paths are covered.",
+    "Prefer behavior-focused tests; avoid over-precise tests that lock implementation details and break on small refactors.",
   ],
   code_quality: [
     "Code is readable and well-named",
@@ -619,10 +619,7 @@ export class ContextAssembler {
     prompt += `- [ ] **Error handling** — Failures are handled gracefully; no swallowed errors that hide problems\n`;
     prompt += `- [ ] **Clarity** — Code is readable; naming is clear; complex logic has explanatory comments\n`;
     prompt += `- [ ] **No dead code** — No commented-out code, unused imports, or orphaned functions\n`;
-    prompt += `- [ ] **Test coverage** — Tests exist for the new/changed behavior and cover:\n`;
-    prompt += `  - Happy paths\n`;
-    prompt += `  - Edge cases and error paths\n`;
-    prompt += `  - Boundary conditions where applicable\n`;
+    prompt += `- [ ] **Test coverage** — Aim for 80–90% for new/changed code. Tests verify behavior aligned with the spec; cover happy paths, important edge/error paths, and boundaries. Avoid demanding near-100% or over-precise tests that break on small refactors.\n`;
     prompt += `- [ ] **Orchestrator validation status is green** — inspect \`${testStatusPath}\` before approving. Do not approve while it says \`PENDING\`, \`FAILED\`, or \`ERROR\`\n`;
     prompt += `- [ ] **Consistent style** — Follows existing codebase patterns and conventions\n\n`;
 
@@ -719,6 +716,12 @@ export class ContextAssembler {
       prompt += `- [ ] ${item}\n`;
     }
     prompt += `\n`;
+    if (angle === "test_coverage") {
+      prompt += `## Test Coverage Guidance\n\n`;
+      prompt += `- **Reasonable coverage:** 80–90% for new/changed code is sufficient. Do not reject for missing coverage on every branch or line.\n`;
+      prompt += `- **Behavior over implementation:** Prefer tests that assert outcomes and behavior aligned with the spec; avoid tests that assert internal structure, exact call counts, or implementation details that change with refactors.\n`;
+      prompt += `- **Stability:** Flag tests that are likely to be fragile (e.g., tightly coupled to private APIs or formatting). Do not require such tests.\n\n`;
+    }
 
     prompt += `## Working directory\n\n`;
     prompt += `The **repository root** is the directory that contains \`package.json\`, \`packages/backend\`, \`packages/frontend\`, etc. You MUST run any \`git\` commands from that directory. Its path is in \`.opensprint/active/${config.taskId}/review-angles/${angle}/config.json\` as \`repoPath\`. The orchestrator writes live validation status to \`${testStatusPath}\`. If you need a targeted test reproduction, change to the repo root first. Do not run \`${config.testCommand}\` from this review prompt; the orchestrator runs validation separately.\n\n`;

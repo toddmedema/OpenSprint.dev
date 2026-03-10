@@ -1113,4 +1113,33 @@ Test
     expect(rebasePrompt).toContain("local `develop`");
     expect(rebasePrompt).toContain("origin/develop");
   });
+
+  it("should include Test Coverage angle guidance (80-90%, behavior-focused, avoid fragile tests)", () => {
+    const config = {
+      invocation_id: "os-abc",
+      agent_role: "reviewer" as const,
+      taskId: "os-abc",
+      repoPath: "/repo",
+      branch: "opensprint/os-abc",
+      testCommand: "npm test",
+      attempt: 1,
+      phase: "review" as const,
+      previousFailure: null as string | null,
+      reviewFeedback: null as string | null,
+    };
+    const context = {
+      taskId: "os-abc",
+      title: "Add feature",
+      description: "Desc",
+      planContent: "# Plan",
+      prdExcerpt: "# PRD",
+      dependencyOutputs: [],
+    };
+    const prompt = assembler.generateReviewPromptForAngle(config, context, "test_coverage");
+    expect(prompt).toContain("80–90%");
+    expect(prompt).toContain("Test Coverage Guidance");
+    expect(prompt).toContain("Behavior over implementation");
+    expect(prompt).toContain("Do not reject for missing coverage on every branch");
+    expect(prompt).toContain("avoid tests that assert internal structure");
+  });
 });

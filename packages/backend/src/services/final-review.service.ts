@@ -39,7 +39,7 @@ const FINAL_REVIEW_SYSTEM_PROMPT = `You are the Final Review agent for OpenSprin
 Your task: Given the plan scope, full implementation context (completed task summaries, codebase state), assess:
 1. **Missing or incorrect functionality** — Does the implementation match the plan scope? Are there gaps or deviations?
 2. **Code quality** — Are there obvious quality issues (structure, patterns, maintainability)?
-3. **Test coverage** — Are critical paths tested? Are there obvious gaps?
+3. **Test coverage** — Aim for 80–90%; critical paths and spec-aligned behavior tested. Avoid demanding near-100% or over-precise implementation-detail tests. Are there obvious gaps?
 4. **Failing tests** — Based on the context, would tests pass? (We don't run tests here; infer from implementation.)
 
 Respond with ONLY valid JSON in this exact format (no markdown wrapper):
