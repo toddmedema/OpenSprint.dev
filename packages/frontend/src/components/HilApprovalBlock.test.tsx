@@ -13,6 +13,7 @@ vi.mock("../api/client", () => ({
     },
     prd: {
       get: vi.fn(),
+      getProposedDiff: vi.fn(),
     },
   },
 }));
@@ -40,6 +41,7 @@ describe("HilApprovalBlock", () => {
   beforeEach(() => {
     vi.mocked(api.notifications.resolve).mockResolvedValue({} as never);
     vi.mocked(api.prd.get).mockResolvedValue({ sections: {}, version: 1, changeLog: [] } as never);
+    vi.mocked(api.prd.getProposedDiff).mockRejectedValue(new Error("proposed-diff not available"));
   });
 
   it("renders approval required with Approve and Reject buttons", () => {
@@ -131,6 +133,47 @@ describe("HilApprovalBlock", () => {
     });
     expect(screen.getByText("Feature List")).toBeInTheDocument();
     expect(screen.getByTestId("prd-diff-section-feature_list")).toBeInTheDocument();
+  });
+
+  it("shows ServerDiffView when proposed-diff API returns data", async () => {
+    vi.mocked(api.prd.getProposedDiff).mockResolvedValue({
+      requestId: "hil-abc123",
+      diff: {
+        lines: [
+          { type: "context" as const, text: "# SPEC", oldLineNumber: 1, newLineNumber: 1 },
+          { type: "add" as const, text: "## New section", newLineNumber: 2 },
+        ],
+        summary: { additions: 1, deletions: 0 },
+      },
+    } as never);
+    const notificationWithDiff = {
+      ...mockNotification,
+      scopeChangeMetadata: {
+        scopeChangeSummary: "• feature_list: Add mobile app",
+        scopeChangeProposedUpdates: [
+          {
+            section: "feature_list",
+            changeLogEntry: "Add mobile app",
+            content: "1. Web dashboard\n2. Mobile app",
+          },
+        ],
+      },
+    };
+    renderWithProviders(
+      <HilApprovalBlock
+        notification={notificationWithDiff}
+        projectId="proj-1"
+        onResolved={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("server-diff-view")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Proposed PRD changes")).toBeInTheDocument();
+    expect(screen.getByText(/## New section/)).toBeInTheDocument();
+    expect(screen.getByTestId("hil-approve-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("hil-reject-btn")).toBeInTheDocument();
   });
 
   it("hides PRD diff when hideDiffInBlock is true", async () => {

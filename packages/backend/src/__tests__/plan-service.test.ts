@@ -338,7 +338,6 @@ vi.mock("../services/task-store.service.js", () => {
     planGetShippedContent: (...args: unknown[]) => mockPlanGetShippedContent(...args),
     planVersionList: (...args: unknown[]) => mockPlanVersionList(...args),
     planVersionGetByVersionNumber: (...args: unknown[]) => mockPlanVersionGetByVersionNumber(...args),
-    planVersionInsert: (...args: unknown[]) => mockPlanVersionInsert(...args),
     planVersionSetExecutedVersion: (...args: unknown[]) => mockPlanVersionSetExecutedVersion(...args),
     planUpdateVersionNumbers: (...args: unknown[]) => mockPlanUpdateVersionNumbers(...args),
     show: (...args: unknown[]) => mockTaskStoreShow(...args),
