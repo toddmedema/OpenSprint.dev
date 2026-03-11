@@ -13,7 +13,14 @@ import type { SaveStatus } from "../components/SaveIndicator";
 
 const TAB_PARAM = "tab";
 const LEVEL_PARAM = "level";
-const VALID_SUB_TABS: SettingsSubTab[] = ["basics", "agents", "workflow", "deployment", "hil", "team"];
+const VALID_SUB_TABS: SettingsSubTab[] = [
+  "basics",
+  "agents",
+  "workflow",
+  "deployment",
+  "hil",
+  "team",
+];
 
 function parseTabFromSearch(search: string): SettingsSubTab {
   const params = new URLSearchParams(search);
@@ -66,8 +73,7 @@ export function ProjectSettingsContent() {
         const next = new URLSearchParams(prev);
         next.set(TAB_PARAM, tab);
         return next;
-      },
-      { replace: true }
+      }
     );
   };
 

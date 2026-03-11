@@ -27,6 +27,7 @@ import { getExpoDeployCommand } from "../utils/expo-deploy-command.js";
 import { ensureExpoInstalled } from "../utils/expo-install.js";
 import { ensureExpoConfig } from "../utils/expo-config.js";
 import { checkExpoAuth } from "../utils/expo-auth-check.js";
+import { ensureEasProjectIdInAppJson } from "../utils/eas-project-link.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("deliver");
@@ -354,7 +355,9 @@ deliverRouter.post(
         project.repoPath,
         variant,
         emit,
-        envVars
+        envVars,
+        undefined,
+        getConfiguredEasProjectId(settings.deployment)
       )
         .catch((err) => {
           log.error("Expo deploy failed", { deployId: record.id, err });
@@ -573,7 +576,8 @@ const deployHandlers: Record<
       variant,
       (chunk) => ctx.emit(chunk),
       expoEnvVars,
-      ctx.projectName
+      ctx.projectName,
+      getConfiguredEasProjectId(ctx.settings.deployment)
     );
   },
   custom: async (ctx) => {
@@ -627,7 +631,8 @@ async function runExpoDeployAsync(
   variant: "beta" | "prod",
   emit: (chunk: string) => void,
   envVars?: Record<string, string>,
-  projectName?: string
+  projectName?: string,
+  easProjectId?: string
 ): Promise<void> {
   const cmd = getExpoDeployCommand(variant);
   try {
@@ -660,6 +665,47 @@ async function runExpoDeployAsync(
       });
       return;
     }
+    if (easProjectId) {
+      emit(`Ensuring EAS project link for ${easProjectId}...\n`);
+      const projectLinkResult = await ensureEasProjectIdInAppJson(repoPath, easProjectId);
+      if (!projectLinkResult.ok && projectLinkResult.code === "APP_JSON_MISSING") {
+        emit("app.json not found; attempting non-interactive eas init...\n");
+        try {
+          await runCommandStreaming(
+            "npx",
+            ["eas-cli", "init", "--id", easProjectId, "--non-interactive"],
+            repoPath,
+            emit,
+            envVars
+          );
+        } catch (initErr) {
+          const initMsg = `EAS project linking failed: ${getErrorMessage(initErr)}`;
+          log.error("EAS init fallback failed", {
+            projectId,
+            deployId,
+            repoPath,
+            easProjectId,
+            err: initErr,
+          });
+          emit(`${initMsg}\n`);
+          await completeDeploy(projectId, deployId, { success: false, error: initMsg });
+          return;
+        }
+      } else if (!projectLinkResult.ok) {
+        const linkMsg = `EAS project linking failed: ${projectLinkResult.error}`;
+        log.error("EAS project linking failed", {
+          projectId,
+          deployId,
+          repoPath,
+          easProjectId,
+          error: projectLinkResult.error,
+          code: projectLinkResult.code,
+        });
+        emit(`${linkMsg}\n`);
+        await completeDeploy(projectId, deployId, { success: false, error: linkMsg });
+        return;
+      }
+    }
     await ensureEasConfig(repoPath);
     emit(`Running: ${cmd}\n`);
     await runCommandStreaming("sh", ["-c", cmd], repoPath, emit, envVars);
@@ -669,6 +715,13 @@ async function runExpoDeployAsync(
     emit(`Error: ${msg}\n`);
     await completeDeploy(projectId, deployId, { success: false, error: msg });
   }
+}
+
+function getConfiguredEasProjectId(config: DeploymentConfig): string | undefined {
+  const rawId = config.easProjectId ?? config.expoConfig?.projectId;
+  if (typeof rawId !== "string") return undefined;
+  const trimmed = rawId.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 /** Run rollback command with streaming */

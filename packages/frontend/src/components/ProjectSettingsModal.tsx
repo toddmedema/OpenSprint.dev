@@ -16,6 +16,7 @@ import { ModelSelect } from "./ModelSelect";
 import { SaveIndicator } from "./SaveIndicator";
 import { SettingsTopBar } from "./settings/SettingsTopBar";
 import { SettingsSubTabsBar, type SettingsSubTab } from "./settings/SettingsSubTabsBar";
+import { WorkflowSettingsContent } from "./settings/WorkflowSettingsContent";
 import { api } from "../api/client";
 import type {
   Project,
@@ -34,12 +35,8 @@ import {
   AI_AUTONOMY_LEVELS,
   DEFAULT_AI_AUTONOMY_LEVEL,
   DEFAULT_REVIEW_MODE,
-  GENERAL_REVIEW_OPTION,
   getDeploymentTargetsForUi,
   AUTO_DEPLOY_TRIGGER_OPTIONS,
-  REVIEW_AGENT_OPTIONS,
-  SELF_IMPROVEMENT_FREQUENCY_OPTIONS,
-  normalizeWorktreeBaseBranch,
   type AutoDeployTrigger,
 } from "@opensprint/shared";
 import { MIN_SAVE_SPINNER_MS, SETTINGS_HELP_CONTAINER_CLASS } from "../lib/constants";
@@ -134,9 +131,6 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     const [showFolderBrowser, setShowFolderBrowser] = useState(false);
     /** Inline "add new env var" row state per target (key: custom-0, expo-staging, etc.) */
     const [newEnvRow, setNewEnvRow] = useState<Record<string, { key: string; value: string }>>({});
-    /** Agent Config: Advanced section (Agent Instructions) collapsed by default */
-    const [advancedSectionExpanded, setAdvancedSectionExpanded] = useState(false);
-
     const saveStatus = saving ? "saving" : "saved";
 
     useEffect(() => {
@@ -258,24 +252,6 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     const aiAutonomyLevel = settings?.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL;
     const gitWorkingMode = settings?.gitWorkingMode ?? "worktree";
     const mergeStrategy = settings?.mergeStrategy ?? "per_task";
-    const gitRemoteModeText =
-      settings?.gitRemoteMode === "publishable"
-        ? "Remote configured"
-        : settings?.gitRemoteMode === "remote_error"
-          ? "Remote unreachable"
-          : settings?.gitRemoteMode === "local_only"
-            ? "Local-only repo"
-            : settings?.gitRuntimeStatus?.refreshing
-              ? "Checking remote configuration..."
-              : "Local-only repo";
-    const gitRuntimeRefreshText = settings?.gitRuntimeStatus?.refreshing
-      ? settings.gitRuntimeStatus.lastCheckedAt
-        ? "Refreshing live Git status..."
-        : "Checking live Git status..."
-      : settings?.gitRuntimeStatus?.lastCheckedAt
-        ? "Git status is current"
-        : null;
-
     type PersistOverrides = Partial<{
       name: string;
       repoPath: string;
@@ -476,8 +452,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
               const next = new URLSearchParams(prev);
               next.set(TAB_PARAM, tab);
               return next;
-            },
-            { replace: true }
+            }
           );
         }
       },
@@ -522,6 +497,169 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     const updateAiAutonomyLevel = (level: AiAutonomyLevel) => {
       setSettings((s) => (s ? { ...s, aiAutonomyLevel: level } : null));
       void persistSettings(undefined, { aiAutonomyLevel: level });
+    };
+
+    const updateWorkflowSettings = useCallback(
+      (updater: (current: ProjectSettings) => ProjectSettings) => {
+        setSettings((current) => (current ? updater(current) : current));
+      },
+      []
+    );
+
+    const getProviderLabel = (provider: AgentType): string => {
+      switch (provider) {
+        case "claude":
+          return "Claude";
+        case "claude-cli":
+          return "Claude CLI";
+        case "cursor":
+          return "Cursor";
+        case "openai":
+          return "OpenAI";
+        case "google":
+          return "Google";
+        case "lmstudio":
+          return "LM Studio";
+        case "custom":
+          return "Custom CLI";
+        default:
+          return provider;
+      }
+    };
+
+    const getRowSummary = (
+      rowLabel: "Simple" | "Complex",
+      agent: typeof simpleComplexityAgent
+    ): string => {
+      const provider = getProviderLabel(agent.type);
+      const modelSummary =
+        agent.type === "custom"
+          ? (agent.cliCommand?.trim() ? `CLI: ${agent.cliCommand.trim()}` : "CLI command not set")
+          : agent.model?.trim()
+            ? agent.model
+            : "Auto model";
+      return `${rowLabel} currently uses ${provider} / ${modelSummary}.`;
+    };
+
+    const renderProviderPrerequisite = (
+      rowKey: "simple" | "complex",
+      rowLabel: "Simple" | "Complex",
+      provider: AgentType
+    ) => {
+      if (!envKeys) return null;
+
+      if (provider === "claude" && !envKeys.anthropic) {
+        return (
+          <div
+            className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+            data-testid={`${rowKey}-provider-prerequisite`}
+          >
+            <p className="text-sm text-theme-warning-text">
+              <strong>Anthropic API key required.</strong> {rowLabel} uses Claude.
+              {" "}
+              <Link
+                to={`/projects/${project.id}/settings?level=global`}
+                className="underline hover:opacity-80"
+                data-testid={`configure-api-keys-link-${rowKey}`}
+              >
+                Configure API keys in Global Settings
+              </Link>
+              .
+            </p>
+          </div>
+        );
+      }
+
+      if (provider === "cursor" && !envKeys.cursor) {
+        return (
+          <div
+            className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+            data-testid={`${rowKey}-provider-prerequisite`}
+          >
+            <p className="text-sm text-theme-warning-text">
+              <strong>Cursor API key required.</strong> {rowLabel} uses Cursor.
+              {" "}
+              <Link
+                to={`/projects/${project.id}/settings?level=global`}
+                className="underline hover:opacity-80"
+                data-testid={`configure-api-keys-link-${rowKey}`}
+              >
+                Configure API keys in Global Settings
+              </Link>
+              .
+            </p>
+          </div>
+        );
+      }
+
+      if (provider === "openai" && !envKeys.openai) {
+        return (
+          <div
+            className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+            data-testid={`${rowKey}-provider-prerequisite`}
+          >
+            <p className="text-sm text-theme-warning-text">
+              <strong>OpenAI API key required.</strong> {rowLabel} uses OpenAI.
+              {" "}
+              <Link
+                to={`/projects/${project.id}/settings?level=global`}
+                className="underline hover:opacity-80"
+                data-testid={`configure-api-keys-link-${rowKey}`}
+              >
+                Configure API keys in Global Settings
+              </Link>
+              .
+            </p>
+          </div>
+        );
+      }
+
+      if (provider === "google" && !envKeys.google) {
+        return (
+          <div
+            className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+            data-testid={`${rowKey}-provider-prerequisite`}
+          >
+            <p className="text-sm text-theme-warning-text">
+              <strong>Google API key required.</strong> {rowLabel} uses Google.
+              {" "}
+              <Link
+                to={`/projects/${project.id}/settings?level=global`}
+                className="underline hover:opacity-80"
+                data-testid={`configure-api-keys-link-${rowKey}`}
+              >
+                Configure API keys in Global Settings
+              </Link>
+              .
+            </p>
+          </div>
+        );
+      }
+
+      if (provider === "claude-cli" && !envKeys.claudeCli) {
+        return (
+          <div
+            className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+            data-testid={`${rowKey}-provider-prerequisite`}
+          >
+            <p className="text-sm text-theme-warning-text">
+              <strong>Claude CLI required.</strong> {rowLabel} uses Claude CLI.
+              {" "}
+              <a
+                href="https://docs.anthropic.com/en/docs/claude-code/getting-started"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:opacity-80"
+              >
+                Install Claude CLI
+              </a>{" "}
+              and run <code className="font-mono text-xs">claude</code> to complete authentication.
+            </p>
+          </div>
+        );
+      }
+
+      return null;
     };
 
     const wrapperClass = fullScreen
@@ -642,114 +780,15 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                   </div>
                 )}
 
-                {activeTab === "agents" && (() => {
-                  const providerLabel = (t: AgentType) =>
-                    t === "claude"
-                      ? "Claude (API)"
-                      : t === "claude-cli"
-                        ? "Claude (CLI)"
-                        : t === "cursor"
-                          ? "Cursor"
-                          : t === "openai"
-                            ? "OpenAI"
-                            : t === "google"
-                              ? "Google (Gemini)"
-                              : t === "lmstudio"
-                                ? "LM Studio"
-                                : "Custom CLI";
-                  const rowSummary = (agent: typeof simpleComplexityAgent) => {
-                    const prov = providerLabel(agent.type);
-                    if (agent.type === "custom")
-                      return `${prov} / ${agent.cliCommand || "—"}`;
-                    if (agent.type === "cursor" && !agent.model) return `${prov} / Auto`;
-                    return `${prov} / ${agent.model || "Select model"}`;
-                  };
-                  const selectedTypes = new Set([
-                        simpleComplexityAgent.type,
-                        complexComplexityAgent.type,
-                      ]);
-                      const needsAnthropic =
-                        envKeys && !envKeys.anthropic && selectedTypes.has("claude");
-                      const needsCursor = envKeys && !envKeys.cursor && selectedTypes.has("cursor");
-                      const needsOpenai = envKeys && !envKeys.openai && selectedTypes.has("openai");
-                      const needsGoogle = envKeys && !envKeys.google && selectedTypes.has("google");
-                      const claudeCliMissing =
-                        envKeys && !envKeys.claudeCli && selectedTypes.has("claude-cli");
-                      return (
-                        <div className="space-y-6">
-                          {needsAnthropic && (
-                            <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
-                              <p className="text-sm text-theme-warning-text">
-                                <strong>Anthropic API key required.</strong>{" "}
-                                <Link
-                                  to={`/projects/${project.id}/settings?level=global`}
-                                  className="underline hover:opacity-80"
-                                  data-testid="configure-api-keys-link"
-                                >
-                                  Configure in Global Settings → API keys
-                                </Link>
-                              </p>
-                            </div>
-                          )}
-                          {needsCursor && (
-                            <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
-                              <p className="text-sm text-theme-warning-text">
-                                <strong>Cursor API key required.</strong>{" "}
-                                <Link
-                                  to={`/projects/${project.id}/settings?level=global`}
-                                  className="underline hover:opacity-80"
-                                  data-testid="configure-api-keys-link"
-                                >
-                                  Configure in Global Settings → API keys
-                                </Link>
-                              </p>
-                            </div>
-                          )}
-                          {needsOpenai && (
-                            <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
-                              <p className="text-sm text-theme-warning-text">
-                                <strong>OpenAI API key required.</strong>{" "}
-                                <Link
-                                  to={`/projects/${project.id}/settings?level=global`}
-                                  className="underline hover:opacity-80"
-                                  data-testid="configure-api-keys-link"
-                                >
-                                  Configure in Global Settings → API keys
-                                </Link>
-                              </p>
-                            </div>
-                          )}
-                          {needsGoogle && (
-                            <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
-                              <p className="text-sm text-theme-warning-text">
-                                <strong>Google API key required.</strong>{" "}
-                                <Link
-                                  to={`/projects/${project.id}/settings?level=global`}
-                                  className="underline hover:opacity-80"
-                                  data-testid="configure-api-keys-link"
-                                >
-                                  Configure in Global Settings → API keys
-                                </Link>
-                              </p>
-                            </div>
-                          )}
-                          {claudeCliMissing && (
-                            <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
-                              <p className="text-sm text-theme-warning-text">
-                                <strong>Claude CLI not found.</strong> Install it from{" "}
-                                <a
-                                  href="https://docs.anthropic.com/en/docs/claude-code/getting-started"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="underline hover:opacity-80"
-                                >
-                                  docs.anthropic.com
-                                </a>{" "}
-                                and run <code className="font-mono text-xs">claude</code> to
-                                complete authentication.
-                              </p>
-                            </div>
-                          )}
+                {activeTab === "agents" && (
+                  <div className="space-y-6">
+                    <section className="p-4 rounded-lg bg-theme-bg-elevated border border-theme-border">
+                      <h3 className="text-sm font-semibold text-theme-text mb-2">How this works</h3>
+                      <p className="text-xs text-theme-muted">
+                        Simple is used for low and medium complexity tasks. Complex is used for high
+                        and very high complexity tasks.
+                      </p>
+                    </section>
                     <div data-testid="task-complexity-section">
                       <h3 className="text-sm font-semibold text-theme-text mb-3">
                         Task Complexity
@@ -760,14 +799,13 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                       </p>
                       <div className="space-y-4">
                         {/* Row 1: Simple */}
-                        <div className="p-3 rounded-lg border border-theme-border bg-theme-bg-elevated/50">
-                          <p className="text-xs text-theme-muted mb-2">
-                            Simple currently uses {rowSummary(simpleComplexityAgent)}
-                          </p>
-                          <div className="flex flex-wrap items-end gap-3">
-                            <span className="w-16 text-sm font-medium text-theme-text shrink-0">
-                              Simple
-                            </span>
+                        <p className="text-xs text-theme-muted" data-testid="simple-row-summary">
+                          {getRowSummary("Simple", simpleComplexityAgent)}
+                        </p>
+                        <div className="flex flex-wrap items-end gap-3">
+                          <span className="w-16 text-sm font-medium text-theme-text shrink-0">
+                            Simple
+                          </span>
                           <div className="flex-1 min-w-[140px]">
                             <label htmlFor="simple-provider-select" className="block text-xs font-medium text-theme-muted mb-1">
                               Provider
@@ -855,15 +893,19 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                           )}
                           </div>
                         </div>
+                        {renderProviderPrerequisite(
+                          "simple",
+                          "Simple",
+                          simpleComplexityAgent.type
+                        )}
                         {/* Row 2: Complex */}
-                        <div className="p-3 rounded-lg border border-theme-border bg-theme-bg-elevated/50">
-                          <p className="text-xs text-theme-muted mb-2">
-                            Complex currently uses {rowSummary(complexComplexityAgent)}
-                          </p>
-                          <div className="flex flex-wrap items-end gap-3">
-                            <span className="w-16 text-sm font-medium text-theme-text shrink-0">
-                              Complex
-                            </span>
+                        <p className="text-xs text-theme-muted" data-testid="complex-row-summary">
+                          {getRowSummary("Complex", complexComplexityAgent)}
+                        </p>
+                        <div className="flex flex-wrap items-end gap-3">
+                          <span className="w-16 text-sm font-medium text-theme-text shrink-0">
+                            Complex
+                          </span>
                           <div className="flex-1 min-w-[140px]">
                             <label htmlFor="complex-provider-select" className="block text-xs font-medium text-theme-muted mb-1">
                               Provider
@@ -949,446 +991,38 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                           )}
                           </div>
                         </div>
+                        {renderProviderPrerequisite(
+                          "complex",
+                          "Complex",
+                          complexComplexityAgent.type
+                        )}
                       </div>
                     </div>
-                    <div data-testid="agent-config-advanced-section">
-                      <button
-                        type="button"
-                        onClick={() => setAdvancedSectionExpanded((e) => !e)}
-                        className="flex items-center gap-2 w-full text-left py-2 text-sm font-medium text-theme-text hover:text-theme-muted transition-colors"
-                        aria-expanded={advancedSectionExpanded}
-                        data-testid="advanced-section-toggle"
-                      >
-                        <svg
-                          className={`w-4 h-4 transition-transform ${advancedSectionExpanded ? "rotate-90" : ""}`}
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
+                    <details
+                      className="rounded-lg border border-theme-border bg-theme-bg-elevated"
+                      data-testid="agents-advanced-section"
+                    >
+                      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-theme-text">
                         Advanced
-                      </button>
-                      {advancedSectionExpanded && (
-                        <div className="pt-2">
-                          <Suspense fallback={<AgentsSectionFallback />}>
-                            <AgentsMdSection projectId={project.id} />
-                          </Suspense>
-                        </div>
-                      )}
-                    </div>
-                        </div>
-                      );
-                    })()}
-
-                {activeTab === "workflow" && (
-                  <div className="space-y-6" data-testid="workflow-tab-content">
-                    {/* Execution Strategy */}
-                    <div className="p-4 rounded-lg border border-theme-border bg-theme-bg-elevated">
-                      <h3 className="text-sm font-semibold text-theme-text mb-3">
-                        Execution Strategy
-                      </h3>
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-sm font-medium text-theme-text">Git working mode</h4>
-                            <p className="text-xs text-theme-muted">
-                              {gitWorkingMode === "worktree"
-                                ? "Worktree: isolated directories per task, supports parallel agents."
-                                : "Branches: agents work in main repo on task branches, one at a time."}
-                            </p>
-                            <p className="text-xs text-theme-muted mt-1" data-testid="git-remote-mode">
-                              {gitRemoteModeText}
-                            </p>
-                            {gitRuntimeRefreshText && (
-                              <p
-                                className="text-xs text-theme-muted mt-1"
-                                data-testid="git-runtime-refresh-status"
-                              >
-                                {gitRuntimeRefreshText}
-                              </p>
-                            )}
-                          </div>
-                          <select
-                            className="input w-48 shrink-0"
-                            value={gitWorkingMode}
-                            onChange={(e) => {
-                              const mode = e.target.value as GitWorkingMode;
-                              setSettings((s) => (s ? { ...s, gitWorkingMode: mode } : null));
-                              void persistSettings(undefined, { gitWorkingMode: mode });
-                            }}
-                            data-testid="git-working-mode-select"
-                          >
-                            <option value="worktree">Worktree</option>
-                            <option value="branches">Branches</option>
-                          </select>
-                        </div>
-                        {gitWorkingMode === "branches" ? (
-                          <div className="p-3 rounded-lg bg-theme-bg border border-theme-border">
-                            <p className="text-sm text-theme-muted">
-                              Branches mode uses a single coder.
-                            </p>
-                          </div>
-                        ) : null}
-                        <div>
-                          <label htmlFor="worktree-base-branch-input" className="block text-sm font-medium text-theme-text mb-1">
-                            Base branch
-                          </label>
-                          <p className="text-xs text-theme-muted mb-2">
-                            Task branches are created from and merged into this branch. Use
-                            alphanumeric, slash, underscore, hyphen, or dot.
-                          </p>
-                          <input
-                            id="worktree-base-branch-input"
-                            type="text"
-                            className="input w-full max-w-xs"
-                            value={settings?.worktreeBaseBranch ?? "main"}
-                            onChange={(e) =>
-                              setSettings((s) =>
-                                s ? { ...s, worktreeBaseBranch: e.target.value || "main" } : null
-                              )
-                            }
-                            onBlur={() => {
-                              const normalized = normalizeWorktreeBaseBranch(
-                                settings?.worktreeBaseBranch
-                              );
-                              setSettings((s) =>
-                                s ? { ...s, worktreeBaseBranch: normalized } : null
-                              );
-                              void persistSettings(undefined, { worktreeBaseBranch: normalized });
-                            }}
-                            placeholder="main"
-                            data-testid="worktree-base-branch-input"
-                          />
-                        </div>
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-sm font-medium text-theme-text">Merge strategy</h4>
-                            <p className="text-xs text-theme-muted">
-                              Per task (default): merge each task to main when complete. Per epic: build
-                              entire plan/epic on one branch; merge once all tasks are done. Use partial
-                              landing (per task) for incremental merges, or batch merge (per epic) to
-                              merge the whole epic at once.
-                            </p>
-                          </div>
-                          <select
-                            aria-label="Merge strategy"
-                            className="input w-48 shrink-0"
-                            value={mergeStrategy}
-                            onChange={(e) => {
-                              const strategy = e.target.value as MergeStrategy;
-                              setSettings((s) => (s ? { ...s, mergeStrategy: strategy } : null));
-                              void persistSettings(undefined, { mergeStrategy: strategy });
-                            }}
-                            data-testid="merge-strategy-select"
-                          >
-                            <option value="per_task">Per task (default)</option>
-                            <option value="per_epic">Per epic</option>
-                          </select>
-                        </div>
-                        {gitWorkingMode === "worktree" ? (
-                          <div>
-                            <h4 className="text-sm font-medium text-theme-text mb-1">Parallelism</h4>
-                            <p className="text-xs text-theme-muted mb-3">
-                              Run multiple coding agents simultaneously on independent tasks. Higher
-                              values speed up builds but use more resources.
-                            </p>
-                            <div className="space-y-4">
-                              <div>
-                                <label htmlFor="max-concurrent-coders-slider" className="block text-sm font-medium text-theme-text mb-2">
-                                  Max Concurrent Coders:{" "}
-                                  <span className="font-bold">
-                                    {settings?.maxConcurrentCoders ?? 1}
-                                  </span>
-                                </label>
-                                <input
-                                  id="max-concurrent-coders-slider"
-                                  type="range"
-                                  min={1}
-                                  max={10}
-                                  step={1}
-                                  value={settings?.maxConcurrentCoders ?? 1}
-                                  onChange={(e) =>
-                                    setSettings((s) =>
-                                      s ? { ...s, maxConcurrentCoders: Number(e.target.value) } : null
-                                    )
-                                  }
-                                  onBlur={scheduleSaveOnBlur}
-                                  className="w-full accent-brand-600"
-                                  data-testid="max-concurrent-coders-slider"
-                                />
-                                <div className="flex justify-between text-xs text-theme-muted mt-1">
-                                  <span>1 (sequential)</span>
-                                  <span>10</span>
-                                </div>
-                              </div>
-                              {(settings?.maxConcurrentCoders ?? 1) > 1 && (
-                                <div>
-                                  <label htmlFor="unknown-scope-strategy-select" className="block text-sm font-medium text-theme-text mb-1">
-                                    Unknown Scope Strategy
-                                  </label>
-                                  <p className="text-xs text-theme-muted mb-2">
-                                    Agents identify task scope based on the files they expect it to
-                                    touch, and parallel agents won&apos;t work on tasks with
-                                    conflicting expected files. What should agents do when the scope is
-                                    unclear?
-                                  </p>
-                                  <select
-                                    id="unknown-scope-strategy-select"
-                                    className="input"
-                                    value={settings?.unknownScopeStrategy ?? "optimistic"}
-                                    onChange={(e) => {
-                                      const strategy = e.target.value as UnknownScopeStrategy;
-                                      setSettings((s) =>
-                                        s ? { ...s, unknownScopeStrategy: strategy } : null
-                                      );
-                                      void persistSettings(undefined, {
-                                        unknownScopeStrategy: strategy,
-                                      });
-                                    }}
-                                    data-testid="unknown-scope-strategy-select"
-                                  >
-                                    <option value="optimistic">
-                                      Optimistic (parallelize, rely on merger)
-                                    </option>
-                                    <option value="conservative">Conservative (serialize)</option>
-                                  </select>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ) : null}
+                      </summary>
+                      <div className="px-4 pb-4 pt-1 border-t border-theme-border">
+                        <Suspense fallback={<AgentsSectionFallback />}>
+                          <AgentsMdSection projectId={project.id} />
+                        </Suspense>
                       </div>
-                    </div>
-
-                    {/* Quality Gates */}
-                    <div className="p-4 rounded-lg border border-theme-border bg-theme-bg-elevated">
-                      <h3 className="text-sm font-semibold text-theme-text mb-3">
-                        Quality Gates
-                      </h3>
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="text-sm font-medium text-theme-text mb-1">Test Command</h4>
-                          <p className="text-xs text-theme-muted mb-2">
-                            Override the test command (auto-detected from package.json). Leave empty to
-                            use detection.
-                          </p>
-                          <input
-                            type="text"
-                            className="input w-full font-mono text-sm"
-                            placeholder="e.g. npm test or npx vitest run"
-                            value={settings?.testCommand ?? ""}
-                            onChange={(e) =>
-                              setSettings((s) =>
-                                s ? { ...s, testCommand: e.target.value.trim() || null } : null
-                              )
-                            }
-                            onBlur={scheduleSaveOnBlur}
-                            data-testid="test-command-input"
-                          />
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between gap-4 mb-3">
-                            <div className="min-w-0 flex-1">
-                              <h4 className="text-sm font-medium text-theme-text">Code Review</h4>
-                              <p className="text-xs text-theme-muted">
-                                After the coding agent completes a task, a review agent can validate the
-                                implementation against the ticket specification, verify tests pass and
-                                cover the scope, and check code quality. Rejected work is sent back to
-                                the coding agent with feedback for improvement.
-                              </p>
-                            </div>
-                            <select
-                              data-testid="review-mode-select"
-                              className="input w-48 shrink-0"
-                              value={settings?.reviewMode ?? DEFAULT_REVIEW_MODE}
-                              onChange={(e) => {
-                                const mode = e.target.value as ReviewMode;
-                                setSettings((s) => (s ? { ...s, reviewMode: mode } : null));
-                                void persistSettings(undefined, { reviewMode: mode });
-                              }}
-                            >
-                              <option value="never">Never</option>
-                              <option value="always">Always</option>
-                              <option value="on-failure-only">On Failure Only</option>
-                            </select>
-                          </div>
-                          <div role="group" aria-labelledby="review-agents-heading">
-                            <span id="review-agents-heading" className="block text-xs font-medium text-theme-muted mb-2">
-                              Review agents
-                            </span>
-                            <p className="text-xs text-theme-muted mb-2">
-                              Leave empty for one general review. Select one or more angles for
-                              parallel angle-specific reviews.
-                            </p>
-                            <div
-                              className="flex flex-wrap gap-2"
-                              data-testid="review-agents-multiselect"
-                            >
-                              {REVIEW_AGENT_OPTIONS.map((opt) => {
-                                const isGeneral = opt.value === GENERAL_REVIEW_OPTION;
-                                const angleValue: ReviewAngle | null = isGeneral
-                                  ? null
-                                  : (opt.value as ReviewAngle);
-                                const angles = settings?.reviewAngles ?? [];
-                                const includeGeneral = settings?.includeGeneralReview === true;
-                                const generalSelected = angles.length === 0 || includeGeneral;
-                                const selected = isGeneral
-                                  ? generalSelected
-                                  : angleValue !== null && angles.includes(angleValue);
-                                const selectedCount = (generalSelected ? 1 : 0) + angles.length;
-                                const wouldLeaveZero = selected && selectedCount === 1;
-                                const disabled = wouldLeaveZero;
-                                return (
-                                  <label
-                                    key={opt.value}
-                                    htmlFor={`review-agent-${opt.value}`}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors text-sm ${
-                                      disabled
-                                        ? "cursor-not-allowed opacity-90"
-                                        : "cursor-pointer hover:border-theme-muted"
-                                    } ${
-                                      selected
-                                        ? "border-brand-600 bg-brand-50 dark:bg-brand-900/20"
-                                        : "border-theme-border"
-                                    }`}
-                                  >
-                                    <input
-                                      id={`review-agent-${opt.value}`}
-                                      type="checkbox"
-                                      checked={selected}
-                                      disabled={disabled}
-                                      onChange={() => {
-                                        if (disabled) return;
-                                        if (isGeneral) {
-                                          if (selected) {
-                                            setSettings((s) =>
-                                              s ? { ...s, includeGeneralReview: false } : null
-                                            );
-                                            void persistSettings(undefined, {
-                                              includeGeneralReview: false,
-                                            });
-                                          } else {
-                                            setSettings((s) =>
-                                              s ? { ...s, includeGeneralReview: true } : null
-                                            );
-                                            void persistSettings(undefined, {
-                                              includeGeneralReview: true,
-                                            });
-                                          }
-                                        } else {
-                                          const current = angles;
-                                          const next: ReviewAngle[] = selected
-                                            ? current.filter((a) => a !== angleValue)
-                                            : angleValue
-                                              ? [...current, angleValue]
-                                              : current;
-                                          lastReviewAnglesRef.current =
-                                            next.length > 0 ? next : undefined;
-                                          if (next.length === 0 && selected && !includeGeneral) return;
-                                          const wasGeneralOnly = current.length === 0 && generalSelected;
-                                          const nextReviewAngles =
-                                            next.length > 0 ? next : ([] as ReviewAngle[]);
-                                          setSettings((s) => {
-                                            if (!s) return null;
-                                            const nextSettings = {
-                                              ...s,
-                                              reviewAngles: next.length > 0 ? next : undefined,
-                                            };
-                                            if (wasGeneralOnly) nextSettings.includeGeneralReview = true;
-                                            return nextSettings;
-                                          });
-                                          void persistSettings(undefined, {
-                                            reviewAngles: nextReviewAngles,
-                                            ...(wasGeneralOnly && { includeGeneralReview: true }),
-                                          });
-                                        }
-                                      }}
-                                      className="rounded border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-0 disabled:cursor-not-allowed"
-                                    />
-                                    <span className="text-theme-text">{opt.label}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Continuous Improvement */}
-                    <div className="p-4 rounded-lg border border-theme-border bg-theme-bg-elevated">
-                      <h3 className="text-sm font-semibold text-theme-text mb-3">
-                        Continuous Improvement
-                      </h3>
-                      <div data-testid="self-improvement-section">
-                        <h4 className="text-sm font-medium text-theme-text mb-1">
-                          Self-improvement
-                        </h4>
-                        <p className="text-xs text-theme-muted mb-2">
-                          When the codebase has changed since the last run, a review runs using your
-                          code review lenses and creates improvement tasks.
-                        </p>
-                        {((settings?.selfImprovementFrequency ?? "never") === "after_each_plan" && (
-                          <p className="text-xs text-theme-muted mb-2">
-                            Runs once after a plan&apos;s execution is fully complete (all tasks done
-                            and merged), not when you click Execute.
-                          </p>
-                        ))}
-                        <div className="flex flex-wrap items-center gap-3">
-                          <label htmlFor="self-improvement-frequency-select" className="block text-xs font-medium text-theme-muted">
-                            Self-improvement frequency
-                          </label>
-                          <select
-                            id="self-improvement-frequency-select"
-                            data-testid="self-improvement-frequency-select"
-                            className="input w-48"
-                            value={settings?.selfImprovementFrequency ?? "never"}
-                            onChange={(e) => {
-                              const value = e.target.value as SelfImprovementFrequency;
-                              setSettings((s) =>
-                                s ? { ...s, selfImprovementFrequency: value } : null
-                              );
-                              void persistSettings(undefined, {
-                                selfImprovementFrequency: value,
-                              });
-                            }}
-                          >
-                            {SELF_IMPROVEMENT_FREQUENCY_OPTIONS.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        {settings?.selfImprovementLastRunAt && (
-                          <p
-                            className="text-xs text-theme-muted mt-2"
-                            data-testid="self-improvement-last-run"
-                          >
-                            Last run:{" "}
-                            {new Date(settings.selfImprovementLastRunAt).toLocaleString(undefined, {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })}
-                          </p>
-                        )}
-                        {settings?.nextRunAt && (
-                          <p
-                            className="text-xs text-theme-muted mt-2"
-                            data-testid="self-improvement-next-run"
-                          >
-                            Next run:{" "}
-                            {new Date(settings.nextRunAt).toLocaleString(undefined, {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                    </details>
                   </div>
+                )}
+
+                {activeTab === "workflow" && settings && (
+                  <WorkflowSettingsContent
+                    settings={settings}
+                    projectId={project.id}
+                    persistSettings={persistSettings}
+                    scheduleSaveOnBlur={scheduleSaveOnBlur}
+                    lastReviewAnglesRef={lastReviewAnglesRef}
+                    onSettingsChange={updateWorkflowSettings}
+                  />
                 )}
 
                 {activeTab === "deployment" && (

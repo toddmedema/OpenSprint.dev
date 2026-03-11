@@ -308,6 +308,15 @@ describe("ProjectSettingsPage", () => {
       );
     });
 
+    const workflowTab = screen.getByRole("button", { name: "Workflow" });
+    await user.click(workflowTab);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/projects/proj-1/settings?tab=workflow"
+      );
+    });
+
     const deploymentTab = screen.getByRole("button", { name: "Deliver" });
     await user.click(deploymentTab);
 
