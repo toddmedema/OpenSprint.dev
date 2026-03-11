@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import type { TaskType, TaskPriority } from "@opensprint/shared";
 import { clampTaskComplexity, getDatabaseDialect } from "@opensprint/shared";
 import {
   isAgentAssignee,
@@ -9,7 +8,6 @@ import {
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { createLogger } from "../utils/logger.js";
-import { getErrorMessage } from "../utils/error-utils.js";
 import type { DbClient } from "../db/client.js";
 import { classifyDbConnectionError, isDbConnectionError } from "../db/db-errors.js";
 import type { AppDb, DrizzlePg } from "../db/app-db.js";
@@ -33,104 +31,32 @@ import {
 } from "./self-improvement-run-history.service.js";
 import { toPgParams } from "../db/sql-params.js";
 import { getDatabaseUrl } from "./global-settings.service.js";
+import type { StoredTask, CreateOpts, CreateInput, TaskChangeCallback } from "./task-store.types.js";
+import {
+  resolveEpicId,
+  getBlockersFromIssue,
+  getParentId as getParentIdHelper,
+  hydrateTask,
+  validateAssigneeChange as validateAssigneeChangeHelper,
+  mergeExtraForUpdate as mergeExtraForUpdateHelper,
+  buildTaskUpdateSets as buildTaskUpdateSetsHelper,
+  buildUpdateManySets as buildUpdateManySetsHelper,
+  isDuplicateKeyError as isDuplicateKeyErrorHelper,
+  getCumulativeAttemptsFromIssue as getCumulativeAttemptsFromIssueHelper,
+  hasLabel as hasLabelHelper,
+  getFileScopeLabels as getFileScopeLabelsHelper,
+  getConflictFilesFromIssue as getConflictFilesFromIssueHelper,
+  getMergeStageFromIssue as getMergeStageFromIssueHelper,
+} from "./task-store-helpers.js";
+import { cascadeDeleteTaskReferences } from "./task-store-cascade.js";
+import { TaskStorePlanAuditorSIFacade } from "./task-store-facades.js";
 
-const log = createLogger("task-store");
-
-export interface StoredTask {
-  id: string;
-  project_id?: string;
-  title: string;
-  description?: string;
-  issue_type: string;
-  status: string;
-  priority: number;
-  assignee?: string | null;
-  owner?: string | null;
-  labels?: string[];
-  created_at: string;
-  updated_at: string;
-  created_by?: string;
-  close_reason?: string;
-  /** Set when first Coder agent picks up task (assignee set). */
-  started_at?: string | null;
-  /** Set when task is closed. */
-  completed_at?: string | null;
-  dependencies?: Array<{
-    depends_on_id: string;
-    type: string;
-  }>;
-  dependency_count?: number;
-  dependent_count?: number;
-  /** Reason task was blocked (e.g. Coding Failure, Merge Failure). Stored in extra when status is blocked. */
-  block_reason?: string | null;
-  /** ISO timestamp of last auto-retry (technical-error unblock). Stored in extra. */
-  last_auto_retry_at?: string | null;
-  [key: string]: unknown;
-}
-
-export interface CreateOpts {
-  type?: TaskType | string;
-  priority?: TaskPriority | number;
-  description?: string;
-  parentId?: string;
-  /** Task-level complexity (1-10). Persisted in complexity column. */
-  complexity?: number;
-  /** Merge into extra JSON (e.g. sourceFeedbackIds) */
-  extra?: Record<string, unknown>;
-}
-
-export interface CreateInput {
-  title: string;
-  type?: TaskType | string;
-  priority?: TaskPriority | number;
-  description?: string;
-  parentId?: string;
-  /** Task-level complexity (1-10). Persisted in complexity column. */
-  complexity?: number;
-}
-
+export type { StoredTask, CreateOpts, CreateInput, TaskChangeCallback } from "./task-store.types.js";
+export { resolveEpicId, getBlockersFromIssue, getParentId } from "./task-store-helpers.js";
 /** Re-export plan types for consumers that import from task-store. */
 export type { PlanInsertData, StoredPlan } from "./plan-store.service.js";
 
-/** Callback invoked when a task is created, updated, or closed. Used to emit WebSocket events. */
-export type TaskChangeCallback = (
-  projectId: string,
-  changeType: "create" | "update" | "close",
-  task: StoredTask
-) => void;
-
-/**
- * Resolve the epic ID for a task by walking the parent chain until a task with issue_type/type === 'epic' is found.
- * Used when mergeStrategy === 'per_epic' for branch naming and defer-merge logic.
- * @param taskId - Task ID (e.g. os-a3f8.1 or os-a3f8.1.2)
- * @param idToIssue - Optional map or array of all tasks; required to determine which ancestor is the epic
- * @returns Epic ID (e.g. os-a3f8) or null if no epic in chain or idToIssue not provided
- */
-export function resolveEpicId(
-  taskId: string | undefined | null,
-  idToIssue?: Map<string, StoredTask> | StoredTask[]
-): string | null {
-  if (taskId == null || typeof taskId !== "string") return null;
-  const map =
-    idToIssue instanceof Map
-      ? idToIssue
-      : Array.isArray(idToIssue)
-        ? new Map(idToIssue.map((t) => [t.id, t]))
-        : undefined;
-  if (!map) return null;
-  let current: string | null = taskId;
-  while (current) {
-    const lastDot = current.lastIndexOf(".");
-    if (lastDot <= 0) return null;
-    const parentId = current.slice(0, lastDot);
-    const parent = map.get(parentId);
-    if (parent && (parent.issue_type ?? (parent as { type?: string }).type) === "epic") {
-      return parentId;
-    }
-    current = parentId;
-  }
-  return null;
-}
+const log = createLogger("task-store");
 
 export class TaskStoreService {
   private client: DbClient | null = null;
@@ -150,6 +76,14 @@ export class TaskStoreService {
   private selfImprovementRunHistoryStore = new SelfImprovementRunHistoryStore(() =>
     this.ensureClient()
   );
+  private planAuditorSIFacade = new TaskStorePlanAuditorSIFacade({
+    ensureInitialized: () => this.ensureInitialized(),
+    withWriteLock: <T>(fn: () => Promise<T>) => this.withWriteLock(fn),
+    planStore: this.planStore,
+    planVersionStore: this.planVersionStore,
+    auditorRunStore: this.auditorRunStore,
+    selfImprovementRunHistoryStore: this.selfImprovementRunHistoryStore,
+  });
 
   constructor(injectedClient?: DbClient) {
     if (injectedClient) {
@@ -357,55 +291,6 @@ export class TaskStoreService {
     return { depsByTaskId, dependentCountByTaskId };
   }
 
-  private hydrateTask(
-    row: Record<string, unknown>,
-    depsByTaskId?: Map<string, Array<{ depends_on_id: string; type: string }>>,
-    dependentCountByTaskId?: Map<string, number>
-  ): StoredTask {
-    const labels: string[] = JSON.parse((row.labels as string) || "[]");
-    const extra: Record<string, unknown> = JSON.parse((row.extra as string) || "{}");
-
-    let deps: Array<{ depends_on_id: string; type: string }>;
-    let dependentCount: number;
-
-    if (depsByTaskId != null && dependentCountByTaskId != null) {
-      deps = depsByTaskId.get(row.id as string) ?? [];
-      dependentCount = dependentCountByTaskId.get(row.id as string) ?? 0;
-    } else {
-      deps = [];
-      dependentCount = 0;
-    }
-
-    const blockReason = (extra.block_reason as string) ?? null;
-    const lastAutoRetryAt = (extra.last_auto_retry_at as string) ?? null;
-    const complexity = clampTaskComplexity(row.complexity);
-    return {
-      ...extra,
-      ...(complexity != null && { complexity }),
-      block_reason: blockReason,
-      last_auto_retry_at: lastAutoRetryAt,
-      id: row.id as string,
-      project_id: row.project_id as string | undefined,
-      title: row.title as string,
-      description: (row.description as string) ?? undefined,
-      issue_type: row.issue_type as string,
-      status: row.status as string,
-      priority: row.priority as number,
-      assignee: (row.assignee as string) ?? null,
-      owner: (row.owner as string) ?? null,
-      labels,
-      created_at: row.created_at as string,
-      updated_at: row.updated_at as string,
-      created_by: (row.created_by as string) ?? undefined,
-      close_reason: (row.close_reason as string) ?? undefined,
-      started_at: (row.started_at as string) ?? null,
-      completed_at: (row.completed_at as string) ?? null,
-      dependencies: deps,
-      dependency_count: deps.length,
-      dependent_count: dependentCount,
-    };
-  }
-
   private async hydrateTaskWithDeps(row: Record<string, unknown>): Promise<StoredTask> {
     const client = this.ensureClient();
     const deps = await client.query(
@@ -417,7 +302,7 @@ export class TaskStoreService {
       [row.id]
     );
     const dependentCount = (depCountRow?.cnt as number) ?? 0;
-    return this.hydrateTask(
+    return hydrateTask(
       row,
       new Map([
         [
@@ -442,7 +327,7 @@ export class TaskStoreService {
     if (rows.length === 0) return [];
     const { depsByTaskId, dependentCountByTaskId } = await this.loadDepsMapsForProject(projectId);
     return rows.map((row) =>
-      this.hydrateTask(row as Record<string, unknown>, depsByTaskId, dependentCountByTaskId)
+      hydrateTask(row as Record<string, unknown>, depsByTaskId, dependentCountByTaskId)
     );
   }
 
@@ -614,11 +499,7 @@ export class TaskStoreService {
   }
 
   getBlockersFromIssue(issue: StoredTask): string[] {
-    const deps = issue.dependencies ?? [];
-    return deps
-      .filter((d) => d.type === "blocks")
-      .map((d) => d.depends_on_id)
-      .filter((x): x is string => !!x);
+    return getBlockersFromIssue(issue);
   }
 
   async readyWithStatusMap(
@@ -639,7 +520,7 @@ export class TaskStoreService {
         if (epicStatus === "blocked") continue;
       }
 
-      const blockers = this.getBlockersFromIssue(issue);
+      const blockers = getBlockersFromIssue(issue);
       const allBlockersClosed =
         blockers.length === 0 || blockers.every((bid) => statusMap.get(bid) === "closed");
       if (allBlockersClosed) {
@@ -677,178 +558,19 @@ export class TaskStoreService {
     await this.ensureInitialized();
     try {
       const issue = await this.show(projectId, id);
-      return this.getBlockersFromIssue(issue);
+      return getBlockersFromIssue(issue);
     } catch {
       return [];
     }
   }
 
   getParentId(taskId: string): string | null {
-    const lastDot = taskId.lastIndexOf(".");
-    if (lastDot <= 0) return null;
-    return taskId.slice(0, lastDot);
+    return getParentIdHelper(taskId);
   }
 
   /** Find plan epic by walking up parent chain (epic.1.2 -> epic.1 -> epic). */
   private getPlanEpicId(issue: StoredTask, allIssues: StoredTask[]): string | null {
     return resolveEpicId(issue.id ?? "", allIssues);
-  }
-
-  /** Throws if assignee change is not allowed (task in progress and not reopening). */
-  private validateAssigneeChange(
-    currentStatus: string | undefined,
-    options: { status?: string; assignee?: string; claim?: boolean },
-    issueId: string
-  ): void {
-    const claimLikeTransition =
-      options.status === "in_progress" && options.assignee !== undefined;
-    if (options.claim || claimLikeTransition || options.assignee === undefined) return;
-    const reopening = options.status === "open";
-    if (currentStatus === "in_progress" && !reopening) {
-      throw new AppError(
-        400,
-        ErrorCodes.ASSIGNEE_LOCKED,
-        "Cannot change assignee while task is in progress",
-        { issueId }
-      );
-    }
-  }
-
-  /** Merge options.extra, block_reason, last_auto_retry_at into existing extra JSON. Returns undefined if no extra-related options. */
-  private mergeExtraForUpdate(
-    existing: Record<string, unknown>,
-    options: {
-      extra?: Record<string, unknown>;
-      block_reason?: string | null;
-      last_auto_retry_at?: string | null;
-    }
-  ): Record<string, unknown> {
-    const merged: Record<string, unknown> = { ...existing, ...options.extra };
-    if (options.block_reason !== undefined) {
-      if (options.block_reason == null || options.block_reason === "") {
-        delete merged.block_reason;
-      } else {
-        merged.block_reason = options.block_reason;
-      }
-    }
-    if (options.last_auto_retry_at !== undefined) {
-      if (options.last_auto_retry_at == null || options.last_auto_retry_at === "") {
-        delete merged.last_auto_retry_at;
-      } else {
-        merged.last_auto_retry_at = options.last_auto_retry_at;
-      }
-    }
-    return merged;
-  }
-
-  /** Build SET clause and values for a single-task update. Row may contain status, started_at, extra for conditional logic. Returns nextIdx for WHERE id = $nextIdx AND project_id = $(nextIdx+1). */
-  private buildTaskUpdateSets(
-    options: {
-      title?: string;
-      status?: string;
-      assignee?: string;
-      description?: string;
-      priority?: number;
-      claim?: boolean;
-      complexity?: number | null;
-      extra?: Record<string, unknown>;
-      block_reason?: string | null;
-      last_auto_retry_at?: string | null;
-    },
-    now: string,
-    row: { status?: string; started_at?: string | null; extra?: string } | null,
-    mergedExtra: Record<string, unknown> | undefined
-  ): { sets: string[]; vals: unknown[]; nextIdx: number } {
-    const sets: string[] = ["updated_at = $1"];
-    const vals: unknown[] = [now];
-    let idx = 2;
-
-    if (options.title != null) {
-      sets.push(`title = $${idx++}`);
-      vals.push(options.title);
-    }
-    if (options.claim) {
-      sets.push(`status = $${idx++}`);
-      vals.push("in_progress");
-      if (options.assignee != null) {
-        sets.push(`assignee = $${idx++}`);
-        vals.push(options.assignee);
-      }
-    } else {
-      if (options.status != null) {
-        sets.push(`status = $${idx++}`);
-        vals.push(options.status);
-      }
-      if (options.assignee !== undefined) {
-        sets.push(`assignee = $${idx++}`);
-        vals.push(options.assignee);
-        const reopening = options.status === "open" && (options.assignee === "" || options.assignee == null);
-        if (reopening) {
-          sets.push(`started_at = $${idx++}`);
-          vals.push(null);
-        }
-      }
-    }
-
-    const assigneeBeingSet = options.assignee != null && options.assignee.trim() !== "";
-    if (assigneeBeingSet && row && (row.started_at == null || row.started_at === "")) {
-      sets.push(`started_at = $${idx++}`);
-      vals.push(now);
-    }
-    if (options.description != null) {
-      sets.push(`description = $${idx++}`);
-      vals.push(options.description);
-    }
-    if (options.priority != null) {
-      sets.push(`priority = $${idx++}`);
-      vals.push(options.priority);
-    }
-    if (options.complexity !== undefined) {
-      const c = clampTaskComplexity(options.complexity);
-      sets.push(`complexity = $${idx++}`);
-      vals.push(c ?? null);
-    }
-    if (mergedExtra !== undefined) {
-      sets.push(`extra = $${idx++}`);
-      vals.push(JSON.stringify(mergedExtra));
-    }
-    return { sets, vals, nextIdx: idx };
-  }
-
-  /** Build SET clause and values for updateMany (status, assignee, description, priority, started_at). Returns nextIdx for WHERE. */
-  private buildUpdateManySets(
-    u: { status?: string; assignee?: string; description?: string; priority?: number },
-    now: string,
-    row: { started_at?: string | null } | null
-  ): { sets: string[]; vals: unknown[]; nextIdx: number } {
-    const sets: string[] = ["updated_at = $1"];
-    const vals: unknown[] = [now];
-    let idx = 2;
-    if (u.status != null) {
-      sets.push(`status = $${idx++}`);
-      vals.push(u.status);
-    }
-    if (u.assignee !== undefined) {
-      sets.push(`assignee = $${idx++}`);
-      vals.push(u.assignee ?? null);
-      const reopening = u.status === "open" && (u.assignee === "" || u.assignee == null);
-      if (reopening) {
-        sets.push(`started_at = $${idx++}`);
-        vals.push(null);
-      } else if (u.assignee != null && u.assignee.trim() !== "" && row && (row.started_at == null || row.started_at === "")) {
-        sets.push(`started_at = $${idx++}`);
-        vals.push(now);
-      }
-    }
-    if (u.description != null) {
-      sets.push(`description = $${idx++}`);
-      vals.push(u.description);
-    }
-    if (u.priority != null) {
-      sets.push(`priority = $${idx++}`);
-      vals.push(u.priority);
-    }
-    return { sets, vals, nextIdx: idx };
   }
 
   // ──── Write methods (mutex + save) ────
@@ -857,7 +579,6 @@ export class TaskStoreService {
     return this.withWriteLock(async () => {
       await this.ensureInitialized();
       const client = this.ensureClient();
-      const id = await this.generateId(projectId, options.parentId);
       const now = new Date().toISOString();
       const type = (options.type as string) ?? "task";
       const priority = options.priority ?? 2;
@@ -865,24 +586,46 @@ export class TaskStoreService {
       const baseExtra: Record<string, unknown> = { ...options.extra };
       const extra = JSON.stringify(baseExtra);
 
-      await client.execute(
-        toPgParams(
-          `INSERT INTO tasks (id, project_id, title, description, issue_type, status, priority, assignee, labels, created_at, updated_at, complexity, extra)
-           VALUES (?, ?, ?, ?, ?, 'open', ?, NULL, '[]', ?, ?, ?, ?)`
-        ),
-        [
-          id,
-          projectId,
-          title,
-          options.description ?? null,
-          type,
-          priority,
-          now,
-          now,
-          complexity ?? null,
-          extra,
-        ]
-      );
+      const isTopLevel = options.parentId == null;
+      const maxAttempts = isTopLevel ? 3 : 1;
+      let lastError: unknown;
+      let id: string | null = null;
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          id = await this.generateId(projectId, options.parentId);
+          await client.execute(
+            toPgParams(
+              `INSERT INTO tasks (id, project_id, title, description, issue_type, status, priority, assignee, labels, created_at, updated_at, complexity, extra)
+               VALUES (?, ?, ?, ?, ?, 'open', ?, NULL, '[]', ?, ?, ?, ?)`
+            ),
+            [
+              id,
+              projectId,
+              title,
+              options.description ?? null,
+              type,
+              priority,
+              now,
+              now,
+              complexity ?? null,
+              extra,
+            ]
+          );
+          break;
+        } catch (err: unknown) {
+          lastError = err;
+          if (!isTopLevel || !isDuplicateKeyErrorHelper(err)) throw err;
+          log.warn("Duplicate key on create (top-level ID), retrying", {
+            title,
+            attempt: attempt + 1,
+          });
+        }
+      }
+
+      if (id == null) {
+        throw lastError;
+      }
 
       if (options.parentId) {
         await client.execute(
@@ -899,11 +642,6 @@ export class TaskStoreService {
     });
   }
 
-  private isDuplicateKeyError(err: unknown): boolean {
-    const msg = getErrorMessage(err);
-    return /unique constraint|already exists|duplicate/i.test(msg);
-  }
-
   async createWithRetry(
     projectId: string,
     title: string,
@@ -918,7 +656,7 @@ export class TaskStoreService {
         return await this.create(projectId, title, options);
       } catch (err: unknown) {
         lastError = err;
-        if (!this.isDuplicateKeyError(err)) throw err;
+        if (!isDuplicateKeyErrorHelper(err)) throw err;
         log.warn("Duplicate key on create, retrying", {
           title,
           attempt: attempt + 1,
@@ -1062,7 +800,7 @@ export class TaskStoreService {
           }
         : null;
 
-      this.validateAssigneeChange(rowShape?.status, options, id);
+      validateAssigneeChangeHelper(rowShape?.status, options, id);
 
       let mergedExtra: Record<string, unknown> | undefined;
       if (
@@ -1073,10 +811,10 @@ export class TaskStoreService {
         const existing: Record<string, unknown> = rowShape?.extra
           ? (JSON.parse(rowShape.extra || "{}") as Record<string, unknown>)
           : {};
-        mergedExtra = this.mergeExtraForUpdate(existing, options);
+        mergedExtra = mergeExtraForUpdateHelper(existing, options);
       }
 
-      const { sets, vals, nextIdx } = this.buildTaskUpdateSets(options, now, rowShape, mergedExtra);
+      const { sets, vals, nextIdx } = buildTaskUpdateSetsHelper(options, now, rowShape, mergedExtra);
       vals.push(id, projectId);
       const updateSql = `UPDATE tasks SET ${sets.join(", ")} WHERE id = $${nextIdx} AND project_id = $${nextIdx + 1}`;
       const modified = await client.execute(updateSql, vals);
@@ -1120,10 +858,10 @@ export class TaskStoreService {
               }
             : null;
 
-          this.validateAssigneeChange(rowShape?.status, u, u.id);
+          validateAssigneeChangeHelper(rowShape?.status, u, u.id);
 
           const now = new Date().toISOString();
-          const { sets, vals, nextIdx } = this.buildUpdateManySets(u, now, rowShape);
+          const { sets, vals, nextIdx } = buildUpdateManySetsHelper(u, now, rowShape);
           vals.push(u.id, projectId);
           const sql = `UPDATE tasks SET ${sets.join(", ")} WHERE id = $${nextIdx} AND project_id = $${nextIdx + 1}`;
           await tx.execute(sql, vals);
@@ -1240,166 +978,6 @@ export class TaskStoreService {
     });
   }
 
-  private stripTaskLinesFromPlanContent(
-    content: string,
-    taskId: string
-  ): { content: string; changed: boolean } {
-    if (!content || !taskId) return { content, changed: false };
-    const lines = content.split("\n");
-    const kept = lines.filter((line) => !line.includes(taskId));
-    if (kept.length === lines.length) return { content, changed: false };
-    return { content: kept.join("\n"), changed: true };
-  }
-
-  private pruneTaskIdFromJson(
-    value: unknown,
-    taskId: string
-  ): { value: unknown; changed: boolean } {
-    if (Array.isArray(value)) {
-      let changed = false;
-      const next: unknown[] = [];
-      for (const item of value) {
-        if (typeof item === "string" && item === taskId) {
-          changed = true;
-          continue;
-        }
-        const pruned = this.pruneTaskIdFromJson(item, taskId);
-        if (pruned.changed) changed = true;
-        next.push(pruned.value);
-      }
-      return changed ? { value: next, changed: true } : { value, changed: false };
-    }
-
-    if (value != null && typeof value === "object") {
-      let changed = false;
-      const next: Record<string, unknown> = {};
-      for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
-        if (typeof raw === "string" && raw === taskId) {
-          changed = true;
-          continue;
-        }
-        const pruned = this.pruneTaskIdFromJson(raw, taskId);
-        if (pruned.changed) changed = true;
-        next[key] = pruned.value;
-      }
-      return changed ? { value: next, changed: true } : { value, changed: false };
-    }
-
-    return { value, changed: false };
-  }
-
-  private async removeTaskReferencesFromFeedback(
-    client: DbClient,
-    projectId: string,
-    taskId: string
-  ): Promise<void> {
-    const rows = await client.query(
-      toPgParams(
-        "SELECT id, created_task_ids, feedback_source_task_id, mapped_epic_id FROM feedback WHERE project_id = ?"
-      ),
-      [projectId]
-    );
-
-    for (const row of rows) {
-      const feedbackId = row.id as string;
-      const sourceTaskId = (row.feedback_source_task_id as string | null) ?? null;
-      const mappedEpicId = (row.mapped_epic_id as string | null) ?? null;
-      let createdTaskIds: string[] = [];
-      try {
-        createdTaskIds = JSON.parse((row.created_task_ids as string) || "[]") as string[];
-      } catch {
-        createdTaskIds = [];
-      }
-      const filteredTaskIds = createdTaskIds.filter((id) => id !== taskId);
-      const createdChanged = filteredTaskIds.length !== createdTaskIds.length;
-      const sourceChanged = sourceTaskId === taskId;
-      const mappedEpicChanged = mappedEpicId === taskId;
-      if (!createdChanged && !sourceChanged && !mappedEpicChanged) continue;
-      await client.execute(
-        toPgParams(
-          "UPDATE feedback SET created_task_ids = ?, feedback_source_task_id = ?, mapped_epic_id = ? WHERE project_id = ? AND id = ?"
-        ),
-        [
-          JSON.stringify(filteredTaskIds),
-          sourceChanged ? null : sourceTaskId,
-          mappedEpicChanged ? null : mappedEpicId,
-          projectId,
-          feedbackId,
-        ]
-      );
-    }
-  }
-
-  private async removeTaskReferencesFromPlans(
-    client: DbClient,
-    projectId: string,
-    taskId: string
-  ): Promise<void> {
-    const rows = await client.query(
-      toPgParams(
-        "SELECT plan_id, content, metadata, gate_task_id, re_execute_gate_task_id FROM plans WHERE project_id = ?"
-      ),
-      [projectId]
-    );
-    const now = new Date().toISOString();
-
-    for (const row of rows) {
-      const planId = row.plan_id as string;
-      const currentContent = (row.content as string) ?? "";
-      const currentMetadataRaw = (row.metadata as string) ?? "{}";
-      const currentGateTaskId = (row.gate_task_id as string | null) ?? null;
-      const currentReExecuteGateTaskId = (row.re_execute_gate_task_id as string | null) ?? null;
-
-      let currentMetadata: Record<string, unknown>;
-      try {
-        currentMetadata = JSON.parse(currentMetadataRaw) as Record<string, unknown>;
-      } catch {
-        currentMetadata = {};
-      }
-
-      const strippedContent = this.stripTaskLinesFromPlanContent(currentContent, taskId);
-      const prunedMetadata = this.pruneTaskIdFromJson(currentMetadata, taskId);
-      const nextGateTaskId = currentGateTaskId === taskId ? null : currentGateTaskId;
-      const nextReExecuteGateTaskId =
-        currentReExecuteGateTaskId === taskId ? null : currentReExecuteGateTaskId;
-      const gateChanged = nextGateTaskId !== currentGateTaskId;
-      const reExecuteGateChanged = nextReExecuteGateTaskId !== currentReExecuteGateTaskId;
-
-      if (
-        !strippedContent.changed &&
-        !prunedMetadata.changed &&
-        !gateChanged &&
-        !reExecuteGateChanged
-      ) {
-        continue;
-      }
-
-      await client.execute(
-        toPgParams(
-          "UPDATE plans SET content = ?, metadata = ?, gate_task_id = ?, re_execute_gate_task_id = ?, updated_at = ? WHERE project_id = ? AND plan_id = ?"
-        ),
-        [
-          strippedContent.content,
-          JSON.stringify(prunedMetadata.value),
-          nextGateTaskId,
-          nextReExecuteGateTaskId,
-          now,
-          projectId,
-          planId,
-        ]
-      );
-    }
-  }
-
-  private async cascadeDeleteTaskReferences(
-    client: DbClient,
-    projectId: string,
-    taskId: string
-  ): Promise<void> {
-    await this.removeTaskReferencesFromFeedback(client, projectId, taskId);
-    await this.removeTaskReferencesFromPlans(client, projectId, taskId);
-  }
-
   async delete(projectId: string, id: string): Promise<void> {
     return this.withWriteLock(async () => {
       await this.ensureInitialized();
@@ -1411,7 +989,7 @@ export class TaskStoreService {
         );
         if (!existing) return 0;
 
-        await this.cascadeDeleteTaskReferences(tx, projectId, id);
+        await cascadeDeleteTaskReferences(tx, projectId, id);
         await tx.execute(
           toPgParams("DELETE FROM task_dependencies WHERE task_id = ? OR depends_on_id = ?"),
           [id, id]
@@ -1443,7 +1021,7 @@ export class TaskStoreService {
             [id, projectId]
           );
           if (!existing) continue;
-          await this.cascadeDeleteTaskReferences(tx, projectId, id);
+          await cascadeDeleteTaskReferences(tx, projectId, id);
           await tx.execute(
             toPgParams("DELETE FROM task_dependencies WHERE task_id = ? OR depends_on_id = ?"),
             [id, id]
@@ -1530,7 +1108,7 @@ export class TaskStoreService {
         toPgParams("DELETE FROM help_chat_histories WHERE scope_key = ? OR scope_key = ?"),
         [`project:${projectId}`, projectId]
       );
-      await this.planStore.planDeleteAllForProject(projectId);
+      await this.planAuditorSIFacade.planDeleteAllForProject(projectId);
       await client.execute(toPgParams("DELETE FROM open_questions WHERE project_id = ?"), [
         projectId,
       ]);
@@ -1589,15 +1167,7 @@ export class TaskStoreService {
   }
 
   getCumulativeAttemptsFromIssue(issue: StoredTask): number {
-    const labels = (issue.labels ?? []) as string[];
-    let max = 0;
-    for (const l of labels) {
-      if (/^attempts:\d+$/.test(l)) {
-        const n = parseInt(l.split(":")[1]!, 10);
-        if (!Number.isNaN(n) && n > max) max = n;
-      }
-    }
-    return max;
+    return getCumulativeAttemptsFromIssueHelper(issue);
   }
 
   async getCumulativeAttempts(projectId: string, id: string): Promise<number> {
@@ -1622,20 +1192,13 @@ export class TaskStoreService {
   }
 
   hasLabel(issue: StoredTask, label: string): boolean {
-    return Array.isArray(issue.labels) && issue.labels.includes(label);
+    return hasLabelHelper(issue, label);
   }
 
   getFileScopeLabels(
     issue: StoredTask
   ): { modify?: string[]; create?: string[]; test?: string[] } | null {
-    const labels = (issue.labels ?? []) as string[];
-    const label = labels.find((l) => l.startsWith("files:"));
-    if (!label) return null;
-    try {
-      return JSON.parse(label.slice("files:".length));
-    } catch {
-      return null;
-    }
+    return getFileScopeLabelsHelper(issue);
   }
 
   async setActualFiles(projectId: string, id: string, files: string[]): Promise<void> {
@@ -1651,15 +1214,7 @@ export class TaskStoreService {
   }
 
   getConflictFilesFromIssue(issue: StoredTask): string[] {
-    const labels = (issue.labels ?? []) as string[];
-    const label = labels.find((l) => l.startsWith("conflict_files:"));
-    if (!label) return [];
-    try {
-      const parsed = JSON.parse(label.slice("conflict_files:".length));
-      return Array.isArray(parsed) ? parsed.filter((f): f is string => typeof f === "string") : [];
-    } catch {
-      return [];
-    }
+    return getConflictFilesFromIssueHelper(issue);
   }
 
   async setConflictFiles(projectId: string, id: string, files: string[]): Promise<void> {
@@ -1675,9 +1230,7 @@ export class TaskStoreService {
   }
 
   getMergeStageFromIssue(issue: StoredTask): string | null {
-    const labels = (issue.labels ?? []) as string[];
-    const label = labels.find((l) => l.startsWith("merge_stage:"));
-    return label ? label.slice("merge_stage:".length) : null;
+    return getMergeStageFromIssueHelper(issue);
   }
 
   async setMergeStage(projectId: string, id: string, stage: string | null): Promise<void> {
@@ -1695,13 +1248,10 @@ export class TaskStoreService {
   /** No-op. Dolt sync removed — persistence is handled by Postgres. */
   async syncForPush(_projectId: string): Promise<void> {}
 
-  // ──── Plan storage (delegated to PlanStore) ────
+  // ──── Plan / Auditor / Self-improvement (delegated to facade) ────
 
   async planInsert(projectId: string, planId: string, data: PlanInsertData): Promise<void> {
-    return this.withWriteLock(async () => {
-      await this.ensureInitialized();
-      await this.planStore.planInsert(projectId, planId, data);
-    });
+    return this.planAuditorSIFacade.planInsert(projectId, planId, data);
   }
 
   async planGet(
@@ -1715,8 +1265,7 @@ export class TaskStoreService {
     current_version_number: number;
     last_executed_version_number: number | null;
   } | null> {
-    await this.ensureInitialized();
-    return this.planStore.planGet(projectId, planId);
+    return this.planAuditorSIFacade.planGet(projectId, planId);
   }
 
   async planGetByEpicId(
@@ -1731,13 +1280,11 @@ export class TaskStoreService {
     current_version_number: number;
     last_executed_version_number: number | null;
   } | null> {
-    await this.ensureInitialized();
-    return this.planStore.planGetByEpicId(projectId, epicId);
+    return this.planAuditorSIFacade.planGetByEpicId(projectId, epicId);
   }
 
   async planListIds(projectId: string): Promise<string[]> {
-    await this.ensureInitialized();
-    return this.planStore.planListIds(projectId);
+    return this.planAuditorSIFacade.planListIds(projectId);
   }
 
   async planUpdateContent(
@@ -1746,15 +1293,12 @@ export class TaskStoreService {
     content: string,
     currentVersionNumber?: number
   ): Promise<void> {
-    return this.withWriteLock(async () => {
-      await this.ensureInitialized();
-      await this.planStore.planUpdateContent(
-        projectId,
-        planId,
-        content,
-        currentVersionNumber
-      );
-    });
+    return this.planAuditorSIFacade.planUpdateContent(
+      projectId,
+      planId,
+      content,
+      currentVersionNumber
+    );
   }
 
   async planUpdateMetadata(
@@ -1762,10 +1306,7 @@ export class TaskStoreService {
     planId: string,
     metadata: Record<string, unknown>
   ): Promise<void> {
-    return this.withWriteLock(async () => {
-      await this.ensureInitialized();
-      await this.planStore.planUpdateMetadata(projectId, planId, metadata);
-    });
+    return this.planAuditorSIFacade.planUpdateMetadata(projectId, planId, metadata);
   }
 
   async planSetShippedContent(
@@ -1773,15 +1314,11 @@ export class TaskStoreService {
     planId: string,
     shippedContent: string
   ): Promise<void> {
-    return this.withWriteLock(async () => {
-      await this.ensureInitialized();
-      await this.planStore.planSetShippedContent(projectId, planId, shippedContent);
-    });
+    return this.planAuditorSIFacade.planSetShippedContent(projectId, planId, shippedContent);
   }
 
   async planGetShippedContent(projectId: string, planId: string): Promise<string | null> {
-    await this.ensureInitialized();
-    return this.planStore.planGetShippedContent(projectId, planId);
+    return this.planAuditorSIFacade.planGetShippedContent(projectId, planId);
   }
 
   async planUpdateVersionNumbers(
@@ -1789,15 +1326,11 @@ export class TaskStoreService {
     planId: string,
     updates: { current_version_number?: number; last_executed_version_number?: number | null }
   ): Promise<void> {
-    return this.withWriteLock(async () => {
-      await this.ensureInitialized();
-      await this.planStore.planUpdateVersionNumbers(projectId, planId, updates);
-    });
+    return this.planAuditorSIFacade.planUpdateVersionNumbers(projectId, planId, updates);
   }
 
   async planVersionList(projectId: string, planId: string): Promise<PlanVersionListItem[]> {
-    await this.ensureInitialized();
-    return this.planVersionStore.list(projectId, planId);
+    return this.planAuditorSIFacade.planVersionList(projectId, planId);
   }
 
   async planVersionGetByVersionNumber(
@@ -1805,15 +1338,15 @@ export class TaskStoreService {
     planId: string,
     versionNumber: number
   ): Promise<PlanVersionRow> {
-    await this.ensureInitialized();
-    return this.planVersionStore.getByVersionNumber(projectId, planId, versionNumber);
+    return this.planAuditorSIFacade.planVersionGetByVersionNumber(
+      projectId,
+      planId,
+      versionNumber
+    );
   }
 
   async planVersionInsert(data: PlanVersionInsert): Promise<PlanVersionRow> {
-    return this.withWriteLock(async () => {
-      await this.ensureInitialized();
-      return this.planVersionStore.insert(data);
-    });
+    return this.planAuditorSIFacade.planVersionInsert(data);
   }
 
   async planVersionSetExecutedVersion(
@@ -1821,69 +1354,58 @@ export class TaskStoreService {
     planId: string,
     versionNumber: number
   ): Promise<void> {
-    return this.withWriteLock(async () => {
-      await this.ensureInitialized();
-      await this.planVersionStore.setExecutedVersion(projectId, planId, versionNumber);
-    });
+    return this.planAuditorSIFacade.planVersionSetExecutedVersion(
+      projectId,
+      planId,
+      versionNumber
+    );
   }
 
   async planDelete(projectId: string, planId: string): Promise<boolean> {
-    return this.withWriteLock(async () => {
-      await this.ensureInitialized();
-      return this.planStore.planDelete(projectId, planId);
-    });
+    return this.planAuditorSIFacade.planDelete(projectId, planId);
   }
 
-  /** List plan versions for a plan (newest first). */
   async listPlanVersions(
     projectId: string,
     planId: string
   ): Promise<PlanVersionListItem[]> {
-    await this.ensureInitialized();
-    return this.planVersionStore.list(projectId, planId);
+    return this.planAuditorSIFacade.listPlanVersions(projectId, planId);
   }
 
-  /** Get a single plan version by version number. Throws 404 if not found. */
   async getPlanVersionByNumber(
     projectId: string,
     planId: string,
     versionNumber: number
   ): Promise<PlanVersionRow> {
-    await this.ensureInitialized();
-    return this.planVersionStore.getByVersionNumber(projectId, planId, versionNumber);
+    return this.planAuditorSIFacade.getPlanVersionByNumber(
+      projectId,
+      planId,
+      versionNumber
+    );
   }
-
-  // ──── Auditor run storage (final review Auditor execution records) ────
 
   async auditorRunInsert(record: AuditorRunInsert): Promise<AuditorRunRecord> {
-    return this.withWriteLock(async () => {
-      await this.ensureInitialized();
-      return this.auditorRunStore.insert(record);
-    });
+    return this.planAuditorSIFacade.auditorRunInsert(record);
   }
 
-  async listAuditorRunsByPlanId(projectId: string, planId: string): Promise<AuditorRunRecord[]> {
-    await this.ensureInitialized();
-    return this.auditorRunStore.listByPlanId(projectId, planId);
+  async listAuditorRunsByPlanId(
+    projectId: string,
+    planId: string
+  ): Promise<AuditorRunRecord[]> {
+    return this.planAuditorSIFacade.listAuditorRunsByPlanId(projectId, planId);
   }
-
-  // ──── Self-improvement run history ────
 
   async insertSelfImprovementRunHistory(
     record: SelfImprovementRunHistoryInsert
   ): Promise<SelfImprovementRunHistoryRecord> {
-    return this.withWriteLock(async () => {
-      await this.ensureInitialized();
-      return this.selfImprovementRunHistoryStore.insert(record);
-    });
+    return this.planAuditorSIFacade.insertSelfImprovementRunHistory(record);
   }
 
   async listSelfImprovementRunHistory(
     projectId: string,
     limit?: number
   ): Promise<SelfImprovementRunHistoryRecord[]> {
-    await this.ensureInitialized();
-    return this.selfImprovementRunHistoryStore.listByProjectId(projectId, limit);
+    return this.planAuditorSIFacade.listSelfImprovementRunHistory(projectId, limit);
   }
 
   private async ensureInitialized(): Promise<void> {
