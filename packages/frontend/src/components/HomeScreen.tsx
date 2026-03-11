@@ -294,7 +294,7 @@ export function HomeScreen() {
             <h2 className="text-lg font-semibold text-theme-text mb-3">Installation checklist</h2>
             <p className="text-sm text-theme-muted mb-4">
               Install the following so you can create new projects. We check every few seconds—once
-              everything is installed, we'll detect it and restart the backend so you can continue
+              everything is installed, we&apos;ll detect it and restart the backend so you can continue
               without restarting the app.
             </p>
             <ul className="space-y-2">

@@ -270,7 +270,7 @@ envRouter.post(
   "/cursor-cli-install",
   wrapAsync(async (_req, res) => {
     const isWin = process.platform === "win32";
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve) => {
       const timeout = 120_000;
       if (isWin) {
         const child = exec(

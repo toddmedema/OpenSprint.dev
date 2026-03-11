@@ -603,7 +603,7 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
       }
     }
 
-    let cappedItems = capAndDedupeImprovementItems(
+    const cappedItems = capAndDedupeImprovementItems(
       allItems,
       MAX_SELF_IMPROVEMENT_TASKS_PER_RUN
     );

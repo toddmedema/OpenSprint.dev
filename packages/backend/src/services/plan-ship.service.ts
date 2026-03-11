@@ -4,8 +4,6 @@
  */
 import type { Plan, PlanComplexity } from "@opensprint/shared";
 import { clampTaskComplexity, getAgentForPlanningRole } from "@opensprint/shared";
-import { getEpicTitleFromPlanContent } from "./plan/planner-normalize.js";
-import { assembleReExecuteContext } from "./plan/plan-codebase-context.js";
 import {
   getContentAndVersionForShip,
   setExecutedVersion,
@@ -20,7 +18,7 @@ import { buildAuditorPrompt, parseAuditorResult } from "./auditor.service.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
-import { broadcastToProject, sendPlanAgentOutputToProject } from "../websocket/index.js";
+import { sendPlanAgentOutputToProject } from "../websocket/index.js";
 import { appendPlanAgentOutput, clearPlanAgentOutput } from "./plan-agent-output-buffer.service.js";
 import { createLogger } from "../utils/logger.js";
 

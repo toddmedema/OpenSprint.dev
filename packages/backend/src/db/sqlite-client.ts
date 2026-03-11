@@ -4,7 +4,9 @@
  */
 
 import fs from "fs/promises";
+import { createRequire } from "module";
 import path from "path";
+import { pathToFileURL } from "url";
 import type { DbClient, DbRow } from "./client.js";
 import { databaseRuntime } from "../services/database-runtime.service.js";
 import { AppError } from "../middleware/error-handler.js";
@@ -13,6 +15,9 @@ import { classifyDbConnectionError, isDbConnectionError } from "./db-errors.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("sqlite-runtime");
+const SQLITE_MODULE_NAME = "better-sqlite3";
+const SQLITE_BINDING_FILE_NAME = "better_sqlite3.node";
+const SQLITE_MODULE_PATH_ENV = "OPENSPRINT_SQLITE_MODULE_PATH";
 const DESKTOP_RUNTIME_MANIFEST = "runtime-diagnostics.json";
 
 /** Convert Postgres $1, $2 placeholders to SQLite ? and return params in order. */
@@ -84,10 +89,61 @@ async function pathExists(candidate: string): Promise<boolean> {
   }
 }
 
+function getConfiguredSqliteModulePath(): string | null {
+  const configuredPath = process.env[SQLITE_MODULE_PATH_ENV]?.trim();
+  if (!configuredPath) {
+    return null;
+  }
+  return path.resolve(configuredPath);
+}
+
+function getSqliteBindingPath(modulePath: string): string {
+  return path.join(modulePath, "build", "Release", SQLITE_BINDING_FILE_NAME);
+}
+
+function normalizeSqliteModuleExport(
+  loaded: unknown
+): typeof import("better-sqlite3") {
+  return (
+    (loaded as { default?: typeof import("better-sqlite3") }).default ??
+    (loaded as unknown as typeof import("better-sqlite3"))
+  );
+}
+
+async function loadSqliteModule(): Promise<typeof import("better-sqlite3")> {
+  try {
+    const imported = await import(SQLITE_MODULE_NAME);
+    return normalizeSqliteModuleExport(imported);
+  } catch (primaryErr) {
+    const configuredModulePath = getConfiguredSqliteModulePath();
+    if (!configuredModulePath) {
+      throw primaryErr;
+    }
+
+    try {
+      if (!(await pathExists(configuredModulePath))) {
+        throw new Error(`Configured SQLite module path does not exist: ${configuredModulePath}`);
+      }
+      const runtimeRequire = createRequire(
+        pathToFileURL(path.join(process.cwd(), "__opensprint_sqlite_loader__.mjs")).href
+      );
+      const loaded = runtimeRequire(configuredModulePath);
+      return normalizeSqliteModuleExport(loaded);
+    } catch (fallbackErr) {
+      log.warn("Could not load SQLite runtime from configured module path", {
+        configuredModulePath,
+        code: getUnknownErrorCode(fallbackErr),
+        message: getUnknownErrorMessage(fallbackErr),
+      });
+      throw primaryErr;
+    }
+  }
+}
+
 async function collectDesktopSqliteRuntimeDiagnostics(absPath: string): Promise<Record<string, unknown>> {
   const cwd = process.cwd();
-  const modulePath = path.join(cwd, "node_modules", "better-sqlite3");
-  const bindingPath = path.join(modulePath, "build", "Release", "better_sqlite3.node");
+  const modulePath = path.join(cwd, "node_modules", SQLITE_MODULE_NAME);
+  const bindingPath = getSqliteBindingPath(modulePath);
   const moduleExists = await pathExists(modulePath);
   const bindingExists = await pathExists(bindingPath);
   let bindingBytes: number | null = null;
@@ -99,6 +155,18 @@ async function collectDesktopSqliteRuntimeDiagnostics(absPath: string): Promise<
       bindingBytes = null;
     }
   }
+  const configuredModulePath = getConfiguredSqliteModulePath();
+  const configuredModuleExists = configuredModulePath
+    ? await pathExists(configuredModulePath)
+    : null;
+  const configuredBindingPath = configuredModulePath
+    ? getSqliteBindingPath(configuredModulePath)
+    : null;
+  const configuredBindingExists = configuredBindingPath
+    ? await pathExists(configuredBindingPath)
+    : null;
+  const sqliteRuntimeDir = path.join(cwd, "sqlite-runtime");
+  const sqliteRuntimeDirExists = await pathExists(sqliteRuntimeDir);
   const runtimeManifestPath = path.join(cwd, DESKTOP_RUNTIME_MANIFEST);
   let runtimeManifest: unknown = null;
   if (await pathExists(runtimeManifestPath)) {
@@ -123,6 +191,13 @@ async function collectDesktopSqliteRuntimeDiagnostics(absPath: string): Promise<
     bindingPath,
     bindingExists,
     bindingBytes,
+    configuredModulePath,
+    configuredModuleExists,
+    configuredBindingPath,
+    configuredBindingExists,
+    sqliteRuntimeDir,
+    sqliteRuntimeDirExists,
+    nodePath: process.env.NODE_PATH ?? null,
     runtimeManifestPath,
     runtimeManifest,
   };
@@ -229,10 +304,7 @@ export async function openSqliteDatabase(
   }
   let Database: typeof import("better-sqlite3");
   try {
-    const imported = await import("better-sqlite3");
-    Database =
-      (imported as { default?: typeof import("better-sqlite3") }).default ??
-      (imported as unknown as typeof import("better-sqlite3"));
+    Database = await loadSqliteModule();
   } catch (err) {
     await logDesktopSqliteRuntimeFailure("module-import", err, absPath);
     throw err;

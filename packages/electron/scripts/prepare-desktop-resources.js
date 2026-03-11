@@ -13,6 +13,12 @@ const outDir = path.join(repoRoot, "packages", "electron", "desktop-resources");
 // Keep only native modules external; bundle pure JS deps so runtime install is minimal.
 const backendExternalDeps = ["better-sqlite3"];
 const SQLITE_MODULE_NAME = "better-sqlite3";
+const SQLITE_RUNTIME_FALLBACK_DIR_NAME = "sqlite-runtime";
+const SQLITE_RUNTIME_FALLBACK_PACKAGES = [
+  SQLITE_MODULE_NAME,
+  "bindings",
+  "file-uri-to-path",
+];
 const SQLITE_BINDING_RELATIVE_PATH = path.join(
   "node_modules",
   SQLITE_MODULE_NAME,
@@ -134,10 +140,15 @@ async function run() {
     targetArch,
     npmEnv
   );
-  writeRuntimeDiagnosticsManifest(backendOut, sqliteRuntimeDiagnostics);
 
   console.log("Pruning non-runtime files from backend node_modules...");
   pruneBackendNodeModules(path.join(backendOut, "node_modules"));
+  console.log("Staging SQLite runtime fallback modules...");
+  const sqliteFallbackDiagnostics = stageSqliteRuntimeFallback(backendOut);
+  writeRuntimeDiagnosticsManifest(backendOut, {
+    ...sqliteRuntimeDiagnostics,
+    fallback: sqliteFallbackDiagnostics,
+  });
 
   fs.cpSync(path.join(frontendDir, "dist"), frontendOut, { recursive: true });
 
@@ -422,6 +433,47 @@ function pruneBackendNodeModules(nodeModulesDir) {
       }
     }
   }
+}
+
+function stageSqliteRuntimeFallback(backendOut) {
+  const nodeModulesDir = path.join(backendOut, "node_modules");
+  const fallbackRuntimeDir = path.join(backendOut, SQLITE_RUNTIME_FALLBACK_DIR_NAME);
+  removeIfExists(fallbackRuntimeDir);
+  fs.mkdirSync(fallbackRuntimeDir, { recursive: true });
+
+  for (const packageName of SQLITE_RUNTIME_FALLBACK_PACKAGES) {
+    const sourcePath = path.join(nodeModulesDir, packageName);
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error(
+        `SQLite runtime fallback package '${packageName}' is missing at ${sourcePath}.`
+      );
+    }
+    fs.cpSync(sourcePath, path.join(fallbackRuntimeDir, packageName), { recursive: true });
+  }
+
+  pruneBackendNodeModules(fallbackRuntimeDir);
+
+  const fallbackBindingPath = path.join(
+    fallbackRuntimeDir,
+    SQLITE_MODULE_NAME,
+    "build",
+    "Release",
+    "better_sqlite3.node"
+  );
+  const fallbackBindingExists = fs.existsSync(fallbackBindingPath);
+  if (!fallbackBindingExists) {
+    throw new Error(
+      `SQLite runtime fallback is missing native binding: ${fallbackBindingPath}`
+    );
+  }
+
+  return {
+    runtimeDir: fallbackRuntimeDir,
+    packageCount: SQLITE_RUNTIME_FALLBACK_PACKAGES.length,
+    packages: SQLITE_RUNTIME_FALLBACK_PACKAGES,
+    bindingPath: fallbackBindingPath,
+    bindingExists: fallbackBindingExists,
+  };
 }
 
 function shouldPruneFile(fileName) {

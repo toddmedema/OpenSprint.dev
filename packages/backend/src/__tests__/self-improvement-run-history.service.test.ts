@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  SelfImprovementRunHistoryStore,
-  type SelfImprovementRunHistoryInsert,
-} from "../services/self-improvement-run-history.service.js";
+import { SelfImprovementRunHistoryStore } from "../services/self-improvement-run-history.service.js";
 
 describe("SelfImprovementRunHistoryStore", () => {
   let mockClient: {

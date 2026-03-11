@@ -82,7 +82,7 @@ const mockListPlanVersions = vi
         .map((v) => ({ version_number: v.version_number }));
     }
   );
-const mockPlanVersionInsertForStore = vi
+const _mockPlanVersionInsertForStore = vi
   .fn()
   .mockImplementation(
     async (data: {

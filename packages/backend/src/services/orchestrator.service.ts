@@ -31,7 +31,7 @@ import {
 } from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
 import { agentService, createProcessGroupHandle } from "./agent.service.js";
-import { BranchManager, WorktreeBranchInUseError } from "./branch-manager.js";
+import { BranchManager } from "./branch-manager.js";
 import { ContextAssembler } from "./context-assembler.js";
 import type { SessionManager } from "./session-manager.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";

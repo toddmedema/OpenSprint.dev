@@ -14,7 +14,6 @@ import { PlanService } from "./plan.service.js";
 import { PrdService } from "./prd.service.js";
 import type { HarmonizerPrdUpdate } from "./harmonizer.service.js";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
-import { feedbackStore } from "./feedback-store.service.js";
 import { notificationService } from "./notification.service.js";
 import { orchestratorService } from "./orchestrator.service.js";
 import { broadcastToProject } from "../websocket/index.js";
@@ -369,7 +368,7 @@ export class FeedbackCategorizationService {
         }
 
         if (item.isLargeScope) {
-          const largeResult = await this.handleLargeScope(projectId, item, settings, firstPlanId);
+          const largeResult = await this.handleLargeScope(projectId, item, settings);
           if (largeResult) return largeResult;
         }
 
@@ -400,8 +399,7 @@ export class FeedbackCategorizationService {
   private async handleLargeScope(
     projectId: string,
     item: FeedbackItem,
-    settings: { hilConfig: { scopeChanges?: string } },
-    firstPlanId: string | null
+    settings: { hilConfig: { scopeChanges?: string } }
   ): Promise<CategorizationResult | null> {
     try {
       const generated = await this.getPlanService().generatePlanFromDescription(
