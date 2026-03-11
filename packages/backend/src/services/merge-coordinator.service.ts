@@ -30,6 +30,7 @@ import type { TimerRegistry } from "./timer-registry.js";
 import { createLogger } from "../utils/logger.js";
 import { buildTaskLastExecutionSummary, compactExecutionText } from "./task-execution-summary.js";
 import { inspectGitRepoState, resolveBaseBranch } from "../utils/git-repo-state.js";
+import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 
 const log = createLogger("merge-coordinator");
 const _MAX_PUSH_REBASE_RESOLUTION_ROUNDS = 12;
@@ -37,6 +38,25 @@ const _MAX_PUSH_REBASE_RESOLUTION_ROUNDS = 12;
 /** One-sentence explanation for merge failures shown to users (conflicts with main in same files). */
 const HUMAN_MERGE_FAILURE_MESSAGE =
   "The merge could not complete because your branch and main both changed the same files.";
+const HUMAN_QUALITY_GATE_FAILURE_MESSAGE =
+  "Pre-merge quality gates failed (build, lint, or test).";
+
+type MergeFailureStage = "rebase_before_merge" | "merge_to_main" | "push_rebase" | "quality_gate";
+
+export interface MergeQualityGateRunOptions {
+  projectId: string;
+  repoPath: string;
+  worktreePath: string;
+  taskId: string;
+  branchName: string;
+  baseBranch: string;
+}
+
+export interface MergeQualityGateFailure {
+  command: string;
+  reason: string;
+  output: string;
+}
 
 export interface MergeSlot {
   taskId: string;
@@ -122,8 +142,12 @@ export interface MergeCoordinatorHost {
     branchName: string;
     conflictedFiles: string[];
     testCommand?: string;
+    mergeQualityGates?: string[];
     baseBranch?: string;
   }): Promise<boolean>;
+  runMergeQualityGates?(
+    options: MergeQualityGateRunOptions
+  ): Promise<MergeQualityGateFailure | null>;
   sessionManager: {
     createSession(repoPath: string, data: Record<string, unknown>): Promise<{ id: string }>;
     archiveSession(
@@ -229,6 +253,27 @@ export class MergeCoordinatorService {
       return "inferred";
     }
     return "heuristic";
+  }
+
+  private getHumanFailureMessage(stage: MergeFailureStage): string {
+    return stage === "quality_gate"
+      ? HUMAN_QUALITY_GATE_FAILURE_MESSAGE
+      : HUMAN_MERGE_FAILURE_MESSAGE;
+  }
+
+  private async ensureMergeQualityGates(options: MergeQualityGateRunOptions): Promise<void> {
+    if (!this.host.runMergeQualityGates) return;
+    const failure = await this.host.runMergeQualityGates(options);
+    if (!failure) return;
+
+    const reason = failure.reason.trim().slice(0, 500) || "Unknown quality gate failure";
+    const outputSnippet = failure.output.trim().slice(0, 1200);
+    const detail = outputSnippet.length > 0 ? ` | ${outputSnippet}` : "";
+    throw new MergeJobError(
+      `Quality gate failed (${failure.command}): ${reason}${detail}`,
+      "quality_gate",
+      []
+    );
   }
 
   private async releaseMergeSlot(
@@ -412,6 +457,14 @@ export class MergeCoordinatorService {
 
       // Last task in epic: merge epic branch to main, then push and cleanup via postCompletionAsync
       try {
+        await this.ensureMergeQualityGates({
+          projectId,
+          repoPath,
+          worktreePath: wtPath,
+          taskId: task.id,
+          branchName,
+          baseBranch,
+        });
         await gitCommitQueue.drain();
         await gitCommitQueue.enqueueAndWait({
           type: "worktree_merge",
@@ -444,6 +497,14 @@ export class MergeCoordinatorService {
 
     // 2. Attempt merge inside the serialized queue. Rebase now happens there.
     try {
+      await this.ensureMergeQualityGates({
+        projectId,
+        repoPath,
+        worktreePath: wtPath,
+        taskId: task.id,
+        branchName,
+        baseBranch,
+      });
       await gitCommitQueue.drain();
       await gitCommitQueue.enqueueAndWait({
         type: "worktree_merge",
@@ -505,6 +566,9 @@ export class MergeCoordinatorService {
         : mergeErr instanceof RebaseConflictError
           ? "push_rebase"
           : "merge_to_main";
+    const normalizedStage = stage as MergeFailureStage;
+    const humanFailureMessage = this.getHumanFailureMessage(normalizedStage);
+    const isQualityGateFailure = normalizedStage === "quality_gate";
     const conflictedFiles =
       mergeErr instanceof MergeJobError
         ? mergeErr.conflictedFiles
@@ -531,7 +595,7 @@ export class MergeCoordinatorService {
           gitBranch: slot.branchName,
           status: "failed",
           outputLog: slot.agent.outputLog.join(""),
-          failureReason: HUMAN_MERGE_FAILURE_MESSAGE,
+          failureReason: humanFailureMessage,
           startedAt: slot.agent.startedAt,
         });
         await this.host.sessionManager.archiveSession(
@@ -552,20 +616,21 @@ export class MergeCoordinatorService {
       const cumulativeAttempts = this.host.taskStore.getCumulativeAttemptsFromIssue(freshIssue) + 1;
       await this.host.taskStore.setCumulativeAttempts(projectId, task.id, cumulativeAttempts);
       await this.host.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
-      await this.host.taskStore.setMergeStage(projectId, task.id, stage);
+      await this.host.taskStore.setMergeStage(projectId, task.id, normalizedStage);
       const scopeConfidence = this.getScopeConfidence(freshIssue);
       const mergeFailureReason = mergeErr.message?.slice(0, 500) ?? "Merge failed";
+      const stageLabel = isQualityGateFailure ? "quality-gate" : "merge";
 
       const maxMergeFailures = BACKOFF_FAILURE_THRESHOLD * 2;
       if (cumulativeAttempts >= maxMergeFailures) {
-        log.info(`Blocking ${task.id} after ${cumulativeAttempts} merge failures`);
+        log.info(`Blocking ${task.id} after ${cumulativeAttempts} ${stageLabel} failures`);
         const blockedSummary = buildTaskLastExecutionSummary({
           attempt: cumulativeAttempts,
           outcome: "blocked",
           phase: "merge",
           blockReason: "Merge Failure",
           summary: compactExecutionText(
-            `Attempt ${cumulativeAttempts} merge failed: ${HUMAN_MERGE_FAILURE_MESSAGE}`,
+            `Attempt ${cumulativeAttempts} ${stageLabel} failed: ${humanFailureMessage}`,
             500
           ),
         });
@@ -580,12 +645,16 @@ export class MergeCoordinatorService {
         await this.host.taskStore.comment(
           projectId,
           task.id,
-          `Blocked after ${cumulativeAttempts} consecutive merge failures. ${HUMAN_MERGE_FAILURE_MESSAGE}`
+          isQualityGateFailure
+            ? `Blocked after ${cumulativeAttempts} consecutive quality-gate failures. ${humanFailureMessage}`
+            : `Blocked after ${cumulativeAttempts} consecutive merge failures. ${humanFailureMessage}`
         );
         broadcastToProject(projectId, {
           type: "task.blocked",
           taskId: task.id,
-          reason: `Blocked after ${cumulativeAttempts} merge failures`,
+          reason: isQualityGateFailure
+            ? `Blocked after ${cumulativeAttempts} quality-gate failures`
+            : `Blocked after ${cumulativeAttempts} merge failures`,
           cumulativeAttempts,
         });
         eventLogService
@@ -596,7 +665,7 @@ export class MergeCoordinatorService {
             event: "merge.failed",
             data: {
               reason: mergeFailureReason,
-              stage,
+              stage: normalizedStage,
               branchName: failedBranchName,
               conflictedFiles,
               attempt: cumulativeAttempts,
@@ -618,7 +687,7 @@ export class MergeCoordinatorService {
               attempt: cumulativeAttempts,
               phase: "merge",
               blockReason: "Merge Failure",
-              mergeStage: stage,
+              mergeStage: normalizedStage,
               conflictedFiles,
               summary: blockedSummary.summary,
               nextAction: "Blocked pending investigation",
@@ -634,7 +703,7 @@ export class MergeCoordinatorService {
         outcome: "requeued",
         phase: "merge",
         summary: compactExecutionText(
-          `Attempt ${cumulativeAttempts} merge failed: ${HUMAN_MERGE_FAILURE_MESSAGE}`,
+          `Attempt ${cumulativeAttempts} ${stageLabel} failed: ${humanFailureMessage}`,
           500
         ),
       });
@@ -648,7 +717,9 @@ export class MergeCoordinatorService {
       await this.host.taskStore.comment(
         projectId,
         task.id,
-        `Merge conflict with current main. Task requeued — next run will rebase and retry. ${HUMAN_MERGE_FAILURE_MESSAGE}`
+        isQualityGateFailure
+          ? `Pre-merge quality gates failed. Task requeued — next run will retry after fixes. ${humanFailureMessage}`
+          : `Merge conflict with current main. Task requeued — next run will rebase and retry. ${humanFailureMessage}`
       );
       eventLogService
         .append(repoPath, {
@@ -658,7 +729,7 @@ export class MergeCoordinatorService {
           event: "merge.failed",
           data: {
             reason: mergeFailureReason,
-            stage,
+            stage: normalizedStage,
             branchName: failedBranchName,
             conflictedFiles,
             attempt: cumulativeAttempts,
@@ -678,7 +749,7 @@ export class MergeCoordinatorService {
           data: {
             attempt: cumulativeAttempts,
             phase: "merge",
-            mergeStage: stage,
+            mergeStage: normalizedStage,
             conflictedFiles,
             summary: requeuedSummary.summary,
             nextAction: "Requeued for retry",
@@ -892,6 +963,7 @@ export class MergeCoordinatorService {
         branchName: baseBranch,
         conflictedFiles: pendingConflict.conflictedFiles,
         testCommand: resolveTestCommand(settings),
+        mergeQualityGates: getMergeQualityGateCommands(),
         baseBranch,
       });
       if (!resolved) {

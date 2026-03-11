@@ -78,7 +78,7 @@ vi.mock("../services/git-commit-queue.service.js", () => ({
   MergeJobError: class MergeJobError extends Error {
     constructor(
       message: string,
-      public readonly stage: "rebase_before_merge" | "merge_to_main",
+      public readonly stage: "rebase_before_merge" | "merge_to_main" | "quality_gate",
       public readonly conflictedFiles: string[],
       public readonly resolvedBy: "requeued" | "blocked" = "requeued"
     ) {
@@ -472,6 +472,33 @@ describe("MergeCoordinatorService", () => {
 
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
 
+    expect(mockHost.taskStore.update).toHaveBeenCalledWith(
+      projectId,
+      taskId,
+      expect.objectContaining({ status: "open" })
+    );
+  });
+
+  it("requeues task when pre-merge quality gate fails", async () => {
+    mockHost.runMergeQualityGates = vi.fn().mockResolvedValue({
+      command: "npm run lint",
+      reason: "Command failed with exit code 1",
+      output: "eslint found errors",
+    });
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(mockGitQueueEnqueueAndWait).not.toHaveBeenCalled();
+    expect(mockHost.taskStore.setMergeStage).toHaveBeenCalledWith(
+      projectId,
+      taskId,
+      "quality_gate"
+    );
+    expect(mockHost.taskStore.comment).toHaveBeenCalledWith(
+      projectId,
+      taskId,
+      expect.stringContaining("Pre-merge quality gates failed")
+    );
     expect(mockHost.taskStore.update).toHaveBeenCalledWith(
       projectId,
       taskId,

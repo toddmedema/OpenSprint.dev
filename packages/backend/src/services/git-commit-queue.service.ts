@@ -10,6 +10,7 @@ import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { BranchManager, MergeConflictError, RebaseConflictError } from "./branch-manager.js";
 import { ProjectService } from "./project.service.js";
 import { agentService } from "./agent.service.js";
+import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
 import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
@@ -31,7 +32,7 @@ export class RepoConflictError extends Error {
 export class MergeJobError extends Error {
   constructor(
     message: string,
-    public readonly stage: "rebase_before_merge" | "merge_to_main",
+    public readonly stage: "rebase_before_merge" | "merge_to_main" | "quality_gate",
     public readonly conflictedFiles: string[],
     public readonly resolvedBy: "requeued" | "blocked" = "requeued"
   ) {
@@ -168,6 +169,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
     projectId: string;
     config: AgentConfig;
     testCommand?: string;
+    mergeQualityGates: string[];
   }> {
     const project = await this.projectService.getProjectByRepoPath(repoPath);
     if (!project) {
@@ -178,6 +180,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
       projectId: project.id,
       config: settings.simpleComplexityAgent as AgentConfig,
       testCommand: resolveTestCommand(settings),
+      mergeQualityGates: getMergeQualityGateCommands(),
     };
   }
 
@@ -294,7 +297,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           }
         }
         if (rebaseConflict) {
-          const { projectId, config, testCommand } = await this.getMergeAgentConfig(
+          const { projectId, config, testCommand, mergeQualityGates } = await this.getMergeAgentConfig(
             repoPath,
             job.taskId
           );
@@ -325,6 +328,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
               branchName: job.branchName,
               conflictedFiles,
               testCommand,
+              mergeQualityGates,
               baseBranch,
             });
             if (!resolved) {
@@ -397,7 +401,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
               branchName: job.branchName,
               conflictedFiles: mergeErr.conflictedFiles,
             });
-            const { projectId, config, testCommand } = await this.getMergeAgentConfig(
+            const { projectId, config, testCommand, mergeQualityGates } = await this.getMergeAgentConfig(
               repoPath,
               job.taskId
             );
@@ -410,6 +414,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
               branchName: job.branchName,
               conflictedFiles: mergeErr.conflictedFiles,
               testCommand,
+              mergeQualityGates,
               baseBranch,
             });
             if (resolved) {

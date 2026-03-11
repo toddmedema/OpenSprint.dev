@@ -47,6 +47,7 @@ import { broadcastToProject } from "../websocket/index.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { assertSafeTaskWorktreePath } from "../utils/path-safety.js";
+import { shellExec } from "../utils/shell-exec.js";
 import { TimerRegistry } from "./timer-registry.js";
 import { AgentLifecycleManager, type AgentRunState } from "./agent-lifecycle.js";
 import { heartbeatService } from "./heartbeat.service.js";
@@ -57,7 +58,13 @@ import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
 import { PhaseExecutorService, type PhaseExecutorHost } from "./phase-executor.service.js";
 import { FailureHandlerService, type FailureHandlerHost } from "./failure-handler.service.js";
-import { MergeCoordinatorService, type MergeCoordinatorHost } from "./merge-coordinator.service.js";
+import {
+  MergeCoordinatorService,
+  type MergeCoordinatorHost,
+  type MergeQualityGateFailure,
+  type MergeQualityGateRunOptions,
+} from "./merge-coordinator.service.js";
+import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 import {
   TaskPhaseCoordinator,
   type TestOutcome,
@@ -2463,8 +2470,52 @@ export class OrchestratorService {
     branchName: string;
     conflictedFiles: string[];
     testCommand?: string;
+    mergeQualityGates?: string[];
   }): Promise<boolean> {
     return agentService.runMergerAgentAndWait(options);
+  }
+
+  async runMergeQualityGates(
+    options: MergeQualityGateRunOptions
+  ): Promise<MergeQualityGateFailure | null> {
+    // Test suites mock merge coordination heavily; skip expensive quality-gate execution in test runtime.
+    if (process.env.NODE_ENV === "test") return null;
+
+    const commands = getMergeQualityGateCommands();
+    const cwd = options.worktreePath;
+    const timeoutMs = 20 * 60 * 1000;
+
+    for (const command of commands) {
+      try {
+        log.info("Running pre-merge quality gate", {
+          projectId: options.projectId,
+          taskId: options.taskId,
+          command,
+          cwd,
+        });
+        await shellExec(command, {
+          cwd,
+          timeout: timeoutMs,
+        });
+      } catch (err) {
+        const e = err as { stdout?: string; stderr?: string; message?: string };
+        const output = [e.stdout ?? "", e.stderr ?? ""]
+          .filter((part) => part.trim().length > 0)
+          .join("\n")
+          .trim()
+          .slice(0, 4000);
+        const reason = (e.message ?? `Command failed: ${command}`).slice(0, 500);
+        log.warn("Pre-merge quality gate failed", {
+          projectId: options.projectId,
+          taskId: options.taskId,
+          command,
+          reason,
+        });
+        return { command, reason, output };
+      }
+    }
+
+    return null;
   }
 }
 

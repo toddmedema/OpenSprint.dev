@@ -4,7 +4,7 @@ import path from "path";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile, access } from "node:fs/promises";
 import { constants } from "node:fs";
-import { exec, execFile } from "node:child_process";
+import { exec, execFile, type ExecException } from "node:child_process";
 import { promisify } from "node:util";
 import type { BackendPlatform } from "@opensprint/shared";
 import type {
@@ -275,8 +275,8 @@ envRouter.post(
       if (isWin) {
         const child = exec(
           `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm '${CURSOR_CLI_INSTALL_WIN}' | iex"`,
-          { timeout, shell: true },
-          (err, stdout, stderr) => {
+          { timeout, shell: "powershell" },
+          (err: ExecException | null, stdout: string, stderr: string) => {
             if (err) {
               const msg = [stdout, stderr].filter(Boolean).join("\n").trim() || err.message;
               res.status(500).json({
@@ -300,7 +300,7 @@ envRouter.post(
         const child = exec(
           `curl -fsS "${CURSOR_CLI_INSTALL_UNIX}" | bash`,
           { timeout, shell: "/bin/bash" },
-          (err, stdout, stderr) => {
+          (err: ExecException | null, stdout: string, stderr: string) => {
             if (err) {
               const msg = [stdout, stderr].filter(Boolean).join("\n").trim() || err.message;
               res.status(500).json({

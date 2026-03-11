@@ -32,18 +32,6 @@ import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("deliver");
 
-/** Current deliver phase status for a project (deployment records) */
-export interface DeliverStatusResponse {
-  activeDeployId: string | null;
-  currentDeploy: DeploymentRecord | null;
-}
-
-export function createDeliverRouter(projectService: ProjectService): Router {
-  const router = Router({ mergeParams: true });
-
-type ProjectParams = { projectId: string };
-type DeployIdParams = { projectId: string; deployId: string };
-
 /** True when repoPath is under the system temp dir (e.g. test env). Used to skip pre-deploy tests and await in-process. */
 function isRepoInTempDir(repoPath: string): boolean {
   const resolvedRepo = path.resolve(repoPath).replace(/^\/private/, "");
@@ -83,6 +71,18 @@ async function completeDeploy(
 
 /** Captured reference for use in async callbacks (avoids ReferenceError when module runs in deferred context). */
 const completeDeployFn = completeDeploy;
+
+/** Current deliver phase status for a project (deployment records) */
+export interface DeliverStatusResponse {
+  activeDeployId: string | null;
+  currentDeploy: DeploymentRecord | null;
+}
+
+export function createDeliverRouter(projectService: ProjectService): Router {
+  const router = Router({ mergeParams: true });
+
+type ProjectParams = { projectId: string };
+type DeployIdParams = { projectId: string; deployId: string };
 
 /** Get git commit hash at HEAD in repo (git rev-parse HEAD) */
 function getCommitHash(repoPath: string): string | null {

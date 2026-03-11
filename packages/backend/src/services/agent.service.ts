@@ -179,6 +179,7 @@ export interface RunMergerAgentOptions {
   branchName: string;
   conflictedFiles: string[];
   testCommand?: string;
+  mergeQualityGates?: string[];
   /** Base branch for merger prompt context (default: "main") */
   baseBranch?: string;
 }
@@ -536,6 +537,10 @@ export class AgentService {
     const conflictedFiles =
       options.conflictedFiles.length > 0 ? options.conflictedFiles.join("\n") : "(none reported)";
     const testCommand = options.testCommand?.trim() ? options.testCommand.trim() : "(not provided)";
+    const mergeQualityGates =
+      options.mergeQualityGates && options.mergeQualityGates.length > 0
+        ? options.mergeQualityGates.map((cmd) => `- ${cmd}`).join("\n")
+        : "- (not provided)";
 
     const basePrompt = `# Merger Agent: Resolve Git Conflicts
 
@@ -548,6 +553,9 @@ You are the Merger agent. Your job is to resolve ${options.phase} conflicts for 
 - Branch: ${options.branchName}
 - Base branch: ${baseBranch}
 - Test command: ${testCommand}
+
+### Required quality gates before merge
+${mergeQualityGates}
 
 ### Conflicted files
 ${conflictedFiles}
@@ -568,7 +576,8 @@ ${branchDiffStat || "(no output)"}
 
 1. Resolve every unmerged file and stage the resolved files.
 2. Prefer preserving both sides when they are compatible.
-3. Verify there are no remaining conflict markers or unmerged paths.
+3. Keep the branch compatible with the required quality gates above.
+4. Verify there are no remaining conflict markers or unmerged paths.
 
 ## Rules
 
