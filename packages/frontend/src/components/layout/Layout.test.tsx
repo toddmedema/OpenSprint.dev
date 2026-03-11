@@ -132,6 +132,20 @@ describe("Layout", () => {
     expect(main).toHaveClass("overflow-hidden");
   });
 
+  it("renders skip-to-main-content link that targets main", () => {
+    renderLayout(
+      <Layout>
+        <span>Content</span>
+      </Layout>
+    );
+    const skipLink = screen.getByRole("link", { name: "Skip to main content" });
+    expect(skipLink).toBeInTheDocument();
+    expect(skipLink).toHaveAttribute("href", "#main");
+    const main = document.getElementById("main");
+    expect(main).toBeInTheDocument();
+    expect(main?.tagName).toBe("MAIN");
+  });
+
   it("shows SPEED nav tabs when project, currentPhase, and onPhaseChange are provided", () => {
     const mockProject = {
       id: "proj-1",
