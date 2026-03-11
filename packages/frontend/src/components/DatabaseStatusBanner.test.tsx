@@ -66,22 +66,37 @@ describe("DatabaseStatusBanner", () => {
   });
 
   it("shows the unavailable message and settings link", () => {
+    const message =
+      "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.";
     renderBanner({
       data: {
         ok: false,
         state: "disconnected",
         lastCheckedAt: null,
-        message: "No PostgreSQL server running",
+        message,
       },
       isPending: false,
     });
 
-    expect(screen.getByTestId("database-status-banner")).toHaveTextContent(
-      "No PostgreSQL server running"
-    );
+    expect(screen.getByTestId("database-status-banner")).toHaveTextContent(message);
     expect(screen.getByRole("link", { name: "Open Settings" })).toHaveAttribute(
       "href",
       "/settings"
+    );
+  });
+
+  it("shows human-readable fallback when API returns no message", () => {
+    renderBanner({
+      data: {
+        ok: false,
+        state: "disconnected",
+        lastCheckedAt: null,
+        message: undefined,
+      },
+      isPending: false,
+    });
+    expect(screen.getByTestId("database-status-banner")).toHaveTextContent(
+      "The database is not available; check Settings to fix the connection."
     );
   });
 
@@ -92,7 +107,8 @@ describe("DatabaseStatusBanner", () => {
           ok: false,
           state: "connecting",
           lastCheckedAt: null,
-          message: "No PostgreSQL server running",
+          message:
+            "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.",
         },
         isPending: false,
       },
@@ -116,7 +132,8 @@ describe("DatabaseStatusBanner", () => {
           ok: false,
           state: "disconnected",
           lastCheckedAt: null,
-          message: "No PostgreSQL server running",
+          message:
+            "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.",
         },
         isPending: false,
       },

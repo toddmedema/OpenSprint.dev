@@ -73,7 +73,11 @@ describe("App", () => {
   it("returns 503 for DB-gated routes when database is unavailable", async () => {
     const app = createApp();
     vi.spyOn(databaseRuntime, "requireDatabase").mockRejectedValueOnce(
-      new AppError(503, ErrorCodes.DATABASE_UNAVAILABLE, "No PostgreSQL server running")
+      new AppError(
+        503,
+        ErrorCodes.DATABASE_UNAVAILABLE,
+        "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct."
+      )
     );
 
     const res = await request(app).get(`${API_PREFIX}/projects/proj-1/tasks`);
@@ -81,7 +85,8 @@ describe("App", () => {
     expect(res.status).toBe(503);
     expect(res.body.error).toMatchObject({
       code: ErrorCodes.DATABASE_UNAVAILABLE,
-      message: "No PostgreSQL server running",
+      message:
+        "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.",
     });
     expect(res.headers["retry-after"]).toBe("5");
   });

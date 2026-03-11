@@ -459,7 +459,7 @@ describe("Settings API lifecycle", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("INVALID_INPUT");
-    expect(res.body.error?.message).toMatch(/per_task|per_epic/);
+    expect(res.body.error?.message).toMatch(/not valid|per_task|per_epic|Per task|Per epic/);
   });
 
   it("PUT /api/v1/projects/:id/settings returns refreshing runtime status when worktreeBaseBranch changes", async () => {

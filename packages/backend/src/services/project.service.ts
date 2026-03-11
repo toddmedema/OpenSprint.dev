@@ -956,7 +956,7 @@ export class ProjectService {
       throw new AppError(
         400,
         ErrorCodes.INVALID_INPUT,
-        "mergeStrategy must be 'per_task' or 'per_epic'"
+        "Merge strategy must be “Per task” (merge to main after each task) or “Per epic” (merge to main when the whole epic is done)."
       );
     }
     const mergeStrategy =

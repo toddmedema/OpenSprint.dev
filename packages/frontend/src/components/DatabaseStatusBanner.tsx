@@ -30,7 +30,8 @@ export function DatabaseStatusBanner() {
   const message =
     data.state === "connecting"
       ? "Reconnecting to PostgreSQL..."
-      : data.message ?? "PostgreSQL is unavailable.";
+      : data.message ??
+        "The database is not available; check Settings to fix the connection.";
 
   return (
     <div

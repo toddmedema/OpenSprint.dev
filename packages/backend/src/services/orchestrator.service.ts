@@ -1955,14 +1955,15 @@ export class OrchestratorService {
           ? await this.extractNoResultReasonFromLogs(wtPath, task.id, slot.agent.outputLog)
           : undefined;
       slot.agent.killedDueToTimeout = false;
+      const noResultMessage =
+        "The coding agent stopped without reporting whether the task succeeded or failed." +
+        (noResultReason ? ` Recent agent output: ${noResultReason}` : "");
       await this.failureHandler.handleTaskFailure(
         projectId,
         repoPath,
         task,
         branchName,
-        `Agent exited with code ${exitCode} without producing a result${
-          noResultReason ? `. Recent agent output: ${noResultReason}` : ""
-        }`,
+        noResultMessage,
         null,
         failureType
       );

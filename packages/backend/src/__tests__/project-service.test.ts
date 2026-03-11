@@ -628,7 +628,7 @@ describe("ProjectService", () => {
     ).rejects.toMatchObject({
       statusCode: 400,
       code: "INVALID_INPUT",
-      message: expect.stringMatching(/per_task|per_epic/),
+      message: expect.stringMatching(/not valid|per_task|per_epic|Per task|Per epic/),
     });
   });
 

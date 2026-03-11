@@ -111,7 +111,7 @@ The product spec for Open Sprint lives in `PRD.md`. Each project's Sketch output
 
 ## Troubleshooting
 
-### "Agent exited with code 1 without producing a result" (no_result)
+### "The coding agent stopped without reporting whether the task succeeded or failed." (no_result)
 
 This means the **coding agent process** (for example, Cursor CLI) exited before writing `.opensprint/active/<taskId>/result.json`. The orchestrator only considers a run successful when it can read that file, so if the process crashes or exits early, you get `no_result`.
 

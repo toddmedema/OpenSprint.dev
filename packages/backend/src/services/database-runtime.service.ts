@@ -142,10 +142,11 @@ export class DatabaseRuntimeService {
       return;
     }
     void this.triggerConnect("require-database");
-      throw new AppError(
+    throw new AppError(
       503,
       ErrorCodes.DATABASE_UNAVAILABLE,
-      this.snapshot.message ?? "Server is unable to connect to database."
+      this.snapshot.message ??
+        "OpenSprint could not connect to the database; check that the server is running and your connection settings are correct."
     );
   }
 

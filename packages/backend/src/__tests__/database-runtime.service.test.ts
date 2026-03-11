@@ -27,7 +27,8 @@ describe("DatabaseRuntimeService", () => {
     expect(await runtime.getStatus()).toMatchObject({
       ok: false,
       state: "disconnected",
-      message: "No PostgreSQL server running",
+      message:
+        "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.",
     });
   });
 
@@ -79,7 +80,11 @@ describe("DatabaseRuntimeService", () => {
     runtime.start();
     await new Promise((resolve) => setTimeout(resolve, 0));
     runtime.handleOperationalFailure(
-      new AppError(503, ErrorCodes.DATABASE_UNAVAILABLE, "No PostgreSQL server running")
+      new AppError(
+        503,
+        ErrorCodes.DATABASE_UNAVAILABLE,
+        "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct."
+      )
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -87,7 +92,8 @@ describe("DatabaseRuntimeService", () => {
     expect(await runtime.getStatus()).toMatchObject({
       ok: false,
       state: "disconnected",
-      message: "No PostgreSQL server running",
+      message:
+        "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.",
     });
   });
 

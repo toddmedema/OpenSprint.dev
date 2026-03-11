@@ -1036,11 +1036,13 @@ describe("ProjectView global deliver toast", () => {
 
 describe("ProjectShell degraded database mode", () => {
   it("shows the database unavailable state instead of phase content", async () => {
+    const message =
+      "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.";
     mockDbStatusGet.mockResolvedValueOnce({
       ok: false,
       state: "disconnected",
       lastCheckedAt: null,
-      message: "No PostgreSQL server running",
+      message,
     });
 
     renderWithRouter("/projects/proj-1/plan");
@@ -1048,7 +1050,7 @@ describe("ProjectShell degraded database mode", () => {
     await waitFor(() => {
       const unavailableState = screen.getByTestId("database-unavailable-state");
       expect(unavailableState).toBeInTheDocument();
-      expect(within(unavailableState).getByText("No PostgreSQL server running")).toBeInTheDocument();
+      expect(within(unavailableState).getByText(message)).toBeInTheDocument();
     });
   });
 });

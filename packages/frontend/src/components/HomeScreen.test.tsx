@@ -117,7 +117,8 @@ describe("HomeScreen", () => {
       ok: false,
       state: "disconnected",
       lastCheckedAt: null,
-      message: "No PostgreSQL server running",
+      message:
+        "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.",
     });
 
     renderHomeScreen();

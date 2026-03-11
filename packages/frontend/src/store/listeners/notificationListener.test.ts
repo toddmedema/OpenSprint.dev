@@ -177,15 +177,15 @@ describe("notificationListener", () => {
     });
   });
 
-  it("dismisses 'Server is unable to connect to PostgreSQL database' toast when connection is restored", async () => {
-    expect(
-      CONNECTION_TOAST_MESSAGE_PATTERN.test("Server is unable to connect to PostgreSQL database.")
-    ).toBe(true);
+  it("dismisses database connection error toast when connection is restored", async () => {
+    const msg =
+      "OpenSprint could not connect to the database; check that the server is running and your connection settings are correct.";
+    expect(CONNECTION_TOAST_MESSAGE_PATTERN.test(msg)).toBe(true);
     const store = createStore();
     store.dispatch(setConnectionError(true));
     store.dispatch(
       addNotification({
-        message: "Server is unable to connect to PostgreSQL database.",
+        message: msg,
         severity: "error",
       })
     );

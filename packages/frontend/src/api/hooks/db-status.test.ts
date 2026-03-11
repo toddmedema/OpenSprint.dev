@@ -53,7 +53,8 @@ describe("useDbStatus backoff", () => {
     vi.mocked(api.dbStatus!.get).mockResolvedValue({
       ok: false,
       state: "disconnected",
-      message: "No PostgreSQL server running",
+      message:
+        "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.",
       lastCheckedAt: null,
     });
   });

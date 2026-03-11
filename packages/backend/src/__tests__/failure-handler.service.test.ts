@@ -423,7 +423,7 @@ describe("FailureHandlerService", () => {
         repoPath,
         makeTask(),
         branchName,
-        "Agent exited with code 1 without producing a result",
+        "The coding agent stopped without reporting whether the task succeeded or failed.",
         null,
         "no_result"
       );
@@ -462,7 +462,7 @@ describe("FailureHandlerService", () => {
         repoPath,
         makeTask(),
         branchName,
-        "Agent exited with code 1 without producing a result",
+        "The coding agent stopped without reporting whether the task succeeded or failed.",
         null,
         "no_result"
       );
@@ -505,14 +505,16 @@ describe("FailureHandlerService", () => {
         repoPath,
         makeTask(),
         branchName,
-        "Agent exited with code 1 without producing a result",
+        "The coding agent stopped without reporting whether the task succeeded or failed.",
         null,
         "no_result"
       );
 
       expect(notificationService.createAgentFailed).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: expect.stringContaining("Agent exited with code 1 without producing a result"),
+          message: expect.stringContaining(
+            "The coding agent stopped without reporting whether the task succeeded or failed."
+          ),
         })
       );
       expect(notificationService.createAgentFailed).not.toHaveBeenCalledWith(

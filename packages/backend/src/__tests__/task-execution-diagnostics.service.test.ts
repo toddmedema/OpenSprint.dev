@@ -51,7 +51,7 @@ describe("TaskExecutionDiagnosticsService", () => {
         gitDiff: null,
         testResults: null,
         failureReason:
-          "Agent exited with code 1 without producing a result. Agent error: 404 This is not a chat model and thus not supported in the v1/chat/completions endpoint.",
+          "The coding agent stopped without reporting whether the task succeeded or failed. Recent agent output: 404 This is not a chat model and thus not supported in the v1/chat/completions endpoint.",
       },
     ] satisfies AgentSession[]),
   };
@@ -85,7 +85,7 @@ describe("TaskExecutionDiagnosticsService", () => {
         gitDiff: null,
         testResults: null,
         failureReason:
-          "Agent exited with code 1 without producing a result. Agent error: 404 This is not a chat model and thus not supported in the v1/chat/completions endpoint.",
+          "The coding agent stopped without reporting whether the task succeeded or failed. Recent agent output: 404 This is not a chat model and thus not supported in the v1/chat/completions endpoint.",
       },
     ] satisfies AgentSession[]);
     mockReadForTask.mockResolvedValue([
@@ -113,7 +113,7 @@ describe("TaskExecutionDiagnosticsService", () => {
           phase: "coding",
           failureType: "no_result",
           summary:
-            "Coding failed: Agent exited with code 1 without producing a result. Agent error: 404 This is not a chat model",
+            "Coding failed: The coding agent stopped without reporting whether the task succeeded or failed. Recent agent output: 404 This is not a chat model",
           nextAction: "Requeued for retry",
         },
       },

@@ -450,7 +450,8 @@ describe("MergeCoordinatorService", () => {
         taskId,
         status: "failed",
         outputLog: "Agent output line 1\nAgent output line 2\n",
-        failureReason: "merge conflict",
+        failureReason:
+          "The merge could not complete because your branch and main both changed the same files.",
       })
     );
     expect(mockHost.sessionManager.archiveSession).toHaveBeenCalledWith(

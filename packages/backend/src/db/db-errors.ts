@@ -69,20 +69,22 @@ export function classifyDbConnectionError(
   const msg = err instanceof Error ? err.message : String(err);
 
   if (isSqliteConnectionCode(code)) {
-    if (code === "SQLITE_CANTOPEN") return "Cannot open SQLite database file.";
-    if (code === "SQLITE_READONLY") return "SQLite database is read-only.";
+    if (code === "SQLITE_CANTOPEN")
+      return "The database file could not be opened; check that the path exists and this app has permission to access it.";
+    if (code === "SQLITE_READONLY")
+      return "The database file is read-only; check file permissions so OpenSprint can save data.";
     if (code.startsWith("SQLITE_BUSY") || code.startsWith("SQLITE_LOCKED"))
-      return "SQLite database is locked or busy.";
-    return "SQLite database error.";
+      return "The database is in use or locked; wait a moment or close other programs that might be using it.";
+    return "The database file could not be used; it may be corrupted or the path in settings may be wrong.";
   }
 
   if (DB_UNREACHABLE_CODES.has(code)) {
     return dialect === "sqlite"
-      ? "Cannot open SQLite database."
-      : "No PostgreSQL server running";
+      ? "The database file could not be opened; check that the path in settings exists and is writable."
+      : "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.";
   }
   if (DB_AUTH_CONFIG_CODES.has(code)) {
-    return "PostgreSQL server is running but wrong user or database setup";
+    return "The database rejected the connection; check the username, password, and database name in your settings.";
   }
   if (
     /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|connection refused|getaddrinfo|connect EHOSTUNREACH/i.test(
@@ -90,18 +92,18 @@ export function classifyDbConnectionError(
     )
   ) {
     return dialect === "sqlite"
-      ? "Cannot open SQLite database."
-      : "No PostgreSQL server running";
+      ? "The database file could not be opened; check that the path in settings exists and is writable."
+      : "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.";
   }
   if (
     /password authentication failed|role .* does not exist|database .* does not exist|permission denied|relation .* does not exist/i.test(
       msg
     )
   ) {
-    return "PostgreSQL server is running but wrong user or database setup";
+    return "The database rejected the connection; check the username, password, and database name in your settings.";
   }
 
   return dialect === "sqlite"
-    ? "Unable to connect to SQLite database."
-    : "Server is unable to connect to PostgreSQL database.";
+    ? "OpenSprint could not connect to the database; check the file path and permissions in your settings."
+    : "OpenSprint could not connect to the database; check that the server is running and your connection settings are correct.";
 }

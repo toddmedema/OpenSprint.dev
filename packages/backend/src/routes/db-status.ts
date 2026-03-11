@@ -17,7 +17,8 @@ dbStatusRouter.get("/", async (_req, res) => {
     res.json({
       data: {
         ok: false,
-        message: "Server is unable to connect to PostgreSQL database.",
+        message:
+          "OpenSprint could not connect to the database; check that the server is running and your connection settings are correct.",
         state: "disconnected",
         lastCheckedAt: null,
       },

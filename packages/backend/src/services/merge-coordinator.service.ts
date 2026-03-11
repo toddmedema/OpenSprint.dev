@@ -34,6 +34,10 @@ import { inspectGitRepoState, resolveBaseBranch } from "../utils/git-repo-state.
 const log = createLogger("merge-coordinator");
 const _MAX_PUSH_REBASE_RESOLUTION_ROUNDS = 12;
 
+/** One-sentence explanation for merge failures shown to users (conflicts with main in same files). */
+const HUMAN_MERGE_FAILURE_MESSAGE =
+  "The merge could not complete because your branch and main both changed the same files.";
+
 export interface MergeSlot {
   taskId: string;
   attempt: number;
@@ -527,7 +531,7 @@ export class MergeCoordinatorService {
           gitBranch: slot.branchName,
           status: "failed",
           outputLog: slot.agent.outputLog.join(""),
-          failureReason: mergeErr.message ?? "Merge failed",
+          failureReason: HUMAN_MERGE_FAILURE_MESSAGE,
           startedAt: slot.agent.startedAt,
         });
         await this.host.sessionManager.archiveSession(
@@ -561,7 +565,7 @@ export class MergeCoordinatorService {
           phase: "merge",
           blockReason: "Merge Failure",
           summary: compactExecutionText(
-            `Attempt ${cumulativeAttempts} merge failed during ${stage}: ${mergeFailureReason}`,
+            `Attempt ${cumulativeAttempts} merge failed: ${HUMAN_MERGE_FAILURE_MESSAGE}`,
             500
           ),
         });
@@ -576,7 +580,7 @@ export class MergeCoordinatorService {
         await this.host.taskStore.comment(
           projectId,
           task.id,
-          `Blocked after ${cumulativeAttempts} consecutive merge failures. Last error: ${mergeErr.message?.slice(0, 300) ?? "unknown"}`
+          `Blocked after ${cumulativeAttempts} consecutive merge failures. ${HUMAN_MERGE_FAILURE_MESSAGE}`
         );
         broadcastToProject(projectId, {
           type: "task.blocked",
@@ -630,7 +634,7 @@ export class MergeCoordinatorService {
         outcome: "requeued",
         phase: "merge",
         summary: compactExecutionText(
-          `Attempt ${cumulativeAttempts} merge failed during ${stage}: ${mergeFailureReason}`,
+          `Attempt ${cumulativeAttempts} merge failed: ${HUMAN_MERGE_FAILURE_MESSAGE}`,
           500
         ),
       });
@@ -644,7 +648,7 @@ export class MergeCoordinatorService {
       await this.host.taskStore.comment(
         projectId,
         task.id,
-        `Merge conflict with current main. Task requeued — next run will rebase and retry. Error: ${mergeErr.message?.slice(0, 300) ?? "unknown"}`
+        `Merge conflict with current main. Task requeued — next run will rebase and retry. ${HUMAN_MERGE_FAILURE_MESSAGE}`
       );
       eventLogService
         .append(repoPath, {

@@ -8,47 +8,51 @@ import { databaseRuntime } from "../services/database-runtime.service.js";
 import { errorHandler } from "../middleware/error-handler.js";
 
 describe("classifyDbConnectionError", () => {
-  it("returns 'No PostgreSQL server running' for ECONNREFUSED", () => {
+  it("returns human-readable message for ECONNREFUSED", () => {
     expect(classifyDbConnectionError({ code: "ECONNREFUSED" })).toBe(
-      "No PostgreSQL server running"
+      "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct."
     );
   });
 
-  it("returns 'No PostgreSQL server running' for ETIMEDOUT", () => {
-    expect(classifyDbConnectionError({ code: "ETIMEDOUT" })).toBe("No PostgreSQL server running");
+  it("returns human-readable message for ETIMEDOUT", () => {
+    expect(classifyDbConnectionError({ code: "ETIMEDOUT" })).toBe(
+      "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct."
+    );
   });
 
-  it("returns 'No PostgreSQL server running' for ENOTFOUND", () => {
-    expect(classifyDbConnectionError({ code: "ENOTFOUND" })).toBe("No PostgreSQL server running");
+  it("returns human-readable message for ENOTFOUND", () => {
+    expect(classifyDbConnectionError({ code: "ENOTFOUND" })).toBe(
+      "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct."
+    );
   });
 
-  it("returns 'PostgreSQL server is running but wrong user or database setup' for 28P01", () => {
+  it("returns human-readable message for 28P01", () => {
     expect(classifyDbConnectionError({ code: "28P01" })).toBe(
-      "PostgreSQL server is running but wrong user or database setup"
+      "The database rejected the connection; check the username, password, and database name in your settings."
     );
   });
 
-  it("returns 'PostgreSQL server is running but wrong user or database setup' for 3D000", () => {
+  it("returns human-readable message for 3D000", () => {
     expect(classifyDbConnectionError({ code: "3D000" })).toBe(
-      "PostgreSQL server is running but wrong user or database setup"
+      "The database rejected the connection; check the username, password, and database name in your settings."
     );
   });
 
   it("returns default message for unknown errors", () => {
     expect(classifyDbConnectionError(new Error("Something else"))).toBe(
-      "Server is unable to connect to PostgreSQL database."
+      "OpenSprint could not connect to the database; check that the server is running and your connection settings are correct."
     );
   });
 
   it("returns unreachable for connection refused in message", () => {
     expect(classifyDbConnectionError(new Error("connect ECONNREFUSED 127.0.0.1:5432"))).toBe(
-      "No PostgreSQL server running"
+      "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct."
     );
   });
 
   it("returns auth/config for password authentication failed in message", () => {
     expect(classifyDbConnectionError(new Error("password authentication failed for user"))).toBe(
-      "PostgreSQL server is running but wrong user or database setup"
+      "The database rejected the connection; check the username, password, and database name in your settings."
     );
   });
 });
@@ -84,7 +88,8 @@ describe("GET /db-status", () => {
   it("returns ok: false with default message when connection fails", async () => {
     vi.spyOn(databaseRuntime, "getStatus").mockResolvedValue({
       ok: false,
-      message: "Server is unable to connect to PostgreSQL database.",
+      message:
+        "OpenSprint could not connect to the database; check that the server is running and your connection settings are correct.",
       state: "disconnected",
       lastCheckedAt: "2026-03-03T00:00:00.000Z",
     });
@@ -94,7 +99,8 @@ describe("GET /db-status", () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({
       ok: false,
-      message: "Server is unable to connect to PostgreSQL database.",
+      message:
+        "OpenSprint could not connect to the database; check that the server is running and your connection settings are correct.",
       state: "disconnected",
       lastCheckedAt: "2026-03-03T00:00:00.000Z",
     });
@@ -103,7 +109,8 @@ describe("GET /db-status", () => {
   it("returns ok: false with root cause when Postgres unreachable", async () => {
     vi.spyOn(databaseRuntime, "getStatus").mockResolvedValue({
       ok: false,
-      message: "No PostgreSQL server running",
+      message:
+        "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.",
       state: "disconnected",
       lastCheckedAt: "2026-03-03T00:00:00.000Z",
     });
@@ -113,7 +120,8 @@ describe("GET /db-status", () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({
       ok: false,
-      message: "No PostgreSQL server running",
+      message:
+        "The database server could not be reached; make sure PostgreSQL is running and the host and port in your settings are correct.",
       state: "disconnected",
       lastCheckedAt: "2026-03-03T00:00:00.000Z",
     });
@@ -122,7 +130,8 @@ describe("GET /db-status", () => {
   it("returns ok: false with auth/config message when applicable", async () => {
     vi.spyOn(databaseRuntime, "getStatus").mockResolvedValue({
       ok: false,
-      message: "PostgreSQL server is running but wrong user or database setup",
+      message:
+        "The database rejected the connection; check the username, password, and database name in your settings.",
       state: "disconnected",
       lastCheckedAt: "2026-03-03T00:00:00.000Z",
     });
@@ -132,7 +141,8 @@ describe("GET /db-status", () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({
       ok: false,
-      message: "PostgreSQL server is running but wrong user or database setup",
+      message:
+        "The database rejected the connection; check the username, password, and database name in your settings.",
       state: "disconnected",
       lastCheckedAt: "2026-03-03T00:00:00.000Z",
     });

@@ -323,7 +323,9 @@ export function ProjectShell() {
   const deliverToast = useAppSelector((s) => s.websocket.deliverToast);
   const planBackgroundError = useAppSelector((s) => s.plan.backgroundError);
   const connectionError = useAppSelector((s) => s.connection?.connectionError ?? false);
-  const dbUnavailableMessage = dbStatus.data?.message ?? "PostgreSQL is unavailable.";
+  const dbUnavailableMessage =
+    dbStatus.data?.message ??
+    "The database is not available; check Settings to fix the connection.";
 
   const handleDismissDeliverToast = () => dispatch(clearDeliverToast());
   const handleDismissPlanBackgroundError = () => dispatch(clearPlanBackgroundError());
