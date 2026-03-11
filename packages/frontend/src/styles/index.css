@@ -450,3 +450,18 @@ html[data-theme="dark"] [data-testid="task-description-markdown"] strong,
 html[data-theme="dark"] [data-testid="task-description-markdown"] code:not(pre code) {
   color: #f3f4f6 !important;
 }
+
+/* ==========================================================================
+   prefers-reduced-motion (WCAG 2.1 2.3.3)
+   Tone down or disable animations and transitions for users who prefer
+   reduced motion (e.g. vestibular disorders, motion sensitivity).
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

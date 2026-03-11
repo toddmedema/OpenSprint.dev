@@ -77,3 +77,12 @@ describe("scrollbar styling", () => {
     expect(cssContent).toContain("--color-scrollbar-thumb: #6b7280");
   });
 });
+
+describe("prefers-reduced-motion (WCAG 2.1 2.3.3)", () => {
+  it("index.css defines @media (prefers-reduced-motion: reduce) to tone down animations", () => {
+    expect(cssContent).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(cssContent).toContain("animation-duration: 0.01ms");
+    expect(cssContent).toContain("animation-iteration-count: 1");
+    expect(cssContent).toContain("transition-duration: 0.01ms");
+  });
+});
