@@ -1,4 +1,5 @@
 import { Router, Request } from "express";
+import { wrapAsync } from "../middleware/wrap-async.js";
 import { readdir, stat, mkdir } from "fs/promises";
 import path from "path";
 import { join, resolve, dirname } from "path";
@@ -59,8 +60,7 @@ interface BrowseResult {
 // GET /fs/browse?path=/some/path — List directory contents
 fsRouter.get(
   "/browse",
-  async (req: Request<object, object, object, { path?: string }>, res, next) => {
-    try {
+  wrapAsync(async (req: Request<object, object, object, { path?: string }>, res) => {
       const rawPath = req.query.path;
       const targetPath = rawPath?.trim() ? resolve(rawPath) : getDefaultBrowseRoot();
 
@@ -95,10 +95,7 @@ fsRouter.get(
 
       const body: ApiResponse<BrowseResult> = { data: result };
       res.json(body);
-    } catch (err) {
-      next(err);
-    }
-  }
+  })
 );
 
 interface CreateFolderBody {
@@ -109,8 +106,7 @@ interface CreateFolderBody {
 // POST /fs/create-folder — Create a new folder and return its path
 fsRouter.post(
   "/create-folder",
-  async (req: Request<object, object, CreateFolderBody>, res, next) => {
-    try {
+  wrapAsync(async (req: Request<object, object, CreateFolderBody>, res) => {
       const { parentPath, name } = req.body ?? {};
       if (!parentPath || typeof parentPath !== "string" || !name || typeof name !== "string") {
         throw new AppError(400, ErrorCodes.INVALID_INPUT, "parentPath and name are required");
@@ -155,17 +151,13 @@ fsRouter.post(
       await mkdir(newPath, { recursive: false });
       const body: ApiResponse<{ path: string }> = { data: { path: newPath } };
       res.json(body);
-    } catch (err) {
-      next(err);
-    }
-  }
+  })
 );
 
 // GET /fs/detect-test-framework?path=/some/path — Detect test framework from project files
 fsRouter.get(
   "/detect-test-framework",
-  async (req: Request<object, object, object, { path?: string }>, res, next) => {
-    try {
+  wrapAsync(async (req: Request<object, object, object, { path?: string }>, res) => {
       const rawPath = req.query.path?.trim();
       if (!rawPath) {
         throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path query parameter is required");
@@ -184,8 +176,5 @@ fsRouter.get(
         data: detected,
       };
       res.json(body);
-    } catch (err) {
-      next(err);
-    }
-  }
+  })
 );

@@ -1,4 +1,5 @@
 import { Router, Request } from "express";
+import { wrapAsync } from "../middleware/wrap-async.js";
 import { FeedbackService } from "../services/feedback.service.js";
 import { orchestratorService } from "../services/orchestrator.service.js";
 import type { ApiResponse, FeedbackItem, FeedbackSubmitRequest } from "@opensprint/shared";
@@ -11,8 +12,9 @@ type ProjectParams = { projectId: string };
 type FeedbackParams = { projectId: string; feedbackId: string };
 
 // GET /projects/:projectId/feedback — List all feedback items (supports ?limit=&offset= for pagination)
-feedbackRouter.get("/", async (req: Request<ProjectParams>, res, next) => {
-  try {
+feedbackRouter.get(
+  "/",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const limit = req.query.limit != null ? parseInt(String(req.query.limit), 10) : undefined;
     const offset = req.query.offset != null ? parseInt(String(req.query.offset), 10) : undefined;
     const options =
@@ -25,14 +27,13 @@ feedbackRouter.get("/", async (req: Request<ProjectParams>, res, next) => {
       data: result,
     };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/feedback — Submit new feedback
-feedbackRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
-  try {
+feedbackRouter.post(
+  "/",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const item = await feedbackService.submitFeedback(
       req.params.projectId,
       req.body as FeedbackSubmitRequest
@@ -41,60 +42,51 @@ feedbackRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
     orchestratorService.nudge(req.params.projectId);
     const body: ApiResponse<FeedbackItem> = { data: item };
     res.status(201).json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/feedback/:feedbackId — Get feedback details
-feedbackRouter.get("/:feedbackId", async (req: Request<FeedbackParams>, res, next) => {
-  try {
+feedbackRouter.get(
+  "/:feedbackId",
+  wrapAsync(async (req: Request<FeedbackParams>, res) => {
     const item = await feedbackService.getFeedback(req.params.projectId, req.params.feedbackId);
     const body: ApiResponse<FeedbackItem> = { data: item };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/feedback/:feedbackId/recategorize — Re-trigger AI categorization
 feedbackRouter.post(
   "/:feedbackId/recategorize",
-  async (req: Request<FeedbackParams>, res, next) => {
-    try {
-      const answer = req.body?.answer as string | undefined;
-      const item = await feedbackService.recategorizeFeedback(
-        req.params.projectId,
-        req.params.feedbackId,
-        answer ? { answer } : undefined
-      );
-      orchestratorService.nudge(req.params.projectId);
-      const body: ApiResponse<FeedbackItem> = { data: item };
-      res.json(body);
-    } catch (err) {
-      next(err);
-    }
-  }
+  wrapAsync(async (req: Request<FeedbackParams>, res) => {
+    const answer = req.body?.answer as string | undefined;
+    const item = await feedbackService.recategorizeFeedback(
+      req.params.projectId,
+      req.params.feedbackId,
+      answer ? { answer } : undefined
+    );
+    orchestratorService.nudge(req.params.projectId);
+    const body: ApiResponse<FeedbackItem> = { data: item };
+    res.json(body);
+  })
 );
 
 // POST /projects/:projectId/feedback/:feedbackId/resolve — Mark feedback as resolved (PRD §10.2)
-feedbackRouter.post("/:feedbackId/resolve", async (req: Request<FeedbackParams>, res, next) => {
-  try {
+feedbackRouter.post(
+  "/:feedbackId/resolve",
+  wrapAsync(async (req: Request<FeedbackParams>, res) => {
     const item = await feedbackService.resolveFeedback(req.params.projectId, req.params.feedbackId);
     const body: ApiResponse<FeedbackItem> = { data: item };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/feedback/:feedbackId/cancel — Mark feedback as cancelled, delete associated tasks
-feedbackRouter.post("/:feedbackId/cancel", async (req: Request<FeedbackParams>, res, next) => {
-  try {
+feedbackRouter.post(
+  "/:feedbackId/cancel",
+  wrapAsync(async (req: Request<FeedbackParams>, res) => {
     const item = await feedbackService.cancelFeedback(req.params.projectId, req.params.feedbackId);
     const body: ApiResponse<FeedbackItem> = { data: item };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);

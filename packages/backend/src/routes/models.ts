@@ -1,4 +1,5 @@
 import { Router, Request } from "express";
+import { wrapAsync } from "../middleware/wrap-async.js";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ApiErrorResponse, ApiResponse } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
@@ -357,8 +358,9 @@ async function resolveApiKey(
 }
 
 // GET /models?provider=claude|claude-cli|cursor&projectId=... — List available models for the given provider
-modelsRouter.get("/", async (req: Request, res, next) => {
-  try {
+modelsRouter.get(
+  "/",
+  wrapAsync(async (req: Request, res) => {
     const provider = (req.query.provider as string) || "claude";
     const projectId = req.query.projectId as string | undefined;
 
@@ -439,7 +441,5 @@ modelsRouter.get("/", async (req: Request, res, next) => {
     }
 
     res.json({ data: [] } as ApiResponse<ModelOption[]>);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);

@@ -1,4 +1,5 @@
 import { Router, Request } from "express";
+import { wrapAsync } from "../middleware/wrap-async.js";
 import { PlanService } from "../services/plan.service.js";
 import { orchestratorService } from "../services/orchestrator.service.js";
 import { taskStore } from "../services/task-store.service.js";
@@ -19,19 +20,19 @@ type ProjectParams = { projectId: string };
 type PlanParams = { projectId: string; planId: string };
 
 // POST /projects/:projectId/plans/decompose — AI decompose PRD into plans + tasks (must be before :planId)
-plansRouter.post("/decompose", async (req: Request<ProjectParams>, res, next) => {
-  try {
+plansRouter.post(
+  "/decompose",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const result = await planService.decomposeFromPrd(req.params.projectId);
     const body: ApiResponse<{ created: number; plans: Plan[] }> = { data: result };
     res.status(201).json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/plans/generate — AI generate a plan from freeform feature description
-plansRouter.post("/generate", async (req: Request<ProjectParams>, res, next) => {
-  try {
+plansRouter.post(
+  "/generate",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const { description } = req.body as { description?: string };
     if (!description?.trim()) {
       res.status(400).json({ error: { code: "VALIDATION", message: "description is required" } });
@@ -43,101 +44,93 @@ plansRouter.post("/generate", async (req: Request<ProjectParams>, res, next) => 
     );
     const body: ApiResponse<GeneratePlanResult> = { data: result };
     res.status(result.status === "created" ? 201 : 202).json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/plans/suggest — AI suggest plans from PRD (no creation; for user to accept/modify)
-plansRouter.post("/suggest", async (req: Request<ProjectParams>, res, next) => {
-  try {
+plansRouter.post(
+  "/suggest",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const result = await planService.suggestPlans(req.params.projectId);
     const body: ApiResponse<SuggestPlansResponse> = { data: result };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/plans — List all Plans with dependency graph (single call)
-plansRouter.get("/", async (req: Request<ProjectParams>, res, next) => {
-  try {
+plansRouter.get(
+  "/",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const graph = await planService.listPlansWithDependencyGraph(req.params.projectId);
     const body: ApiResponse<PlanDependencyGraph> = { data: graph };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/plans — Create a new Plan
-plansRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
-  try {
+plansRouter.post(
+  "/",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const plan = await planService.createPlan(req.params.projectId, req.body);
     const body: ApiResponse<Plan> = { data: plan };
     res.status(201).json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/plans/dependencies — Get dependency graph
-plansRouter.get("/dependencies", async (req: Request<ProjectParams>, res, next) => {
-  try {
+plansRouter.get(
+  "/dependencies",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const graph = await planService.getDependencyGraph(req.params.projectId);
     const body: ApiResponse<PlanDependencyGraph> = { data: graph };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/plans/:planId/cross-epic-dependencies — Prerequisites still in Planning
-plansRouter.get("/:planId/cross-epic-dependencies", async (req: Request<PlanParams>, res, next) => {
-  try {
+plansRouter.get(
+  "/:planId/cross-epic-dependencies",
+  wrapAsync(async (req: Request<PlanParams>, res) => {
     const result = await planService.getCrossEpicDependencies(
       req.params.projectId,
       req.params.planId
     );
     const body: ApiResponse<CrossEpicDependenciesResponse> = { data: result };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/plans/:planId/auditor-runs — List Auditor runs for a plan (plan-centric lookup)
-plansRouter.get("/:planId/auditor-runs", async (req: Request<PlanParams>, res, next) => {
-  try {
+plansRouter.get(
+  "/:planId/auditor-runs",
+  wrapAsync(async (req: Request<PlanParams>, res) => {
     const runs = await taskStore.listAuditorRunsByPlanId(
       req.params.projectId,
       req.params.planId
     );
     const body: ApiResponse<typeof runs> = { data: runs };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/plans/:planId/mark-complete — Mark plan complete (set reviewedAt when all tasks closed)
 // Registered before generic :planId so /mark-complete is not captured as a planId
-plansRouter.post("/:planId/mark-complete", async (req: Request<PlanParams>, res, next) => {
-  try {
+plansRouter.post(
+  "/:planId/mark-complete",
+  wrapAsync(async (req: Request<PlanParams>, res) => {
     const plan = await planService.markPlanComplete(req.params.projectId, req.params.planId);
     const body: ApiResponse<Plan> = { data: plan };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 type VersionParams = PlanParams & { versionNumber: string };
 
 // GET /projects/:projectId/plans/:planId/versions — List plan versions (newest first).
 // When the plan has no versions (first load), create version 1 from current content so UI and execute flow are consistent.
-plansRouter.get("/:planId/versions", async (req: Request<PlanParams>, res, next) => {
-  try {
+plansRouter.get(
+  "/:planId/versions",
+  wrapAsync(async (req: Request<PlanParams>, res) => {
     await planService.getPlan(req.params.projectId, req.params.planId);
     await planService.ensurePlanHasAtLeastOneVersion(req.params.projectId, req.params.planId);
     const list = await taskStore.listPlanVersions(req.params.projectId, req.params.planId);
@@ -149,14 +142,13 @@ plansRouter.get("/:planId/versions", async (req: Request<PlanParams>, res, next)
     }));
     const body: ApiResponse<{ versions: typeof versions }> = { data: { versions } };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/plans/:planId/versions/:versionNumber — Get plan version by number
-plansRouter.get("/:planId/versions/:versionNumber", async (req: Request<VersionParams>, res, next) => {
-  try {
+plansRouter.get(
+  "/:planId/versions/:versionNumber",
+  wrapAsync(async (req: Request<VersionParams>, res) => {
     await planService.getPlan(req.params.projectId, req.params.planId);
     const versionNum = parseInt(req.params.versionNumber, 10);
     if (Number.isNaN(versionNum) || versionNum < 1) {
@@ -188,59 +180,53 @@ plansRouter.get("/:planId/versions/:versionNumber", async (req: Request<VersionP
     };
     const body: ApiResponse<typeof data> = { data };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/plans/:planId — Get Plan details
-plansRouter.get("/:planId", async (req: Request<PlanParams>, res, next) => {
-  try {
+plansRouter.get(
+  "/:planId",
+  wrapAsync(async (req: Request<PlanParams>, res) => {
     const plan = await planService.getPlan(req.params.projectId, req.params.planId);
     const body: ApiResponse<Plan> = { data: plan };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // PUT /projects/:projectId/plans/:planId — Update Plan markdown
-plansRouter.put("/:planId", async (req: Request<PlanParams>, res, next) => {
-  try {
+plansRouter.put(
+  "/:planId",
+  wrapAsync(async (req: Request<PlanParams>, res) => {
     const plan = await planService.updatePlan(req.params.projectId, req.params.planId, req.body);
     const body: ApiResponse<Plan> = { data: plan };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/plans/:planId/plan-tasks — Plan Tasks (create epic if missing, then AI-generate tasks)
-plansRouter.post("/:planId/plan-tasks", async (req: Request<PlanParams>, res, next) => {
-  try {
+plansRouter.post(
+  "/:planId/plan-tasks",
+  wrapAsync(async (req: Request<PlanParams>, res) => {
     const plan = await planService.planTasks(req.params.projectId, req.params.planId);
     const body: ApiResponse<Plan> = { data: plan };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/plans/:planId/execute — Execute! (approve Plan for execution)
 // Optional body: { prerequisitePlanIds?: string[]; version_number?: number }
 // If version_number provided, run ship with that version's content and set as last_executed.
 plansRouter.post(
   "/:planId/execute",
-  async (
-    req: Request<
-      PlanParams,
-      unknown,
-      { prerequisitePlanIds?: string[]; version_number?: number }
-    >,
-    res,
-    next
-  ) => {
-    try {
+  wrapAsync(
+    async (
+      req: Request<
+        PlanParams,
+        unknown,
+        { prerequisitePlanIds?: string[]; version_number?: number }
+      >,
+      res
+    ) => {
       const prerequisitePlanIds = req.body?.prerequisitePlanIds ?? [];
       const version_number = req.body?.version_number;
       const options =
@@ -258,22 +244,19 @@ plansRouter.post(
       orchestratorService.nudge(req.params.projectId);
       const body: ApiResponse<Plan> = { data: plan };
       res.json(body);
-    } catch (err) {
-      next(err);
     }
-  }
+  )
 );
 
 // POST /projects/:projectId/plans/:planId/re-execute — Re-execute an updated Plan
 // Optional body: { version_number?: number }. Else uses last_executed_version_number for version content.
 plansRouter.post(
   "/:planId/re-execute",
-  async (
-    req: Request<PlanParams, unknown, { version_number?: number }>,
-    res,
-    next
-  ) => {
-    try {
+  wrapAsync(
+    async (
+      req: Request<PlanParams, unknown, { version_number?: number }>,
+      res
+    ) => {
       const version_number = req.body?.version_number;
       const options =
         version_number != null ? { version_number } : undefined;
@@ -286,29 +269,25 @@ plansRouter.post(
       orchestratorService.nudge(req.params.projectId);
       const body: ApiResponse<Plan> = { data: plan };
       res.json(body);
-    } catch (err) {
-      next(err);
     }
-  }
+  )
 );
 
 // POST /projects/:projectId/plans/:planId/archive — Archive plan (close all ready/open tasks)
-plansRouter.post("/:planId/archive", async (req: Request<PlanParams>, res, next) => {
-  try {
+plansRouter.post(
+  "/:planId/archive",
+  wrapAsync(async (req: Request<PlanParams>, res) => {
     const plan = await planService.archivePlan(req.params.projectId, req.params.planId);
     const body: ApiResponse<Plan> = { data: plan };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // DELETE /projects/:projectId/plans/:planId — Delete plan from database
-plansRouter.delete("/:planId", async (req: Request<PlanParams>, res, next) => {
-  try {
+plansRouter.delete(
+  "/:planId",
+  wrapAsync(async (req: Request<PlanParams>, res) => {
     await planService.deletePlan(req.params.projectId, req.params.planId);
     res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);

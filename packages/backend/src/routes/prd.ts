@@ -1,5 +1,6 @@
 import { Router, Request } from "express";
 import multer from "multer";
+import { wrapAsync } from "../middleware/wrap-async.js";
 import { PrdService } from "../services/prd.service.js";
 import { ChatService } from "../services/chat.service.js";
 import { prdFromCodebaseService } from "../services/prd-from-codebase.service.js";
@@ -33,42 +34,40 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
 }
 
 // GET /projects/:projectId/prd — Get full PRD
-prdRouter.get("/", async (req: Request<ProjectParams>, res, next) => {
-  try {
+prdRouter.get(
+  "/",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const prd = await prdService.getPrd(req.params.projectId);
     const body: ApiResponse<Prd> = { data: prd };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/prd/history — Get PRD change log
-prdRouter.get("/history", async (req: Request<ProjectParams>, res, next) => {
-  try {
+prdRouter.get(
+  "/history",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const changeLog = await prdService.getHistory(req.params.projectId);
     const body: ApiResponse<PrdChangeLogEntry[]> = { data: changeLog };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/prd/generate-from-codebase — Generate PRD from existing codebase (before /:section).
 // projectId from params ensures PRD is written to the project's repo, not the OpenSprint server repo.
-prdRouter.post("/generate-from-codebase", async (req: Request<ProjectParams>, res, next) => {
-  try {
+prdRouter.post(
+  "/generate-from-codebase",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     await prdFromCodebaseService.generatePrdFromCodebase(req.params.projectId);
     res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/prd/diff?fromVersion=<versionId>&toVersion=<versionId|'current'>
 // Returns diff between two SPEC.md versions. toVersion defaults to 'current' (current SPEC.md from disk).
-prdRouter.get("/diff", async (req: Request<ProjectParams>, res, next) => {
-  try {
+prdRouter.get(
+  "/diff",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const { projectId } = req.params;
     const fromVersionParam = req.query.fromVersion;
     const toVersionParam = req.query.toVersion as string | undefined;
@@ -132,15 +131,14 @@ prdRouter.get("/diff", async (req: Request<ProjectParams>, res, next) => {
       },
     };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/prd/proposed-diff?requestId=<id>
 // Returns diff between current SPEC and proposed SPEC for a hil_approval request. Register before /:section.
-prdRouter.get("/proposed-diff", async (req: Request<ProjectParams>, res, next) => {
-  try {
+prdRouter.get(
+  "/proposed-diff",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const { projectId } = req.params;
     const requestId = req.query.requestId as string | undefined;
 
@@ -184,25 +182,23 @@ prdRouter.get("/proposed-diff", async (req: Request<ProjectParams>, res, next) =
       data: { requestId, diff: { lines: diff.lines, summary: diff.summary } },
     };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/prd/:section — Get a specific PRD section
-prdRouter.get("/:section", async (req: Request<SectionParams>, res, next) => {
-  try {
+prdRouter.get(
+  "/:section",
+  wrapAsync(async (req: Request<SectionParams>, res) => {
     const section = await prdService.getSection(req.params.projectId, req.params.section);
     const body: ApiResponse<PrdSection> = { data: section };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // PUT /projects/:projectId/prd/:section — Update a specific PRD section (direct edit)
-prdRouter.put("/:section", async (req: Request<SectionParams>, res, next) => {
-  try {
+prdRouter.put(
+  "/:section",
+  wrapAsync(async (req: Request<SectionParams>, res) => {
     const { content, source } = req.body as { content?: string; source?: string };
     if (content === undefined || content === null) {
       res.status(400).json({
@@ -234,14 +230,14 @@ prdRouter.put("/:section", async (req: Request<SectionParams>, res, next) => {
         newVersion: result.newVersion,
       },
     });
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/prd/upload — Upload a PRD document (.md, .docx, .pdf)
-prdRouter.post("/upload", upload.single("file"), async (req: Request<ProjectParams>, res, next) => {
-  try {
+prdRouter.post(
+  "/upload",
+  upload.single("file"),
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const file = (req as unknown as { file?: Express.Multer.File }).file;
     if (!file) {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "No file provided" } });
@@ -275,7 +271,5 @@ prdRouter.post("/upload", upload.single("file"), async (req: Request<ProjectPara
       data: { text: extractedText, filename: file.originalname },
     };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);

@@ -23,6 +23,7 @@ import { helpRouter } from "./routes/help.js";
 import { dbStatusRouter } from "./routes/db-status.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { requestIdMiddleware } from "./middleware/request-id.js";
+import { wrapAsync } from "./middleware/wrap-async.js";
 import { requireDatabase } from "./middleware/require-database.js";
 import { orchestratorService } from "./services/orchestrator.service.js";
 
@@ -41,8 +42,9 @@ export function createApp() {
 
   // API routes (global agents count for desktop tray; must be before /projects so :projectId does not capture "agents")
   // Uses same logic as UI: list projects, then getActiveAgents(projectId) per project and sum (orchestrator + planning agents).
-  app.get(`${API_PREFIX}/agents/active-count`, async (_req, res, next) => {
-    try {
+  app.get(
+    `${API_PREFIX}/agents/active-count`,
+    wrapAsync(async (_req, res) => {
       const projects = await projectService.listProjects();
       let count = 0;
       for (const p of projects) {
@@ -54,10 +56,8 @@ export function createApp() {
         }
       }
       res.json({ data: { count } });
-    } catch (err) {
-      next(err);
-    }
-  });
+    })
+  );
 
   app.use(`${API_PREFIX}/db-status`, dbStatusRouter);
   app.use(`${API_PREFIX}/models`, modelsRouter);

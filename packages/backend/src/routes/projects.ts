@@ -1,4 +1,5 @@
 import { Router, Request } from "express";
+import { wrapAsync } from "../middleware/wrap-async.js";
 import { ProjectService } from "../services/project.service.js";
 import { PlanService } from "../services/plan.service.js";
 import { orchestratorService } from "../services/orchestrator.service.js";
@@ -21,107 +22,97 @@ export const projectsRouter = Router();
 type ProjectParams = { id: string };
 
 // GET /projects — List all projects
-projectsRouter.get("/", async (_req, res, next) => {
-  try {
+projectsRouter.get(
+  "/",
+  wrapAsync(async (_req, res) => {
     const projects = await projectService.listProjects();
     const body: ApiResponse<Project[]> = { data: projects };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects — Create a new project
-projectsRouter.post("/", async (req, res, next) => {
-  try {
+projectsRouter.post(
+  "/",
+  wrapAsync(async (req, res) => {
     const request = req.body as CreateProjectRequest;
     const project = await projectService.createProject(request);
     const body: ApiResponse<Project> = { data: project };
     res.status(201).json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/scaffold — Scaffold new project from template (Create New wizard)
-projectsRouter.post("/scaffold", async (req, res, next) => {
-  try {
+projectsRouter.post(
+  "/scaffold",
+  wrapAsync(async (req, res) => {
     const request = req.body as ScaffoldProjectRequest;
     const result = await projectService.scaffoldProject(request);
     const body: ApiResponse<ScaffoldProjectResponse> = { data: result };
     res.status(201).json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:id/sketch — Sketch phase resource (returns project; chat/prd under /chat, /prd)
-projectsRouter.get("/:id/sketch", async (req: Request<ProjectParams>, res, next) => {
-  try {
+projectsRouter.get(
+  "/:id/sketch",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const project = await projectService.getProject(req.params.id);
     const body: ApiResponse<Project> = { data: project };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:id/plan-status — Plan it / Replan it CTA visibility (PRD §7.1.5)
-projectsRouter.get("/:id/plan-status", async (req: Request<ProjectParams>, res, next) => {
-  try {
+projectsRouter.get(
+  "/:id/plan-status",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const status = await planService.getPlanStatus(req.params.id);
     res.json({ data: status });
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:id/sketch-context — Sketch empty-state: hasExistingCode for "Generate from codebase" visibility
-projectsRouter.get("/:id/sketch-context", async (req: Request<ProjectParams>, res, next) => {
-  try {
+projectsRouter.get(
+  "/:id/sketch-context",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const hasExistingCode = await planService.hasExistingCode(req.params.id);
     res.json({ data: { hasExistingCode } });
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:id/self-improvement/history — List recent self-improvement runs (timestamp, status, tasksCreatedCount)
 projectsRouter.get(
   "/:id/self-improvement/history",
-  async (req: Request<ProjectParams>, res, next) => {
-    try {
-      const projectId = req.params.id;
-      await projectService.getProject(projectId);
-      const limit = req.query.limit != null ? Number(req.query.limit) : undefined;
-      const runs = await taskStore.listSelfImprovementRunHistory(projectId, limit);
-      const data = runs.map((r) => ({
-        timestamp: r.timestamp,
-        status: r.status,
-        tasksCreatedCount: r.tasksCreatedCount,
-        ...(r.runId && { runId: r.runId }),
-      }));
-      res.json({ data });
-    } catch (err) {
-      next(err);
-    }
-  }
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
+    const projectId = req.params.id;
+    await projectService.getProject(projectId);
+    const limit = req.query.limit != null ? Number(req.query.limit) : undefined;
+    const runs = await taskStore.listSelfImprovementRunHistory(projectId, limit);
+    const data = runs.map((r) => ({
+      timestamp: r.timestamp,
+      status: r.status,
+      tasksCreatedCount: r.tasksCreatedCount,
+      ...(r.runId && { runId: r.runId }),
+    }));
+    res.json({ data });
+  })
 );
 
 // GET /projects/:id — Get project details
-projectsRouter.get("/:id", async (req, res, next) => {
-  try {
+projectsRouter.get(
+  "/:id",
+  wrapAsync(async (req, res) => {
     const project = await projectService.getProject(req.params.id);
     const body: ApiResponse<Project> = { data: project };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // PUT /projects/:id — Update project
-projectsRouter.put("/:id", async (req, res, next) => {
-  try {
+projectsRouter.put(
+  "/:id",
+  wrapAsync(async (req, res) => {
     const { project, repoPathChanged } = await projectService.updateProject(
       req.params.id,
       req.body
@@ -139,54 +130,48 @@ projectsRouter.put("/:id", async (req, res, next) => {
 
     const body: ApiResponse<Project> = { data: project };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:id/archive — Archive project (remove from UI only, keep data)
-projectsRouter.post("/:id/archive", async (req: Request<ProjectParams>, res, next) => {
-  try {
+projectsRouter.post(
+  "/:id/archive",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const projectId = req.params.id;
     orchestratorService.stopProject(projectId);
     await projectService.archiveProject(projectId);
     res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // DELETE /projects/:id — Delete project (remove from UI and delete .opensprint directory)
-projectsRouter.delete("/:id", async (req: Request<ProjectParams>, res, next) => {
-  try {
+projectsRouter.delete(
+  "/:id",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const projectId = req.params.id;
     orchestratorService.stopProject(projectId);
     await projectService.deleteProject(projectId);
     res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:id/settings — Get project settings (apiKeys not included; stored in global settings only)
-projectsRouter.get("/:id/settings", async (req, res, next) => {
-  try {
+projectsRouter.get(
+  "/:id/settings",
+  wrapAsync(async (req, res) => {
     const settings = await projectService.getSettingsWithRuntimeState(req.params.id);
     res.json({ data: settings });
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // PUT /projects/:id/settings — Update project settings (apiKeys not accepted; use global settings)
-projectsRouter.put("/:id/settings", async (req, res, next) => {
-  try {
+projectsRouter.put(
+  "/:id/settings",
+  wrapAsync(async (req, res) => {
     const projectId = req.params.id;
     const { apiKeys: _omit, ...bodyWithoutApiKeys } = req.body as Record<string, unknown>;
     const settings = await projectService.updateSettings(projectId, bodyWithoutApiKeys);
     await orchestratorService.refreshMaxSlotsAndNudge(projectId);
     res.json({ data: settings });
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);

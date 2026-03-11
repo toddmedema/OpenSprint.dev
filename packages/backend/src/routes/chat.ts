@@ -1,4 +1,5 @@
 import { Router, Request } from "express";
+import { wrapAsync } from "../middleware/wrap-async.js";
 import { ChatService } from "../services/chat.service.js";
 import type { ApiResponse, ChatRequest, ChatResponse, Conversation } from "@opensprint/shared";
 import { createLogger } from "../utils/logger.js";
@@ -12,8 +13,9 @@ type ProjectParams = { projectId: string };
 
 // POST /projects/:projectId/chat — Send a message to the planning agent.
 // projectId from params is the single source of truth; PRD updates are applied to that project's repo only.
-chatRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
-  try {
+chatRouter.post(
+  "/",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const body = req.body as ChatRequest;
     const context = body.context ?? "sketch";
     log.info("POST received", {
@@ -25,19 +27,16 @@ chatRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
     log.info("POST completed", { projectId: req.params.projectId });
     const result: ApiResponse<ChatResponse> = { data: response };
     res.json(result);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/chat/history — Get conversation history
-chatRouter.get("/history", async (req: Request<ProjectParams>, res, next) => {
-  try {
+chatRouter.get(
+  "/history",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const context = (req.query.context as string) ?? "sketch";
     const conversation = await chatService.getHistory(req.params.projectId, context);
     const result: ApiResponse<Conversation> = { data: conversation };
     res.json(result);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);

@@ -1,4 +1,5 @@
 import { Router, Request } from "express";
+import { wrapAsync } from "../middleware/wrap-async.js";
 import { notificationService } from "../services/notification.service.js";
 import { hilService } from "../services/hil-service.js";
 import { taskStore } from "../services/task-store.service.js";
@@ -23,8 +24,7 @@ type ResolveBody = { approved?: boolean };
 // POST /projects/:projectId/notifications/:notificationId/retry-rate-limit — Check keys available, resolve rate-limit notifications, nudge orchestrator
 projectNotificationsRouter.post(
   "/:notificationId/retry-rate-limit",
-  async (req: Request<NotificationParams>, res, next) => {
-    try {
+  wrapAsync(async (req: Request<NotificationParams>, res) => {
       const { projectId, notificationId } = req.params;
       const notifications = await notificationService.listByProject(projectId);
       const notification = notifications.find((n) => n.id === notificationId);
@@ -77,41 +77,35 @@ projectNotificationsRouter.post(
       res.json({
         data: { ok: true, resolvedCount: resolved.length },
       } as ApiResponse<{ ok: boolean; resolvedCount: number }>);
-    } catch (err) {
-      next(err);
-    }
-  }
+  })
 );
 
 // DELETE /projects/:projectId/notifications — Clear all notifications for project
-projectNotificationsRouter.delete("/", async (req: Request<ProjectParams>, res, next) => {
-  try {
+projectNotificationsRouter.delete(
+  "/",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const deletedCount = await notificationService.deleteByProject(req.params.projectId);
     res.json({
       data: { deletedCount },
     } as ApiResponse<{ deletedCount: number }>);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/notifications — List unresolved notifications for project
-projectNotificationsRouter.get("/", async (req: Request<ProjectParams>, res, next) => {
-  try {
+projectNotificationsRouter.get(
+  "/",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const notifications = await notificationService.listByProject(req.params.projectId);
     const body: ApiResponse<Notification[]> = { data: notifications };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // PATCH /projects/:projectId/notifications/:notificationId — Resolve notification
 // Body: { approved?: boolean } for hil_approval notifications (true=approve, false/dismiss=reject)
 projectNotificationsRouter.patch(
   "/:notificationId",
-  async (req: Request<NotificationParams, unknown, ResolveBody>, res, next) => {
-    try {
+  wrapAsync(async (req: Request<NotificationParams, unknown, ResolveBody>, res) => {
       const { projectId, notificationId } = req.params;
       const approved = req.body?.approved;
       const notification = await notificationService.resolve(projectId, notificationId);
@@ -144,43 +138,37 @@ projectNotificationsRouter.patch(
 
       const body: ApiResponse<Notification> = { data: notification };
       res.json(body);
-    } catch (err) {
-      next(err);
-    }
-  }
+  })
 );
 
 // DELETE /notifications — Clear all notifications across all projects (global)
-globalNotificationsRouter.delete("/", async (_req, res, next) => {
-  try {
+globalNotificationsRouter.delete(
+  "/",
+  wrapAsync(async (_req, res) => {
     const deletedCount = await notificationService.deleteAll();
     res.json({
       data: { deletedCount },
     } as ApiResponse<{ deletedCount: number }>);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /notifications/pending-count — Count of pending human notifications (for desktop tray badge)
-globalNotificationsRouter.get("/pending-count", async (_req, res, next) => {
-  try {
+globalNotificationsRouter.get(
+  "/pending-count",
+  wrapAsync(async (_req, res) => {
     const list = await notificationService.listGlobal();
     res.json({ data: { count: list.length } } as ApiResponse<{ count: number }>);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /notifications — List unresolved notifications across all projects (global)
-globalNotificationsRouter.get("/", async (_req, res, next) => {
-  try {
+globalNotificationsRouter.get(
+  "/",
+  wrapAsync(async (_req, res) => {
     const notifications = await notificationService.listGlobal();
     const body: ApiResponse<Notification[]> = { data: notifications };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 export { projectNotificationsRouter, globalNotificationsRouter };

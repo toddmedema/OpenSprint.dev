@@ -1,4 +1,5 @@
 import { Router, Request } from "express";
+import { wrapAsync } from "../middleware/wrap-async.js";
 import { spawn, execSync } from "child_process";
 import path from "path";
 import os from "os";
@@ -94,83 +95,87 @@ const activeDeployments = new Map<string, string>();
 
 // POST /projects/:projectId/deliver — Trigger deployment (Deliver phase)
 // Body: { target?: string } — target name from targets array; defaults to getDefaultDeploymentTarget()
-deliverRouter.post("/", async (req: Request<ProjectParams>, res, next) => {
-  try {
-    const { projectId } = req.params;
-
-    if (activeDeployments.has(projectId)) {
-      res.status(409).json({
-        error: {
-          code: "DEPLOY_ALREADY_RUNNING",
-          message: `Deployment ${activeDeployments.get(projectId)} is already running for this project`,
-        },
-      });
-      return;
-    }
-
-    // Reserve the slot synchronously before any awaits to prevent concurrent deploys
-    activeDeployments.set(projectId, "pending");
-
-    const bodyTarget = (req.body as { target?: string } | undefined)?.target;
-    const project = await projectService.getProject(projectId);
-    const settings = await projectService.getSettings(projectId);
-
-    const latest = await deployStorageService.getLatestDeploy(projectId);
-    const previousDeployId = latest?.id ?? null;
-
-    const commitHash = getCommitHash(project.repoPath);
-    const target = bodyTarget ?? getDefaultDeploymentTarget(settings.deployment);
-    const mode = settings.deployment.mode ?? "custom";
-
-    const record = await deployStorageService.createRecord(projectId, previousDeployId, {
-      commitHash,
-      target,
-      mode,
-    });
-
-    activeDeployments.set(projectId, record.id);
-    broadcastToProject(projectId, { type: "deliver.started", deployId: record.id });
-
+deliverRouter.post(
+  "/",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     try {
-      await deployStorageService.updateRecord(projectId, record.id, { status: "running" });
-    } catch (updateErr) {
-      activeDeployments.delete(projectId);
-      throw updateErr;
-    }
+      const { projectId } = req.params;
 
-    const repoInTempDir = isRepoInTempDir(project.repoPath);
+      if (activeDeployments.has(projectId)) {
+        res.status(409).json({
+          error: {
+            code: "DEPLOY_ALREADY_RUNNING",
+            message: `Deployment ${activeDeployments.get(projectId)} is already running for this project`,
+          },
+        });
+        return;
+      }
 
-    const deployPromise = runDeployAsync(
-      projectId,
-      record.id,
-      project.repoPath,
-      settings,
-      target,
-      project.name
-    )
-      .catch((err) => {
-        log.error("Deploy failed", { deployId: record.id, err });
-      })
-      .finally(() => {
-        activeDeployments.delete(projectId);
+      // Reserve the slot synchronously before any awaits to prevent concurrent deploys
+      activeDeployments.set(projectId, "pending");
+
+      const bodyTarget = (req.body as { target?: string } | undefined)?.target;
+      const project = await projectService.getProject(projectId);
+      const settings = await projectService.getSettings(projectId);
+
+      const latest = await deployStorageService.getLatestDeploy(projectId);
+      const previousDeployId = latest?.id ?? null;
+
+      const commitHash = getCommitHash(project.repoPath);
+      const target = bodyTarget ?? getDefaultDeploymentTarget(settings.deployment);
+      const mode = settings.deployment.mode ?? "custom";
+
+      const record = await deployStorageService.createRecord(projectId, previousDeployId, {
+        commitHash,
+        target,
+        mode,
       });
 
-    // When repo is in temp dir (e.g. test env), await deploy so it completes before test teardown
-    if (repoInTempDir) {
-      await deployPromise;
-    }
+      activeDeployments.set(projectId, record.id);
+      broadcastToProject(projectId, { type: "deliver.started", deployId: record.id });
 
-    const body: ApiResponse<{ deployId: string }> = { data: { deployId: record.id } };
-    res.status(202).json(body);
-  } catch (err) {
-    activeDeployments.delete(req.params.projectId);
-    next(err);
-  }
-});
+      try {
+        await deployStorageService.updateRecord(projectId, record.id, { status: "running" });
+      } catch (updateErr) {
+        activeDeployments.delete(projectId);
+        throw updateErr;
+      }
+
+      const repoInTempDir = isRepoInTempDir(project.repoPath);
+
+      const deployPromise = runDeployAsync(
+        projectId,
+        record.id,
+        project.repoPath,
+        settings,
+        target,
+        project.name
+      )
+        .catch((err) => {
+          log.error("Deploy failed", { deployId: record.id, err });
+        })
+        .finally(() => {
+          activeDeployments.delete(projectId);
+        });
+
+      // When repo is in temp dir (e.g. test env), await deploy so it completes before test teardown
+      if (repoInTempDir) {
+        await deployPromise;
+      }
+
+      const body: ApiResponse<{ deployId: string }> = { data: { deployId: record.id } };
+      res.status(202).json(body);
+    } catch (err) {
+      activeDeployments.delete(req.params.projectId);
+      throw err;
+    }
+  })
+);
 
 // GET /projects/:projectId/deliver/status — Current deployment status (Deliver phase)
-deliverRouter.get("/status", async (req: Request<ProjectParams>, res, next) => {
-  try {
+deliverRouter.get(
+  "/status",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const { projectId } = req.params;
     await projectService.getProject(projectId);
     const history = await deployStorageService.listHistory(projectId, 1);
@@ -185,14 +190,13 @@ deliverRouter.get("/status", async (req: Request<ProjectParams>, res, next) => {
       },
     };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/deliver/history — Deployment history (Deliver phase)
-deliverRouter.get("/history", async (req: Request<ProjectParams>, res, next) => {
-  try {
+deliverRouter.get(
+  "/history",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const { projectId } = req.params;
     await projectService.getProject(projectId);
     const limit = Math.min(parseInt(req.query.limit as string, 10) || 50, 100);
@@ -200,14 +204,13 @@ deliverRouter.get("/history", async (req: Request<ProjectParams>, res, next) => 
 
     const body: ApiResponse<DeploymentRecord[]> = { data: history };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // PUT /projects/:projectId/deliver/settings — Update deployment settings (must be before /:deployId)
-deliverRouter.put("/settings", async (req: Request<ProjectParams>, res, next) => {
-  try {
+deliverRouter.put(
+  "/settings",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const { projectId } = req.params;
     const deployment = req.body as Partial<DeploymentConfig>;
     const settings = await projectService.getSettings(projectId);
@@ -225,15 +228,14 @@ deliverRouter.put("/settings", async (req: Request<ProjectParams>, res, next) =>
 
     const body: ApiResponse<ProjectSettings> = { data: updated };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/deliver/cancel — Clear stuck delivering state (in-memory + mark running/pending as failed)
 // Must be before /:deployId so "cancel" is not captured as deployId
-deliverRouter.post("/cancel", async (req: Request<ProjectParams>, res, next) => {
-  try {
+deliverRouter.post(
+  "/cancel",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const { projectId } = req.params;
     await projectService.getProject(projectId);
 
@@ -249,133 +251,135 @@ deliverRouter.post("/cancel", async (req: Request<ProjectParams>, res, next) => 
 
     const body: ApiResponse<{ cleared: boolean }> = { data: { cleared: true } };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/deliver/expo-deploy — Expo deploy (beta or prod) with export + eas deploy
 // Body: { variant: "beta" | "prod" }
 // Must be before /:deployId/rollback so "expo-deploy" is not captured as deployId
-deliverRouter.post("/expo-deploy", async (req: Request<ProjectParams>, res, next) => {
-  try {
-    const { projectId } = req.params;
-    const variant = (req.body as { variant?: string } | undefined)?.variant;
-
-    if (variant !== "beta" && variant !== "prod") {
-      res.status(400).json({
-        error: {
-          code: "INVALID_VARIANT",
-          message: "variant must be 'beta' or 'prod'",
-        },
-      });
-      return;
-    }
-
-    if (activeDeployments.has(projectId)) {
-      res.status(409).json({
-        error: {
-          code: "DEPLOY_ALREADY_RUNNING",
-          message: `Deployment ${activeDeployments.get(projectId)} is already running for this project`,
-        },
-      });
-      return;
-    }
-
-    const project = await projectService.getProject(projectId);
-    const settings = await projectService.getSettings(projectId);
-
-    if (settings.deployment.mode !== "expo") {
-      res.status(400).json({
-        error: {
-          code: "EXPO_REQUIRED",
-          message: "Expo deploy is only available when deployment mode is 'expo'",
-        },
-      });
-      return;
-    }
-
-    // Pre-deploy: identify required but missing Expo auth before starting
-    const authCheck = await checkExpoAuth(project.repoPath);
-    if (!authCheck.ok) {
-      res.status(400).json({
-        error: {
-          code: authCheck.code,
-          message: authCheck.message,
-          prompt: authCheck.prompt,
-        },
-      });
-      return;
-    }
-
-    activeDeployments.set(projectId, "pending");
-
-    const latest = await deployStorageService.getLatestDeploy(projectId);
-    const previousDeployId = latest?.id ?? null;
-    const commitHash = getCommitHash(project.repoPath);
-    const target = variant === "prod" ? "production" : "staging";
-
-    const record = await deployStorageService.createRecord(projectId, previousDeployId, {
-      commitHash,
-      target,
-      mode: "expo",
-    });
-
-    activeDeployments.set(projectId, record.id);
-    broadcastToProject(projectId, { type: "deliver.started", deployId: record.id });
-
+deliverRouter.post(
+  "/expo-deploy",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     try {
-      await deployStorageService.updateRecord(projectId, record.id, { status: "running" });
-    } catch (updateErr) {
-      activeDeployments.delete(projectId);
-      throw updateErr;
-    }
+      const { projectId } = req.params;
+      const variant = (req.body as { variant?: string } | undefined)?.variant;
 
-    const repoInTempDir = isRepoInTempDir(project.repoPath);
-    const expoTarget = variant === "prod" ? "production" : "staging";
-    const expoTargetConfig = getDeploymentTargetConfig(settings.deployment, expoTarget);
-    const baseEnvVars =
-      expoTargetConfig?.envVars ?? settings.deployment.envVars ?? {};
-    const envVars =
-      authCheck.expoToken != null
-        ? { ...baseEnvVars, EXPO_TOKEN: authCheck.expoToken }
-        : baseEnvVars;
+      if (variant !== "beta" && variant !== "prod") {
+        res.status(400).json({
+          error: {
+            code: "INVALID_VARIANT",
+            message: "variant must be 'beta' or 'prod'",
+          },
+        });
+        return;
+      }
 
-    const emit = (chunk: string) => {
-      deployStorageService.appendLog(projectId, record.id, chunk);
-      broadcastToProject(projectId, { type: "deliver.output", deployId: record.id, chunk });
-    };
+      if (activeDeployments.has(projectId)) {
+        res.status(409).json({
+          error: {
+            code: "DEPLOY_ALREADY_RUNNING",
+            message: `Deployment ${activeDeployments.get(projectId)} is already running for this project`,
+          },
+        });
+        return;
+      }
 
-    const deployPromise = runExpoDeployAsync(
-      projectId,
-      record.id,
-      project.repoPath,
-      variant,
-      emit,
-      envVars
-    )
-      .catch((err) => {
-        log.error("Expo deploy failed", { deployId: record.id, err });
-      })
-      .finally(() => {
-        activeDeployments.delete(projectId);
+      const project = await projectService.getProject(projectId);
+      const settings = await projectService.getSettings(projectId);
+
+      if (settings.deployment.mode !== "expo") {
+        res.status(400).json({
+          error: {
+            code: "EXPO_REQUIRED",
+            message: "Expo deploy is only available when deployment mode is 'expo'",
+          },
+        });
+        return;
+      }
+
+      // Pre-deploy: identify required but missing Expo auth before starting
+      const authCheck = await checkExpoAuth(project.repoPath);
+      if (!authCheck.ok) {
+        res.status(400).json({
+          error: {
+            code: authCheck.code,
+            message: authCheck.message,
+            prompt: authCheck.prompt,
+          },
+        });
+        return;
+      }
+
+      activeDeployments.set(projectId, "pending");
+
+      const latest = await deployStorageService.getLatestDeploy(projectId);
+      const previousDeployId = latest?.id ?? null;
+      const commitHash = getCommitHash(project.repoPath);
+      const target = variant === "prod" ? "production" : "staging";
+
+      const record = await deployStorageService.createRecord(projectId, previousDeployId, {
+        commitHash,
+        target,
+        mode: "expo",
       });
 
-    if (repoInTempDir) {
-      await deployPromise;
-    }
+      activeDeployments.set(projectId, record.id);
+      broadcastToProject(projectId, { type: "deliver.started", deployId: record.id });
 
-    const body: ApiResponse<{ deployId: string }> = { data: { deployId: record.id } };
-    res.status(202).json(body);
-  } catch (err) {
-    activeDeployments.delete(req.params.projectId);
-    next(err);
-  }
-});
+      try {
+        await deployStorageService.updateRecord(projectId, record.id, { status: "running" });
+      } catch (updateErr) {
+        activeDeployments.delete(projectId);
+        throw updateErr;
+      }
+
+      const repoInTempDir = isRepoInTempDir(project.repoPath);
+      const expoTarget = variant === "prod" ? "production" : "staging";
+      const expoTargetConfig = getDeploymentTargetConfig(settings.deployment, expoTarget);
+      const baseEnvVars =
+        expoTargetConfig?.envVars ?? settings.deployment.envVars ?? {};
+      const envVars =
+        authCheck.expoToken != null
+          ? { ...baseEnvVars, EXPO_TOKEN: authCheck.expoToken }
+          : baseEnvVars;
+
+      const emit = (chunk: string) => {
+        deployStorageService.appendLog(projectId, record.id, chunk);
+        broadcastToProject(projectId, { type: "deliver.output", deployId: record.id, chunk });
+      };
+
+      const deployPromise = runExpoDeployAsync(
+        projectId,
+        record.id,
+        project.repoPath,
+        variant,
+        emit,
+        envVars
+      )
+        .catch((err) => {
+          log.error("Expo deploy failed", { deployId: record.id, err });
+        })
+        .finally(() => {
+          activeDeployments.delete(projectId);
+        });
+
+      if (repoInTempDir) {
+        await deployPromise;
+      }
+
+      const body: ApiResponse<{ deployId: string }> = { data: { deployId: record.id } };
+      res.status(202).json(body);
+    } catch (err) {
+      activeDeployments.delete(req.params.projectId);
+      throw err;
+    }
+  })
+);
 
 // POST /projects/:projectId/deliver/:deployId/rollback — Rollback to a deployment
-deliverRouter.post("/:deployId/rollback", async (req: Request<DeployIdParams>, res, next) => {
-  try {
+deliverRouter.post(
+  "/:deployId/rollback",
+  wrapAsync(async (req: Request<DeployIdParams>, res) => {
     const { projectId, deployId } = req.params;
     const record = await deployStorageService.getRecord(projectId, deployId);
     if (!record) {
@@ -434,10 +438,8 @@ deliverRouter.post("/:deployId/rollback", async (req: Request<DeployIdParams>, r
         },
       });
     }
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 /** Run deployment asynchronously with streaming output.
  * PRD §7.5.2: Runs pre-deploy test suite first. If tests fail, creates fix epic via Planner and aborts.

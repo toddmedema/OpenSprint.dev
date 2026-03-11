@@ -1,4 +1,5 @@
 import { Router, Request } from "express";
+import { wrapAsync } from "../middleware/wrap-async.js";
 import path from "path";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile, access } from "node:fs/promises";
@@ -125,8 +126,9 @@ envRouter.get("/runtime", (_req, res) => {
   } as ApiResponse<EnvRuntimeResponse>);
 });
 
-envRouter.get("/global-status", async (_req, res, next) => {
-  try {
+envRouter.get(
+  "/global-status",
+  wrapAsync(async (_req, res) => {
     const settings = await getGlobalSettings();
     const fromGlobalStore = globalStoreHasKeys(settings.apiKeys);
     const fromEnv =
@@ -140,14 +142,13 @@ envRouter.get("/global-status", async (_req, res, next) => {
     res.json({
       data: { hasAnyKey, useCustomCli },
     } as ApiResponse<{ hasAnyKey: boolean; useCustomCli: boolean }>);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // PUT /env/global-settings — Update global settings (e.g. useCustomCli).
-envRouter.put("/global-settings", async (req: Request, res, next) => {
-  try {
+envRouter.put(
+  "/global-settings",
+  wrapAsync(async (req: Request, res) => {
     const body = req.body as { useCustomCli?: boolean };
     const updates: { useCustomCli?: boolean } = {};
     if (typeof body.useCustomCli === "boolean") {
@@ -163,15 +164,14 @@ envRouter.put("/global-settings", async (req: Request, res, next) => {
     res.json({
       data: { useCustomCli: updated.useCustomCli ?? false },
     } as ApiResponse<{ useCustomCli: boolean }>);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /env/keys — Check which API keys / CLIs are configured (never returns key values).
 // Keys are read from global store first, then process.env. Return anthropic/cursor/openai true if any source has them.
-envRouter.get("/keys", async (_req, res, next) => {
-  try {
+envRouter.get(
+  "/keys",
+  wrapAsync(async (_req, res) => {
     const settings = await getGlobalSettings();
     const anthropic =
       Boolean(process.env.ANTHROPIC_API_KEY?.trim()) ||
@@ -197,14 +197,13 @@ envRouter.get("/keys", async (_req, res, next) => {
       claudeCli: boolean;
       useCustomCli: boolean;
     }>);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /env/keys/validate — Validate an API key via minimal API call (Claude: list models limit 1; Cursor: GET /v0/models).
-envRouter.post("/keys/validate", async (req: Request, res, next) => {
-  try {
+envRouter.post(
+  "/keys/validate",
+  wrapAsync(async (req: Request, res) => {
     const { provider, value } = req.body as { provider?: string; value?: string };
     if (!provider || typeof value !== "string") {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "provider and value are required");
@@ -229,15 +228,14 @@ envRouter.post("/keys/validate", async (req: Request, res, next) => {
     res.json({
       data: result.valid ? { valid: true } : { valid: false, error: result.error },
     } as ApiResponse<{ valid: boolean; error?: string }>);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /env/keys — Save an API key to global store and .env (backward compat).
 // Writes to ~/.opensprint/global-settings.json (merge with existing apiKeys) and .env.
-envRouter.post("/keys", async (req: Request, res, next) => {
-  try {
+envRouter.post(
+  "/keys",
+  wrapAsync(async (req: Request, res) => {
     const { key, value } = req.body as { key?: string; value?: string };
     if (!key || typeof value !== "string") {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "key and value are required");
@@ -305,7 +303,5 @@ envRouter.post("/keys", async (req: Request, res, next) => {
     process.env[key] = trimmed;
 
     res.json({ data: { saved: true } } as ApiResponse<{ saved: boolean }>);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);

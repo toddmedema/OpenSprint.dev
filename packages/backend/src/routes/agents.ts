@@ -1,4 +1,5 @@
 import { Router, Request } from "express";
+import { wrapAsync } from "../middleware/wrap-async.js";
 import type { ApiResponse, ActiveAgent } from "@opensprint/shared";
 import { AGENT_ROLE_CANONICAL_ORDER } from "@opensprint/shared";
 import type { AgentRole } from "@opensprint/shared";
@@ -19,20 +20,20 @@ function isValidRole(role: string): role is AgentRole {
 }
 
 // GET /projects/:projectId/agents/instructions — Read AGENTS.md
-agentsRouter.get("/instructions", async (req: Request<ProjectParams>, res, next) => {
-  try {
+agentsRouter.get(
+  "/instructions",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     await projectService.getProject(req.params.projectId);
     const content = await agentInstructionsService.getGeneralInstructions(req.params.projectId);
     const body: ApiResponse<{ content: string }> = { data: { content } };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // PUT /projects/:projectId/agents/instructions — Write AGENTS.md
-agentsRouter.put("/instructions", async (req: Request<ProjectParams>, res, next) => {
-  try {
+agentsRouter.put(
+  "/instructions",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     if (req.body?.content === undefined) {
       res.status(400).json({
         error: { code: "VALIDATION_ERROR", message: "content is required", details: undefined },
@@ -45,14 +46,13 @@ agentsRouter.put("/instructions", async (req: Request<ProjectParams>, res, next)
       String(req.body.content)
     );
     res.status(200).json({ data: { saved: true } });
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/agents/instructions/:role — Read DB-backed role instructions
-agentsRouter.get("/instructions/:role", async (req: Request<RoleParams>, res, next) => {
-  try {
+agentsRouter.get(
+  "/instructions/:role",
+  wrapAsync(async (req: Request<RoleParams>, res) => {
     if (!isValidRole(req.params.role)) {
       res.status(400).json({
         error: {
@@ -70,14 +70,13 @@ agentsRouter.get("/instructions/:role", async (req: Request<RoleParams>, res, ne
     );
     const body: ApiResponse<{ content: string }> = { data: { content } };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // PUT /projects/:projectId/agents/instructions/:role — Write DB-backed role instructions
-agentsRouter.put("/instructions/:role", async (req: Request<RoleParams>, res, next) => {
-  try {
+agentsRouter.put(
+  "/instructions/:role",
+  wrapAsync(async (req: Request<RoleParams>, res) => {
     if (!isValidRole(req.params.role)) {
       res.status(400).json({
         error: {
@@ -101,25 +100,23 @@ agentsRouter.put("/instructions/:role", async (req: Request<RoleParams>, res, ne
       String(req.body.content)
     );
     res.status(200).json({ data: { saved: true } });
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // GET /projects/:projectId/agents/active — List active agents (Build phase from orchestrator)
-agentsRouter.get("/active", async (req: Request<ProjectParams>, res, next) => {
-  try {
+agentsRouter.get(
+  "/active",
+  wrapAsync(async (req: Request<ProjectParams>, res) => {
     const agents: ActiveAgent[] = await orchestratorService.getActiveAgents(req.params.projectId);
     const body: ApiResponse<ActiveAgent[]> = { data: agents };
     res.json(body);
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);
 
 // POST /projects/:projectId/agents/:agentId/kill — Terminate agent process (Execute phase only)
-agentsRouter.post("/:agentId/kill", async (req: Request<KillParams>, res, next) => {
-  try {
+agentsRouter.post(
+  "/:agentId/kill",
+  wrapAsync(async (req: Request<KillParams>, res) => {
     const { projectId, agentId } = req.params;
     const killed = await orchestratorService.killAgent(projectId, agentId);
     if (!killed) {
@@ -127,7 +124,5 @@ agentsRouter.post("/:agentId/kill", async (req: Request<KillParams>, res, next) 
       return;
     }
     res.status(200).json({ data: { killed: true } });
-  } catch (err) {
-    next(err);
-  }
-});
+  })
+);

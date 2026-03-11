@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { TaskService } from "../services/task.service.js";
 import type { ApiResponse, TaskAnalytics } from "@opensprint/shared";
+import { wrapAsync } from "../middleware/wrap-async.js";
 
 /**
  * Global task analytics router.
@@ -9,15 +10,14 @@ import type { ApiResponse, TaskAnalytics } from "@opensprint/shared";
 export function createTasksAnalyticsRouter(taskService: TaskService): Router {
   const router = Router();
 
-  router.get("/analytics", async (_req, res, next) => {
-    try {
+  router.get(
+    "/analytics",
+    wrapAsync(async (_req, res) => {
       const analytics = await taskService.getTaskAnalytics();
       const body: ApiResponse<TaskAnalytics> = { data: analytics };
       res.json(body);
-    } catch (err) {
-      next(err);
-    }
-  });
+    })
+  );
 
   return router;
 }
