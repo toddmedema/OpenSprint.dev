@@ -199,9 +199,9 @@ export function Navbar({
         className="absolute bottom-0 left-0 right-0 h-px bg-theme-border pointer-events-none z-10"
         aria-hidden="true"
       />
-      {/* Grid: 1fr auto 1fr so center (phase tabs) is viewport-centered regardless of left content width. On Windows Electron, no right padding so window controls sit at the edge. */}
+      {/* Grid: 1fr auto 1fr so center (phase tabs) is viewport-centered regardless of left content width. On Electron (Mac and Windows), no right padding so right-edge controls/settings sit flush. */}
       <div
-        className={`grid w-full grid-cols-[1fr_auto_1fr] items-stretch gap-2 min-w-0 py-0 pl-4 md:pl-6 ${isElectronWin ? "pr-0" : "pr-4 md:pr-6"}`}
+        className={`grid w-full grid-cols-[1fr_auto_1fr] items-stretch gap-2 min-w-0 py-0 pl-4 md:pl-6 ${isElectronWin || isElectronMac ? "pr-0" : "pr-4 md:pr-6"}`}
       >
         <div
           data-testid="navbar-left-slot"
@@ -359,9 +359,10 @@ export function Navbar({
           ) : null}
         </div>
 
-        {/* Right: Active agents + Help + Settings. On Windows Electron, no-drag so buttons are clickable; window controls at end. */}
+        {/* Right: Active agents + Help + Settings. On Windows Electron, no-drag so buttons are clickable; window controls at end. On Mac Electron, no right padding so settings icon is flush with window edge. */}
         <div
-          className="flex items-center justify-end [&>*:not(:first-child)]:pl-1 md:[&>*:not(:first-child)]:pl-3"
+          data-testid="navbar-right-slot"
+          className={`flex items-center justify-end [&>*:not(:first-child)]:pl-1 md:[&>*:not(:first-child)]:pl-3 ${isElectronMac ? "pr-0" : ""}`}
           style={isElectronWin ? ({ WebkitAppRegion: "no-drag" } as CSSProperties) : undefined}
         >
           {project ? (

@@ -261,6 +261,23 @@ describe("Navbar", () => {
     }
   });
 
+  it("on macOS Electron, right slot has no right padding so settings icon is flush with window edge", () => {
+    const prev =
+      typeof window !== "undefined" && (window as unknown as { electron?: unknown }).electron;
+    if (typeof window !== "undefined") {
+      (window as unknown as { electron: { isElectron: true; platform: string } }).electron = {
+        isElectron: true,
+        platform: "darwin",
+      };
+    }
+    renderNavbar(<Navbar project={null} />);
+    expect(screen.getByTestId("navbar-right-slot")).toHaveClass("pr-0");
+    if (typeof window !== "undefined") {
+      if (prev !== undefined) (window as unknown as { electron: unknown }).electron = prev;
+      else delete (window as unknown as { electron?: unknown }).electron;
+    }
+  });
+
   it("on Windows Electron, shows integrated window controls (minimize, maximize, close) in navbar", async () => {
     const prev =
       typeof window !== "undefined" && (window as unknown as { electron?: unknown }).electron;
