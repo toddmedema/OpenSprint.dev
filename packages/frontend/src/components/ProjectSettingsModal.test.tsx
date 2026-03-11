@@ -1123,6 +1123,68 @@ describe("ProjectSettingsModal", () => {
     );
   });
 
+  it("Agent Config tab shows How this works explainer before Task Complexity", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    const explainer = await screen.findByTestId("agent-config-how-this-works");
+    expect(explainer).toBeInTheDocument();
+    expect(explainer).toHaveTextContent(
+      "How this works: Simple agents handle low/medium complexity tasks; Complex agents handle high/very_high complexity tasks."
+    );
+
+    const taskSection = screen.getByTestId("task-complexity-section");
+    expect(explainer.compareDocumentPosition(taskSection)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
+  it("Agent Config tab shows row-level summaries with provider and model", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Task Complexity");
+
+    const simpleSummary = screen.getByTestId("simple-row-summary");
+    expect(simpleSummary).toHaveTextContent(
+      "Simple currently uses Claude (API) / claude-3-5-sonnet."
+    );
+
+    const complexSummary = screen.getByTestId("complex-row-summary");
+    expect(complexSummary).toHaveTextContent(
+      "Complex currently uses Claude (API) / claude-3-5-sonnet."
+    );
+  });
+
+  it("Agent Config row summaries show Cursor / Auto model when Cursor has no model", async () => {
+    mockGetSettings.mockResolvedValue({
+      ...mockSettings,
+      simpleComplexityAgent: { type: "cursor" as const, model: null, cliCommand: null },
+      complexComplexityAgent: { type: "cursor" as const, model: null, cliCommand: null },
+    });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Task Complexity");
+
+    expect(screen.getByTestId("simple-row-summary")).toHaveTextContent(
+      "Simple currently uses Cursor / Auto model."
+    );
+    expect(screen.getByTestId("complex-row-summary")).toHaveTextContent(
+      "Complex currently uses Cursor / Auto model."
+    );
+  });
+
   it("Agent Config tab shows single Task Complexity section with Simple and Complex rows", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await waitForModalReady();
@@ -1131,9 +1193,6 @@ describe("ProjectSettingsModal", () => {
     await userEvent.click(agentConfigTab);
 
     await screen.findByText("Task Complexity");
-    expect(
-      screen.getByText(/Simple = low\/medium tasks.*Complex = high\/very_high tasks/)
-    ).toBeInTheDocument();
     expect(screen.getByText("Simple")).toBeInTheDocument();
     expect(screen.getByText("Complex")).toBeInTheDocument();
     expect(screen.getByTestId("task-complexity-section")).toBeInTheDocument();

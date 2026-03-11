@@ -518,17 +518,17 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     const getProviderLabel = (provider: AgentType): string => {
       switch (provider) {
         case "claude":
-          return "Claude";
+          return "Claude (API)";
         case "claude-cli":
-          return "Claude CLI";
+          return "Claude (CLI)";
         case "cursor":
           return "Cursor";
         case "openai":
           return "OpenAI";
         case "google":
-          return "Google";
+          return "Google (Gemini)";
         case "lmstudio":
-          return "LM Studio";
+          return "LM Studio (local)";
         case "custom":
           return "Custom CLI";
         default:
@@ -782,26 +782,21 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
 
                 {activeTab === "agents" && (
                   <div className="space-y-6">
-                    <section className="p-4 rounded-lg bg-theme-bg-elevated border border-theme-border">
-                      <h3 className="text-sm font-semibold text-theme-text mb-2">How this works</h3>
-                      <p className="text-xs text-theme-muted">
-                        Simple is used for low and medium complexity tasks. Complex is used for high
-                        and very high complexity tasks.
+                    <section
+                      className="p-4 rounded-lg bg-theme-bg-elevated border border-theme-border"
+                      data-testid="agent-config-how-this-works"
+                    >
+                      <p className="text-sm text-theme-muted">
+                        How this works: Simple agents handle low/medium complexity tasks; Complex
+                        agents handle high/very_high complexity tasks.
                       </p>
                     </section>
                     <div data-testid="task-complexity-section">
                       <h3 className="text-sm font-semibold text-theme-text mb-3">
                         Task Complexity
                       </h3>
-                      <p className="text-xs text-theme-muted mb-3">
-                        How this works: Simple = low/medium tasks. Complex = high/very_high tasks.
-                        Each row configures provider and model.
-                      </p>
                       <div className="space-y-4">
                         {/* Row 1: Simple */}
-                        <p className="text-xs text-theme-muted" data-testid="simple-row-summary">
-                          {getRowSummary("Simple", simpleComplexityAgent)}
-                        </p>
                         <div className="flex flex-wrap items-end gap-3">
                           <span className="w-16 text-sm font-medium text-theme-text shrink-0">
                             Simple
@@ -892,15 +887,15 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             </div>
                           )}
                         </div>
+                        <p className="text-xs text-theme-muted" data-testid="simple-row-summary">
+                          {getRowSummary("Simple", simpleComplexityAgent)}
+                        </p>
                         {renderProviderPrerequisite(
                           "simple",
                           "Simple",
                           simpleComplexityAgent.type
                         )}
                         {/* Row 2: Complex */}
-                        <p className="text-xs text-theme-muted" data-testid="complex-row-summary">
-                          {getRowSummary("Complex", complexComplexityAgent)}
-                        </p>
                         <div className="flex flex-wrap items-end gap-3">
                           <span className="w-16 text-sm font-medium text-theme-text shrink-0">
                             Complex
@@ -989,6 +984,9 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             </div>
                           )}
                         </div>
+                        <p className="text-xs text-theme-muted" data-testid="complex-row-summary">
+                          {getRowSummary("Complex", complexComplexityAgent)}
+                        </p>
                         {renderProviderPrerequisite(
                           "complex",
                           "Complex",
