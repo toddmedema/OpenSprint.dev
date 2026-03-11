@@ -176,6 +176,9 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     } | null>(null);
     const [modelRefreshTrigger] = useState(0);
 
+    // Advanced section (Agent Instructions) in Agent Config — collapsed by default
+    const [advancedExpanded, setAdvancedExpanded] = useState(false);
+
     const clearPollTimeout = useCallback(() => {
       if (pollTimeoutRef.current) {
         clearTimeout(pollTimeoutRef.current);
@@ -987,19 +990,28 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                         )}
                       </div>
                     </div>
-                    <details
+                    <div
                       className="rounded-lg border border-theme-border bg-theme-bg-elevated"
                       data-testid="agents-advanced-section"
                     >
-                      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-theme-text">
+                      <button
+                        type="button"
+                        onClick={() => setAdvancedExpanded((v) => !v)}
+                        className="w-full flex items-center justify-between cursor-pointer px-4 py-3 text-sm font-semibold text-theme-text text-left hover:bg-theme-border-subtle/50 transition-colors rounded-none first:rounded-t-lg"
+                        aria-expanded={advancedExpanded}
+                        aria-label={advancedExpanded ? "Collapse Advanced" : "Expand Advanced"}
+                      >
                         Advanced
-                      </summary>
-                      <div className="px-4 pb-4 pt-1 border-t border-theme-border">
-                        <Suspense fallback={<AgentsSectionFallback />}>
-                          <AgentsMdSection projectId={project.id} />
-                        </Suspense>
-                      </div>
-                    </details>
+                        <span className="text-theme-muted text-xs">{advancedExpanded ? "▼" : "▶"}</span>
+                      </button>
+                      {advancedExpanded && (
+                        <div className="px-4 pb-4 pt-1 border-t border-theme-border">
+                          <Suspense fallback={<AgentsSectionFallback />}>
+                            <AgentsMdSection projectId={project.id} />
+                          </Suspense>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

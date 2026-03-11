@@ -123,6 +123,31 @@ describe("ProjectSettingsModal workflow integration", () => {
     expect(screen.queryByTestId("review-mode-select")).not.toBeInTheDocument();
   });
 
+  it("hides Agent Instructions by default (Advanced section collapsed)", async () => {
+    const user = userEvent.setup();
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={vi.fn()} />);
+
+    await screen.findByTestId("settings-modal-content");
+    await user.click(screen.getByRole("button", { name: "Agent Config" }));
+
+    expect(screen.getByTestId("agents-advanced-section")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Expand Advanced" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Agent Instructions" })).not.toBeInTheDocument();
+  });
+
+  it("shows AgentsMdSection when Advanced section is expanded", async () => {
+    const user = userEvent.setup();
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={vi.fn()} />);
+
+    await screen.findByTestId("settings-modal-content");
+    await user.click(screen.getByRole("button", { name: "Agent Config" }));
+    await user.click(screen.getByRole("button", { name: "Expand Advanced" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Agent Instructions" })).toBeInTheDocument();
+    });
+  });
+
   it("shows provider-specific API prerequisite copy per row", async () => {
     mockGlobalSettingsGet.mockResolvedValue({ databaseUrl: "", apiKeys: {} });
     const user = userEvent.setup();
