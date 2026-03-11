@@ -659,7 +659,7 @@ const FeedbackCard = memo(
                     key={i}
                     type="button"
                     onClick={() => setImageModalSrc(dataUrl)}
-                    className="p-0 border-0 rounded border border-theme-border overflow-hidden cursor-pointer hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-theme-ring"
+                    className="p-0 border-0 rounded border border-theme-border overflow-hidden cursor-pointer hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring"
                     aria-label={`View attachment ${i + 1} full size`}
                   >
                     <img
@@ -1941,7 +1941,7 @@ export function EvalPhase({
                       onChange={(e) => setEvalSearchInputValue(e.target.value)}
                       onKeyDown={handleEvalSearchKeyDown}
                       placeholder="Search feedback…"
-                      className="w-36 sm:w-48 md:w-56 px-3 py-1.5 text-sm bg-theme-surface-muted rounded-md text-theme-text placeholder:text-theme-muted border border-theme-border focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+                      className="w-36 sm:w-48 md:w-56 px-3 py-1.5 text-sm bg-theme-surface-muted rounded-md text-theme-text placeholder:text-theme-muted border border-theme-border focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:border-brand-500 transition-all"
                       aria-label="Search feedback"
                     />
                     <button

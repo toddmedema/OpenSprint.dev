@@ -110,7 +110,7 @@ export function ServerDiffView({
         </div>
       )}
       <div
-        className="font-mono text-xs overflow-x-auto max-h-[24rem] overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring"
+        className="font-mono text-xs overflow-x-auto max-h-[24rem] overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring focus-visible:ring-inset"
         role="list"
         aria-label="Diff lines"
         tabIndex={0}

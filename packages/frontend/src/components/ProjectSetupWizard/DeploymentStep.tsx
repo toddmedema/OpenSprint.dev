@@ -29,7 +29,7 @@ export function DeploymentStep({
               value="expo"
               checked={mode === "expo"}
               onChange={() => onModeChange("expo")}
-              className="mt-0.5"
+              className="mt-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
             />
             <div>
               <p className="text-sm font-medium text-theme-text">Expo.dev</p>
@@ -45,7 +45,7 @@ export function DeploymentStep({
               value="custom"
               checked={mode === "custom"}
               onChange={() => onModeChange("custom")}
-              className="mt-0.5"
+              className="mt-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
             />
             <div>
               <p className="text-sm font-medium text-theme-text">Custom Pipeline</p>

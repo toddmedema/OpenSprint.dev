@@ -141,7 +141,7 @@ export function ExecuteFilterToolbar({
             onChange={(e) => setSearchInputValue(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search tickets…"
-            className="w-36 sm:w-48 md:w-56 px-3 py-1.5 text-sm bg-theme-surface-muted rounded-md text-theme-text placeholder:text-theme-muted border border-theme-border focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+            className="w-36 sm:w-48 md:w-56 px-3 py-1.5 text-sm bg-theme-surface-muted rounded-md text-theme-text placeholder:text-theme-muted border border-theme-border focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:border-brand-500 transition-all"
             aria-label="Search tickets"
           />
           <button

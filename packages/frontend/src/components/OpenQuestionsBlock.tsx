@@ -158,7 +158,7 @@ export function OpenQuestionsBlock({
               onChange={(e) => setAnswerText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAnswer()}
               placeholder="Type your answer..."
-              className="flex-1 text-sm px-3 py-2 rounded-lg border border-theme-border bg-theme-surface text-theme-text placeholder-theme-muted focus:ring-2 focus:ring-theme-info-border focus:border-theme-info-border outline-none"
+              className="flex-1 text-sm px-3 py-2 rounded-lg border border-theme-border bg-theme-surface text-theme-text placeholder-theme-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-info-border focus-visible:border-theme-info-border"
               aria-label="Answer to open questions"
               data-testid="open-questions-answer-input"
               disabled={answerSubmitting}

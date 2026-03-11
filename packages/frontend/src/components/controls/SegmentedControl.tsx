@@ -59,7 +59,7 @@ export function SegmentedControl<T extends string>({
             data-testid={option.testId}
             onClick={() => onChange(option.value)}
             disabled={option.disabled}
-            className={`inline-flex items-center justify-center gap-1.5 font-medium transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${size === "phase" ? "rounded-sm" : "rounded-lg min-w-[44px]"} ${sizeClasses} ${
+            className={`inline-flex items-center justify-center gap-1.5 font-medium transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${size === "phase" ? "rounded-sm" : "rounded-lg min-w-[44px]"} ${sizeClasses} ${
               isActive ? activeClasses : inactiveClasses
             }`}
           >

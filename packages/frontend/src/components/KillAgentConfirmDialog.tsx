@@ -54,7 +54,7 @@ export function KillAgentConfirmDialog({
               type="checkbox"
               checked={dontShowAgain}
               onChange={(e) => setDontShowAgain(e.target.checked)}
-              className="rounded border-theme-border text-brand-600 focus:ring-brand-500"
+              className="rounded border-theme-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             />
             <span className="text-sm text-theme-text">Don&apos;t show this again</span>
           </label>

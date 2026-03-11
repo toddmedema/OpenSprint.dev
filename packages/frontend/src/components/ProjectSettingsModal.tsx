@@ -991,7 +991,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                                       });
                                     }
                                   }}
-                                  className="rounded border-0 focus:ring-2 focus:ring-brand-500 focus:ring-offset-0 disabled:cursor-not-allowed"
+                                  className="rounded border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-0 disabled:cursor-not-allowed"
                                 />
                                 <span className="text-theme-text">{opt.label}</span>
                               </label>
@@ -1299,7 +1299,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                               autoResolveFeedbackOnTaskCompletion: e.target.checked,
                             })
                           }
-                          className="rounded"
+                          className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                           data-testid="auto-resolve-feedback-toggle"
                         />
                       </label>
@@ -1325,7 +1325,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                                 expoConfig: { channel: "preview" },
                               });
                             }}
-                            className="mt-0.5"
+                            className="mt-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
                           />
                           <div>
                             <p className="text-sm font-medium text-theme-text">Expo.dev</p>
@@ -1343,7 +1343,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             onChange={() => {
                               updateDeployment({ mode: "custom" });
                             }}
-                            className="mt-0.5"
+                            className="mt-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
                           />
                           <div>
                             <p className="text-sm font-medium text-theme-text">Custom Pipeline</p>
@@ -1385,6 +1385,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                                   <input
                                     type="checkbox"
                                     checked={t.isDefault ?? false}
+                                    className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                                     onChange={(e) => {
                                       const next = (deployment.targets ?? []).map((x, j) =>
                                         j === i
@@ -1765,7 +1766,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                         type="checkbox"
                         checked={enableHumanTeammates}
                         onChange={(e) => setEnableHumanTeammates(e.target.checked)}
-                        className="rounded border-theme-border"
+                        className="rounded border-theme-border focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                         data-testid="enable-human-teammates-checkbox"
                       />
                       <span className="text-sm font-medium text-theme-text">

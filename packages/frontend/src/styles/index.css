@@ -207,6 +207,13 @@ html[data-theme="dark"] {
   body {
     @apply font-sans antialiased;
   }
+
+  /* Fallback focus-visible for interactive elements without explicit focus styles */
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--ui-stroke-focus);
+    outline-offset: 2px;
+  }
 }
 
 /* ==========================================================================
@@ -254,12 +261,14 @@ html[data-theme="dark"] {
   .btn-secondary {
     @apply inline-flex items-center justify-center rounded-lg bg-theme-surface px-4 py-2.5
       text-sm font-semibold text-theme-text ring-1 ring-inset ring-theme-border
-      hover:bg-theme-surface-muted transition-colors;
+      hover:bg-theme-surface-muted
+      focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 transition-colors;
   }
 
   .btn-danger {
     @apply inline-flex items-center justify-center rounded-lg bg-theme-error-solid px-4 py-2.5
-      text-sm font-semibold text-white shadow-sm hover:bg-theme-error-solid-hover transition-colors;
+      text-sm font-semibold text-white shadow-sm hover:bg-theme-error-solid-hover
+      focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-error-solid focus-visible:ring-offset-2 transition-colors;
   }
 
   /* Phase toolbar (Plan/Execute/Deliver secondary bars): match top nav height; smaller buttons and radius */
@@ -275,7 +284,7 @@ html[data-theme="dark"] {
   .input {
     @apply block w-full rounded-lg border-0 py-2.5 px-3 shadow-sm sm:text-sm
       bg-theme-input-bg text-theme-input-text placeholder:text-theme-input-placeholder
-      ring-1 ring-inset ring-theme-ring focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-600;
+      ring-1 ring-inset ring-theme-ring focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600;
   }
 
   /* Shared dropdown styles — equal left/right padding for consistency (feedback wo3oqk) */

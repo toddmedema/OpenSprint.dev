@@ -202,7 +202,7 @@ export function AssigneeSelector({
                     }
                   }}
                   placeholder="Enter name…"
-                  className="flex-1 text-xs px-2 py-1 rounded border border-theme-border bg-theme-surface text-theme-text focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  className="flex-1 text-xs px-2 py-1 rounded border border-theme-border bg-theme-surface text-theme-text focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-500"
                   data-testid="assignee-other-input"
                   autoFocus
                 />

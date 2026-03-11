@@ -86,7 +86,7 @@ export function AgentsStep({
         className="rounded-lg border border-theme-border bg-theme-surface-muted"
         data-testid="about-agent-team-section"
       >
-        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-theme-text hover:bg-theme-surface-muted/50 rounded-t-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-inset">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-theme-text hover:bg-theme-surface-muted/50 rounded-t-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset">
           What do these agents do?
         </summary>
         <div className="px-4 pb-4 pt-0 border-t border-theme-border">
@@ -98,7 +98,7 @@ export function AgentsStep({
           <button
             type="button"
             onClick={() => setAgentReferenceOpen(true)}
-            className="mt-3 text-sm text-brand-600 hover:text-brand-700 hover:underline focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
+            className="mt-3 text-sm text-brand-600 hover:text-brand-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 rounded"
           >
             Learn more
           </button>

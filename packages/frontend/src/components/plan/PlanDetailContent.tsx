@@ -186,7 +186,7 @@ export function PlanDetailContent({
                 onChange={handleTitleChange}
                 onBlur={handleTitleBlur}
                 onKeyDown={handleTitleKeyDown}
-                className="w-full font-semibold text-theme-text bg-transparent border border-transparent rounded px-2 py-1 -ml-2 hover:border-theme-border focus:border-theme-info-border focus:ring-2 focus:ring-theme-info-border/30 outline-none transition-colors"
+                className="w-full font-semibold text-theme-text bg-transparent border border-transparent rounded px-2 py-1 -ml-2 hover:border-theme-border focus:outline-none focus-visible:border-theme-info-border focus-visible:ring-2 focus-visible:ring-theme-info-border/30 transition-colors"
                 placeholder="Title"
                 aria-label="Title"
               />

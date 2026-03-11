@@ -20,6 +20,21 @@ describe("SegmentedControl", () => {
     expect(screen.getByTestId("seg-ready")).toHaveAttribute("aria-checked", "false");
   });
 
+  it("has visible focus-visible ring for keyboard navigation", () => {
+    render(
+      <SegmentedControl
+        value="all"
+        onChange={vi.fn()}
+        options={[
+          { value: "all", label: "All", testId: "seg-all" },
+          { value: "ready", label: "Ready", testId: "seg-ready" },
+        ]}
+      />
+    );
+    const btn = screen.getByTestId("seg-ready");
+    expect(btn).toHaveClass("focus:outline-none", "focus-visible:ring-2", "focus-visible:ring-brand-500");
+  });
+
   it("calls onChange when a new option is selected", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

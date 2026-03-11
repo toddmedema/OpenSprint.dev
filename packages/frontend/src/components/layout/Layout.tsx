@@ -24,7 +24,7 @@ export function Layout({
     <div className="h-full flex flex-col bg-theme-bg">
       <a
         href="#main"
-        className="absolute left-4 -top-16 z-[9999] px-4 py-2 rounded shadow bg-theme-bg text-theme-fg transition-[top] duration-150 focus:top-4 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+        className="absolute left-4 -top-16 z-[9999] px-4 py-2 rounded shadow bg-theme-bg text-theme-fg transition-[top] duration-150 focus:top-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
       >
         Skip to main content
       </a>

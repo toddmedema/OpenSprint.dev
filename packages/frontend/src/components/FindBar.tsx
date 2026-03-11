@@ -93,7 +93,7 @@ export function FindBar() {
         value={searchText}
         onChange={(e) => setSearchText(e.target.value)}
         placeholder="Find in page..."
-        className="h-8 flex-1 min-w-0 rounded border border-theme-border bg-theme-input-bg px-2 py-1 text-sm text-theme-input-text placeholder:text-theme-input-placeholder focus:outline-none focus:ring-2 focus:ring-brand-500"
+        className="h-8 flex-1 min-w-0 rounded border border-theme-border bg-theme-input-bg px-2 py-1 text-sm text-theme-input-text placeholder:text-theme-input-placeholder focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         aria-label="Find in page"
       />
       <span className="shrink-0 text-sm text-theme-muted" aria-live="polite">

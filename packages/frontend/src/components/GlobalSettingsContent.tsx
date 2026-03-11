@@ -699,7 +699,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
                 }
               }}
               data-testid="show-notification-dot-in-menu-bar"
-              className="rounded border-theme-border"
+              className="rounded border-theme-border focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             />
             <span className="text-sm text-theme-text">Show notification dot in menu bar</span>
           </label>
@@ -724,7 +724,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
                 }
               }}
               data-testid="show-running-agent-count-in-menu-bar"
-              className="rounded border-theme-border"
+              className="rounded border-theme-border focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             />
             <span className="text-sm text-theme-text">Show running agent count in menu bar</span>
           </label>
