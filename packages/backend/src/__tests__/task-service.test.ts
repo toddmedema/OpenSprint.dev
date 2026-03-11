@@ -101,7 +101,8 @@ vi.mock("../services/session-manager.js", () => {
   proto.listSessions = vi.fn().mockResolvedValue([]);
   proto.readSession = vi.fn().mockResolvedValue(null);
   proto.getActiveDir = vi.fn().mockReturnValue("/tmp/opensprint-worktrees/task-1");
-  return { SessionManager: MockSessionManager };
+  const sessionManager = Object.create(proto);
+  return { SessionManager: MockSessionManager, sessionManager };
 });
 
 vi.mock("../services/context-assembler.js", () => ({

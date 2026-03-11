@@ -33,7 +33,7 @@ import { ProjectService } from "./project.service.js";
 import { agentService, createProcessGroupHandle } from "./agent.service.js";
 import { BranchManager, WorktreeBranchInUseError } from "./branch-manager.js";
 import { ContextAssembler } from "./context-assembler.js";
-import { SessionManager } from "./session-manager.js";
+import { sessionManager as sharedSessionManager } from "./session-manager.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { buildSummarizerPrompt, countWords } from "./summarizer.service.js";
 import type { TaskContext } from "./context-assembler.js";
@@ -235,7 +235,7 @@ export class OrchestratorService {
   private _projectService: ProjectService | null = null;
   private branchManager = new BranchManager();
   private _contextAssembler: ContextAssembler | null = null;
-  private sessionManager = new SessionManager();
+  private sessionManager = sharedSessionManager;
   private testRunner = new TestRunner();
   private _feedbackService: FeedbackService | null = null;
   private lifecycleManager = new AgentLifecycleManager();

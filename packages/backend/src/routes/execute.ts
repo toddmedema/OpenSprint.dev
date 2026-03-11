@@ -6,7 +6,7 @@ import { eventLogService, type OrchestratorEvent } from "../services/event-log.s
 import type { ProjectService } from "../services/project.service.js";
 import type { ApiResponse, OrchestratorStatus, TaskExecutionDiagnostics } from "@opensprint/shared";
 import { taskStore } from "../services/task-store.service.js";
-import { SessionManager } from "../services/session-manager.js";
+import { sessionManager } from "../services/session-manager.js";
 import { TaskExecutionDiagnosticsService } from "../services/task-execution-diagnostics.service.js";
 
 export function createExecuteRouter(
@@ -17,7 +17,7 @@ export function createExecuteRouter(
   const diagnosticsService = new TaskExecutionDiagnosticsService(
     projectService,
     taskStore,
-    new SessionManager()
+    sessionManager
   );
 
   type ProjectParams = { projectId: string };

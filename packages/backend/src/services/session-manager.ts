@@ -328,3 +328,6 @@ function rowToSession(row: Record<string, unknown>): AgentSession {
     summary: row.summary as string | undefined,
   };
 }
+
+/** Single shared instance for composition, execute router, and orchestrator. */
+export const sessionManager = new SessionManager();

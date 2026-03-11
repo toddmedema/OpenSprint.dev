@@ -280,16 +280,20 @@ vi.mock("../services/context-assembler.js", () => ({
   })),
 }));
 
-vi.mock("../services/session-manager.js", () => ({
-  SessionManager: vi.fn().mockImplementation(() => ({
+vi.mock("../services/session-manager.js", () => {
+  const mockInstance = {
     getActiveDir: mockGetActiveDir,
     readResult: mockReadResult,
     clearResult: mockClearResult,
     createSession: mockCreateSession,
     archiveSession: mockArchiveSession,
     listSessions: mockListSessions,
-  })),
-}));
+  };
+  return {
+    SessionManager: vi.fn().mockImplementation(() => mockInstance),
+    sessionManager: mockInstance,
+  };
+});
 
 vi.mock("../services/test-runner.js", () => ({
   TestRunner: vi.fn().mockImplementation(() => ({

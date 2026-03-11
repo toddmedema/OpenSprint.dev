@@ -49,11 +49,13 @@ vi.mock("../services/context-assembler.js", () => ({
   })),
 }));
 
-vi.mock("../services/session-manager.js", () => ({
-  SessionManager: vi.fn().mockImplementation(() => ({
-    getActiveDir: mockGetActiveDir,
-  })),
-}));
+vi.mock("../services/session-manager.js", () => {
+  const mockInstance = { getActiveDir: mockGetActiveDir };
+  return {
+    SessionManager: vi.fn().mockImplementation(() => mockInstance),
+    sessionManager: mockInstance,
+  };
+});
 
 vi.mock("../utils/file-utils.js", () => ({
   writeJsonAtomic: (...args: unknown[]) => mockWriteJsonAtomic(...args),
