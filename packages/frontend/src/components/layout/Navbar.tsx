@@ -102,8 +102,6 @@ export function Navbar({
   const isElectron = typeof window !== "undefined" && Boolean(window.electron?.isElectron);
   const isElectronMac = isElectron && window.electron?.platform === "darwin";
   const isElectronWin = isElectron && window.electron?.platform === "win32";
-  /** In Electron, Help and Settings are in app menus only; hide from nav bar. */
-  const showHelpAndSettingsInNav = !isElectron;
 
   const [isMaximized, setIsMaximized] = useState(false);
   useEffect(() => {
@@ -361,7 +359,7 @@ export function Navbar({
           ) : null}
         </div>
 
-        {/* Right: Active agents + Help + Settings (Help/Settings only in web; in Electron they're in app menus). On Windows, no-drag so buttons are clickable; window controls at end. */}
+        {/* Right: Active agents + Help + Settings. On Windows Electron, no-drag so buttons are clickable; window controls at end. */}
         <div
           className="flex items-center justify-end [&>*:not(:first-child)]:pl-1 md:[&>*:not(:first-child)]:pl-3"
           style={isElectronWin ? ({ WebkitAppRegion: "no-drag" } as CSSProperties) : undefined}
@@ -371,8 +369,7 @@ export function Navbar({
               {showAgentDropdown && <ActiveAgentsList projectId={project.id} />}
               {showDbBackedChrome && <NotificationBell projectId={project.id} />}
               <ConnectionIndicator />
-              {showHelpAndSettingsInNav && (
-                <>
+              <>
                   <NavButton
                     to={helpHref}
                     active={isHelpActive}
@@ -413,14 +410,12 @@ export function Navbar({
                     </svg>
                   </NavButton>
                 </>
-              )}
             </>
           ) : projects.length >= 1 ? (
             <>
               {showAgentDropdown && <GlobalActiveAgentsList />}
               {showDbBackedChrome && <GlobalNotificationBell />}
-              {showHelpAndSettingsInNav && (
-                <>
+              <>
                   <NavButton
                     to={helpHref}
                     active={isHelpActive}
@@ -461,12 +456,10 @@ export function Navbar({
                     </svg>
                   </NavButton>
                 </>
-              )}
             </>
           ) : (
             <>
-              {showHelpAndSettingsInNav && (
-                <>
+              <>
                   <NavButton
                     to={helpHref}
                     active={isHelpActive}
@@ -507,7 +500,6 @@ export function Navbar({
                     </svg>
                   </NavButton>
                 </>
-              )}
             </>
           )}
           {isElectronWin && (

@@ -949,7 +949,7 @@ describe("Navbar", () => {
     expect(settingsLink).toHaveAttribute("href", "/settings");
   });
 
-  it("hides Help and Settings from nav when running in Electron (they are in app menus)", async () => {
+  it("shows Help and Settings in nav when running in Electron (matches web behavior)", async () => {
     const prev = (typeof window !== "undefined" && (window as unknown as { electron?: unknown }).electron);
     if (typeof window !== "undefined") (window as unknown as { electron: { isElectron: true } }).electron = { isElectron: true };
     mockProjectsList.mockResolvedValue([
@@ -979,8 +979,8 @@ describe("Navbar", () => {
     await waitFor(() => {
       expect(screen.getByRole("tablist", { name: "Phase navigation" })).toBeInTheDocument();
     });
-    expect(screen.queryByRole("link", { name: "Help" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Project settings" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Help" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Project settings" })).toBeInTheDocument();
     if (typeof window !== "undefined") {
       if (prev !== undefined) (window as unknown as { electron: unknown }).electron = prev;
       else delete (window as unknown as { electron?: unknown }).electron;
