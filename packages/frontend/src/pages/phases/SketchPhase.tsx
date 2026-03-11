@@ -745,7 +745,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   const showChatInline = !isMobile || !discussCollapsed;
 
   return (
-    <div className="h-full flex overflow-hidden bg-theme-bg">
+    <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden bg-theme-bg">
       {/* Left: Table of contents (collapsible, resizable when expanded). On mobile when collapsed: hidden (floating button below) */}
       {showTocInline && tocCollapsed ? (
         <PrdTocPanel
@@ -759,6 +759,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
           storageKey="sketch-toc"
           defaultWidth={220}
           minWidth={160}
+          className="z-40"
           side="left"
           resizeHandleLabel="Resize table of contents"
           noBorder
@@ -777,7 +778,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
       ) : null}
 
       {/* Center: live PRD document — full width on mobile when sidebars collapsed. No top padding on wrapper so header height stays consistent when scrolled (no padding scrolling away). */}
-      <div ref={prdScrollContainerRef} className="flex-1 min-w-0 overflow-y-auto">
+      <div ref={prdScrollContainerRef} className="flex-1 min-h-0 min-w-0 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-4 md:px-6 pb-24">
           <div className="flex items-center justify-between min-h-[3.5rem] mb-6 md:mb-8 sticky top-0 bg-theme-bg/95 backdrop-blur-sm py-3 -mx-4 md:-mx-6 px-4 md:px-6 z-20 border-b-0">
             <h1 className="text-2xl font-bold text-theme-text tracking-tight">
@@ -856,6 +857,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
         <ResizableSidebar
           storageKey="sketch"
           defaultWidth={380}
+          className="z-40"
           resizeHandleLabel="Resize Discuss sidebar"
           responsive
           overlayOnMobile={false}

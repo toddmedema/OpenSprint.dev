@@ -234,8 +234,8 @@ export function ResizableSidebar({
   // Hit zone is w-8 (32px) for easier grab; visible dragger runs full height (top to bottom)
   const handlePositionClass =
     side === "left"
-      ? "absolute right-0 inset-y-0 w-8 -mr-4 cursor-col-resize z-10 flex items-stretch justify-center group hover:bg-brand-500/10"
-      : "absolute left-0 inset-y-0 w-8 -ml-4 cursor-col-resize z-10 flex items-stretch justify-center group hover:bg-brand-500/10";
+      ? "absolute right-0 inset-y-0 w-8 -mr-4 cursor-col-resize z-40 flex items-stretch justify-center group hover:bg-brand-500/10"
+      : "absolute left-0 inset-y-0 w-8 -ml-4 cursor-col-resize z-40 flex items-stretch justify-center group hover:bg-brand-500/10";
 
   // Mobile overlay: fixed panel with backdrop, close button, swipe-to-close
   if (isMobileOverlay && visible) {
@@ -299,7 +299,7 @@ export function ResizableSidebar({
 
   return (
     <div
-      className={`relative flex flex-col min-h-0 bg-theme-bg shrink-0 overflow-hidden ${borderClass} ${responsiveClasses} ${className}`}
+      className={`relative flex h-full flex-col min-h-0 bg-theme-bg shrink-0 overflow-visible ${borderClass} ${responsiveClasses} ${className}`}
       style={widthStyle}
     >
       {visible && (
@@ -313,7 +313,7 @@ export function ResizableSidebar({
           onMouseDown={onHandleMouseDown}
           className={`${handlePositionClass} ${responsive ? "hidden md:flex" : ""}`}
         >
-          <div className="w-1 min-h-full rounded-full bg-theme-ring group-hover:bg-brand-500/60 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="h-full w-1 rounded-full bg-theme-ring group-hover:bg-brand-500/60 opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
       )}
       <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">{children}</div>

@@ -692,6 +692,21 @@ describe("SketchPhase with sketchSlice", () => {
       expect(screen.getByRole("slider", { name: "Resize Discuss sidebar" })).toBeInTheDocument();
     });
 
+    it("keeps Sketch sidebars above sticky content so resize handles stay full-height", () => {
+      const store = createStore({
+        sketch: { prdContent: { overview: "Content" } },
+      });
+      renderSketchPhase(store);
+
+      const tocHandle = screen.getByRole("slider", { name: "Resize table of contents" });
+      const discussHandle = screen.getByRole("slider", { name: "Resize Discuss sidebar" });
+
+      expect(tocHandle.closest(".relative")).toHaveClass("z-40");
+      expect(discussHandle.closest(".relative")).toHaveClass("z-40");
+      expect(tocHandle).toHaveClass("inset-y-0");
+      expect(discussHandle).toHaveClass("inset-y-0");
+    });
+
     it("persists Discuss sidebar width to localStorage when resized", () => {
       const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
       const store = createStore({

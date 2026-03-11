@@ -156,8 +156,19 @@ describe("ResizableSidebar", () => {
 
     const handle = screen.getByRole("slider", { name: "Resize sidebar" });
     expect(handle).toHaveClass("w-8");
-    const visibleDragger = handle.querySelector(".w-1.min-h-full");
+    const visibleDragger = handle.querySelector(".w-1.h-full");
     expect(visibleDragger).toBeInTheDocument();
+  });
+
+  it("keeps the resize handle above sticky sidebar headers", () => {
+    render(
+      <ResizableSidebar storageKey={STORAGE_KEY}>
+        <span>Content</span>
+      </ResizableSidebar>
+    );
+
+    const handle = screen.getByRole("slider", { name: "Resize sidebar" });
+    expect(handle).toHaveClass("z-40");
   });
 
   it("uses min 200px and max 80% viewport by default", () => {
@@ -190,7 +201,7 @@ describe("ResizableSidebar", () => {
     expect(container).toHaveStyle({ width: "200px" });
   });
 
-  it("has root with min-h-0 and overflow-hidden for flex shrinking and scroll containment", () => {
+  it("has root with h-full and overflow-visible so handle is not clipped", () => {
     render(
       <ResizableSidebar storageKey={STORAGE_KEY}>
         <span>Content</span>
@@ -198,8 +209,9 @@ describe("ResizableSidebar", () => {
     );
 
     const root = screen.getByText("Content").closest(".relative");
+    expect(root).toHaveClass("h-full");
     expect(root).toHaveClass("min-h-0");
-    expect(root).toHaveClass("overflow-hidden");
+    expect(root).toHaveClass("overflow-visible");
   });
 
   it("has inner wrapper with min-h-0 and overflow-hidden for independent sidebar scroll", () => {
