@@ -38,6 +38,16 @@ function formatAttemptLabel(attempts: number[]): string {
   return first === last ? `Attempt ${first}` : `Attempts ${first}-${last}`;
 }
 
+export function formatAttemptTimestamp(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 export interface TaskDetailDiagnosticsProps {
   task: Task | null;
   diagnostics: TaskExecutionDiagnostics | null;
@@ -152,6 +162,11 @@ export function TaskDetailDiagnostics({
                       {EXECUTION_PHASE_LABELS[attempt.finalPhase]} ·{" "}
                       {EXECUTION_OUTCOME_LABELS[attempt.finalOutcome]}
                     </span>
+                    {(attempt.completedAt ?? attempt.startedAt) && (
+                      <span className="ml-auto text-theme-muted shrink-0">
+                        {formatAttemptTimestamp(attempt.completedAt ?? attempt.startedAt)}
+                      </span>
+                    )}
                   </div>
                   {(attempt.codingModel || attempt.reviewModel) && (
                     <div className="mt-1 text-theme-muted">

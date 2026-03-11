@@ -2594,6 +2594,7 @@ describe("TaskDetailSidebar", () => {
     expect(screen.getByTestId("execution-attempt-6")).toHaveTextContent(
       "packages/backend/src/routes/global-settings.ts"
     );
+    expect(screen.getByTestId("execution-attempt-6")).toHaveTextContent(/2026/);
   });
 
   it("hides Execution diagnostics content when diagnosticsSectionExpanded is false", () => {
