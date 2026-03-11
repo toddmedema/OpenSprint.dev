@@ -1971,7 +1971,7 @@ describe("TaskDetailSidebar", () => {
       expect(screen.getByRole("img", { name: "Complex complexity" })).toBeInTheDocument();
     });
 
-    it("shows em dash when task has no complexity", () => {
+    it("does not render complexity when task has no complexity", () => {
       const props = createMinimalProps({
         selectedTaskData: {
           ...defaultSelectedTaskData,
@@ -1981,9 +1981,7 @@ describe("TaskDetailSidebar", () => {
       renderSidebar(props, {
         preloadedState: defaultPreloadedState,
       });
-      const complexity = screen.getByTestId("task-complexity");
-      expect(complexity).toHaveTextContent("—");
-      expect(complexity).toHaveAttribute("aria-label", "Complexity: not set");
+      expect(screen.queryByTestId("task-complexity")).not.toBeInTheDocument();
     });
 
     it("shows Score: N/10 tooltip on hover when task has valid complexity", () => {
@@ -2028,18 +2026,17 @@ describe("TaskDetailSidebar", () => {
       expect(complexity).toHaveAttribute("title", "Score: 10/10");
     });
 
-    it("has no tooltip when task has no complexity", () => {
+    it("does not render complexity element when task has null complexity", () => {
       const props = createMinimalProps({
         selectedTaskData: {
           ...defaultSelectedTaskData,
-          complexity: undefined,
+          complexity: null as unknown as number,
         },
       });
       renderSidebar(props, {
         preloadedState: defaultPreloadedState,
       });
-      const complexity = screen.getByTestId("task-complexity");
-      expect(complexity).not.toHaveAttribute("title");
+      expect(screen.queryByTestId("task-complexity")).not.toBeInTheDocument();
     });
 
     it("displays complexity in same row as priority", () => {

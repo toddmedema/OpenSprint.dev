@@ -59,21 +59,23 @@ export function TaskDetailMetadata({
               taskId={selectedTask}
               isDoneTask={isDoneTask}
             />
-            <span
-              className="inline-flex items-center gap-1.5"
-              data-testid="task-complexity"
-              aria-label={displayLabel ? `Complexity: ${displayLabel}` : "Complexity: not set"}
-              title={
-                typeof task.complexity === "number" &&
-                task.complexity >= TASK_COMPLEXITY_MIN &&
-                task.complexity <= TASK_COMPLEXITY_MAX
-                  ? `Score: ${task.complexity}/10`
-                  : undefined
-              }
-            >
-              <ComplexityIcon complexity={task.complexity} size="sm" />
-              {displayLabel ?? "—"}
-            </span>
+            {displayLabel != null && (
+              <span
+                className="inline-flex items-center gap-1.5"
+                data-testid="task-complexity"
+                aria-label={`Complexity: ${displayLabel}`}
+                title={
+                  typeof task.complexity === "number" &&
+                  task.complexity >= TASK_COMPLEXITY_MIN &&
+                  task.complexity <= TASK_COMPLEXITY_MAX
+                    ? `Score: ${task.complexity}/10`
+                    : undefined
+                }
+              >
+                <ComplexityIcon complexity={task.complexity} size="sm" />
+                {displayLabel}
+              </span>
+            )}
             {enableHumanTeammates ? (
               <AssigneeSelector
                 projectId={projectId}
