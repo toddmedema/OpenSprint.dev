@@ -529,26 +529,6 @@ function buildBackendPath(existingPath: string): string {
   ].join(pathDelimiter);
 }
 
-function prependDelimitedPath(
-  existingValue: string | undefined,
-  prependedValue: string | undefined
-): string | undefined {
-  const trimmedPrepended = prependedValue?.trim();
-  if (!trimmedPrepended) {
-    return existingValue;
-  }
-  const pathDelimiter = process.platform === "win32" ? ";" : ":";
-  return [
-    ...new Set([
-      trimmedPrepended,
-      ...(existingValue ?? "")
-        .split(pathDelimiter)
-        .map((entry) => entry.trim())
-        .filter((entry) => entry.length > 0),
-    ]),
-  ].join(pathDelimiter);
-}
-
 const PREREQ_CHECK_TIMEOUT_MS = 8000;
 
 interface PrerequisitesCheckResult {
@@ -644,8 +624,18 @@ function startBackend(pathOverride?: string): ChildProcess {
       ? pathOverride
       : buildBackendPath(process.env.PATH ?? "");
   const sqliteRuntimeDir = path.join(backendDir, SQLITE_RUNTIME_DIR_NAME);
-  const sqliteRuntimeModulePath = path.join(sqliteRuntimeDir, SQLITE_RUNTIME_MODULE_NAME);
+  const sqliteRuntimeModulePath = path.join(
+    sqliteRuntimeDir,
+    "node_modules",
+    SQLITE_RUNTIME_MODULE_NAME
+  );
   const hasSqliteRuntimeFallback = fs.existsSync(sqliteRuntimeModulePath);
+  if (app.isPackaged && !hasSqliteRuntimeFallback) {
+    console.warn(
+      "[startup] SQLite fallback runtime module is missing",
+      JSON.stringify({ sqliteRuntimeModulePath })
+    );
+  }
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -655,14 +645,8 @@ function startBackend(pathOverride?: string): ChildProcess {
     PATH: normalizedPath,
     // Use Electron's embedded Node runtime so packaged apps do not depend on PATH.
     ELECTRON_RUN_AS_NODE: "1",
-    NODE_PATH: prependDelimitedPath(
-      process.env.NODE_PATH,
-      hasSqliteRuntimeFallback ? sqliteRuntimeDir : undefined
-    ),
+    OPENSPRINT_SQLITE_MODULE_PATH: sqliteRuntimeModulePath,
   };
-  if (hasSqliteRuntimeFallback) {
-    env.OPENSPRINT_SQLITE_MODULE_PATH = sqliteRuntimeModulePath;
-  }
   const child = spawn(process.execPath, [backendEntry], {
     cwd: backendDir,
     env,

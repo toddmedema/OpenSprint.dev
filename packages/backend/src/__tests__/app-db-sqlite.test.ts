@@ -6,7 +6,22 @@ import { describe, it, expect } from "vitest";
 import { initAppDb } from "../db/app-db.js";
 import { randomUUID } from "crypto";
 
-const betterSqlite3Available = await import("better-sqlite3").then(() => true).catch(() => false);
+type SqliteProbeCtor = new (filename: string) => { close: () => void };
+
+const betterSqlite3Available = await (async () => {
+  try {
+    // Import alone can succeed while native loading fails (ABI/arch mismatch).
+    const loaded = await import("better-sqlite3");
+    const Database =
+      (loaded as unknown as { default?: SqliteProbeCtor }).default ??
+      (loaded as unknown as SqliteProbeCtor);
+    const probe = new Database(":memory:");
+    probe.close();
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 describe.sequential.skipIf(!betterSqlite3Available)("initAppDb (SQLite)", () => {
   it("initializes with in-memory SQLite and runs schema", async () => {

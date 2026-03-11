@@ -433,8 +433,9 @@ function pruneBackendNodeModules(nodeModulesDir) {
 function stageSqliteRuntimeFallback(backendOut) {
   const nodeModulesDir = path.join(backendOut, "node_modules");
   const fallbackRuntimeDir = path.join(backendOut, SQLITE_RUNTIME_FALLBACK_DIR_NAME);
+  const fallbackNodeModulesDir = path.join(fallbackRuntimeDir, "node_modules");
   removeIfExists(fallbackRuntimeDir);
-  fs.mkdirSync(fallbackRuntimeDir, { recursive: true });
+  fs.mkdirSync(fallbackNodeModulesDir, { recursive: true });
 
   for (const packageName of SQLITE_RUNTIME_FALLBACK_PACKAGES) {
     const sourcePath = path.join(nodeModulesDir, packageName);
@@ -443,13 +444,13 @@ function stageSqliteRuntimeFallback(backendOut) {
         `SQLite runtime fallback package '${packageName}' is missing at ${sourcePath}.`
       );
     }
-    fs.cpSync(sourcePath, path.join(fallbackRuntimeDir, packageName), { recursive: true });
+    fs.cpSync(sourcePath, path.join(fallbackNodeModulesDir, packageName), { recursive: true });
   }
 
-  pruneBackendNodeModules(fallbackRuntimeDir);
+  pruneBackendNodeModules(fallbackNodeModulesDir);
 
   const fallbackBindingPath = path.join(
-    fallbackRuntimeDir,
+    fallbackNodeModulesDir,
     SQLITE_MODULE_NAME,
     "build",
     "Release",
@@ -464,6 +465,8 @@ function stageSqliteRuntimeFallback(backendOut) {
 
   return {
     runtimeDir: fallbackRuntimeDir,
+    nodeModulesDir: fallbackNodeModulesDir,
+    modulePath: path.join(fallbackNodeModulesDir, SQLITE_MODULE_NAME),
     packageCount: SQLITE_RUNTIME_FALLBACK_PACKAGES.length,
     packages: SQLITE_RUNTIME_FALLBACK_PACKAGES,
     bindingPath: fallbackBindingPath,
