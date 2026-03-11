@@ -131,8 +131,10 @@ vi.mock("util", () => ({
 
 describe("AgentClient", () => {
   let client: AgentClient;
+  const originalPlatform = process.platform;
 
   beforeEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform });
     client = new AgentClient();
     vi.clearAllMocks();
   });
@@ -233,6 +235,43 @@ describe("AgentClient", () => {
         expect.objectContaining({ cwd: "/tmp" })
       );
       expect(result.content).toContain("Cursor response");
+    });
+
+    it("should route cursor config through cmd.exe on Windows", async () => {
+      Object.defineProperty(process, "platform", { value: "win32" });
+      const originalComSpec = process.env.ComSpec;
+      process.env.ComSpec = "C:\\Windows\\System32\\cmd.exe";
+      try {
+        const mockChild = {
+          killed: false,
+          kill: vi.fn(),
+          stdout: {
+            on: vi.fn((_ev: string, fn: (d: Buffer) => void) => fn(Buffer.from("Cursor response"))),
+          },
+          stderr: { on: vi.fn() },
+          on: vi.fn((ev: string, fn: (code: number) => void) => {
+            if (ev === "close") setTimeout(() => fn(0), 0);
+            if (ev === "error") return;
+            return { on: vi.fn() };
+          }),
+        };
+        mockSpawn.mockReturnValue(mockChild);
+
+        const result = await client.invoke({
+          config: { type: "cursor", model: "gpt-4", cliCommand: null },
+          prompt: "Hello",
+          cwd: "/tmp",
+        });
+
+        expect(mockSpawn).toHaveBeenCalledWith(
+          "C:\\Windows\\System32\\cmd.exe",
+          expect.arrayContaining(["/d", "/s", "/c", "agent"]),
+          expect.objectContaining({ cwd: "/tmp" })
+        );
+        expect(result.content).toContain("Cursor response");
+      } finally {
+        process.env.ComSpec = originalComSpec;
+      }
     });
 
     it("should map cursor null model to explicit auto", async () => {
@@ -742,6 +781,44 @@ describe("AgentClient", () => {
       expect(kill).toBeDefined();
 
       await fs.rm(tmpDir, { recursive: true, force: true });
+    });
+
+    it("should spawn Cursor task-file command through cmd.exe on Windows", async () => {
+      Object.defineProperty(process, "platform", { value: "win32" });
+      const originalComSpec = process.env.ComSpec;
+      process.env.ComSpec = "C:\\Windows\\System32\\cmd.exe";
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const os = await import("os");
+      const tmpDir = path.join(os.tmpdir(), `agent-client-cursor-win-${Date.now()}`);
+      try {
+        await fs.mkdir(path.dirname(path.join(tmpDir, ".opensprint/active/bd-a3f8.1/prompt.md")), {
+          recursive: true,
+        });
+        const taskFilePath = path.join(tmpDir, ".opensprint/active/bd-a3f8.1/prompt.md");
+        await fs.writeFile(taskFilePath, "# Task\n\nImplement login", "utf-8");
+
+        const mockChild = {
+          killed: false,
+          kill: vi.fn(),
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn(() => ({ on: vi.fn() })),
+        };
+        mockSpawn.mockReturnValue(mockChild);
+
+        const config: AgentConfig = { type: "cursor", model: "gpt-4", cliCommand: null };
+        client.spawnWithTaskFile(config, taskFilePath, tmpDir, vi.fn(), vi.fn());
+
+        expect(mockSpawn).toHaveBeenCalledWith(
+          "C:\\Windows\\System32\\cmd.exe",
+          expect.arrayContaining(["/d", "/s", "/c", "agent", "--print", "--workspace", tmpDir, "--trust"]),
+          expect.any(Object)
+        );
+      } finally {
+        process.env.ComSpec = originalComSpec;
+        await fs.rm(tmpDir, { recursive: true, force: true });
+      }
     });
 
     it("emits Windows-compatible install instructions when Cursor CLI not found (ENOENT)", async () => {

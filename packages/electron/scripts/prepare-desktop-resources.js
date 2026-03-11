@@ -8,6 +8,7 @@ const { execSync, execFileSync } = require("child_process");
 const repoRoot = path.resolve(__dirname, "..", "..", "..");
 const backendDir = path.join(repoRoot, "packages", "backend");
 const frontendDir = path.join(repoRoot, "packages", "frontend");
+const electronPackageDir = path.join(repoRoot, "packages", "electron");
 const runtimeDepsTemplateDir = path.join(repoRoot, "packages", "electron", "runtime-deps");
 const outDir = path.join(repoRoot, "packages", "electron", "desktop-resources");
 // Keep only native modules external; bundle pure JS deps so runtime install is minimal.
@@ -120,25 +121,21 @@ async function run() {
   console.log(
     `Installing backend runtime dependencies (runtime=electron, version=${electronVersion}, platform=${targetPlatform}, arch=${targetArch})...`
   );
-  const npmEnv = {
-    ...process.env,
-    npm_config_runtime: "electron",
-    npm_config_target: electronVersion,
-    npm_config_disturl: "https://electronjs.org/headers",
-    npm_config_platform: targetPlatform,
-    npm_config_arch: targetArch,
-  };
   execSync("npm ci --omit=dev --ignore-scripts=false --no-audit --no-fund", {
     cwd: backendOut,
-    env: npmEnv,
+    env: process.env,
     stdio: "inherit",
   });
+  console.log("Rebuilding native modules for Electron...");
+  execSync(
+    `npx electron-rebuild --version ${electronVersion} --module-dir ${backendOut} --arch ${targetArch}`,
+    { cwd: electronPackageDir, stdio: "inherit" }
+  );
   const sqliteRuntimeDiagnostics = ensureSqliteRuntimeLoadable(
     backendOut,
     electronVersion,
     targetPlatform,
-    targetArch,
-    npmEnv
+    targetArch
   );
 
   console.log("Pruning non-runtime files from backend node_modules...");
@@ -162,8 +159,7 @@ function ensureSqliteRuntimeLoadable(
   backendOut,
   electronVersion,
   targetPlatform,
-  targetArch,
-  npmEnv
+  targetArch
 ) {
   console.log(
     `Verifying ${SQLITE_MODULE_NAME} runtime load (electron=${electronVersion}, platform=${targetPlatform}, arch=${targetArch})...`
@@ -212,11 +208,10 @@ function ensureSqliteRuntimeLoadable(
 
   logProbeFailure("Initial SQLite runtime verification failed", probe, initialDiagnostics);
   console.warn(`Attempting source rebuild for ${SQLITE_MODULE_NAME}...`);
-  execSync(`npm rebuild ${SQLITE_MODULE_NAME} --build-from-source --no-audit --no-fund`, {
-    cwd: backendOut,
-    env: npmEnv,
-    stdio: "inherit",
-  });
+  execSync(
+    `npx electron-rebuild --version ${electronVersion} --module-dir ${backendOut} --arch ${targetArch} -f`,
+    { cwd: electronPackageDir, stdio: "inherit" }
+  );
 
   const rebuiltDiagnostics = collectSqliteRuntimeDiagnostics(
     backendOut,

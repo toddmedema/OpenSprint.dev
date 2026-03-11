@@ -449,6 +449,14 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
     });
 
     const saveOnBlurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+      return () => {
+        if (saveOnBlurRef.current) {
+          clearTimeout(saveOnBlurRef.current);
+          saveOnBlurRef.current = null;
+        }
+      };
+    }, []);
     const scheduleSaveOnBlur = useCallback(() => {
       if (saveOnBlurRef.current) clearTimeout(saveOnBlurRef.current);
       saveOnBlurRef.current = setTimeout(() => {

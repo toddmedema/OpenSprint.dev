@@ -68,6 +68,17 @@ function getCursorCliInstallInstructions(): string {
   );
 }
 
+function getCursorCommandInvocation(args: string[]): { command: string; args: string[] } {
+  if (process.platform !== "win32") {
+    return { command: "agent", args };
+  }
+  // Cursor's Windows installer provides agent.cmd; run via cmd.exe so .cmd shims execute reliably.
+  return {
+    command: process.env.ComSpec?.trim() || "cmd.exe",
+    args: ["/d", "/s", "/c", "agent", ...args],
+  };
+}
+
 /** Build full prompt from system prompt, conversation history, and final user message (Human/Assistant format). */
 function buildFullPrompt(options: {
   systemPrompt?: string;
@@ -398,7 +409,8 @@ function formatAgentError(
   if (
     lower.includes("enoent") ||
     lower.includes("command not found") ||
-    lower.includes("not found")
+    lower.includes("not found") ||
+    lower.includes("is not recognized as an internal or external command")
   ) {
     if (agentType === "cursor") {
       return `Cursor agent CLI was not found. Install: ${getCursorCliInstallInstructions()}. Then restart your terminal.`;
@@ -1427,8 +1439,7 @@ export class AgentClient {
             }
           );
         }
-        command = "agent";
-        args = [
+        const cursorArgs = [
           "--print",
           "--force",
           "--output-format",
@@ -1438,8 +1449,11 @@ export class AgentClient {
           cwd,
           "--trust",
         ];
-        args.push("--model", resolveCursorModel(config.model));
-        args.push(taskContent);
+        cursorArgs.push("--model", resolveCursorModel(config.model));
+        cursorArgs.push(taskContent);
+        const cursorInvocation = getCursorCommandInvocation(cursorArgs);
+        command = cursorInvocation.command;
+        args = cursorInvocation.args;
         break;
       }
       case "custom": {
@@ -1958,7 +1972,8 @@ export class AgentClient {
       let stdout = "";
       let stderr = "";
 
-      const child = spawn("agent", args, {
+      const cursorInvocation = getCursorCommandInvocation(args);
+      const child = spawn(cursorInvocation.command, cursorInvocation.args, {
         cwd,
         env: normalizeSpawnEnvPath({ ...process.env, CURSOR_API_KEY: cursorApiKey || "" }),
         stdio: ["ignore", "pipe", "pipe"],

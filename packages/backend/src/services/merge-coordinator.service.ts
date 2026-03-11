@@ -31,9 +31,12 @@ import { createLogger } from "../utils/logger.js";
 import { buildTaskLastExecutionSummary, compactExecutionText } from "./task-execution-summary.js";
 import { inspectGitRepoState, resolveBaseBranch } from "../utils/git-repo-state.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
+import type { RetryContext } from "./orchestrator-phase-context.js";
 
 const log = createLogger("merge-coordinator");
 const _MAX_PUSH_REBASE_RESOLUTION_ROUNDS = 12;
+const NEXT_RETRY_CONTEXT_KEY = "next_retry_context";
+const MERGE_RETRY_CONTEXT_FAILURE_LIMIT = 1200;
 
 /** One-sentence explanation for merge failures shown to users (conflicts with main in same files). */
 const HUMAN_MERGE_FAILURE_MESSAGE =
@@ -259,6 +262,21 @@ export class MergeCoordinatorService {
     return stage === "quality_gate"
       ? HUMAN_QUALITY_GATE_FAILURE_MESSAGE
       : HUMAN_MERGE_FAILURE_MESSAGE;
+  }
+
+  private buildRetryContextForMergeFailure(
+    stage: MergeFailureStage,
+    mergeFailureReason: string
+  ): RetryContext {
+    const stageLabel = stage === "quality_gate" ? "pre-merge quality gate" : "merge";
+    const previousFailure = compactExecutionText(
+      `${stageLabel} failed: ${mergeFailureReason}`,
+      MERGE_RETRY_CONTEXT_FAILURE_LIMIT
+    );
+    return {
+      previousFailure,
+      failureType: stage === "quality_gate" ? "coding_failure" : "merge_conflict",
+    };
   }
 
   private async ensureMergeQualityGates(options: MergeQualityGateRunOptions): Promise<void> {
@@ -620,6 +638,10 @@ export class MergeCoordinatorService {
       const scopeConfidence = this.getScopeConfidence(freshIssue);
       const mergeFailureReason = mergeErr.message?.slice(0, 500) ?? "Merge failed";
       const stageLabel = isQualityGateFailure ? "quality-gate" : "merge";
+      const retryContext = this.buildRetryContextForMergeFailure(
+        normalizedStage,
+        mergeFailureReason
+      );
 
       const maxMergeFailures = BACKOFF_FAILURE_THRESHOLD * 2;
       if (cumulativeAttempts >= maxMergeFailures) {
@@ -640,6 +662,7 @@ export class MergeCoordinatorService {
           block_reason: "Merge Failure",
           extra: {
             last_execution_summary: blockedSummary,
+            [NEXT_RETRY_CONTEXT_KEY]: retryContext,
           },
         });
         await this.host.taskStore.comment(
@@ -712,6 +735,7 @@ export class MergeCoordinatorService {
         assignee: "",
         extra: {
           last_execution_summary: requeuedSummary,
+          [NEXT_RETRY_CONTEXT_KEY]: retryContext,
         },
       });
       await this.host.taskStore.comment(

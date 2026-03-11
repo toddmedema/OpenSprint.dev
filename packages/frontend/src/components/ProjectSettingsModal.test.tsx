@@ -1010,6 +1010,7 @@ describe("ProjectSettingsModal", () => {
 
     const deploymentTab = screen.getByRole("button", { name: "Deliver" });
     await userEvent.click(deploymentTab);
+    mockUpdateSettings.mockClear();
 
     expect(screen.getByLabelText("EAS Project ID")).toBeInTheDocument();
     expect(
@@ -1019,7 +1020,7 @@ describe("ProjectSettingsModal", () => {
     ).toBeInTheDocument();
 
     const easInput = screen.getByTestId("eas-project-id-input");
-    await userEvent.type(easInput, "abc123-def456");
+    fireEvent.change(easInput, { target: { value: "abc123-def456" } });
     fireEvent.blur(easInput);
 
     await waitFor(() =>
@@ -1051,13 +1052,14 @@ describe("ProjectSettingsModal", () => {
 
     const deploymentTab = screen.getByRole("button", { name: "Deliver" });
     await userEvent.click(deploymentTab);
+    mockUpdateSettings.mockClear();
 
     const nameInputs = screen.getAllByTestId("env-var-name-input");
     expect(nameInputs.length).toBeGreaterThanOrEqual(1);
     const valueInputs = screen.getAllByTestId("env-var-value-input");
     expect(valueInputs.length).toBeGreaterThanOrEqual(1);
 
-    await userEvent.type(nameInputs[0]!, "API_KEY");
+    fireEvent.change(nameInputs[0]!, { target: { value: "API_KEY" } });
     fireEvent.blur(nameInputs[0]!);
 
     await waitFor(() =>

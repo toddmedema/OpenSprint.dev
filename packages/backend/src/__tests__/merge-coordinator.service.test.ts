@@ -475,7 +475,15 @@ describe("MergeCoordinatorService", () => {
     expect(mockHost.taskStore.update).toHaveBeenCalledWith(
       projectId,
       taskId,
-      expect.objectContaining({ status: "open" })
+      expect.objectContaining({
+        status: "open",
+        extra: expect.objectContaining({
+          next_retry_context: expect.objectContaining({
+            previousFailure: expect.stringContaining("merge failed"),
+            failureType: "merge_conflict",
+          }),
+        }),
+      })
     );
   });
 
@@ -502,7 +510,42 @@ describe("MergeCoordinatorService", () => {
     expect(mockHost.taskStore.update).toHaveBeenCalledWith(
       projectId,
       taskId,
-      expect.objectContaining({ status: "open" })
+      expect.objectContaining({
+        status: "open",
+        extra: expect.objectContaining({
+          next_retry_context: expect.objectContaining({
+            previousFailure: expect.stringContaining("quality gate failed"),
+            failureType: "coding_failure",
+          }),
+        }),
+      })
+    );
+  });
+
+  it("persists retry context when quality-gate failures reach blocked threshold", async () => {
+    (mockHost.taskStore.getCumulativeAttemptsFromIssue as unknown as ReturnType<typeof vi.fn>)
+      .mockReturnValue(5);
+    mockHost.runMergeQualityGates = vi.fn().mockResolvedValue({
+      command: "npm run lint",
+      reason: "Command failed with exit code 1",
+      output: "eslint found errors",
+    });
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(mockHost.taskStore.update).toHaveBeenCalledWith(
+      projectId,
+      taskId,
+      expect.objectContaining({
+        status: "blocked",
+        block_reason: "Merge Failure",
+        extra: expect.objectContaining({
+          next_retry_context: expect.objectContaining({
+            previousFailure: expect.stringContaining("quality gate failed"),
+            failureType: "coding_failure",
+          }),
+        }),
+      })
     );
   });
 
