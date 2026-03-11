@@ -54,7 +54,7 @@ const EpicTaskRow = memo(function EpicTaskRow({
           </span>
           {isSelfImprovementTask(task) && (
             <span
-              className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium bg-theme-surface-muted text-theme-muted"
+              className="shrink-0 rounded pl-1.5 pr-0 py-0.5 text-xs font-medium bg-theme-surface-muted text-theme-muted"
               title="Created by self-improvement"
               data-testid="task-badge-self-improvement"
             >

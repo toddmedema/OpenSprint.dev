@@ -105,6 +105,7 @@ describe("BuildEpicCard", () => {
     const badges = screen.getAllByTestId("task-badge-self-improvement");
     expect(badges).toHaveLength(1);
     expect(badges[0]).toHaveTextContent("Self-improvement");
+    expect(badges[0]).toHaveClass("pr-0");
   });
 
   it("calls onTaskSelect when a task is clicked", async () => {
