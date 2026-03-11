@@ -10,6 +10,10 @@ import { createApp } from "../app.js";
 import { createAppServices } from "../composition.js";
 import { ProjectService } from "../services/project.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG } from "@opensprint/shared";
+import { isExpoInstalled } from "../utils/expo-install.js";
+import { getExpoConfigStatus } from "../utils/expo-config.js";
+import { checkExpoAuth } from "../utils/expo-auth-check.js";
+import { isEasProjectLinked } from "../utils/eas-project-link.js";
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
 vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
@@ -50,6 +54,24 @@ vi.mock("../services/task-store.service.js", async (importOriginal) => {
     _testPool: dbResult.pool,
   };
 });
+
+// Expo readiness route unit-test mocks (used by GET /expo-readiness tests)
+vi.mock("../utils/expo-install.js", () => ({
+  isExpoInstalled: vi.fn(),
+  ensureExpoInstalled: vi.fn(),
+  installExpo: vi.fn(),
+}));
+vi.mock("../utils/expo-config.js", () => ({
+  getExpoConfigStatus: vi.fn(),
+  ensureExpoConfig: vi.fn(),
+}));
+vi.mock("../utils/expo-auth-check.js", () => ({
+  checkExpoAuth: vi.fn(),
+}));
+vi.mock("../utils/eas-project-link.js", () => ({
+  isEasProjectLinked: vi.fn(),
+  ensureEasProjectIdInAppJson: vi.fn(),
+}));
 
 const execAsync = promisify(exec);
 
@@ -427,6 +449,8 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
 
     beforeEach(() => {
       process.env.EXPO_TOKEN = "test-expo-token-for-deploy-route-tests";
+      // Mocked checkExpoAuth: default to ok so expo-deploy flow proceeds (expo-readiness tests override in their describe)
+      vi.mocked(checkExpoAuth).mockResolvedValue({ ok: true, expoToken: process.env.EXPO_TOKEN });
     });
 
     afterEach(() => {
@@ -456,8 +480,14 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should return 400 with explicit prompt when Expo auth is missing", async () => {
-      const saved = process.env.EXPO_TOKEN;
-      delete process.env.EXPO_TOKEN;
+      const authPrompt = "Add an Expo access token at https://expo.dev/settings/access-tokens";
+      vi.mocked(checkExpoAuth).mockResolvedValueOnce({
+        ok: false,
+        missing: "api_key",
+        code: "EXPO_TOKEN_REQUIRED",
+        message: "Expo authentication required",
+        prompt: authPrompt,
+      });
 
       await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
@@ -466,8 +496,6 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       const res = await request(app)
         .post(`${API_PREFIX}/projects/${projectId}/deliver/expo-deploy`)
         .send({ variant: "beta" });
-
-      process.env.EXPO_TOKEN = saved;
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("EXPO_TOKEN_REQUIRED");
@@ -550,30 +578,26 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
   });
 
   describe("GET /projects/:projectId/deliver/expo-readiness", () => {
-    it("should return 200 with correct shape when all checks pass", async () => {
-      const saved = process.env.EXPO_TOKEN;
-      process.env.EXPO_TOKEN = "test-expo-token-readiness";
+    beforeEach(() => {
+      vi.mocked(isExpoInstalled).mockReset();
+      vi.mocked(getExpoConfigStatus).mockReset();
+      vi.mocked(checkExpoAuth).mockReset();
+      vi.mocked(isEasProjectLinked).mockReset();
+    });
+
+    it("returns 200 with correct shape when all checks are true", async () => {
+      vi.mocked(isExpoInstalled).mockResolvedValue(true);
+      vi.mocked(getExpoConfigStatus).mockResolvedValue({ configured: true });
+      vi.mocked(checkExpoAuth).mockResolvedValue({ ok: true });
+      vi.mocked(isEasProjectLinked).mockResolvedValue(true);
 
       await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
 
-      await fs.writeFile(
-        path.join(tempDir, "my-project", "app.json"),
-        JSON.stringify({
-          expo: {
-            name: "TestApp",
-            slug: "test-app",
-            extra: { eas: { projectId: "test-eas-project-id" } },
-          },
-        })
-      );
-
       const res = await request(app).get(
         `${API_PREFIX}/projects/${projectId}/deliver/expo-readiness`
       );
-
-      process.env.EXPO_TOKEN = saved;
 
       expect(res.status).toBe(200);
       expect(res.body.data).toMatchObject({
@@ -587,40 +611,35 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       expect(res.body.data.prompt).toBeUndefined();
     });
 
-    it("should return 200 with missing and prompt when authOk is false", async () => {
-      const saved = process.env.EXPO_TOKEN;
-      delete process.env.EXPO_TOKEN;
+    it("returns 200 with missing and prompt when authOk is false", async () => {
+      const authPrompt = "Add an Expo access token at https://expo.dev/settings/access-tokens";
+      vi.mocked(isExpoInstalled).mockResolvedValue(true);
+      vi.mocked(getExpoConfigStatus).mockResolvedValue({ configured: true });
+      vi.mocked(checkExpoAuth).mockResolvedValue({
+        ok: false,
+        missing: "api_key",
+        code: "EXPO_TOKEN_REQUIRED",
+        message: "Expo token required",
+        prompt: authPrompt,
+      });
+      vi.mocked(isEasProjectLinked).mockResolvedValue(true);
 
       await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
 
-      await fs.writeFile(
-        path.join(tempDir, "my-project", "app.json"),
-        JSON.stringify({
-          expo: {
-            name: "TestApp",
-            slug: "test-app",
-            extra: { eas: { projectId: "test-eas-project-id" } },
-          },
-        })
-      );
-
       const res = await request(app).get(
         `${API_PREFIX}/projects/${projectId}/deliver/expo-readiness`
       );
-
-      process.env.EXPO_TOKEN = saved;
 
       expect(res.status).toBe(200);
       expect(res.body.data.authOk).toBe(false);
       expect(res.body.data.missing).toContain("auth");
       expect(res.body.data.prompt).toBeDefined();
-      expect(typeof res.body.data.prompt).toBe("string");
-      expect(res.body.data.prompt).toContain("expo.dev");
+      expect(res.body.data.prompt).toBe(authPrompt);
     });
 
-    it("should return 400 when deployment mode is not expo", async () => {
+    it("returns 400 when mode is not expo", async () => {
       const res = await request(app).get(
         `${API_PREFIX}/projects/${projectId}/deliver/expo-readiness`
       );
@@ -628,30 +647,32 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("EXPO_REQUIRED");
       expect(res.body.error?.message).toContain("expo");
+      expect(isExpoInstalled).not.toHaveBeenCalled();
     });
 
-    it("should return 404 when project not found", async () => {
+    it("returns 404 when project not found", async () => {
       const res = await request(app).get(
         `${API_PREFIX}/projects/nonexistent-id/deliver/expo-readiness`
       );
 
       expect(res.status).toBe(404);
       expect(res.body.error?.code).toBe("PROJECT_NOT_FOUND");
+      expect(isExpoInstalled).not.toHaveBeenCalled();
     });
 
-    it("should populate missing array from false checks", async () => {
-      const saved = process.env.EXPO_TOKEN;
-      process.env.EXPO_TOKEN = "test-token-for-missing-array";
+    it("populates missing array from false checks", async () => {
+      vi.mocked(isExpoInstalled).mockResolvedValue(true);
+      vi.mocked(getExpoConfigStatus).mockResolvedValue({ configured: false });
+      vi.mocked(checkExpoAuth).mockResolvedValue({ ok: true });
+      vi.mocked(isEasProjectLinked).mockResolvedValue(false);
 
       await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
-      // No app.json: expoConfigured and easProjectLinked false; expo in package.json so expoInstalled true
+
       const res = await request(app).get(
         `${API_PREFIX}/projects/${projectId}/deliver/expo-readiness`
       );
-
-      process.env.EXPO_TOKEN = saved;
 
       expect(res.status).toBe(200);
       expect(res.body.data.expoInstalled).toBe(true);
