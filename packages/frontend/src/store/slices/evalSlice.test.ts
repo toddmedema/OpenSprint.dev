@@ -5,6 +5,7 @@ import evalReducer, {
   updateFeedbackItemResolved,
   fetchFeedbackItem,
   cancelFeedback,
+  submitFeedback,
   type EvalState,
 } from "./evalSlice";
 import type { FeedbackItem } from "@opensprint/shared";
@@ -187,6 +188,73 @@ describe("evalSlice", () => {
       expect(state.feedbackItemLoadingId).toBeNull();
       expect(state.async.feedbackItem.error).toBe("Not found");
       expect(state.feedbackItemErrorId).toBe("fb-missing");
+    });
+  });
+
+  describe("submitFeedback", () => {
+    it("keeps optimistic plan replies linked to the plan thread", async () => {
+      const { api } = await import("../../api/client");
+      let resolveSubmit: ((value: FeedbackItem) => void) | null = null;
+      const submitPromise = new Promise<FeedbackItem>((resolve) => {
+        resolveSubmit = resolve;
+      });
+      vi.mocked(api.feedback.submit).mockReturnValueOnce(submitPromise);
+      const store = createStore();
+
+      const dispatchPromise = store.dispatch(
+        submitFeedback({
+          projectId: "proj-1",
+          text: "Reply to plan",
+          planId: "plan-alpha",
+          planVersionNumber: 4,
+        })
+      );
+
+      const pendingState = store.getState().eval;
+      expect(pendingState.feedback).toHaveLength(1);
+      expect(pendingState.feedback[0].mappedPlanId).toBe("plan-alpha");
+      expect(pendingState.feedback[0].submittedPlanId).toBe("plan-alpha");
+      expect(pendingState.feedback[0].planVersionNumber).toBe(4);
+
+      resolveSubmit?.({
+        ...baseItem,
+        id: "fb-plan-reply",
+        text: "Reply to plan",
+        mappedPlanId: "plan-alpha",
+        submittedPlanId: "plan-alpha",
+        planVersionNumber: 4,
+      });
+      await dispatchPromise;
+    });
+
+    it("keeps non-plan optimistic feedback unlinked", async () => {
+      const { api } = await import("../../api/client");
+      let resolveSubmit: ((value: FeedbackItem) => void) | null = null;
+      const submitPromise = new Promise<FeedbackItem>((resolve) => {
+        resolveSubmit = resolve;
+      });
+      vi.mocked(api.feedback.submit).mockReturnValueOnce(submitPromise);
+      const store = createStore();
+
+      const dispatchPromise = store.dispatch(
+        submitFeedback({
+          projectId: "proj-1",
+          text: "General feedback",
+        })
+      );
+
+      const pendingState = store.getState().eval;
+      expect(pendingState.feedback).toHaveLength(1);
+      expect(pendingState.feedback[0].mappedPlanId).toBeNull();
+      expect(pendingState.feedback[0].submittedPlanId).toBeUndefined();
+      expect(pendingState.feedback[0].planVersionNumber).toBeUndefined();
+
+      resolveSubmit?.({
+        ...baseItem,
+        id: "fb-general",
+        text: "General feedback",
+      });
+      await dispatchPromise;
     });
   });
 

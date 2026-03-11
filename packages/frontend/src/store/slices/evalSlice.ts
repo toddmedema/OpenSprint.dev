@@ -181,17 +181,23 @@ const evalSlice = createSlice({
       state.async.submit.loading = true;
       state.async.submit.error = null;
       state.error = null;
-      const { text, images, parentId, priority } = action.meta.arg;
+      const { text, images, parentId, priority, planId, planVersionNumber } = action.meta.arg;
       const requestId = action.meta.requestId;
       const parent = parentId ? state.feedback.find((f) => f.id === parentId) : null;
       const depth = parent ? (parent.depth ?? 0) + 1 : 0;
       const userPriority =
         typeof priority === "number" && priority >= 0 && priority <= 4 ? priority : undefined;
+      const submittedPlanId =
+        typeof planId === "string" && planId.trim().length > 0 ? planId.trim() : undefined;
+      const normalizedPlanVersionNumber =
+        typeof planVersionNumber === "number" && planVersionNumber >= 1
+          ? planVersionNumber
+          : undefined;
       const optimistic: FeedbackItem = {
         id: `${OPTIMISTIC_ID_PREFIX}${requestId}`,
         text,
         category: "bug",
-        mappedPlanId: null,
+        mappedPlanId: submittedPlanId ?? null,
         createdTaskIds: [],
         status: "pending",
         createdAt: new Date().toISOString(),
@@ -199,6 +205,10 @@ const evalSlice = createSlice({
         parent_id: parentId ?? null,
         depth,
         ...(userPriority !== undefined && { userPriority }),
+        ...(submittedPlanId && { submittedPlanId }),
+        ...(normalizedPlanVersionNumber !== undefined && {
+          planVersionNumber: normalizedPlanVersionNumber,
+        }),
       };
       state.feedback.unshift(optimistic);
     });

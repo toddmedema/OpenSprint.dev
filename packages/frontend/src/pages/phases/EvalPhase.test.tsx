@@ -58,11 +58,7 @@ function createQueryClientWithFeedbackAndPlans(
   return client;
 }
 
-function createMockPlan(opts: {
-  planId: string;
-  status: Plan["status"];
-  content?: string;
-}): Plan {
+function createMockPlan(opts: { planId: string; status: Plan["status"]; content?: string }): Plan {
   return {
     metadata: {
       planId: opts.planId,
@@ -351,7 +347,8 @@ const mockFeedbackWithCancelled: FeedbackItem[] = [
 ];
 
 /** One feedback item with attached images for image modal tests. */
-const DATA_URL_PLACEHOLDER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+const DATA_URL_PLACEHOLDER =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 const mockFeedbackWithImages: FeedbackItem[] = [
   {
     id: "fb-img",
@@ -1615,7 +1612,9 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByRole("heading", { name: "Feedback & plan reviews" })).toBeInTheDocument();
+        expect(
+          screen.getByRole("heading", { name: "Feedback & plan reviews" })
+        ).toBeInTheDocument();
       });
 
       const heading = screen.getByRole("heading", { name: "Feedback & plan reviews" });
@@ -1800,7 +1799,9 @@ describe("EvalPhase feedback form", () => {
           { ...mockFeedbackItems[1], id: "fb-b", text: "Pending B", status: "pending" },
         ];
         const planInReview = createMockPlan({ planId: "auth-plan", status: "in_review" });
-        const queryClient = createQueryClientWithFeedbackAndPlans(twoPendingFeedback, [planInReview]);
+        const queryClient = createQueryClientWithFeedbackAndPlans(twoPendingFeedback, [
+          planInReview,
+        ]);
         const store = createStore({ evalFeedback: twoPendingFeedback });
         localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "pending");
 
@@ -1811,7 +1812,9 @@ describe("EvalPhase feedback form", () => {
           { store, queryClient }
         );
 
-        await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+        await waitFor(() =>
+          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+        );
 
         // Pending count = 2 feedback + 1 plan = 3
         expect(screen.getByRole("option", { name: "Pending (3)" })).toBeInTheDocument();
@@ -1836,7 +1839,9 @@ describe("EvalPhase feedback form", () => {
           { store, queryClient }
         );
 
-        await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+        await waitFor(() =>
+          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+        );
 
         expect(screen.getByRole("option", { name: "Resolved (2)" })).toBeInTheDocument();
         expect(screen.getByText("Resolved feedback")).toBeInTheDocument();
@@ -1864,7 +1869,9 @@ describe("EvalPhase feedback form", () => {
           { store, queryClient }
         );
 
-        await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+        await waitFor(() =>
+          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+        );
 
         // All = 3 feedback + 2 plans = 5; Pending = 2 feedback + 1 in_review = 3; Resolved = 1 feedback + 1 complete = 2
         expect(screen.getByRole("option", { name: "All (5)" })).toBeInTheDocument();
@@ -1885,7 +1892,9 @@ describe("EvalPhase feedback form", () => {
           { store, queryClient }
         );
 
-        await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+        await waitFor(() =>
+          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+        );
 
         expect(screen.getByTestId("plan-review-card-my-feature-plan")).toBeInTheDocument();
         expect(screen.getByTestId("plan-review-card-actions-row")).toBeInTheDocument();
@@ -1893,13 +1902,221 @@ describe("EvalPhase feedback form", () => {
         expect(screen.getByLabelText("Plan")).toBeInTheDocument(); // Plan badge
         // Primary card text is plan title (from content "# Plan" in mock)
         expect(screen.getByTestId("plan-review-card-title")).toHaveTextContent("Plan");
-        expect(screen.getByTestId("plan-review-card-task-summary")).toHaveTextContent("All 3 tasks done");
-        expect(screen.getByRole("button", { name: /View plan My Feature Plan/i })).toBeInTheDocument();
+        expect(screen.getByTestId("plan-review-card-task-summary")).toHaveTextContent(
+          "All 3 tasks done"
+        );
+        expect(
+          screen.getByRole("button", { name: /View plan My Feature Plan/i })
+        ).toBeInTheDocument();
         const markCompleteBtn = screen.getByRole("button", { name: /Mark plan complete: Plan/i });
         expect(markCompleteBtn).toBeInTheDocument();
         expect(markCompleteBtn).toHaveAttribute("aria-label", "Mark plan complete: Plan");
         expect(screen.getByRole("button", { name: /Reply to plan Plan/i })).toBeInTheDocument();
         expect(screen.getByTestId("plan-reply-button")).toBeInTheDocument();
+      });
+
+      it("opens an inline plan reply composer and never opens the plan chat sidebar", async () => {
+        const planInReview = createMockPlan({ planId: "inline-plan", status: "in_review" });
+        const queryClient = createQueryClientWithFeedbackAndPlans([], [planInReview]);
+        const store = createStore({ evalFeedback: [] });
+        localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "pending");
+        const user = userEvent.setup();
+
+        renderWithProviders(
+          <MemoryRouter>
+            <EvalPhase projectId="proj-1" />
+          </MemoryRouter>,
+          { store, queryClient }
+        );
+
+        await waitFor(() =>
+          expect(screen.getByTestId("plan-review-card-inline-plan")).toBeInTheDocument()
+        );
+
+        await user.click(screen.getByRole("button", { name: /Reply to plan Plan/i }));
+
+        expect(screen.getByTestId("plan-inline-reply-composer-inline-plan")).toBeInTheDocument();
+        expect(screen.getByTestId("plan-inline-reply-input-inline-plan")).toBeInTheDocument();
+        expect(screen.queryByTestId("eval-plan-chat-panel")).not.toBeInTheDocument();
+      });
+
+      it("submits plan replies as feedback and renders them inline under the plan card", async () => {
+        const { api } = await import("../../api/client");
+        const submittedText = "Need stronger auth checks";
+        const planInReview: Plan = {
+          ...createMockPlan({ planId: "inline-plan", status: "in_review" }),
+          lastExecutedVersionNumber: 7,
+        };
+        const submittedFeedback: FeedbackItem = {
+          id: "fb-inline-plan",
+          text: submittedText,
+          category: "feature",
+          mappedPlanId: "inline-plan",
+          submittedPlanId: "inline-plan",
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-03T00:00:00Z",
+          parent_id: null,
+          depth: 0,
+        };
+        vi.mocked(api.feedback.submit).mockResolvedValueOnce(submittedFeedback);
+
+        const queryClient = createQueryClientWithFeedbackAndPlans([], [planInReview]);
+        const store = createStore({ evalFeedback: [] });
+        localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "pending");
+        const user = userEvent.setup();
+
+        renderWithProviders(
+          <MemoryRouter>
+            <EvalPhase projectId="proj-1" />
+          </MemoryRouter>,
+          { store, queryClient }
+        );
+
+        await waitFor(() =>
+          expect(screen.getByTestId("plan-review-card-inline-plan")).toBeInTheDocument()
+        );
+
+        await user.click(screen.getByRole("button", { name: /Reply to plan Plan/i }));
+        const composer = screen.getByTestId("plan-inline-reply-composer-inline-plan");
+        const input = within(composer).getByTestId("plan-inline-reply-input-inline-plan");
+        await user.type(input, submittedText);
+        await user.click(within(composer).getByRole("button", { name: "Submit" }));
+
+        await waitFor(() => {
+          expect(api.feedback.submit).toHaveBeenCalledWith(
+            "proj-1",
+            submittedText,
+            undefined,
+            undefined,
+            undefined,
+            "inline-plan",
+            7
+          );
+        });
+
+        await waitFor(() =>
+          expect(screen.getByTestId("plan-inline-replies-inline-plan")).toBeInTheDocument()
+        );
+        expect(
+          screen.queryByTestId("plan-inline-reply-composer-inline-plan")
+        ).not.toBeInTheDocument();
+        expect(screen.getByText(submittedText)).toBeInTheDocument();
+      });
+
+      it("shows created tasks on inline plan reply feedback cards", async () => {
+        const planInReview = createMockPlan({ planId: "inline-plan", status: "in_review" });
+        const planReplyFeedback: FeedbackItem[] = [
+          {
+            id: "fb-plan-reply-task",
+            text: "Please harden auth",
+            category: "bug",
+            mappedPlanId: "inline-plan",
+            submittedPlanId: "inline-plan",
+            createdTaskIds: ["task-1"],
+            status: "pending",
+            createdAt: "2024-01-03T00:00:00Z",
+          },
+        ];
+        const queryClient = createQueryClientWithFeedbackAndPlans(planReplyFeedback, [
+          planInReview,
+        ]);
+        const store = createStore({
+          evalFeedback: planReplyFeedback,
+          executeTasks: [createMockTask({ id: "task-1", title: "Fix login bug" })],
+        });
+        localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "pending");
+
+        renderWithProviders(
+          <MemoryRouter>
+            <EvalPhase projectId="proj-1" />
+          </MemoryRouter>,
+          { store, queryClient }
+        );
+
+        const inlineReplies = await screen.findByTestId("plan-inline-replies-inline-plan");
+        expect(within(inlineReplies).getByText("Please harden auth")).toBeInTheDocument();
+        expect(within(inlineReplies).getByText("Fix login bug")).toBeInTheDocument();
+      });
+
+      it("extracts nested plan replies into the inline plan thread and keeps parent feedback standalone", async () => {
+        const planInReview = createMockPlan({ planId: "inline-plan", status: "in_review" });
+        const mixedFeedback: FeedbackItem[] = [
+          {
+            id: "fb-parent-general",
+            text: "General polish feedback",
+            category: "feature",
+            mappedPlanId: null,
+            createdTaskIds: [],
+            status: "pending",
+            createdAt: "2024-01-04T00:00:00Z",
+            parent_id: null,
+            depth: 0,
+          },
+          {
+            id: "fb-nested-plan-reply",
+            text: "Please add role checks",
+            category: "bug",
+            mappedPlanId: "inline-plan",
+            submittedPlanId: "inline-plan",
+            createdTaskIds: ["task-1"],
+            status: "pending",
+            createdAt: "2024-01-03T00:00:00Z",
+            parent_id: "fb-parent-general",
+            depth: 1,
+          },
+        ];
+        const queryClient = createQueryClientWithFeedbackAndPlans(mixedFeedback, [planInReview]);
+        const store = createStore({
+          evalFeedback: mixedFeedback,
+          executeTasks: [createMockTask({ id: "task-1", title: "Fix login bug" })],
+        });
+        localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "pending");
+
+        renderWithProviders(
+          <MemoryRouter>
+            <EvalPhase projectId="proj-1" />
+          </MemoryRouter>,
+          { store, queryClient }
+        );
+
+        const inlineReplies = await screen.findByTestId("plan-inline-replies-inline-plan");
+        expect(within(inlineReplies).getByText("Please add role checks")).toBeInTheDocument();
+        expect(within(inlineReplies).getByText("Fix login bug")).toBeInTheDocument();
+        expect(screen.getByText("General polish feedback")).toBeInTheDocument();
+      });
+
+      it("keeps legacy plan replies inline when submittedPlanId is missing", async () => {
+        const planInReview = createMockPlan({ planId: "inline-plan", status: "in_review" });
+        const legacyPlanReplyFeedback: FeedbackItem[] = [
+          {
+            id: "fb-legacy-plan-reply",
+            text: "Backfill migration checks",
+            category: "feature",
+            mappedPlanId: "inline-plan",
+            createdTaskIds: [],
+            status: "pending",
+            createdAt: "2024-01-03T00:00:00Z",
+            planVersionNumber: 2,
+          },
+        ];
+        const queryClient = createQueryClientWithFeedbackAndPlans(legacyPlanReplyFeedback, [
+          planInReview,
+        ]);
+        const store = createStore({
+          evalFeedback: legacyPlanReplyFeedback,
+        });
+        localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "pending");
+
+        renderWithProviders(
+          <MemoryRouter>
+            <EvalPhase projectId="proj-1" />
+          </MemoryRouter>,
+          { store, queryClient }
+        );
+
+        const inlineReplies = await screen.findByTestId("plan-inline-replies-inline-plan");
+        expect(within(inlineReplies).getByText("Backfill migration checks")).toBeInTheDocument();
       });
 
       it("plan review card uses formatPlanIdAsTitle as primary text when plan content has no # title", async () => {
@@ -1919,11 +2136,15 @@ describe("EvalPhase feedback form", () => {
           { store, queryClient }
         );
 
-        await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+        await waitFor(() =>
+          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+        );
 
         expect(screen.getByTestId("plan-review-card-title")).toHaveTextContent("Auth And Deploy");
         // When all tasks done, subtext is plan overview (first sentences of body)
-        expect(screen.getByTestId("plan-review-card-task-summary")).toHaveTextContent("Do the thing.");
+        expect(screen.getByTestId("plan-review-card-task-summary")).toHaveTextContent(
+          "Do the thing."
+        );
       });
 
       it("combined review list has role list and aria-label for accessibility", async () => {
@@ -1939,9 +2160,13 @@ describe("EvalPhase feedback form", () => {
           { store, queryClient }
         );
 
-        await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+        await waitFor(() =>
+          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+        );
 
-        const list = screen.getByRole("list", { name: "Combined review queue: feedback and plans" });
+        const list = screen.getByRole("list", {
+          name: "Combined review queue: feedback and plans",
+        });
         expect(list).toBeInTheDocument();
       });
 
@@ -1961,7 +2186,9 @@ describe("EvalPhase feedback form", () => {
           { store, queryClient }
         );
 
-        await waitFor(() => expect(screen.getByTestId("plan-mark-complete-button")).toBeInTheDocument());
+        await waitFor(() =>
+          expect(screen.getByTestId("plan-mark-complete-button")).toBeInTheDocument()
+        );
 
         const user = userEvent.setup();
         await user.click(screen.getByRole("button", { name: /Mark plan complete: Plan/i }));
@@ -3884,9 +4111,7 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => expect(screen.getByText("Bug with screenshot")).toBeInTheDocument());
-      await user.click(
-        screen.getByRole("button", { name: /View attachment 1 full size/i })
-      );
+      await user.click(screen.getByRole("button", { name: /View attachment 1 full size/i }));
       await waitFor(() => {
         expect(screen.getByTestId("feedback-image-modal")).toBeInTheDocument();
       });
@@ -3910,9 +4135,7 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => expect(screen.getByText("Bug with screenshot")).toBeInTheDocument());
-      await user.click(
-        screen.getByRole("button", { name: /View attachment 1 full size/i })
-      );
+      await user.click(screen.getByRole("button", { name: /View attachment 1 full size/i }));
       await waitFor(() => {
         expect(screen.getByTestId("feedback-image-modal")).toBeInTheDocument();
       });
@@ -3936,9 +4159,7 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => expect(screen.getByText("Bug with screenshot")).toBeInTheDocument());
-      await user.click(
-        screen.getByRole("button", { name: /View attachment 1 full size/i })
-      );
+      await user.click(screen.getByRole("button", { name: /View attachment 1 full size/i }));
       await waitFor(() => {
         expect(screen.getByTestId("feedback-image-modal")).toBeInTheDocument();
       });

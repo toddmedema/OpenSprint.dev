@@ -17,13 +17,8 @@ import {
   recategorizeFeedback,
   fetchFeedback,
 } from "../../store/slices/evalSlice";
-import {
-  sendPlanMessage,
-  updatePlan,
-  setPlanChatMessages,
-} from "../../store/slices/planSlice";
 import { selectTaskSummariesForFeedback } from "../../store/slices/executeSlice";
-import { useTasks, useFeedback, usePlans, useMarkPlanComplete, usePlanChat } from "../../api/hooks";
+import { useTasks, useFeedback, usePlans, useMarkPlanComplete } from "../../api/hooks";
 import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
 import { PhaseLoadingSpinner } from "../../components/PhaseLoadingSpinner";
 import { queryKeys } from "../../api/queryKeys";
@@ -48,8 +43,6 @@ import { HilApprovalBlock } from "../../components/HilApprovalBlock";
 import { OpenQuestionsBlock } from "../../components/OpenQuestionsBlock";
 import { useViewportWidth } from "../../hooks/useViewportWidth";
 import { CloseButton } from "../../components/CloseButton";
-import { ChatInput } from "../../components/ChatInput";
-import { getPlanChatMessageDisplay } from "./PlanPhase";
 import { PhaseEmptyState, PhaseEmptyStateLogo } from "../../components/PhaseEmptyState";
 
 /** Reply icon (message turn / corner up-right) */
@@ -141,11 +134,7 @@ function countResolved(feedback: FeedbackItem[], plansComplete: Plan[]): number 
 }
 
 /** Count for All filter: all feedback + in_review plans + complete plans */
-function countAll(
-  feedback: FeedbackItem[],
-  plansInReview: Plan[],
-  plansComplete: Plan[]
-): number {
+function countAll(feedback: FeedbackItem[], plansInReview: Plan[], plansComplete: Plan[]): number {
   return feedback.length + plansInReview.length + plansComplete.length;
 }
 
@@ -158,11 +147,7 @@ export type UnifiedReviewItem =
 
 function getSortDate(item: UnifiedReviewItem): string {
   if (item.kind === "plan") {
-    return (
-      item.plan.metadata.reviewedAt ??
-      item.plan.lastModified ??
-      ""
-    );
+    return item.plan.metadata.reviewedAt ?? item.plan.lastModified ?? "";
   }
   return item.node.item.createdAt ?? "";
 }
@@ -304,16 +289,107 @@ function buildFeedbackTree(items: FeedbackItem[]): FeedbackTreeNode[] {
 }
 
 /** Find a feedback node by ID in the tree (searches recursively). */
-function findFeedbackNode(
-  tree: FeedbackTreeNode[],
-  id: string
-): FeedbackTreeNode | null {
+function findFeedbackNode(tree: FeedbackTreeNode[], id: string): FeedbackTreeNode | null {
   for (const node of tree) {
     if (node.item.id === id) return node;
     const found = findFeedbackNode(node.children, id);
     if (found) return found;
   }
   return null;
+}
+
+/**
+ * For each feedback item, resolve whether it belongs to a plan-reply thread.
+ * A thread is considered plan-linked when this item or any ancestor was submitted as
+ * a reply-to-plan (submittedPlanId), with legacy fallback to mappedPlanId+planVersionNumber.
+ */
+function buildPlanReplyPlanIdByFeedbackId(items: FeedbackItem[]): Record<string, string> {
+  const byId = new Map(items.map((item) => [item.id, item] as const));
+  const cache = new Map<string, string | null>();
+  const normalizePlanId = (value: unknown): string | null =>
+    typeof value === "string" && value.trim() ? value.trim() : null;
+
+  const resolvePlanIdForItem = (id: string): string | null => {
+    if (cache.has(id)) return cache.get(id) ?? null;
+    const item = byId.get(id);
+    if (!item) {
+      cache.set(id, null);
+      return null;
+    }
+
+    const visited = new Set<string>();
+    let current: FeedbackItem | undefined = item;
+    while (current) {
+      if (visited.has(current.id)) break;
+      visited.add(current.id);
+      const submittedPlanId = normalizePlanId(current.submittedPlanId);
+      if (submittedPlanId) {
+        cache.set(id, submittedPlanId);
+        return submittedPlanId;
+      }
+      const fallbackMappedPlanId = normalizePlanId(current.mappedPlanId);
+      const hasReplyVersion =
+        typeof current.planVersionNumber === "number" && current.planVersionNumber >= 1;
+      if (hasReplyVersion && fallbackMappedPlanId) {
+        cache.set(id, fallbackMappedPlanId);
+        return fallbackMappedPlanId;
+      }
+
+      const parentId = current.parent_id ?? null;
+      if (!parentId) break;
+      current = byId.get(parentId);
+    }
+
+    cache.set(id, null);
+    return null;
+  };
+
+  const result: Record<string, string> = {};
+  for (const item of items) {
+    const planId = resolvePlanIdForItem(item.id);
+    if (planId) result[item.id] = planId;
+  }
+  return result;
+}
+
+function partitionFeedbackTreeByPlanReplies(
+  tree: FeedbackTreeNode[],
+  planReplyPlanIdByFeedbackId: Record<string, string>
+): { standaloneTree: FeedbackTreeNode[]; planReplyNodesByPlanId: Record<string, FeedbackTreeNode[]> } {
+  const planReplyNodesByPlanId: Record<string, FeedbackTreeNode[]> = {};
+
+  const isSameNodeSequence = (a: FeedbackTreeNode[], b: FeedbackTreeNode[]): boolean =>
+    a.length === b.length && a.every((node, index) => node === b[index]);
+
+  const visit = (nodes: FeedbackTreeNode[], inheritedPlanId: string | null): FeedbackTreeNode[] => {
+    const standaloneNodes: FeedbackTreeNode[] = [];
+    for (const node of nodes) {
+      const nodePlanId = planReplyPlanIdByFeedbackId[node.item.id] ?? null;
+      const startsPlanThread = nodePlanId != null && nodePlanId !== inheritedPlanId;
+      if (startsPlanThread) {
+        if (!planReplyNodesByPlanId[nodePlanId]) {
+          planReplyNodesByPlanId[nodePlanId] = [];
+        }
+        planReplyNodesByPlanId[nodePlanId]!.push(node);
+        continue;
+      }
+
+      const nextInheritedPlanId = nodePlanId ?? inheritedPlanId;
+      const standaloneChildren = visit(node.children, nextInheritedPlanId);
+      if (isSameNodeSequence(standaloneChildren, node.children)) {
+        standaloneNodes.push(node);
+      } else {
+        standaloneNodes.push({
+          item: node.item,
+          children: standaloneChildren,
+        });
+      }
+    }
+    return standaloneNodes;
+  };
+
+  const standaloneTree = visit(tree, null);
+  return { standaloneTree, planReplyNodesByPlanId };
 }
 
 /** Task columns that indicate feedback is in progress (agent may be working). */
@@ -345,7 +421,12 @@ interface FeedbackCardProps {
   replyingToId: string | null;
   onStartReply: (id: string) => void;
   onCancelReply: () => void;
-  onSubmitReply: (parentId: string, text: string, images?: string[], priority?: number | null) => void;
+  onSubmitReply: (
+    parentId: string,
+    text: string,
+    images?: string[],
+    priority?: number | null
+  ) => void;
   onResolve: (feedbackId: string) => void;
   onCancel: (feedbackId: string) => void;
   onRemoveAfterAnimation: (feedbackId: string) => void;
@@ -1122,11 +1203,17 @@ function PlanReviewCard({
         >
           Plan
         </span>
-        <p className="text-sm text-theme-text font-medium min-w-0" data-testid="plan-review-card-title">
+        <p
+          className="text-sm text-theme-text font-medium min-w-0"
+          data-testid="plan-review-card-title"
+        >
           {displayTitle}
         </p>
         {total > 0 && (
-          <p className="text-xs text-theme-muted mt-0.5 min-w-0" data-testid="plan-review-card-task-summary">
+          <p
+            className="text-xs text-theme-muted mt-0.5 min-w-0"
+            data-testid="plan-review-card-task-summary"
+          >
             {taskSummary}
           </p>
         )}
@@ -1136,15 +1223,10 @@ function PlanReviewCard({
         className="mt-1 flex flex-wrap items-center justify-between gap-2"
         data-testid="plan-review-card-actions-row"
       >
-        <div
-          className="flex gap-1 flex-wrap min-w-0"
-          data-testid="plan-review-card-plan-link"
-        >
+        <div className="flex gap-1 flex-wrap min-w-0" data-testid="plan-review-card-plan-link">
           <button
             type="button"
-            onClick={() =>
-              navigate(getProjectPhasePath(projectId, "plan", { plan: planId }))
-            }
+            onClick={() => navigate(getProjectPhasePath(projectId, "plan", { plan: planId }))}
             className="inline-flex items-center gap-1.5 rounded bg-theme-border-subtle px-1.5 py-0.5 text-xs font-mono text-brand-600 hover:bg-theme-info-bg hover:text-theme-info-text underline transition-colors"
             title={`View plan: ${linkTitle}`}
             aria-label={`View plan ${linkTitle}`}
@@ -1173,7 +1255,7 @@ function PlanReviewCard({
               type="button"
               onClick={() => onReplyToPlan(planId)}
               className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text transition-colors"
-              title="Reply to plan (chat with planning agent)"
+              title="Reply to plan"
               aria-label={`Reply to plan ${displayTitle}`}
               data-testid="plan-reply-button"
             >
@@ -1184,6 +1266,207 @@ function PlanReviewCard({
         </div>
       </div>
     </div>
+  );
+}
+
+function PlanReplyComposer({
+  plan,
+  submitting,
+  isDraggingImage,
+  clearDragState,
+  onCancel,
+  onSubmit,
+}: {
+  plan: Plan;
+  submitting: boolean;
+  isDraggingImage: boolean;
+  clearDragState: () => void;
+  onCancel: () => void;
+  onSubmit: (text: string, images?: string[], priority?: number | null) => Promise<boolean>;
+}) {
+  const [replyText, setReplyText] = useState("");
+  const [replyPriority, setReplyPriority] = useState<number | null>(null);
+  const [replyPriorityDropdownOpen, setReplyPriorityDropdownOpen] = useState(false);
+  const [replyPriorityAlignRight, setReplyPriorityAlignRight] = useState(false);
+  const replyPriorityDropdownRef = useRef<HTMLDivElement>(null);
+  const replyPriorityTriggerRef = useRef<HTMLButtonElement>(null);
+  const replyImages = useImageAttachment();
+  const { title: contentTitle } = parsePlanContent(plan.content ?? "");
+  const displayTitle = contentTitle.trim()
+    ? contentTitle
+    : formatPlanIdAsTitle(plan.metadata.planId);
+
+  useEffect(() => {
+    if (!replyPriorityDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        replyPriorityDropdownRef.current &&
+        !replyPriorityDropdownRef.current.contains(e.target as Node)
+      ) {
+        setReplyPriorityDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setReplyPriorityDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [replyPriorityDropdownOpen]);
+
+  useEffect(() => {
+    if (replyPriorityDropdownOpen && replyPriorityTriggerRef.current) {
+      setReplyPriorityAlignRight(
+        shouldRightAlignDropdown(replyPriorityTriggerRef.current.getBoundingClientRect())
+      );
+    }
+  }, [replyPriorityDropdownOpen]);
+
+  const handleSubmit = useCallback(async () => {
+    const trimmed = replyText.trim();
+    if (!trimmed || submitting) return;
+    const imagePayload = replyImages.images.length > 0 ? replyImages.images : undefined;
+    const success = await onSubmit(trimmed, imagePayload, replyPriority);
+    if (!success) return;
+    setReplyText("");
+    setReplyPriority(null);
+    replyImages.reset();
+    onCancel();
+  }, [onCancel, onSubmit, replyImages, replyPriority, replyText, submitting]);
+
+  const onKeyDownReply = useSubmitShortcut(handleSubmit, {
+    multiline: true,
+    disabled: !replyText.trim() || submitting,
+  });
+
+  return (
+    <ImageDropZone
+      variant="reply"
+      isDraggingImage={isDraggingImage}
+      onDragOver={replyImages.handleDragOver}
+      onDrop={async (e) => {
+        clearDragState();
+        await replyImages.handleDrop(e);
+      }}
+      className="mt-2 card p-3"
+      data-testid={`plan-inline-reply-composer-${plan.metadata.planId}`}
+    >
+      <blockquote className="mb-2 pl-3 border-l-2 border-theme-border text-sm text-theme-muted italic">
+        Replying to: {displayTitle}
+      </blockquote>
+      <textarea
+        className="input min-h-[60px] mb-2 text-sm"
+        value={replyText}
+        onChange={(e) => setReplyText(e.target.value)}
+        onPaste={replyImages.handlePaste}
+        onKeyDown={(e) => {
+          onKeyDownReply(e);
+          if (e.key === "Escape") {
+            e.preventDefault();
+            onCancel();
+          }
+        }}
+        placeholder="Write a reply..."
+        disabled={submitting}
+        autoFocus
+        data-testid={`plan-inline-reply-input-${plan.metadata.planId}`}
+      />
+      <ImageAttachmentThumbnails attachment={replyImages} className="mb-2" />
+      <div className="flex justify-end items-stretch gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={submitting}
+          className="inline-flex items-center h-10 px-3 text-sm text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text transition-colors rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Cancel plan reply"
+        >
+          Cancel
+        </button>
+        <div ref={replyPriorityDropdownRef} className="relative shrink-0 flex">
+          <button
+            ref={replyPriorityTriggerRef}
+            type="button"
+            onClick={() => !submitting && setReplyPriorityDropdownOpen((o) => !o)}
+            disabled={submitting}
+            className="input text-sm h-10 min-h-10 py-2.5 px-3 w-auto min-w-[10rem] inline-flex items-center gap-2 bg-theme-input-bg text-theme-input-text ring-theme-ring"
+            aria-label="Priority (optional)"
+            aria-haspopup="listbox"
+            aria-expanded={replyPriorityDropdownOpen}
+            data-testid="plan-inline-reply-priority-select"
+          >
+            {replyPriority != null ? (
+              <>
+                <PriorityIcon priority={replyPriority} size="sm" />
+                <span className="flex-1 text-left">{PRIORITY_LABELS[replyPriority]}</span>
+              </>
+            ) : (
+              <span className="flex-1 text-left text-theme-muted">Priority (optional)</span>
+            )}
+            <span className="text-[10px] opacity-70 shrink-0">
+              {replyPriorityDropdownOpen ? "▲" : "▼"}
+            </span>
+          </button>
+          {replyPriorityDropdownOpen && (
+            <ul
+              role="listbox"
+              className={`absolute top-full mt-1 z-50 min-w-[10rem] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1 ${replyPriorityAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
+              data-testid="plan-inline-reply-priority-dropdown"
+            >
+              <li role="option">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplyPriority(null);
+                    setReplyPriorityDropdownOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-theme-border-subtle/50 transition-colors text-theme-muted"
+                  data-testid="plan-inline-reply-priority-option-clear"
+                >
+                  No priority
+                </button>
+              </li>
+              {([0, 1, 2, 3, 4] as const).map((p) => (
+                <li key={p} role="option">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyPriority(p);
+                      setReplyPriorityDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-theme-border-subtle/50 transition-colors ${
+                      replyPriority === p ? "text-brand-600 font-medium" : "text-theme-text"
+                    }`}
+                    data-testid={`plan-inline-reply-priority-option-${p}`}
+                  >
+                    <PriorityIcon priority={p} size="sm" />
+                    {PRIORITY_LABELS[p]}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <ImageAttachmentButton
+          attachment={replyImages}
+          variant="icon"
+          disabled={submitting}
+          data-testid="plan-inline-reply-attach-images"
+        />
+        <KeyboardShortcutTooltip>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting || !replyText.trim()}
+            className="btn-primary h-10 disabled:opacity-50"
+          >
+            {submitting ? "Submitting..." : "Submit"}
+          </button>
+        </KeyboardShortcutTooltip>
+      </div>
+    </ImageDropZone>
   );
 }
 
@@ -1200,14 +1483,6 @@ export function EvalPhase({
   const plansQuery = usePlans(projectId);
   const markPlanCompleteMutation = useMarkPlanComplete(projectId);
   const plans = plansQuery.data?.plans ?? [];
-  const [planChatPlanId, setPlanChatPlanId] = useState<string | null>(null);
-  const [planChatSending, setPlanChatSending] = useState(false);
-  const [planChatInput, setPlanChatInput] = useState("");
-  const planChatContext = planChatPlanId ? `plan:${planChatPlanId}` : undefined;
-  const planChatQuery = usePlanChat(projectId, planChatContext);
-  const planChatMessages = useAppSelector((s) =>
-    planChatContext ? (s.plan.chatMessages[planChatContext] ?? []) : []
-  );
   const plansInReview = useMemo(
     () => plans.filter((p) => (p.status as string) === "in_review"),
     [plans]
@@ -1413,10 +1688,12 @@ export function EvalPhase({
   /** IDs of items animating out (resolved but still visible during collapse). Keeps them in the tree when filter would hide them. */
   const [animatingOutIds, setAnimatingOutIds] = useState<Set<string>>(new Set());
   /** On mobile: feedback ID shown in detail overlay (null = no overlay) */
-  const [selectedFeedbackIdForOverlay, setSelectedFeedbackIdForOverlay] =
-    useState<string | null>(null);
+  const [selectedFeedbackIdForOverlay, setSelectedFeedbackIdForOverlay] = useState<string | null>(
+    null
+  );
   /** Feedback items submitted/requeued here that still need reconciliation if a WS event is missed. */
   const [reconcilingFeedbackIds, setReconcilingFeedbackIds] = useState<Set<string>>(new Set());
+  const [replyingToPlanId, setReplyingToPlanId] = useState<string | null>(null);
 
   // Reset filter when "cancelled" is selected but no feedback has status cancelled (option no longer shown)
   const hasCancelled = feedback.some((f) => f.status === "cancelled");
@@ -1441,7 +1718,6 @@ export function EvalPhase({
         text,
         images: imagePayload,
         priority: priorityPayload,
-        planId: planChatPlanId ?? undefined,
       })
     );
     if (submitFeedback.fulfilled.match(result)) {
@@ -1467,12 +1743,44 @@ export function EvalPhase({
           images,
           parentId,
           priority: priorityPayload,
-          planId: planChatPlanId ?? undefined,
         })
       );
       if (submitFeedback.fulfilled.match(result)) {
         setReconcilingFeedbackIds((prev) => new Set(prev).add(result.payload.id));
       }
+    },
+    [dispatch, projectId, submitting]
+  );
+
+  const handleSubmitPlanReply = useCallback(
+    async (
+      planId: string,
+      planVersionNumber: number | null | undefined,
+      text: string,
+      images?: string[],
+      priority?: number | null
+    ): Promise<boolean> => {
+      if (!text.trim() || submitting) return false;
+      const priorityPayload = priority != null ? priority : undefined;
+      const versionPayload =
+        typeof planVersionNumber === "number" && planVersionNumber >= 1
+          ? planVersionNumber
+          : undefined;
+      const result = await dispatch(
+        submitFeedback({
+          projectId,
+          text,
+          images,
+          priority: priorityPayload,
+          planId,
+          planVersionNumber: versionPayload,
+        })
+      );
+      if (submitFeedback.fulfilled.match(result)) {
+        setReconcilingFeedbackIds((prev) => new Set(prev).add(result.payload.id));
+        return true;
+      }
+      return false;
     },
     [dispatch, projectId, submitting]
   );
@@ -1584,18 +1892,6 @@ export function EvalPhase({
   );
 
   // When navigating with ?feedback=id (e.g. from Analyst dropdown), ensure visibility, expand ancestors, and scroll
-  /* Sync plan chat history into Redux when reply-to-Plan panel is open (so messages display). */
-  useEffect(() => {
-    if (planChatQuery.data && planChatContext) {
-      dispatch(
-        setPlanChatMessages({
-          context: planChatContext,
-          messages: planChatQuery.data.messages,
-        })
-      );
-    }
-  }, [planChatQuery.data, planChatContext, dispatch]);
-
   useEffect(() => {
     if (!feedbackIdFromUrl || feedbackQuery.isLoading || feedback.length === 0) return;
     const targetItem = feedback.find((f) => f.id === feedbackIdFromUrl);
@@ -1650,16 +1946,19 @@ export function EvalPhase({
       ),
     [feedback, statusFilter, animatingOutIds]
   );
+  const planReplyPlanIdByFeedbackId = useMemo(
+    () => buildPlanReplyPlanIdByFeedbackId(feedback),
+    [feedback]
+  );
   const feedbackTree = useMemo(() => buildFeedbackTree(filteredFeedback), [filteredFeedback]);
+  const { standaloneTree: standaloneFeedbackTree, planReplyNodesByPlanId } = useMemo(
+    () => partitionFeedbackTreeByPlanReplies(feedbackTree, planReplyPlanIdByFeedbackId),
+    [feedbackTree, planReplyPlanIdByFeedbackId]
+  );
   const unifiedList = useMemo(
     () =>
-      buildUnifiedReviewList(
-        statusFilter,
-        feedbackTree,
-        plansInReview,
-        plansComplete
-      ),
-    [statusFilter, feedbackTree, plansInReview, plansComplete]
+      buildUnifiedReviewList(statusFilter, standaloneFeedbackTree, plansInReview, plansComplete),
+    [statusFilter, standaloneFeedbackTree, plansInReview, plansComplete]
   );
   const filteredUnifiedList = useMemo(() => {
     const q = evalSearchQuery.trim().toLowerCase();
@@ -1685,8 +1984,7 @@ export function EvalPhase({
   }, [feedback, reconcilingFeedbackIds]);
 
   const hasReconcilingFeedback = useMemo(
-    () =>
-      feedback.some((item) => reconcilingFeedbackIds.has(item.id) && isCategorizing(item)),
+    () => feedback.some((item) => reconcilingFeedbackIds.has(item.id) && isCategorizing(item)),
     [feedback, reconcilingFeedbackIds]
   );
 
@@ -1766,33 +2064,6 @@ export function EvalPhase({
     [projectId, refetchNotifications]
   );
 
-  const handleSendPlanChat = useCallback(
-    async (text: string) => {
-      const trimmed = text?.trim();
-      if (!trimmed || !planChatContext || !planChatPlanId || planChatSending) return;
-      setPlanChatSending(true);
-      setPlanChatInput("");
-      const result = await dispatch(
-        sendPlanMessage({ projectId, message: trimmed, context: planChatContext })
-      );
-      if (sendPlanMessage.fulfilled.match(result) && result.payload?.response?.planUpdate) {
-        await dispatch(
-          updatePlan({ projectId, planId: planChatPlanId, content: result.payload.response.planUpdate })
-        );
-        void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.plans.detail(projectId, planChatPlanId),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.plans.versions(projectId, planChatPlanId),
-        });
-      }
-      void planChatQuery.refetch();
-      setPlanChatSending(false);
-    },
-    [dispatch, projectId, planChatContext, planChatPlanId, planChatSending, queryClient, planChatQuery]
-  );
-
   /* ── RENDER: Loading spinner during fetch (no fake page content) ── */
   if (showFeedbackSpinner) {
     return (
@@ -1812,7 +2083,10 @@ export function EvalPhase({
         className="flex-1 min-h-0 overflow-y-auto w-full"
         data-testid="eval-feedback-feed-scroll"
       >
-        <div className={`${CONTENT_CONTAINER_CLASS} py-4 sm:py-8 w-full`} data-testid="eval-feedback-content">
+        <div
+          className={`${CONTENT_CONTAINER_CLASS} py-4 sm:py-8 w-full`}
+          data-testid="eval-feedback-content"
+        >
           {/* Feedback Input */}
           <ImageDropZone
             variant="main"
@@ -1825,7 +2099,10 @@ export function EvalPhase({
             className="card p-5 mb-8"
             data-testid="main-feedback-drop-zone"
           >
-            <label htmlFor="eval-feedback-input" className="block text-sm font-medium text-theme-text mb-2">
+            <label
+              htmlFor="eval-feedback-input"
+              className="block text-sm font-medium text-theme-text mb-2"
+            >
               What did you find?
             </label>
             <textarea
@@ -1961,7 +2238,11 @@ export function EvalPhase({
                         stroke="currentColor"
                         strokeWidth={2}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M6 18L18 6M6 6l12 12"
+                        />
                       </svg>
                     </button>
                   </div>
@@ -2001,9 +2282,7 @@ export function EvalPhase({
                   <option value="all">
                     All ({countAll(feedback, plansInReview, plansComplete)})
                   </option>
-                  <option value="pending">
-                    Pending ({countPending(feedback, plansInReview)})
-                  </option>
+                  <option value="pending">Pending ({countPending(feedback, plansInReview)})</option>
                   <option value="resolved">
                     Resolved ({countResolved(feedback, plansComplete)})
                   </option>
@@ -2062,44 +2341,115 @@ export function EvalPhase({
                         markPlanCompleteMutation.isPending &&
                         markPlanCompleteMutation.variables === entry.plan.metadata.planId
                       }
-                      onReplyToPlan={setPlanChatPlanId}
+                      onReplyToPlan={(planId) => {
+                        setReplyingToId(null);
+                        setReplyingToPlanId(planId);
+                      }}
                     />
+                    {replyingToPlanId === entry.plan.metadata.planId && (
+                      <PlanReplyComposer
+                        plan={entry.plan}
+                        submitting={submitting}
+                        isDraggingImage={isDraggingImage}
+                        clearDragState={clearDragState}
+                        onCancel={() => setReplyingToPlanId(null)}
+                        onSubmit={(text, images, priority) =>
+                          handleSubmitPlanReply(
+                            entry.plan.metadata.planId,
+                            entry.plan.lastExecutedVersionNumber ??
+                              entry.plan.currentVersionNumber ??
+                              null,
+                            text,
+                            images,
+                            priority
+                          )
+                        }
+                      />
+                    )}
+                    {(planReplyNodesByPlanId[entry.plan.metadata.planId]?.length ?? 0) > 0 && (
+                      <div
+                        className="mt-2 space-y-2"
+                        data-testid={`plan-inline-replies-${entry.plan.metadata.planId}`}
+                      >
+                        {(planReplyNodesByPlanId[entry.plan.metadata.planId] ?? []).map((node) => (
+                          <FeedbackCard
+                            key={`feedback-${node.item.id}`}
+                            node={node}
+                            depth={0}
+                            projectId={projectId}
+                            onNavigateToBuildTask={onNavigateToBuildTask}
+                            replyingToId={replyingToId}
+                            onStartReply={(feedbackId) => {
+                              setReplyingToPlanId(null);
+                              setReplyingToId(feedbackId);
+                            }}
+                            onCancelReply={() => setReplyingToId(null)}
+                            onSubmitReply={handleSubmitReply}
+                            onResolve={handleResolve}
+                            onCancel={handleCancel}
+                            onRemoveAfterAnimation={handleRemoveAfterAnimation}
+                            collapsedIds={collapsedIds}
+                            onToggleCollapse={handleToggleCollapse}
+                            submitting={submitting}
+                            isDraggingImage={isDraggingImage}
+                            clearDragState={clearDragState}
+                            taskSummaryById={taskSummaryById}
+                            questionId={questionIdByFeedbackId[node.item.id]}
+                            questionIdByFeedbackId={questionIdByFeedbackId}
+                            notification={notificationByFeedbackId[node.item.id]}
+                            notificationByFeedbackId={notificationByFeedbackId}
+                            onAnswerOpenQuestion={handleAnswerOpenQuestion}
+                            onDismissOpenQuestion={handleDismissOpenQuestion}
+                            answeringOpenQuestion={answeringOpenQuestion}
+                            onHilResolved={refetchNotifications}
+                            onCardTap={
+                              isMobile
+                                ? () => setSelectedFeedbackIdForOverlay(node.item.id)
+                                : undefined
+                            }
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div key={`feedback-${entry.node.item.id}`} role="listitem">
                     <FeedbackCard
-                    key={`feedback-${entry.node.item.id}`}
-                    node={entry.node}
-                    depth={0}
-                    projectId={projectId}
-                    onNavigateToBuildTask={onNavigateToBuildTask}
-                    replyingToId={replyingToId}
-                    onStartReply={setReplyingToId}
-                    onCancelReply={() => setReplyingToId(null)}
-                    onSubmitReply={handleSubmitReply}
-                    onResolve={handleResolve}
-                    onCancel={handleCancel}
-                    onRemoveAfterAnimation={handleRemoveAfterAnimation}
-                    collapsedIds={collapsedIds}
-                    onToggleCollapse={handleToggleCollapse}
-                    submitting={submitting}
-                    isDraggingImage={isDraggingImage}
-                    clearDragState={clearDragState}
-                    taskSummaryById={taskSummaryById}
-                    questionId={questionIdByFeedbackId[entry.node.item.id]}
-                    questionIdByFeedbackId={questionIdByFeedbackId}
-                    notification={notificationByFeedbackId[entry.node.item.id]}
-                    notificationByFeedbackId={notificationByFeedbackId}
-                    onAnswerOpenQuestion={handleAnswerOpenQuestion}
-                    onDismissOpenQuestion={handleDismissOpenQuestion}
-                    answeringOpenQuestion={answeringOpenQuestion}
-                    onHilResolved={refetchNotifications}
-                    onCardTap={
-                      isMobile
-                        ? () => setSelectedFeedbackIdForOverlay(entry.node.item.id)
-                        : undefined
-                    }
-                  />
+                      key={`feedback-${entry.node.item.id}`}
+                      node={entry.node}
+                      depth={0}
+                      projectId={projectId}
+                      onNavigateToBuildTask={onNavigateToBuildTask}
+                      replyingToId={replyingToId}
+                      onStartReply={(feedbackId) => {
+                        setReplyingToPlanId(null);
+                        setReplyingToId(feedbackId);
+                      }}
+                      onCancelReply={() => setReplyingToId(null)}
+                      onSubmitReply={handleSubmitReply}
+                      onResolve={handleResolve}
+                      onCancel={handleCancel}
+                      onRemoveAfterAnimation={handleRemoveAfterAnimation}
+                      collapsedIds={collapsedIds}
+                      onToggleCollapse={handleToggleCollapse}
+                      submitting={submitting}
+                      isDraggingImage={isDraggingImage}
+                      clearDragState={clearDragState}
+                      taskSummaryById={taskSummaryById}
+                      questionId={questionIdByFeedbackId[entry.node.item.id]}
+                      questionIdByFeedbackId={questionIdByFeedbackId}
+                      notification={notificationByFeedbackId[entry.node.item.id]}
+                      notificationByFeedbackId={notificationByFeedbackId}
+                      onAnswerOpenQuestion={handleAnswerOpenQuestion}
+                      onDismissOpenQuestion={handleDismissOpenQuestion}
+                      answeringOpenQuestion={answeringOpenQuestion}
+                      onHilResolved={refetchNotifications}
+                      onCardTap={
+                        isMobile
+                          ? () => setSelectedFeedbackIdForOverlay(entry.node.item.id)
+                          : undefined
+                      }
+                    />
                   </div>
                 )
               )}
@@ -2108,137 +2458,64 @@ export function EvalPhase({
         </div>
       </div>
 
-      {/* Reply-to-Plan chat panel (slide-over from right) */}
-      {planChatPlanId && (
-        <div
-          className="fixed inset-0 z-40 flex flex-col sm:flex-row"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Reply to plan"
-          data-testid="eval-plan-chat-panel"
-        >
-          <div
-            className="absolute inset-0 bg-theme-overlay/60 sm:bg-transparent"
-            onClick={() => setPlanChatPlanId(null)}
-            aria-hidden="true"
-          />
-          <div className="relative w-full sm:w-[420px] sm:max-w-[100vw] flex flex-col bg-theme-bg border-l border-theme-border shadow-xl ml-auto h-full">
-            <div className="flex-none flex items-center justify-between px-4 py-3 border-b border-theme-border">
-              <h3 className="text-sm font-semibold text-theme-text truncate">
-                Reply to plan: {formatPlanIdAsTitle(planChatPlanId)}
-              </h3>
-              <CloseButton
-                onClick={() => setPlanChatPlanId(null)}
-                ariaLabel="Close plan chat"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text transition-colors"
-                size="w-5 h-5"
-              />
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col">
-              <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide mb-3">
-                Refine with AI
-              </h4>
-              <div className="space-y-3">
-                {planChatMessages.length === 0 && !planChatQuery.isLoading && (
-                  <p className="text-sm text-theme-muted">
-                    Chat with the planning agent to refine this plan. Your reply is sent in the context of this plan and the plan markdown may be updated.
-                  </p>
-                )}
-                {planChatMessages.map((msg, i) => (
-                  <div
-                    key={`${msg.role}-${i}-${msg.timestamp ?? i}`}
-                    data-testid={`eval-plan-chat-message-${msg.role}`}
-                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                        msg.role === "user"
-                          ? "border border-theme-border bg-theme-surface text-theme-text shadow-sm"
-                          : "bg-theme-surface border border-theme-border text-theme-text"
-                      }`}
-                    >
-                      <p className="whitespace-pre-wrap">
-                        {getPlanChatMessageDisplay(msg.content)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                {planChatSending && (
-                  <div className="flex justify-start">
-                    <div className="bg-theme-surface border border-theme-border rounded-2xl px-3 py-2 text-sm text-theme-muted">
-                      Thinking...
-                    </div>
-                  </div>
-                )}
+      {/* Mobile feedback detail overlay */}
+      {isMobile &&
+        selectedFeedbackIdForOverlay &&
+        (() => {
+          const node = findFeedbackNode(feedbackTree, selectedFeedbackIdForOverlay);
+          if (!node) return null;
+          return (
+            <div
+              className="fixed inset-0 z-50 flex flex-col bg-theme-bg"
+              data-testid="feedback-detail-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Feedback detail"
+            >
+              <div className="flex flex-none items-center justify-between px-4 py-3 border-b border-theme-border shrink-0">
+                <h3 className="text-sm font-semibold text-theme-text">Feedback</h3>
+                <CloseButton
+                  onClick={() => setSelectedFeedbackIdForOverlay(null)}
+                  ariaLabel="Close"
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text transition-colors"
+                  size="w-5 h-5"
+                />
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
+                <FeedbackCard
+                  node={node}
+                  depth={0}
+                  projectId={projectId}
+                  onNavigateToBuildTask={onNavigateToBuildTask}
+                  replyingToId={replyingToId}
+                  onStartReply={(feedbackId) => {
+                    setReplyingToPlanId(null);
+                    setReplyingToId(feedbackId);
+                  }}
+                  onCancelReply={() => setReplyingToId(null)}
+                  onSubmitReply={handleSubmitReply}
+                  onResolve={handleResolve}
+                  onCancel={handleCancel}
+                  onRemoveAfterAnimation={handleRemoveAfterAnimation}
+                  collapsedIds={collapsedIds}
+                  onToggleCollapse={handleToggleCollapse}
+                  submitting={submitting}
+                  isDraggingImage={isDraggingImage}
+                  clearDragState={clearDragState}
+                  taskSummaryById={taskSummaryById}
+                  questionId={questionIdByFeedbackId[node.item.id]}
+                  questionIdByFeedbackId={questionIdByFeedbackId}
+                  notification={notificationByFeedbackId[node.item.id]}
+                  notificationByFeedbackId={notificationByFeedbackId}
+                  onAnswerOpenQuestion={handleAnswerOpenQuestion}
+                  onDismissOpenQuestion={handleDismissOpenQuestion}
+                  answeringOpenQuestion={answeringOpenQuestion}
+                  onHilResolved={refetchNotifications}
+                />
               </div>
             </div>
-            <div className="flex-none border-t border-theme-border p-4 bg-theme-bg">
-              <ChatInput
-                value={planChatInput}
-                onChange={setPlanChatInput}
-                onSend={() => handleSendPlanChat(planChatInput)}
-                sendDisabled={planChatSending || !planChatInput.trim()}
-                placeholder="Refine this plan..."
-                aria-label="Refine this plan"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile feedback detail overlay */}
-      {isMobile && selectedFeedbackIdForOverlay && (() => {
-        const node = findFeedbackNode(feedbackTree, selectedFeedbackIdForOverlay);
-        if (!node) return null;
-        return (
-          <div
-            className="fixed inset-0 z-50 flex flex-col bg-theme-bg"
-            data-testid="feedback-detail-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Feedback detail"
-          >
-            <div className="flex flex-none items-center justify-between px-4 py-3 border-b border-theme-border shrink-0">
-              <h3 className="text-sm font-semibold text-theme-text">Feedback</h3>
-              <CloseButton
-                onClick={() => setSelectedFeedbackIdForOverlay(null)}
-                ariaLabel="Close"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text transition-colors"
-                size="w-5 h-5"
-              />
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-              <FeedbackCard
-                node={node}
-                depth={0}
-                projectId={projectId}
-                onNavigateToBuildTask={onNavigateToBuildTask}
-                replyingToId={replyingToId}
-                onStartReply={setReplyingToId}
-                onCancelReply={() => setReplyingToId(null)}
-                onSubmitReply={handleSubmitReply}
-                onResolve={handleResolve}
-                onCancel={handleCancel}
-                onRemoveAfterAnimation={handleRemoveAfterAnimation}
-                collapsedIds={collapsedIds}
-                onToggleCollapse={handleToggleCollapse}
-                submitting={submitting}
-                isDraggingImage={isDraggingImage}
-                clearDragState={clearDragState}
-                taskSummaryById={taskSummaryById}
-                questionId={questionIdByFeedbackId[node.item.id]}
-                questionIdByFeedbackId={questionIdByFeedbackId}
-                notification={notificationByFeedbackId[node.item.id]}
-                notificationByFeedbackId={notificationByFeedbackId}
-                onAnswerOpenQuestion={handleAnswerOpenQuestion}
-                onDismissOpenQuestion={handleDismissOpenQuestion}
-                answeringOpenQuestion={answeringOpenQuestion}
-                onHilResolved={refetchNotifications}
-              />
-            </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
     </div>
   );
 }
