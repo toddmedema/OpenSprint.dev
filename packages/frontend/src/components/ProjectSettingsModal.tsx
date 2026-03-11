@@ -321,7 +321,13 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                 mode: effDeployment.mode,
                 expoConfig:
                   effDeployment.mode === "expo"
-                    ? { channel: effDeployment.expoConfig?.channel ?? "preview" }
+                    ? {
+                        channel: effDeployment.expoConfig?.channel ?? "preview",
+                        projectId:
+                          effDeployment.expoConfig?.projectId ??
+                          effDeployment.easProjectId ??
+                          undefined,
+                      }
                     : undefined,
                 customCommand: effDeployment.customCommand ?? undefined,
                 webhookUrl: effDeployment.webhookUrl ?? undefined,
@@ -1108,7 +1114,13 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             onChange={() => {
                               updateDeployment({
                                 mode: "expo",
-                                expoConfig: { channel: "preview" },
+                                expoConfig: {
+                                  channel: deployment.expoConfig?.channel ?? "preview",
+                                  projectId:
+                                    deployment.expoConfig?.projectId ??
+                                    deployment.easProjectId ??
+                                    undefined,
+                                },
                               });
                             }}
                             className="mt-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
@@ -1373,6 +1385,40 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                     )}
                     {deployment.mode === "expo" && (
                       <div className="space-y-3 pt-2 border-t border-theme-border">
+                        <div>
+                          <label
+                            htmlFor="eas-project-id"
+                            className="block text-sm font-medium text-theme-text mb-1"
+                          >
+                            EAS Project ID
+                          </label>
+                          <input
+                            id="eas-project-id"
+                            type="text"
+                            className="input w-full font-mono text-sm"
+                            placeholder="e.g. abc123-def456-ghi789"
+                            value={
+                              deployment.easProjectId ??
+                              deployment.expoConfig?.projectId ??
+                              ""
+                            }
+                            onChange={(e) => {
+                              const value = e.target.value.trim() || undefined;
+                              updateDeployment({
+                                expoConfig: {
+                                  channel: deployment.expoConfig?.channel ?? "preview",
+                                  projectId: value,
+                                },
+                              });
+                            }}
+                            onBlur={scheduleSaveOnBlur}
+                            data-testid="eas-project-id-input"
+                          />
+                          <p className="mt-1 text-xs text-theme-muted">
+                            Link to an existing Expo project. Leave blank to create one on first
+                            deploy.
+                          </p>
+                        </div>
                         <h4 className="text-sm font-medium text-theme-text">
                           Environment variables per target
                         </h4>

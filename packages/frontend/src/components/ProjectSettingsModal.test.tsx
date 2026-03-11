@@ -1000,6 +1000,40 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByText("Environment variables per target")).toBeInTheDocument();
   });
 
+  it("Expo mode shows EAS Project ID input and persists it", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      deployment: { mode: "expo" as const },
+    });
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const deploymentTab = screen.getByRole("button", { name: "Deliver" });
+    await userEvent.click(deploymentTab);
+
+    expect(screen.getByLabelText("EAS Project ID")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Link to an existing Expo project. Leave blank to create one on first deploy."
+      )
+    ).toBeInTheDocument();
+
+    const easInput = screen.getByTestId("eas-project-id-input");
+    await userEvent.type(easInput, "abc123-def456");
+    fireEvent.blur(easInput);
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          deployment: expect.objectContaining({
+            expoConfig: expect.objectContaining({ projectId: "abc123-def456" }),
+          }),
+        })
+      )
+    );
+  });
+
   it("adds env var via inline inputs in Deploy settings (no prompt)", async () => {
     const promptSpy = vi.spyOn(window, "prompt").mockImplementation(() => null);
     mockGetSettings.mockResolvedValueOnce({
