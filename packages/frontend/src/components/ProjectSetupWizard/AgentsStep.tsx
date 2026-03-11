@@ -12,6 +12,7 @@ import {
 import type { AgentRole } from "@opensprint/shared";
 import { ASSET_BASE } from "../../lib/constants";
 import { hasNoApiKeys } from "../../utils/agentConfigDefaults";
+import { api } from "../../api/client";
 
 const DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234";
 
@@ -27,6 +28,7 @@ export interface EnvKeys {
   cursor: boolean;
   openai: boolean;
   claudeCli: boolean;
+  cursorCli: boolean;
 }
 
 export interface AgentsStepProps {
@@ -79,6 +81,15 @@ export function AgentsStep({
   const usesClaudeCli =
     simpleComplexityAgent.type === "claude-cli" || complexComplexityAgent.type === "claude-cli";
   const claudeCliMissing = envKeys && !envKeys.claudeCli && usesClaudeCli;
+  const usesCursor =
+    simpleComplexityAgent.type === "cursor" || complexComplexityAgent.type === "cursor";
+  const cursorCliMissing = envKeys && !envKeys.cursorCli && usesCursor;
+
+  const [cursorCliInstalling, setCursorCliInstalling] = useState(false);
+  const [cursorCliInstallResult, setCursorCliInstallResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
   return (
     <div className="space-y-6" data-testid="agents-step">
@@ -136,6 +147,44 @@ export function AgentsStep({
             </Link>{" "}
             to add your keys.
           </p>
+        </div>
+      )}
+      {cursorCliMissing && (
+        <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
+          <p className="text-sm text-theme-warning-text mb-2">
+            <strong>Cursor CLI not found.</strong> The <code className="font-mono text-xs">agent</code> command is required for Cursor. Install it, then restart your terminal or OpenSprint.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary text-sm"
+            disabled={cursorCliInstalling}
+            onClick={async () => {
+              setCursorCliInstallResult(null);
+              setCursorCliInstalling(true);
+              try {
+                const data = await api.env.installCursorCli();
+                setCursorCliInstallResult({
+                  success: data.success,
+                  message: data.message ?? (data.success ? "Install finished." : "Install failed."),
+                });
+              } catch (err) {
+                setCursorCliInstallResult({
+                  success: false,
+                  message: err instanceof Error ? err.message : "Install request failed.",
+                });
+              } finally {
+                setCursorCliInstalling(false);
+              }
+            }}
+            data-testid="install-cursor-cli-btn"
+          >
+            {cursorCliInstalling ? "Installing…" : "Install Cursor CLI"}
+          </button>
+          {cursorCliInstallResult && (
+            <p className={`text-sm mt-2 ${cursorCliInstallResult.success ? "text-theme-success-text" : "text-theme-error-text"}`}>
+              {cursorCliInstallResult.message}
+            </p>
+          )}
         </div>
       )}
       {claudeCliMissing && (

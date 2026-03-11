@@ -2,11 +2,15 @@
  * Plan ship: Execute (ship), Re-execute (reship), ship with prerequisites.
  * Encapsulates version resolution, epic unblock, PRD sync, and auditor-based reship; used by PlanService.
  */
-import type { Plan } from "@opensprint/shared";
+import type { Plan, PlanComplexity } from "@opensprint/shared";
 import { clampTaskComplexity, getAgentForPlanningRole } from "@opensprint/shared";
 import { getEpicTitleFromPlanContent } from "./plan/planner-normalize.js";
 import { assembleReExecuteContext } from "./plan/plan-codebase-context.js";
-import { getContentAndVersionForShip, setExecutedVersion } from "./plan-versioning.service.js";
+import {
+  getContentAndVersionForShip,
+  setExecutedVersion,
+  type PlanVersioningStore,
+} from "./plan-versioning.service.js";
 import type { PlanCrudService } from "./plan-crud.service.js";
 import type { PlanDecomposeGenerateService } from "./plan-decompose-generate.service.js";
 import { ProjectService } from "./project.service.js";
@@ -22,7 +26,7 @@ import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("plan-ship");
 
-export interface PlanShipStore {
+export interface PlanShipStore extends PlanVersioningStore {
   planVersionGetByVersionNumber(
     projectId: string,
     planId: string,
@@ -48,7 +52,11 @@ export interface PlanShipStore {
   planUpdateMetadata(projectId: string, planId: string, metadata: Record<string, unknown>): Promise<void>;
   planGetShippedContent(projectId: string, planId: string): Promise<string | null>;
   listAll(projectId: string): Promise<StoredTask[]>;
-  update(projectId: string, taskId: string, updates: Record<string, unknown>): Promise<void>;
+  update(
+    projectId: string,
+    taskId: string,
+    updates: Record<string, unknown>
+  ): Promise<void | StoredTask>;
   delete(projectId: string, taskId: string): Promise<void>;
   createWithRetry(
     projectId: string,
@@ -64,7 +72,14 @@ export interface PlanShipDeps {
   decomposeService: PlanDecomposeGenerateService;
   taskStore: PlanShipStore;
   projectService: ProjectService;
-  chatService: { syncPrdFromPlanShip: (projectId: string, planId: string, content: string, complexity?: string) => Promise<void> };
+  chatService: {
+    syncPrdFromPlanShip: (
+      projectId: string,
+      planId: string,
+      content: string,
+      complexity?: PlanComplexity
+    ) => Promise<void>;
+  };
   /** When set, reshipPlan uses this for the "none started" branch so the facade can be mocked in tests. */
   shipPlanDelegate?: (
     projectId: string,

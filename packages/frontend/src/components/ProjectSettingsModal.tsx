@@ -173,8 +173,14 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
       openai: boolean;
       google: boolean;
       claudeCli: boolean;
+      cursorCli: boolean;
     } | null>(null);
     const [modelRefreshTrigger] = useState(0);
+    const [cursorCliInstalling, setCursorCliInstalling] = useState(false);
+    const [cursorCliInstallResult, setCursorCliInstallResult] = useState<{
+      success: boolean;
+      message: string;
+    } | null>(null);
 
     // Advanced section (Agent Instructions) in Agent Config — collapsed by default
     const [advancedExpanded, setAdvancedExpanded] = useState(false);
@@ -236,7 +242,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
           const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
           const openai = (apiKeys?.OPENAI_API_KEY?.length ?? 0) > 0;
           const google = (apiKeys?.GOOGLE_API_KEY?.length ?? 0) > 0;
-          setEnvKeys({ anthropic, cursor, openai, google, claudeCli: env.claudeCli });
+          setEnvKeys({ anthropic, cursor, openai, google, claudeCli: env.claudeCli, cursorCli: env.cursorCli });
         })
         .catch(() => setEnvKeys(null));
     }, [activeTab]);
@@ -593,6 +599,50 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                 add in Global Settings
               </Link>
             </p>
+          </div>
+        );
+      }
+
+      if (provider === "cursor" && envKeys.cursor && !envKeys.cursorCli) {
+        return (
+          <div
+            className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+            data-testid={`${rowKey}-provider-prerequisite`}
+          >
+            <p className="text-sm text-theme-warning-text mb-2">
+              <strong>Cursor CLI not found.</strong> The <code className="font-mono text-xs">agent</code> command is required for Cursor. Install it, then restart your terminal or OpenSprint.
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary text-sm"
+              disabled={cursorCliInstalling}
+              onClick={async () => {
+                setCursorCliInstallResult(null);
+                setCursorCliInstalling(true);
+                try {
+                  const data = await api.env.installCursorCli();
+                  setCursorCliInstallResult({
+                    success: data.success,
+                    message: data.message ?? (data.success ? "Install finished." : "Install failed."),
+                  });
+                } catch (err) {
+                  setCursorCliInstallResult({
+                    success: false,
+                    message: err instanceof Error ? err.message : "Install request failed.",
+                  });
+                } finally {
+                  setCursorCliInstalling(false);
+                }
+              }}
+              data-testid="install-cursor-cli-btn"
+            >
+              {cursorCliInstalling ? "Installing…" : "Install Cursor CLI"}
+            </button>
+            {cursorCliInstallResult && (
+              <p className={`text-sm mt-2 ${cursorCliInstallResult.success ? "text-theme-success-text" : "text-theme-error-text"}`}>
+                {cursorCliInstallResult.message}
+              </p>
+            )}
           </div>
         );
       }

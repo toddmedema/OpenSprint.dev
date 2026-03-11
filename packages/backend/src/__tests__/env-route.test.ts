@@ -4,12 +4,27 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { envRouter } from "../routes/env.js";
-import { API_PREFIX } from "@opensprint/shared";
 import { setEnvPathForTesting } from "../routes/env.js";
+import { API_PREFIX } from "@opensprint/shared";
 import { errorHandler } from "../middleware/error-handler.js";
 import { getGlobalSettings, setGlobalSettings } from "../services/global-settings.service.js";
 import { setBackendRuntimeInfoForTesting } from "../utils/runtime-info.js";
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("node:child_process")>();
+  return {
+    ...mod,
+    exec: vi.fn((_cmd: string, _opts: unknown, cb: (err: Error | null, stdout: string, stderr: string) => void) => {
+      setImmediate(() => cb(null, "", ""));
+      return {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+      };
+    }),
+  };
+});
+
+import { envRouter } from "../routes/env.js";
 
 const mockValidateApiKey = vi.fn();
 
@@ -162,7 +177,7 @@ describe("Env API", () => {
   });
 
   describe("GET /env/keys", () => {
-    it("returns shape with anthropic, cursor, openai, google, claudeCli, useCustomCli booleans", async () => {
+    it("returns shape with anthropic, cursor, openai, google, claudeCli, cursorCli, useCustomCli booleans", async () => {
       const res = await request(app).get(`${API_PREFIX}/env/keys`);
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
@@ -171,6 +186,7 @@ describe("Env API", () => {
       expect(typeof res.body.data.openai).toBe("boolean");
       expect(typeof res.body.data.google).toBe("boolean");
       expect(typeof res.body.data.claudeCli).toBe("boolean");
+      expect(typeof res.body.data.cursorCli).toBe("boolean");
       expect(typeof res.body.data.useCustomCli).toBe("boolean");
     });
 
@@ -327,6 +343,16 @@ describe("Env API", () => {
         wslDistroName: "Ubuntu",
         repoPathPolicy: "linux_fs_only",
       });
+    });
+  });
+
+  describe("POST /env/cursor-cli-install", () => {
+    it("returns 200 with success and message when install script completes", async () => {
+      const res = await request(app).post(`${API_PREFIX}/env/cursor-cli-install`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toBeDefined();
+      expect(res.body.data.success).toBe(true);
+      expect(typeof res.body.data.message).toBe("string");
     });
   });
 

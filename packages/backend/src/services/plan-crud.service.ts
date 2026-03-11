@@ -56,8 +56,15 @@ export interface PlanCrudStore extends PlanVersioningStore {
   listAll(projectId: string): Promise<StoredTask[]>;
   show(projectId: string, taskId: string): Promise<StoredTask>;
   create(projectId: string, title: string, opts?: Record<string, unknown>): Promise<{ id: string }>;
-  createMany(projectId: string, inputs: Array<Record<string, unknown>>): Promise<Array<{ id: string }>>;
-  update(projectId: string, taskId: string, updates: Record<string, unknown>): Promise<void>;
+  createMany(
+    projectId: string,
+    inputs: Array<Record<string, unknown> & { title: string }>
+  ): Promise<Array<{ id: string }>>;
+  update(
+    projectId: string,
+    taskId: string,
+    updates: Record<string, unknown>
+  ): Promise<void | StoredTask>;
   addDependencies(projectId: string, deps: Array<{ childId: string; parentId: string; type?: string }>): Promise<void>;
   addLabel(projectId: string, taskId: string, label: string): Promise<void>;
   planInsert(projectId: string, planId: string, data: { epic_id: string; content: string; metadata: string }): Promise<void>;
@@ -65,7 +72,7 @@ export interface PlanCrudStore extends PlanVersioningStore {
   planUpdateMetadata(projectId: string, planId: string, metadata: Record<string, unknown>): Promise<void>;
   planGetByEpicId(projectId: string, epicId: string): Promise<{ plan_id: string; metadata: Record<string, unknown> } | null>;
   delete(projectId: string, taskId: string): Promise<void>;
-  closeMany(projectId: string, items: Array<{ id: string; reason: string }>): Promise<void>;
+  closeMany(projectId: string, items: Array<{ id: string; reason: string }>): Promise<void | StoredTask[]>;
   planDelete(projectId: string, planId: string): Promise<boolean>;
   listPlanVersions(projectId: string, planId: string): Promise<Array<{ version_number: number }>>;
 }

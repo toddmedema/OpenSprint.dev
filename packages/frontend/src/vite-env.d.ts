@@ -13,6 +13,8 @@ declare global {
       stopFindInPage: (action: "clearSelection" | "keepSelection" | "activateSelection") => Promise<void>;
       refreshTray?: () => Promise<void>;
       restartApp?: () => Promise<void>;
+      checkPrerequisitesFresh?: () => Promise<{ missing: string[]; path?: string; platform: string }>;
+      restartBackendWithPath?: (pathOverride?: string) => Promise<void>;
       minimizeWindow?: () => Promise<void>;
       maximizeWindow?: () => Promise<void>;
       closeWindow?: () => Promise<void>;

@@ -1,8 +1,10 @@
 import type {
   Plan,
   PlanDependencyGraph,
+  PlanDependencyEdge,
   CrossEpicDependenciesResponse,
   GeneratePlanResult,
+  Notification,
 } from "@opensprint/shared";
 import { getCodebaseContextFromRepo, hasExistingCode as hasExistingCodeInRepo } from "./plan/plan-codebase-context.js";
 import { assembleReExecuteContext as assembleReExecuteContextFromModule } from "./plan/plan-codebase-context.js";
@@ -66,12 +68,18 @@ export class PlanService {
           projectService: this.projectService,
           prdService: this.prdService,
           createPlan: (projectId, body) => this.planCrudService.createPlan(projectId, body as Parameters<PlanCrudService["createPlan"]>[1]),
-          getPlan: (projectId, planId, opts) => this.planCrudService.getPlan(projectId, planId, opts),
+          getPlan: (
+            projectId,
+            planId,
+            opts?: { allIssues?: StoredTask[]; edges?: PlanDependencyEdge[] }
+          ) => this.planCrudService.getPlan(projectId, planId, opts),
         },
         {
           chatService: this.chatService,
           notificationService,
-          maybeAutoRespond,
+          maybeAutoRespond: maybeAutoRespond
+            ? (p, n) => maybeAutoRespond(p, n as Notification)
+            : undefined,
         }
       );
     }

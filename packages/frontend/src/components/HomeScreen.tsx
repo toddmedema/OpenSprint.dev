@@ -117,6 +117,7 @@ export function HomeScreen() {
     missing: string[];
     platform: string;
   } | null>(null);
+  const [restartingBackend, setRestartingBackend] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null);
   const [archiveModal, setArchiveModal] = useState<Project | null>(null);
@@ -166,12 +167,54 @@ export function HomeScreen() {
     };
   }, []);
 
+  // Initial fetch: in Electron use fresh check (login shell) so we see newly installed tools; otherwise use API.
   useEffect(() => {
-    api.env
-      .getPrerequisites()
-      .then(setPrerequisites)
+    const fetchPrereqs = (): Promise<{ missing: string[]; platform: string; path?: string }> => {
+      if (typeof window !== "undefined" && window.electron?.checkPrerequisitesFresh) {
+        return window.electron.checkPrerequisitesFresh();
+      }
+      return api.env.getPrerequisites().then((r) => ({ ...r, path: undefined }));
+    };
+    fetchPrereqs()
+      .then((r) => setPrerequisites({ missing: r.missing, platform: r.platform }))
       .catch(() => setPrerequisites(null));
   }, []);
+
+  // Poll when prerequisites are missing. In Electron, use fresh check; when all met, restart backend with refreshed PATH.
+  useEffect(() => {
+    if (!prerequisites || prerequisites.missing.length === 0) return;
+    const isElectron = typeof window !== "undefined" && window.electron?.checkPrerequisitesFresh;
+    const intervalId = setInterval(async () => {
+      try {
+        if (isElectron && window.electron?.checkPrerequisitesFresh) {
+          const fresh = await window.electron.checkPrerequisitesFresh();
+          setPrerequisites((prev) =>
+            prev ? { ...prev, missing: fresh.missing, platform: fresh.platform } : null
+          );
+          if (fresh.missing.length === 0) {
+            clearInterval(intervalId);
+            if (fresh.path && window.electron?.restartBackendWithPath) {
+              setRestartingBackend(true);
+              try {
+                await window.electron.restartBackendWithPath(fresh.path);
+                setPrerequisites((prev) => (prev ? { ...prev, missing: [] } : null));
+              } finally {
+                setRestartingBackend(false);
+              }
+            } else {
+              setPrerequisites((prev) => (prev ? { ...prev, missing: [] } : null));
+            }
+          }
+        } else {
+          const r = await api.env.getPrerequisites();
+          setPrerequisites((prev) => (prev ? { ...prev, missing: r.missing, platform: r.platform } : null));
+        }
+      } catch {
+        // ignore poll errors
+      }
+    }, 3000);
+    return () => clearInterval(intervalId);
+  }, [prerequisites?.missing.length]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -258,8 +301,9 @@ export function HomeScreen() {
           >
             <h2 className="text-lg font-semibold text-theme-text mb-3">Installation checklist</h2>
             <p className="text-sm text-theme-muted mb-4">
-              Install the following so you can create new projects. After installing, restart the
-              app or open a new terminal so they’re available.
+              Install the following so you can create new projects. We check every few seconds—once
+              everything is installed, we'll detect it and restart the backend so you can continue
+              without restarting the app.
             </p>
             <ul className="space-y-2">
               {PREREQ_ITEMS.map((tool) => {
@@ -291,6 +335,11 @@ export function HomeScreen() {
                 );
               })}
             </ul>
+            {restartingBackend && (
+              <p className="mt-3 text-sm text-theme-muted" data-testid="restarting-backend-message">
+                Restarting backend so new tools are available…
+              </p>
+            )}
             {typeof window !== "undefined" && window.electron?.restartApp && (
               <div className="mt-6 flex justify-center">
                 <button

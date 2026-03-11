@@ -1,7 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, execSync, type ChildProcess } from "child_process";
 import http from "http";
 import net from "net";
 import {
@@ -527,11 +527,100 @@ function buildBackendPath(existingPath: string): string {
   ].join(pathDelimiter);
 }
 
-function startBackend(): ChildProcess {
+const PREREQ_CHECK_TIMEOUT_MS = 8000;
+
+interface PrerequisitesCheckResult {
+  missing: string[];
+  path?: string;
+  platform: string;
+}
+
+/** On Windows, read PATH from registry (user + machine) so we see newly installed tools without restart. */
+function getWindowsPathFromRegistry(): string | undefined {
+  try {
+    const userPath = execSync(
+      'powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable(\'Path\', \'User\')"',
+      { encoding: "utf8", timeout: 5000, windowsHide: true }
+    ).trim();
+    const machinePath = execSync(
+      'powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable(\'Path\', \'Machine\')"',
+      { encoding: "utf8", timeout: 5000, windowsHide: true }
+    ).trim();
+    const parts = [userPath, machinePath, process.env.PATH].filter(Boolean);
+    return parts.join(";");
+  } catch {
+    return undefined;
+  }
+}
+
+/** Run prerequisite check in a fresh shell (login shell on Unix) so we see newly installed tools. */
+function checkPrerequisitesFresh(): Promise<PrerequisitesCheckResult> {
+  const platform = process.platform;
+  const result: PrerequisitesCheckResult = { missing: [], platform };
+
+  if (platform === "win32") {
+    const freshPath = getWindowsPathFromRegistry();
+    result.path = freshPath ?? process.env.PATH;
+    const env = freshPath ? { ...process.env, PATH: freshPath } : process.env;
+    try {
+      execSync("git --version", { encoding: "utf8", timeout: 5000, windowsHide: true, env });
+    } catch {
+      result.missing.push("Git");
+    }
+    try {
+      execSync("node --version", { encoding: "utf8", timeout: 5000, windowsHide: true, env });
+    } catch {
+      result.missing.push("Node.js");
+    }
+    return Promise.resolve(result);
+  }
+
+  // Unix: use login shell so we pick up profile-updated PATH (e.g. after installing nvm/node).
+  return new Promise((resolve) => {
+    const script =
+      'echo "__PATH__$PATH"; (git --version 2>/dev/null && node --version 2>/dev/null) || true';
+    const child = spawn("/bin/sh", ["-l", "-c", script], { env: { ...process.env } });
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
+    child.stderr?.on("data", (chunk) => (stderr += chunk.toString()));
+    const timeoutId = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // ignore
+      }
+      result.missing = ["Git", "Node.js"];
+      resolve(result);
+    }, PREREQ_CHECK_TIMEOUT_MS);
+    const finish = (): void => {
+      clearTimeout(timeoutId);
+      const pathMatch = stdout.match(/__PATH__(.*?)(?:\n|$)/s);
+      if (pathMatch && pathMatch[1]) {
+        result.path = pathMatch[1].trim();
+      }
+      const hasGit = /git version/i.test(stdout) || /git version/i.test(stderr);
+      const hasNode = /v\d+\.\d+\.\d+/.test(stdout) || /v\d+\.\d+\.\d+/.test(stderr);
+      if (!hasGit) result.missing.push("Git");
+      if (!hasNode) result.missing.push("Node.js");
+      resolve(result);
+    };
+    child.on("error", () => {
+      result.missing = ["Git", "Node.js"];
+      finish();
+    });
+    child.on("close", finish);
+  });
+}
+
+function startBackend(pathOverride?: string): ChildProcess {
   const { backendDir, backendEntry, frontendDist } = getPaths();
   backendLaunchError = null;
   const backendLog = app.isPackaged ? ensureBackendLogStream() : null;
-  const normalizedPath = buildBackendPath(process.env.PATH ?? "");
+  const normalizedPath =
+    pathOverride !== undefined && pathOverride !== ""
+      ? pathOverride
+      : buildBackendPath(process.env.PATH ?? "");
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -1138,6 +1227,19 @@ app.whenReady().then(async () => {
     app.relaunch();
     app.quit();
   });
+
+  ipcMain.handle("prerequisites:checkFresh", async (): Promise<PrerequisitesCheckResult> => {
+    return checkPrerequisitesFresh();
+  });
+
+  ipcMain.handle(
+    "backend:restartWithPath",
+    async (_event: Electron.IpcMainInvokeEvent, pathOverride: string | undefined): Promise<void> => {
+      await killBackend();
+      backendProcess = startBackend(pathOverride ?? undefined);
+      await waitForBackend(backendProcess);
+    }
+  );
 
   globalShortcut.register("CommandOrControl+F", focusAndOpenFindBar);
 

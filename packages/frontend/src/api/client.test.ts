@@ -441,7 +441,7 @@ describe("api client", () => {
   });
 
   describe("env", () => {
-    it("getKeys returns anthropic, cursor, openai, claudeCli, useCustomCli", async () => {
+    it("getKeys returns anthropic, cursor, openai, claudeCli, cursorCli, useCustomCli", async () => {
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
         status: 200,
@@ -451,6 +451,7 @@ describe("api client", () => {
             cursor: false,
             openai: true,
             claudeCli: true,
+            cursorCli: false,
             useCustomCli: false,
           },
         }),
@@ -462,6 +463,7 @@ describe("api client", () => {
         cursor: false,
         openai: true,
         claudeCli: true,
+        cursorCli: false,
         useCustomCli: false,
       });
       expect(fetch).toHaveBeenCalledWith(

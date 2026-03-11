@@ -2,7 +2,7 @@
  * Plan task generation: break down a plan into implementation tasks via agent and persist to task store.
  * Internal module used by PlanDecomposeGenerateService.
  */
-import type { Plan } from "@opensprint/shared";
+import type { Plan, ProjectSettings } from "@opensprint/shared";
 import { getAgentForPlanningRole } from "@opensprint/shared";
 import {
   normalizePlannerTask,
@@ -99,13 +99,22 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
   const agentId = `plan-task-gen-${projectId}-${Date.now()}`;
 
   const taskGenPrompt = (() => {
-    const autonomyDesc = buildAutonomyDescription(settings.aiAutonomyLevel, settings.hilConfig);
+    const autonomyDesc = buildAutonomyDescription(
+      settings.aiAutonomyLevel as "full" | "confirm_all" | "major_only" | undefined,
+      settings.hilConfig as
+        | { scopeChanges: string; architectureDecisions: string; dependencyModifications: string }
+        | undefined
+    );
     return autonomyDesc
       ? `${TASK_GENERATION_SYSTEM_PROMPT}\n\n## AI Autonomy Level\n\n${autonomyDesc}\n\n`
       : TASK_GENERATION_SYSTEM_PROMPT;
   })();
   const taskGenSystemPrompt = `${taskGenPrompt}\n\n${await getCombinedInstructions(repoPath, "planner")}`;
-  const plannerConfig = getAgentForPlanningRole(settings, "planner", plan.metadata.complexity);
+  const plannerConfig = getAgentForPlanningRole(
+    settings as ProjectSettings,
+    "planner",
+    plan.metadata.complexity
+  );
 
   const initialMessages: Array<{ role: "user" | "assistant"; content: string }> = [
     { role: "user", content: prompt },

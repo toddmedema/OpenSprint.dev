@@ -188,8 +188,13 @@ export const api = {
         openai: boolean;
         google: boolean;
         claudeCli: boolean;
+        cursorCli: boolean;
         useCustomCli: boolean;
       }>("/env/keys"),
+    installCursorCli: () =>
+      request<{ success: boolean; message?: string }>("/env/cursor-cli-install", {
+        method: "POST",
+      }),
     getGlobalStatus: () =>
       request<{ hasAnyKey: boolean; useCustomCli: boolean }>("/env/global-status"),
     validateKey: (provider: "claude" | "cursor" | "openai" | "google", value: string) =>

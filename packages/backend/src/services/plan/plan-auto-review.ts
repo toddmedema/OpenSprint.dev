@@ -2,7 +2,7 @@
  * Plan auto-review: review created plans/tasks against codebase and close already-implemented tasks.
  * Internal module used by PlanDecomposeGenerateService.
  */
-import type { Plan } from "@opensprint/shared";
+import type { Plan, ProjectSettings } from "@opensprint/shared";
 import { getAgentForPlanningRole } from "@opensprint/shared";
 import { AUTO_REVIEW_SYSTEM_PROMPT } from "./plan-prompts.js";
 import { buildPlanTaskSummaryFromCreated } from "./plan-decompose-generate.js";
@@ -18,7 +18,9 @@ export interface PlanAutoReviewDeps {
   projectId: string;
   repoPath: string;
   settings: { aiAutonomyLevel?: string; hilConfig?: unknown };
-  taskStore: { close(projectId: string, taskId: string, reason: string): Promise<void> };
+  taskStore: {
+    close(projectId: string, taskId: string, reason: string): Promise<void | unknown>;
+  };
 }
 
 /**
@@ -50,7 +52,7 @@ export async function runAutoReviewPlanAgainstRepo(
     const autoReviewSystemPrompt = `${AUTO_REVIEW_SYSTEM_PROMPT}\n\n${await getCombinedInstructions(deps.repoPath, "planner")}`;
     const response = await agentService.invokePlanningAgent({
       projectId: deps.projectId,
-      config: getAgentForPlanningRole(deps.settings, "planner"),
+      config: getAgentForPlanningRole(deps.settings as ProjectSettings, "planner"),
       messages: [{ role: "user", content: prompt }],
       systemPrompt: autoReviewSystemPrompt,
       cwd: deps.repoPath,

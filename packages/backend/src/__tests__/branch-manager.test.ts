@@ -128,6 +128,17 @@ describe("BranchManager", () => {
   });
 
   describe("rebaseContinue", () => {
+    it("treats 'no rebase in progress' as already complete", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      await expect(branchManager.rebaseContinue(repoPath)).resolves.toBeUndefined();
+    });
+
     it("throws RebaseConflictError when the next commit conflicts during rebase --continue", async () => {
       await execAsync("git init", { cwd: repoPath });
       await execAsync("git branch -M main", { cwd: repoPath });

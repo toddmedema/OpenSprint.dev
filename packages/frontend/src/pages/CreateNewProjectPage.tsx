@@ -71,6 +71,7 @@ export function CreateNewProjectPage() {
     cursor: boolean;
     openai: boolean;
     claudeCli: boolean;
+    cursorCli: boolean;
   } | null>(null);
   const [keyInput, setKeyInput] = useState<{ anthropic: string; cursor: string; openai: string }>({
     anthropic: "",
@@ -114,7 +115,7 @@ export function CreateNewProjectPage() {
         const anthropic = (apiKeys?.ANTHROPIC_API_KEY?.length ?? 0) > 0;
         const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
         const openai = (apiKeys?.OPENAI_API_KEY?.length ?? 0) > 0;
-        const keys = { anthropic, cursor, openai, claudeCli: env.claudeCli };
+        const keys = { anthropic, cursor, openai, claudeCli: env.claudeCli, cursorCli: env.cursorCli };
         setEnvKeys(keys);
         if (!hasSetAgentDefaultRef.current) {
           hasSetAgentDefaultRef.current = true;

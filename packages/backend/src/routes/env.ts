@@ -134,6 +134,17 @@ async function isClaudeCliAvailable(): Promise<boolean> {
   }
 }
 
+/** Check whether the Cursor `agent` CLI binary is on $PATH */
+async function isCursorCliAvailable(): Promise<boolean> {
+  try {
+    const cmd = process.platform === "win32" ? "where" : "which";
+    await execFileAsync(cmd, ["agent"], { timeout: 3000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Check if global store has any API keys configured */
 function globalStoreHasKeys(apiKeys: { [key: string]: unknown[] } | undefined): boolean {
   if (!apiKeys || typeof apiKeys !== "object") return false;
@@ -231,18 +242,86 @@ envRouter.get(
     const google =
       Boolean(process.env.GOOGLE_API_KEY?.trim()) ||
       globalStoreHasProvider(settings.apiKeys, "GOOGLE_API_KEY");
-    const claudeCli = await isClaudeCliAvailable();
+    const [claudeCli, cursorCli] = await Promise.all([
+      isClaudeCliAvailable(),
+      isCursorCliAvailable(),
+    ]);
     const useCustomCli = settings.useCustomCli ?? false;
     res.json({
-      data: { anthropic, cursor, openai, google, claudeCli, useCustomCli },
+      data: { anthropic, cursor, openai, google, claudeCli, cursorCli, useCustomCli },
     } as ApiResponse<{
       anthropic: boolean;
       cursor: boolean;
       openai: boolean;
       google: boolean;
       claudeCli: boolean;
+      cursorCli: boolean;
       useCustomCli: boolean;
     }>);
+  })
+);
+
+/** Cursor CLI install script URLs (official Cursor install). */
+const CURSOR_CLI_INSTALL_UNIX = "https://cursor.com/install";
+const CURSOR_CLI_INSTALL_WIN = "https://cursor.com/install?win32=true";
+
+// POST /env/cursor-cli-install — Run the official Cursor CLI install script (user-initiated).
+envRouter.post(
+  "/cursor-cli-install",
+  wrapAsync(async (_req, res) => {
+    const isWin = process.platform === "win32";
+    return new Promise<void>((resolve, reject) => {
+      const timeout = 120_000;
+      if (isWin) {
+        const child = exec(
+          `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm '${CURSOR_CLI_INSTALL_WIN}' | iex"`,
+          { timeout, shell: true },
+          (err, stdout, stderr) => {
+            if (err) {
+              const msg = [stdout, stderr].filter(Boolean).join("\n").trim() || err.message;
+              res.status(500).json({
+                data: { success: false, message: msg || "Install script failed." },
+              } as ApiResponse<{ success: boolean; message?: string }>);
+            } else {
+              res.json({
+                data: {
+                  success: true,
+                  message:
+                    "Cursor CLI install finished. Restart your terminal or OpenSprint so the agent command is available.",
+                },
+              } as ApiResponse<{ success: boolean; message?: string }>);
+            }
+            resolve();
+          }
+        );
+        child.stdout?.on("data", (d) => log.info("cursor-cli-install stdout", { chunk: d?.toString().slice(0, 200) }));
+        child.stderr?.on("data", (d) => log.warn("cursor-cli-install stderr", { chunk: d?.toString().slice(0, 200) }));
+      } else {
+        const child = exec(
+          `curl -fsS "${CURSOR_CLI_INSTALL_UNIX}" | bash`,
+          { timeout, shell: "/bin/bash" },
+          (err, stdout, stderr) => {
+            if (err) {
+              const msg = [stdout, stderr].filter(Boolean).join("\n").trim() || err.message;
+              res.status(500).json({
+                data: { success: false, message: msg || "Install script failed." },
+              } as ApiResponse<{ success: boolean; message?: string }>);
+            } else {
+              res.json({
+                data: {
+                  success: true,
+                  message:
+                    "Cursor CLI install finished. Restart your terminal or OpenSprint so the agent command is available.",
+                },
+              } as ApiResponse<{ success: boolean; message?: string }>);
+            }
+            resolve();
+          }
+        );
+        child.stdout?.on("data", (d) => log.info("cursor-cli-install stdout", { chunk: d?.toString().slice(0, 200) }));
+        child.stderr?.on("data", (d) => log.warn("cursor-cli-install stderr", { chunk: d?.toString().slice(0, 200) }));
+      }
+    });
   })
 );
 

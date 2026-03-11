@@ -237,10 +237,14 @@ function parsePriorityComplexityResponse(
     // JSON.parse failed; fall through to extractJsonArrayFromAgentResponse below.
   }
   if (!arr) {
-    const extractedArr = extractJsonArrayFromAgentResponse<
-      Array<{ title?: string; priority?: number; complexity?: number }>
-    >(content);
-    if (Array.isArray(extractedArr)) arr = extractedArr;
+    type PrioItem = { title?: string; priority?: number; complexity?: number };
+    const extractedArr = extractJsonArrayFromAgentResponse<Array<PrioItem>>(content);
+    if (Array.isArray(extractedArr)) {
+      arr =
+        extractedArr.length > 0 && Array.isArray(extractedArr[0])
+          ? (extractedArr as unknown as PrioItem[][]).flat()
+          : (extractedArr as PrioItem[]);
+    }
   }
   if (!arr) {
     const obj = extractJsonFromAgentResponse<{
@@ -248,7 +252,14 @@ function parsePriorityComplexityResponse(
       improvements?: Array<{ title?: string; priority?: number; complexity?: number }>;
     }>(content, "title");
     const extractedArr = obj?.items ?? obj?.improvements;
-    if (Array.isArray(extractedArr)) arr = extractedArr;
+    if (Array.isArray(extractedArr)) {
+      type Item = { title?: string; priority?: number; complexity?: number };
+      if (extractedArr.length > 0 && Array.isArray(extractedArr[0])) {
+        arr = (extractedArr as unknown as Item[][]).flat();
+      } else {
+        arr = extractedArr as Item[];
+      }
+    }
   }
   if (!arr || arr.length === 0) return { byTitle, byIndex };
   const titleSet = new Set(titles.map((t) => t.trim()));
@@ -308,7 +319,12 @@ export function parseImprovementList(content: string): ImprovementItem[] {
     if (Array.isArray(parsed)) {
       const items: ImprovementItem[] = [];
       for (const item of parsed) {
-        if (item && typeof item === "object" && typeof (item as ImprovementItem).title === "string") {
+        if (
+          item &&
+          typeof item === "object" &&
+          !Array.isArray(item) &&
+          typeof (item as ImprovementItem).title === "string"
+        ) {
           const t = item as ImprovementItem;
           const complexity = clampTaskComplexity(t.complexity);
           items.push({
@@ -333,7 +349,12 @@ export function parseImprovementList(content: string): ImprovementItem[] {
   if (Array.isArray(extractedArr) && extractedArr.length > 0) {
     const items: ImprovementItem[] = [];
     for (const item of extractedArr) {
-      if (item && typeof item === "object" && typeof (item as ImprovementItem).title === "string") {
+      if (
+        item &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        typeof (item as ImprovementItem).title === "string"
+      ) {
         const t = item as ImprovementItem;
         const complexity = clampTaskComplexity(t.complexity);
         items.push({
@@ -355,7 +376,12 @@ export function parseImprovementList(content: string): ImprovementItem[] {
   if (Array.isArray(json) && json.length >= 0) {
     const items: ImprovementItem[] = [];
     for (const item of json) {
-      if (item && typeof item === "object" && typeof (item as ImprovementItem).title === "string") {
+      if (
+        item &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        typeof (item as ImprovementItem).title === "string"
+      ) {
         const t = item as ImprovementItem;
         const complexity = clampTaskComplexity(t.complexity);
         items.push({

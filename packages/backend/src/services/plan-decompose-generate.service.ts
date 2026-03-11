@@ -5,9 +5,11 @@
 import type {
   Plan,
   PlanMetadata,
+  PlanDependencyEdge,
   SuggestedPlan,
   PlanComplexity,
   GeneratePlanResult,
+  Notification,
 } from "@opensprint/shared";
 import { getAgentForPlanningRole } from "@opensprint/shared";
 import {
@@ -45,12 +47,19 @@ const log = createLogger("plan-decompose-generate");
 export interface PlanDecomposeGenerateDeps {
   taskStore: {
     listAll(projectId: string): Promise<StoredTask[]>;
-    createMany(projectId: string, inputs: Array<Record<string, unknown>>): Promise<Array<{ id: string }>>;
+    createMany(
+      projectId: string,
+      inputs: Array<Record<string, unknown> & { title: string }>
+    ): Promise<Array<{ id: string }>>;
     addDependencies(projectId: string, deps: Array<{ childId: string; parentId: string; type?: string }>): Promise<void>;
     addLabel(projectId: string, taskId: string, label: string): Promise<void>;
-    close(projectId: string, taskId: string, reason: string): Promise<void>;
+    close(projectId: string, taskId: string, reason: string): Promise<void | StoredTask>;
     create(projectId: string, title: string, opts?: Record<string, unknown>): Promise<{ id: string }>;
-    update(projectId: string, taskId: string, updates: Record<string, unknown>): Promise<void>;
+    update(
+      projectId: string,
+      taskId: string,
+      updates: Record<string, unknown>
+    ): Promise<void | StoredTask>;
     planUpdateMetadata(projectId: string, planId: string, metadata: Record<string, unknown>): Promise<void>;
   };
   projectService: ProjectService;
@@ -62,7 +71,7 @@ export interface PlanDecomposeGenerateDeps {
   getPlan: (
     projectId: string,
     planId: string,
-    opts?: { allIssues?: StoredTask[]; edges?: unknown[] }
+    opts?: { allIssues?: StoredTask[]; edges?: PlanDependencyEdge[] }
   ) => Promise<Plan>;
 }
 
@@ -78,19 +87,19 @@ export interface PlanDecomposeGenerateOptionalDeps {
   notificationService?: {
     create: (opts: {
       projectId: string;
-      source: string;
+      source: "plan" | "prd" | "execute" | "eval";
       sourceId: string;
-      questions: Array<{ id: string; text: string }>;
+      questions: Array<{ id: string; text: string; createdAt?: string }>;
     }) => Promise<{
       id: string;
       projectId: string;
-      source: string;
+      source: "plan" | "prd" | "execute" | "eval";
       sourceId: string;
-      questions: Array<{ id: string; text: string }>;
-      status: string;
+      questions: Array<{ id: string; text: string; createdAt?: string }>;
+      status: "open" | "resolved";
       createdAt: string;
       resolvedAt: string | null;
-      kind: string;
+      kind?: string;
     }>;
   };
   maybeAutoRespond?: (projectId: string, notification: { id: string }) => Promise<void>;
@@ -436,10 +445,10 @@ Field rules: complexity: low, medium, high, or very_high (plan-level).
         notification: {
           id: notification.id,
           projectId: notification.projectId,
-          source: notification.source,
+          source: notification.source as "plan" | "prd" | "execute" | "eval",
           sourceId: notification.sourceId,
           questions: notification.questions,
-          status: notification.status,
+          status: notification.status as "open" | "resolved",
           createdAt: notification.createdAt,
           resolvedAt: notification.resolvedAt,
           kind: "open_question",
@@ -450,7 +459,7 @@ Field rules: complexity: low, medium, high, or very_high (plan-level).
         status: "needs_clarification",
         draftId,
         resumeContext: `plan-draft:${draftId}`,
-        notification,
+        notification: notification as Notification,
       };
     }
 

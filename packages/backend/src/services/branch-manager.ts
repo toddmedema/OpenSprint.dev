@@ -84,6 +84,37 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+function getErrorText(err: unknown): string {
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const obj = err as Record<string, unknown>;
+    const parts: string[] = [];
+    if (typeof obj.message === "string") parts.push(obj.message);
+    if (typeof obj.stdout === "string") parts.push(obj.stdout);
+    if (typeof obj.stderr === "string") parts.push(obj.stderr);
+    if (typeof obj.output === "string") parts.push(obj.output);
+    return parts.join("\n");
+  }
+  return String(err);
+}
+
+function isNoRebaseInProgressError(err: unknown): boolean {
+  return /no rebase in progress/i.test(getErrorText(err));
+}
+
+function shouldAttemptRebaseSkip(err: unknown): boolean {
+  const text = getErrorText(err).toLowerCase();
+  if (!text) return false;
+  return (
+    text.includes("could not apply") ||
+    text.includes("you can instead skip this commit") ||
+    text.includes("previous cherry-pick is now empty") ||
+    text.includes("nothing to commit") ||
+    text.includes("no changes - did you forget to use 'git add'")
+  );
+}
+
 export class UnsafeCleanupPathError extends Error {
   constructor(
     message: string,
@@ -509,19 +540,51 @@ export class BranchManager {
    */
   async rebaseContinue(repoPath: string): Promise<void> {
     await this.git(repoPath, "add -A");
+    const noHooks = getGitNoHooksPath();
     try {
-      await shellExec("git -c core.editor=true rebase --continue", {
+      await shellExec(`git -c core.editor=true -c core.hooksPath="${noHooks}" rebase --continue`, {
         cwd: repoPath,
         timeout: 30000,
       });
     } catch (err) {
       const rebaseActive = await this.isRebaseInProgress(repoPath);
       if (!rebaseActive) {
+        if (isNoRebaseInProgressError(err)) {
+          // Merger agent may have already completed the rebase; treat this as done.
+          return;
+        }
         throw err;
       }
       const conflictedFiles = await this.getConflictedFiles(repoPath);
       if (conflictedFiles.length > 0) {
         throw new RebaseConflictError(conflictedFiles);
+      }
+
+      // Rebase can also stop with no unmerged paths when the current patch is effectively empty/already applied.
+      // In that case, continue with --skip instead of failing the entire merge flow.
+      if (shouldAttemptRebaseSkip(err)) {
+        try {
+          await shellExec(
+            `git -c core.editor=true -c core.hooksPath="${noHooks}" rebase --skip`,
+            {
+              cwd: repoPath,
+              timeout: 30000,
+            }
+          );
+          return;
+        } catch (skipErr) {
+          const stillActive = await this.isRebaseInProgress(repoPath);
+          if (!stillActive && isNoRebaseInProgressError(skipErr)) {
+            return;
+          }
+          if (stillActive) {
+            const conflictedAfterSkip = await this.getConflictedFiles(repoPath);
+            if (conflictedAfterSkip.length > 0) {
+              throw new RebaseConflictError(conflictedAfterSkip);
+            }
+          }
+          throw skipErr;
+        }
       }
       throw err;
     }
@@ -1408,7 +1471,11 @@ export class BranchManager {
    */
   async rebaseOntoMain(wtPath: string, baseBranch: string = "main"): Promise<void> {
     try {
-      await this.git(wtPath, `rebase ${baseBranch}`);
+      const noHooks = getGitNoHooksPath();
+      await shellExec(`git -c core.hooksPath="${noHooks}" rebase --empty=drop ${baseBranch}`, {
+        cwd: wtPath,
+        timeout: 120000,
+      });
     } catch (_err) {
       const conflicted = await this.getConflictedFiles(wtPath);
       throw new RebaseConflictError(conflicted);

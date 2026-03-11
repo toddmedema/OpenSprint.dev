@@ -32,6 +32,14 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("stop-find-in-page", action),
   refreshTray: () => ipcRenderer.invoke("refresh-tray"),
   restartApp: () => ipcRenderer.invoke("restart-app"),
+  checkPrerequisitesFresh: () =>
+    ipcRenderer.invoke("prerequisites:checkFresh") as Promise<{
+      missing: string[];
+      path?: string;
+      platform: string;
+    }>,
+  restartBackendWithPath: (pathOverride?: string) =>
+    ipcRenderer.invoke("backend:restartWithPath", pathOverride) as Promise<void>,
   minimizeWindow: () => ipcRenderer.invoke("window-minimize"),
   maximizeWindow: () => ipcRenderer.invoke("window-maximize"),
   closeWindow: () => ipcRenderer.invoke("window-close"),
