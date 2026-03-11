@@ -207,7 +207,7 @@ export function Navbar({
       >
         <div
           data-testid="navbar-left-slot"
-          className={`flex items-center gap-1 md:gap-2 min-w-0 ${isElectronMac ? "pl-[62px] md:pl-[68px]" : ""}`}
+          className={`flex items-center gap-0.5 md:gap-1 min-w-0 ${isElectronMac ? "pl-[62px] md:pl-[68px]" : ""}`}
         >
           {/* On macOS Electron, leave left space for native traffic lights, then show logo + project picker. On Windows, no-drag so logo and dropdown are clickable. */}
           <Link
