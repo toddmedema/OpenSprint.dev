@@ -8,6 +8,8 @@ import {
 } from "../services/phase-executor.service.js";
 import type { StoredTask } from "../services/task-store.service.js";
 import type { AgentSlotLike } from "../services/orchestrator-phase-context.js";
+import { RepoPreflightError } from "../utils/git-repo-state.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 
 const mockCreateTaskWorktree = vi.fn();
 const mockCreateOrCheckoutBranch = vi.fn();
@@ -23,6 +25,7 @@ const mockLifecycleRun = vi.fn();
 const mockPersistCounters = vi.fn();
 const mockGetState = vi.fn();
 const mockHandleReviewDone = vi.fn();
+const mockHandleTaskFailure = vi.fn();
 const mockGetNextKey = vi.fn();
 
 vi.mock("../services/project.service.js", () => ({
@@ -199,7 +202,7 @@ describe("PhaseExecutorService", () => {
     phaseExecutor = new PhaseExecutorService(mockHost, {
       handleCodingDone: vi.fn().mockResolvedValue(undefined),
       handleReviewDone: mockHandleReviewDone,
-      handleTaskFailure: vi.fn().mockResolvedValue(undefined),
+      handleTaskFailure: mockHandleTaskFailure,
     });
   });
 
@@ -342,6 +345,37 @@ describe("PhaseExecutorService", () => {
       );
       expect(mockCreateOrCheckoutBranch).not.toHaveBeenCalled();
       expect(slot.worktreePath).toBe(epicWtPath);
+    });
+
+    it("reports repo_preflight with code and remediation commands when preflight fails", async () => {
+      const task = makeTask();
+      const slot = makeSlot();
+      const slots = new Map([[task.id, slot]]);
+      mockGetState.mockReturnValue({ slots, status: { queueDepth: 0 } });
+      mockPreflightCheck.mockRejectedValueOnce(
+        new RepoPreflightError(
+          "Dependency integrity check failed after one automatic repair attempt.",
+          ErrorCodes.REPO_DEPENDENCIES_INVALID,
+          ["npm ci", "npm ls --depth=0 --workspaces"]
+        )
+      );
+
+      await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot);
+
+      expect(mockLifecycleRun).not.toHaveBeenCalled();
+      expect(mockHandleTaskFailure).toHaveBeenCalledTimes(1);
+      const [failureProjectId, failureRepoPath, failureTask, failureBranch, failureReason, testError, failureType] =
+        mockHandleTaskFailure.mock.calls[0]!;
+      expect(failureProjectId).toBe(projectId);
+      expect(failureRepoPath).toBe(repoPath);
+      expect(failureTask).toBe(task);
+      expect(failureBranch).toBe(slot.branchName);
+      expect(failureReason).toContain("[REPO_DEPENDENCIES_INVALID]");
+      expect(failureReason).toContain(
+        "Suggested commands: npm ci ; npm ls --depth=0 --workspaces"
+      );
+      expect(testError).toBeNull();
+      expect(failureType).toBe("repo_preflight");
     });
   });
 
@@ -531,6 +565,37 @@ describe("PhaseExecutorService", () => {
           process.env.OPENSPRINT_SERIALIZE_CURSOR_REVIEW_ANGLES = previous;
         }
       }
+    });
+
+    it("reports repo_preflight with code and remediation commands before review spawn", async () => {
+      const task = makeTask();
+      const slot = makeSlot();
+      const slots = new Map([[task.id, slot]]);
+      mockGetState.mockReturnValue({ slots, status: { queueDepth: 0 } });
+      mockPreflightCheck.mockRejectedValueOnce(
+        new RepoPreflightError(
+          "Dependency integrity check failed after one automatic repair attempt.",
+          ErrorCodes.REPO_DEPENDENCIES_INVALID,
+          ["npm ci", "npm ls --depth=0 --workspaces"]
+        )
+      );
+
+      await phaseExecutor.executeReviewPhase(projectId, repoPath, task, slot.branchName);
+
+      expect(mockLifecycleRun).not.toHaveBeenCalled();
+      expect(mockHandleTaskFailure).toHaveBeenCalledTimes(1);
+      const [failureProjectId, failureRepoPath, failureTask, failureBranch, failureReason, testError, failureType] =
+        mockHandleTaskFailure.mock.calls[0]!;
+      expect(failureProjectId).toBe(projectId);
+      expect(failureRepoPath).toBe(repoPath);
+      expect(failureTask).toBe(task);
+      expect(failureBranch).toBe(slot.branchName);
+      expect(failureReason).toContain("[REPO_DEPENDENCIES_INVALID]");
+      expect(failureReason).toContain(
+        "Suggested commands: npm ci ; npm ls --depth=0 --workspaces"
+      );
+      expect(testError).toBeNull();
+      expect(failureType).toBe("repo_preflight");
     });
   });
 });

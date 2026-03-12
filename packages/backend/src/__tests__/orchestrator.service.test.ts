@@ -662,6 +662,23 @@ describe("OrchestratorService (slot-based model)", () => {
   });
 
   describe("preflightCheck", () => {
+    it("runs dependency integrity check after restoring missing node_modules in branches mode", async () => {
+      const invokePreflight = orchestrator as unknown as {
+        preflightCheck(
+          repoPath: string,
+          wtPath: string,
+          taskId: string,
+          baseBranch?: string,
+          reviewAngles?: Array<"security" | "performance">
+        ): Promise<void>;
+      };
+
+      await invokePreflight.preflightCheck(repoPath, repoPath, "task-preflight", "main");
+
+      expect(mockEnsureRepoNodeModules).toHaveBeenCalledWith(repoPath);
+      expect(mockCheckDependencyIntegrity).toHaveBeenCalledWith(repoPath, repoPath);
+    });
+
     it("clears top-level and per-angle result files for review attempts", async () => {
       await fs.mkdir(path.join(repoPath, "node_modules"), { recursive: true });
       const invokePreflight = orchestrator as unknown as {
