@@ -78,7 +78,8 @@ export function TaskDetailLinks({
   ]);
 
   return (
-    <div className="pt-0 px-4 pb-3" data-section="view-plan-deps-addlink">
+    <div className="-mb-2" data-section="view-plan-deps-addlink">
+      <div className="pt-0 px-4 pb-0">
       {showLinks && (
         <div className="text-xs">
           <span className="text-theme-muted">Links:</span>
@@ -176,6 +177,7 @@ export function TaskDetailLinks({
           Add link
         </button>
       )}
+      </div>
     </div>
   );
 }
