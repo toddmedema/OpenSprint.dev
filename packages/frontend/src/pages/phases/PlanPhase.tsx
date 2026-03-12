@@ -58,6 +58,7 @@ import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotific
 import { formatPlanIdAsTitle } from "../../lib/formatting";
 import { matchesPlanSearchQuery } from "../../lib/planSearchFilter";
 import { parseDetailParams, getProjectPhasePath } from "../../lib/phaseRouting";
+import { shouldRightAlignDropdown } from "../../lib/dropdownViewport";
 
 /** Display text for plan chat: show "Plan updated" when agent response contains [PLAN_UPDATE] */
 export function getPlanChatMessageDisplay(content: string): string {
@@ -282,11 +283,38 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   const [planAllInProgress, setPlanAllInProgress] = useState(false);
   const [executeAllInProgress, setExecuteAllInProgress] = useState(false);
   const [selectedVersionNumber, setSelectedVersionNumber] = useState<number | null>(null);
+  const [planActionsMenuOpen, setPlanActionsMenuOpen] = useState(false);
+  const planActionsMenuRef = useRef<HTMLDivElement>(null);
+  const planActionsMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setSelectedVersionNumber(null);
+    setPlanActionsMenuOpen(false);
   }, [selectedPlanId]);
+
+  useEffect(() => {
+    if (!planActionsMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        planActionsMenuRef.current &&
+        !planActionsMenuRef.current.contains(e.target as Node)
+      ) {
+        setPlanActionsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [planActionsMenuOpen]);
+
+  const [planActionsMenuAlignRight, setPlanActionsMenuAlignRight] = useState(false);
+  useEffect(() => {
+    if (planActionsMenuOpen && planActionsMenuTriggerRef.current) {
+      setPlanActionsMenuAlignRight(
+        shouldRightAlignDropdown(planActionsMenuTriggerRef.current.getBoundingClientRect())
+      );
+    }
+  }, [planActionsMenuOpen]);
 
   const {
     searchExpanded,
@@ -1127,53 +1155,60 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
               onVersionSelect={setSelectedVersionNumber}
               headerActions={
                 <>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirmPlanId(selectedPlan.metadata.planId)}
-                    disabled={!!deletingPlanId}
-                    className="p-1.5 text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Delete plan"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden
+                  <div ref={planActionsMenuRef} className="relative shrink-0">
+                    <button
+                      ref={planActionsMenuTriggerRef}
+                      type="button"
+                      onClick={() => setPlanActionsMenuOpen((o) => !o)}
+                      className="p-1.5 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+                      aria-label="Plan actions"
+                      aria-haspopup="menu"
+                      aria-expanded={planActionsMenuOpen}
+                      data-testid="plan-sidebar-actions-menu-trigger"
                     >
-                      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                      <path d="M10 11v6M14 11v6" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleArchive(selectedPlan.metadata.planId)}
-                    disabled={!!archivingPlanId}
-                    className="p-1.5 text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Archive plan (mark all ready/open tasks as done)"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden
-                    >
-                      <path d="M21 8v13H3V8" />
-                      <path d="M1 3h22v5H1z" />
-                      <path d="M10 12h4" />
-                    </svg>
-                  </button>
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                      </svg>
+                    </button>
+                    {planActionsMenuOpen && (
+                      <ul
+                        role="menu"
+                        className={`absolute top-full mt-1 z-50 min-w-[140px] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1 ${planActionsMenuAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
+                        data-testid="plan-sidebar-actions-menu"
+                      >
+                        <li role="none">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              handleArchive(selectedPlan.metadata.planId);
+                              setPlanActionsMenuOpen(false);
+                            }}
+                            disabled={!!archivingPlanId}
+                            className="dropdown-item w-full flex items-center gap-2 text-left text-xs text-theme-text hover:bg-theme-border-subtle/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            data-testid="plan-sidebar-archive-btn"
+                          >
+                            {archivingPlanId ? "Archiving…" : "Archive"}
+                          </button>
+                        </li>
+                        <li role="none">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setDeleteConfirmPlanId(selectedPlan.metadata.planId);
+                              setPlanActionsMenuOpen(false);
+                            }}
+                            disabled={!!deletingPlanId}
+                            className="dropdown-item w-full flex items-center gap-2 text-left text-xs text-theme-error-text hover:bg-theme-error-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            data-testid="plan-sidebar-delete-btn"
+                          >
+                            {deletingPlanId ? "Deleting…" : "Delete"}
+                          </button>
+                        </li>
+                      </ul>
+                    )}
+                  </div>
                   <CloseButton onClick={handleClosePlan} ariaLabel="Close plan panel" />
                 </>
               }

@@ -597,8 +597,9 @@ describe("PlanPhase archive", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("renders archive icon button in plan details sidebar when a plan is selected", async () => {
+  it("renders plan sidebar 3-dot menu that opens to reveal Delete and Archive", async () => {
     const store = createStore();
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <Provider store={store}>
@@ -608,8 +609,15 @@ describe("PlanPhase archive", () => {
       { wrapper: PlanPhaseWrapper }
     );
 
-    const archiveButton = screen.getByTitle("Archive plan (mark all ready/open tasks as done)");
-    expect(archiveButton).toBeInTheDocument();
+    const menuTrigger = screen.getByTestId("plan-sidebar-actions-menu-trigger");
+    expect(menuTrigger).toBeInTheDocument();
+    expect(screen.queryByTestId("plan-sidebar-actions-menu")).not.toBeInTheDocument();
+
+    await user.click(menuTrigger);
+    const menu = screen.getByTestId("plan-sidebar-actions-menu");
+    expect(menu).toBeInTheDocument();
+    expect(screen.getByTestId("plan-sidebar-archive-btn")).toHaveTextContent("Archive");
+    expect(screen.getByTestId("plan-sidebar-delete-btn")).toHaveTextContent("Delete");
   });
 
   it("has main content area with overflow-auto, min-w-0, and min-h-0 for independent scroll", () => {
@@ -722,7 +730,7 @@ describe("PlanPhase archive", () => {
     expect(scrollIntoViewMock).not.toHaveBeenCalled();
   });
 
-  it("calls archive API when archive button is clicked", async () => {
+  it("calls archive API when Archive is chosen from plan sidebar actions menu", async () => {
     const store = createStore();
     const user = userEvent.setup();
     render(
@@ -734,8 +742,8 @@ describe("PlanPhase archive", () => {
       { wrapper: PlanPhaseWrapper }
     );
 
-    const archiveButton = screen.getByTitle("Archive plan (mark all ready/open tasks as done)");
-    await user.click(archiveButton);
+    await user.click(screen.getByTestId("plan-sidebar-actions-menu-trigger"));
+    await user.click(screen.getByTestId("plan-sidebar-archive-btn"));
 
     expect(mockArchive).toHaveBeenCalledWith("proj-1", "archive-test-feature");
   });
