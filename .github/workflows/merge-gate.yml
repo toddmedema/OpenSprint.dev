@@ -23,6 +23,20 @@ jobs:
       fail-fast: false
       matrix:
         gate: [build, lint, test]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: opensprint
+          POSTGRES_PASSWORD: opensprint
+          POSTGRES_DB: opensprint_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opensprint -d opensprint_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -36,6 +50,8 @@ jobs:
         run: npm run ${{ matrix.gate }}
       - name: Run test gate with machine-readable reports
         if: matrix.gate == 'test'
+        env:
+          TEST_DATABASE_URL: postgresql://opensprint:opensprint@localhost:5432/opensprint_test
         run: |
           mkdir -p artifacts/test-results
 
