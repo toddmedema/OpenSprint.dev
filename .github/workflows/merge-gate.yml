@@ -49,7 +49,7 @@ jobs:
           done
       - name: Upload test reports
         if: always() && matrix.gate == 'test'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: merge-gate-test-reports-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           path: artifacts/test-results/
