@@ -45,6 +45,9 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Verify desktop artifact names (fixed for permalinks)
+        if: matrix.gate == 'build'
+        run: npm run verify:desktop-artifacts
       - name: Run gate
         if: matrix.gate != 'test'
         run: npm run ${{ matrix.gate }}

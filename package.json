@@ -19,6 +19,7 @@
     "build:frontend": "npm run build -w packages/frontend",
     "test": "npm run test --workspaces --if-present",
     "verify:source": "bash scripts/verify-source-imports.sh",
+    "verify:desktop-artifacts": "node scripts/verify-desktop-artifact-names.js",
     "branch-protection:apply": "bash scripts/apply-branch-protection.sh",
     "lint": "npm run lint --workspaces --if-present -- --max-warnings=0",
     "lint:ci": "npm run lint && npm run format:check",

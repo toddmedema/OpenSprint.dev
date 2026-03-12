@@ -65,13 +65,14 @@
       "target": [
         "dmg"
       ],
+      "artifactName": "Open.Sprint-${arch}.${ext}",
       "icon": "../frontend/public/desktop-icon-mac.png"
     },
     "win": {
       "target": [
         "nsis"
       ],
-      "artifactName": "${productName} Setup ${version}-${arch}.${ext}",
+      "artifactName": "Open.Sprint-${arch}.${ext}",
       "icon": "../frontend/public/logo-512x512.png"
     },
     "nsis": {
@@ -82,6 +83,7 @@
       "target": [
         "AppImage"
       ],
+      "artifactName": "Open.Sprint-${arch}.${ext}",
       "icon": "../frontend/public/logo-512x512.png"
     }
   }

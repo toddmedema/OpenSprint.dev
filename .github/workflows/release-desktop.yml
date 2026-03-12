@@ -1,3 +1,5 @@
+# Desktop release. Artifacts use fixed names (Open.Sprint-${arch}.${ext}) so
+# permalinks like .../releases/latest/download/Open.Sprint-x64.exe always serve the latest build.
 name: Release desktop
 
 on:
