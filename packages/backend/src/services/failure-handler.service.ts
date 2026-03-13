@@ -11,6 +11,8 @@ import {
   AGENT_INACTIVITY_TIMEOUT_MS,
   BACKOFF_FAILURE_THRESHOLD,
   MAX_PRIORITY_BEFORE_BLOCK,
+  TASK_COMPLEXITY_MAX,
+  TASK_COMPLEXITY_MIN,
 } from "@opensprint/shared";
 import type { StoredTask } from "./task-store.service.js";
 import type { FailureType, RetryContext } from "./orchestrator-phase-context.js";
@@ -719,6 +721,13 @@ export class FailureHandlerService {
         );
       } else {
         const newPriority = currentPriority + 1;
+        const currentComplexity =
+          typeof task.complexity === "number" &&
+          task.complexity >= TASK_COMPLEXITY_MIN &&
+          task.complexity <= TASK_COMPLEXITY_MAX
+            ? task.complexity
+            : TASK_COMPLEXITY_MIN;
+        const newComplexity = Math.min(TASK_COMPLEXITY_MAX, currentComplexity + 2);
         log.info(
           `Demoting ${task.id} priority ${currentPriority} → ${newPriority} after ${cumulativeAttempts} failures`
         );
@@ -735,6 +744,7 @@ export class FailureHandlerService {
             status: "open",
             assignee: "",
             priority: newPriority,
+            complexity: newComplexity,
             extra: {
               last_execution_summary: demoteSummary,
               [NEXT_RETRY_CONTEXT_KEY]: persistedRetryContext,

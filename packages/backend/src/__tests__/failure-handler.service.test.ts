@@ -656,6 +656,7 @@ describe("FailureHandlerService", () => {
           status: "open",
           assignee: "",
           priority: 3,
+          complexity: 3, // no task complexity → default 1, bump +2 = 3
           extra: expect.objectContaining({
             next_retry_context: expect.objectContaining({
               previousFailure: "Review rejected",
@@ -663,6 +664,42 @@ describe("FailureHandlerService", () => {
               failureType: "review_rejection",
             }),
           }),
+        })
+      );
+    });
+
+    it("bumps task complexity by 2 on demotion (capped at 10)", async () => {
+      const slot = makeSlot("/tmp/worktree");
+      slot.attempt = 3; // demotion point
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+      const mockUpdate = vi.fn().mockResolvedValue(undefined);
+      mockHost.taskStore = { ...mockHost.taskStore, update: mockUpdate };
+
+      const taskWithComplexity9 = makeTask() as ReturnType<typeof makeTask> & { complexity?: number };
+      taskWithComplexity9.complexity = 9;
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        taskWithComplexity9,
+        branchName,
+        "Tests failed",
+        null,
+        "coding_failure"
+      );
+
+      expect(mockUpdate).toHaveBeenCalledWith(
+        projectId,
+        taskId,
+        expect.objectContaining({
+          status: "open",
+          assignee: "",
+          priority: 3, // makeTask has priority 2 → newPriority 3
+          complexity: 10, // 9 + 2 capped at 10
+          extra: expect.any(Object),
         })
       );
     });
