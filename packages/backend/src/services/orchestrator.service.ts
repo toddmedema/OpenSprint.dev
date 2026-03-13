@@ -106,6 +106,7 @@ import {
 import {
   extractNoResultReasonFromLogs,
   buildReviewNoResultFailureReason,
+  synthesizeCodingResultFromOutput,
 } from "./no-result-reason.service.js";
 
 const log = createLogger("orchestrator");
@@ -1635,10 +1636,22 @@ export class OrchestratorService {
       })) as CodingAgentResult | null;
     };
 
-    const result = await readResultWithTimeout();
+    let result = await readResultWithTimeout();
 
     if (result && result.status) {
       normalizeCodingStatus(result);
+    }
+
+    if (!result) {
+      const synthesizedResult = synthesizeCodingResultFromOutput(slot.agent.outputLog);
+      if (synthesizedResult) {
+        result = synthesizedResult;
+        normalizeCodingStatus(result);
+        log.info("Synthesized coding result from structured terminal agent output", {
+          taskId: task.id,
+          status: result.status,
+        });
+      }
     }
 
     if (!result) {

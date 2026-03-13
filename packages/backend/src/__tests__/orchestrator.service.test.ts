@@ -12,6 +12,7 @@ import { heartbeatService } from "../services/heartbeat.service.js";
 import { RepoPreflightError } from "../utils/git-repo-state.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import type { ReviewAgentResult } from "@opensprint/shared";
+import { OPEN_QUESTION_BLOCK_REASON } from "@opensprint/shared";
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
 vi.mock("drizzle-orm", () => ({
@@ -95,6 +96,8 @@ const {
   mockGetMergeQualityGateCommands,
   mockIsSelfImprovementRunInProgress,
   mockHasOpenPrdSpecHilApproval,
+  mockNotificationCreate,
+  mockMaybeAutoRespond,
 } = vi.hoisted(() => ({
   mockBroadcastToProject: vi.fn(),
   mockSendAgentOutputToProject: vi.fn(),
@@ -168,6 +171,17 @@ const {
   mockGetMergeQualityGateCommands: vi.fn(),
   mockIsSelfImprovementRunInProgress: vi.fn().mockReturnValue(false),
   mockHasOpenPrdSpecHilApproval: vi.fn().mockResolvedValue(false),
+  mockNotificationCreate: vi.fn().mockResolvedValue({
+    id: "oq-1",
+    projectId: "",
+    source: "execute",
+    sourceId: "",
+    questions: [],
+    status: "open",
+    createdAt: "",
+    resolvedAt: null,
+  }),
+  mockMaybeAutoRespond: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../websocket/index.js", () => ({
@@ -426,18 +440,13 @@ vi.mock("../services/notification.service.js", () => ({
       resolvedAt: null,
       kind: "api_blocked",
     }),
-    create: vi.fn().mockResolvedValue({
-      id: "oq-1",
-      projectId: "",
-      source: "execute",
-      sourceId: "",
-      questions: [],
-      status: "open",
-      createdAt: "",
-      resolvedAt: null,
-    }),
+    create: (...args: unknown[]) => mockNotificationCreate(...args),
     resolveRateLimitNotifications: vi.fn().mockResolvedValue([]),
   },
+}));
+
+vi.mock("../services/open-question-autoresolve.service.js", () => ({
+  maybeAutoRespond: (...args: unknown[]) => mockMaybeAutoRespond(...args),
 }));
 
 const mockListPendingFeedbackIds = vi.fn().mockResolvedValue([]);
@@ -694,6 +703,166 @@ describe("OrchestratorService (slot-based model)", () => {
       const reason = extractNoResultReasonFromOutput(["}\n", " \n"]);
 
       expect(reason).toBeUndefined();
+    });
+  });
+
+  describe("coding no_result recovery", () => {
+    it("turns structured terminal clarification output into blocked open questions", async () => {
+      const { task } = setupSingleTaskFlow("task-open-question");
+      mockReadResult.mockResolvedValue(null);
+      mockNotificationCreate.mockImplementation(async (input: {
+        projectId: string;
+        source: string;
+        sourceId: string;
+        questions: Array<{ id: string; text: string }>;
+      }) => ({
+        id: "oq-1",
+        projectId: input.projectId,
+        source: input.source,
+        sourceId: input.sourceId,
+        questions: input.questions,
+        status: "open",
+        createdAt: "2026-03-13T23:12:13.000Z",
+        resolvedAt: null,
+      }));
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      const state = (
+        orchestrator as unknown as { getState: (id: string) => { slots: Map<string, unknown> } }
+      ).getState(projectId);
+      const slot = state.slots.get(task.id) as {
+        branchName?: string;
+        agent: { outputLog: string[]; killedDueToTimeout: boolean };
+      };
+      expect(slot).toBeTruthy();
+      slot.agent.killedDueToTimeout = false;
+      slot.agent.outputLog = [
+        '{"type":"result","subtype":"success","result":"Unexpected workspace change detected while running the baseline gates: `packages/frontend/vite.config.js` was reformatted (indentation-only diff) by tooling.\\n\\nHow do you want me to proceed?\\n- keep this formatting change and include it in commits\\n- leave it out and continue with only the baseline-gate fixes."}\n',
+      ];
+
+      const invokeHandleCodingDone = orchestrator as unknown as {
+        handleCodingDone(
+          projectId: string,
+          repoPath: string,
+          task: typeof task,
+          branchName: string,
+          exitCode: number | null
+        ): Promise<void>;
+      };
+
+      await invokeHandleCodingDone.handleCodingDone(
+        projectId,
+        repoPath,
+        task,
+        slot.branchName ?? `opensprint/${task.id}`,
+        0
+      );
+
+      expect(mockNotificationCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId,
+          source: "execute",
+          sourceId: task.id,
+          questions: [
+            expect.objectContaining({
+              text: expect.stringContaining("How do you want me to proceed?"),
+            }),
+          ],
+        })
+      );
+      expect(mockTaskStoreUpdate).toHaveBeenCalledWith(
+        projectId,
+        task.id,
+        expect.objectContaining({
+          assignee: "",
+          status: "blocked",
+          block_reason: OPEN_QUESTION_BLOCK_REASON,
+        })
+      );
+      expect(mockTaskStoreComment).not.toHaveBeenCalled();
+      expect(mockMaybeAutoRespond).toHaveBeenCalled();
+    });
+
+    it("turns assistant chat clarification output into blocked open questions", async () => {
+      const { task } = setupSingleTaskFlow("task-open-question-chat");
+      mockReadResult.mockResolvedValue(null);
+      mockNotificationCreate.mockImplementation(async (input: {
+        projectId: string;
+        source: string;
+        sourceId: string;
+        questions: Array<{ id: string; text: string }>;
+      }) => ({
+        id: "oq-2",
+        projectId: input.projectId,
+        source: input.source,
+        sourceId: input.sourceId,
+        questions: input.questions,
+        status: "open",
+        createdAt: "2026-03-13T23:22:13.000Z",
+        resolvedAt: null,
+      }));
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      const state = (
+        orchestrator as unknown as { getState: (id: string) => { slots: Map<string, unknown> } }
+      ).getState(projectId);
+      const slot = state.slots.get(task.id) as {
+        branchName?: string;
+        agent: { outputLog: string[]; killedDueToTimeout: boolean };
+      };
+      expect(slot).toBeTruthy();
+      slot.agent.killedDueToTimeout = false;
+      slot.agent.outputLog = [
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Unexpected workspace change detected while running the baseline gates.\\n\\nHow do you want me to proceed?\\n- keep this formatting change and include it in commits\\n- leave it out and continue with only the baseline-gate fixes."}]}}\n',
+      ];
+
+      const invokeHandleCodingDone = orchestrator as unknown as {
+        handleCodingDone(
+          projectId: string,
+          repoPath: string,
+          task: typeof task,
+          branchName: string,
+          exitCode: number | null
+        ): Promise<void>;
+      };
+
+      await invokeHandleCodingDone.handleCodingDone(
+        projectId,
+        repoPath,
+        task,
+        slot.branchName ?? `opensprint/${task.id}`,
+        0
+      );
+
+      expect(mockNotificationCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId,
+          source: "execute",
+          sourceId: task.id,
+          questions: [
+            expect.objectContaining({
+              text: expect.stringContaining("How do you want me to proceed?"),
+            }),
+          ],
+        })
+      );
+      expect(mockTaskStoreUpdate).toHaveBeenCalledWith(
+        projectId,
+        task.id,
+        expect.objectContaining({
+          assignee: "",
+          status: "blocked",
+          block_reason: OPEN_QUESTION_BLOCK_REASON,
+        })
+      );
     });
   });
 

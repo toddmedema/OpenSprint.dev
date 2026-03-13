@@ -7,9 +7,21 @@
 import path from "path";
 import fs from "fs/promises";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import type { CodingAgentResult } from "@opensprint/shared";
 import type { ReviewOutcome } from "./task-phase-coordinator.js";
 
 const DEFAULT_REASON_LIMIT = 240;
+const DEFAULT_OPEN_QUESTION_ID = "q1";
+
+interface StructuredTerminalResultEvent {
+  subtype: string;
+  text: string;
+  isError: boolean;
+}
+
+interface StructuredAssistantMessageEvent {
+  text: string;
+}
 
 /** True if the string has meaningful alphanumeric content (not just punctuation/whitespace). */
 export function isMeaningfulNoResultFragment(fragment: string): boolean {
@@ -51,6 +63,213 @@ export function extractStructuredNoResultErrorFromJsonLine(line: string): string
   }
 }
 
+/** Extract the final structured terminal result emitted by CLI agents (e.g. Cursor/Codex NDJSON). */
+export function extractStructuredTerminalResultFromJsonLine(
+  line: string
+): StructuredTerminalResultEvent | undefined {
+  if (!line.startsWith("{")) return undefined;
+  try {
+    const parsed = JSON.parse(line) as Record<string, unknown>;
+    if (parsed.type !== "result") return undefined;
+    const text = typeof parsed.result === "string" ? parsed.result.trim() : "";
+    if (!text || !isMeaningfulNoResultFragment(text)) return undefined;
+    const subtype = typeof parsed.subtype === "string" ? parsed.subtype.toLowerCase() : "";
+    return {
+      subtype,
+      text,
+      isError: parsed.is_error === true || subtype === "error" || subtype === "failed",
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+export function extractStructuredTerminalResultFromOutput(
+  outputLog: string[]
+): StructuredTerminalResultEvent | undefined {
+  const output = outputLog.join("").replace(/\r/g, "").trim();
+  if (!output) return undefined;
+
+  const lines = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return undefined;
+
+  return lines
+    .map((line) => extractStructuredTerminalResultFromJsonLine(line))
+    .filter((result): result is StructuredTerminalResultEvent => Boolean(result))
+    .at(-1);
+}
+
+/** Extract assistant/chat response text from structured NDJSON output. */
+export function extractStructuredAssistantTextFromJsonLine(
+  line: string
+): StructuredAssistantMessageEvent | undefined {
+  if (!line.startsWith("{")) return undefined;
+  try {
+    const parsed = JSON.parse(line) as Record<string, unknown>;
+    if (parsed.type !== "assistant") return undefined;
+    const message =
+      parsed.message && typeof parsed.message === "object"
+        ? (parsed.message as Record<string, unknown>)
+        : null;
+    if (!message) return undefined;
+
+    const rawContent = message.content;
+    let text = "";
+    if (typeof rawContent === "string") {
+      text = rawContent;
+    } else if (Array.isArray(rawContent)) {
+      text = rawContent
+        .map((item) => {
+          if (!item || typeof item !== "object") return "";
+          const part = item as Record<string, unknown>;
+          return typeof part.text === "string" ? part.text : "";
+        })
+        .join("");
+    }
+
+    const trimmed = text.trim();
+    if (!trimmed || !isMeaningfulNoResultFragment(trimmed)) return undefined;
+    return { text: trimmed };
+  } catch {
+    return undefined;
+  }
+}
+
+export function extractStructuredAssistantTranscriptFromOutput(
+  outputLog: string[]
+): string | undefined {
+  const output = outputLog.join("").replace(/\r/g, "").trim();
+  if (!output) return undefined;
+
+  const lines = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return undefined;
+
+  const fragments = lines
+    .map((line) => extractStructuredAssistantTextFromJsonLine(line)?.text)
+    .filter((line): line is string => Boolean(line));
+  if (fragments.length === 0) return undefined;
+
+  return fragments.join("");
+}
+
+function extractPlainTextOutput(outputLog: string[]): string | undefined {
+  const output = outputLog.join("").replace(/\r/g, "").trim();
+  if (!output) return undefined;
+
+  const lines = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith("{"))
+    .filter((line) => !/^}+$/.test(line))
+    .filter((line) => isMeaningfulNoResultFragment(line));
+  if (lines.length === 0) return undefined;
+
+  return lines.join("\n");
+}
+
+function findLastQuestionCueStart(text: string): number | undefined {
+  const cuePatterns = [
+    /How do you want me to proceed\?/gi,
+    /Do you want me to [^\n?]*\?/gi,
+    /Would you like me to [^\n?]*\?/gi,
+    /Should I [^\n?]*\?/gi,
+    /Can you clarify[^\n?]*\?/gi,
+    /Which option do you prefer\?/gi,
+  ];
+
+  let lastStart: number | undefined;
+  for (const pattern of cuePatterns) {
+    for (const match of text.matchAll(pattern)) {
+      if (match.index == null) continue;
+      if (lastStart == null || match.index > lastStart) {
+        lastStart = match.index;
+      }
+    }
+  }
+  return lastStart;
+}
+
+function summarizeTextSnippet(text: string, limit: number = DEFAULT_REASON_LIMIT): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (!compact) return "";
+  const sentence = compact.match(/^(.{1,240}?[.!?])(?:\s|$)/)?.[1] ?? compact;
+  return sentence.slice(0, limit);
+}
+
+function extractOpenQuestionBlock(text: string): string | undefined {
+  const normalized = text.replace(/\r/g, "").trim();
+  if (!normalized) return undefined;
+
+  const cueStart = findLastQuestionCueStart(normalized);
+  if (cueStart == null) return undefined;
+
+  const paragraphStart = normalized.lastIndexOf("\n\n", cueStart);
+  if (paragraphStart >= 0) {
+    const questionText = normalized.slice(paragraphStart + 2).trim();
+    const contextSource = normalized.slice(0, paragraphStart).trim();
+    const contextSentence = summarizeTextSnippet(contextSource, DEFAULT_REASON_LIMIT);
+    return contextSentence ? `${contextSentence}\n\n${questionText}` : questionText;
+  }
+
+  const sentenceStart = normalized.lastIndexOf(". ", cueStart);
+  const start = sentenceStart >= 0 ? sentenceStart + 2 : 0;
+  return normalized.slice(start).trim();
+}
+
+function summarizeTerminalResultText(text: string, limit: number = DEFAULT_REASON_LIMIT): string {
+  const focus = extractOpenQuestionBlock(text) ?? text.trim();
+  return summarizeTextSnippet(focus, limit);
+}
+
+/**
+ * Convert structured agent output into a synthetic coding result when the agent
+ * exits without writing result.json. This preserves open questions instead of
+ * turning them into a generic no_result failure.
+ */
+export function synthesizeCodingResultFromOutput(
+  outputLog: string[]
+): CodingAgentResult | undefined {
+  const candidateTexts = [
+    extractStructuredTerminalResultFromOutput(outputLog)?.text,
+    extractStructuredAssistantTranscriptFromOutput(outputLog),
+    extractPlainTextOutput(outputLog),
+  ].filter((text): text is string => Boolean(text?.trim()));
+
+  const notes = candidateTexts.find((text) => extractOpenQuestionBlock(text) || text.trim());
+  if (!notes) return undefined;
+
+  const openQuestionText = extractOpenQuestionBlock(notes);
+  if (openQuestionText) {
+    return {
+      status: "failed",
+      summary: summarizeTerminalResultText(openQuestionText),
+      filesChanged: [],
+      testsWritten: 0,
+      testsPassed: 0,
+      notes,
+      open_questions: [{ id: DEFAULT_OPEN_QUESTION_ID, text: openQuestionText }],
+    };
+  }
+
+  const summary = summarizeTerminalResultText(notes);
+  if (!summary) return undefined;
+  return {
+    status: "failed",
+    summary: `Agent exited without writing result.json: ${summary}`.slice(0, DEFAULT_REASON_LIMIT),
+    filesChanged: [],
+    testsWritten: 0,
+    testsPassed: 0,
+    notes,
+  };
+}
+
 /**
  * Derive a short reason from in-memory output log (coding or review agent).
  */
@@ -82,6 +301,24 @@ export function extractNoResultReasonFromOutput(
     .filter((line) => isMeaningfulNoResultFragment(line));
   if (structuredErrors.length > 0) {
     return structuredErrors.at(-1)?.slice(0, limit);
+  }
+
+  const assistantTranscript = extractStructuredAssistantTranscriptFromOutput(outputLog);
+  if (assistantTranscript) {
+    const summary = summarizeTerminalResultText(assistantTranscript, limit);
+    if (summary) return summary;
+  }
+
+  const terminalResult = extractStructuredTerminalResultFromOutput(outputLog);
+  if (terminalResult) {
+    const summary = summarizeTerminalResultText(terminalResult.text, limit);
+    if (summary) return summary;
+  }
+
+  const plainTextOutput = extractPlainTextOutput(outputLog);
+  if (plainTextOutput) {
+    const summary = summarizeTerminalResultText(plainTextOutput, limit);
+    if (summary) return summary;
   }
 
   const nonJsonLines = lines
