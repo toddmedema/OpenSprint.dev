@@ -16,8 +16,8 @@
     "prepare:resources:linux:x64": "node scripts/prepare-desktop-resources.js --platform linux --arch x64",
     "prepare:resources:linux:arm64": "node scripts/prepare-desktop-resources.js --platform linux --arch arm64",
     "start": "npm run compile && electron .",
-    "build": "npm run prepare:resources && npm run compile && electron-builder",
-    "build:dir": "npm run prepare:resources && npm run compile && electron-builder --dir",
+    "build": "node scripts/build-target.js",
+    "build:dir": "node scripts/build-target.js --dir",
     "build:mac": "node scripts/build-target.js --platform darwin",
     "build:mac:x64": "node scripts/build-target.js --platform darwin --arch x64",
     "build:mac:arm64": "node scripts/build-target.js --platform darwin --arch arm64",
@@ -26,11 +26,13 @@
     "build:win:arm64": "node scripts/build-target.js --platform win32 --arch arm64",
     "build:linux": "node scripts/build-target.js --platform linux",
     "build:linux:x64": "node scripts/build-target.js --platform linux --arch x64",
-    "build:linux:arm64": "node scripts/build-target.js --platform linux --arch arm64"
+    "build:linux:arm64": "node scripts/build-target.js --platform linux --arch arm64",
+    "test": "vitest run"
   },
   "dependencies": {},
   "devDependencies": {
     "@electron/rebuild": "^3.6.1",
+    "vitest": "^2.1.0",
     "electron": "^35.1.0",
     "electron-builder": "^25.0.0",
     "esbuild": "^0.25.12",

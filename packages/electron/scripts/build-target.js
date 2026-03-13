@@ -3,16 +3,22 @@
 
 const path = require("path");
 const { execFileSync, execSync } = require("child_process");
+const { cleanStaleDesktopArtifacts } = require("./clean-desktop-artifacts.js");
 
 const scriptDir = __dirname;
 const packageDir = path.resolve(scriptDir, "..");
 const prepareScriptPath = path.join(scriptDir, "prepare-desktop-resources.js");
+const outputDir = path.join(packageDir, "dist");
 
 function parseCliOptions(argv) {
-  const options = {};
+  const options = { dir: false };
   for (let i = 0; i < argv.length; i += 1) {
     const raw = argv[i];
     if (!raw.startsWith("--")) continue;
+    if (raw === "--dir") {
+      options.dir = true;
+      continue;
+    }
     const [flag, inlineValue] = raw.split("=", 2);
     const nextValue = inlineValue ?? argv[i + 1];
     if ((flag === "--platform" || flag === "--arch") && nextValue) {
@@ -53,12 +59,13 @@ function resolveBuilderPlatformFlag(platform) {
   return "--linux";
 }
 
-function run() {
-  const cliOptions = parseCliOptions(process.argv.slice(2));
+function run({ argv = process.argv.slice(2) } = {}) {
+  const cliOptions = parseCliOptions(argv);
   const targetPlatform = resolveTargetPlatform(cliOptions);
   const targetArch = resolveTargetArch(cliOptions);
   const platformFlag = resolveBuilderPlatformFlag(targetPlatform);
   const archFlag = `--${targetArch}`;
+  const dirFlag = cliOptions.dir ? " --dir" : "";
 
   console.log(
     `Building Electron desktop package (platform=${targetPlatform}, arch=${targetArch})`
@@ -86,11 +93,23 @@ function run() {
     stdio: "inherit",
   });
 
-  execSync(`electron-builder ${platformFlag} ${archFlag}`, {
+  cleanStaleDesktopArtifacts(targetPlatform, targetArch, outputDir);
+
+  execSync(`electron-builder${dirFlag} ${platformFlag} ${archFlag}`, {
     cwd: packageDir,
     env: process.env,
     stdio: "inherit",
   });
 }
 
-run();
+if (require.main === module) {
+  run();
+}
+
+module.exports = {
+  parseCliOptions,
+  resolveTargetPlatform,
+  resolveTargetArch,
+  resolveBuilderPlatformFlag,
+  run,
+};
