@@ -89,8 +89,9 @@ describe("GlobalSettingsContent", () => {
     renderGlobalSettingsContent();
 
     await screen.findByTestId("api-keys-section");
-    const anthropicInputs = screen.getAllByTestId(/api-key-input-ANTHROPIC_API_KEY-/);
-    const cursorInputs = screen.getAllByTestId(/api-key-input-CURSOR_API_KEY-/);
+    // Wait for apiKeys to load and inputs to render (get() is async)
+    const anthropicInputs = await screen.findAllByTestId(/api-key-input-ANTHROPIC_API_KEY-/);
+    const cursorInputs = await screen.findAllByTestId(/api-key-input-CURSOR_API_KEY-/);
     expect(anthropicInputs.length).toBe(1);
     expect(cursorInputs.length).toBe(1);
     expect(anthropicInputs[0]).toHaveValue("••••••••");
