@@ -298,7 +298,7 @@ describe("GlobalKeyboardShortcuts", () => {
     });
   });
 
-  it("in Electron, Escape does not open settings (Settings is in app menu)", async () => {
+  it("in Electron, Escape opens project settings", async () => {
     const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
     if (typeof window !== "undefined") {
       (window as unknown as { electron: { isElectron: true; onNavigateHelp: () => () => void; onNavigateSettings: () => () => void } }).electron = {
@@ -320,12 +320,13 @@ describe("GlobalKeyboardShortcuts", () => {
     await act(() => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
-    await waitFor(() => {}, { timeout: 100 });
-    expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/sketch");
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/settings");
+    });
     if (typeof window !== "undefined") (window as unknown as { electron: unknown }).electron = prev;
   });
 
-  it("in Electron, ? does not open help (Help is in app menu)", async () => {
+  it("in Electron, ? opens project help", async () => {
     const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
     if (typeof window !== "undefined") {
       (window as unknown as { electron: { isElectron: true; onNavigateHelp: () => () => void; onNavigateSettings: () => () => void } }).electron = {
@@ -347,8 +348,65 @@ describe("GlobalKeyboardShortcuts", () => {
     await act(() => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true }));
     });
-    await waitFor(() => {}, { timeout: 100 });
-    expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/sketch");
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/help");
+    });
+    if (typeof window !== "undefined") (window as unknown as { electron: unknown }).electron = prev;
+  });
+
+  it("in Electron, Escape opens global settings when not in a project", async () => {
+    const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
+    if (typeof window !== "undefined") {
+      (window as unknown as { electron: { isElectron: true; onNavigateHelp: () => () => void; onNavigateSettings: () => () => void } }).electron = {
+        isElectron: true,
+        onNavigateHelp: () => () => {},
+        onNavigateSettings: () => () => {},
+      };
+    }
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <GlobalKeyboardShortcuts />
+        <Routes>
+          <Route path="/" element={<LocationDisplay />} />
+          <Route path="/settings" element={<LocationDisplay />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent("/");
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/settings");
+    });
+    if (typeof window !== "undefined") (window as unknown as { electron: unknown }).electron = prev;
+  });
+
+  it("in Electron, ? opens global help when not in a project", async () => {
+    const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
+    if (typeof window !== "undefined") {
+      (window as unknown as { electron: { isElectron: true; onNavigateHelp: () => () => void; onNavigateSettings: () => () => void } }).electron = {
+        isElectron: true,
+        onNavigateHelp: () => () => {},
+        onNavigateSettings: () => () => {},
+      };
+    }
+    render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <GlobalKeyboardShortcuts />
+        <Routes>
+          <Route path="/settings" element={<LocationDisplay />} />
+          <Route path="/help" element={<LocationDisplay />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent("/settings");
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true }));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/help");
+    });
     if (typeof window !== "undefined") (window as unknown as { electron: unknown }).electron = prev;
   });
 

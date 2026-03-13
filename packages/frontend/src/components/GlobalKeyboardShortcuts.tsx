@@ -50,7 +50,8 @@ function isFocusInModal(e: KeyboardEvent): boolean {
  * - 1/2/3/4/5: switch to Sketch/Plan/Execute/Evaluate/Deliver (when on a project)
  * - ~ (Backquote): go to home
  * - Escape: close modal if one is open; otherwise open settings (project if in a project, else global)
- * - ? or F1: open help (project help if in a project, else global; same navigation as Settings)
+ * - ?: open help (project help if in a project, else global; same navigation as Settings)
+ * - F1: open help on web builds
  */
 /** Parse projectId from pathname when under /projects/:projectId/... (GlobalKeyboardShortcuts is outside Routes so useParams is empty). */
 function projectIdFromPathname(pathname: string): string | undefined {
@@ -97,26 +98,24 @@ export function GlobalKeyboardShortcuts() {
         return;
       }
 
-      // Escape: close modal if one is open; otherwise open settings (web only; in Electron, Settings is in app menu)
+      // Escape: close modal if one is open; otherwise open settings.
       if (key === "Escape") {
         if (isModalOpen() || isFocusInModal(e)) {
           e.preventDefault();
           return;
         }
-        if (!isElectron) {
-          if (projectId) {
-            e.preventDefault();
-            navigate(`/projects/${projectId}/settings`);
-          } else {
-            e.preventDefault();
-            navigate("/settings");
-          }
+        if (projectId) {
+          e.preventDefault();
+          navigate(`/projects/${projectId}/settings`);
+        } else {
+          e.preventDefault();
+          navigate("/settings");
         }
         return;
       }
 
-      // ? or F1: open help (web only; in Electron, Help is in app menu)
-      if (!isElectron && (key === "?" || key === "F1")) {
+      // ?: open help everywhere; F1: web-only help shortcut.
+      if (key === "?" || (!isElectron && key === "F1")) {
         e.preventDefault();
         e.stopPropagation();
         if (projectId) {
