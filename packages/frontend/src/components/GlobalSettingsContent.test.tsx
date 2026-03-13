@@ -109,8 +109,7 @@ describe("GlobalSettingsContent", () => {
 
     renderGlobalSettingsContent();
 
-    await screen.findByTestId("api-keys-section");
-    const input = screen.getByTestId(/api-key-input-ANTHROPIC_API_KEY-/);
+    const input = await screen.findByTestId(/api-key-input-ANTHROPIC_API_KEY-/);
     expect(input).toHaveValue("••••••••");
 
     const eyeBtn = screen.getByTestId(/api-key-eye-ANTHROPIC_API_KEY-/);
@@ -136,8 +135,7 @@ describe("GlobalSettingsContent", () => {
 
     renderGlobalSettingsContent();
 
-    await screen.findByTestId("api-keys-section");
-    expect(screen.getByText(/Limit hit at/)).toBeInTheDocument();
+    expect(await screen.findByText(/Limit hit at/)).toBeInTheDocument();
     expect(screen.getByText(/retry after 24h/)).toBeInTheDocument();
   });
 
@@ -250,8 +248,7 @@ describe("GlobalSettingsContent", () => {
 
     renderGlobalSettingsContent();
 
-    await screen.findByTestId("api-keys-section");
-    const rows = screen.getAllByTestId(/api-key-input-ANTHROPIC_API_KEY-/);
+    const rows = await screen.findAllByTestId(/api-key-input-ANTHROPIC_API_KEY-/);
     expect(rows).toHaveLength(3);
     const targetRow = rows[0].closest("[data-index]") as HTMLElement;
     expect(targetRow).toHaveAttribute("data-index", "0");
