@@ -23,6 +23,9 @@ type QualityGateDetail = {
 type TaskExecutionEventItemWithQualityGate = TaskExecutionEventItem & {
   qualityGateDetail?: QualityGateDetail | null;
 };
+type TaskExecutionAttemptItemWithQualityGate = TaskExecutionAttemptItem & {
+  qualityGateDetail?: QualityGateDetail | null;
+};
 type TaskExecutionDiagnosticsWithQualityGate = TaskExecutionDiagnostics & {
   latestQualityGateDetail?: QualityGateDetail | null;
 };
@@ -116,32 +119,64 @@ function eventQualityGateDetail(event: TaskExecutionEventItem | null): QualityGa
   return (event as TaskExecutionEventItemWithQualityGate).qualityGateDetail ?? null;
 }
 
-function buildQualityGateMergeSummary(data: JsonRecord): string | null {
-  const detail = extractQualityGateDetail(data);
-  const command = detail?.command ?? null;
-  const failedGateReason = detail?.reason ?? null;
-  const firstErrorLine = detail?.firstErrorLine ?? null;
-  const autoRepairAttempted = asBoolean(data.qualityGateAutoRepairAttempted) === true;
-  const autoRepairSucceeded = asBoolean(data.qualityGateAutoRepairSucceeded) === true;
-  const autoRepairCommands = asStringArray(data.qualityGateAutoRepairCommands);
-  const category = asString(data.qualityGateCategory);
-  if (!command && !firstErrorLine && !failedGateReason && !category) return null;
+function withAttemptQualityGateDetail(
+  item: TaskExecutionAttemptItem,
+  detail: QualityGateDetail | null
+): TaskExecutionAttemptItem {
+  if (!detail) return item;
+  (item as TaskExecutionAttemptItemWithQualityGate).qualityGateDetail = detail;
+  return item;
+}
 
+function attemptQualityGateDetail(attempt: TaskExecutionAttemptItem | null): QualityGateDetail | null {
+  if (!attempt) return null;
+  return (attempt as TaskExecutionAttemptItemWithQualityGate).qualityGateDetail ?? null;
+}
+
+function buildActionableFailureSummary(
+  detail: QualityGateDetail | null,
+  options?: {
+    autoRepairAttempted?: boolean;
+    autoRepairSucceeded?: boolean;
+    autoRepairCommands?: string[];
+    category?: string | null;
+  }
+): string | null {
+  const command = detail?.command ?? null;
+  const errorMessage = detail?.firstErrorLine ?? detail?.reason ?? null;
+  if (!command && !errorMessage) return null;
   const summaryParts: string[] = [];
-  summaryParts.push("Quality gate failed");
-  if (command) summaryParts.push(`cmd: ${command}`);
-  const errorMessage = firstErrorLine ?? failedGateReason;
-  if (errorMessage) summaryParts.push(`error: ${compactExecutionText(errorMessage, 220)}`);
-  if (autoRepairAttempted) {
-    const commands = autoRepairCommands.length > 0 ? autoRepairCommands.join(" -> ") : "auto-repair";
-    const status = autoRepairSucceeded ? "succeeded" : "failed";
+
+  if (command && errorMessage) {
+    summaryParts.push(`${command}: ${compactExecutionText(errorMessage, 220)}`);
+  } else if (command) {
+    summaryParts.push(command);
+  } else if (errorMessage) {
+    summaryParts.push(compactExecutionText(errorMessage, 220));
+  }
+
+  if (options?.autoRepairAttempted) {
+    const commands =
+      (options.autoRepairCommands ?? []).length > 0
+        ? (options.autoRepairCommands ?? []).join(" -> ")
+        : "auto-repair";
+    const status = options.autoRepairSucceeded ? "succeeded" : "failed";
     summaryParts.push(`repair: ${commands} (${status})`);
   }
-  if (category === "environment_setup") {
+  if (options?.category === "environment_setup") {
     summaryParts.push("category: environment_setup");
   }
 
   return compactExecutionText(summaryParts.join(" | "), 500);
+}
+
+function buildActionableFailureSummaryFromData(data: JsonRecord): string | null {
+  return buildActionableFailureSummary(extractQualityGateDetail(data), {
+    autoRepairAttempted: asBoolean(data.qualityGateAutoRepairAttempted) === true,
+    autoRepairSucceeded: asBoolean(data.qualityGateAutoRepairSucceeded) === true,
+    autoRepairCommands: asStringArray(data.qualityGateAutoRepairCommands),
+    category: asString(data.qualityGateCategory),
+  });
 }
 
 function labelForPhase(phase: TaskExecutionPhase): string {
@@ -333,6 +368,7 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
     const reason = asString(data.reason);
     const qualityGateDetail = extractQualityGateDetail(data);
     const summary =
+      buildActionableFailureSummary(qualityGateDetail) ??
       asString(data.summary) ??
       (reason ? `${labelForPhase(phase)} failed: ${compactExecutionText(reason, 360)}` : null) ??
       `${labelForPhase(phase)} failed`;
@@ -375,8 +411,7 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
     const mergeStage = asString(data.stage);
     const reason = asString(data.reason);
     const qualityGateDetail = extractQualityGateDetail(data);
-    const qualityGateSummary =
-      mergeStage === "quality_gate" ? buildQualityGateMergeSummary(data) : null;
+    const qualityGateSummary = buildActionableFailureSummaryFromData(data);
     const summary =
       qualityGateSummary ??
       asString(data.summary) ??
@@ -406,15 +441,18 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
     const qualityGateDetail = extractQualityGateDetail(data);
     return withQualityGateDetail(
       {
-      at: event.timestamp,
-      attempt,
-      phase,
-      outcome: "requeued",
-      title: "Task requeued",
-      summary: asString(data.summary) ?? "Task requeued for another attempt",
-      failureType: asString(data.failureType),
-      blockReason: asString(data.blockReason),
-      nextAction: asString(data.nextAction) ?? defaultNextAction("requeued"),
+        at: event.timestamp,
+        attempt,
+        phase,
+        outcome: "requeued",
+        title: "Task requeued",
+        summary:
+          buildActionableFailureSummary(qualityGateDetail) ??
+          asString(data.summary) ??
+          "Task requeued for another attempt",
+        failureType: asString(data.failureType),
+        blockReason: asString(data.blockReason),
+        nextAction: asString(data.nextAction) ?? defaultNextAction("requeued"),
       },
       qualityGateDetail
     );
@@ -422,16 +460,23 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
 
   if (event.event === "task.demoted") {
     const phase = phaseFromUnknown(data.phase, "orchestrator");
-    return {
-      at: event.timestamp,
-      attempt,
-      phase,
-      outcome: "demoted",
-      title: "Task demoted",
-      summary: asString(data.summary) ?? "Task priority lowered after repeated failures",
-      failureType: asString(data.failureType),
-      nextAction: asString(data.nextAction) ?? defaultNextAction("demoted"),
-    };
+    const qualityGateDetail = extractQualityGateDetail(data);
+    return withQualityGateDetail(
+      {
+        at: event.timestamp,
+        attempt,
+        phase,
+        outcome: "demoted",
+        title: "Task demoted",
+        summary:
+          buildActionableFailureSummary(qualityGateDetail) ??
+          asString(data.summary) ??
+          "Task priority lowered after repeated failures",
+        failureType: asString(data.failureType),
+        nextAction: asString(data.nextAction) ?? defaultNextAction("demoted"),
+      },
+      qualityGateDetail
+    );
   }
 
   if (event.event === "task.blocked") {
@@ -444,7 +489,11 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
         phase,
         outcome: "blocked",
         title: "Task blocked",
-        summary: asString(data.summary) ?? asString(data.reason) ?? "Task blocked",
+        summary:
+          buildActionableFailureSummary(qualityGateDetail) ??
+          asString(data.summary) ??
+          asString(data.reason) ??
+          "Task blocked",
         failureType: asString(data.failureType),
         blockReason: asString(data.blockReason),
         mergeStage: asString(data.mergeStage),
@@ -511,12 +560,19 @@ function buildAttemptItem(
 ): TaskExecutionAttemptItem {
   const terminalEvent = [...attemptEvents].reverse().find((event) => event.outcome !== "running");
   const sessionDerived = finalAttemptFromSessions(sessions);
+  const latestAttemptDetail =
+    eventQualityGateDetail(terminalEvent ?? null) ??
+    [...attemptEvents]
+      .reverse()
+      .map((event) => eventQualityGateDetail(event))
+      .find((detail): detail is QualityGateDetail => detail != null) ??
+    null;
   const codingModel =
     attemptEvents.find((event) => event.phase === "coding" && event.model)?.model ?? null;
   const reviewModel =
     attemptEvents.find((event) => event.phase === "review" && event.model)?.model ?? null;
 
-  return {
+  const item: TaskExecutionAttemptItem = {
     attempt,
     startedAt:
       sessions[0]?.startedAt ??
@@ -528,6 +584,9 @@ function buildAttemptItem(
     finalPhase: terminalEvent?.phase ?? sessionDerived?.finalPhase ?? "orchestrator",
     finalOutcome: terminalEvent?.outcome ?? sessionDerived?.finalOutcome ?? "running",
     finalSummary:
+      (eventQualityGateDetail(terminalEvent ?? null)
+        ? terminalEvent?.summary
+        : buildActionableFailureSummary(latestAttemptDetail)) ??
       terminalEvent?.summary ??
       sessionDerived?.finalSummary ??
       `Attempt ${attempt} has no recorded terminal outcome`,
@@ -537,6 +596,7 @@ function buildAttemptItem(
     conflictedFiles: terminalEvent?.conflictedFiles ?? [],
     sessionAttemptStatuses: sessionDerived?.sessionAttemptStatuses ?? [],
   };
+  return withAttemptQualityGateDetail(item, latestAttemptDetail);
 }
 
 export class TaskExecutionDiagnosticsService {
@@ -602,6 +662,7 @@ export class TaskExecutionDiagnosticsService {
     const latestTimelineEvent = timeline.at(-1) ?? null;
     const latestEvent =
       [...timeline].reverse().find((event) => event.outcome !== "running") ?? null;
+    const latestRunningEvent = latestTimelineEvent?.outcome === "running" ? latestTimelineEvent : null;
     const taskQualityGateDetail = extractQualityGateDetail(asRecord(task) ?? {});
 
     const diagnostics: TaskExecutionDiagnostics = {
@@ -610,25 +671,38 @@ export class TaskExecutionDiagnosticsService {
       blockReason: task.block_reason ?? null,
       cumulativeAttempts,
       latestSummary:
-        lastExecution?.summary ?? latestTimelineEvent?.summary ?? latestEvent?.summary ?? null,
+        latestRunningEvent?.summary ??
+        latestAttempt?.finalSummary ??
+        latestTimelineEvent?.summary ??
+        latestEvent?.summary ??
+        lastExecution?.summary ??
+        null,
       latestFailureType:
-        lastExecution?.failureType ??
+        latestAttempt?.failureType ??
         latestTimelineEvent?.failureType ??
         latestEvent?.failureType ??
+        lastExecution?.failureType ??
         null,
       latestOutcome:
-        lastExecution?.outcome ?? latestTimelineEvent?.outcome ?? latestEvent?.outcome ?? null,
+        latestRunningEvent?.outcome ??
+        latestAttempt?.finalOutcome ??
+        latestTimelineEvent?.outcome ??
+        latestEvent?.outcome ??
+        lastExecution?.outcome ??
+        null,
       latestNextAction:
+        latestRunningEvent?.nextAction ??
         latestTimelineEvent?.nextAction ??
         latestEvent?.nextAction ??
-        defaultNextAction(lastExecution?.outcome ?? "failed"),
+        defaultNextAction(latestAttempt?.finalOutcome ?? lastExecution?.outcome ?? "failed"),
       attempts,
       timeline,
     };
     const latestQualityGateDetail =
+      attemptQualityGateDetail(latestAttempt ?? null) ??
       eventQualityGateDetail(latestTimelineEvent) ??
       eventQualityGateDetail(latestEvent) ??
-      taskQualityGateDetail ??
+      (timeline.length === 0 ? taskQualityGateDetail : null) ??
       null;
     if (latestQualityGateDetail) {
       (diagnostics as TaskExecutionDiagnosticsWithQualityGate).latestQualityGateDetail =

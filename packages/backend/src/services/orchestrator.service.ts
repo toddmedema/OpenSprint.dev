@@ -179,6 +179,7 @@ interface PhaseResult {
   codingSummary: string;
   testResults: TestResults | null;
   testOutput: string;
+  validationCommand?: string | null;
 }
 
 interface ReviewAgentSlotState {
@@ -371,7 +372,13 @@ export class OrchestratorService {
       },
       phase: "coding",
       attempt,
-      phaseResult: { codingDiff: "", codingSummary: "", testResults: null, testOutput: "" },
+      phaseResult: {
+        codingDiff: "",
+        codingSummary: "",
+        testResults: null,
+        testOutput: "",
+        validationCommand: null,
+      },
       infraRetries: 0,
       timers: new TimerRegistry(),
       ...(assignee != null && { assignee }),
@@ -1685,6 +1692,7 @@ export class OrchestratorService {
           testCommand
         );
         slot.phaseResult.testOutput = scopedResult.rawOutput;
+        slot.phaseResult.validationCommand = scopedResult.executedCommand ?? testCommand ?? null;
         if (scopedResult.failed > 0) {
           await this.failureHandler.handleTaskFailure(
             projectId,
@@ -1979,6 +1987,7 @@ export class OrchestratorService {
           return;
         }
         sl.phaseResult.testOutput = scopedResult.rawOutput;
+        sl.phaseResult.validationCommand = scopedResult.executedCommand ?? testCommand ?? null;
         if (scopedResult.failed > 0) {
           const validationCommand = scopedResult.executedCommand ?? testCommand;
           await this.writeReviewTestStatus(

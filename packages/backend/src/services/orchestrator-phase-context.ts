@@ -42,6 +42,7 @@ export interface AgentSlotLike {
     codingSummary: string;
     testResults: TestResults | null;
     testOutput: string;
+    validationCommand?: string | null;
   };
   infraRetries: number;
   agent: { outputLog: string[]; startedAt: string; killedDueToTimeout: boolean };

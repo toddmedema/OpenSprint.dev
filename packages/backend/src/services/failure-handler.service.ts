@@ -49,12 +49,42 @@ const RETRY_CONTEXT_REVIEW_LIMIT = 4000;
 const RETRY_CONTEXT_TEST_OUTPUT_LIMIT = 6000;
 const RETRY_CONTEXT_TEST_FAILURES_LIMIT = 2000;
 const RETRY_CONTEXT_DIFF_LIMIT = 6000;
+const FAILURE_DIAGNOSTIC_OUTPUT_LIMIT = 1800;
+const FAILURE_DIAGNOSTIC_LINE_LIMIT = 300;
 const PREFLIGHT_DEPENDENCY_REMEDIATION =
   "Run npm ci in the repository root, then fix invalid dependencies before retrying.";
 const PREFLIGHT_GIT_REMEDIATION =
   "Fix repository git setup (base branch and git identity), then retry.";
 const ENVIRONMENT_SETUP_REMEDIATION =
   "Run npm ci in the repository root, re-link worktree node_modules, then retry.";
+const FAILURE_DIAGNOSTIC_REASON_PATTERNS: RegExp[] = [
+  /^tests? failed:/i,
+  /^command failed(?::|\b)/i,
+  /^coding failed:/i,
+  /^review failed:/i,
+  /^review rejected\b/i,
+  /^agent exited with code\b/i,
+];
+const FAILURE_DIAGNOSTIC_NOISE_PATTERNS: RegExp[] = [
+  /^> [^ ].*/i,
+  /^npm (error|err!)/i,
+  /^lifecycle script .* failed/i,
+  /^exit code \d+/i,
+  /^error: command failed/i,
+  /^at\s+\S+/i,
+  /^node:/i,
+  /^caused by:/i,
+  /^⎯+/,
+  /^[-=]{3,}$/,
+];
+
+type FailureDiagnosticDetail = {
+  command: string | null;
+  reason: string | null;
+  outputSnippet: string | null;
+  worktreePath: string | null;
+  firstErrorLine: string | null;
+};
 
 export interface FailureHandlerHost {
   getState(projectId: string): {
@@ -128,6 +158,7 @@ export interface FailureSlot {
     codingSummary: string;
     testResults: TestResults | null;
     testOutput: string;
+    validationCommand?: string | null;
   };
   agent: { outputLog: string[]; startedAt: string; killedDueToTimeout: boolean };
 }
@@ -272,6 +303,95 @@ export class FailureHandlerService {
     return null;
   }
 
+  private toFailureOutputSnippet(text: string | null | undefined): string | null {
+    const trimmed = text?.trim();
+    if (!trimmed) return null;
+    return compactExecutionText(trimmed, FAILURE_DIAGNOSTIC_OUTPUT_LIMIT);
+  }
+
+  private firstFailedTestError(testResults?: TestResults | null): string | null {
+    const failedDetail = testResults?.details.find(
+      (detail) => detail.status === "failed" && detail.error?.trim()
+    );
+    return failedDetail?.error?.trim()
+      ? compactExecutionText(failedDetail.error.trim(), FAILURE_DIAGNOSTIC_LINE_LIMIT)
+      : null;
+  }
+
+  private firstActionableFailureOutputLine(text: string | null | undefined): string | null {
+    if (!text) return null;
+    for (const line of text.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (FAILURE_DIAGNOSTIC_NOISE_PATTERNS.some((pattern) => pattern.test(trimmed))) continue;
+      return compactExecutionText(trimmed, FAILURE_DIAGNOSTIC_LINE_LIMIT);
+    }
+    return null;
+  }
+
+  private extractCommandFromFailureReason(reason: string): string | null {
+    const commandPatterns = [
+      /^Command failed:\s*(.+)$/im,
+      /^npm error command sh -c\s+(.+)$/im,
+      /^Quality gate failed \(([^)]+)\)/i,
+    ];
+    for (const pattern of commandPatterns) {
+      const command = reason.match(pattern)?.[1]?.trim();
+      if (command) return command;
+    }
+    return null;
+  }
+
+  private firstActionableReasonLine(reason: string): string | null {
+    const trimmed = reason.trim();
+    if (!trimmed) return null;
+    if (FAILURE_DIAGNOSTIC_REASON_PATTERNS.some((pattern) => pattern.test(trimmed))) return null;
+    return compactExecutionText(trimmed, FAILURE_DIAGNOSTIC_LINE_LIMIT);
+  }
+
+  private buildFailureDiagnosticDetail(params: {
+    failureType: FailureType;
+    reason: string;
+    slot: FailureSlot;
+    testResults?: TestResults | null;
+  }): FailureDiagnosticDetail | null {
+    const validationOutput =
+      params.failureType === "test_failure" ? params.slot.phaseResult.testOutput : "";
+    const command =
+      (params.failureType === "test_failure"
+        ? params.slot.phaseResult.validationCommand?.trim() || null
+        : null) ?? this.extractCommandFromFailureReason(params.reason);
+    const firstErrorLine =
+      (params.failureType === "test_failure"
+        ? this.firstFailedTestError(params.testResults ?? params.slot.phaseResult.testResults) ??
+          this.firstActionableFailureOutputLine(validationOutput)
+        : null) ?? this.firstActionableReasonLine(params.reason);
+    const outputSnippet = this.toFailureOutputSnippet(validationOutput);
+    const worktreePath = params.slot.worktreePath?.trim() || null;
+    if (!command && !firstErrorLine && !outputSnippet) return null;
+    return {
+      command: command ?? null,
+      reason: params.reason.trim() ? params.reason.slice(0, 500) : null,
+      outputSnippet,
+      worktreePath,
+      firstErrorLine: firstErrorLine ?? null,
+    };
+  }
+
+  private failureDiagnosticFields(
+    detail: FailureDiagnosticDetail | null
+  ): Record<string, FailureDiagnosticDetail | string | null> {
+    if (!detail) return {};
+    return {
+      failedGateCommand: detail.command,
+      failedGateReason: detail.reason,
+      failedGateOutputSnippet: detail.outputSnippet,
+      worktreePath: detail.worktreePath,
+      firstErrorLine: detail.firstErrorLine,
+      qualityGateDetail: detail,
+    };
+  }
+
   async handleTaskFailure(
     projectId: string,
     repoPath: string,
@@ -318,6 +438,12 @@ export class FailureHandlerService {
       `${slot.phase === "review" ? "Review" : "Coding"} failed: ${effectiveReason}`,
       500
     );
+    const failureDiagnosticDetail = this.buildFailureDiagnosticDetail({
+      failureType,
+      reason: effectiveReason,
+      slot,
+      testResults,
+    });
 
     log.error(`Task ${task.id} failed [${failureType}] (attempt ${cumulativeAttempts})`, {
       reason: effectiveReason,
@@ -408,6 +534,7 @@ export class FailureHandlerService {
           reason: effectiveReason.slice(0, 500),
           summary: failureSummary,
           nextAction,
+          ...this.failureDiagnosticFields(failureDiagnosticDetail),
         },
       })
       .catch(() => {});
@@ -584,6 +711,7 @@ export class FailureHandlerService {
         agentConfig.model ?? null,
         slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
         persistedRetryContext,
+        failureDiagnosticDetail,
         remediationAction ? { nextAction: remediationAction } : undefined
       );
       return;
@@ -601,6 +729,7 @@ export class FailureHandlerService {
         extra: {
           last_execution_summary: retrySummary,
           [NEXT_RETRY_CONTEXT_KEY]: persistedRetryContext,
+          ...this.failureDiagnosticFields(failureDiagnosticDetail),
         },
       });
       eventLogService
@@ -616,6 +745,7 @@ export class FailureHandlerService {
             model: agentConfig.model ?? null,
             summary: retrySummary.summary,
             nextAction,
+            ...this.failureDiagnosticFields(failureDiagnosticDetail),
           },
         })
         .catch(() => {});
@@ -664,6 +794,7 @@ export class FailureHandlerService {
         extra: {
           last_execution_summary: retrySummary,
           [NEXT_RETRY_CONTEXT_KEY]: persistedRetryContext,
+          ...this.failureDiagnosticFields(failureDiagnosticDetail),
         },
       });
       eventLogService
@@ -679,6 +810,7 @@ export class FailureHandlerService {
             model: agentConfig.model ?? null,
             summary: retrySummary.summary,
             nextAction,
+            ...this.failureDiagnosticFields(failureDiagnosticDetail),
           },
         })
         .catch(() => {});
@@ -717,7 +849,8 @@ export class FailureHandlerService {
           slot.phase,
           agentConfig.model ?? null,
           slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
-          persistedRetryContext
+          persistedRetryContext,
+          failureDiagnosticDetail
         );
       } else {
         const newPriority = currentPriority + 1;
@@ -748,6 +881,7 @@ export class FailureHandlerService {
             extra: {
               last_execution_summary: demoteSummary,
               [NEXT_RETRY_CONTEXT_KEY]: persistedRetryContext,
+              ...this.failureDiagnosticFields(failureDiagnosticDetail),
             },
           });
         } catch {
@@ -766,6 +900,7 @@ export class FailureHandlerService {
               model: agentConfig.model ?? null,
               summary: demoteSummary.summary,
               nextAction,
+              ...this.failureDiagnosticFields(failureDiagnosticDetail),
             },
           })
           .catch(() => {});
@@ -828,6 +963,7 @@ export class FailureHandlerService {
     model?: string | null,
     notificationContext?: { effectiveReason: string; apiErrorKind: AgentApiErrorKind | null },
     retryContext?: RetryContext,
+    failureDiagnosticDetail?: FailureDiagnosticDetail | null,
     options?: { blockReason?: string; nextAction?: string }
   ): Promise<void> {
     const blockReason = options?.blockReason ?? "Coding Failure";
@@ -853,6 +989,7 @@ export class FailureHandlerService {
         extra: {
           last_execution_summary: blockSummary,
           [NEXT_RETRY_CONTEXT_KEY]: retryContext ?? null,
+          ...this.failureDiagnosticFields(failureDiagnosticDetail ?? null),
         },
       });
     } catch (err) {
@@ -872,6 +1009,7 @@ export class FailureHandlerService {
           blockReason,
           summary: blockSummary.summary,
           nextAction,
+          ...this.failureDiagnosticFields(failureDiagnosticDetail ?? null),
         },
       })
       .catch(() => {});

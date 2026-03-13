@@ -421,6 +421,87 @@ describe("FailureHandlerService", () => {
     );
   });
 
+  it("persists structured execution diagnostics for test-failure requeues", async () => {
+    const slot = makeSlot("/tmp/worktree");
+    slot.phaseResult.validationCommand = "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts";
+    slot.phaseResult.testResults = {
+      passed: 0,
+      failed: 1,
+      skipped: 0,
+      total: 1,
+      details: [
+        {
+          name: "src/foo.test.ts > auth > rejects invalid token",
+          status: "failed",
+          duration: 7,
+          error: "AssertionError: expected 401 to be 403 // Object.is equality",
+        },
+      ],
+    };
+    slot.phaseResult.testOutput = [
+      " FAIL  src/foo.test.ts > auth > rejects invalid token",
+      "AssertionError: expected 401 to be 403 // Object.is equality",
+    ].join("\n");
+    mockHost.getState = vi.fn().mockReturnValue({
+      slots: new Map([[taskId, slot]]),
+      status: { totalFailed: 0, queueDepth: 0 },
+    });
+
+    await handler.handleTaskFailure(
+      projectId,
+      repoPath,
+      makeTask(),
+      branchName,
+      "Tests failed: 1 failed, 0 passed",
+      slot.phaseResult.testResults,
+      "test_failure"
+    );
+
+    expect(mockHost.taskStore.update).toHaveBeenCalledWith(
+      projectId,
+      taskId,
+      expect.objectContaining({
+        extra: expect.objectContaining({
+          failedGateCommand: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+          failedGateReason: "Tests failed: 1 failed, 0 passed",
+          failedGateOutputSnippet: expect.stringContaining(
+            "AssertionError: expected 401 to be 403"
+          ),
+          firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
+          qualityGateDetail: expect.objectContaining({
+            command: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+            firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
+          }),
+        }),
+      })
+    );
+
+    const appendCalls = vi.mocked(eventLogService.append).mock.calls.map(([, event]) => event);
+    const failedEvent = appendCalls.find((event) => event.event === "task.failed");
+    const requeuedEvent = appendCalls.find((event) => event.event === "task.requeued");
+
+    expect(failedEvent?.data).toEqual(
+      expect.objectContaining({
+        failedGateCommand: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+        firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
+        qualityGateDetail: expect.objectContaining({
+          command: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+          firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
+        }),
+      })
+    );
+    expect(requeuedEvent?.data).toEqual(
+      expect.objectContaining({
+        failedGateCommand: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+        firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
+        qualityGateDetail: expect.objectContaining({
+          command: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+          firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
+        }),
+      })
+    );
+  });
+
   describe("failure comment", () => {
     it("includes explicit inactivity message for timeout failures", async () => {
       const mockComment = vi.fn().mockResolvedValue(undefined);

@@ -214,10 +214,10 @@ describe("TaskExecutionDiagnosticsService", () => {
     const diagnosticsQualityGate = diagnostics as {
       latestQualityGateDetail?: unknown;
       timeline: Array<{ qualityGateDetail?: unknown }>;
+      attempts: Array<{ qualityGateDetail?: unknown }>;
     };
 
-    expect(diagnostics.latestSummary).toContain("cmd: npm run build");
-    expect(diagnostics.latestSummary).toContain("error: Cannot find module");
+    expect(diagnostics.latestSummary).toContain("npm run build: Cannot find module");
     expect(diagnostics.latestSummary).toContain("repair: npm ci -> npm install (failed)");
     expect(diagnostics.latestSummary).toContain("category: environment_setup");
     expect(diagnosticsQualityGate.latestQualityGateDetail).toEqual({
@@ -234,6 +234,123 @@ describe("TaskExecutionDiagnosticsService", () => {
       worktreePath: "/tmp/worktree/os-eeac.39",
       firstErrorLine: "Cannot find module 'better-sqlite3'",
     });
+    expect(diagnosticsQualityGate.attempts[0]?.qualityGateDetail).toEqual({
+      command: "npm run build",
+      reason: "Command failed with exit code 1",
+      outputSnippet: "Cannot find module 'better-sqlite3'",
+      worktreePath: "/tmp/worktree/os-eeac.39",
+      firstErrorLine: "Cannot find module 'better-sqlite3'",
+    });
+  });
+
+  it("prefers the latest execution failure detail over stale task-level gate metadata after requeue", async () => {
+    taskStore.show.mockResolvedValue({
+      id: taskId,
+      status: "open",
+      labels: ["attempts:3"],
+      block_reason: null,
+      last_execution_summary: null,
+      failedGateCommand: "npm run build",
+      failedGateReason: "Command failed with exit code 1",
+      failedGateOutputSnippet: "stale build error",
+      worktreePath: "/tmp/worktree/stale",
+      qualityGateDetail: {
+        command: "npm run build",
+        reason: "Command failed with exit code 1",
+        outputSnippet: "stale build error",
+        worktreePath: "/tmp/worktree/stale",
+        firstErrorLine: "stale build error",
+      },
+    });
+    taskStore.getCumulativeAttemptsFromIssue.mockReturnValue(3);
+    sessionManager.listSessions.mockResolvedValue([]);
+    mockReadForTask.mockResolvedValue([
+      {
+        timestamp: "2026-03-03T08:00:00.000Z",
+        projectId,
+        taskId,
+        event: "transition.start_task",
+        data: { attempt: 3 },
+      },
+      {
+        timestamp: "2026-03-03T08:01:00.000Z",
+        projectId,
+        taskId,
+        event: "task.failed",
+        data: {
+          attempt: 3,
+          phase: "coding",
+          failureType: "test_failure",
+          summary: "Coding failed: Tests failed: 1 failed, 0 passed",
+          nextAction: "Requeued for retry",
+          failedGateCommand: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+          failedGateReason: "Tests failed: 1 failed, 0 passed",
+          failedGateOutputSnippet:
+            "FAIL src/foo.test.ts > auth > rejects invalid token\nAssertionError: expected 401 to be 403 // Object.is equality",
+          firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
+          worktreePath: "/tmp/worktree/os-eeac.39",
+          qualityGateDetail: {
+            command: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+            reason: "Tests failed: 1 failed, 0 passed",
+            outputSnippet:
+              "FAIL src/foo.test.ts > auth > rejects invalid token\nAssertionError: expected 401 to be 403 // Object.is equality",
+            worktreePath: "/tmp/worktree/os-eeac.39",
+            firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
+          },
+        },
+      },
+      {
+        timestamp: "2026-03-03T08:01:05.000Z",
+        projectId,
+        taskId,
+        event: "task.requeued",
+        data: {
+          attempt: 3,
+          phase: "coding",
+          failureType: "test_failure",
+          summary: "Coding failed: Tests failed: 1 failed, 0 passed. Requeued for retry",
+          nextAction: "Requeued for retry",
+        },
+      },
+    ]);
+
+    const service = new TaskExecutionDiagnosticsService(
+      projectService as never,
+      taskStore as never,
+      sessionManager as never
+    );
+
+    const diagnostics = await service.getDiagnostics(projectId, taskId);
+    const diagnosticsQualityGate = diagnostics as {
+      latestQualityGateDetail?: unknown;
+      timeline: Array<{ qualityGateDetail?: unknown }>;
+      attempts: Array<{ qualityGateDetail?: unknown; finalSummary: string }>;
+    };
+
+    expect(diagnostics.latestSummary).toContain(
+      "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts: AssertionError: expected 401 to be 403"
+    );
+    expect(diagnostics.latestSummary).not.toContain("stale build error");
+    expect(diagnosticsQualityGate.latestQualityGateDetail).toEqual({
+      command: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+      reason: "Tests failed: 1 failed, 0 passed",
+      outputSnippet:
+        "FAIL src/foo.test.ts > auth > rejects invalid token\nAssertionError: expected 401 to be 403 // Object.is equality",
+      worktreePath: "/tmp/worktree/os-eeac.39",
+      firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
+    });
+    expect(diagnosticsQualityGate.timeline.at(-1)?.qualityGateDetail).toBeUndefined();
+    expect(diagnosticsQualityGate.attempts[0]?.qualityGateDetail).toEqual({
+      command: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+      reason: "Tests failed: 1 failed, 0 passed",
+      outputSnippet:
+        "FAIL src/foo.test.ts > auth > rejects invalid token\nAssertionError: expected 401 to be 403 // Object.is equality",
+      worktreePath: "/tmp/worktree/os-eeac.39",
+      firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
+    });
+    expect(diagnosticsQualityGate.attempts[0]?.finalSummary).toContain(
+      "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts: AssertionError: expected 401 to be 403"
+    );
   });
 
   it("surfaces running tool-wait diagnostics for active attempts", async () => {

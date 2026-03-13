@@ -60,6 +60,7 @@ export interface TaskExecutionAttemptItem {
   blockReason?: string | null;
   mergeStage?: string | null;
   conflictedFiles?: string[];
+  qualityGateDetail?: QualityGateDiagnosticDetail | null;
   sessionAttemptStatuses: string[];
 }
 
