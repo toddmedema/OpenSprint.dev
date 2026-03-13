@@ -660,6 +660,61 @@ describe("FailureHandlerService", () => {
       );
     });
 
+    it("requeues no_result failures caused by lost internet without API-blocked notification", async () => {
+      const slot = makeSlot("/tmp/worktree");
+      slot.agent.outputLog = [
+        "[Agent error: Lost internet connection. Open Sprint could not reach 8.8.8.8:53. Check your network and retry.]\n",
+      ];
+      const mockUpdate = vi.fn().mockResolvedValue(undefined);
+      const mockDeleteAssignment = vi.fn().mockResolvedValue(undefined);
+      const mockSetCumulativeAttempts = vi.fn().mockResolvedValue(undefined);
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+      mockHost.taskStore = {
+        ...mockHost.taskStore,
+        update: mockUpdate,
+        setCumulativeAttempts: mockSetCumulativeAttempts,
+      };
+      mockHost.deleteAssignment = mockDeleteAssignment;
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        "The coding agent stopped without reporting whether the task succeeded or failed.",
+        null,
+        "no_result"
+      );
+
+      expect(mockExecuteCodingPhase).not.toHaveBeenCalled();
+      expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, taskId, "/tmp/worktree");
+      expect(mockDeleteAssignment).toHaveBeenCalledWith(repoPath, taskId);
+      expect(mockSetCumulativeAttempts).not.toHaveBeenCalled();
+      expect(notificationService.createApiBlocked).not.toHaveBeenCalled();
+      expect(notificationService.createAgentFailed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining("Lost internet connection"),
+        })
+      );
+      expect(mockUpdate).toHaveBeenCalledWith(
+        projectId,
+        taskId,
+        expect.objectContaining({
+          status: "open",
+          assignee: "",
+          extra: expect.objectContaining({
+            last_execution_summary: expect.objectContaining({
+              outcome: "requeued",
+              failureType: "no_result",
+            }),
+          }),
+        })
+      );
+    });
+
     it("ignores punctuation-only no_result fragments when enriching the failure reason", async () => {
       const slot = makeSlot("/tmp/worktree");
       slot.agent.outputLog = ["}\n"];

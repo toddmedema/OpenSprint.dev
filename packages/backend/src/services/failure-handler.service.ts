@@ -22,6 +22,7 @@ import { broadcastToProject } from "../websocket/index.js";
 import { createLogger } from "../utils/logger.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { classifyAgentApiError, type AgentApiErrorKind } from "../utils/error-utils.js";
+import { isLostInternetMessage } from "../utils/connectivity-check.js";
 import { notificationService } from "./notification.service.js";
 import { buildTaskLastExecutionSummary, compactExecutionText } from "./task-execution-summary.js";
 import { resolveBaseBranch } from "../utils/git-repo-state.js";
@@ -225,6 +226,11 @@ export class FailureHandlerService {
       /timed out after 5 minutes/i,
     ];
     return fatalPatterns.some((pattern) => pattern.test(reason));
+  }
+
+  private isOfflineConnectivityFailure(failureType: FailureType, reason: string): boolean {
+    if (failureType !== "no_result") return false;
+    return isLostInternetMessage(reason);
   }
 
   private truncateRetryContextText(value: string | undefined, limit: number): string | undefined {
@@ -477,6 +483,7 @@ export class FailureHandlerService {
     const apiErrorKind = classifyAgentApiError(
       new Error(effectiveReason)
     ) as AgentApiErrorKind | null;
+    const offlineConnectivityFailure = this.isOfflineConnectivityFailure(failureType, effectiveReason);
     // Surface failures in the notification system only when not a review-phase failure, or when
     // we will block (review notifications are created in blockTask when retries exceed limit).
     if (slot.phase !== "review") {
@@ -657,13 +664,15 @@ export class FailureHandlerService {
       .comment(projectId, task.id, commentText)
       .catch((err) => log.warn("Failed to add failure comment", { err }));
 
-    if (failureType === "no_result" && apiErrorKind) {
+    if (failureType === "no_result" && (apiErrorKind || offlineConnectivityFailure)) {
       const retrySummary = buildTaskLastExecutionSummary({
         attempt: cumulativeAttempts,
         outcome: "requeued",
         phase: slot.phase,
         failureType,
-        summary: `${failureSummary}. Waiting for API issue to be resolved.`,
+        summary: offlineConnectivityFailure
+          ? `${failureSummary}. Waiting for internet connectivity to recover.`
+          : `${failureSummary}. Waiting for API issue to be resolved.`,
       });
       await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
         baseBranch,

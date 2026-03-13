@@ -68,6 +68,11 @@ const { mockOpenAICreate, mockOpenAIResponsesCreate } = vi.hoisted(() => ({
   mockOpenAIResponsesCreate: vi.fn(),
 }));
 
+const { mockCheckInternetConnectivity, mockBuildLostInternetMessage } = vi.hoisted(() => ({
+  mockCheckInternetConnectivity: vi.fn(),
+  mockBuildLostInternetMessage: vi.fn(),
+}));
+
 vi.mock("openai", () => ({
   default: vi.fn().mockImplementation(() => ({
     chat: {
@@ -79,6 +84,11 @@ vi.mock("openai", () => ({
       create: (...args: unknown[]) => mockOpenAIResponsesCreate(...args),
     },
   })),
+}));
+
+vi.mock("../utils/connectivity-check.js", () => ({
+  checkInternetConnectivity: (...args: unknown[]) => mockCheckInternetConnectivity(...args),
+  buildLostInternetMessage: (...args: unknown[]) => mockBuildLostInternetMessage(...args),
 }));
 
 vi.mock("../services/api-key-resolver.service.js", () => ({
@@ -143,6 +153,11 @@ describe("AgentClient", () => {
     Object.defineProperty(process, "platform", { value: originalPlatform });
     client = new AgentClient();
     vi.clearAllMocks();
+    mockCheckInternetConnectivity.mockResolvedValue({ reachable: true, target: "8.8.8.8:53" });
+    mockBuildLostInternetMessage.mockImplementation(
+      (target: string) =>
+        `Lost internet connection. Open Sprint could not reach ${target}. Check your network and retry.`
+    );
   });
 
   describe("invoke", () => {
@@ -1134,6 +1149,55 @@ describe("AgentClient", () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     });
 
+    it("does not rotate OpenAI keys when connectivity check indicates offline", async () => {
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const os = await import("os");
+      const tmpDir = path.join(os.tmpdir(), `agent-client-openai-offline-${Date.now()}`);
+      const taskDir = path.join(tmpDir, ".opensprint/active/os-openai-offline.1");
+      await fs.mkdir(taskDir, { recursive: true });
+      const taskFilePath = path.join(taskDir, "prompt.md");
+      await fs.writeFile(taskFilePath, "# Task\n\nHandle offline case", "utf-8");
+
+      mockGetNextKey.mockResolvedValue({ key: "sk-openai-only", keyId: "k1", source: "global" });
+      mockOpenAICreate.mockRejectedValueOnce(new Error("401 invalid_api_key"));
+      mockCheckInternetConnectivity.mockResolvedValue({
+        reachable: false,
+        target: "8.8.8.8:53",
+      });
+
+      const onOutput = vi.fn();
+      const onExit = vi.fn();
+      const config: AgentConfig = { type: "openai", model: "gpt-4o-mini", cliCommand: null };
+
+      client.spawnWithTaskFile(
+        config,
+        taskFilePath,
+        tmpDir,
+        onOutput,
+        onExit,
+        "coder",
+        undefined,
+        "proj-openai-offline"
+      );
+
+      await vi.waitFor(
+        () => {
+          expect(onExit).toHaveBeenCalledWith(1);
+        },
+        { timeout: 2000 }
+      );
+
+      expect(mockGetNextKey).toHaveBeenCalledTimes(1);
+      expect(mockRecordInvalidKey).not.toHaveBeenCalled();
+      expect(mockRecordLimitHit).not.toHaveBeenCalled();
+      expect(onOutput).toHaveBeenCalledWith(
+        expect.stringContaining("[Agent error: Lost internet connection.")
+      );
+
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    });
+
     it("should run Google Gemini in-process for spawnWithTaskFile (no subprocess)", async () => {
       const fs = await import("fs/promises");
       const path = await import("path");
@@ -1683,6 +1747,71 @@ describe("AgentClient", () => {
 
       expect(mockRecordInvalidKey).not.toHaveBeenCalled();
       expect(mockGetNextKey).toHaveBeenCalledTimes(1);
+
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    });
+
+    it("does not rotate Cursor keys when detached API auth error occurs while offline", async () => {
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const os = await import("os");
+      const tmpDir = path.join(os.tmpdir(), `agent-client-output-cursor-offline-${Date.now()}`);
+      const taskDir = path.join(tmpDir, ".opensprint/active/bd-offline.1");
+      await fs.mkdir(taskDir, { recursive: true });
+      const taskFilePath = path.join(taskDir, "prompt.md");
+      await fs.writeFile(taskFilePath, "# Task\n\nCheck offline auth handling", "utf-8");
+      const outputLogPath = path.join(taskDir, "output.log");
+
+      mockGetNextKey.mockResolvedValue({ key: "cursor-key", keyId: "k1", source: "global" });
+      mockCheckInternetConnectivity.mockResolvedValue({
+        reachable: false,
+        target: "8.8.8.8:53",
+      });
+
+      const mockChild = {
+        killed: false,
+        kill: vi.fn(),
+        pid: 10005,
+        stdout: { on: vi.fn(), removeAllListeners: vi.fn() },
+        stderr: { on: vi.fn(), removeAllListeners: vi.fn() },
+        on: vi.fn((ev: string, fn: (code?: number) => void) => {
+          if (ev === "close") setTimeout(() => fn(1), 20);
+          return { on: vi.fn(), removeAllListeners: vi.fn() };
+        }),
+        removeAllListeners: vi.fn(),
+      };
+      mockSpawn.mockReturnValue(mockChild);
+
+      const onOutput = vi.fn();
+      const onExit = vi.fn();
+      const config: AgentConfig = { type: "cursor", model: "gpt-4", cliCommand: null };
+
+      client.spawnWithTaskFile(
+        config,
+        taskFilePath,
+        tmpDir,
+        onOutput,
+        onExit,
+        "coder",
+        outputLogPath,
+        "proj-123"
+      );
+
+      await fs.writeFile(outputLogPath, "S: Unauthorized: invalid api key\n", "utf-8");
+
+      await vi.waitFor(
+        () => {
+          expect(onExit).toHaveBeenCalledWith(1);
+        },
+        { timeout: 2000 }
+      );
+
+      expect(mockGetNextKey).toHaveBeenCalledTimes(1);
+      expect(mockRecordInvalidKey).not.toHaveBeenCalled();
+      expect(mockRecordLimitHit).not.toHaveBeenCalled();
+      expect(onOutput).toHaveBeenCalledWith(
+        expect.stringContaining("[Agent error: Lost internet connection.")
+      );
 
       await fs.rm(tmpDir, { recursive: true, force: true });
     });

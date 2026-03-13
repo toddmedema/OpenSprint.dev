@@ -18,6 +18,10 @@ import {
   isLimitError,
 } from "../utils/error-utils.js";
 import {
+  buildLostInternetMessage,
+  checkInternetConnectivity,
+} from "../utils/connectivity-check.js";
+import {
   isOpenAIResponsesModel,
   toOpenAIResponsesInputMessage,
   type OpenAIResponsesInputMessage,
@@ -522,6 +526,45 @@ function toCursorRotatableApiErrorKind(err: unknown): RotatableApiErrorKind | nu
   return isCursorSessionAuthError(err) ? null : kind;
 }
 
+const API_CONNECTIVITY_ERROR_PATTERNS = [
+  /\b401\b/i,
+  /\b429\b/i,
+  /\bunauthorized\b/i,
+  /\binvalid api key\b/i,
+  /\binvalid token\b/i,
+  /\bauthentication required\b/i,
+  /\brate[_\s-]?limit\b/i,
+  /\binsufficient_quota\b/i,
+  /\bresource exhausted\b/i,
+  /\btimeout\b/i,
+  /\btimed out\b/i,
+  /\betimedout\b/i,
+  /\beconnreset\b/i,
+  /\beconnrefused\b/i,
+  /\benotfound\b/i,
+  /\beai_again\b/i,
+  /\bfetch failed\b/i,
+  /\bnetwork\b/i,
+  /\bsocket hang up\b/i,
+  /\bconnection error\b/i,
+  /\bunable to connect\b/i,
+];
+
+function shouldRunConnectivityCheckOnApiFailure(errorLike: unknown): boolean {
+  if (toRotatableApiErrorKind(errorLike)) return true;
+  const text =
+    typeof errorLike === "string" ? errorLike : getCombinedErrorText(errorLike).toLowerCase();
+  if (!text.trim()) return false;
+  return API_CONNECTIVITY_ERROR_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+async function getOfflineFailureMessage(errorLike: unknown): Promise<string | null> {
+  if (!shouldRunConnectivityCheckOnApiFailure(errorLike)) return null;
+  const connectivity = await checkInternetConnectivity();
+  if (connectivity.reachable) return null;
+  return buildLostInternetMessage(connectivity.target);
+}
+
 function getProviderBlockedMessage(provider: ApiKeyProvider, kind: RotatableApiErrorKind): string {
   const providerLabel =
     provider === "ANTHROPIC_API_KEY"
@@ -828,6 +871,12 @@ export class AgentClient {
           return trySpawn();
         }
 
+        const offlineMessage = await getOfflineFailureMessage(combinedOutput);
+        if (offlineMessage) {
+          onOutput(`[Agent error: ${offlineMessage}]\n`);
+          return Promise.resolve(onExit(1));
+        }
+
         const apiErrorKind = toCursorRotatableApiErrorKind(apiErrorOutput);
         if (apiErrorKind && keyId !== ENV_FALLBACK_KEY_ID) {
           lastApiErrorKind = apiErrorKind;
@@ -1005,6 +1054,11 @@ export class AgentClient {
           return Promise.resolve(onExit(0)).catch((e) => log.error("onExit failed", { err: e }));
         } catch (error: unknown) {
           lastError = error;
+          const offlineMessage = await getOfflineFailureMessage(error);
+          if (offlineMessage) {
+            emit(`[Agent error: ${offlineMessage}]\n`);
+            return Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
+          }
           const apiErrorKind = toRotatableApiErrorKind(error);
           if (projectId && apiErrorKind && keyId !== ENV_FALLBACK_KEY_ID) {
             if (apiErrorKind === "rate_limit") {
@@ -1148,6 +1202,11 @@ export class AgentClient {
           return Promise.resolve(onExit(0)).catch((e) => log.error("onExit failed", { err: e }));
         } catch (error: unknown) {
           lastError = error;
+          const offlineMessage = await getOfflineFailureMessage(error);
+          if (offlineMessage) {
+            emit(`[Agent error: ${offlineMessage}]\n`);
+            return Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
+          }
           const apiErrorKind = toRotatableApiErrorKind(error);
           if (projectId && apiErrorKind && keyId !== ENV_FALLBACK_KEY_ID) {
             if (apiErrorKind === "rate_limit") {
@@ -1291,6 +1350,11 @@ export class AgentClient {
           return Promise.resolve(onExit(0)).catch((e) => log.error("onExit failed", { err: e }));
         } catch (error: unknown) {
           lastError = error;
+          const offlineMessage = await getOfflineFailureMessage(error);
+          if (offlineMessage) {
+            emit(`[Agent error: ${offlineMessage}]\n`);
+            return Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
+          }
           const apiErrorKind = toRotatableApiErrorKind(error);
           if (projectId && apiErrorKind && keyId !== ENV_FALLBACK_KEY_ID) {
             if (apiErrorKind === "rate_limit") {
@@ -1956,6 +2020,14 @@ export class AgentClient {
         return { content };
       } catch (error: unknown) {
         lastError = error;
+        const offlineMessage = await getOfflineFailureMessage(error);
+        if (offlineMessage) {
+          throw new AppError(503, ErrorCodes.AGENT_INVOKE_FAILED, offlineMessage, {
+            agentType: "cursor",
+            raw: getErrorMessage(error),
+            isConnectivityError: true,
+          });
+        }
         const apiErrorKind = toCursorRotatableApiErrorKind(error);
         if (projectId && apiErrorKind && keyId !== ENV_FALLBACK_KEY_ID) {
           if (apiErrorKind === "rate_limit") {
@@ -2251,6 +2323,14 @@ export class AgentClient {
         return { content };
       } catch (error: unknown) {
         lastError = error;
+        const offlineMessage = await getOfflineFailureMessage(error);
+        if (offlineMessage) {
+          throw new AppError(503, ErrorCodes.AGENT_INVOKE_FAILED, offlineMessage, {
+            agentType: "openai",
+            raw: getErrorMessage(error),
+            isConnectivityError: true,
+          });
+        }
         const apiErrorKind = toRotatableApiErrorKind(error);
         if (projectId && apiErrorKind && keyId !== ENV_FALLBACK_KEY_ID) {
           if (apiErrorKind === "rate_limit") {
@@ -2433,6 +2513,14 @@ export class AgentClient {
         return { content };
       } catch (error: unknown) {
         lastError = error;
+        const offlineMessage = await getOfflineFailureMessage(error);
+        if (offlineMessage) {
+          throw new AppError(503, ErrorCodes.AGENT_INVOKE_FAILED, offlineMessage, {
+            agentType: "google",
+            raw: getErrorMessage(error),
+            isConnectivityError: true,
+          });
+        }
         const apiErrorKind = toRotatableApiErrorKind(error);
         if (projectId && apiErrorKind && keyId !== ENV_FALLBACK_KEY_ID) {
           if (apiErrorKind === "rate_limit") {
