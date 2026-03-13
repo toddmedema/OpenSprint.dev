@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { configureStore } from "@reduxjs/toolkit";
 import connectionReducer, { setConnectionError } from "./connectionSlice";
 
-function createStore(
-  preloadedState?: { connection?: { connectionError: boolean; lastRecoveredAt?: number | null } }
-) {
+function createStore(preloadedState?: {
+  connection?: { connectionError: boolean; lastRecoveredAt?: number | null };
+}) {
   return configureStore({
     reducer: { connection: connectionReducer },
     preloadedState,

@@ -14,8 +14,13 @@ describe("DatabaseUnavailableState", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("heading", { level: 1, name: "Database unavailable" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open Settings" })).toHaveAttribute("href", "/settings");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Database unavailable" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Settings" })).toHaveAttribute(
+      "href",
+      "/settings"
+    );
   });
 
   it("displays the message and uses aria-describedby for screen readers", () => {
@@ -35,14 +40,13 @@ describe("DatabaseUnavailableState", () => {
   it("renders as region landmark with clear structure", () => {
     render(
       <MemoryRouter>
-        <DatabaseUnavailableState
-          message="Database is down."
-          settingsHref="/projects/1/settings"
-        />
+        <DatabaseUnavailableState message="Database is down." settingsHref="/projects/1/settings" />
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/Project phase content is unavailable until the database reconnects/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Project phase content is unavailable until the database reconnects/)
+    ).toBeInTheDocument();
     const region = screen.getByTestId("database-unavailable-state");
     expect(region).toHaveAttribute("role", "region");
   });

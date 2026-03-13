@@ -24,4 +24,3 @@ describe("designTokens", () => {
     expect(getDesignTokenVar("overlay", "default")).toBe("--ui-overlay-default");
   });
 });
-

@@ -107,7 +107,10 @@ export function HilApprovalBlock({
                 toVersion="proposed"
               />
             ) : showDiffError ? (
-              <div className="rounded border border-theme-error-border bg-theme-error-bg/50 p-3" data-testid="hil-diff-error">
+              <div
+                className="rounded border border-theme-error-border bg-theme-error-bg/50 p-3"
+                data-testid="hil-diff-error"
+              >
                 <p className="text-sm text-theme-error mb-2">{diffErrorMessage}</p>
                 <button
                   type="button"

@@ -433,8 +433,16 @@ export class AgentService {
   }
 
   private async recordAgentRunStat(params: AgentRunStatParams): Promise<void> {
-    const { tracking, role: paramRole, runId, config, projectId, startedAt, completedAt, outcome } =
-      params;
+    const {
+      tracking,
+      role: paramRole,
+      runId,
+      config,
+      projectId,
+      startedAt,
+      completedAt,
+      outcome,
+    } = params;
     const targetProjectId = tracking?.projectId ?? projectId;
     const role = tracking?.role ?? paramRole;
     const taskId = tracking?.id ?? runId;
@@ -487,8 +495,7 @@ export class AgentService {
 
   private async recordMergerSession(params: MergerSessionRecordParams): Promise<void> {
     const taskLabel = params.taskId.trim() || "(no task id)";
-    const fallbackOutput =
-      `[Merger ${params.outcome}] phase=${params.phase} task=${taskLabel} branch=${params.branchName}\n`;
+    const fallbackOutput = `[Merger ${params.outcome}] phase=${params.phase} task=${taskLabel} branch=${params.branchName}\n`;
     const outputLog = params.outputLog.trim().length > 0 ? params.outputLog : fallbackOutput;
     const truncatedOutput = truncateToThreshold(outputLog, LOG_DIFF_TRUNCATE_AT_CHARS);
     const failureReason =

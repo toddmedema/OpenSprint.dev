@@ -2,9 +2,12 @@ import { describe, it, expect } from "vitest";
 import { configureStore } from "@reduxjs/toolkit";
 import routeReducer, { setRoute } from "./routeSlice";
 
-function createStore(
-  preloadedState?: { route?: { projectId: string | null; phase: "plan" | "sketch" | "execute" | "eval" | "deliver" | null } }
-) {
+function createStore(preloadedState?: {
+  route?: {
+    projectId: string | null;
+    phase: "plan" | "sketch" | "execute" | "eval" | "deliver" | null;
+  };
+}) {
   return configureStore({
     reducer: { route: routeReducer },
     preloadedState,

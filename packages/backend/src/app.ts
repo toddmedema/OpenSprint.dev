@@ -69,14 +69,22 @@ export function createApp(services?: AppServices) {
   app.use(`${API_PREFIX}/projects/:projectId/plan-status`, requireDatabase);
   app.use(`${API_PREFIX}/projects`, createProjectsRouter(projectService, planService));
   app.use(`${API_PREFIX}/projects/:projectId/prd`, requireDatabase, prdRouter);
-  app.use(`${API_PREFIX}/projects/:projectId/plans`, requireDatabase, createPlansRouter(planService));
+  app.use(
+    `${API_PREFIX}/projects/:projectId/plans`,
+    requireDatabase,
+    createPlansRouter(planService)
+  );
   app.use(`${API_PREFIX}/projects/:projectId/chat`, requireDatabase, chatRouter);
   app.use(
     `${API_PREFIX}/projects/:projectId/execute`,
     requireDatabase,
     createExecuteRouter(taskService, projectService, sessionManager)
   );
-  app.use(`${API_PREFIX}/projects/:projectId/deliver`, requireDatabase, createDeliverRouter(projectService));
+  app.use(
+    `${API_PREFIX}/projects/:projectId/deliver`,
+    requireDatabase,
+    createDeliverRouter(projectService)
+  );
   app.use(`${API_PREFIX}/projects/:projectId/agents`, requireDatabase, agentsRouter);
   app.use(
     `${API_PREFIX}/projects/:projectId/tasks`,

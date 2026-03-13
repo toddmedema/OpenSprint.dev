@@ -10,8 +10,7 @@ export const DESIGN_TOKEN_CONTRACT = {
 
 export type DesignTokenGroup = keyof typeof DESIGN_TOKEN_CONTRACT;
 
-export type DesignTokenName<G extends DesignTokenGroup> =
-  (typeof DESIGN_TOKEN_CONTRACT)[G][number];
+export type DesignTokenName<G extends DesignTokenGroup> = (typeof DESIGN_TOKEN_CONTRACT)[G][number];
 
 export function getDesignTokenVar<G extends DesignTokenGroup>(
   group: G,
@@ -19,4 +18,3 @@ export function getDesignTokenVar<G extends DesignTokenGroup>(
 ): string {
   return `--ui-${group}-${name}`;
 }
-

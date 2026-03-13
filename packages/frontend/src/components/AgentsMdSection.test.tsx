@@ -84,7 +84,9 @@ describe("AgentsMdSection", () => {
 
     await screen.findByTestId("agents-md-view");
     await screen.findByText("Use bd for tasks.");
-    expect(screen.getByRole("heading", { level: 3, name: "Agent Instructions" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Agent Instructions" })
+    ).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Agent Instructions");
     expect(screen.getByTestId("agents-md-edit")).toBeInTheDocument();
   });
@@ -125,7 +127,9 @@ describe("AgentsMdSection", () => {
     renderSection();
 
     await screen.findByText(/Network error|Failed to load/);
-    expect(screen.getByRole("heading", { level: 3, name: "Agent Instructions" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Agent Instructions" })
+    ).toBeInTheDocument();
   });
 
   it("switches to edit mode when Edit is clicked", async () => {
@@ -372,7 +376,9 @@ describe("AgentsMdSection", () => {
       expect(mockGetAgentsInstructionsForRole).toHaveBeenCalledWith(projectId, "coder")
     );
     expect(
-      screen.getByText(/No role-specific instructions. Add instructions that apply only to this agent./)
+      screen.getByText(
+        /No role-specific instructions. Add instructions that apply only to this agent./
+      )
     ).toBeInTheDocument();
   });
 

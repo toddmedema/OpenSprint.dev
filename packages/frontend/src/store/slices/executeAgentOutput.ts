@@ -70,9 +70,7 @@ export const agentOutputReducers = {
   },
 };
 
-export function addAgentOutputExtraReducers(
-  builder: ActionReducerMapBuilder<ExecuteState>
-): void {
+export function addAgentOutputExtraReducers(builder: ActionReducerMapBuilder<ExecuteState>): void {
   createAsyncHandlers("archived", fetchArchivedSessions, builder, {
     ensureState: ensureAsync,
     onFulfilled: (state, action) => {

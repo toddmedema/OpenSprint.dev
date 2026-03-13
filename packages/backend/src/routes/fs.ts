@@ -61,40 +61,40 @@ interface BrowseResult {
 fsRouter.get(
   "/browse",
   wrapAsync(async (req: Request<object, object, object, { path?: string }>, res) => {
-      const rawPath = req.query.path;
-      const targetPath = rawPath?.trim() ? resolve(rawPath) : getDefaultBrowseRoot();
+    const rawPath = req.query.path;
+    const targetPath = rawPath?.trim() ? resolve(rawPath) : getDefaultBrowseRoot();
 
-      if (shouldEnforcePathRestriction() && !isPathUnderRoot(targetPath)) {
-        throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
-      }
-      if (!existsSync(targetPath)) {
-        throw new AppError(404, ErrorCodes.NOT_FOUND, "Directory does not exist");
-      }
+    if (shouldEnforcePathRestriction() && !isPathUnderRoot(targetPath)) {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
+    }
+    if (!existsSync(targetPath)) {
+      throw new AppError(404, ErrorCodes.NOT_FOUND, "Directory does not exist");
+    }
 
-      const pathStat = await stat(targetPath);
-      if (!pathStat.isDirectory()) {
-        throw new AppError(400, ErrorCodes.NOT_DIRECTORY, "Path is not a directory");
-      }
+    const pathStat = await stat(targetPath);
+    if (!pathStat.isDirectory()) {
+      throw new AppError(400, ErrorCodes.NOT_DIRECTORY, "Path is not a directory");
+    }
 
-      const entries = await readdir(targetPath, { withFileTypes: true });
-      const dirEntries = entries
-        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
-        .map((e) => ({
-          name: e.name,
-          path: join(targetPath, e.name),
-          isDirectory: true,
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+    const entries = await readdir(targetPath, { withFileTypes: true });
+    const dirEntries = entries
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) => ({
+        name: e.name,
+        path: join(targetPath, e.name),
+        isDirectory: true,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 
-      const parentPath = dirname(targetPath);
-      const result: BrowseResult = {
-        current: targetPath,
-        parent: parentPath !== targetPath ? parentPath : null,
-        entries: dirEntries,
-      };
+    const parentPath = dirname(targetPath);
+    const result: BrowseResult = {
+      current: targetPath,
+      parent: parentPath !== targetPath ? parentPath : null,
+      entries: dirEntries,
+    };
 
-      const body: ApiResponse<BrowseResult> = { data: result };
-      res.json(body);
+    const body: ApiResponse<BrowseResult> = { data: result };
+    res.json(body);
   })
 );
 
@@ -107,50 +107,53 @@ interface CreateFolderBody {
 fsRouter.post(
   "/create-folder",
   wrapAsync(async (req: Request<object, object, CreateFolderBody>, res) => {
-      const { parentPath, name } = req.body ?? {};
-      if (!parentPath || typeof parentPath !== "string" || !name || typeof name !== "string") {
-        throw new AppError(400, ErrorCodes.INVALID_INPUT, "parentPath and name are required");
-      }
-      const trimmedName = name.trim();
-      if (!trimmedName || trimmedName === "." || trimmedName === "..") {
-        throw new AppError(400, ErrorCodes.INVALID_INPUT, "Invalid folder name");
-      }
-      if (trimmedName.includes("/") || trimmedName.includes("\\")) {
-        throw new AppError(
-          400,
-          ErrorCodes.INVALID_INPUT,
-          "Folder name cannot contain path separators"
-        );
-      }
+    const { parentPath, name } = req.body ?? {};
+    if (!parentPath || typeof parentPath !== "string" || !name || typeof name !== "string") {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "parentPath and name are required");
+    }
+    const trimmedName = name.trim();
+    if (!trimmedName || trimmedName === "." || trimmedName === "..") {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Invalid folder name");
+    }
+    if (trimmedName.includes("/") || trimmedName.includes("\\")) {
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "Folder name cannot contain path separators"
+      );
+    }
 
-      const parentResolved = resolve(parentPath);
-      const newPath = join(parentResolved, trimmedName);
-      if (!newPath.startsWith(parentResolved)) {
-        throw new AppError(400, ErrorCodes.INVALID_INPUT, "Invalid path");
-      }
-      if (shouldEnforcePathRestriction() && (!isPathUnderRoot(parentResolved) || !isPathUnderRoot(newPath))) {
-        throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
-      }
+    const parentResolved = resolve(parentPath);
+    const newPath = join(parentResolved, trimmedName);
+    if (!newPath.startsWith(parentResolved)) {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Invalid path");
+    }
+    if (
+      shouldEnforcePathRestriction() &&
+      (!isPathUnderRoot(parentResolved) || !isPathUnderRoot(newPath))
+    ) {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
+    }
 
-      if (!existsSync(parentResolved)) {
-        throw new AppError(404, ErrorCodes.NOT_FOUND, "Parent directory does not exist");
-      }
-      const parentStat = await stat(parentResolved);
-      if (!parentStat.isDirectory()) {
-        throw new AppError(400, ErrorCodes.NOT_DIRECTORY, "Parent path is not a directory");
-      }
+    if (!existsSync(parentResolved)) {
+      throw new AppError(404, ErrorCodes.NOT_FOUND, "Parent directory does not exist");
+    }
+    const parentStat = await stat(parentResolved);
+    if (!parentStat.isDirectory()) {
+      throw new AppError(400, ErrorCodes.NOT_DIRECTORY, "Parent path is not a directory");
+    }
 
-      if (existsSync(newPath)) {
-        throw new AppError(
-          409,
-          ErrorCodes.ALREADY_EXISTS,
-          "A file or folder with that name already exists"
-        );
-      }
+    if (existsSync(newPath)) {
+      throw new AppError(
+        409,
+        ErrorCodes.ALREADY_EXISTS,
+        "A file or folder with that name already exists"
+      );
+    }
 
-      await mkdir(newPath, { recursive: false });
-      const body: ApiResponse<{ path: string }> = { data: { path: newPath } };
-      res.json(body);
+    await mkdir(newPath, { recursive: false });
+    const body: ApiResponse<{ path: string }> = { data: { path: newPath } };
+    res.json(body);
   })
 );
 
@@ -158,23 +161,23 @@ fsRouter.post(
 fsRouter.get(
   "/detect-test-framework",
   wrapAsync(async (req: Request<object, object, object, { path?: string }>, res) => {
-      const rawPath = req.query.path?.trim();
-      if (!rawPath) {
-        throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path query parameter is required");
-      }
+    const rawPath = req.query.path?.trim();
+    if (!rawPath) {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path query parameter is required");
+    }
 
-      const targetPath = resolve(rawPath);
-      if (shouldEnforcePathRestriction() && !isPathUnderRoot(targetPath)) {
-        throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
-      }
-      if (!existsSync(targetPath)) {
-        throw new AppError(404, ErrorCodes.NOT_FOUND, "Directory does not exist");
-      }
+    const targetPath = resolve(rawPath);
+    if (shouldEnforcePathRestriction() && !isPathUnderRoot(targetPath)) {
+      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
+    }
+    if (!existsSync(targetPath)) {
+      throw new AppError(404, ErrorCodes.NOT_FOUND, "Directory does not exist");
+    }
 
-      const detected = await detectTestFramework(targetPath);
-      const body: ApiResponse<{ framework: string; testCommand: string } | null> = {
-        data: detected,
-      };
-      res.json(body);
+    const detected = await detectTestFramework(targetPath);
+    const body: ApiResponse<{ framework: string; testCommand: string } | null> = {
+      data: detected,
+    };
+    res.json(body);
   })
 );

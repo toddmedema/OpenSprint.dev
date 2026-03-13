@@ -3,7 +3,10 @@ import { isAgentAssignee } from "@opensprint/shared";
 import { toPgParams } from "../db/index.js";
 
 // Avoid loading drizzle-orm/pg-core (vitest resolution can fail in some workspaces)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 import {
   TaskStoreService,
@@ -28,10 +31,7 @@ function stored(id: string, issueType: string, overrides: Partial<StoredTask> = 
 
 describe("resolveEpicId", () => {
   it("returns epic id for os-a3f8.1 when parent is epic", () => {
-    const all = [
-      stored("os-a3f8", "epic"),
-      stored("os-a3f8.1", "task"),
-    ];
+    const all = [stored("os-a3f8", "epic"), stored("os-a3f8.1", "task")];
     expect(resolveEpicId("os-a3f8.1", all)).toBe("os-a3f8");
   });
 
@@ -433,6 +433,69 @@ suite("TaskStoreService", () => {
       });
       const eligible = await store.listBlockedByTechnicalErrorEligibleForRetry(TEST_PROJECT_ID);
       expect(eligible.map((e) => e.id)).toContain(t.id);
+    });
+
+    it("excludes review rejections even when they were blocked as Coding Failure", async () => {
+      const t = await store.create(TEST_PROJECT_ID, "Reviewer blocked");
+      await store.update(TEST_PROJECT_ID, t.id, {
+        status: "blocked",
+        block_reason: "Coding Failure",
+        extra: {
+          last_execution_summary: {
+            at: "2026-03-13T18:31:21.550Z",
+            attempt: 27,
+            outcome: "blocked",
+            phase: "review",
+            summary: "Review blocked after repeated out-of-scope rejections.",
+            failureType: "review_rejection",
+            blockReason: "Coding Failure",
+          },
+        },
+      });
+
+      const eligible = await store.listBlockedByTechnicalErrorEligibleForRetry(TEST_PROJECT_ID);
+      expect(eligible.map((e) => e.id)).not.toContain(t.id);
+    });
+
+    it("excludes deterministic setup failures even when block_reason looks technical", async () => {
+      const preflightTask = await store.create(TEST_PROJECT_ID, "Repo preflight blocked");
+      await store.update(TEST_PROJECT_ID, preflightTask.id, {
+        status: "blocked",
+        block_reason: "Coding Failure",
+        extra: {
+          last_execution_summary: {
+            at: "2026-03-13T18:31:21.550Z",
+            attempt: 1,
+            outcome: "blocked",
+            phase: "coding",
+            summary: "Coding blocked after repo preflight failure.",
+            failureType: "repo_preflight",
+            blockReason: "Coding Failure",
+          },
+        },
+      });
+
+      const envTask = await store.create(TEST_PROJECT_ID, "Env setup blocked");
+      await store.update(TEST_PROJECT_ID, envTask.id, {
+        status: "blocked",
+        block_reason: "Merge Failure",
+        extra: {
+          last_execution_summary: {
+            at: "2026-03-13T18:31:21.550Z",
+            attempt: 2,
+            outcome: "blocked",
+            phase: "coding",
+            summary: "Merge blocked after environment setup failure.",
+            failureType: "environment_setup",
+            blockReason: "Merge Failure",
+          },
+        },
+      });
+
+      const eligible = await store.listBlockedByTechnicalErrorEligibleForRetry(TEST_PROJECT_ID);
+      const eligibleIds = eligible.map((e) => e.id);
+      expect(eligibleIds).not.toContain(preflightTask.id);
+      expect(eligibleIds).not.toContain(envTask.id);
     });
   });
 
@@ -845,9 +908,7 @@ suite("TaskStoreService", () => {
         message: expect.stringMatching(/cannot change assignee while task is in progress/i),
       });
 
-      await expect(
-        store.update(TEST_PROJECT_ID, task.id, { assignee: "" })
-      ).rejects.toMatchObject({
+      await expect(store.update(TEST_PROJECT_ID, task.id, { assignee: "" })).rejects.toMatchObject({
         code: "ASSIGNEE_LOCKED",
       });
 

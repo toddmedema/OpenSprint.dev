@@ -22,7 +22,10 @@
       "dependsOn": [],
       "complexity": 4,
       "files": {
-        "create": ["packages/backend/src/utils/expo-eas-linked.ts", "packages/backend/src/utils/__tests__/expo-eas-linked.test.ts"],
+        "create": [
+          "packages/backend/src/utils/expo-eas-linked.ts",
+          "packages/backend/src/utils/__tests__/expo-eas-linked.test.ts"
+        ],
         "modify": [],
         "test": ["packages/backend/src/utils/__tests__/expo-eas-linked.test.ts"]
       }
@@ -31,7 +34,10 @@
       "title": "Add GET /projects/:projectId/deliver/expo-readiness endpoint",
       "description": "Add GET /projects/:projectId/deliver/expo-readiness route in packages/backend/src/routes/deliver.ts (before /:deployId so path is not captured). Returns 200 with { data: { expoInstalled: boolean, expoConfigured: boolean, authOk: boolean, easProjectLinked: boolean, missing: string[], prompt?: string } }. Use isExpoInstalled (expo-install.ts), getExpoConfigStatus (expo-config.ts), checkExpoAuth (expo-auth-check.ts), and isEasProjectLinked (new). Build missing array from false checks; include prompt from checkExpoAuth when authOk is false. Return 400 when deployment.mode !== 'expo'; 404 when project not found; 500 on invalid repo path. Verify with: npm test -- deploy-route",
       "priority": 0,
-      "dependsOn": ["Add ExpoReadinessResponse type to shared package", "Add isEasProjectLinked utility for EAS project detection"],
+      "dependsOn": [
+        "Add ExpoReadinessResponse type to shared package",
+        "Add isEasProjectLinked utility for EAS project detection"
+      ],
       "complexity": 5,
       "files": {
         "modify": ["packages/backend/src/routes/deliver.ts"],
@@ -46,7 +52,10 @@
       "dependsOn": [],
       "complexity": 2,
       "files": {
-        "modify": ["packages/shared/src/types/settings.ts", "packages/shared/src/__tests__/settings.test.ts"],
+        "modify": [
+          "packages/shared/src/types/settings.ts",
+          "packages/shared/src/__tests__/settings.test.ts"
+        ],
         "create": [],
         "test": ["packages/shared/src/__tests__/settings.test.ts"]
       }
@@ -67,10 +76,17 @@
       "title": "Add expo-readiness API client and query hook",
       "description": "Add api.deliver.expoReadiness(projectId) in packages/frontend/src/api/client.ts returning the readiness response. Add queryKeys.deliver.expoReadiness(projectId) in packages/frontend/src/api/queryKeys.ts. Add useExpoReadiness(projectId) hook in packages/frontend/src/api/hooks/deliver.ts that fetches when projectId is set and deployment mode is expo. Export ExpoReadinessResponse type from shared or define in frontend. Verify with: npm test -- client.test",
       "priority": 1,
-      "dependsOn": ["Add ExpoReadinessResponse type to shared package", "Add GET /projects/:projectId/deliver/expo-readiness endpoint"],
+      "dependsOn": [
+        "Add ExpoReadinessResponse type to shared package",
+        "Add GET /projects/:projectId/deliver/expo-readiness endpoint"
+      ],
       "complexity": 3,
       "files": {
-        "modify": ["packages/frontend/src/api/client.ts", "packages/frontend/src/api/queryKeys.ts", "packages/frontend/src/api/hooks/deliver.ts"],
+        "modify": [
+          "packages/frontend/src/api/client.ts",
+          "packages/frontend/src/api/queryKeys.ts",
+          "packages/frontend/src/api/hooks/deliver.ts"
+        ],
         "create": [],
         "test": ["packages/frontend/src/api/client.test.ts"]
       }
@@ -122,6 +138,6 @@
         "create": [],
         "test": ["packages/backend/src/__tests__/deploy-route.test.ts"]
       }
-    },
+    }
   ]
 }

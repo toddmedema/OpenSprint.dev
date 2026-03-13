@@ -20,7 +20,10 @@ vi.mock("../services/beads.service.js", () => ({
 }));
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
@@ -409,7 +412,9 @@ describe.skipIf(!helpPostgresOk)("Help chat API", () => {
 
     const res = await request(app).get(`${API_PREFIX}/help/agent-log?projectId=${projectId}`);
     expect(res.status).toBe(200);
-    const labelEntry = res.body.data.find((e: { model: string }) => e.model === "Cursor Composer 1.5");
+    const labelEntry = res.body.data.find(
+      (e: { model: string }) => e.model === "Cursor Composer 1.5"
+    );
     expect(labelEntry).toBeDefined();
     expect(labelEntry?.model).toBe("Cursor Composer 1.5");
   });
@@ -453,7 +458,8 @@ describe.skipIf(!helpPostgresOk)("Help chat API", () => {
     const res = await request(app).get(`${API_PREFIX}/help/agent-log?projectId=${projectId}`);
     expect(res.status).toBe(200);
     const entry = res.body.data.find(
-      (e: { model: string; durationMs: number }) => e.durationMs === 60000 && e.model.includes("Cursor")
+      (e: { model: string; durationMs: number }) =>
+        e.durationMs === 60000 && e.model.includes("Cursor")
     );
     expect(entry).toBeDefined();
     expect(entry.model).toBe("Cursor Composer 1.5");

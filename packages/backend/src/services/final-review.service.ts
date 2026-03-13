@@ -187,7 +187,14 @@ Assess the implementation against the plan scope. Return JSON with status, asses
       });
 
       const result = this.parseFinalReviewResponse(response.content, projectId, epicId);
-      await this.persistAuditorRun(projectId, planId, epicId, startedAt, result.status, result.assessment);
+      await this.persistAuditorRun(
+        projectId,
+        planId,
+        epicId,
+        startedAt,
+        result.status,
+        result.assessment
+      );
       return result;
     } catch (err) {
       log.error("Final review agent failed", { projectId, epicId, err });
@@ -224,14 +231,20 @@ Respond with ONLY valid JSON (no markdown):
 
     const angleSystemPrompt = `${EPIC_ANGLE_SYSTEM}\n\n${await getCombinedInstructions(repoPath, "auditor")}`;
     const config = getAgentForPlanningRole(settings, "auditor");
-    const angleResults: Array<{ angle: string; status: string; assessment: string; proposedTasks: FinalReviewProposedTask[] }> = [];
+    const angleResults: Array<{
+      angle: string;
+      status: string;
+      assessment: string;
+      proposedTasks: FinalReviewProposedTask[];
+    }> = [];
 
     const anglePromises = reviewAngles.map(async (angle) => {
       const label = REVIEW_ANGLE_OPTIONS.find((o) => o.value === angle)?.label ?? angle;
       const checklist = REVIEW_ANGLE_CHECKLISTS[angle] ?? [];
-      const checklistBlock = checklist.length > 0
-        ? `\n\n## Checklist for ${label}\n${checklist.map((c) => `- [ ] ${c}`).join("\n")}\n`
-        : "";
+      const checklistBlock =
+        checklist.length > 0
+          ? `\n\n## Checklist for ${label}\n${checklist.map((c) => `- [ ] ${c}`).join("\n")}\n`
+          : "";
       const prompt = `${basePrompt}${checklistBlock}\n\nFocus ONLY on the ${label} angle.`;
       const agentId = `final-review-${angle}-${projectId}-${epicId}-${Date.now()}`;
       try {
@@ -267,7 +280,12 @@ Respond with ONLY valid JSON (no markdown):
         return { angle, status, assessment: parsed?.assessment ?? "", proposedTasks };
       } catch (err) {
         log.warn("Epic angle review failed", { projectId, epicId, angle, err });
-        return { angle, status: "pass", assessment: "Angle review failed; assuming pass.", proposedTasks: [] };
+        return {
+          angle,
+          status: "pass",
+          assessment: "Angle review failed; assuming pass.",
+          proposedTasks: [],
+        };
       }
     });
 
@@ -285,7 +303,12 @@ Respond with ONLY valid JSON (no markdown):
   }
 
   private async synthesizeEpicReviewResults(
-    angleResults: Array<{ angle: string; status: string; assessment: string; proposedTasks: FinalReviewProposedTask[] }>,
+    angleResults: Array<{
+      angle: string;
+      status: string;
+      assessment: string;
+      proposedTasks: FinalReviewProposedTask[];
+    }>,
     projectId: string,
     epicId: string,
     planId: string,
@@ -340,8 +363,19 @@ Rules:
           description: String(t.description),
           priority: typeof t.priority === "number" ? Math.min(4, Math.max(0, t.priority)) : 2,
         }));
-      const result: FinalReviewResult = { status, assessment: parsed?.assessment ?? "", proposedTasks };
-      await this.persistAuditorRun(projectId, planId, epicId, startedAt, result.status, result.assessment);
+      const result: FinalReviewResult = {
+        status,
+        assessment: parsed?.assessment ?? "",
+        proposedTasks,
+      };
+      await this.persistAuditorRun(
+        projectId,
+        planId,
+        epicId,
+        startedAt,
+        result.status,
+        result.assessment
+      );
       return result;
     } catch (err) {
       log.warn("Epic synthesizer failed, using programmatic merge", { projectId, epicId, err });
@@ -356,10 +390,21 @@ Rules:
       });
       const result: FinalReviewResult = {
         status: hasIssues ? "issues" : "pass",
-        assessment: angleResults.map((r) => r.assessment).filter(Boolean).join(" | ") || "Epic review",
+        assessment:
+          angleResults
+            .map((r) => r.assessment)
+            .filter(Boolean)
+            .join(" | ") || "Epic review",
         proposedTasks: deduped,
       };
-      await this.persistAuditorRun(projectId, planId, epicId, startedAt, result.status, result.assessment);
+      await this.persistAuditorRun(
+        projectId,
+        planId,
+        epicId,
+        startedAt,
+        result.status,
+        result.assessment
+      );
       return result;
     }
   }

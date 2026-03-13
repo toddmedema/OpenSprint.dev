@@ -219,18 +219,14 @@ describe("FinalReviewService", () => {
         content: JSON.stringify({
           status: "issues",
           assessment: "Performance concerns",
-          proposedTasks: [
-            { title: "Optimize query", description: "Add index", priority: 1 },
-          ],
+          proposedTasks: [{ title: "Optimize query", description: "Add index", priority: 1 }],
         }),
       })
       .mockResolvedValueOnce({
         content: JSON.stringify({
           status: "issues",
           assessment: "One angle found issues",
-          proposedTasks: [
-            { title: "Optimize query", description: "Add index", priority: 1 },
-          ],
+          proposedTasks: [{ title: "Optimize query", description: "Add index", priority: 1 }],
         }),
       });
 

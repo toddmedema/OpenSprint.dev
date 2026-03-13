@@ -18,7 +18,8 @@ export function matchesStatusFilter(kanbanColumn: string, filter: StatusFilter):
   if (filter === "planning") return false; // planning filter uses parent plan status, not kanbanColumn
   if (filter === "blocked") return kanbanColumn === "blocked";
   if (filter === "in_line") return kanbanColumn === "backlog" || kanbanColumn === "planning";
-  if (filter === "in_progress") return kanbanColumn === "in_progress" || kanbanColumn === "in_review";
+  if (filter === "in_progress")
+    return kanbanColumn === "in_progress" || kanbanColumn === "in_review";
   return kanbanColumn === filter;
 }
 

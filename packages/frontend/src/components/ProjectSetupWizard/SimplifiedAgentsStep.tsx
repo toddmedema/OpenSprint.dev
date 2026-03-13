@@ -173,7 +173,10 @@ export function SimplifiedAgentsStep({
             {needsAnthropic && (
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
-                  <label htmlFor="simplified-anthropic-api-key" className="block text-xs font-medium text-theme-muted mb-1">
+                  <label
+                    htmlFor="simplified-anthropic-api-key"
+                    className="block text-xs font-medium text-theme-muted mb-1"
+                  >
                     ANTHROPIC_API_KEY (Claude API)
                   </label>
                   <input
@@ -199,7 +202,10 @@ export function SimplifiedAgentsStep({
             {needsCursor && (
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
-                  <label htmlFor="simplified-cursor-api-key" className="block text-xs font-medium text-theme-muted mb-1">
+                  <label
+                    htmlFor="simplified-cursor-api-key"
+                    className="block text-xs font-medium text-theme-muted mb-1"
+                  >
                     CURSOR_API_KEY
                   </label>
                   <input
@@ -225,7 +231,10 @@ export function SimplifiedAgentsStep({
             {needsOpenai && (
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
-                  <label htmlFor="simplified-openai-api-key" className="block text-xs font-medium text-theme-muted mb-1">
+                  <label
+                    htmlFor="simplified-openai-api-key"
+                    className="block text-xs font-medium text-theme-muted mb-1"
+                  >
                     OPENAI_API_KEY
                   </label>
                   <input
@@ -254,7 +263,9 @@ export function SimplifiedAgentsStep({
       {cursorCliMissing && (
         <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
           <p className="text-sm text-theme-warning-text mb-2">
-            <strong>Cursor CLI not found.</strong> The <code className="font-mono text-xs">agent</code> command is required for Cursor. Install it, then restart your terminal or Open Sprint.
+            <strong>Cursor CLI not found.</strong> The{" "}
+            <code className="font-mono text-xs">agent</code> command is required for Cursor. Install
+            it, then restart your terminal or Open Sprint.
           </p>
           <button
             type="button"
@@ -283,7 +294,9 @@ export function SimplifiedAgentsStep({
             {cursorCliInstalling ? "Installing…" : "Install Cursor CLI"}
           </button>
           {cursorCliInstallResult && (
-            <p className={`text-sm mt-2 ${cursorCliInstallResult.success ? "text-theme-success-text" : "text-theme-error-text"}`}>
+            <p
+              className={`text-sm mt-2 ${cursorCliInstallResult.success ? "text-theme-success-text" : "text-theme-error-text"}`}
+            >
               {cursorCliInstallResult.message}
             </p>
           )}
@@ -323,7 +336,12 @@ export function SimplifiedAgentsStep({
           <div className="flex flex-wrap items-end gap-3">
             <span className="w-16 text-sm font-medium text-theme-text shrink-0">Simple</span>
             <div className="flex-1 min-w-[140px]">
-              <label htmlFor="simplified-simple-provider-select" className="block text-sm font-medium text-theme-text mb-1">Provider</label>
+              <label
+                htmlFor="simplified-simple-provider-select"
+                className="block text-sm font-medium text-theme-text mb-1"
+              >
+                Provider
+              </label>
               <select
                 id="simplified-simple-provider-select"
                 className="input w-full"
@@ -346,7 +364,12 @@ export function SimplifiedAgentsStep({
             </div>
             {simpleComplexityAgent.type === "lmstudio" && (
               <div className="flex-1 min-w-[180px]">
-                <label htmlFor="simplified-simple-base-url" className="block text-sm font-medium text-theme-text mb-1">Base URL</label>
+                <label
+                  htmlFor="simplified-simple-base-url"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
+                  Base URL
+                </label>
                 <input
                   id="simplified-simple-base-url"
                   type="text"
@@ -364,7 +387,12 @@ export function SimplifiedAgentsStep({
             )}
             {simpleComplexityAgent.type !== "custom" ? (
               <div className="flex-1 min-w-[140px]">
-                <label htmlFor="simplified-simple-agent-select" className="block text-sm font-medium text-theme-text mb-1">Agent</label>
+                <label
+                  htmlFor="simplified-simple-agent-select"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
+                  Agent
+                </label>
                 <ModelSelect
                   id="simplified-simple-agent-select"
                   provider={simpleComplexityAgent.type}
@@ -382,7 +410,10 @@ export function SimplifiedAgentsStep({
               </div>
             ) : (
               <div className="flex-1 min-w-[200px]">
-                <label htmlFor="simplified-simple-cli-command" className="block text-sm font-medium text-theme-text mb-1">
+                <label
+                  htmlFor="simplified-simple-cli-command"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
                   CLI command
                 </label>
                 <input
@@ -405,7 +436,12 @@ export function SimplifiedAgentsStep({
           <div className="flex flex-wrap items-end gap-3">
             <span className="w-16 text-sm font-medium text-theme-text shrink-0">Complex</span>
             <div className="flex-1 min-w-[140px]">
-              <label htmlFor="simplified-complex-provider-select" className="block text-sm font-medium text-theme-text mb-1">Provider</label>
+              <label
+                htmlFor="simplified-complex-provider-select"
+                className="block text-sm font-medium text-theme-text mb-1"
+              >
+                Provider
+              </label>
               <select
                 id="simplified-complex-provider-select"
                 className="input w-full"
@@ -428,7 +464,12 @@ export function SimplifiedAgentsStep({
             </div>
             {complexComplexityAgent.type === "lmstudio" && (
               <div className="flex-1 min-w-[180px]">
-                <label htmlFor="simplified-complex-base-url" className="block text-sm font-medium text-theme-text mb-1">Base URL</label>
+                <label
+                  htmlFor="simplified-complex-base-url"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
+                  Base URL
+                </label>
                 <input
                   id="simplified-complex-base-url"
                   type="text"
@@ -446,7 +487,12 @@ export function SimplifiedAgentsStep({
             )}
             {complexComplexityAgent.type !== "custom" ? (
               <div className="flex-1 min-w-[140px]">
-                <label htmlFor="simplified-complex-agent-select" className="block text-sm font-medium text-theme-text mb-1">Agent</label>
+                <label
+                  htmlFor="simplified-complex-agent-select"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
+                  Agent
+                </label>
                 <ModelSelect
                   id="simplified-complex-agent-select"
                   provider={complexComplexityAgent.type}
@@ -464,7 +510,10 @@ export function SimplifiedAgentsStep({
               </div>
             ) : (
               <div className="flex-1 min-w-[200px]">
-                <label htmlFor="simplified-complex-cli-command" className="block text-sm font-medium text-theme-text mb-1">
+                <label
+                  htmlFor="simplified-complex-cli-command"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
                   CLI command
                 </label>
                 <input

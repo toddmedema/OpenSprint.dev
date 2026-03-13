@@ -133,7 +133,10 @@ export function ExecuteFilterToolbar({
   const right = (
     <>
       {searchExpanded ? (
-        <div className="flex items-center gap-1 animate-fade-in" data-testid="execute-search-expanded">
+        <div
+          className="flex items-center gap-1 animate-fade-in"
+          data-testid="execute-search-expanded"
+        >
           <input
             ref={searchInputRef}
             type="text"
@@ -202,11 +205,6 @@ export function ExecuteFilterToolbar({
   );
 
   return (
-    <FilterBar
-      variant="phase"
-      left={left}
-      right={right}
-      dataTestId="execute-filter-toolbar"
-    />
+    <FilterBar variant="phase" left={left} right={right} dataTestId="execute-filter-toolbar" />
   );
 }

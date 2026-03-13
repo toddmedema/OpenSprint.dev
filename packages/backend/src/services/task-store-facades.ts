@@ -85,12 +85,7 @@ export class TaskStorePlanAuditorSIFacade {
   ): Promise<void> {
     return this.deps.withWriteLock(async () => {
       await this.deps.ensureInitialized();
-      await this.deps.planStore.planUpdateContent(
-        projectId,
-        planId,
-        content,
-        currentVersionNumber
-      );
+      await this.deps.planStore.planUpdateContent(projectId, planId, content, currentVersionNumber);
     });
   }
 
@@ -176,10 +171,7 @@ export class TaskStorePlanAuditorSIFacade {
     await this.deps.planStore.planDeleteAllForProject(projectId);
   }
 
-  async listPlanVersions(
-    projectId: string,
-    planId: string
-  ): Promise<PlanVersionListItem[]> {
+  async listPlanVersions(projectId: string, planId: string): Promise<PlanVersionListItem[]> {
     await this.deps.ensureInitialized();
     return this.deps.planVersionStore.list(projectId, planId);
   }
@@ -200,10 +192,7 @@ export class TaskStorePlanAuditorSIFacade {
     });
   }
 
-  async listAuditorRunsByPlanId(
-    projectId: string,
-    planId: string
-  ): Promise<AuditorRunRecord[]> {
+  async listAuditorRunsByPlanId(projectId: string, planId: string): Promise<AuditorRunRecord[]> {
     await this.deps.ensureInitialized();
     return this.deps.auditorRunStore.listByPlanId(projectId, planId);
   }

@@ -10,7 +10,10 @@ import { API_PREFIX, DEFAULT_HIL_CONFIG, OPENSPRINT_DIR } from "@opensprint/shar
 import { setBackendRuntimeInfoForTesting } from "../utils/runtime-info.js";
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {

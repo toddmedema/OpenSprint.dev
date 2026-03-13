@@ -43,7 +43,11 @@ export async function isEasProjectLinked(repoPath: string): Promise<boolean> {
 
 export type EnsureEasProjectIdInAppJsonResult =
   | { ok: true; status: "already-linked" | "linked" }
-  | { ok: false; code: "APP_JSON_MISSING" | "INVALID_APP_JSON" | "APP_JSON_WRITE_FAILED"; error: string };
+  | {
+      ok: false;
+      code: "APP_JSON_MISSING" | "INVALID_APP_JSON" | "APP_JSON_WRITE_FAILED";
+      error: string;
+    };
 
 /**
  * Ensure app.json contains expo.extra.eas.projectId.

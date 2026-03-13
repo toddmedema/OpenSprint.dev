@@ -166,7 +166,9 @@ export class HelpChatService {
     const [project, prdResult, plansResult, tasksResult, agents] = await Promise.all([
       this.projectService.getProject(projectId),
       this.prdService.getPrd(projectId).catch(() => null),
-      this.getPlanService().listPlans(projectId).catch(() => []),
+      this.getPlanService()
+        .listPlans(projectId)
+        .catch(() => []),
       taskStore.listAll(projectId).catch(() => []),
       orchestratorService.getActiveAgents(projectId).catch(() => []),
     ]);

@@ -16,10 +16,7 @@ export const trayRefreshListener = createListenerMiddleware();
 
 /** When user clears all notifications (by project or global), force-refresh the Mac menu bar tray icon so the dot is removed. */
 trayRefreshListener.startListening({
-  matcher: isAnyOf(
-    clearAllByProject.fulfilled,
-    clearAllGlobal.fulfilled
-  ),
+  matcher: isAnyOf(clearAllByProject.fulfilled, clearAllGlobal.fulfilled),
   effect: () => {
     requestTrayRefresh();
   },

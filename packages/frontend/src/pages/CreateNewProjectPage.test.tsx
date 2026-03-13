@@ -72,7 +72,8 @@ function setNavigator(platform: string, userAgent: string) {
 
 function getInstructionsPre() {
   return screen.getByText(
-    (_content, element) => element?.tagName === "PRE" && !!element.textContent?.includes("npm run web")
+    (_content, element) =>
+      element?.tagName === "PRE" && !!element.textContent?.includes("npm run web")
   );
 }
 
@@ -542,8 +543,14 @@ describe("CreateNewProjectPage", () => {
     await user.click(screen.getByTestId("next-button"));
 
     await screen.findByTestId("prereq-install-buttons");
-    expect(screen.getByTestId("install-git-button")).toHaveAttribute("href", "https://git-scm.com/");
-    expect(screen.getByTestId("install-nodejs-button")).toHaveAttribute("href", "https://nodejs.org/");
+    expect(screen.getByTestId("install-git-button")).toHaveAttribute(
+      "href",
+      "https://git-scm.com/"
+    );
+    expect(screen.getByTestId("install-nodejs-button")).toHaveAttribute(
+      "href",
+      "https://nodejs.org/"
+    );
   });
 
   it("loads env keys when entering agents step", async () => {

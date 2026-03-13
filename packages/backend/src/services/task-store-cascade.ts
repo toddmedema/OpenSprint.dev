@@ -20,10 +20,7 @@ function stripTaskLinesFromPlanContent(
  * Recursively removes all occurrences of taskId from a JSON value (arrays and objects).
  * Used to clean plan metadata and feedback JSON so deleted task IDs are not left behind.
  */
-function pruneTaskIdFromJson(
-  value: unknown,
-  taskId: string
-): { value: unknown; changed: boolean } {
+function pruneTaskIdFromJson(value: unknown, taskId: string): { value: unknown; changed: boolean } {
   if (Array.isArray(value)) {
     let changed = false;
     const next: unknown[] = [];

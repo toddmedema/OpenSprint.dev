@@ -14,7 +14,10 @@ import { ErrorCodes } from "../middleware/error-codes.js";
 import type { ReviewAgentResult } from "@opensprint/shared";
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 // ─── Mocks ───
@@ -180,12 +183,10 @@ vi.mock("../services/task-store.service.js", async (importOriginal) => {
   });
   const mockInstance = {
     ready: mockTaskStoreReady,
-    readyWithStatusMap: vi
-      .fn()
-      .mockImplementation(async () => {
-        const tasks = await mockTaskStoreReady();
-        return { tasks, statusMap: new Map(), allIssues: tasks };
-      }),
+    readyWithStatusMap: vi.fn().mockImplementation(async () => {
+      const tasks = await mockTaskStoreReady();
+      return { tasks, statusMap: new Map(), allIssues: tasks };
+    }),
     syncForPush: vi.fn().mockResolvedValue(undefined),
     getDb: vi.fn().mockResolvedValue(mockDb),
     runWrite: vi.fn().mockImplementation(async (fn: (db: typeof mockDb) => void) => {
@@ -414,8 +415,27 @@ vi.mock("../services/notification.service.js", () => ({
   notificationService: {
     hasOpenPrdSpecHilApproval: (...args: unknown[]) => mockHasOpenPrdSpecHilApproval(...args),
     listByProject: vi.fn().mockResolvedValue([]),
-    createApiBlocked: vi.fn().mockResolvedValue({ id: "ab-1", projectId: "", source: "execute", sourceId: "", questions: [], status: "open", createdAt: "", resolvedAt: null, kind: "api_blocked" }),
-    create: vi.fn().mockResolvedValue({ id: "oq-1", projectId: "", source: "execute", sourceId: "", questions: [], status: "open", createdAt: "", resolvedAt: null }),
+    createApiBlocked: vi.fn().mockResolvedValue({
+      id: "ab-1",
+      projectId: "",
+      source: "execute",
+      sourceId: "",
+      questions: [],
+      status: "open",
+      createdAt: "",
+      resolvedAt: null,
+      kind: "api_blocked",
+    }),
+    create: vi.fn().mockResolvedValue({
+      id: "oq-1",
+      projectId: "",
+      source: "execute",
+      sourceId: "",
+      questions: [],
+      status: "open",
+      createdAt: "",
+      resolvedAt: null,
+    }),
     resolveRateLimitNotifications: vi.fn().mockResolvedValue([]),
   },
 }));
@@ -617,9 +637,11 @@ describe("OrchestratorService (slot-based model)", () => {
 
   describe("pending validation review rejection handling", () => {
     it("detects pending-only orchestrator status rejection", () => {
-      const isPendingOnly = (orchestrator as unknown as {
-        isPendingValidationOnlyRejection: (result: ReviewAgentResult) => boolean;
-      }).isPendingValidationOnlyRejection.bind(orchestrator);
+      const isPendingOnly = (
+        orchestrator as unknown as {
+          isPendingValidationOnlyRejection: (result: ReviewAgentResult) => boolean;
+        }
+      ).isPendingValidationOnlyRejection.bind(orchestrator);
 
       expect(
         isPendingOnly({
@@ -1147,22 +1169,17 @@ describe("OrchestratorService (slot-based model)", () => {
         heartbeatTimestamp: Date.now(),
       });
 
-      const resumed = await host.reattachSlot?.(
+      const resumed = await host.reattachSlot?.(projectId, repoPath, task as never, {
+        taskId: task.id,
         projectId,
-        repoPath,
-        task as never,
-        {
-          taskId: task.id,
-          projectId,
-          phase: "coding",
-          branchName: `opensprint/${task.id}`,
-          worktreePath: repoPath,
-          promptPath: path.join(repoPath, ".opensprint", "active", task.id, "prompt.md"),
-          agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
-          attempt: 2,
-          createdAt: "2026-03-02T10:00:00.000Z",
-        }
-      );
+        phase: "coding",
+        branchName: `opensprint/${task.id}`,
+        worktreePath: repoPath,
+        promptPath: path.join(repoPath, ".opensprint", "active", task.id, "prompt.md"),
+        agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+        attempt: 2,
+        createdAt: "2026-03-02T10:00:00.000Z",
+      });
 
       expect(resumed).toBe(true);
       expect(mockCreateProcessGroupHandle).toHaveBeenCalledWith(4242);
@@ -1377,20 +1394,18 @@ describe("OrchestratorService (slot-based model)", () => {
       // Slot contains opensprint/epic_<epicId>: phase executor calls createTaskWorktree with worktreeKey and branchName
       await vi.waitFor(
         () => {
-          expect(mockCreateTaskWorktree).toHaveBeenCalledWith(
-            repoPath,
-            childTaskId,
-            "main",
-            { worktreeKey: "epic_os-abc", branchName: "opensprint/epic_os-abc" }
-          );
+          expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, childTaskId, "main", {
+            worktreeKey: "epic_os-abc",
+            branchName: "opensprint/epic_os-abc",
+          });
         },
         { timeout: 8000 }
       );
 
       // assignment.json written by phase executor contains epic branch and worktreeKey
-      const assignmentCall = vi.mocked(mockWriteJsonAtomic).mock.calls.find((c) =>
-        String(c[0]).endsWith("assignment.json")
-      );
+      const assignmentCall = vi
+        .mocked(mockWriteJsonAtomic)
+        .mock.calls.find((c) => String(c[0]).endsWith("assignment.json"));
       expect(assignmentCall).toBeDefined();
       expect(assignmentCall![1]).toMatchObject({
         taskId: childTaskId,
@@ -1426,15 +1441,13 @@ describe("OrchestratorService (slot-based model)", () => {
       await vi.waitFor(() => {
         expect(mockCreateTaskWorktree).toHaveBeenCalled();
       });
-      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(
-        repoPath,
-        "os-standalone",
-        "main",
-        { worktreeKey: "os-standalone", branchName: "opensprint/os-standalone" }
-      );
-      const assignmentCall = vi.mocked(mockWriteJsonAtomic).mock.calls.find((c) =>
-        String(c[0]).endsWith("assignment.json")
-      );
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, "os-standalone", "main", {
+        worktreeKey: "os-standalone",
+        branchName: "opensprint/os-standalone",
+      });
+      const assignmentCall = vi
+        .mocked(mockWriteJsonAtomic)
+        .mock.calls.find((c) => String(c[0]).endsWith("assignment.json"));
       expect(assignmentCall![1]).toMatchObject({
         taskId: "os-standalone",
         branchName: "opensprint/os-standalone",
@@ -1480,8 +1493,8 @@ describe("OrchestratorService (slot-based model)", () => {
       (taskWithAgent as { assignee: string | null }).assignee = "Frodo";
       const taskUnassigned = makeTask("task-unassigned");
       mockTaskStoreReady.mockResolvedValue([taskWithAgent, taskUnassigned]);
-      mockCreateTaskWorktree.mockImplementation(async (_repo: string, taskId: string) =>
-        `/tmp/opensprint-worktrees/${taskId}`
+      mockCreateTaskWorktree.mockImplementation(
+        async (_repo: string, taskId: string) => `/tmp/opensprint-worktrees/${taskId}`
       );
       mockGetActiveDir.mockImplementation((base: string, tid: string) =>
         path.join(base, ".opensprint", "active", tid)

@@ -106,10 +106,7 @@ export function WorkflowSettingsContent({
               {gitRemoteModeText}
             </p>
             {gitRuntimeRefreshText && (
-              <p
-                className="text-xs text-theme-muted mt-1"
-                data-testid="git-runtime-refresh-status"
-              >
+              <p className="text-xs text-theme-muted mt-1" data-testid="git-runtime-refresh-status">
                 {gitRuntimeRefreshText}
               </p>
             )}
@@ -186,8 +183,8 @@ export function WorkflowSettingsContent({
           <div>
             <h4 className="text-sm font-semibold text-theme-text mb-1">Parallelism</h4>
             <p className="text-xs text-theme-muted mb-3">
-              Run multiple coding agents simultaneously on independent tasks. Higher values speed
-              up builds but use more resources.
+              Run multiple coding agents simultaneously on independent tasks. Higher values speed up
+              builds but use more resources.
             </p>
             <div className="space-y-4">
               <div>
@@ -318,7 +315,9 @@ export function WorkflowSettingsContent({
             <div className="flex flex-wrap gap-2" data-testid="review-agents-multiselect">
               {REVIEW_AGENT_OPTIONS.map((opt) => {
                 const isGeneral = opt.value === GENERAL_REVIEW_OPTION;
-                const angleValue: ReviewAngle | null = isGeneral ? null : (opt.value as ReviewAngle);
+                const angleValue: ReviewAngle | null = isGeneral
+                  ? null
+                  : (opt.value as ReviewAngle);
                 const angles = draftSettings.reviewAngles ?? [];
                 const includeGeneral = draftSettings.includeGeneralReview === true;
                 const generalSelected = angles.length === 0 || includeGeneral;
@@ -367,8 +366,7 @@ export function WorkflowSettingsContent({
                           lastReviewAnglesRef.current = next.length > 0 ? next : undefined;
                           if (next.length === 0 && selected && !includeGeneral) return;
                           const wasGeneralOnly = current.length === 0 && generalSelected;
-                          const nextReviewAngles =
-                            next.length > 0 ? next : ([] as ReviewAngle[]);
+                          const nextReviewAngles = next.length > 0 ? next : ([] as ReviewAngle[]);
                           applySettingsUpdate((s) => {
                             const nextSettings: ProjectSettings = {
                               ...s,
@@ -410,12 +408,12 @@ export function WorkflowSettingsContent({
             When the codebase has changed since the last run, a review runs using your code review
             lenses and creates improvement tasks.
           </p>
-          {((draftSettings.selfImprovementFrequency ?? "never") === "after_each_plan" && (
+          {(draftSettings.selfImprovementFrequency ?? "never") === "after_each_plan" && (
             <p className="text-xs text-theme-muted mb-2">
               Runs once after a plan&apos;s execution is fully complete (all tasks done and merged),
               not when you click Execute.
             </p>
-          ))}
+          )}
           <div className="flex flex-wrap items-center gap-3">
             <label
               htmlFor="self-improvement-frequency-select"

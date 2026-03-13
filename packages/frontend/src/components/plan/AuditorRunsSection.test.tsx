@@ -32,9 +32,7 @@ describe("AuditorRunsSection", () => {
     await vi.waitFor(() => {
       expect(screen.getByTestId("auditor-runs-section")).toBeInTheDocument();
     });
-    expect(
-      screen.getByText(/No Auditor runs yet/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/No Auditor runs yet/)).toBeInTheDocument();
   });
 
   it("lists past Auditor runs with expandable logs", async () => {

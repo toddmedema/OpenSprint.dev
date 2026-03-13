@@ -26,8 +26,7 @@ export function TaskPriorityDropdown({
   const dispatch = useAppDispatch();
   const task = useAppSelector((s) => selectTaskById(s, taskId));
   const priorityUpdatePendingTaskId = useAppSelector(selectPriorityUpdatePendingTaskId);
-  const priorityUpdateLoading =
-    Boolean(taskId) && priorityUpdatePendingTaskId === taskId;
+  const priorityUpdateLoading = Boolean(taskId) && priorityUpdatePendingTaskId === taskId;
 
   const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
   const [alignRight, setAlignRight] = useState(false);
@@ -99,9 +98,7 @@ export function TaskPriorityDropdown({
         {priorityUpdateLoading ? (
           <span className="text-[10px] opacity-70 animate-pulse">Updating…</span>
         ) : (
-          <span className="text-[10px] opacity-70">
-            {priorityDropdownOpen ? "▲" : "▼"}
-          </span>
+          <span className="text-[10px] opacity-70">{priorityDropdownOpen ? "▲" : "▼"}</span>
         )}
       </button>
       {priorityDropdownOpen && (

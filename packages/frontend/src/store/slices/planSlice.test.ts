@@ -419,7 +419,9 @@ describe("planSlice", () => {
           projectId: "proj-1",
           source: "plan",
           sourceId: "draft:draft-1",
-          questions: [{ id: "q1", text: "Which volunteers are eligible?", createdAt: "2025-01-01" }],
+          questions: [
+            { id: "q1", text: "Which volunteers are eligible?", createdAt: "2025-01-01" },
+          ],
           status: "open",
           createdAt: "2025-01-01",
           resolvedAt: null,

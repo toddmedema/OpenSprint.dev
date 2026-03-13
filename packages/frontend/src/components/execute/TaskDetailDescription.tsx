@@ -24,11 +24,7 @@ export interface TaskDetailDescriptionProps {
   onToggle: () => void;
 }
 
-export function TaskDetailDescription({
-  content,
-  expanded,
-  onToggle,
-}: TaskDetailDescriptionProps) {
+export function TaskDetailDescription({ content, expanded, onToggle }: TaskDetailDescriptionProps) {
   return (
     <div className="-mb-2">
       <CollapsibleSection

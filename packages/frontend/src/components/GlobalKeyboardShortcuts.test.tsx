@@ -119,9 +119,7 @@ describe("GlobalKeyboardShortcuts", () => {
     );
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/sketch");
     await act(() => {
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
-      );
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     await waitFor(() => {
       expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/settings");
@@ -140,9 +138,7 @@ describe("GlobalKeyboardShortcuts", () => {
     );
     expect(screen.getByTestId("location")).toHaveTextContent("/");
     await act(() => {
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
-      );
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     await waitFor(() => {
       expect(screen.getByTestId("location")).toHaveTextContent("/settings");
@@ -160,9 +156,7 @@ describe("GlobalKeyboardShortcuts", () => {
     );
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/settings");
     await act(() => {
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
-      );
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     await waitFor(() => {}, { timeout: 50 });
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/settings");
@@ -182,9 +176,7 @@ describe("GlobalKeyboardShortcuts", () => {
     const input = screen.getByTestId("input");
     input.focus();
     await act(() => {
-      input.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
-      );
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     await waitFor(() => {}, { timeout: 100 });
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/sketch");
@@ -205,9 +197,7 @@ describe("GlobalKeyboardShortcuts", () => {
     );
     expect(screen.getByTestId("mock-modal")).toBeInTheDocument();
     await act(() => {
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
-      );
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     await waitFor(() => {}, { timeout: 100 });
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/sketch");
@@ -226,9 +216,7 @@ describe("GlobalKeyboardShortcuts", () => {
     );
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/sketch");
     await act(() => {
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "?", bubbles: true })
-      );
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true }));
     });
     await waitFor(() => {
       expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/help");
@@ -247,9 +235,7 @@ describe("GlobalKeyboardShortcuts", () => {
     );
     expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/plan");
     await act(() => {
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "F1", bubbles: true })
-      );
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "F1", bubbles: true }));
     });
     await waitFor(() => {
       expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/help");
@@ -268,9 +254,7 @@ describe("GlobalKeyboardShortcuts", () => {
     );
     expect(screen.getByTestId("location")).toHaveTextContent("/");
     await act(() => {
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "?", bubbles: true })
-      );
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true }));
     });
     await waitFor(() => {
       expect(screen.getByTestId("location")).toHaveTextContent("/help");
@@ -289,9 +273,7 @@ describe("GlobalKeyboardShortcuts", () => {
     );
     expect(screen.getByTestId("location")).toHaveTextContent("/settings");
     await act(() => {
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "F1", bubbles: true })
-      );
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "F1", bubbles: true }));
     });
     await waitFor(() => {
       expect(screen.getByTestId("location")).toHaveTextContent("/help");
@@ -299,9 +281,20 @@ describe("GlobalKeyboardShortcuts", () => {
   });
 
   it("in Electron, Escape opens project settings", async () => {
-    const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
+    const prev =
+      typeof window !== "undefined"
+        ? (window as unknown as { electron?: unknown }).electron
+        : undefined;
     if (typeof window !== "undefined") {
-      (window as unknown as { electron: { isElectron: true; onNavigateHelp: () => () => void; onNavigateSettings: () => () => void } }).electron = {
+      (
+        window as unknown as {
+          electron: {
+            isElectron: true;
+            onNavigateHelp: () => () => void;
+            onNavigateSettings: () => () => void;
+          };
+        }
+      ).electron = {
         isElectron: true,
         onNavigateHelp: () => () => {},
         onNavigateSettings: () => () => {},
@@ -327,9 +320,20 @@ describe("GlobalKeyboardShortcuts", () => {
   });
 
   it("in Electron, ? opens project help", async () => {
-    const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
+    const prev =
+      typeof window !== "undefined"
+        ? (window as unknown as { electron?: unknown }).electron
+        : undefined;
     if (typeof window !== "undefined") {
-      (window as unknown as { electron: { isElectron: true; onNavigateHelp: () => () => void; onNavigateSettings: () => () => void } }).electron = {
+      (
+        window as unknown as {
+          electron: {
+            isElectron: true;
+            onNavigateHelp: () => () => void;
+            onNavigateSettings: () => () => void;
+          };
+        }
+      ).electron = {
         isElectron: true,
         onNavigateHelp: () => () => {},
         onNavigateSettings: () => () => {},
@@ -355,9 +359,20 @@ describe("GlobalKeyboardShortcuts", () => {
   });
 
   it("in Electron, Escape opens global settings when not in a project", async () => {
-    const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
+    const prev =
+      typeof window !== "undefined"
+        ? (window as unknown as { electron?: unknown }).electron
+        : undefined;
     if (typeof window !== "undefined") {
-      (window as unknown as { electron: { isElectron: true; onNavigateHelp: () => () => void; onNavigateSettings: () => () => void } }).electron = {
+      (
+        window as unknown as {
+          electron: {
+            isElectron: true;
+            onNavigateHelp: () => () => void;
+            onNavigateSettings: () => () => void;
+          };
+        }
+      ).electron = {
         isElectron: true,
         onNavigateHelp: () => () => {},
         onNavigateSettings: () => () => {},
@@ -383,9 +398,20 @@ describe("GlobalKeyboardShortcuts", () => {
   });
 
   it("in Electron, ? opens global help when not in a project", async () => {
-    const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
+    const prev =
+      typeof window !== "undefined"
+        ? (window as unknown as { electron?: unknown }).electron
+        : undefined;
     if (typeof window !== "undefined") {
-      (window as unknown as { electron: { isElectron: true; onNavigateHelp: () => () => void; onNavigateSettings: () => () => void } }).electron = {
+      (
+        window as unknown as {
+          electron: {
+            isElectron: true;
+            onNavigateHelp: () => () => void;
+            onNavigateSettings: () => () => void;
+          };
+        }
+      ).electron = {
         isElectron: true,
         onNavigateHelp: () => () => {},
         onNavigateSettings: () => () => {},
@@ -412,15 +438,20 @@ describe("GlobalKeyboardShortcuts", () => {
 
   it("Electron app menu: Help callback navigates to /help when not in project", async () => {
     let helpCallback: (() => void) | undefined;
-    const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
+    const prev =
+      typeof window !== "undefined"
+        ? (window as unknown as { electron?: unknown }).electron
+        : undefined;
     if (typeof window !== "undefined") {
-      (window as unknown as {
-        electron: {
-          isElectron: true;
-          onNavigateHelp: (cb: () => void) => () => void;
-          onNavigateSettings: (cb: () => void) => () => void;
-        };
-      }).electron = {
+      (
+        window as unknown as {
+          electron: {
+            isElectron: true;
+            onNavigateHelp: (cb: () => void) => () => void;
+            onNavigateSettings: (cb: () => void) => () => void;
+          };
+        }
+      ).electron = {
         isElectron: true,
         onNavigateHelp: (cb) => {
           helpCallback = cb;
@@ -451,15 +482,20 @@ describe("GlobalKeyboardShortcuts", () => {
 
   it("Electron app menu: Help callback navigates to project help when in project", async () => {
     let helpCallback: (() => void) | undefined;
-    const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
+    const prev =
+      typeof window !== "undefined"
+        ? (window as unknown as { electron?: unknown }).electron
+        : undefined;
     if (typeof window !== "undefined") {
-      (window as unknown as {
-        electron: {
-          isElectron: true;
-          onNavigateHelp: (cb: () => void) => () => void;
-          onNavigateSettings: (cb: () => void) => () => void;
-        };
-      }).electron = {
+      (
+        window as unknown as {
+          electron: {
+            isElectron: true;
+            onNavigateHelp: (cb: () => void) => () => void;
+            onNavigateSettings: (cb: () => void) => () => void;
+          };
+        }
+      ).electron = {
         isElectron: true,
         onNavigateHelp: (cb) => {
           helpCallback = cb;
@@ -490,15 +526,20 @@ describe("GlobalKeyboardShortcuts", () => {
 
   it("Electron app menu: Settings callback navigates to /settings when not in project", async () => {
     let settingsCallback: (() => void) | undefined;
-    const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
+    const prev =
+      typeof window !== "undefined"
+        ? (window as unknown as { electron?: unknown }).electron
+        : undefined;
     if (typeof window !== "undefined") {
-      (window as unknown as {
-        electron: {
-          isElectron: true;
-          onNavigateHelp: (cb: () => void) => () => void;
-          onNavigateSettings: (cb: () => void) => () => void;
-        };
-      }).electron = {
+      (
+        window as unknown as {
+          electron: {
+            isElectron: true;
+            onNavigateHelp: (cb: () => void) => () => void;
+            onNavigateSettings: (cb: () => void) => () => void;
+          };
+        }
+      ).electron = {
         isElectron: true,
         onNavigateHelp: () => () => {},
         onNavigateSettings: (cb) => {
@@ -529,15 +570,20 @@ describe("GlobalKeyboardShortcuts", () => {
 
   it("Electron app menu: Settings callback navigates to project settings when in project", async () => {
     let settingsCallback: (() => void) | undefined;
-    const prev = typeof window !== "undefined" ? (window as unknown as { electron?: unknown }).electron : undefined;
+    const prev =
+      typeof window !== "undefined"
+        ? (window as unknown as { electron?: unknown }).electron
+        : undefined;
     if (typeof window !== "undefined") {
-      (window as unknown as {
-        electron: {
-          isElectron: true;
-          onNavigateHelp: (cb: () => void) => () => void;
-          onNavigateSettings: (cb: () => void) => () => void;
-        };
-      }).electron = {
+      (
+        window as unknown as {
+          electron: {
+            isElectron: true;
+            onNavigateHelp: (cb: () => void) => () => void;
+            onNavigateSettings: (cb: () => void) => () => void;
+          };
+        }
+      ).electron = {
         isElectron: true,
         onNavigateHelp: () => () => {},
         onNavigateSettings: (cb) => {

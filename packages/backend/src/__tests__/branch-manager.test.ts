@@ -364,9 +364,13 @@ describe("BranchManager", () => {
 
       await execAsync("git checkout -b opensprint/rebase-multi-conflict", { cwd: repoPath });
       await fs.writeFile(path.join(repoPath, "conflict.txt"), "feature-1\n");
-      await execAsync('git add conflict.txt && git commit -m "feature commit 1"', { cwd: repoPath });
+      await execAsync('git add conflict.txt && git commit -m "feature commit 1"', {
+        cwd: repoPath,
+      });
       await fs.writeFile(path.join(repoPath, "conflict.txt"), "feature-2\n");
-      await execAsync('git add conflict.txt && git commit -m "feature commit 2"', { cwd: repoPath });
+      await execAsync('git add conflict.txt && git commit -m "feature commit 2"', {
+        cwd: repoPath,
+      });
 
       await execAsync("git checkout main", { cwd: repoPath });
       await fs.writeFile(path.join(repoPath, "conflict.txt"), "main-change\n");
@@ -595,7 +599,9 @@ describe("BranchManager", () => {
       const { stdout: headMessage } = await execAsync("git log -1 --pretty=%s", { cwd: repoPath });
       expect(headMessage.trim()).toBe("chore: initialize Open Sprint project");
 
-      const { stdout: wtBranch } = await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: wtPath });
+      const { stdout: wtBranch } = await execAsync("git rev-parse --abbrev-ref HEAD", {
+        cwd: wtPath,
+      });
       expect(wtBranch.trim()).toBe(`opensprint/${taskId}`);
 
       await expect(fs.readFile(path.join(wtPath, "README"), "utf-8")).resolves.toBe(
@@ -897,11 +903,12 @@ describe("BranchManager", () => {
       worktreePaths.push(wtPath);
 
       // Task branch should be based on develop
-      const { stdout } = await execAsync(
-        `git merge-base develop opensprint/${taskId}`,
-        { cwd: repoPath }
-      );
-      const developSha = (await execAsync("git rev-parse develop", { cwd: repoPath })).stdout.trim();
+      const { stdout } = await execAsync(`git merge-base develop opensprint/${taskId}`, {
+        cwd: repoPath,
+      });
+      const developSha = (
+        await execAsync("git rev-parse develop", { cwd: repoPath })
+      ).stdout.trim();
       expect(stdout.trim()).toBe(developSha);
     });
 
@@ -1191,9 +1198,13 @@ describe("BranchManager", () => {
 
       await execAsync("git checkout -b feature", { cwd: repoPath });
       await fs.writeFile(filePath, "feature-1\nline-2\n");
-      await execAsync('git add conflict.txt && git commit -m "feature commit 1"', { cwd: repoPath });
+      await execAsync('git add conflict.txt && git commit -m "feature commit 1"', {
+        cwd: repoPath,
+      });
       await fs.writeFile(filePath, "feature-1\nfeature-2\n");
-      await execAsync('git add conflict.txt && git commit -m "feature commit 2"', { cwd: repoPath });
+      await execAsync('git add conflict.txt && git commit -m "feature commit 2"', {
+        cwd: repoPath,
+      });
 
       await execAsync("git checkout main", { cwd: repoPath });
       await fs.writeFile(filePath, "main-1\nline-2\n");

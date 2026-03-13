@@ -24,24 +24,12 @@ describe("ServerDiffView", () => {
   });
 
   it("renders title when fromVersion and toVersion are provided", () => {
-    render(
-      <ServerDiffView
-        diff={mockDiff}
-        fromVersion="v1"
-        toVersion="current"
-      />
-    );
+    render(<ServerDiffView diff={mockDiff} fromVersion="v1" toVersion="current" />);
     expect(screen.getByText("v1 → current")).toBeInTheDocument();
   });
 
   it("renders summary in title when version props and summary present", () => {
-    render(
-      <ServerDiffView
-        diff={mockDiff}
-        fromVersion="v1"
-        toVersion="current"
-      />
-    );
+    render(<ServerDiffView diff={mockDiff} fromVersion="v1" toVersion="current" />);
     expect(screen.getByText(/\+1 −1/)).toBeInTheDocument();
   });
 
@@ -69,9 +57,18 @@ describe("ServerDiffView", () => {
 
   it("applies data-line-type for add, remove, context", () => {
     render(<ServerDiffView diff={mockDiff} />);
-    expect(screen.getByText("First line").closest("[data-line-type]")).toHaveAttribute("data-line-type", "context");
-    expect(screen.getByText(/Removed line/).closest("[data-line-type]")).toHaveAttribute("data-line-type", "remove");
-    expect(screen.getByText(/Added line/).closest("[data-line-type]")).toHaveAttribute("data-line-type", "add");
+    expect(screen.getByText("First line").closest("[data-line-type]")).toHaveAttribute(
+      "data-line-type",
+      "context"
+    );
+    expect(screen.getByText(/Removed line/).closest("[data-line-type]")).toHaveAttribute(
+      "data-line-type",
+      "remove"
+    );
+    expect(screen.getByText(/Added line/).closest("[data-line-type]")).toHaveAttribute(
+      "data-line-type",
+      "add"
+    );
   });
 
   it("supports keyboard navigation (ArrowDown, ArrowUp)", async () => {

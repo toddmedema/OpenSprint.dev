@@ -82,7 +82,10 @@ prdRouter.get(
     const fromVersion = Number(fromVersionParam);
     if (!Number.isInteger(fromVersion) || fromVersion < 0) {
       res.status(400).json({
-        error: { code: "INVALID_INPUT", message: "Query parameter 'fromVersion' must be a non-negative integer" },
+        error: {
+          code: "INVALID_INPUT",
+          message: "Query parameter 'fromVersion' must be a non-negative integer",
+        },
       });
       return;
     }
@@ -95,7 +98,8 @@ prdRouter.get(
       return;
     }
 
-    const useCurrent = toVersionParam === undefined || toVersionParam === "" || toVersionParam === "current";
+    const useCurrent =
+      toVersionParam === undefined || toVersionParam === "" || toVersionParam === "current";
     let toContent: string;
     let resolvedToVersion: string;
 
@@ -107,7 +111,10 @@ prdRouter.get(
       const toVersion = Number(toVersionParam);
       if (!Number.isInteger(toVersion) || toVersion < 0) {
         res.status(400).json({
-          error: { code: "INVALID_INPUT", message: "Query parameter 'toVersion' must be 'current' or a non-negative integer" },
+          error: {
+            code: "INVALID_INPUT",
+            message: "Query parameter 'toVersion' must be 'current' or a non-negative integer",
+          },
         });
         return;
       }
@@ -123,7 +130,11 @@ prdRouter.get(
     }
 
     const diff = computeLineDiff(fromContent, toContent);
-    const body: ApiResponse<{ fromVersion: string; toVersion: string; diff: { lines: typeof diff.lines; summary: typeof diff.summary } }> = {
+    const body: ApiResponse<{
+      fromVersion: string;
+      toVersion: string;
+      diff: { lines: typeof diff.lines; summary: typeof diff.summary };
+    }> = {
       data: {
         fromVersion: String(fromVersion),
         toVersion: resolvedToVersion,
@@ -156,7 +167,10 @@ prdRouter.get(
       !notification.scopeChangeMetadata
     ) {
       res.status(404).json({
-        error: { code: "NOT_FOUND", message: "HIL approval request not found or has no proposed scope changes" },
+        error: {
+          code: "NOT_FOUND",
+          message: "HIL approval request not found or has no proposed scope changes",
+        },
       });
       return;
     }
@@ -178,7 +192,10 @@ prdRouter.get(
     const proposedSpec = prdToSpecMarkdown(proposedPrd);
     const diff = computeLineDiff(currentSpec, proposedSpec);
 
-    const body: ApiResponse<{ requestId: string; diff: { lines: typeof diff.lines; summary: typeof diff.summary } }> = {
+    const body: ApiResponse<{
+      requestId: string;
+      diff: { lines: typeof diff.lines; summary: typeof diff.summary };
+    }> = {
       data: { requestId, diff: { lines: diff.lines, summary: diff.summary } },
     };
     res.json(body);

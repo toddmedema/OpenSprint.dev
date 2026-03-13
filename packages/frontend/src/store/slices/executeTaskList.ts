@@ -37,8 +37,7 @@ export const taskListReducers = {
     }>
   ) {
     ensureTasksState(state);
-    const { taskId, status, assignee, priority, blockReason, title, description } =
-      action.payload;
+    const { taskId, status, assignee, priority, blockReason, title, description } = action.payload;
     const task = state.tasksById[taskId];
     if (task) {
       if (status !== undefined) {
@@ -80,9 +79,7 @@ export const taskListReducers = {
   },
 };
 
-export function addTaskListExtraReducers(
-  builder: ActionReducerMapBuilder<ExecuteState>
-): void {
+export function addTaskListExtraReducers(builder: ActionReducerMapBuilder<ExecuteState>): void {
   builder
     .addCase(fetchTasks.pending, (state) => {
       ensureAsync(state);
@@ -163,8 +160,7 @@ export function addTaskListExtraReducers(
       ensureAsync(state);
       state.async.taskDetail.loading = false;
       const requestedTaskId = (action.meta?.arg as { taskId?: string } | undefined)?.taskId;
-      const isForSelectedTask =
-        requestedTaskId != null && state.selectedTaskId === requestedTaskId;
+      const isForSelectedTask = requestedTaskId != null && state.selectedTaskId === requestedTaskId;
       if (isForSelectedTask) {
         const msg = action.error?.message ?? "";
         state.async.taskDetail.error = msg || "Failed to load task details";

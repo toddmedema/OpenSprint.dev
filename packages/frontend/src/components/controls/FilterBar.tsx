@@ -22,7 +22,9 @@ export function FilterBar({ left, right, dataTestId, variant = "default" }: Filt
       data-testid={dataTestId}
     >
       <div className="flex w-full items-center justify-between gap-2 sm:gap-4">
-        <div className={`flex items-center gap-2 flex-1 min-w-0 overflow-x-auto overflow-y-visible flex-nowrap ${isPhase ? "py-0" : "py-1"}`}>
+        <div
+          className={`flex items-center gap-2 flex-1 min-w-0 overflow-x-auto overflow-y-visible flex-nowrap ${isPhase ? "py-0" : "py-1"}`}
+        >
           {left}
         </div>
         {right ? <div className="flex items-center shrink-0 gap-1 sm:gap-2">{right}</div> : null}
@@ -30,4 +32,3 @@ export function FilterBar({ left, right, dataTestId, variant = "default" }: Filt
     </div>
   );
 }
-

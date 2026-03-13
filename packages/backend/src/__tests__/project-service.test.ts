@@ -118,9 +118,11 @@ describe("ProjectService", () => {
 
     // Task store: global DB, no per-repo data
 
-    // Verify AGENTS.md created with bd instruction
+    // Verify AGENTS.md created with the Open Sprint runtime contract
     const agentsMd = await fs.readFile(path.join(repoPath, "AGENTS.md"), "utf-8");
-    expect(agentsMd).toContain("Use 'bd' for task tracking");
+    expect(agentsMd).toContain("## Open Sprint Runtime Contract");
+    expect(agentsMd).toContain("Do not use external task CLIs");
+    expect(agentsMd).not.toContain("Use 'bd' for task tracking");
 
     // PRD §5.9: Verify .gitignore has orchestrator-state and worktrees
     const gitignorePath = path.join(repoPath, ".gitignore");
@@ -194,7 +196,7 @@ describe("ProjectService", () => {
     expect((found as Record<string, unknown>).description).toBeUndefined();
   });
 
-  it("should append bd instruction to existing AGENTS.md that lacks it", async () => {
+  it("should append the Open Sprint runtime contract to existing AGENTS.md that lacks it", async () => {
     const repoPath = path.join(tempDir, "existing-agents-md");
     await fs.mkdir(repoPath, { recursive: true });
     await fs.writeFile(
@@ -214,11 +216,12 @@ describe("ProjectService", () => {
     const content = await fs.readFile(path.join(repoPath, "AGENTS.md"), "utf-8");
     expect(content).toContain("# My Project");
     expect(content).toContain("Custom instructions here.");
-    expect(content).toContain("Use 'bd' for task tracking");
+    expect(content).toContain("## Open Sprint Runtime Contract");
+    expect(content).toContain("Do not use external task CLIs");
   });
 
-  it("should not duplicate bd instruction if AGENTS.md already has it", async () => {
-    const repoPath = path.join(tempDir, "agents-md-with-bd");
+  it("should replace the legacy bd instruction with the runtime contract", async () => {
+    const repoPath = path.join(tempDir, "agents-md-with-legacy-bd");
     await fs.mkdir(repoPath, { recursive: true });
     await fs.writeFile(
       path.join(repoPath, "AGENTS.md"),
@@ -235,7 +238,30 @@ describe("ProjectService", () => {
     });
 
     const content = await fs.readFile(path.join(repoPath, "AGENTS.md"), "utf-8");
-    const matches = content.match(/Use 'bd' for task tracking/g);
+    expect(content).toContain("# My Project");
+    expect(content).toContain("## Open Sprint Runtime Contract");
+    expect(content).not.toContain("Use 'bd' for task tracking");
+  });
+
+  it("should not duplicate the runtime contract if AGENTS.md already has it", async () => {
+    const repoPath = path.join(tempDir, "agents-md-with-runtime-contract");
+    await fs.mkdir(repoPath, { recursive: true });
+    await fs.writeFile(
+      path.join(repoPath, "AGENTS.md"),
+      "# My Project\n\n## Open Sprint Runtime Contract\n\nOpen Sprint manages task state internally. Do not use external task CLIs.\n"
+    );
+
+    await projectService.createProject({
+      name: "Already Has Runtime Contract",
+      repoPath,
+      simpleComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      complexComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    const content = await fs.readFile(path.join(repoPath, "AGENTS.md"), "utf-8");
+    const matches = content.match(/## Open Sprint Runtime Contract/g);
     expect(matches).toHaveLength(1);
   });
 
@@ -791,7 +817,9 @@ describe("ProjectService", () => {
     const withNever = await projectService.getSettingsWithRuntimeState(project.id);
     expect(withNever.nextRunAt).toBeUndefined();
 
-    await projectService.updateSettings(project.id, { selfImprovementFrequency: "after_each_plan" });
+    await projectService.updateSettings(project.id, {
+      selfImprovementFrequency: "after_each_plan",
+    });
     const withPlan = await projectService.getSettingsWithRuntimeState(project.id);
     expect(withPlan.nextRunAt).toBeUndefined();
   });

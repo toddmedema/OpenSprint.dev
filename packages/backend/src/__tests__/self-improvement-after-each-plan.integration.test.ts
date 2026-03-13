@@ -134,6 +134,7 @@ vi.mock("../services/branch-manager.js", () => {
       removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
       deleteBranch: vi.fn().mockResolvedValue(undefined),
       getChangedFiles: vi.fn().mockResolvedValue([]),
+      prepareMainForPush: vi.fn().mockResolvedValue(undefined),
       pushMain: vi.fn().mockResolvedValue(undefined),
       pushMainToOrigin: vi.fn().mockResolvedValue(undefined),
       isMergeInProgress: vi.fn().mockResolvedValue(false),
@@ -254,6 +255,7 @@ describe("after-each-plan self-improvement integration", () => {
         removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
         deleteBranch: vi.fn().mockResolvedValue(undefined),
         getChangedFiles: vi.fn().mockResolvedValue([]),
+        prepareMainForPush: vi.fn().mockResolvedValue(undefined),
         pushMain: vi.fn().mockResolvedValue(undefined),
         pushMainToOrigin: vi.fn().mockResolvedValue(undefined),
         isMergeInProgress: vi.fn().mockResolvedValue(false),
@@ -303,7 +305,8 @@ describe("after-each-plan self-improvement integration", () => {
   it("triggers self-improvement and creates tasks with source self-improvement when plan is complete and change detection returns true", async () => {
     mockHasCodeChangesSince.mockResolvedValue(true);
     mockInvokePlanningAgent.mockResolvedValue({
-      content: '[{"title":"Add tests","description":"Unit tests for X","priority":1,"complexity":3}]',
+      content:
+        '[{"title":"Add tests","description":"Unit tests for X","priority":1,"complexity":3}]',
     });
 
     mockHost.taskStore.listAll.mockResolvedValue([

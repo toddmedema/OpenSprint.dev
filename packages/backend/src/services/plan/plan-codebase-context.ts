@@ -84,9 +84,7 @@ export async function getKeyFilesContent(repoPath: string): Promise<string> {
         try {
           const content = await fs.readFile(full, "utf-8");
           const truncated =
-            content.length > MAX_FILE
-              ? content.slice(0, MAX_FILE) + "\n... (truncated)"
-              : content;
+            content.length > MAX_FILE ? content.slice(0, MAX_FILE) + "\n... (truncated)" : content;
           parts.push(`### ${rel}\n\n\`\`\`\n${truncated}\n\`\`\`\n`);
           total += truncated.length;
           if (total >= MAX_TOTAL) return;
@@ -118,11 +116,7 @@ export async function buildCodebaseContextForAutoReview(repoPath: string): Promi
   const MAX_FILES = 150;
   const MAX_FILE_SIZE = 2000;
 
-  async function walk(
-    dir: string,
-    prefix: string,
-    files: string[]
-  ): Promise<void> {
+  async function walk(dir: string, prefix: string, files: string[]): Promise<void> {
     if (files.length >= MAX_FILES) return;
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });

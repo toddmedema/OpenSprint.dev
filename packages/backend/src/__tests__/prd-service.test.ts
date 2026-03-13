@@ -50,33 +50,51 @@ vi.mock("../services/task-store.service.js", () => ({
         }),
       })
     ),
-    runWrite: vi.fn().mockImplementation(async (fn: (client: { execute: (sql: string, args: unknown[]) => Promise<void> }) => Promise<unknown>) => {
-      const client = {
-        execute: vi.fn().mockImplementation(async (sql: string, args: unknown[]) => {
-          if (sql.includes("prd_metadata") && sql.includes("INSERT") && Array.isArray(args) && args.length >= 4) {
-            const projectId = String(args[0]);
-            prdMetadataStore[projectId] = {
-              version: Number(args[1]),
-              change_log: String(args[2]),
-              section_versions: String(args[3]),
-            };
-          }
-          if (sql.includes("prd_snapshots") && sql.includes("INSERT") && Array.isArray(args) && args.length >= 4) {
-            const projectId = String(args[0]);
-            const version = Number(args[1]);
-            const content = String(args[2]);
-            const created_at = String(args[3]);
-            prdSnapshotsStore[`${projectId}:${version}`] = {
-              project_id: projectId,
-              version,
-              content,
-              created_at,
-            };
-          }
-        }),
-      };
-      return fn(client);
-    }),
+    runWrite: vi
+      .fn()
+      .mockImplementation(
+        async (
+          fn: (client: {
+            execute: (sql: string, args: unknown[]) => Promise<void>;
+          }) => Promise<unknown>
+        ) => {
+          const client = {
+            execute: vi.fn().mockImplementation(async (sql: string, args: unknown[]) => {
+              if (
+                sql.includes("prd_metadata") &&
+                sql.includes("INSERT") &&
+                Array.isArray(args) &&
+                args.length >= 4
+              ) {
+                const projectId = String(args[0]);
+                prdMetadataStore[projectId] = {
+                  version: Number(args[1]),
+                  change_log: String(args[2]),
+                  section_versions: String(args[3]),
+                };
+              }
+              if (
+                sql.includes("prd_snapshots") &&
+                sql.includes("INSERT") &&
+                Array.isArray(args) &&
+                args.length >= 4
+              ) {
+                const projectId = String(args[0]);
+                const version = Number(args[1]);
+                const content = String(args[2]);
+                const created_at = String(args[3]);
+                prdSnapshotsStore[`${projectId}:${version}`] = {
+                  project_id: projectId,
+                  version,
+                  content,
+                  created_at,
+                };
+              }
+            }),
+          };
+          return fn(client);
+        }
+      ),
   },
   TaskStoreService: vi.fn(),
 }));

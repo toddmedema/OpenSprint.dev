@@ -68,8 +68,7 @@ const selectUnreadPhaseByProject = (state: UnreadPhaseRootState, projectId: stri
 export const selectPhaseUnread = createSelector(
   [selectUnreadPhaseByProject],
   (flags): UnreadPhaseFlags =>
-    flags == null ||
-    (flags.plan !== true && flags.sketch !== true && flags.execute !== true)
+    flags == null || (flags.plan !== true && flags.sketch !== true && flags.execute !== true)
       ? EMPTY_PHASE_UNREAD
       : {
           plan: flags.plan ?? false,

@@ -26,7 +26,11 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
   const [diffModalFromVersion, setDiffModalFromVersion] = useState<number | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
-  const [diffResult, setDiffResult] = useState<{ diff: ServerDiffResult; fromVersion: string; toVersion: string } | null>(null);
+  const [diffResult, setDiffResult] = useState<{
+    diff: ServerDiffResult;
+    fromVersion: string;
+    toVersion: string;
+  } | null>(null);
 
   const closeDiffModal = useCallback(() => {
     setDiffModalFromVersion(null);
@@ -127,7 +131,12 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
       )}
 
       {diffModalFromVersion != null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="version-diff-modal-title">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="version-diff-modal-title"
+        >
           <button
             type="button"
             className="absolute inset-0 bg-theme-overlay"
@@ -154,11 +163,18 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
             </div>
             <div className="flex-1 min-h-0 overflow-auto p-4">
               {diffLoading && (
-                <p className="text-sm text-theme-muted" data-testid="version-diff-loading">Loading diff…</p>
+                <p className="text-sm text-theme-muted" data-testid="version-diff-loading">
+                  Loading diff…
+                </p>
               )}
               {diffError && (
-                <div className="rounded border border-theme-error-border bg-theme-error-bg/50 p-3" data-testid="version-diff-error-block">
-                  <p className="text-sm text-theme-error mb-2" data-testid="version-diff-error">{diffError}</p>
+                <div
+                  className="rounded border border-theme-error-border bg-theme-error-bg/50 p-3"
+                  data-testid="version-diff-error-block"
+                >
+                  <p className="text-sm text-theme-error mb-2" data-testid="version-diff-error">
+                    {diffError}
+                  </p>
                   <button
                     type="button"
                     onClick={closeDiffModal}

@@ -6,9 +6,9 @@ import unreadPhaseReducer, {
   selectPhaseUnread,
 } from "./unreadPhaseSlice";
 
-function createStore(
-  preloadedState?: { unreadPhase?: Record<string, { plan?: boolean; sketch?: boolean; execute?: boolean }> }
-) {
+function createStore(preloadedState?: {
+  unreadPhase?: Record<string, { plan?: boolean; sketch?: boolean; execute?: boolean }>;
+}) {
   return configureStore({
     reducer: { unreadPhase: unreadPhaseReducer },
     preloadedState,

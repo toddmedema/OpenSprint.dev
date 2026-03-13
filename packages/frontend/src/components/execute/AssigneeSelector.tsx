@@ -27,12 +27,7 @@ export interface AssigneeSelectorProps {
 function PersonIcon({ size = "sm" }: { size?: "xs" | "sm" }) {
   const cls = size === "xs" ? "w-3 h-3" : "w-4 h-4";
   return (
-    <svg
-      className={`${cls} shrink-0 text-theme-muted`}
-      viewBox="0 0 16 16"
-      role="img"
-      aria-hidden
-    >
+    <svg className={`${cls} shrink-0 text-theme-muted`} viewBox="0 0 16 16" role="img" aria-hidden>
       <path
         fill="currentColor"
         d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 2-2 2H4c-1 0-2-1-2-2v-1a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v1z"
@@ -113,9 +108,7 @@ export function AssigneeSelector({
     }
     setLoading(true);
     try {
-      await dispatch(
-        updateTaskAssignee({ projectId, taskId, assignee })
-      ).unwrap();
+      await dispatch(updateTaskAssignee({ projectId, taskId, assignee })).unwrap();
       onSelect?.(assignee);
       setOpen(false);
       setShowOtherInput(false);
@@ -157,78 +150,78 @@ export function AssigneeSelector({
       data-testid="assignee-dropdown"
     >
       <li role="option" aria-selected={!currentAssignee}>
+        <button
+          type="button"
+          onClick={() => handleSelect(null)}
+          className={`dropdown-item w-full flex items-center gap-2 text-left text-xs hover:bg-theme-border-subtle/50 transition-colors px-3 py-2 ${
+            !currentAssignee ? "text-brand-600 font-medium" : "text-theme-text"
+          }`}
+          data-testid="assignee-option-unassigned"
+        >
+          Unassigned
+        </button>
+      </li>
+      {teamMembers.map((m) => {
+        const label = m.name || m.id;
+        const isSelected = currentAssignee === m.id || currentAssignee === m.name;
+        return (
+          <li key={m.id} role="option" aria-selected={isSelected}>
             <button
               type="button"
-              onClick={() => handleSelect(null)}
+              onClick={() => handleSelect(m.name || m.id)}
               className={`dropdown-item w-full flex items-center gap-2 text-left text-xs hover:bg-theme-border-subtle/50 transition-colors px-3 py-2 ${
-                !currentAssignee ? "text-brand-600 font-medium" : "text-theme-text"
+                isSelected ? "text-brand-600 font-medium" : "text-theme-text"
               }`}
-              data-testid="assignee-option-unassigned"
+              data-testid={`assignee-option-${m.id}`}
             >
-              Unassigned
+              <PersonIcon size="xs" />
+              {label}
             </button>
           </li>
-          {teamMembers.map((m) => {
-            const label = m.name || m.id;
-            const isSelected = currentAssignee === m.id || currentAssignee === m.name;
-            return (
-              <li key={m.id} role="option" aria-selected={isSelected}>
-                <button
-                  type="button"
-                  onClick={() => handleSelect(m.name || m.id)}
-                  className={`dropdown-item w-full flex items-center gap-2 text-left text-xs hover:bg-theme-border-subtle/50 transition-colors px-3 py-2 ${
-                    isSelected ? "text-brand-600 font-medium" : "text-theme-text"
-                  }`}
-                  data-testid={`assignee-option-${m.id}`}
-                >
-                  <PersonIcon size="xs" />
-                  {label}
-                </button>
-              </li>
-            );
-          })}
-          {showOtherInput ? (
-            <li className="px-3 py-2 border-t border-theme-border mt-1 pt-2">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={otherInput}
-                  onChange={(e) => setOtherInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleOtherSubmit();
-                    if (e.key === "Escape") {
-                      setShowOtherInput(false);
-                      setOtherInput("");
-                    }
-                  }}
-                  placeholder="Enter name…"
-                  className="flex-1 text-xs px-2 py-1 rounded border border-theme-border bg-theme-surface text-theme-text focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-500"
-                  data-testid="assignee-other-input"
-                />
-                <button
-                  type="button"
-                  onClick={handleOtherSubmit}
-                  disabled={!otherInput.trim()}
-                  className="text-xs px-2 py-1 rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  data-testid="assignee-other-submit"
-                >
-                  Add
-                </button>
-              </div>
-            </li>
-          ) : (
-            <li role="option" aria-selected={false}>
-              <button
-                type="button"
-                onClick={() => setShowOtherInput(true)}
-                className="dropdown-item w-full flex items-center gap-2 text-left text-xs hover:bg-theme-border-subtle/50 transition-colors px-3 py-2 text-theme-muted"
-                data-testid="assignee-option-other"
-              >
-                Other…
-              </button>
-            </li>
-          )}
-        </ul>
+        );
+      })}
+      {showOtherInput ? (
+        <li className="px-3 py-2 border-t border-theme-border mt-1 pt-2">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={otherInput}
+              onChange={(e) => setOtherInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleOtherSubmit();
+                if (e.key === "Escape") {
+                  setShowOtherInput(false);
+                  setOtherInput("");
+                }
+              }}
+              placeholder="Enter name…"
+              className="flex-1 text-xs px-2 py-1 rounded border border-theme-border bg-theme-surface text-theme-text focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-500"
+              data-testid="assignee-other-input"
+            />
+            <button
+              type="button"
+              onClick={handleOtherSubmit}
+              disabled={!otherInput.trim()}
+              className="text-xs px-2 py-1 rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="assignee-other-submit"
+            >
+              Add
+            </button>
+          </div>
+        </li>
+      ) : (
+        <li role="option" aria-selected={false}>
+          <button
+            type="button"
+            onClick={() => setShowOtherInput(true)}
+            className="dropdown-item w-full flex items-center gap-2 text-left text-xs hover:bg-theme-border-subtle/50 transition-colors px-3 py-2 text-theme-muted"
+            data-testid="assignee-option-other"
+          >
+            Other…
+          </button>
+        </li>
+      )}
+    </ul>
   ) : null;
 
   return (

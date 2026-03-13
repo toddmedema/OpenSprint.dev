@@ -21,9 +21,7 @@ export const activeAgentsReducers = {
   },
 };
 
-export function addActiveAgentsExtraReducers(
-  builder: ActionReducerMapBuilder<ExecuteState>
-): void {
+export function addActiveAgentsExtraReducers(builder: ActionReducerMapBuilder<ExecuteState>): void {
   createAsyncHandlers("activeAgents", fetchActiveAgents, builder, {
     ensureState: ensureAsync,
     onFulfilled: (state, action) => {

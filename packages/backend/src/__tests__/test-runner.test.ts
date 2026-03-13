@@ -105,7 +105,9 @@ describe("TestRunner", () => {
       expect(result.failed).toBe(1);
       expect(result.skipped).toBe(1);
       expect(result.total).toBe(4);
-      expect(result.details.some((d) => d.status === "failed" && d.error?.includes("boom"))).toBe(true);
+      expect(result.details.some((d) => d.status === "failed" && d.error?.includes("boom"))).toBe(
+        true
+      );
 
       const invoked = (mockSpawn.mock.calls[0]?.[1] as string[] | undefined)?.[1] ?? "";
       expect(invoked).toContain("--reporter=json");

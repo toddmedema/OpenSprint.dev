@@ -25,58 +25,58 @@ type ResolveBody = { approved?: boolean };
 projectNotificationsRouter.post(
   "/:notificationId/retry-rate-limit",
   wrapAsync(async (req: Request<NotificationParams>, res) => {
-      const { projectId, notificationId } = req.params;
-      const notifications = await notificationService.listByProject(projectId);
-      const notification = notifications.find((n) => n.id === notificationId);
-      if (!notification) {
-        throw new AppError(
-          404,
-          ErrorCodes.NOTIFICATION_NOT_FOUND,
-          `Notification '${notificationId}' not found`,
-          { notificationId, projectId }
-        );
+    const { projectId, notificationId } = req.params;
+    const notifications = await notificationService.listByProject(projectId);
+    const notification = notifications.find((n) => n.id === notificationId);
+    if (!notification) {
+      throw new AppError(
+        404,
+        ErrorCodes.NOTIFICATION_NOT_FOUND,
+        `Notification '${notificationId}' not found`,
+        { notificationId, projectId }
+      );
+    }
+    if (notification.kind !== "api_blocked" || notification.errorCode !== "rate_limit") {
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "Retry is only available for rate limit notifications"
+      );
+    }
+    const settings = await projectServiceInstance.getSettings(projectId);
+    const providers = getProvidersRequiringApiKeys([
+      settings.simpleComplexityAgent,
+      settings.complexComplexityAgent,
+    ]);
+    let hasAvailableKey = false;
+    for (const provider of providers) {
+      const resolved = await getNextKey(projectId, provider);
+      if (resolved) {
+        hasAvailableKey = true;
+        break;
       }
-      if (notification.kind !== "api_blocked" || notification.errorCode !== "rate_limit") {
-        throw new AppError(
-          400,
-          ErrorCodes.INVALID_INPUT,
-          "Retry is only available for rate limit notifications"
-        );
-      }
-      const settings = await projectServiceInstance.getSettings(projectId);
-      const providers = getProvidersRequiringApiKeys([
-        settings.simpleComplexityAgent,
-        settings.complexComplexityAgent,
-      ]);
-      let hasAvailableKey = false;
-      for (const provider of providers) {
-        const resolved = await getNextKey(projectId, provider);
-        if (resolved) {
-          hasAvailableKey = true;
-          break;
-        }
-      }
-      if (providers.length > 0 && !hasAvailableKey) {
-        throw new AppError(
-          400,
-          ErrorCodes.INVALID_INPUT,
-          "No API keys available. Add more keys in Settings or wait 24h for rate-limited keys to reset."
-        );
-      }
-      const resolved = await notificationService.resolveRateLimitNotifications(projectId);
-      for (const r of resolved) {
-        broadcastToProject(projectId, {
-          type: "notification.resolved",
-          notificationId: r.id,
-          projectId,
-          source: r.source,
-          sourceId: r.sourceId,
-        });
-      }
-      orchestratorService.nudge(projectId);
-      res.json({
-        data: { ok: true, resolvedCount: resolved.length },
-      } as ApiResponse<{ ok: boolean; resolvedCount: number }>);
+    }
+    if (providers.length > 0 && !hasAvailableKey) {
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "No API keys available. Add more keys in Settings or wait 24h for rate-limited keys to reset."
+      );
+    }
+    const resolved = await notificationService.resolveRateLimitNotifications(projectId);
+    for (const r of resolved) {
+      broadcastToProject(projectId, {
+        type: "notification.resolved",
+        notificationId: r.id,
+        projectId,
+        source: r.source,
+        sourceId: r.sourceId,
+      });
+    }
+    orchestratorService.nudge(projectId);
+    res.json({
+      data: { ok: true, resolvedCount: resolved.length },
+    } as ApiResponse<{ ok: boolean; resolvedCount: number }>);
   })
 );
 
@@ -106,38 +106,38 @@ projectNotificationsRouter.get(
 projectNotificationsRouter.patch(
   "/:notificationId",
   wrapAsync(async (req: Request<NotificationParams, unknown, ResolveBody>, res) => {
-      const { projectId, notificationId } = req.params;
-      const approved = req.body?.approved;
-      const notification = await notificationService.resolve(projectId, notificationId);
+    const { projectId, notificationId } = req.params;
+    const approved = req.body?.approved;
+    const notification = await notificationService.resolve(projectId, notificationId);
 
-      // HIL approval: notify waiting workflow of user's choice
-      if (notification.kind === "hil_approval") {
-        hilService.notifyResolved(notificationId, approved === true);
+    // HIL approval: notify waiting workflow of user's choice
+    if (notification.kind === "hil_approval") {
+      hilService.notifyResolved(notificationId, approved === true);
+    }
+
+    broadcastToProject(projectId, {
+      type: "notification.resolved",
+      notificationId,
+      projectId,
+      source: notification.source,
+      sourceId: notification.sourceId,
+    });
+
+    // When source=execute, unblock the task so orchestrator can re-pick it
+    if (notification.source === "execute" && notification.sourceId) {
+      const taskId = notification.sourceId;
+      try {
+        await taskStore.update(projectId, taskId, {
+          status: "open",
+          block_reason: null,
+        });
+      } catch {
+        // Task may not exist or already unblocked
       }
+    }
 
-      broadcastToProject(projectId, {
-        type: "notification.resolved",
-        notificationId,
-        projectId,
-        source: notification.source,
-        sourceId: notification.sourceId,
-      });
-
-      // When source=execute, unblock the task so orchestrator can re-pick it
-      if (notification.source === "execute" && notification.sourceId) {
-        const taskId = notification.sourceId;
-        try {
-          await taskStore.update(projectId, taskId, {
-            status: "open",
-            block_reason: null,
-          });
-        } catch {
-          // Task may not exist or already unblocked
-        }
-      }
-
-      const body: ApiResponse<Notification> = { data: notification };
-      res.json(body);
+    const body: ApiResponse<Notification> = { data: notification };
+    res.json(body);
   })
 );
 

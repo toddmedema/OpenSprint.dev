@@ -150,8 +150,7 @@ notificationListener.startListening({
 
     // Use server message for assignee locked (task in progress)
     const assigneeLockedMessage =
-      actionType === "execute/updateTaskAssignee/rejected" &&
-      payloadCode === "ASSIGNEE_LOCKED"
+      actionType === "execute/updateTaskAssignee/rejected" && payloadCode === "ASSIGNEE_LOCKED"
         ? payloadMessage
         : null;
     // Replace generic "Rejected" with an actionable message when we know the thunk
@@ -199,8 +198,9 @@ notificationListener.startListening({
     return API_THUNK_PREFIXES.some((p) => type.startsWith(p));
   },
   effect: (_, listenerApi) => {
-    clearConnectionErrorAndDismissToasts(listenerApi.dispatch, () =>
-      listenerApi.getState() as NotificationState
+    clearConnectionErrorAndDismissToasts(
+      listenerApi.dispatch,
+      () => listenerApi.getState() as NotificationState
     );
     // Refetch db-status so DatabaseStatusBanner (Connecting to Postgres) auto-dismisses when DB is back.
     try {
@@ -215,8 +215,9 @@ notificationListener.startListening({
 notificationListener.startListening({
   actionCreator: dbStatusRestored,
   effect: (_, listenerApi) => {
-    clearConnectionErrorAndDismissToasts(listenerApi.dispatch, () =>
-      listenerApi.getState() as NotificationState
+    clearConnectionErrorAndDismissToasts(
+      listenerApi.dispatch,
+      () => listenerApi.getState() as NotificationState
     );
   },
 });

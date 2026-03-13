@@ -80,103 +80,100 @@ export function TaskDetailLinks({
   return (
     <div className="-mb-2" data-section="view-plan-deps-addlink">
       <div className="pt-0 px-4 pb-0">
-      {showLinks && (
-        <div className="text-xs">
-          <span className="text-theme-muted">Links:</span>
-          <div className="flex flex-col gap-y-1.5 mt-1.5">
-            {hasPlanLink && (
-              <button
-                type="button"
-                onClick={() => onNavigateToPlan!(plan!.metadata.planId)}
-                className="inline-flex items-center gap-1.5 text-left text-brand-600 hover:text-brand-500 transition-colors"
-                title={`View plan: ${planTitle}`}
-                data-testid="sidebar-view-plan-btn"
-              >
-                <span className="text-theme-muted shrink-0">Plan:</span>
-                <span className="truncate max-w-[200px] hover:underline" title={planTitle!}>
-                  {planTitle}
-                </span>
-              </button>
-            )}
-            {sorted.map((d) => {
-              const depTask = d.targetId ? taskById[d.targetId] : undefined;
-              const label = depTask?.title ?? d.targetId ?? "";
-              const col = depTask?.kanbanColumn ?? "backlog";
-              const typeLabel = TYPE_LABEL[d.type ?? ""] ?? "Related:";
-              const removing = removeLinkRemovingId === d.targetId;
-              return (
-                <div
-                  key={d.targetId}
-                  className="inline-flex items-center gap-1.5 w-full group"
+        {showLinks && (
+          <div className="text-xs">
+            <span className="text-theme-muted">Links:</span>
+            <div className="flex flex-col gap-y-1.5 mt-1.5">
+              {hasPlanLink && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToPlan!(plan!.metadata.planId)}
+                  className="inline-flex items-center gap-1.5 text-left text-brand-600 hover:text-brand-500 transition-colors"
+                  title={`View plan: ${planTitle}`}
+                  data-testid="sidebar-view-plan-btn"
                 >
-                  <button
-                    type="button"
-                    onClick={() => onSelectTask(d.targetId!)}
-                    className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-left text-brand-600 hover:text-brand-500 transition-colors"
-                  >
-                    <TaskStatusBadge column={col} size="xs" title={COLUMN_LABELS[col]} />
-                    <span className="text-theme-muted shrink-0">{typeLabel}</span>
-                    <span className="truncate max-w-[200px] hover:underline" title={label}>
-                      {label}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteLinkConfirm({
-                        targetId: d.targetId!,
-                        type: d.type ?? "related",
-                        taskName: label,
-                      });
-                    }}
-                    disabled={removing}
-                    className="shrink-0 p-0.5 rounded text-theme-muted hover:text-theme-error-text hover:bg-theme-error-bg transition-colors disabled:opacity-50"
-                    aria-label={`Remove ${TYPE_LABEL_SHORT[d.type ?? ""] ?? "Related"} link to ${label}`}
-                    data-testid={`sidebar-remove-link-btn-${d.targetId}`}
-                  >
-                    <svg
-                      className="w-3.5 h-3.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
+                  <span className="text-theme-muted shrink-0">Plan:</span>
+                  <span className="truncate max-w-[200px] hover:underline" title={planTitle!}>
+                    {planTitle}
+                  </span>
+                </button>
+              )}
+              {sorted.map((d) => {
+                const depTask = d.targetId ? taskById[d.targetId] : undefined;
+                const label = depTask?.title ?? d.targetId ?? "";
+                const col = depTask?.kanbanColumn ?? "backlog";
+                const typeLabel = TYPE_LABEL[d.type ?? ""] ?? "Related:";
+                const removing = removeLinkRemovingId === d.targetId;
+                return (
+                  <div key={d.targetId} className="inline-flex items-center gap-1.5 w-full group">
+                    <button
+                      type="button"
+                      onClick={() => onSelectTask(d.targetId!)}
+                      className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-left text-brand-600 hover:text-brand-500 transition-colors"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              );
-            })}
+                      <TaskStatusBadge column={col} size="xs" title={COLUMN_LABELS[col]} />
+                      <span className="text-theme-muted shrink-0">{typeLabel}</span>
+                      <span className="truncate max-w-[200px] hover:underline" title={label}>
+                        {label}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteLinkConfirm({
+                          targetId: d.targetId!,
+                          type: d.type ?? "related",
+                          taskName: label,
+                        });
+                      }}
+                      disabled={removing}
+                      className="shrink-0 p-0.5 rounded text-theme-muted hover:text-theme-error-text hover:bg-theme-error-bg transition-colors disabled:opacity-50"
+                      aria-label={`Remove ${TYPE_LABEL_SHORT[d.type ?? ""] ?? "Related"} link to ${label}`}
+                      data-testid={`sidebar-remove-link-btn-${d.targetId}`}
+                    >
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {addLinkOpen ? (
-        <AddLinkFlow
-          projectId={projectId}
-          childTaskId={selectedTask}
-          tasks={allTasks}
-          excludeIds={excludeIds}
-          onSave={async (parentTaskId, type) => {
-            await onAddLink(parentTaskId, type);
-          }}
-          onCancel={() => setAddLinkOpen(false)}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAddLinkOpen(true)}
-          className="text-xs text-brand-600 hover:text-brand-700 hover:underline text-left mt-1.5"
-          data-testid="sidebar-add-link-btn"
-        >
-          Add link
-        </button>
-      )}
+        {addLinkOpen ? (
+          <AddLinkFlow
+            projectId={projectId}
+            childTaskId={selectedTask}
+            tasks={allTasks}
+            excludeIds={excludeIds}
+            onSave={async (parentTaskId, type) => {
+              await onAddLink(parentTaskId, type);
+            }}
+            onCancel={() => setAddLinkOpen(false)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddLinkOpen(true)}
+            className="text-xs text-brand-600 hover:text-brand-700 hover:underline text-left mt-1.5"
+            data-testid="sidebar-add-link-btn"
+          >
+            Add link
+          </button>
+        )}
       </div>
     </div>
   );

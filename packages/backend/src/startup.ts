@@ -40,9 +40,7 @@ function hasValidRepoPath(project: { repoPath: string }): boolean {
  * Starts the watchdog, blocked-auto-retry, and session retention services.
  * @param projectService - When provided (from composition root), use it; otherwise create a new instance.
  */
-export async function initAlwaysOnOrchestrator(
-  projectService?: ProjectService
-): Promise<void> {
+export async function initAlwaysOnOrchestrator(projectService?: ProjectService): Promise<void> {
   const projectServiceToUse = projectService ?? new ProjectService();
   const feedbackService = new FeedbackService();
 

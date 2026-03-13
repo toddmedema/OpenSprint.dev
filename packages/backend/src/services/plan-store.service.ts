@@ -167,8 +167,10 @@ export class PlanStore {
       metadata,
       shipped_content: (row.shipped_content as string) ?? null,
       updated_at: (row.updated_at as string) ?? "",
-      current_version_number: row.current_version_number != null ? Number(row.current_version_number) : 1,
-      last_executed_version_number: row.last_executed_version_number != null ? Number(row.last_executed_version_number) : null,
+      current_version_number:
+        row.current_version_number != null ? Number(row.current_version_number) : 1,
+      last_executed_version_number:
+        row.last_executed_version_number != null ? Number(row.last_executed_version_number) : null,
     };
   }
 
@@ -216,8 +218,10 @@ export class PlanStore {
       metadata,
       shipped_content: (row.shipped_content as string) ?? null,
       updated_at: (row.updated_at as string) ?? "",
-      current_version_number: row.current_version_number != null ? Number(row.current_version_number) : 1,
-      last_executed_version_number: row.last_executed_version_number != null ? Number(row.last_executed_version_number) : null,
+      current_version_number:
+        row.current_version_number != null ? Number(row.current_version_number) : 1,
+      last_executed_version_number:
+        row.last_executed_version_number != null ? Number(row.last_executed_version_number) : null,
     };
   }
 
@@ -365,7 +369,13 @@ export class PlanStore {
       toPgParams(
         "UPDATE plans SET current_version_number = ?, last_executed_version_number = ?, updated_at = ? WHERE project_id = ? AND plan_id = ?"
       ),
-      [current_version_number, last_executed_version_number, new Date().toISOString(), projectId, planId]
+      [
+        current_version_number,
+        last_executed_version_number,
+        new Date().toISOString(),
+        projectId,
+        planId,
+      ]
     );
   }
 

@@ -410,14 +410,20 @@ describe("ApiKeysSection", () => {
     for (let i = 0; i < keyInputs.length; i++) {
       const row = keyInputs[i].closest("[data-index]");
       expect(row).toBeInTheDocument();
-      const handle = row!.querySelector(`[data-testid="api-key-drag-handle-ANTHROPIC_API_KEY-k${i + 1}"]`);
+      const handle = row!.querySelector(
+        `[data-testid="api-key-drag-handle-ANTHROPIC_API_KEY-k${i + 1}"]`
+      );
       const label = row!.querySelector(`[data-testid="api-key-label-ANTHROPIC_API_KEY-k${i + 1}"]`);
       const key = row!.querySelector(`[data-testid="api-key-input-ANTHROPIC_API_KEY-k${i + 1}"]`);
       expect(handle).toBeInTheDocument();
       expect(label).toBeInTheDocument();
       expect(key).toBeInTheDocument();
-      expect((handle as Node).compareDocumentPosition(label as Node) & DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-      expect((label as Node).compareDocumentPosition(key as Node) & DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+      expect(
+        (handle as Node).compareDocumentPosition(label as Node) & DOCUMENT_POSITION_FOLLOWING
+      ).not.toBe(0);
+      expect(
+        (label as Node).compareDocumentPosition(key as Node) & DOCUMENT_POSITION_FOLLOWING
+      ).not.toBe(0);
     }
   });
 
@@ -432,7 +438,9 @@ describe("ApiKeysSection", () => {
         onApiKeysChange={onApiKeysChange}
       />
     );
-    expect(screen.queryByTestId("api-key-drag-handle-ANTHROPIC_API_KEY-k1")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("api-key-drag-handle-ANTHROPIC_API_KEY-k1")
+    ).not.toBeInTheDocument();
   });
 
   it("calls onApiKeysChange with reordered entries when drop reorders keys", async () => {

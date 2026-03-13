@@ -241,7 +241,10 @@ export function PlanFilterToolbar({
       setSearchInputValue &&
       searchInputRef ? (
         searchExpanded ? (
-          <div className="flex items-center gap-1 animate-fade-in" data-testid="plan-search-expanded">
+          <div
+            className="flex items-center gap-1 animate-fade-in"
+            data-testid="plan-search-expanded"
+          >
             <input
               ref={searchInputRef}
               type="text"
@@ -306,12 +309,5 @@ export function PlanFilterToolbar({
     </>
   );
 
-  return (
-    <FilterBar
-      variant="phase"
-      left={left}
-      right={right}
-      dataTestId="plan-filter-toolbar"
-    />
-  );
+  return <FilterBar variant="phase" left={left} right={right} dataTestId="plan-filter-toolbar" />;
 }

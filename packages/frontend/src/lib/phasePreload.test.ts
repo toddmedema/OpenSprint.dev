@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
-import {
-  preloadPhaseData,
-  preloadPhaseChunks,
-  schedulePhasePreload,
-} from "./phasePreload";
+import { preloadPhaseData, preloadPhaseChunks, schedulePhasePreload } from "./phasePreload";
 import { queryKeys } from "../api/queryKeys";
 
 describe("phasePreload", () => {

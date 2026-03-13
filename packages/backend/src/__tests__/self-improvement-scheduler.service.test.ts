@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const {
-  mockListProjects,
-  mockGetSettings,
-  mockRunIfDue,
-} = vi.hoisted(() => ({
+const { mockListProjects, mockGetSettings, mockRunIfDue } = vi.hoisted(() => ({
   mockListProjects: vi.fn(),
   mockGetSettings: vi.fn(),
   mockRunIfDue: vi.fn(),
@@ -193,9 +189,7 @@ describe("self-improvement-scheduler.service", () => {
 
     it("daily project with lastRunAt yesterday is due at midnight UTC", async () => {
       const now = new Date(Date.UTC(2025, 0, 15, 0, 0, 0, 0)); // Jan 15 00:00 UTC
-      mockListProjects.mockResolvedValue([
-        { id: "proj-daily", name: "Daily", repoPath: "/tmp/d" },
-      ]);
+      mockListProjects.mockResolvedValue([{ id: "proj-daily", name: "Daily", repoPath: "/tmp/d" }]);
       mockGetSettings.mockResolvedValue({
         selfImprovementFrequency: "daily",
         selfImprovementLastRunAt: "2025-01-14T12:00:00.000Z",

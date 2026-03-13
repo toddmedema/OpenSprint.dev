@@ -4,10 +4,10 @@ Empty states appear when a phase has no content yet (e.g. no plans, no tasks, no
 
 ## Quick Reference
 
-| Element | Required | Notes |
-| ------- | -------- | ----- |
-| **Copy** | Yes | Title + description from `EMPTY_STATE_COPY` |
-| **Illustration** | Optional | Use `PhaseEmptyStateLogo` for consistency |
+| Element            | Required        | Notes                                                           |
+| ------------------ | --------------- | --------------------------------------------------------------- |
+| **Copy**           | Yes             | Title + description from `EMPTY_STATE_COPY`                     |
+| **Illustration**   | Optional        | Use `PhaseEmptyStateLogo` for consistency                       |
 | **Primary action** | When actionable | Button label from `EMPTY_STATE_COPY.<phase>.primaryActionLabel` |
 
 ## Pattern Structure
@@ -49,18 +49,18 @@ import { EMPTY_STATE_COPY } from "../../lib/emptyStateCopy";
     onClick: () => setAddPlanModalOpen(true),
     "data-testid": "empty-state-new-plan",
   }}
-/>
+/>;
 ```
 
 ## Phase-Specific Copy and Actions
 
-| Phase   | Title              | Description                                                       | Primary Action        |
-| ------- | ------------------ | ----------------------------------------------------------------- | --------------------- |
-| Sketch  | What do you want to build? | Describe your app idea and Open Sprint will generate a PRD. | Sketch it (textarea + button) |
-| Plan    | No plans yet       | Create a plan to break down your spec into tasks.                 | New Plan              |
-| Execute | No tasks yet       | Ship a plan from the Plan phase to start generating tasks.        | Go to Plan            |
-| Eval    | No feedback yet    | Test your app and report findings using the form above.           | Report a finding      |
-| Deliver | No deliveries yet  | Configure targets in settings, then deploy from the toolbar.      | Configure targets     |
+| Phase   | Title                      | Description                                                  | Primary Action                |
+| ------- | -------------------------- | ------------------------------------------------------------ | ----------------------------- |
+| Sketch  | What do you want to build? | Describe your app idea and Open Sprint will generate a PRD.  | Sketch it (textarea + button) |
+| Plan    | No plans yet               | Create a plan to break down your spec into tasks.            | New Plan                      |
+| Execute | No tasks yet               | Ship a plan from the Plan phase to start generating tasks.   | Go to Plan                    |
+| Eval    | No feedback yet            | Test your app and report findings using the form above.      | Report a finding              |
+| Deliver | No deliveries yet          | Configure targets in settings, then deploy from the toolbar. | Configure targets             |
 
 ## Filtered-Empty States
 

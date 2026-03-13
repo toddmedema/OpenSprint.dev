@@ -279,9 +279,7 @@ export function TaskDetailDiagnostics({
                   data-testid={`execution-attempt-${attempt.attempt}`}
                 >
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="font-medium text-theme-text">
-                      Attempt {attempt.attempt}
-                    </span>
+                    <span className="font-medium text-theme-text">Attempt {attempt.attempt}</span>
                     <span className="text-theme-muted">
                       {EXECUTION_PHASE_LABELS[attempt.finalPhase]} ·{" "}
                       {EXECUTION_OUTCOME_LABELS[attempt.finalOutcome]}
@@ -300,9 +298,7 @@ export function TaskDetailDiagnostics({
                     </div>
                   )}
                   {attempt.mergeStage && (
-                    <div className="mt-1 text-theme-muted">
-                      Merge stage: {attempt.mergeStage}
-                    </div>
+                    <div className="mt-1 text-theme-muted">Merge stage: {attempt.mergeStage}</div>
                   )}
                   {(attempt.conflictedFiles?.length ?? 0) > 0 && (
                     <div className="mt-1 text-theme-muted">

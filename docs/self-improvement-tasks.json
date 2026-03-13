@@ -21,7 +21,10 @@
       "files": {
         "modify": ["packages/backend/src/services/project.service.ts"],
         "create": [],
-        "test": ["packages/backend/src/__tests__/project.service.test.ts", "packages/backend/src/__tests__/projects-route.test.ts"]
+        "test": [
+          "packages/backend/src/__tests__/project.service.test.ts",
+          "packages/backend/src/__tests__/projects-route.test.ts"
+        ]
       }
     },
     {
@@ -52,7 +55,10 @@
       "title": "Self-improvement prompt builder and Reviewer invocation",
       "description": "In a new self-improvement.service.ts (or extend an existing module): (1) Build a self-improvement prompt that includes: codebase context (file tree, key files content or diff since last run from BranchManager/git), SPEC.md excerpt, and the project's code review lenses (review angles). When reviewAngles is empty, one general review; when 1+ angles, one run per angle (parallel where supported) with angle-specific instructions. (2) Invoke the Reviewer (or equivalent) via the existing spawn pipeline (e.g. AgentService.invokeReviewAgent or invokePlanningAgent with a file-based prompt). Write prompt to a temp or dedicated task dir (e.g. .opensprint/self-improvement/run-<ts>/prompt.md) and spawn the agent. Reuse ContextAssembler for codebase context and FinalReviewService pattern for multi-angle. Input: repoPath, projectId, settings (for lenses and agent config). Acceptance: unit test that prompt contains SPEC excerpt and lens angles when configured; integration test with mocked agent that spawn is called with correct prompt path. Run: npm test for self-improvement service.",
       "priority": 1,
-      "dependsOn": ["Implement git-based change detection for self-improvement", "Self-improvement run state and concurrency guard"],
+      "dependsOn": [
+        "Implement git-based change detection for self-improvement",
+        "Self-improvement run state and concurrency guard"
+      ],
       "complexity": 6,
       "files": {
         "modify": [],
@@ -88,19 +94,33 @@
       "title": "Hook self-improvement into plan execution completion",
       "description": "In merge-coordinator.service.ts: when an epic is closed after plan execution (i.e. after runFinalReviewAndCloseOrCreateTasks closes the epic, or after the last task merge when all impl tasks are closed and epic is closed), call a new hook: e.g. selfImprovementService.maybeRunAfterPlanComplete(projectId, planId). Inside that: get settings; if selfImprovementFrequency !== 'after_each_plan' return; if isRunInProgress(projectId) return; run change detection (hasRepoChangedSince); if not changed return; startRun(projectId), then run the self-improvement review (prompt + spawn + parse + create tasks), then update last run timestamp, then endRun(projectId). Do NOT trigger when the user clicks Execute (shipPlan); only when the plan's execution is fully complete (all tasks done and merged, epic closed). Acceptance: integration test that when epic is closed and frequency is after_each_plan and repo has changes, self-improvement run is triggered; when no changes, it is not; when user clicks Execute (shipPlan) only, self-improvement is not triggered. Run: npm test for merge-coordinator or self-improvement integration.",
       "priority": 1,
-      "dependsOn": ["Self-improvement run state and concurrency guard", "Self-improvement prompt builder and Reviewer invocation", "Update last run timestamp and commit SHA after successful run"],
+      "dependsOn": [
+        "Self-improvement run state and concurrency guard",
+        "Self-improvement prompt builder and Reviewer invocation",
+        "Update last run timestamp and commit SHA after successful run"
+      ],
       "complexity": 5,
       "files": {
-        "modify": ["packages/backend/src/services/merge-coordinator.service.ts", "packages/backend/src/services/self-improvement.service.ts"],
+        "modify": [
+          "packages/backend/src/services/merge-coordinator.service.ts",
+          "packages/backend/src/services/self-improvement.service.ts"
+        ],
         "create": [],
-        "test": ["packages/backend/src/__tests__/merge-coordinator.service.test.ts", "packages/backend/src/__tests__/self-improvement.service.test.ts"]
+        "test": [
+          "packages/backend/src/__tests__/merge-coordinator.service.test.ts",
+          "packages/backend/src/__tests__/self-improvement.service.test.ts"
+        ]
       }
     },
     {
       "title": "Daily and weekly self-improvement scheduler",
       "description": "Create a scheduler (e.g. self-improvement-scheduler.service.ts) that runs at midnight UTC (daily) and once per week (e.g. Sunday 00:00 UTC). On each tick, list projects; for each project with selfImprovementFrequency 'daily' or 'weekly', check the schedule (daily: run once per calendar day; weekly: run once per week). If due: run change detection; if changed and not isRunInProgress(projectId), startRun, run self-improvement flow, update last run, endRun. Reuse the pattern from nightly-deploy-scheduler.service.ts (setTimeout loop, runNightlyTick-style). Start the scheduler from backend index when the app starts. Acceptance: unit test with mocked time that at midnight UTC daily projects with frequency 'daily' are checked; weekly only on Sunday. Integration test that at the right time change detection and conditional run are invoked. Run: npm test.",
       "priority": 2,
-      "dependsOn": ["Self-improvement run state and concurrency guard", "Self-improvement prompt builder and Reviewer invocation", "Update last run timestamp and commit SHA after successful run"],
+      "dependsOn": [
+        "Self-improvement run state and concurrency guard",
+        "Self-improvement prompt builder and Reviewer invocation",
+        "Update last run timestamp and commit SHA after successful run"
+      ],
       "complexity": 5,
       "files": {
         "modify": ["packages/backend/src/index.ts"],
@@ -115,7 +135,10 @@
       "dependsOn": ["Self-improvement run state and concurrency guard"],
       "complexity": 2,
       "files": {
-        "modify": ["packages/shared/src/types/agent.ts", "packages/backend/src/services/orchestrator.service.ts"],
+        "modify": [
+          "packages/shared/src/types/agent.ts",
+          "packages/backend/src/services/orchestrator.service.ts"
+        ],
         "create": [],
         "test": ["packages/backend/src/__tests__/build-route.test.ts"]
       }
@@ -124,10 +147,16 @@
       "title": "Project Settings UI: Self-improvement frequency dropdown",
       "description": "In Project Settings (ProjectSettingsModal or settings content), add a Self-improvement section (grouped with or near Code review). Single dropdown: 'Self-improvement frequency' with options: Never, After each Plan, Daily, Weekly. Default Never. Help text: 'When the codebase has changed since the last run, a review runs using your code review lenses and creates improvement tasks.' For 'After each Plan': 'Runs once after a plan\'s execution is fully complete (all tasks done and merged), not when you click Execute.' Persist via existing PUT /projects/:id/settings (selfImprovementFrequency). Optionally display 'Last run: <date>' when backend exposes selfImprovementLastRunAt. Acceptance: user can select and save frequency; help text is visible. Run: npm test in packages/frontend for settings; manual verification.",
       "priority": 2,
-      "dependsOn": ["Persist and expose self-improvement settings in backend", "Add selfImprovementRunInProgress to execute status"],
+      "dependsOn": [
+        "Persist and expose self-improvement settings in backend",
+        "Add selfImprovementRunInProgress to execute status"
+      ],
       "complexity": 3,
       "files": {
-        "modify": ["packages/frontend/src/components/ProjectSettingsModal.tsx", "packages/frontend/src/components/settings/SettingsSubTabsBar.tsx"],
+        "modify": [
+          "packages/frontend/src/components/ProjectSettingsModal.tsx",
+          "packages/frontend/src/components/settings/SettingsSubTabsBar.tsx"
+        ],
         "create": [],
         "test": ["packages/frontend/src/components/ProjectSettingsModal.test.tsx"]
       }
@@ -139,7 +168,10 @@
       "dependsOn": ["Parse self-improvement agent output and create tasks"],
       "complexity": 3,
       "files": {
-        "modify": ["packages/frontend/src/pages/phases/ExecutePhase.tsx", "packages/frontend/src/components/tasks/TaskList.tsx"],
+        "modify": [
+          "packages/frontend/src/pages/phases/ExecutePhase.tsx",
+          "packages/frontend/src/components/tasks/TaskList.tsx"
+        ],
         "create": [],
         "test": ["packages/frontend/src/pages/phases/ExecutePhase.test.tsx"]
       }
@@ -151,7 +183,10 @@
       "dependsOn": ["Add selfImprovementRunInProgress to execute status"],
       "complexity": 2,
       "files": {
-        "modify": ["packages/frontend/src/pages/ProjectShell.tsx", "packages/frontend/src/pages/phases/ExecutePhase.tsx"],
+        "modify": [
+          "packages/frontend/src/pages/ProjectShell.tsx",
+          "packages/frontend/src/pages/phases/ExecutePhase.tsx"
+        ],
         "create": [],
         "test": ["packages/frontend/src/pages/phases/ExecutePhase.test.tsx"]
       }

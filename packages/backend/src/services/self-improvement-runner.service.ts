@@ -151,7 +151,10 @@ export async function enrichPriorityAndComplexity(
         },
       });
 
-      const parsed = parsePriorityComplexityResponse(response.content, items.map((i) => i.title));
+      const parsed = parsePriorityComplexityResponse(
+        response.content,
+        items.map((i) => i.title)
+      );
       return items.map((item, i) => {
         // Prefer title-based match; fall back to index when counts align (agent returns same order)
         let assigned = parsed.byTitle.get(item.title.trim());
@@ -169,7 +172,7 @@ export async function enrichPriorityAndComplexity(
               : 2;
         const complexity =
           assigned?.complexity != null
-            ? clampTaskComplexity(assigned.complexity) ?? 5
+            ? (clampTaskComplexity(assigned.complexity) ?? 5)
             : item.complexity != null
               ? item.complexity
               : 5;
@@ -278,8 +281,9 @@ function parsePriorityComplexityResponse(
         : undefined;
     byIndex.push(entry ?? {});
     if (!rawTitle || !entry) continue;
-    const canonical =
-      titleSet.has(rawTitle) ? rawTitle : lowerToCanonical.get(normalizeTitleForMatch(rawTitle));
+    const canonical = titleSet.has(rawTitle)
+      ? rawTitle
+      : lowerToCanonical.get(normalizeTitleForMatch(rawTitle));
     if (!canonical) continue;
     byTitle.set(canonical, entry);
   }
@@ -287,7 +291,10 @@ function parsePriorityComplexityResponse(
 }
 
 /** Dedupe by normalized title and cap to max tasks; sort by priority (lower first, undefined treated as 2). Skips items with title shorter than MIN_IMPROVEMENT_TITLE_LENGTH. Exported for tests. */
-export function capAndDedupeImprovementItems(items: ImprovementItem[], max: number): ImprovementItem[] {
+export function capAndDedupeImprovementItems(
+  items: ImprovementItem[],
+  max: number
+): ImprovementItem[] {
   const seen = new Set<string>();
   const deduped: ImprovementItem[] = [];
   for (const item of items) {
@@ -298,9 +305,7 @@ export function capAndDedupeImprovementItems(items: ImprovementItem[], max: numb
     seen.add(key);
     deduped.push(item);
   }
-  return deduped
-    .sort((a, b) => (a.priority ?? 2) - (b.priority ?? 2))
-    .slice(0, max);
+  return deduped.sort((a, b) => (a.priority ?? 2) - (b.priority ?? 2)).slice(0, max);
 }
 
 /** Parse agent response into improvement items. Tries JSON array first, then markdown list; on failure returns one fallback task. */
@@ -401,7 +406,10 @@ export function parseImprovementList(content: string): ImprovementItem[] {
   }
 
   // Try single JSON object with "items" or "improvements" array
-  const obj = extractJsonFromAgentResponse<{ items?: ImprovementItem[]; improvements?: ImprovementItem[] }>(content);
+  const obj = extractJsonFromAgentResponse<{
+    items?: ImprovementItem[];
+    improvements?: ImprovementItem[];
+  }>(content);
   if (obj && (Array.isArray(obj.items) || Array.isArray(obj.improvements))) {
     const arr = (obj.items ?? obj.improvements) as ImprovementItem[];
     const items: ImprovementItem[] = [];
@@ -466,7 +474,10 @@ export function isSelfImprovementRunInProgress(projectId: string): boolean {
  * Test-only: set in-progress state for a project so tests can assert execute status.
  * Use in afterEach to clear state and avoid leaking across tests.
  */
-export function setSelfImprovementRunInProgressForTest(projectId: string, inProgress: boolean): void {
+export function setSelfImprovementRunInProgressForTest(
+  projectId: string,
+  inProgress: boolean
+): void {
   if (inProgress) {
     inProgressProjects.add(projectId);
   } else {
@@ -566,7 +577,7 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
       const angleLabel =
         lens === "general"
           ? "General"
-          : REVIEW_ANGLE_OPTIONS.find((o) => o.value === lens)?.label ?? lens;
+          : (REVIEW_ANGLE_OPTIONS.find((o) => o.value === lens)?.label ?? lens);
       const userPrompt =
         lens === "general"
           ? `${baseContext}\n\nProvide improvement tasks from a general code quality and maintainability perspective.`
@@ -605,10 +616,7 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
       }
     }
 
-    const cappedItems = capAndDedupeImprovementItems(
-      allItems,
-      MAX_SELF_IMPROVEMENT_TASKS_PER_RUN
-    );
+    const cappedItems = capAndDedupeImprovementItems(allItems, MAX_SELF_IMPROVEMENT_TASKS_PER_RUN);
     if (cappedItems.length < allItems.length) {
       log.info("Self-improvement run capped task count", {
         projectId,
@@ -675,8 +683,7 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
         continue;
       }
       const priority = item.priority ?? 2;
-      const complexity =
-        item.complexity != null ? clampTaskComplexity(item.complexity) ?? 5 : 5;
+      const complexity = item.complexity != null ? (clampTaskComplexity(item.complexity) ?? 5) : 5;
       if (
         item.priority === undefined ||
         item.complexity === undefined ||

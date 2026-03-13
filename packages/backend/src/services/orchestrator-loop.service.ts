@@ -24,8 +24,14 @@ const log = createLogger("orchestrator-loop");
 
 /** If runLoop is blocked in an await longer than this, force recovery so nudge can start a fresh loop. */
 const LOOP_STUCK_GUARD_MS = 5 * 60 * 1000;
-/** Start at most one new coder per loop pass (throttle while no_result failures are under investigation). */
-const MAX_NEW_TASKS_PER_LOOP = 1;
+
+function resolveMaxNewTasksPerLoop(slotsAvailable: number): number {
+  const raw = Number(process.env.OPENSPRINT_MAX_NEW_TASKS_PER_LOOP ?? "");
+  if (Number.isFinite(raw) && raw > 0) {
+    return Math.max(1, Math.floor(raw));
+  }
+  return slotsAvailable;
+}
 
 /** Minimal state shape needed by the loop (slots, run id, timers, status). */
 export interface LoopState {
@@ -56,13 +62,18 @@ export interface OrchestratorLoopHost {
   ensureApiBlockedNotificationsForExhaustedProviders(projectId: string): Promise<void>;
   nudge(projectId: string): void;
   runLoop(projectId: string): Promise<void>;
-  getProjectService(): { getRepoPath: (id: string) => Promise<string>; getSettings: (id: string) => Promise<{
-    gitWorkingMode?: "worktree" | "branches";
-    maxConcurrentCoders?: number;
-    unknownScopeStrategy?: string;
-  }> };
+  getProjectService(): {
+    getRepoPath: (id: string) => Promise<string>;
+    getSettings: (id: string) => Promise<{
+      gitWorkingMode?: "worktree" | "branches";
+      maxConcurrentCoders?: number;
+      unknownScopeStrategy?: string;
+    }>;
+  };
   getTaskStore(): {
-    readyWithStatusMap(projectId: string): Promise<{ tasks: StoredTask[]; allIssues: StoredTask[] }>;
+    readyWithStatusMap(
+      projectId: string
+    ): Promise<{ tasks: StoredTask[]; allIssues: StoredTask[] }>;
     update(projectId: string, taskId: string, fields: Record<string, unknown>): Promise<void>;
   };
   getTaskScheduler(): {
@@ -152,8 +163,7 @@ export class OrchestratorLoopService {
       this.host.setMaxSlotsCache(projectId, maxSlots);
 
       const taskStore = this.host.getTaskStore() as unknown as TaskStoreService;
-      const { tasks: readyTasksRaw, allIssues } =
-        await taskStore.readyWithStatusMap(projectId);
+      const { tasks: readyTasksRaw, allIssues } = await taskStore.readyWithStatusMap(projectId);
 
       let readyTasks = readyTasksRaw.filter((t) => (t.issue_type ?? t.type) !== "epic");
       readyTasks = readyTasks.filter((t) => (t.issue_type ?? t.type) !== "chore");
@@ -195,17 +205,12 @@ export class OrchestratorLoopService {
         return;
       }
 
-      const selected = await this.host.getTaskScheduler().selectTasks(
-        projectId,
-        repoPath,
-        readyTasks,
-        state.slots,
-        maxSlots,
-        {
+      const selected = await this.host
+        .getTaskScheduler()
+        .selectTasks(projectId, repoPath, readyTasks, state.slots, maxSlots, {
           allIssues,
           unknownScopeStrategy: settings.unknownScopeStrategy ?? "conservative",
-        }
-      );
+        });
 
       for (const provider of ["ANTHROPIC_API_KEY", "CURSOR_API_KEY", "OPENAI_API_KEY"] as const) {
         if (isExhausted(projectId, provider)) {
@@ -219,13 +224,11 @@ export class OrchestratorLoopService {
 
       const dispatchableTasks: SchedulerResult[] = [];
       for (const st of selected) {
-        const complexity = await getComplexityForAgent(
-          projectId,
-          repoPath,
-          st.task,
-          taskStore
+        const complexity = await getComplexityForAgent(projectId, repoPath, st.task, taskStore);
+        const agentConfig = getAgentForComplexity(
+          settings as import("@opensprint/shared").ProjectSettings,
+          complexity
         );
-        const agentConfig = getAgentForComplexity(settings as import("@opensprint/shared").ProjectSettings, complexity);
         const provider = getProviderForAgentType(agentConfig.type);
         if (provider && isExhausted(projectId, provider)) {
           log.info("Skipping task: provider exhausted", {
@@ -238,12 +241,17 @@ export class OrchestratorLoopService {
         dispatchableTasks.push(st);
       }
 
-      const dispatchBatch = dispatchableTasks.slice(0, MAX_NEW_TASKS_PER_LOOP);
+      const maxNewTasksThisPass = Math.min(
+        slotsAvailable,
+        resolveMaxNewTasksPerLoop(slotsAvailable)
+      );
+      const dispatchBatch = dispatchableTasks.slice(0, maxNewTasksThisPass);
       if (dispatchableTasks.length > dispatchBatch.length) {
         log.info("Dispatch capped for stability; deferring additional ready tasks", {
           projectId,
           selectedTasks: dispatchableTasks.length,
           dispatchingNow: dispatchBatch.length,
+          maxNewTasksThisPass,
         });
       }
 

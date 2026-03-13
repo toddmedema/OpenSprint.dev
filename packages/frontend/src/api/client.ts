@@ -46,10 +46,7 @@ import type {
   PlanVersionContent,
 } from "@opensprint/shared";
 import type { TaskListResponse } from "./taskList";
-import type {
-  PrdProposedDiffResponse,
-  PrdVersionDiffResponse,
-} from "./prdDiffTypes";
+import type { PrdProposedDiffResponse, PrdVersionDiffResponse } from "./prdDiffTypes";
 
 /** API base; set VITE_API_BASE for production/staging (e.g. empty for same-origin, or full origin). */
 const BASE_URL = `${(import.meta.env.VITE_API_BASE as string | undefined) ?? ""}/api/v1`;
@@ -180,8 +177,7 @@ export const api = {
   },
   env: {
     getRuntime: () => request<EnvRuntimeResponse>("/env/runtime"),
-    getPrerequisites: () =>
-      request<{ missing: string[]; platform: string }>("/env/prerequisites"),
+    getPrerequisites: () => request<{ missing: string[]; platform: string }>("/env/prerequisites"),
     getKeys: () =>
       request<{
         anthropic: boolean;
@@ -281,11 +277,7 @@ export const api = {
       request<PrdProposedDiffResponse>(
         `/projects/${projectId}/prd/proposed-diff?requestId=${encodeURIComponent(requestId)}`
       ),
-    getVersionDiff: (
-      projectId: string,
-      fromVersion: string,
-      toVersion?: string
-    ) => {
+    getVersionDiff: (projectId: string, fromVersion: string, toVersion?: string) => {
       const params = new URLSearchParams({ fromVersion });
       if (toVersion != null && toVersion !== "") params.set("toVersion", toVersion);
       return request<PrdVersionDiffResponse>(
@@ -369,18 +361,15 @@ export const api = {
       options?: { prerequisitePlanIds?: string[]; version_number?: number }
     ) => {
       const body: { prerequisitePlanIds?: string[]; version_number?: number } = {};
-      if (options?.prerequisitePlanIds?.length) body.prerequisitePlanIds = options.prerequisitePlanIds;
+      if (options?.prerequisitePlanIds?.length)
+        body.prerequisitePlanIds = options.prerequisitePlanIds;
       if (options?.version_number != null) body.version_number = options.version_number;
       return request<Plan>(`/projects/${projectId}/plans/${planId}/execute`, {
         method: "POST",
         body: JSON.stringify(body),
       });
     },
-    reExecute: (
-      projectId: string,
-      planId: string,
-      options?: { version_number?: number }
-    ) => {
+    reExecute: (projectId: string, planId: string, options?: { version_number?: number }) => {
       const body: { version_number?: number } = {};
       if (options?.version_number != null) body.version_number = options.version_number;
       return request<Plan>(`/projects/${projectId}/plans/${planId}/re-execute`, {
@@ -453,10 +442,9 @@ export const api = {
         body: JSON.stringify({ parentTaskId, type: type ?? "blocks" }),
       }),
     removeDependency: (projectId: string, taskId: string, parentTaskId: string) =>
-      request<void>(
-        `/projects/${projectId}/tasks/${taskId}/dependencies/${parentTaskId}`,
-        { method: "DELETE" }
-      ),
+      request<void>(`/projects/${projectId}/tasks/${taskId}/dependencies/${parentTaskId}`, {
+        method: "DELETE",
+      }),
   },
 
   // ─── Execute ───

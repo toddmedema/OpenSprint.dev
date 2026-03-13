@@ -73,9 +73,7 @@ const VALIDATION_TIMEOUT_MULTIPLIER = 1.8;
 const VALIDATION_TIMING_SAMPLE_LIMIT = 30;
 
 /** Next midnight UTC (daily) or next Sunday 00:00 UTC (weekly). Used for nextRunAt in settings response. */
-function getNextScheduledSelfImprovementRunAt(
-  frequency: "daily" | "weekly"
-): string {
+function getNextScheduledSelfImprovementRunAt(frequency: "daily" | "weekly"): string {
   const n = new Date();
   const y = n.getUTCFullYear();
   const m = n.getUTCMonth();
@@ -115,6 +113,39 @@ function normalizeDeployment(input: CreateProjectRequest["deployment"]): Deploym
 }
 
 const VALID_AI_AUTONOMY_LEVELS: AiAutonomyLevel[] = ["confirm_all", "major_only", "full"];
+const LEGACY_BD_TASK_TRACKING_INSTRUCTION = "Use 'bd' for task tracking";
+const OPENSPRINT_RUNTIME_CONTRACT_HEADING = "## Open Sprint Runtime Contract";
+const OPENSPRINT_RUNTIME_CONTRACT_SECTION = [
+  OPENSPRINT_RUNTIME_CONTRACT_HEADING,
+  "",
+  "Open Sprint manages task state internally. Do not use external task CLIs.",
+  "",
+  "- Execute agents start in a prepared worktree with the task branch already checked out.",
+  "- Report completion or blocking questions by writing the exact `.opensprint/active/<task-id>/result.json` payload requested in the task prompt.",
+  "- Commit incremental logical units while working so crash recovery can preserve progress.",
+  '- If blocked by ambiguity, return `status: "failed"` with `open_questions` instead of guessing.',
+  "- Do not push, merge, or close tasks manually; the orchestrator handles validation, task state, merging, and remote publication.",
+].join("\n");
+
+function removeLegacyBdTaskTrackingInstruction(content: string): string {
+  return content
+    .replace(new RegExp(`(^|\\n)${LEGACY_BD_TASK_TRACKING_INSTRUCTION}(?=\\n|$)`, "g"), "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+}
+
+function ensureOpenSprintRuntimeContract(content: string): string {
+  const normalized = removeLegacyBdTaskTrackingInstruction(content);
+  if (normalized.includes(OPENSPRINT_RUNTIME_CONTRACT_HEADING)) {
+    return normalized
+      ? `${normalized}\n`
+      : `# Agent Instructions\n\n${OPENSPRINT_RUNTIME_CONTRACT_SECTION}\n`;
+  }
+  if (!normalized.trim()) {
+    return `# Agent Instructions\n\n${OPENSPRINT_RUNTIME_CONTRACT_SECTION}\n`;
+  }
+  return `${normalized}\n\n${OPENSPRINT_RUNTIME_CONTRACT_SECTION}\n`;
+}
 
 /** Resolve aiAutonomyLevel and hilConfig from create/update input. aiAutonomyLevel takes precedence. */
 function resolveAiAutonomyAndHil(input: {
@@ -238,7 +269,9 @@ function toCanonicalSettings(s: ProjectSettings): ProjectSettings {
     enableHumanTeammates: s.enableHumanTeammates === true,
     ...(s.teamMembers && s.teamMembers.length > 0 && { teamMembers: s.teamMembers }),
     selfImprovementFrequency: s.selfImprovementFrequency ?? "never",
-    ...(s.selfImprovementLastRunAt !== undefined && { selfImprovementLastRunAt: s.selfImprovementLastRunAt }),
+    ...(s.selfImprovementLastRunAt !== undefined && {
+      selfImprovementLastRunAt: s.selfImprovementLastRunAt,
+    }),
     ...(s.selfImprovementLastCommitSha !== undefined && {
       selfImprovementLastCommitSha: s.selfImprovementLastCommitSha,
     }),
@@ -431,17 +464,16 @@ export class ProjectService {
 
     // Task store uses global server only. No per-repo data.
 
-    // Ensure AGENTS.md exists and contains bd task-tracking instruction
+    // Ensure AGENTS.md exists and includes the Open Sprint runtime contract
     const agentsMdPath = path.join(repoPath, "AGENTS.md");
-    const bdInstruction = "Use 'bd' for task tracking";
     try {
-      let agentsContent = await fs.readFile(agentsMdPath, "utf-8");
-      if (!agentsContent.includes(bdInstruction)) {
-        agentsContent = agentsContent.trimEnd() + `\n\n${bdInstruction}\n`;
-        await fs.writeFile(agentsMdPath, agentsContent);
+      const agentsContent = await fs.readFile(agentsMdPath, "utf-8");
+      const nextAgentsContent = ensureOpenSprintRuntimeContract(agentsContent);
+      if (nextAgentsContent !== agentsContent) {
+        await fs.writeFile(agentsMdPath, nextAgentsContent);
       }
     } catch {
-      await fs.writeFile(agentsMdPath, `# Agent Instructions\n\n${bdInstruction}\n`);
+      await fs.writeFile(agentsMdPath, ensureOpenSprintRuntimeContract(""));
     }
 
     // PRD §5.9: Add orchestrator state and worktrees to .gitignore during setup
@@ -929,10 +961,7 @@ export class ProjectService {
    * Compute project-specific validation timeout from manual override or adaptive history.
    * Scoped and full-suite runs keep separate rolling duration samples.
    */
-  async getValidationTimeoutMs(
-    projectId: string,
-    scope: "scoped" | "full"
-  ): Promise<number> {
+  async getValidationTimeoutMs(projectId: string, scope: "scoped" | "full"): Promise<number> {
     const settings = await this.getSettings(projectId);
     if (typeof settings.validationTimeoutMsOverride === "number") {
       return clampValidationTimeoutMs(settings.validationTimeoutMsOverride);
@@ -942,13 +971,7 @@ export class ProjectService {
     const scoped = (profile?.scoped ?? []).filter((v): v is number => typeof v === "number");
     const full = (profile?.full ?? []).filter((v): v is number => typeof v === "number");
     const samples =
-      scope === "scoped"
-        ? scoped.length > 0
-          ? scoped
-          : full
-        : full.length > 0
-          ? full
-          : scoped;
+      scope === "scoped" ? (scoped.length > 0 ? scoped : full) : full.length > 0 ? full : scoped;
 
     if (samples.length === 0) {
       return DEFAULT_VALIDATION_TIMEOUT_MS;
@@ -1069,7 +1092,8 @@ export class ProjectService {
         : (current.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL);
     const hilConfig = hilConfigFromAiAutonomyLevel(aiAutonomyLevel);
     const gitWorkingMode =
-      sanitizedUpdates.gitWorkingMode === "worktree" || sanitizedUpdates.gitWorkingMode === "branches"
+      sanitizedUpdates.gitWorkingMode === "worktree" ||
+      sanitizedUpdates.gitWorkingMode === "branches"
         ? sanitizedUpdates.gitWorkingMode
         : (current.gitWorkingMode ?? "worktree");
     const teamMembers =

@@ -394,14 +394,10 @@ export function ProjectShell() {
     );
   }
 
-  return (
-    renderShellContent(
-      <Outlet
-        context={
-          { projectId, project: resolvedProject, currentPhase } satisfies ProjectShellContext
-        }
-      />
-    )
+  return renderShellContent(
+    <Outlet
+      context={{ projectId, project: resolvedProject, currentPhase } satisfies ProjectShellContext}
+    />
   );
 }
 

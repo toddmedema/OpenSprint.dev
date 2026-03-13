@@ -16,7 +16,10 @@ import { checkExpoAuth } from "../utils/expo-auth-check.js";
 import { isEasProjectLinked } from "../utils/eas-project-link.js";
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
@@ -90,7 +93,9 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     | undefined;
 
   afterAll(async () => {
-    const mod = (await import("../services/task-store.service.js")) as { _testPool?: { end: () => Promise<void> } };
+    const mod = (await import("../services/task-store.service.js")) as {
+      _testPool?: { end: () => Promise<void> };
+    };
     if (mod._testPool) await mod._testPool.end();
   });
 

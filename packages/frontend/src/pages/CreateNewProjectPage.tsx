@@ -30,7 +30,6 @@ type ActionableError = {
   missing?: string[];
 };
 
-
 const STEPS: { key: Step; label: string }[] = [
   { key: "basics", label: "Basics" },
   { key: "agents", label: "Agents" },
@@ -109,7 +108,13 @@ export function CreateNewProjectPage() {
         const anthropic = (apiKeys?.ANTHROPIC_API_KEY?.length ?? 0) > 0;
         const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
         const openai = (apiKeys?.OPENAI_API_KEY?.length ?? 0) > 0;
-        const keys = { anthropic, cursor, openai, claudeCli: env.claudeCli, cursorCli: env.cursorCli };
+        const keys = {
+          anthropic,
+          cursor,
+          openai,
+          claudeCli: env.claudeCli,
+          cursorCli: env.cursorCli,
+        };
         setEnvKeys(keys);
         if (!hasSetAgentDefaultRef.current) {
           hasSetAgentDefaultRef.current = true;
@@ -234,12 +239,16 @@ export function CreateNewProjectPage() {
         if (scaffoldStepMountedRef.current) {
           const message = err instanceof Error ? err.message : "Failed to scaffold project";
           const commands =
-            err instanceof ApiError && err.details && Array.isArray((err.details as { commands?: unknown }).commands)
+            err instanceof ApiError &&
+            err.details &&
+            Array.isArray((err.details as { commands?: unknown }).commands)
               ? (((err.details as { commands?: string[] }).commands as string[]) ?? undefined)
               : undefined;
           const code = err instanceof ApiError ? err.code : undefined;
           const missing =
-            err instanceof ApiError && err.details && Array.isArray((err.details as { missing?: unknown }).missing)
+            err instanceof ApiError &&
+            err.details &&
+            Array.isArray((err.details as { missing?: unknown }).missing)
               ? ((err.details as { missing: string[] }).missing ?? undefined)
               : undefined;
           setScaffoldError({ message, commands, code, missing });
@@ -320,12 +329,16 @@ export function CreateNewProjectPage() {
         if (scaffoldStepMountedRef.current) {
           const message = err instanceof Error ? err.message : "Failed to scaffold project";
           const commands =
-            err instanceof ApiError && err.details && Array.isArray((err.details as { commands?: unknown }).commands)
+            err instanceof ApiError &&
+            err.details &&
+            Array.isArray((err.details as { commands?: unknown }).commands)
               ? (((err.details as { commands?: string[] }).commands as string[]) ?? undefined)
               : undefined;
           const code = err instanceof ApiError ? err.code : undefined;
           const missing =
-            err instanceof ApiError && err.details && Array.isArray((err.details as { missing?: unknown }).missing)
+            err instanceof ApiError &&
+            err.details &&
+            Array.isArray((err.details as { missing?: unknown }).missing)
               ? ((err.details as { missing: string[] }).missing ?? undefined)
               : undefined;
           setScaffoldError({ message, commands, code, missing });
@@ -536,7 +549,10 @@ export function CreateNewProjectPage() {
                       {scaffoldError.code === "SCAFFOLD_PREREQUISITES_MISSING" &&
                         scaffoldError.missing &&
                         scaffoldError.missing.length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-2" data-testid="prereq-install-buttons">
+                          <div
+                            className="mt-3 flex flex-wrap gap-2"
+                            data-testid="prereq-install-buttons"
+                          >
                             {scaffoldError.missing.map((tool) => (
                               <a
                                 key={tool}

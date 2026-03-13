@@ -54,7 +54,12 @@ export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps
     const yTimeScale = d3.scaleLinear().domain([0, maxTime]).range([innerHeight, 0]);
     const yCountScale = d3.scaleLinear().domain([0, maxCount]).range([innerHeight, 0]);
 
-    const g = d3.select(svg).attr("width", width).attr("height", height).append("g").attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
+    const g = d3
+      .select(svg)
+      .attr("width", width)
+      .attr("height", height)
+      .append("g")
+      .attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
 
     // Bars (avg completion time)
     const barWidth = (xScale.bandwidth() ?? 0) * BAR_WIDTH_RATIO;

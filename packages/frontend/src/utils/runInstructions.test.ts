@@ -10,10 +10,7 @@ describe("getRunInstructions", () => {
         wslDistroName: null,
         repoPathPolicy: "any",
       })
-    ).toEqual([
-      'pushd "C:\\Users\\Todd\\My App"',
-      "npm run web",
-    ]);
+    ).toEqual(['pushd "C:\\Users\\Todd\\My App"', "npm run web"]);
   });
 
   it("returns cd + npm run web for WSL runtimes even when the user is on Windows", () => {
@@ -24,10 +21,7 @@ describe("getRunInstructions", () => {
         wslDistroName: "Ubuntu",
         repoPathPolicy: "linux_fs_only",
       })
-    ).toEqual([
-      'cd "/home/todd/My App"',
-      "npm run web",
-    ]);
+    ).toEqual(['cd "/home/todd/My App"', "npm run web"]);
   });
 
   it("returns cd + npm run web for macOS paths with spaces", () => {
@@ -38,10 +32,7 @@ describe("getRunInstructions", () => {
         wslDistroName: null,
         repoPathPolicy: "any",
       })
-    ).toEqual([
-      'cd "/Users/todd/My App"',
-      "npm run web",
-    ]);
+    ).toEqual(['cd "/Users/todd/My App"', "npm run web"]);
   });
 
   it("returns cd + npm run web for native Linux runtimes", () => {
@@ -52,10 +43,7 @@ describe("getRunInstructions", () => {
         wslDistroName: null,
         repoPathPolicy: "any",
       })
-    ).toEqual([
-      'cd "/workspace/My App"',
-      "npm run web",
-    ]);
+    ).toEqual(['cd "/workspace/My App"', "npm run web"]);
   });
 
   it("never includes shell chaining", () => {

@@ -45,7 +45,14 @@ vi.mock("../api/client", () => ({
       list: vi.fn().mockResolvedValue({ plans: [], edges: [] }),
     },
     projects: {
-      get: vi.fn().mockResolvedValue({ id: "proj-1", name: "Test", repoPath: "/tmp", currentPhase: "execute", createdAt: "", updatedAt: "" }),
+      get: vi.fn().mockResolvedValue({
+        id: "proj-1",
+        name: "Test",
+        repoPath: "/tmp",
+        currentPhase: "execute",
+        createdAt: "",
+        updatedAt: "",
+      }),
       getSettings: (...args: unknown[]) => mockGetSettings(...args),
     },
     execute: {
@@ -97,7 +104,7 @@ const readyTask = {
 
 const teamMembers = [{ id: "alice", name: "Alice" }];
 
-function createStore(preloadedTasks: typeof readyTask[] = [readyTask]) {
+function createStore(preloadedTasks: (typeof readyTask)[] = [readyTask]) {
   const { tasksById, taskIdsOrder } = toTasksByIdAndOrder(preloadedTasks as never);
   return configureStore({
     reducer: {
@@ -196,7 +203,8 @@ describe("E2E: Assign task to teammate, verify no agent pickup; unassign and ver
     // After fulfilled, Redux should have the task with assignee "Alice"
     await waitFor(() => {
       const state = store.getState();
-      const task = (state.execute as { tasksById: Record<string, { assignee: string | null }> }).tasksById["epic-1.1"];
+      const task = (state.execute as { tasksById: Record<string, { assignee: string | null }> })
+        .tasksById["epic-1.1"];
       expect(task?.assignee).toBe("Alice");
     });
 
@@ -216,7 +224,8 @@ describe("E2E: Assign task to teammate, verify no agent pickup; unassign and ver
     // Verify task is eligible for agent (no assignee)
     await waitFor(() => {
       const state = store.getState();
-      const task = (state.execute as { tasksById: Record<string, { assignee: string | null }> }).tasksById["epic-1.1"];
+      const task = (state.execute as { tasksById: Record<string, { assignee: string | null }> })
+        .tasksById["epic-1.1"];
       expect(task?.assignee).toBeNull();
     });
     expect(isAgentAssignee(null)).toBe(false);

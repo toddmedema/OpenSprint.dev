@@ -57,10 +57,17 @@ vi.mock("../../api/client", () => ({
       markDone: (...args: unknown[]) => mockMarkDone(...args),
       unblock: (...args: unknown[]) => mockUnblock(...args),
       delete: (...args: unknown[]) => mockDeleteTask(...args),
-      updateTask: vi.fn().mockImplementation(async (_projectId: string, taskId: string, updates: { assignee?: string | null }) => {
-        const task = (await mockGet("proj-1", taskId)) as { id: string; assignee: string | null };
-        return { ...task, assignee: updates.assignee ?? task.assignee };
-      }),
+      updateTask: vi
+        .fn()
+        .mockImplementation(
+          async (_projectId: string, taskId: string, updates: { assignee?: string | null }) => {
+            const task = (await mockGet("proj-1", taskId)) as {
+              id: string;
+              assignee: string | null;
+            };
+            return { ...task, assignee: updates.assignee ?? task.assignee };
+          }
+        ),
     },
     plans: {
       list: vi.fn().mockResolvedValue({ plans: [], edges: [] }),
@@ -2787,50 +2794,46 @@ describe("ExecutePhase Redux integration", () => {
     });
   });
 
-  it(
-    "backfills live output once on mount and once after websocket reconnect",
-    async () => {
-      const tasks = [
-        {
-          id: "epic-1.1",
-          title: "Task A",
-          epicId: "epic-1",
-          kanbanColumn: "in_progress",
-          priority: 0,
-          assignee: null,
-        },
-      ];
-      const store = createStore(
-        tasks,
-        { selectedTaskId: "epic-1.1", agentOutput: { "epic-1.1": ["Initial"] } },
-        { connected: false }
-      );
-      render(
-        <MemoryRouter>
-          <Provider store={store}>
-            <ExecutePhase projectId="proj-1" />
-          </Provider>
-        </MemoryRouter>
-      );
+  it("backfills live output once on mount and once after websocket reconnect", async () => {
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(
+      tasks,
+      { selectedTaskId: "epic-1.1", agentOutput: { "epic-1.1": ["Initial"] } },
+      { connected: false }
+    );
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
 
-      await waitFor(() => {
-        expect(mockLiveOutput).toHaveBeenCalledWith("proj-1", "epic-1.1");
-      });
-      const initialCalls = mockLiveOutput.mock.calls.length;
+    await waitFor(() => {
+      expect(mockLiveOutput).toHaveBeenCalledWith("proj-1", "epic-1.1");
+    });
+    const initialCalls = mockLiveOutput.mock.calls.length;
 
-      await act(async () => {
-        store.dispatch(setConnected(true));
-      });
+    await act(async () => {
+      store.dispatch(setConnected(true));
+    });
 
-      await waitFor(
-        () => {
-          expect(mockLiveOutput.mock.calls.length).toBe(initialCalls + 1);
-        },
-        { timeout: 12000 }
-      );
-    },
-    20000
-  );
+    await waitFor(
+      () => {
+        expect(mockLiveOutput.mock.calls.length).toBe(initialCalls + 1);
+      },
+      { timeout: 12000 }
+    );
+  }, 20000);
 
   it("task detail sidebar header shows only task title, not redundant Task label", async () => {
     mockGet.mockResolvedValue({

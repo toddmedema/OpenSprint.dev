@@ -243,7 +243,14 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
           const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
           const openai = (apiKeys?.OPENAI_API_KEY?.length ?? 0) > 0;
           const google = (apiKeys?.GOOGLE_API_KEY?.length ?? 0) > 0;
-          setEnvKeys({ anthropic, cursor, openai, google, claudeCli: env.claudeCli, cursorCli: env.cursorCli });
+          setEnvKeys({
+            anthropic,
+            cursor,
+            openai,
+            google,
+            claudeCli: env.claudeCli,
+            cursorCli: env.cursorCli,
+          });
         })
         .catch(() => setEnvKeys(null));
     }, [activeTab]);
@@ -305,7 +312,8 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
         const effAiAutonomy = overrides?.aiAutonomyLevel ?? aiAutonomyLevel;
         const effGitMode = overrides?.gitWorkingMode ?? gitWorkingMode;
         const effMergeStrategy = overrides?.mergeStrategy ?? mergeStrategy;
-        const effEnableHumanTeammates = overrides?.enableHumanTeammates ?? settings?.enableHumanTeammates ?? false;
+        const effEnableHumanTeammates =
+          overrides?.enableHumanTeammates ?? settings?.enableHumanTeammates ?? false;
         const effTeamMembers = overrides?.teamMembers ?? settings?.teamMembers ?? [];
         const effSettings = overrides ? { ...settings } : settings;
         if (effSimple.type === "custom" && !(effSimple.cliCommand ?? "").trim()) return;
@@ -363,7 +371,8 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                 lastReviewAnglesRef.current ??
                 effSettings?.reviewAngles ??
                 [],
-              includeGeneralReview: overrides?.includeGeneralReview ?? effSettings?.includeGeneralReview ?? undefined,
+              includeGeneralReview:
+                overrides?.includeGeneralReview ?? effSettings?.includeGeneralReview ?? undefined,
               maxConcurrentCoders:
                 effGitMode === "branches"
                   ? 1
@@ -482,13 +491,11 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
         if (settings) void persistSettings();
         setActiveTab(tab);
         if (fullScreen) {
-          setSearchParams(
-            (prev) => {
-              const next = new URLSearchParams(prev);
-              next.set(TAB_PARAM, tab);
-              return next;
-            }
-          );
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set(TAB_PARAM, tab);
+            return next;
+          });
         }
       },
       [settings, persistSettings, fullScreen, setSearchParams, setActiveTab]
@@ -595,7 +602,9 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
             data-testid={`${rowKey}-provider-prerequisite`}
           >
             <p className="text-sm text-theme-warning-text mb-2">
-              <strong>Cursor CLI not found.</strong> The <code className="font-mono text-xs">agent</code> command is required for Cursor. Install it, then restart your terminal or Open Sprint.
+              <strong>Cursor CLI not found.</strong> The{" "}
+              <code className="font-mono text-xs">agent</code> command is required for Cursor.
+              Install it, then restart your terminal or Open Sprint.
             </p>
             <button
               type="button"
@@ -608,7 +617,8 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                   const data = await api.env.installCursorCli();
                   setCursorCliInstallResult({
                     success: data.success,
-                    message: data.message ?? (data.success ? "Install finished." : "Install failed."),
+                    message:
+                      data.message ?? (data.success ? "Install finished." : "Install failed."),
                   });
                 } catch (err) {
                   setCursorCliInstallResult({
@@ -624,7 +634,9 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
               {cursorCliInstalling ? "Installing…" : "Install Cursor CLI"}
             </button>
             {cursorCliInstallResult && (
-              <p className={`text-sm mt-2 ${cursorCliInstallResult.success ? "text-theme-success-text" : "text-theme-error-text"}`}>
+              <p
+                className={`text-sm mt-2 ${cursorCliInstallResult.success ? "text-theme-success-text" : "text-theme-error-text"}`}
+              >
                 {cursorCliInstallResult.message}
               </p>
             )}
@@ -748,9 +760,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
           {/* Content */}
           <div
             className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain pt-[15px] ${
-              fullScreen
-                ? `${SETTINGS_HELP_CONTAINER_CLASS} bg-theme-surface pb-4`
-                : "px-5 py-4"
+              fullScreen ? `${SETTINGS_HELP_CONTAINER_CLASS} bg-theme-surface pb-4` : "px-5 py-4"
             }`}
             data-testid="settings-modal-content"
           >
@@ -763,7 +773,10 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                 {activeTab === "basics" && (
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="project-name" className="block text-sm font-medium text-theme-text mb-1">
+                      <label
+                        htmlFor="project-name"
+                        className="block text-sm font-medium text-theme-text mb-1"
+                      >
                         Project Name
                       </label>
                       <input
@@ -777,7 +790,10 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                       />
                     </div>
                     <div>
-                      <label htmlFor="project-folder" className="block text-sm font-medium text-theme-text mb-1">
+                      <label
+                        htmlFor="project-folder"
+                        className="block text-sm font-medium text-theme-text mb-1"
+                      >
                         Project folder
                       </label>
                       <div className="flex gap-2">
@@ -840,7 +856,10 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             Simple
                           </span>
                           <div className="flex-1 min-w-[140px]">
-                            <label htmlFor="simple-provider-select" className="block text-xs font-medium text-theme-muted mb-1">
+                            <label
+                              htmlFor="simple-provider-select"
+                              className="block text-xs font-medium text-theme-muted mb-1"
+                            >
                               Provider
                             </label>
                             <select
@@ -858,54 +877,63 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                               <option value="claude-cli">Claude (CLI)</option>
                               <option value="cursor">Cursor</option>
                               <option value="openai">OpenAI</option>
-                            <option value="google">Google (Gemini)</option>
-                            <option value="lmstudio">LM Studio (local)</option>
-                            <option value="custom">Custom CLI</option>
-                          </select>
-                        </div>
-                        {simpleComplexityAgent.type === "lmstudio" && (
-                          <div className="flex-1 min-w-[180px]">
-                            <label htmlFor="simple-base-url" className="block text-xs font-medium text-theme-muted mb-1">
-                              Base URL
-                            </label>
-                            <input
-                              id="simple-base-url"
-                              type="text"
-                              className="input w-full font-mono text-sm"
-                              placeholder={DEFAULT_LMSTUDIO_BASE_URL}
-                              value={simpleComplexityAgent.baseUrl ?? ""}
-                              onChange={(e) =>
-                                updateSimpleComplexityAgent({
-                                  baseUrl: e.target.value.trim() || undefined,
-                                })
-                              }
-                              onBlur={scheduleSaveOnBlur}
-                            />
+                              <option value="google">Google (Gemini)</option>
+                              <option value="lmstudio">LM Studio (local)</option>
+                              <option value="custom">Custom CLI</option>
+                            </select>
                           </div>
-                        )}
-                        {simpleComplexityAgent.type !== "custom" ? (
-                          <div className="flex-1 min-w-[140px]">
-                            <label htmlFor="simple-agent-select" className="block text-xs font-medium text-theme-muted mb-1">
-                              Agent
-                            </label>
-                            <ModelSelect
-                              id="simple-agent-select"
-                              provider={simpleComplexityAgent.type}
-                              value={simpleComplexityAgent.model}
-                              onChange={(id) => updateSimpleComplexityAgent({ model: id })}
-                              onBlur={scheduleSaveOnBlur}
-                              projectId={project.id}
-                              refreshTrigger={modelRefreshTrigger}
-                              baseUrl={
-                                simpleComplexityAgent.type === "lmstudio"
-                                  ? simpleComplexityAgent.baseUrl || DEFAULT_LMSTUDIO_BASE_URL
-                                  : undefined
-                              }
-                            />
-                          </div>
-                        ) : (
+                          {simpleComplexityAgent.type === "lmstudio" && (
+                            <div className="flex-1 min-w-[180px]">
+                              <label
+                                htmlFor="simple-base-url"
+                                className="block text-xs font-medium text-theme-muted mb-1"
+                              >
+                                Base URL
+                              </label>
+                              <input
+                                id="simple-base-url"
+                                type="text"
+                                className="input w-full font-mono text-sm"
+                                placeholder={DEFAULT_LMSTUDIO_BASE_URL}
+                                value={simpleComplexityAgent.baseUrl ?? ""}
+                                onChange={(e) =>
+                                  updateSimpleComplexityAgent({
+                                    baseUrl: e.target.value.trim() || undefined,
+                                  })
+                                }
+                                onBlur={scheduleSaveOnBlur}
+                              />
+                            </div>
+                          )}
+                          {simpleComplexityAgent.type !== "custom" ? (
+                            <div className="flex-1 min-w-[140px]">
+                              <label
+                                htmlFor="simple-agent-select"
+                                className="block text-xs font-medium text-theme-muted mb-1"
+                              >
+                                Agent
+                              </label>
+                              <ModelSelect
+                                id="simple-agent-select"
+                                provider={simpleComplexityAgent.type}
+                                value={simpleComplexityAgent.model}
+                                onChange={(id) => updateSimpleComplexityAgent({ model: id })}
+                                onBlur={scheduleSaveOnBlur}
+                                projectId={project.id}
+                                refreshTrigger={modelRefreshTrigger}
+                                baseUrl={
+                                  simpleComplexityAgent.type === "lmstudio"
+                                    ? simpleComplexityAgent.baseUrl || DEFAULT_LMSTUDIO_BASE_URL
+                                    : undefined
+                                }
+                              />
+                            </div>
+                          ) : (
                             <div className="flex-1 min-w-[200px]">
-                              <label htmlFor="simple-cli-command" className="block text-xs font-medium text-theme-muted mb-1">
+                              <label
+                                htmlFor="simple-cli-command"
+                                className="block text-xs font-medium text-theme-muted mb-1"
+                              >
                                 CLI command
                               </label>
                               <input
@@ -925,18 +953,17 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             </div>
                           )}
                         </div>
-                        {renderProviderPrerequisite(
-                          "simple",
-                          "Simple",
-                          simpleComplexityAgent.type
-                        )}
+                        {renderProviderPrerequisite("simple", "Simple", simpleComplexityAgent.type)}
                         {/* Row 2: Complex */}
                         <div className="flex flex-wrap items-end gap-3">
                           <span className="w-16 text-sm font-medium text-theme-text shrink-0">
                             Complex
                           </span>
                           <div className="flex-1 min-w-[140px]">
-                            <label htmlFor="complex-provider-select" className="block text-xs font-medium text-theme-muted mb-1">
+                            <label
+                              htmlFor="complex-provider-select"
+                              className="block text-xs font-medium text-theme-muted mb-1"
+                            >
                               Provider
                             </label>
                             <select
@@ -952,62 +979,71 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                               <option value="claude-cli">Claude (CLI)</option>
                               <option value="cursor">Cursor</option>
                               <option value="openai">OpenAI</option>
-                            <option value="google">Google (Gemini)</option>
-                            <option value="lmstudio">LM Studio (local)</option>
-                            <option value="custom">Custom CLI</option>
-                          </select>
-                        </div>
-                        {complexComplexityAgent.type === "lmstudio" && (
-                          <div className="flex-1 min-w-[180px]">
-                            <label htmlFor="complex-base-url" className="block text-xs font-medium text-theme-muted mb-1">
-                              Base URL
-                            </label>
-                            <input
-                              id="complex-base-url"
-                              type="text"
-                              className="input w-full font-mono text-sm"
-                              placeholder={DEFAULT_LMSTUDIO_BASE_URL}
-                              value={complexComplexityAgent.baseUrl ?? ""}
-                              onChange={(e) =>
-                                updateComplexComplexityAgent({
-                                  baseUrl: e.target.value.trim() || undefined,
-                                })
-                              }
-                              onBlur={scheduleSaveOnBlur}
-                            />
+                              <option value="google">Google (Gemini)</option>
+                              <option value="lmstudio">LM Studio (local)</option>
+                              <option value="custom">Custom CLI</option>
+                            </select>
                           </div>
-                        )}
-                        {complexComplexityAgent.type !== "custom" ? (
-                          <div className="flex-1 min-w-[140px]">
-                            <label htmlFor="complex-agent-select" className="block text-xs font-medium text-theme-muted mb-1">
-                              Agent
-                            </label>
-                            <ModelSelect
-                              id="complex-agent-select"
-                              provider={complexComplexityAgent.type}
-                              value={complexComplexityAgent.model}
-                              onChange={(id) => updateComplexComplexityAgent({ model: id })}
-                              onBlur={scheduleSaveOnBlur}
-                              projectId={project.id}
-                              refreshTrigger={modelRefreshTrigger}
-                              baseUrl={
-                                complexComplexityAgent.type === "lmstudio"
-                                  ? complexComplexityAgent.baseUrl || DEFAULT_LMSTUDIO_BASE_URL
-                                  : undefined
-                              }
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex-1 min-w-[200px]">
-                            <label htmlFor="complex-cli-command" className="block text-xs font-medium text-theme-muted mb-1">
-                              CLI command
-                            </label>
-                            <input
-                              id="complex-cli-command"
-                              type="text"
-                              className="input w-full font-mono text-sm"
-                              placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
-                              value={complexComplexityAgent.cliCommand ?? ""}
+                          {complexComplexityAgent.type === "lmstudio" && (
+                            <div className="flex-1 min-w-[180px]">
+                              <label
+                                htmlFor="complex-base-url"
+                                className="block text-xs font-medium text-theme-muted mb-1"
+                              >
+                                Base URL
+                              </label>
+                              <input
+                                id="complex-base-url"
+                                type="text"
+                                className="input w-full font-mono text-sm"
+                                placeholder={DEFAULT_LMSTUDIO_BASE_URL}
+                                value={complexComplexityAgent.baseUrl ?? ""}
+                                onChange={(e) =>
+                                  updateComplexComplexityAgent({
+                                    baseUrl: e.target.value.trim() || undefined,
+                                  })
+                                }
+                                onBlur={scheduleSaveOnBlur}
+                              />
+                            </div>
+                          )}
+                          {complexComplexityAgent.type !== "custom" ? (
+                            <div className="flex-1 min-w-[140px]">
+                              <label
+                                htmlFor="complex-agent-select"
+                                className="block text-xs font-medium text-theme-muted mb-1"
+                              >
+                                Agent
+                              </label>
+                              <ModelSelect
+                                id="complex-agent-select"
+                                provider={complexComplexityAgent.type}
+                                value={complexComplexityAgent.model}
+                                onChange={(id) => updateComplexComplexityAgent({ model: id })}
+                                onBlur={scheduleSaveOnBlur}
+                                projectId={project.id}
+                                refreshTrigger={modelRefreshTrigger}
+                                baseUrl={
+                                  complexComplexityAgent.type === "lmstudio"
+                                    ? complexComplexityAgent.baseUrl || DEFAULT_LMSTUDIO_BASE_URL
+                                    : undefined
+                                }
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex-1 min-w-[200px]">
+                              <label
+                                htmlFor="complex-cli-command"
+                                className="block text-xs font-medium text-theme-muted mb-1"
+                              >
+                                CLI command
+                              </label>
+                              <input
+                                id="complex-cli-command"
+                                type="text"
+                                className="input w-full font-mono text-sm"
+                                placeholder="e.g. my-agent or /usr/local/bin/my-agent --model gpt-4"
+                                value={complexComplexityAgent.cliCommand ?? ""}
                                 onChange={(e) =>
                                   updateComplexComplexityAgent(
                                     { cliCommand: e.target.value || null },
@@ -1038,7 +1074,9 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                         aria-label={advancedExpanded ? "Collapse Advanced" : "Expand Advanced"}
                       >
                         Advanced
-                        <span className="text-theme-muted text-xs">{advancedExpanded ? "▼" : "▶"}</span>
+                        <span className="text-theme-muted text-xs">
+                          {advancedExpanded ? "▼" : "▶"}
+                        </span>
                       </button>
                       {advancedExpanded && (
                         <div className="px-4 pb-4 pt-1 border-t border-theme-border">
@@ -1075,7 +1113,12 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                       </p>
                       {getDeploymentTargetsForUi(deployment).map((target) => (
                         <div key={target.name} className="flex items-center justify-between gap-3">
-                          <label htmlFor={`auto-deploy-trigger-${target.name}`} className="text-sm text-theme-text shrink-0">{target.name}:</label>
+                          <label
+                            htmlFor={`auto-deploy-trigger-${target.name}`}
+                            className="text-sm text-theme-text shrink-0"
+                          >
+                            {target.name}:
+                          </label>
                           <select
                             id={`auto-deploy-trigger-${target.name}`}
                             value={target.autoDeployTrigger ?? "none"}
@@ -1107,7 +1150,10 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                           </select>
                         </div>
                       ))}
-                      <label htmlFor="auto-resolve-feedback-toggle" className="flex items-center justify-between gap-3 cursor-pointer">
+                      <label
+                        htmlFor="auto-resolve-feedback-toggle"
+                        className="flex items-center justify-between gap-3 cursor-pointer"
+                      >
                         <span className="text-sm text-theme-text">
                           Auto-resolve feedback when tasks done
                         </span>
@@ -1130,11 +1176,18 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                       </p>
                     </div>
                     <div>
-                      <label htmlFor="deployment-mode-expo" className="block text-sm font-medium text-theme-text mb-3">
+                      <label
+                        htmlFor="deployment-mode-expo"
+                        className="block text-sm font-medium text-theme-text mb-3"
+                      >
                         Delivery Mode
                       </label>
                       <div className="space-y-3">
-                        <label htmlFor="deployment-mode-expo" className="flex items-start gap-3 p-3 rounded-lg border border-theme-border hover:border-theme-info-border cursor-pointer transition-colors" aria-label="Expo.dev - Automatic delivery for React Native and web projects">
+                        <label
+                          htmlFor="deployment-mode-expo"
+                          className="flex items-start gap-3 p-3 rounded-lg border border-theme-border hover:border-theme-info-border cursor-pointer transition-colors"
+                          aria-label="Expo.dev - Automatic delivery for React Native and web projects"
+                        >
                           <input
                             id="deployment-mode-expo"
                             type="radio"
@@ -1162,7 +1215,11 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             </p>
                           </div>
                         </label>
-                        <label htmlFor="deployment-mode-custom" className="flex items-start gap-3 p-3 rounded-lg border border-theme-border hover:border-theme-info-border cursor-pointer transition-colors" aria-label="Custom Pipeline - Command or webhook triggered after Execute completion">
+                        <label
+                          htmlFor="deployment-mode-custom"
+                          className="flex items-start gap-3 p-3 rounded-lg border border-theme-border hover:border-theme-info-border cursor-pointer transition-colors"
+                          aria-label="Custom Pipeline - Command or webhook triggered after Execute completion"
+                        >
                           <input
                             id="deployment-mode-custom"
                             type="radio"
@@ -1210,7 +1267,10 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                                   }}
                                   onBlur={scheduleSaveOnBlur}
                                 />
-                                <label htmlFor={`deployment-target-default-${i}`} className="flex items-center gap-1 text-xs">
+                                <label
+                                  htmlFor={`deployment-target-default-${i}`}
+                                  className="flex items-center gap-1 text-xs"
+                                >
                                   <input
                                     id={`deployment-target-default-${i}`}
                                     type="checkbox"
@@ -1428,9 +1488,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             className="input w-full font-mono text-sm"
                             placeholder="e.g. abc123-def456-ghi789"
                             value={
-                              deployment.easProjectId ??
-                              deployment.expoConfig?.projectId ??
-                              ""
+                              deployment.easProjectId ?? deployment.expoConfig?.projectId ?? ""
                             }
                             onChange={(e) => {
                               const value = e.target.value.trim() || undefined;
@@ -1625,7 +1683,10 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
 
                 {activeTab === "team" && (
                   <div className="space-y-4" data-testid="team-tab-content">
-                    <label htmlFor="enable-human-teammates-checkbox" className="flex items-center gap-2 cursor-pointer">
+                    <label
+                      htmlFor="enable-human-teammates-checkbox"
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
                       <input
                         id="enable-human-teammates-checkbox"
                         type="checkbox"
@@ -1642,49 +1703,47 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                       <>
                         <h3 className="text-sm font-semibold text-theme-text">Team Members</h3>
                         <p className="text-xs text-theme-muted mb-3">
-                          Add teammates who can be assigned to tasks. Each member has a display name.
+                          Add teammates who can be assigned to tasks. Each member has a display
+                          name.
                         </p>
                         <div className="space-y-3">
                           {teamMembers.map((member, i) => (
-                        <div
-                          key={member.id}
-                          className="flex flex-wrap items-center gap-2 p-3 rounded-lg border border-theme-border bg-theme-surface"
-                          data-testid="team-member-row"
-                        >
-                          <input
-                            type="text"
-                            className="input flex-1 min-w-[100px] text-sm"
-                            placeholder="Name"
-                            value={member.name}
-                            onChange={(e) => {
-                              const next = [...teamMembers];
-                              next[i] = { ...member, name: e.target.value };
-                              updateTeamMembers(next, { immediate: false });
-                            }}
-                            onBlur={scheduleSaveOnBlur}
-                            data-testid="team-member-name-input"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = teamMembers.filter((_, j) => j !== i);
-                              updateTeamMembers(next);
-                            }}
-                            className="text-theme-error-text hover:opacity-80 text-sm px-2"
-                            data-testid="team-member-remove"
-                          >
-                            Remove
-                          </button>
+                            <div
+                              key={member.id}
+                              className="flex flex-wrap items-center gap-2 p-3 rounded-lg border border-theme-border bg-theme-surface"
+                              data-testid="team-member-row"
+                            >
+                              <input
+                                type="text"
+                                className="input flex-1 min-w-[100px] text-sm"
+                                placeholder="Name"
+                                value={member.name}
+                                onChange={(e) => {
+                                  const next = [...teamMembers];
+                                  next[i] = { ...member, name: e.target.value };
+                                  updateTeamMembers(next, { immediate: false });
+                                }}
+                                onBlur={scheduleSaveOnBlur}
+                                data-testid="team-member-name-input"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = teamMembers.filter((_, j) => j !== i);
+                                  updateTeamMembers(next);
+                                }}
+                                className="text-theme-error-text hover:opacity-80 text-sm px-2"
+                                data-testid="team-member-remove"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
                         <button
                           type="button"
                           onClick={() => {
-                            const next = [
-                              ...teamMembers,
-                              { id: crypto.randomUUID(), name: "" },
-                            ];
+                            const next = [...teamMembers, { id: crypto.randomUUID(), name: "" }];
                             updateTeamMembers(next);
                           }}
                           className="btn-secondary text-sm"

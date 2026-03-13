@@ -3,11 +3,7 @@
  * Extracted from OrchestratorService for clarity and testability.
  */
 
-import type {
-  AgentRuntimeState,
-  AgentSuspendReason,
-  OrchestratorStatus,
-} from "@opensprint/shared";
+import type { AgentRuntimeState, AgentSuspendReason, OrchestratorStatus } from "@opensprint/shared";
 import { REVIEW_ANGLE_OPTIONS } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import type { ProjectService } from "./project.service.js";

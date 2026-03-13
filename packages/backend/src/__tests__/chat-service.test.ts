@@ -191,7 +191,10 @@ describe("ChatService - Plan phase agent registry", () => {
           await rmRecursive(dir);
           return;
         } catch (err: unknown) {
-          const code = err && typeof err === "object" && "code" in err ? (err as NodeJS.ErrnoException).code : undefined;
+          const code =
+            err && typeof err === "object" && "code" in err
+              ? (err as NodeJS.ErrnoException).code
+              : undefined;
           if (code === "ENOTEMPTY" && attempt < 3) {
             await new Promise((r) => setTimeout(r, 50 * attempt));
             continue;
@@ -204,7 +207,10 @@ describe("ChatService - Plan phase agent registry", () => {
       if (repoPath) await removeWithRetry(repoPath);
       if (tempDir) await removeWithRetry(tempDir);
     } catch (err: unknown) {
-      const code = err && typeof err === "object" && "code" in err ? (err as NodeJS.ErrnoException).code : undefined;
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? (err as NodeJS.ErrnoException).code
+          : undefined;
       if (code === "ENOENT") return;
       throw err;
     }

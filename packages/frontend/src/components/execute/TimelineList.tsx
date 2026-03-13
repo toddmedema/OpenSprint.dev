@@ -74,8 +74,7 @@ function TimelineRow({
 }) {
   const isBlocked = task.kanbanColumn === "blocked";
   const isDone = task.kanbanColumn === "done";
-  const isInProgress =
-    task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review";
+  const isInProgress = task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review";
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
 
   const handleAssigneeOpenChange = (open: boolean) => {
@@ -199,38 +198,32 @@ export function TimelineList({
   );
   const showBlockedSection = blockedTasks.length > 0;
 
-  const bySection = useMemo(
-    () => {
-      const planningTasks = sorted.filter((t) => isTaskInPlanningPlan(t, plans));
-      const planningIds = new Set(planningTasks.map((t) => t.id));
-      const notInPlanning = (t: (typeof sorted)[number]) => !planningIds.has(t.id);
+  const bySection = useMemo(() => {
+    const planningTasks = sorted.filter((t) => isTaskInPlanningPlan(t, plans));
+    const planningIds = new Set(planningTasks.map((t) => t.id));
+    const notInPlanning = (t: (typeof sorted)[number]) => !planningIds.has(t.id);
 
-      const active = sorted.filter(
-        (t) => getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.active
-      );
-      const completed = sorted.filter(
-        (t) => getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.completed
-      );
-      const ready = sorted.filter(
-        (t) => t.kanbanColumn === "ready" && notInPlanning(t)
-      );
-      const inLine = sorted.filter(
-        (t) =>
-          (t.kanbanColumn === "backlog" || t.kanbanColumn === "planning") && notInPlanning(t)
-      );
-      const blockedExcludingPlanning = blockedTasks.filter(notInPlanning);
+    const active = sorted.filter(
+      (t) => getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.active
+    );
+    const completed = sorted.filter(
+      (t) => getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.completed
+    );
+    const ready = sorted.filter((t) => t.kanbanColumn === "ready" && notInPlanning(t));
+    const inLine = sorted.filter(
+      (t) => (t.kanbanColumn === "backlog" || t.kanbanColumn === "planning") && notInPlanning(t)
+    );
+    const blockedExcludingPlanning = blockedTasks.filter(notInPlanning);
 
-      return {
-        [TIMELINE_SECTION.active]: active,
-        [TIMELINE_SECTION.completed]: completed,
-        blocked: blockedExcludingPlanning,
-        ready,
-        in_line: inLine,
-        planning: planningTasks,
-      };
-    },
-    [sorted, blockedTasks, plans]
-  );
+    return {
+      [TIMELINE_SECTION.active]: active,
+      [TIMELINE_SECTION.completed]: completed,
+      blocked: blockedExcludingPlanning,
+      ready,
+      in_line: inLine,
+      planning: planningTasks,
+    };
+  }, [sorted, blockedTasks, plans]);
 
   const sections = useMemo(
     () => [
@@ -276,7 +269,15 @@ export function TimelineList({
       }
     }
     return result;
-  }, [sections, epicIdToTitle, getRelativeTime, onUnblock, projectId, teamMembers, enableHumanTeammates]);
+  }, [
+    sections,
+    epicIdToTitle,
+    getRelativeTime,
+    onUnblock,
+    projectId,
+    teamMembers,
+    enableHumanTeammates,
+  ]);
 
   const taskIdToIndex = useMemo(() => {
     const m = new Map<string, number>();

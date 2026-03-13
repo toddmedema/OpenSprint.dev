@@ -157,7 +157,9 @@ vi.mock("../../api/client", () => ({
       list: (...args: unknown[]) => mockPlansList(...args),
       get: (...args: unknown[]) => mockPlansGet(...args),
       listVersions: (...args: unknown[]) => mockPlansListVersions(...args),
-      getVersion: vi.fn().mockResolvedValue({ version_number: 1, title: "", content: "", created_at: "" }),
+      getVersion: vi
+        .fn()
+        .mockResolvedValue({ version_number: 1, title: "", content: "", created_at: "" }),
       create: (...args: unknown[]) => mockPlansCreate(...args),
       update: (...args: unknown[]) => mockPlansUpdate(...args),
       archive: (...args: unknown[]) => mockArchive(...args),
@@ -274,7 +276,7 @@ function createStore(
         backgroundError: null,
         auditorOutputByPlanId: {},
       },
-        execute: {
+      execute: {
         ...toTasksByIdAndOrder(executeTasks),
         orchestratorRunning: false,
         awaitingApproval: false,
@@ -2873,7 +2875,9 @@ describe("PlanPhase Generate Plan", () => {
         projectId: "proj-1",
         source: "plan",
         sourceId: "draft:draft-1",
-        questions: [{ id: "q1", text: "Which volunteer roles should be supported?", createdAt: "2025-01-01" }],
+        questions: [
+          { id: "q1", text: "Which volunteer roles should be supported?", createdAt: "2025-01-01" },
+        ],
         status: "open",
         createdAt: "2025-01-01",
         resolvedAt: null,
@@ -2911,7 +2915,13 @@ describe("PlanPhase Generate Plan", () => {
       projectId: "proj-1",
       source: "plan" as const,
       sourceId: "draft:draft-2",
-      questions: [{ id: "q1", text: "Which volunteer roles should be supported?", createdAt: "2025-01-01T00:00:00Z" }],
+      questions: [
+        {
+          id: "q1",
+          text: "Which volunteer roles should be supported?",
+          createdAt: "2025-01-01T00:00:00Z",
+        },
+      ],
       status: "open" as const,
       createdAt: "2025-01-01T00:00:00Z",
       resolvedAt: null,

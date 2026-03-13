@@ -2,10 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
-import {
-  getExpoConfigStatus,
-  ensureExpoConfig,
-} from "../expo-config.js";
+import { getExpoConfigStatus, ensureExpoConfig } from "../expo-config.js";
 
 describe("expo-config", () => {
   let tempDir: string;
@@ -57,30 +54,21 @@ describe("expo-config", () => {
     });
 
     it("returns not configured when app.json has no expo block", async () => {
-      await fs.writeFile(
-        path.join(tempDir, "app.json"),
-        JSON.stringify({ someOtherKey: "value" })
-      );
+      await fs.writeFile(path.join(tempDir, "app.json"), JSON.stringify({ someOtherKey: "value" }));
       const status = await getExpoConfigStatus(tempDir);
       expect(status.configured).toBe(false);
       expect(status.reason).toContain("expo");
     });
 
     it("returns configured when app.config.js exists", async () => {
-      await fs.writeFile(
-        path.join(tempDir, "app.config.js"),
-        "module.exports = { expo: {} };"
-      );
+      await fs.writeFile(path.join(tempDir, "app.config.js"), "module.exports = { expo: {} };");
       const status = await getExpoConfigStatus(tempDir);
       expect(status.configured).toBe(true);
       expect(status.configPath).toContain("app.config.js");
     });
 
     it("returns configured when app.config.ts exists", async () => {
-      await fs.writeFile(
-        path.join(tempDir, "app.config.ts"),
-        "export default { expo: {} };"
-      );
+      await fs.writeFile(path.join(tempDir, "app.config.ts"), "export default { expo: {} };");
       const status = await getExpoConfigStatus(tempDir);
       expect(status.configured).toBe(true);
       expect(status.configPath).toContain("app.config.ts");
@@ -126,10 +114,7 @@ describe("expo-config", () => {
           },
         })
       );
-      await fs.writeFile(
-        path.join(tempDir, "package.json"),
-        JSON.stringify({ version: "1.0.0" })
-      );
+      await fs.writeFile(path.join(tempDir, "package.json"), JSON.stringify({ version: "1.0.0" }));
 
       const result = await ensureExpoConfig(tempDir, "Open Sprint Demo", () => {});
       expect(result).toEqual({ ok: true });
@@ -163,10 +148,7 @@ describe("expo-config", () => {
     });
 
     it("slugifies project name correctly", async () => {
-      await fs.writeFile(
-        path.join(tempDir, "package.json"),
-        JSON.stringify({ version: "1.0.0" })
-      );
+      await fs.writeFile(path.join(tempDir, "package.json"), JSON.stringify({ version: "1.0.0" }));
       await ensureExpoConfig(tempDir, "My App & Co.!", () => {});
 
       const content = await fs.readFile(path.join(tempDir, "app.json"), "utf-8");
@@ -175,10 +157,7 @@ describe("expo-config", () => {
     });
 
     it("calls emit when configuring", async () => {
-      await fs.writeFile(
-        path.join(tempDir, "package.json"),
-        JSON.stringify({ version: "1.0.0" })
-      );
+      await fs.writeFile(path.join(tempDir, "package.json"), JSON.stringify({ version: "1.0.0" }));
       const emitted: string[] = [];
       const emit = (chunk: string) => emitted.push(chunk);
       await ensureExpoConfig(tempDir, "Test", emit);

@@ -80,9 +80,7 @@ describe("notificationSlice", () => {
     expect(store.getState().notification.items).toHaveLength(1);
 
     // Second connection toast should be skipped (banner already shown)
-    store.dispatch(
-      addNotification({ message: "Connecting to database...", severity: "error" })
-    );
+    store.dispatch(addNotification({ message: "Connecting to database...", severity: "error" }));
     expect(store.getState().notification.items).toHaveLength(1);
 
     // Non-connection toast should still be added

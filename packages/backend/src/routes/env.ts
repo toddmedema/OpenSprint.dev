@@ -33,9 +33,7 @@ async function checkPrerequisites(): Promise<{ missing: string[] }> {
   const isCommandNotFound = (err: unknown): boolean => {
     const msg = err instanceof Error ? err.message : String(err);
     const code =
-      err && typeof err === "object" && "code" in err
-        ? (err as { code?: string }).code
-        : undefined;
+      err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
     return (
       code === "ENOENT" ||
       /command not found/i.test(msg) ||
@@ -294,8 +292,12 @@ envRouter.post(
             resolve();
           }
         );
-        child.stdout?.on("data", (d) => log.info("cursor-cli-install stdout", { chunk: d?.toString().slice(0, 200) }));
-        child.stderr?.on("data", (d) => log.warn("cursor-cli-install stderr", { chunk: d?.toString().slice(0, 200) }));
+        child.stdout?.on("data", (d) =>
+          log.info("cursor-cli-install stdout", { chunk: d?.toString().slice(0, 200) })
+        );
+        child.stderr?.on("data", (d) =>
+          log.warn("cursor-cli-install stderr", { chunk: d?.toString().slice(0, 200) })
+        );
       } else {
         const child = exec(
           `curl -fsS "${CURSOR_CLI_INSTALL_UNIX}" | bash`,
@@ -318,8 +320,12 @@ envRouter.post(
             resolve();
           }
         );
-        child.stdout?.on("data", (d) => log.info("cursor-cli-install stdout", { chunk: d?.toString().slice(0, 200) }));
-        child.stderr?.on("data", (d) => log.warn("cursor-cli-install stderr", { chunk: d?.toString().slice(0, 200) }));
+        child.stdout?.on("data", (d) =>
+          log.info("cursor-cli-install stdout", { chunk: d?.toString().slice(0, 200) })
+        );
+        child.stderr?.on("data", (d) =>
+          log.warn("cursor-cli-install stderr", { chunk: d?.toString().slice(0, 200) })
+        );
       }
     });
   })

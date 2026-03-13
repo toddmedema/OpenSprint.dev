@@ -434,7 +434,9 @@ describe("EpicCard", () => {
 
     expect(screen.getByText("In review")).toBeInTheDocument();
     expect(
-      screen.getByText(/All tasks are done. Mark this plan complete to ship, or review in Evaluate./)
+      screen.getByText(
+        /All tasks are done. Mark this plan complete to ship, or review in Evaluate./
+      )
     ).toBeInTheDocument();
   });
 
@@ -992,7 +994,9 @@ describe("EpicCard", () => {
 
     expect(screen.getByTestId("execute-error-inline")).toBeInTheDocument();
     expect(
-      screen.getByText(/Generate tasks first. Click .Generate Tasks. to create tasks from this plan/)
+      screen.getByText(
+        /Generate tasks first. Click .Generate Tasks. to create tasks from this plan/
+      )
     ).toBeInTheDocument();
   });
 });

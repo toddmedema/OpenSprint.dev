@@ -46,9 +46,7 @@ function resolveTargetArch(cliOptions = {}) {
   const targetArch =
     cliOptions.arch?.trim() || process.env.OPENSPRINT_ELECTRON_ARCH?.trim() || process.arch;
   if (!["x64", "arm64"].includes(targetArch)) {
-    throw new Error(
-      `Unsupported target arch '${targetArch}'. Use one of: x64, arm64.`
-    );
+    throw new Error(`Unsupported target arch '${targetArch}'. Use one of: x64, arm64.`);
   }
   return targetArch;
 }
@@ -67,19 +65,11 @@ function run({ argv = process.argv.slice(2) } = {}) {
   const archFlag = `--${targetArch}`;
   const dirFlag = cliOptions.dir ? " --dir" : "";
 
-  console.log(
-    `Building Electron desktop package (platform=${targetPlatform}, arch=${targetArch})`
-  );
+  console.log(`Building Electron desktop package (platform=${targetPlatform}, arch=${targetArch})`);
 
   execFileSync(
     process.execPath,
-    [
-      prepareScriptPath,
-      "--platform",
-      targetPlatform,
-      "--arch",
-      targetArch,
-    ],
+    [prepareScriptPath, "--platform", targetPlatform, "--arch", targetArch],
     {
       cwd: packageDir,
       env: process.env,

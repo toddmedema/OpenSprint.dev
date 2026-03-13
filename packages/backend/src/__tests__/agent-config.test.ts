@@ -69,7 +69,12 @@ describe("agent-config schema", () => {
 
     it("should accept lmstudio agent type with baseUrl", () => {
       const config = parseAgentConfig(
-        { type: "lmstudio", model: "local-model", cliCommand: null, baseUrl: "http://localhost:1234" },
+        {
+          type: "lmstudio",
+          model: "local-model",
+          cliCommand: null,
+          baseUrl: "http://localhost:1234",
+        },
         "simpleComplexityAgent"
       );
       expect(config).toEqual({

@@ -353,14 +353,18 @@ export class RecoveryService {
             event: "recovery.agent_assignee_no_process_reset",
             data: { assignee: task.assignee ?? null, reason: "no process for agent assignee" },
           })
-          .catch((err) => log.debug("Best-effort event log append failed", { taskId: task.id, err }));
+          .catch((err) =>
+            log.debug("Best-effort event log append failed", { taskId: task.id, err })
+          );
         await this.taskStore
           .comment(
             projectId,
             task.id,
             "Watchdog: no running process for agent assignee. Task requeued for next attempt."
           )
-          .catch((err) => log.warn("Failed to comment on recovered task", { taskId: task.id, err }));
+          .catch((err) =>
+            log.warn("Failed to comment on recovered task", { taskId: task.id, err })
+          );
       } catch (err) {
         log.warn("Failed to recover task", { taskId: task.id, err: (err as Error).message });
       }

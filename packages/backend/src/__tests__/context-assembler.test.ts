@@ -185,7 +185,11 @@ User authentication.
   });
 
   it("prefers task-local acceptance criteria for feedback tasks in coding prompt", async () => {
-    await fs.writeFile(path.join(repoPath, SPEC_MD), "# Product Specification\n\nTest product.", "utf-8");
+    await fs.writeFile(
+      path.join(repoPath, SPEC_MD),
+      "# Product Specification\n\nTest product.",
+      "utf-8"
+    );
     const planContent = `# Plan
 
 ## Acceptance Criteria
@@ -223,6 +227,11 @@ User authentication.
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
     expect(prompt).toContain("## Acceptance Criteria");
     expect(prompt).toContain("Any agent failure in this flow shows a clear visible inline error.");
+    expect(prompt).toContain("## Feedback Task Scope");
+    expect(prompt).toContain(
+      "Do not add scope from a parent plan, mapped epic, or prior review feedback unless that requirement is explicitly restated in the ticket."
+    );
+    expect(prompt).toContain("reference-only for feedback tasks; not extra acceptance criteria");
     expect(prompt).not.toContain("Add in_review plan status");
     expect(prompt).not.toContain("Persist reviewedAt metadata");
     expect(prompt).not.toContain("## Technical Approach");
@@ -271,7 +280,8 @@ User authentication.
       taskId: config.taskId,
       title: "Implement login",
       description: "Add login",
-      planContent: "# Feature\n\n## Acceptance Criteria\n- Login\n\n## Technical Approach\n- bcrypt",
+      planContent:
+        "# Feature\n\n## Acceptance Criteria\n- Login\n\n## Technical Approach\n- bcrypt",
       prdExcerpt: "# Product\n\nTest.",
       dependencyOutputs: [],
     });
@@ -327,7 +337,8 @@ User authentication.
       taskId: config.taskId,
       title: "Implement login",
       description: "Add login",
-      planContent: "# Feature\n\n## Acceptance Criteria\n- Login\n\n## Technical Approach\n- bcrypt",
+      planContent:
+        "# Feature\n\n## Acceptance Criteria\n- Login\n\n## Technical Approach\n- bcrypt",
       prdExcerpt: "# Product\n\nTest.",
       dependencyOutputs: [],
     });
@@ -928,9 +939,7 @@ User authentication.
     expect(prompt).toContain("Do NOT rerun the full-suite command `npm test`");
     expect(prompt).toContain("Before finalizing, open that file");
     expect(prompt).toContain("If it says `FAILED` or `ERROR`, reject");
-    expect(prompt).toContain(
-      "If it says `PENDING`, continue based on code quality/scope findings"
-    );
+    expect(prompt).toContain("If it says `PENDING`, continue based on code quality/scope findings");
     expect(prompt).toContain("6. Write your result to `.opensprint/active/bd-a3f8.2/result.json`");
     expect(prompt).toContain('"status": "approved"');
     expect(prompt).toContain("do NOT merge");
@@ -981,6 +990,11 @@ User authentication.
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
     expect(prompt).toContain("## Acceptance Criteria");
     expect(prompt).toContain("User sees a clear error banner when Dreamer fails.");
+    expect(prompt).toContain("## Feedback Task Scope");
+    expect(prompt).toContain(
+      "The original ticket and the task-local acceptance criteria above are the source of truth."
+    );
+    expect(prompt).toContain("reference-only for feedback tasks; not extra acceptance criteria");
     expect(prompt).not.toContain("Add in_review plan status");
     expect(prompt).not.toContain("Persist reviewedAt metadata");
     expect(prompt).not.toContain("The technical approach matches the plan");
@@ -1078,7 +1092,9 @@ User authentication.
     expect(securityPrompt).toContain("Review Checklist — Security implications");
     expect(securityPrompt).toContain("No injection vulnerabilities");
     expect(securityPrompt).toContain("Do NOT rerun the full-suite command `npm test`");
-    expect(securityPrompt).toContain(".opensprint/active/bd-a3f8.2/context/orchestrator-test-status.md");
+    expect(securityPrompt).toContain(
+      ".opensprint/active/bd-a3f8.2/context/orchestrator-test-status.md"
+    );
     expect(securityPrompt).toContain("Before finalizing, open that file");
     expect(securityPrompt).toContain(
       ".opensprint/active/bd-a3f8.2/review-angles/security/result.json"

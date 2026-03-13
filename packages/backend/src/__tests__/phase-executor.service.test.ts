@@ -254,7 +254,11 @@ describe("PhaseExecutorService", () => {
 
       await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot);
 
-      expect(mockCreateOrCheckoutBranch).toHaveBeenCalledWith(repoPath, `opensprint/${taskId}`, "main");
+      expect(mockCreateOrCheckoutBranch).toHaveBeenCalledWith(
+        repoPath,
+        `opensprint/${taskId}`,
+        "main"
+      );
       expect(mockCreateTaskWorktree).not.toHaveBeenCalled();
       expect(mockEnsureRepoNodeModules).toHaveBeenCalledWith(repoPath);
       expect(slot.worktreePath).toBe(repoPath);
@@ -337,12 +341,10 @@ describe("PhaseExecutorService", () => {
 
       await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot);
 
-      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(
-        repoPath,
-        task.id,
-        "main",
-        { worktreeKey: `epic_${epicId}`, branchName: `opensprint/epic_${epicId}` }
-      );
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, task.id, "main", {
+        worktreeKey: `epic_${epicId}`,
+        branchName: `opensprint/epic_${epicId}`,
+      });
       expect(mockCreateOrCheckoutBranch).not.toHaveBeenCalled();
       expect(slot.worktreePath).toBe(epicWtPath);
     });
@@ -364,16 +366,21 @@ describe("PhaseExecutorService", () => {
 
       expect(mockLifecycleRun).not.toHaveBeenCalled();
       expect(mockHandleTaskFailure).toHaveBeenCalledTimes(1);
-      const [failureProjectId, failureRepoPath, failureTask, failureBranch, failureReason, testError, failureType] =
-        mockHandleTaskFailure.mock.calls[0]!;
+      const [
+        failureProjectId,
+        failureRepoPath,
+        failureTask,
+        failureBranch,
+        failureReason,
+        testError,
+        failureType,
+      ] = mockHandleTaskFailure.mock.calls[0]!;
       expect(failureProjectId).toBe(projectId);
       expect(failureRepoPath).toBe(repoPath);
       expect(failureTask).toBe(task);
       expect(failureBranch).toBe(slot.branchName);
       expect(failureReason).toContain("[REPO_DEPENDENCIES_INVALID]");
-      expect(failureReason).toContain(
-        "Suggested commands: npm ci ; npm ls --depth=0 --workspaces"
-      );
+      expect(failureReason).toContain("Suggested commands: npm ci ; npm ls --depth=0 --workspaces");
       expect(testError).toBeNull();
       expect(failureType).toBe("repo_preflight");
     });
@@ -584,16 +591,21 @@ describe("PhaseExecutorService", () => {
 
       expect(mockLifecycleRun).not.toHaveBeenCalled();
       expect(mockHandleTaskFailure).toHaveBeenCalledTimes(1);
-      const [failureProjectId, failureRepoPath, failureTask, failureBranch, failureReason, testError, failureType] =
-        mockHandleTaskFailure.mock.calls[0]!;
+      const [
+        failureProjectId,
+        failureRepoPath,
+        failureTask,
+        failureBranch,
+        failureReason,
+        testError,
+        failureType,
+      ] = mockHandleTaskFailure.mock.calls[0]!;
       expect(failureProjectId).toBe(projectId);
       expect(failureRepoPath).toBe(repoPath);
       expect(failureTask).toBe(task);
       expect(failureBranch).toBe(slot.branchName);
       expect(failureReason).toContain("[REPO_DEPENDENCIES_INVALID]");
-      expect(failureReason).toContain(
-        "Suggested commands: npm ci ; npm ls --depth=0 --workspaces"
-      );
+      expect(failureReason).toContain("Suggested commands: npm ci ; npm ls --depth=0 --workspaces");
       expect(testError).toBeNull();
       expect(failureType).toBe("repo_preflight");
     });

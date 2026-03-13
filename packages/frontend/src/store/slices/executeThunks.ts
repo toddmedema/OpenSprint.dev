@@ -8,11 +8,7 @@ import { DEDUP_SKIP } from "../dedup";
 import { setPlansAndGraph } from "./planSlice";
 import { isApiError, isConnectionError } from "../../api/client";
 import { setDeliverToast } from "./websocketSlice";
-import {
-  type ExecuteState,
-  TASKS_IN_FLIGHT_KEY,
-  EXECUTE_ASYNC_KEYS,
-} from "./executeTypes";
+import { type ExecuteState, TASKS_IN_FLIGHT_KEY, EXECUTE_ASYNC_KEYS } from "./executeTypes";
 import { createInitialAsyncStates } from "../asyncHelpers";
 
 export type FetchTasksArg = string;
@@ -135,11 +131,7 @@ export const updateTaskPriority = createAsyncThunk(
 export const updateTaskAssignee = createAsyncThunk(
   "execute/updateTaskAssignee",
   async (
-    {
-      projectId,
-      taskId,
-      assignee,
-    }: { projectId: string; taskId: string; assignee: string | null },
+    { projectId, taskId, assignee }: { projectId: string; taskId: string; assignee: string | null },
     { dispatch, rejectWithValue }
   ) => {
     try {

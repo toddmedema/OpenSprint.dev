@@ -53,10 +53,7 @@ function rowToValues(row: DbRow, columns: string[]): unknown[] {
   return columns.map((c) => row[c]);
 }
 
-export async function migrateSqliteToPostgres(
-  sourceUrl: string,
-  targetUrl: string
-): Promise<void> {
+export async function migrateSqliteToPostgres(sourceUrl: string, targetUrl: string): Promise<void> {
   const sourceDialect = getDatabaseDialect(sourceUrl);
   if (sourceDialect !== "sqlite") {
     throw new Error("Source must be SQLite");
@@ -66,8 +63,7 @@ export async function migrateSqliteToPostgres(
   }
 
   const sourceAppDb = await initAppDb(sourceUrl);
-  const { client: targetClient, pool: targetPool } =
-    await createPostgresDbClientFromUrl(targetUrl);
+  const { client: targetClient, pool: targetPool } = await createPostgresDbClientFromUrl(targetUrl);
 
   try {
     await runSchema(targetClient, "postgres");

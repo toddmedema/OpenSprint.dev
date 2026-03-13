@@ -150,14 +150,14 @@ describe("AgentsStep", () => {
   });
 
   it("when LM Studio selected for Simple, shows Base URL input and ModelSelect with baseUrl", async () => {
-    mockModelsList.mockImplementation((provider: string, _projectId?: string, _baseUrl?: string) => {
-      if (provider === "lmstudio") {
-        return Promise.resolve([
-          { id: "local-model", displayName: "Local Model" },
-        ]);
+    mockModelsList.mockImplementation(
+      (provider: string, _projectId?: string, _baseUrl?: string) => {
+        if (provider === "lmstudio") {
+          return Promise.resolve([{ id: "local-model", displayName: "Local Model" }]);
+        }
+        return Promise.resolve([]);
       }
-      return Promise.resolve([]);
-    });
+    );
 
     renderAgentsStep({
       simpleComplexityAgent: {

@@ -40,15 +40,7 @@ export function useSubmitFeedback(projectId: string) {
       planId?: string | null;
       planVersionNumber?: number | null;
     }) =>
-      api.feedback.submit(
-        projectId,
-        text,
-        images,
-        parentId,
-        priority,
-        planId,
-        planVersionNumber
-      ),
+      api.feedback.submit(projectId, text, images, parentId, priority, planId, planVersionNumber),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.feedback.list(projectId) });
     },

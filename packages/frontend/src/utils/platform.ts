@@ -11,11 +11,7 @@ export function getPlatformFamily(): PlatformFamily {
   const uaData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
   const uaDataPlatform = uaData?.platform?.toLowerCase() ?? "";
 
-  if (
-    platform.includes("win") ||
-    ua.includes("windows") ||
-    uaDataPlatform === "windows"
-  ) {
+  if (platform.includes("win") || ua.includes("windows") || uaDataPlatform === "windows") {
     return "windows";
   }
 
@@ -23,11 +19,7 @@ export function getPlatformFamily(): PlatformFamily {
     return "mac";
   }
 
-  if (
-    platform.includes("linux") ||
-    ua.includes("linux") ||
-    uaDataPlatform === "linux"
-  ) {
+  if (platform.includes("linux") || ua.includes("linux") || uaDataPlatform === "linux") {
     return "linux";
   }
 

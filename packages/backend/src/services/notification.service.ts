@@ -85,7 +85,8 @@ function generateId(): string {
 function rowToNotification(row: Record<string, unknown>): Notification {
   const questions: OpenQuestionItem[] = JSON.parse((row.questions as string) || "[]");
   const kind =
-    (row.kind as "open_question" | "api_blocked" | "hil_approval" | "agent_failed") || "open_question";
+    (row.kind as "open_question" | "api_blocked" | "hil_approval" | "agent_failed") ||
+    "open_question";
   const errorCode = row.error_code as ApiBlockedErrorCode | undefined;
   const scopeChangeMetadataRaw = row.scope_change_metadata as string | undefined;
   const scopeChangeMetadata = scopeChangeMetadataRaw
@@ -241,14 +242,7 @@ export class NotificationService {
       await client.execute(
         `INSERT INTO open_questions (id, project_id, source, source_id, questions, status, created_at, kind)
          VALUES ($1, $2, $3, $4, $5, 'open', $6, 'agent_failed')`,
-        [
-          id,
-          input.projectId,
-          input.source,
-          input.sourceId,
-          JSON.stringify(questions),
-          createdAt,
-        ]
+        [id, input.projectId, input.source, input.sourceId, JSON.stringify(questions), createdAt]
       );
     });
 

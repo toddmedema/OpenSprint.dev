@@ -5,7 +5,10 @@ import {
 } from "../services/review-synthesizer.service.js";
 
 // Avoid loading drizzle-orm/pg-core (vitest resolution can fail in some workspaces)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 vi.mock("../services/agent.service.js", () => ({
@@ -73,7 +76,10 @@ describe("ReviewSynthesizerService", () => {
     vi.mocked(agentService.invokePlanningAgent).mockRejectedValue(new Error("API error"));
 
     const angleInputs: AngleReviewInput[] = [
-      { angle: "security", result: { status: "rejected", summary: "Bad", issues: ["X"], notes: "" } },
+      {
+        angle: "security",
+        result: { status: "rejected", summary: "Bad", issues: ["X"], notes: "" },
+      },
       { angle: "performance", result: { status: "approved", summary: "OK", notes: "" } },
     ];
     const taskStore = {} as never;
@@ -95,8 +101,14 @@ describe("ReviewSynthesizerService", () => {
     vi.mocked(agentService.invokePlanningAgent).mockRejectedValue(new Error("fail"));
 
     const angleInputs: AngleReviewInput[] = [
-      { angle: "security", result: { status: "rejected", summary: "S1", issues: ["A"], notes: "" } },
-      { angle: "performance", result: { status: "rejected", summary: "S2", issues: ["B"], notes: "" } },
+      {
+        angle: "security",
+        result: { status: "rejected", summary: "S1", issues: ["A"], notes: "" },
+      },
+      {
+        angle: "performance",
+        result: { status: "rejected", summary: "S2", issues: ["B"], notes: "" },
+      },
     ];
     const taskStore = {} as never;
     const result = await reviewSynthesizerService.synthesize(

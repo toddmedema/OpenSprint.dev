@@ -32,7 +32,10 @@ const mockProjectServiceForSession = {
 };
 
 // Avoid loading drizzle-orm/pg-core (vitest resolution can fail in some workspaces)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 const {
@@ -278,7 +281,11 @@ describe("Multi-angle review flow — integration", () => {
       const resultPath = path.join(taskDir, "result.json");
       await fs.writeFile(
         resultPath,
-        JSON.stringify({ status: "approved", summary: "Looks good", notes: "" } as ReviewAgentResult)
+        JSON.stringify({
+          status: "approved",
+          summary: "Looks good",
+          notes: "",
+        } as ReviewAgentResult)
       );
       await runParams.onDone(0);
 
@@ -337,11 +344,27 @@ describe("Multi-angle review flow — integration", () => {
       ).toBe(true);
 
       const securityPrompt = await fs.readFile(
-        path.join(repoPath, ".opensprint", "active", taskId, "review-angles", "security", "prompt.md"),
+        path.join(
+          repoPath,
+          ".opensprint",
+          "active",
+          taskId,
+          "review-angles",
+          "security",
+          "prompt.md"
+        ),
         "utf-8"
       );
       const perfPrompt = await fs.readFile(
-        path.join(repoPath, ".opensprint", "active", taskId, "review-angles", "performance", "prompt.md"),
+        path.join(
+          repoPath,
+          ".opensprint",
+          "active",
+          taskId,
+          "review-angles",
+          "performance",
+          "prompt.md"
+        ),
         "utf-8"
       );
       expect(securityPrompt).toContain("Security implications");
@@ -377,11 +400,19 @@ describe("Multi-angle review flow — integration", () => {
 
       coord.setTestOutcome(testPassed);
       coord.setReviewOutcome(
-        { status: "approved", result: { status: "approved", summary: "OK", notes: "" }, exitCode: 0 },
+        {
+          status: "approved",
+          result: { status: "approved", summary: "OK", notes: "" },
+          exitCode: 0,
+        },
         "security"
       );
       coord.setReviewOutcome(
-        { status: "approved", result: { status: "approved", summary: "OK", notes: "" }, exitCode: 0 },
+        {
+          status: "approved",
+          result: { status: "approved", summary: "OK", notes: "" },
+          exitCode: 0,
+        },
         "performance"
       );
 
@@ -440,7 +471,11 @@ describe("Multi-angle review flow — integration", () => {
 
       coord.setTestOutcome(testPassed);
       coord.setReviewOutcome(
-        { status: "approved", result: { status: "approved", summary: "OK", notes: "" }, exitCode: 0 },
+        {
+          status: "approved",
+          result: { status: "approved", summary: "OK", notes: "" },
+          exitCode: 0,
+        },
         "security"
       );
       coord.setReviewOutcome({ status: "no_result", result: null, exitCode: 1 }, "performance");
@@ -475,29 +510,35 @@ describe("Multi-angle review flow — integration", () => {
 
       const sessionManager = new SessionManager(mockProjectServiceForSession as never);
 
-      const mockHandleReviewDone = vi.fn().mockImplementation(
-        async (
-          _projectId: string,
-          _repoPath: string,
-          _task: StoredTask,
-          _branchName: string,
-          exitCode: number | null,
-          angle?: string
-        ) => {
-          coord.setTestOutcome(testPassed);
-          const result = await sessionManager.readResult(repoPath, taskId, angle as import("@opensprint/shared").ReviewAngle | undefined);
-          const status: ReviewOutcome["status"] =
-            (result as ReviewAgentResult)?.status === "approved"
-              ? "approved"
-              : (result as ReviewAgentResult)?.status === "rejected"
-                ? "rejected"
-                : "no_result";
-          coord.setReviewOutcome(
-            { status, result: result as ReviewAgentResult | null, exitCode },
-            angle
-          );
-        }
-      );
+      const mockHandleReviewDone = vi
+        .fn()
+        .mockImplementation(
+          async (
+            _projectId: string,
+            _repoPath: string,
+            _task: StoredTask,
+            _branchName: string,
+            exitCode: number | null,
+            angle?: string
+          ) => {
+            coord.setTestOutcome(testPassed);
+            const result = await sessionManager.readResult(
+              repoPath,
+              taskId,
+              angle as import("@opensprint/shared").ReviewAngle | undefined
+            );
+            const status: ReviewOutcome["status"] =
+              (result as ReviewAgentResult)?.status === "approved"
+                ? "approved"
+                : (result as ReviewAgentResult)?.status === "rejected"
+                  ? "rejected"
+                  : "no_result";
+            coord.setReviewOutcome(
+              { status, result: result as ReviewAgentResult | null, exitCode },
+              angle
+            );
+          }
+        );
 
       phaseExecutor = new PhaseExecutorService(mockHost, {
         handleCodingDone: vi.fn().mockResolvedValue(undefined),

@@ -319,10 +319,10 @@ export const REVIEW_ANGLE_OPTIONS: { value: ReviewAngle; label: string }[] = [
 export const GENERAL_REVIEW_OPTION = "general" as const;
 
 /** All review agent options for UI: General first (checked by default), then angle-specific options. */
-export const REVIEW_AGENT_OPTIONS: { value: typeof GENERAL_REVIEW_OPTION | ReviewAngle; label: string }[] = [
-  { value: GENERAL_REVIEW_OPTION, label: "General" },
-  ...REVIEW_ANGLE_OPTIONS,
-];
+export const REVIEW_AGENT_OPTIONS: {
+  value: typeof GENERAL_REVIEW_OPTION | ReviewAngle;
+  label: string;
+}[] = [{ value: GENERAL_REVIEW_OPTION, label: "General" }, ...REVIEW_ANGLE_OPTIONS];
 
 /** Strategy when file scope is unknown for parallel scheduling */
 export type UnknownScopeStrategy = "conservative" | "optimistic";
@@ -828,7 +828,8 @@ export function parseSettings(raw: unknown): ProjectSettings {
       : "worktree";
 
   const mergeStrategy =
-    typeof r?.mergeStrategy === "string" && VALID_MERGE_STRATEGIES.includes(r.mergeStrategy as MergeStrategy)
+    typeof r?.mergeStrategy === "string" &&
+    VALID_MERGE_STRATEGIES.includes(r.mergeStrategy as MergeStrategy)
       ? (r.mergeStrategy as MergeStrategy)
       : "per_task";
 
@@ -850,7 +851,9 @@ export function parseSettings(raw: unknown): ProjectSettings {
   const enableHumanTeammates = r?.enableHumanTeammates === true;
   const selfImprovementFrequency =
     typeof r?.selfImprovementFrequency === "string" &&
-    VALID_SELF_IMPROVEMENT_FREQUENCIES.includes(r.selfImprovementFrequency as SelfImprovementFrequency)
+    VALID_SELF_IMPROVEMENT_FREQUENCIES.includes(
+      r.selfImprovementFrequency as SelfImprovementFrequency
+    )
       ? (r.selfImprovementFrequency as SelfImprovementFrequency)
       : "never";
   const base = {
@@ -1010,11 +1013,7 @@ export function mergeApiKeysWithCurrent(
             ? existing?.invalidAt
             : undefined;
       const label =
-        typeof e.label === "string"
-          ? e.label
-          : preserveExistingState
-            ? existing?.label
-            : undefined;
+        typeof e.label === "string" ? e.label : preserveExistingState ? existing?.label : undefined;
       merged.push({
         id,
         value,

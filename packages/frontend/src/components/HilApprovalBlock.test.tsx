@@ -243,7 +243,9 @@ describe("HilApprovalBlock", () => {
     await waitFor(() => {
       expect(screen.getByTestId("hil-diff-error")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("hil-diff-error")).toHaveTextContent("HIL approval request not found");
+    expect(screen.getByTestId("hil-diff-error")).toHaveTextContent(
+      "HIL approval request not found"
+    );
     expect(screen.getByTestId("hil-diff-error-dismiss")).toBeInTheDocument();
     expect(screen.getByTestId("hil-approve-btn")).toBeInTheDocument();
     expect(screen.getByTestId("hil-reject-btn")).toBeInTheDocument();

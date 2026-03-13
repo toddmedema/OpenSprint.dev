@@ -130,7 +130,14 @@ describe("auditor.service", () => {
         status: "success",
         capability_summary: "## Features",
         tasks: [
-          { index: 0, title: "Task", description: "...", priority: 1, depends_on: [], complexity: "low" },
+          {
+            index: 0,
+            title: "Task",
+            description: "...",
+            priority: 1,
+            depends_on: [],
+            complexity: "low",
+          },
         ],
       });
       const result = parseAuditorResult(content);

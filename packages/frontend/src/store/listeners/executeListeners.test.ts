@@ -58,17 +58,15 @@ describe("executeListeners", () => {
     };
 
     store.dispatch(
-      updateTaskPriority.fulfilled(
-        { task, taskId: "task-1" },
-        "",
-        { projectId: "proj-1", taskId: "task-1", priority: 0, previousPriority: 1 }
-      )
+      updateTaskPriority.fulfilled({ task, taskId: "task-1" }, "", {
+        projectId: "proj-1",
+        taskId: "task-1",
+        priority: 0,
+        previousPriority: 1,
+      })
     );
 
-    expect(mockSetQueryData).toHaveBeenCalledWith(
-      queryKeys.tasks.detail("proj-1", "task-1"),
-      task
-    );
+    expect(mockSetQueryData).toHaveBeenCalledWith(queryKeys.tasks.detail("proj-1", "task-1"), task);
     // Must NOT invalidate tasks list — that triggers refetch → setTasks → full Redux replace → sidebar flicker
     expect(mockInvalidateQueries).not.toHaveBeenCalled();
   });
@@ -94,11 +92,12 @@ describe("executeListeners", () => {
     };
 
     store.dispatch(
-      updateTaskPriority.fulfilled(
-        { task, taskId: "task-2" },
-        "",
-        { projectId: "proj-2", taskId: "task-2", priority: 2, previousPriority: 1 }
-      )
+      updateTaskPriority.fulfilled({ task, taskId: "task-2" }, "", {
+        projectId: "proj-2",
+        taskId: "task-2",
+        priority: 2,
+        previousPriority: 1,
+      })
     );
 
     const invalidateCalls = mockInvalidateQueries.mock.calls;
@@ -133,17 +132,14 @@ describe("executeListeners", () => {
     };
 
     store.dispatch(
-      updateTaskAssignee.fulfilled(
-        { task, taskId: "task-1" },
-        "",
-        { projectId: "proj-1", taskId: "task-1", assignee: "Alice" }
-      )
+      updateTaskAssignee.fulfilled({ task, taskId: "task-1" }, "", {
+        projectId: "proj-1",
+        taskId: "task-1",
+        assignee: "Alice",
+      })
     );
 
-    expect(mockSetQueryData).toHaveBeenCalledWith(
-      queryKeys.tasks.detail("proj-1", "task-1"),
-      task
-    );
+    expect(mockSetQueryData).toHaveBeenCalledWith(queryKeys.tasks.detail("proj-1", "task-1"), task);
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.tasks.list("proj-1"),
     });

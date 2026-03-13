@@ -65,14 +65,36 @@ export interface PlanCrudStore extends PlanVersioningStore {
     taskId: string,
     updates: Record<string, unknown>
   ): Promise<void | StoredTask>;
-  addDependencies(projectId: string, deps: Array<{ childId: string; parentId: string; type?: string }>): Promise<void>;
+  addDependencies(
+    projectId: string,
+    deps: Array<{ childId: string; parentId: string; type?: string }>
+  ): Promise<void>;
   addLabel(projectId: string, taskId: string, label: string): Promise<void>;
-  planInsert(projectId: string, planId: string, data: { epic_id: string; content: string; metadata: string }): Promise<void>;
-  planUpdateContent(projectId: string, planId: string, content: string, currentVersionNumber?: number): Promise<void>;
-  planUpdateMetadata(projectId: string, planId: string, metadata: Record<string, unknown>): Promise<void>;
-  planGetByEpicId(projectId: string, epicId: string): Promise<{ plan_id: string; metadata: Record<string, unknown> } | null>;
+  planInsert(
+    projectId: string,
+    planId: string,
+    data: { epic_id: string; content: string; metadata: string }
+  ): Promise<void>;
+  planUpdateContent(
+    projectId: string,
+    planId: string,
+    content: string,
+    currentVersionNumber?: number
+  ): Promise<void>;
+  planUpdateMetadata(
+    projectId: string,
+    planId: string,
+    metadata: Record<string, unknown>
+  ): Promise<void>;
+  planGetByEpicId(
+    projectId: string,
+    epicId: string
+  ): Promise<{ plan_id: string; metadata: Record<string, unknown> } | null>;
   delete(projectId: string, taskId: string): Promise<void>;
-  closeMany(projectId: string, items: Array<{ id: string; reason: string }>): Promise<void | StoredTask[]>;
+  closeMany(
+    projectId: string,
+    items: Array<{ id: string; reason: string }>
+  ): Promise<void | StoredTask[]>;
   planDelete(projectId: string, planId: string): Promise<boolean>;
   listPlanVersions(projectId: string, planId: string): Promise<Array<{ version_number: number }>>;
 }
@@ -156,9 +178,7 @@ export class PlanCrudService {
       epicId: (row.metadata.epicId as string) ?? "",
       shippedAt: (row.metadata.shippedAt as string | null) ?? null,
       reviewedAt:
-        "reviewedAt" in row.metadata
-          ? (row.metadata.reviewedAt as string | null)
-          : undefined,
+        "reviewedAt" in row.metadata ? (row.metadata.reviewedAt as string | null) : undefined,
       complexity: (row.metadata.complexity as PlanMetadata["complexity"]) ?? "medium",
       mockups: (row.metadata.mockups as PlanMetadata["mockups"]) ?? undefined,
     };
@@ -192,11 +212,7 @@ export class PlanCrudService {
           status = allTasksDone ? statusWhenAllDone : "building";
         }
       } catch {
-        status = metadata.shippedAt
-          ? allTasksDone
-            ? statusWhenAllDone
-            : "building"
-          : "planning";
+        status = metadata.shippedAt ? (allTasksDone ? statusWhenAllDone : "building") : "planning";
       }
     } else if (metadata.shippedAt) {
       status = allTasksDone ? statusWhenAllDone : "building";
@@ -491,7 +507,9 @@ export class PlanCrudService {
         (issue: StoredTask) =>
           issue.id.startsWith(epicId + ".") && (issue.issue_type ?? issue.type) !== "epic"
       );
-      const allClosed = children.every((issue: StoredTask) => (issue.status as string) === "closed");
+      const allClosed = children.every(
+        (issue: StoredTask) => (issue.status as string) === "closed"
+      );
       if (children.length > 0 && !allClosed) {
         throw new AppError(
           400,

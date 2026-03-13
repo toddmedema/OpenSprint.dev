@@ -233,9 +233,7 @@ export function useExecuteSwimlanes(
 
   const inLineSwimlanes = useMemo((): Swimlane[] => {
     if (statusFilter !== "all" && statusFilter !== "in_line") return [];
-    const inLineTasks = implTasks.filter(
-      (t) => isInLineTask(t) && !isPlanningPlanTask(t, plans)
-    );
+    const inLineTasks = implTasks.filter((t) => isInLineTask(t) && !isPlanningPlanTask(t, plans));
     return buildSwimlanesFromFilteredTasks(inLineTasks, plans, statusFilter, searchQuery);
   }, [implTasks, plans, statusFilter, searchQuery]);
 

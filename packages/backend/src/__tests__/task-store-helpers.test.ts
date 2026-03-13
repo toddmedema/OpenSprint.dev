@@ -112,9 +112,9 @@ describe("task-store-helpers", () => {
     });
 
     it("throws when changing assignee while in progress", () => {
-      expect(() =>
-        validateAssigneeChange("in_progress", { assignee: "other" }, "os-1")
-      ).toThrow(AppError);
+      expect(() => validateAssigneeChange("in_progress", { assignee: "other" }, "os-1")).toThrow(
+        AppError
+      );
       expect(() =>
         validateAssigneeChange("in_progress", { status: "blocked", assignee: "other" }, "os-1")
       ).toThrow(AppError);
@@ -131,10 +131,7 @@ describe("task-store-helpers", () => {
     });
 
     it("clears block_reason when set to null", () => {
-      const out = mergeExtraForUpdate(
-        { block_reason: "Coding Failure" },
-        { block_reason: null }
-      );
+      const out = mergeExtraForUpdate({ block_reason: "Coding Failure" }, { block_reason: null });
       expect(out).not.toHaveProperty("block_reason");
     });
   });
@@ -206,9 +203,9 @@ describe("task-store-helpers", () => {
   describe("getFileScopeLabels", () => {
     it("parses files: label", () => {
       const scope = { modify: ["a.ts"] };
-      expect(
-        getFileScopeLabels(stored({ labels: [`files:${JSON.stringify(scope)}`] }))
-      ).toEqual(scope);
+      expect(getFileScopeLabels(stored({ labels: [`files:${JSON.stringify(scope)}`] }))).toEqual(
+        scope
+      );
     });
 
     it("returns null when no files label", () => {
@@ -240,7 +237,10 @@ describe("task-store-helpers", () => {
 
   describe("resolveEpicId", () => {
     it("returns epic id from parent chain", () => {
-      const all = [stored({ id: "os-a", issue_type: "epic" }), stored({ id: "os-a.1", issue_type: "task" })];
+      const all = [
+        stored({ id: "os-a", issue_type: "epic" }),
+        stored({ id: "os-a.1", issue_type: "task" }),
+      ];
       expect(resolveEpicId("os-a.1", all)).toBe("os-a");
     });
   });

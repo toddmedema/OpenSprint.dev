@@ -565,11 +565,7 @@ export class TaskService {
       return this.getTask(projectId, taskId);
     }
     // When assigning to a human (non-agent), require enableHumanTeammates and optionally add to teamMembers.
-    if (
-      assigneeValue &&
-      assigneeValue.length > 0 &&
-      !isAgentAssignee(assigneeValue)
-    ) {
+    if (assigneeValue && assigneeValue.length > 0 && !isAgentAssignee(assigneeValue)) {
       const settings = await this.projectService.getSettings(projectId);
       if (!settings.enableHumanTeammates) {
         throw new AppError(
@@ -677,11 +673,8 @@ export class TaskService {
     const mergeStrategy = settings.mergeStrategy ?? "per_task";
     const allIssues = await this.taskStore.listAll(projectId);
     const epicId = resolveEpicId(taskId, allIssues);
-    const useEpicBranch =
-      mergeStrategy === "per_epic" && epicId != null;
-    const branchName = useEpicBranch
-      ? `opensprint/epic_${epicId}`
-      : `opensprint/${taskId}`;
+    const useEpicBranch = mergeStrategy === "per_epic" && epicId != null;
+    const branchName = useEpicBranch ? `opensprint/epic_${epicId}` : `opensprint/${taskId}`;
 
     if (createBranch) {
       const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);

@@ -10,7 +10,9 @@ const { mockDbClient } = vi.hoisted(() => {
     query: vi.fn().mockResolvedValue([]),
     queryOne: vi.fn().mockResolvedValue(undefined),
     execute: vi.fn().mockResolvedValue(0),
-    runInTransaction: vi.fn().mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(client)),
+    runInTransaction: vi
+      .fn()
+      .mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(client)),
   };
   return { mockDbClient: client };
 });
@@ -28,7 +30,9 @@ vi.mock("../services/task-store.service.js", () => ({
     addDependency: vi.fn().mockResolvedValue(undefined),
     syncForPush: vi.fn().mockResolvedValue(undefined),
     getDb: vi.fn().mockResolvedValue(mockDbClient),
-    runWrite: vi.fn().mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(mockDbClient)),
+    runWrite: vi
+      .fn()
+      .mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(mockDbClient)),
   },
   TaskStoreService: vi.fn(),
   SCHEMA_SQL: "",
@@ -76,11 +80,7 @@ describe("getCombinedInstructions", () => {
     const generalContent = "# General\n\nShared.";
     await fs.writeFile(path.join(tempDir, "AGENTS.md"), generalContent, "utf-8");
     await fs.mkdir(path.join(tempDir, OPENSPRINT_PATHS.agents), { recursive: true });
-    await fs.writeFile(
-      path.join(tempDir, OPENSPRINT_PATHS.agents, "reviewer.md"),
-      "",
-      "utf-8"
-    );
+    await fs.writeFile(path.join(tempDir, OPENSPRINT_PATHS.agents, "reviewer.md"), "", "utf-8");
 
     const result = await getCombinedInstructions(tempDir, "reviewer");
 

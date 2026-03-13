@@ -203,6 +203,4 @@ export interface GeneratePlanNeedsClarificationResult {
   notification: Notification;
 }
 
-export type GeneratePlanResult =
-  | GeneratePlanCreatedResult
-  | GeneratePlanNeedsClarificationResult;
+export type GeneratePlanResult = GeneratePlanCreatedResult | GeneratePlanNeedsClarificationResult;

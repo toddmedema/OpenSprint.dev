@@ -70,49 +70,49 @@ export function App() {
       <FindBar />
       <GlobalKeyboardShortcuts />
       <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/onboarding" element={<OnboardingPage />} />
-      <Route
-        path="/settings"
-        element={
-          <LazyRoute>
-            <SettingsPage />
-          </LazyRoute>
-        }
-      />
-      <Route path="/help/shortcuts" element={<HelpShortcutsRedirect />} />
-      <Route
-        path="/help"
-        element={
-          <LazyRoute>
-            <HelpPage />
-          </LazyRoute>
-        }
-      />
-      <Route path="/projects/add-existing" element={<ProjectSetup />} />
-      <Route path="/projects/create-new" element={<CreateNewProjectPage />} />
-      <Route path="/projects/:projectId" element={<ProjectShell />}>
-        <Route index element={<Navigate to="sketch" replace />} />
-        <Route path="help/shortcuts" element={<HelpShortcutsRedirect />} />
+        <Route path="/" element={<Home />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
         <Route
-          path="help"
+          path="/settings"
           element={
             <LazyRoute>
-              <ProjectHelpContent />
+              <SettingsPage />
             </LazyRoute>
           }
         />
+        <Route path="/help/shortcuts" element={<HelpShortcutsRedirect />} />
         <Route
-          path="settings"
+          path="/help"
           element={
             <LazyRoute>
-              <ProjectSettingsContent />
+              <HelpPage />
             </LazyRoute>
           }
         />
-        <Route path=":phase" element={<ProjectView />} />
-      </Route>
-    </Routes>
+        <Route path="/projects/add-existing" element={<ProjectSetup />} />
+        <Route path="/projects/create-new" element={<CreateNewProjectPage />} />
+        <Route path="/projects/:projectId" element={<ProjectShell />}>
+          <Route index element={<Navigate to="sketch" replace />} />
+          <Route path="help/shortcuts" element={<HelpShortcutsRedirect />} />
+          <Route
+            path="help"
+            element={
+              <LazyRoute>
+                <ProjectHelpContent />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="settings"
+            element={
+              <LazyRoute>
+                <ProjectSettingsContent />
+              </LazyRoute>
+            }
+          />
+          <Route path=":phase" element={<ProjectView />} />
+        </Route>
+      </Routes>
     </>
   );
 }

@@ -21,7 +21,12 @@ export function RepositoryStep({
   return (
     <div className="space-y-4" data-testid="repository-step">
       <div>
-        <label htmlFor="repository-project-folder" className="block text-sm font-medium text-theme-text mb-1">Project folder</label>
+        <label
+          htmlFor="repository-project-folder"
+          className="block text-sm font-medium text-theme-text mb-1"
+        >
+          Project folder
+        </label>
         <div className="flex gap-2">
           <input
             id="repository-project-folder"

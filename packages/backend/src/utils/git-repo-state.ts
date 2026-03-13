@@ -86,7 +86,10 @@ export async function getCurrentGitBranch(repoPath: string): Promise<string | nu
 }
 
 export async function localBranchExists(repoPath: string, branchName: string): Promise<boolean> {
-  const ref = await runGit(repoPath, `git show-ref --verify --quiet refs/heads/${branchName} && echo ok`);
+  const ref = await runGit(
+    repoPath,
+    `git show-ref --verify --quiet refs/heads/${branchName} && echo ok`
+  );
   return ref === "ok";
 }
 
@@ -124,10 +127,7 @@ export function assertGitIdentityConfigured(
   throwGitIdentityPreflightError(identity, options?.appError);
 }
 
-function throwGitIdentityPreflightError(
-  identity: GitIdentityState,
-  appError?: boolean
-): never {
+function throwGitIdentityPreflightError(identity: GitIdentityState, appError?: boolean): never {
   const message =
     "Git author identity is required before Open Sprint can create commits. Configure user.name and user.email, then try again.";
   const commands = buildGitIdentityCommands();
@@ -215,7 +215,9 @@ export async function detectRemoteMode(repoPath: string): Promise<{
       remoteMode: "local_only",
     };
   }
-  const reachable = Boolean(await runGit(repoPath, "git ls-remote --symref origin HEAD", GIT_TIMEOUT_MS));
+  const reachable = Boolean(
+    await runGit(repoPath, "git ls-remote --symref origin HEAD", GIT_TIMEOUT_MS)
+  );
   return {
     hasOrigin: true,
     originReachable: reachable,

@@ -4,14 +4,8 @@
  */
 import type { Plan, ProjectSettings } from "@opensprint/shared";
 import { getAgentForPlanningRole } from "@opensprint/shared";
-import {
-  normalizePlannerTask,
-  findPlannerTaskArray,
-} from "./planner-normalize.js";
-import {
-  TASK_GENERATION_SYSTEM_PROMPT,
-  TASK_GENERATION_RETRY_PROMPT,
-} from "./plan-prompts.js";
+import { normalizePlannerTask, findPlannerTaskArray } from "./planner-normalize.js";
+import { TASK_GENERATION_SYSTEM_PROMPT, TASK_GENERATION_RETRY_PROMPT } from "./plan-prompts.js";
 import { agentService } from "../agent.service.js";
 import { buildAutonomyDescription } from "../autonomy-description.js";
 import { getCombinedInstructions } from "../agent-instructions.service.js";
@@ -28,8 +22,14 @@ export interface PlanTaskGenerationDeps {
   prdContext: string;
   settings: { aiAutonomyLevel?: string; hilConfig?: unknown };
   taskStore: {
-    createMany(projectId: string, inputs: Array<Record<string, unknown>>): Promise<Array<{ id: string }>>;
-    addDependencies(projectId: string, deps: Array<{ childId: string; parentId: string; type?: string }>): Promise<void>;
+    createMany(
+      projectId: string,
+      inputs: Array<Record<string, unknown>>
+    ): Promise<Array<{ id: string }>>;
+    addDependencies(
+      projectId: string,
+      deps: Array<{ childId: string; parentId: string; type?: string }>
+    ): Promise<void>;
     addLabel(projectId: string, taskId: string, label: string): Promise<void>;
   };
 }

@@ -10,7 +10,10 @@ import * as projectIndex from "../services/project-index.js";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
@@ -91,7 +94,9 @@ describe.skipIf(!planDecomposePostgresOk)("Plan decompose with auto-review", () 
   let originalHome: string | undefined;
 
   afterAll(async () => {
-    const mod = (await import("../services/task-store.service.js")) as { _testPool?: { end: () => Promise<void> } };
+    const mod = (await import("../services/task-store.service.js")) as {
+      _testPool?: { end: () => Promise<void> };
+    };
     if (mod._testPool) await mod._testPool.end();
   });
 
@@ -217,7 +222,8 @@ describe.skipIf(!planDecomposePostgresOk)("Plan decompose with auto-review", () 
 
       const allIssues = await taskStore.listAll(projectId);
       const implTasks = allIssues.filter(
-        (i: { id: string; issue_type?: string; type?: string }) => (i.issue_type ?? i.type) !== "epic"
+        (i: { id: string; issue_type?: string; type?: string }) =>
+          (i.issue_type ?? i.type) !== "epic"
       );
       expect(implTasks.length).toBe(0);
     }

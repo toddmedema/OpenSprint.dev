@@ -348,23 +348,23 @@ export class BranchManager {
   }
 
   /**
-   * Push the base branch to the remote. Called after successful merge so completed work reaches origin.
-   * Fetches and rebases first when origin/<baseBranch> exists (to handle concurrent pushes).
-   * If the remote has no base branch (e.g. empty repo or first push), skips rebase and pushes.
+   * Prepare the base branch for publishing. Fetches and rebases first when origin/<baseBranch>
+   * exists (to handle concurrent pushes).
+   * If the remote has no base branch (e.g. empty repo or first push), skips rebase.
    * If rebase hits conflicts, throws a RebaseConflictError (repo left in rebase state
    * so a merger agent can resolve). Caller is responsible for aborting if resolution fails.
    * @param baseBranch - Base branch to push (default: "main")
    */
-  async pushMain(repoPath: string, baseBranch: string = "main"): Promise<void> {
+  async prepareMainForPush(repoPath: string, baseBranch: string = "main"): Promise<void> {
     const originUrl = await getOriginUrl(repoPath);
     if (!originUrl) {
-      log.info("pushMain: no origin configured, skipping publish", { baseBranch });
+      log.info("prepareMainForPush: no origin configured, skipping publish prep", { baseBranch });
       return;
     }
     try {
       await this.git(repoPath, `fetch origin ${baseBranch}`);
     } catch (error) {
-      log.warn("pushMain: fetch failed, pushing anyway", { error });
+      log.warn("prepareMainForPush: fetch failed, pushing anyway", { error });
     }
 
     await this.commitWip(repoPath, "pre-push");
@@ -376,13 +376,10 @@ export class BranchManager {
 
       try {
         const noHooks = getGitNoHooksPath();
-        await shellExec(
-          `git -c core.hooksPath="${noHooks}" rebase --empty=drop ${originRef}`,
-          {
-            cwd: repoPath,
-            timeout: 120000,
-          }
-        );
+        await shellExec(`git -c core.hooksPath="${noHooks}" rebase --empty=drop ${originRef}`, {
+          cwd: repoPath,
+          timeout: 120000,
+        });
       } catch (rebaseErr) {
         const rebaseActive = await this.isRebaseInProgress(repoPath);
         if (!rebaseActive) {
@@ -392,13 +389,23 @@ export class BranchManager {
         throw new RebaseConflictError(conflictedFiles);
       }
     } else {
-      log.info("pushMain: origin branch not present (e.g. empty remote), skipping rebase", {
-        baseBranch,
-      });
+      log.info(
+        "prepareMainForPush: origin branch not present (e.g. empty remote), skipping rebase",
+        {
+          baseBranch,
+        }
+      );
     }
+  }
 
-    const noHooks = getGitNoHooksPath();
-    await this.git(repoPath, `-c core.hooksPath="${noHooks}" push origin ${baseBranch}`);
+  /**
+   * Push the base branch to the remote. Called after successful merge so completed work reaches origin.
+   * Fetches/rebases first via prepareMainForPush().
+   * @param baseBranch - Base branch to push (default: "main")
+   */
+  async pushMain(repoPath: string, baseBranch: string = "main"): Promise<void> {
+    await this.prepareMainForPush(repoPath, baseBranch);
+    await this.pushMainToOrigin(repoPath, baseBranch);
   }
 
   /**
@@ -510,7 +517,7 @@ export class BranchManager {
   }
 
   /**
-   * Push the base branch to origin (no fetch/rebase). Used after the merger agent has resolved conflicts.
+   * Push the exact current base-branch HEAD to origin without further local mutations.
    * @param baseBranch - Base branch to push (default: "main")
    */
   async pushMainToOrigin(repoPath: string, baseBranch: string = "main"): Promise<void> {
@@ -519,7 +526,6 @@ export class BranchManager {
       log.info("pushMainToOrigin: no origin configured, skipping publish", { baseBranch });
       return;
     }
-    await this.commitWip(repoPath, "pre-push");
     const noHooksPush = getGitNoHooksPath();
     await this.git(repoPath, `-c core.hooksPath="${noHooksPush}" push origin ${baseBranch}`);
   }
@@ -582,13 +588,10 @@ export class BranchManager {
       // In that case, continue with --skip instead of failing the entire merge flow.
       if (shouldAttemptRebaseSkip(err)) {
         try {
-          await shellExec(
-            `git -c core.editor=true -c core.hooksPath="${noHooks}" rebase --skip`,
-            {
-              cwd: repoPath,
-              timeout: 30000,
-            }
-          );
+          await shellExec(`git -c core.editor=true -c core.hooksPath="${noHooks}" rebase --skip`, {
+            cwd: repoPath,
+            timeout: 30000,
+          });
           return;
         } catch (skipErr) {
           const stillActive = await this.isRebaseInProgress(repoPath);
@@ -1633,8 +1636,13 @@ export class BranchManager {
       }
       log.info("All conflicts auto-resolved", { branchName, resolvedCount: infraFiles.length });
     }
+    return { autoResolvedFiles };
+  }
 
-    // Strip .opensprint/ runtime paths from the staged merge result (sessions, active, pending-commits).
+  /**
+   * Remove runtime-only .opensprint paths from a staged merge result before the merge commit is created.
+   */
+  async stripRuntimePathsFromMergeResult(repoPath: string): Promise<void> {
     await shellExec(
       "git rm -r --cached --ignore-unmatch .opensprint/pending-commits.json .opensprint/sessions .opensprint/active",
       { cwd: repoPath, timeout: 10000 }
@@ -1644,16 +1652,15 @@ export class BranchManager {
       path.join(repoPath, ".opensprint", "sessions"),
       path.join(repoPath, ".opensprint", "active"),
     ];
-    for (const p of runtimePaths) {
+    for (const runtimePath of runtimePaths) {
       try {
-        const stat = await fs.stat(p);
-        if (stat.isFile()) await fs.unlink(p);
-        else if (stat.isDirectory()) await fs.rm(p, { recursive: true, force: true });
+        const stat = await fs.stat(runtimePath);
+        if (stat.isFile()) await fs.unlink(runtimePath);
+        else if (stat.isDirectory()) await fs.rm(runtimePath, { recursive: true, force: true });
       } catch {
         // Path may not exist
       }
     }
-    return { autoResolvedFiles };
   }
 
   /**

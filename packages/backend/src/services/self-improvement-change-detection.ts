@@ -42,10 +42,10 @@ export async function hasCodeChangesSince(
 
   if (sinceCommitSha) {
     try {
-      const { stdout } = await shellExec(
-        `git rev-list ${sinceCommitSha}..${baseBranch} --count`,
-        { cwd: repoPath, timeout: GIT_TIMEOUT_MS }
-      );
+      const { stdout } = await shellExec(`git rev-list ${sinceCommitSha}..${baseBranch} --count`, {
+        cwd: repoPath,
+        timeout: GIT_TIMEOUT_MS,
+      });
       const count = parseInt(stdout.trim(), 10);
       return !Number.isNaN(count) && count > 0;
     } catch {

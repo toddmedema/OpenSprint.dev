@@ -25,12 +25,12 @@ For a faster setup that skips Electron/Puppeteer workspace installs: `OPENSPRINT
 
 From the repo root, run:
 
-| Command | Purpose |
-|--------|--------|
-| `npm run test` | Run the test suite (all workspaces) |
-| `npm run lint` | Lint all packages |
-| `npm run format:check` | Check Prettier formatting |
-| `npm run build` | Build shared, backend, and frontend |
+| Command                | Purpose                             |
+| ---------------------- | ----------------------------------- |
+| `npm run test`         | Run the test suite (all workspaces) |
+| `npm run lint`         | Lint all packages                   |
+| `npm run format:check` | Check Prettier formatting           |
+| `npm run build`        | Build shared, backend, and frontend |
 
 CI also runs `npm run lint:ci` (lint + format check). Fix any failures before submitting.
 
@@ -45,10 +45,10 @@ Maintainers will review and merge when ready. By contributing, you agree that yo
 
 ## Project layout
 
-- `packages/backend` — Node.js + TypeScript API and orchestrator  
-- `packages/frontend` — React + TypeScript web app  
-- `packages/shared` — Shared types and constants  
-- `packages/electron` — Electron desktop app  
+- `packages/backend` — Node.js + TypeScript API and orchestrator
+- `packages/frontend` — React + TypeScript web app
+- `packages/shared` — Shared types and constants
+- `packages/electron` — Electron desktop app
 
 Product spec: `PRD.md`. Architecture and commands: [README](README.md#architecture-at-a-glance).
 

@@ -8,9 +8,7 @@ import { migratePlanVersions } from "../services/migrate-plan-versions.service.j
 
 // Drizzle is loaded dynamically in initPostgresAppDb so Vitest can load this file without resolving drizzle-orm.
 // Type matches the return of drizzle({ client, schema }) from drizzle-orm/node-postgres.
-export type DrizzlePg = import("drizzle-orm/node-postgres").NodePgDatabase<
-  Record<string, unknown>
->;
+export type DrizzlePg = import("drizzle-orm/node-postgres").NodePgDatabase<Record<string, unknown>>;
 
 export interface AppDb {
   getClient(): Promise<DbClient>;

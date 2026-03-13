@@ -1,6 +1,11 @@
 import React from "react";
 import type { Task } from "@opensprint/shared";
-import { complexityToDisplay, isAgentAssignee, TASK_COMPLEXITY_MIN, TASK_COMPLEXITY_MAX } from "@opensprint/shared";
+import {
+  complexityToDisplay,
+  isAgentAssignee,
+  TASK_COMPLEXITY_MIN,
+  TASK_COMPLEXITY_MAX,
+} from "@opensprint/shared";
 import { ComplexityIcon } from "../ComplexityIcon";
 import { TaskPriorityDropdown } from "./TaskPriorityDropdown";
 import { AssigneeSelector } from "./AssigneeSelector";

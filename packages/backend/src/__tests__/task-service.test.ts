@@ -18,14 +18,17 @@ const { mockTaskStoreState, mockBranchManagerInstance, mockOrchestrator, lastAss
       createOrCheckoutBranch: vi.fn().mockResolvedValue(undefined),
     },
     mockOrchestrator: {
-    stopTaskAndFreeSlot: vi.fn().mockResolvedValue(undefined),
-    nudge: vi.fn(),
-  },
-  lastAssembleConfig: { branch: undefined as string | undefined },
-}));
+      stopTaskAndFreeSlot: vi.fn().mockResolvedValue(undefined),
+      nudge: vi.fn(),
+    },
+    lastAssembleConfig: { branch: undefined as string | undefined },
+  }));
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
@@ -113,12 +116,12 @@ vi.mock("../services/context-assembler.js", () => ({
     extractPrdExcerpt: vi.fn().mockResolvedValue(""),
     getPlanContentForTask: vi.fn().mockResolvedValue(""),
     collectDependencyOutputs: vi.fn().mockResolvedValue([]),
-    assembleTaskDirectory: vi.fn().mockImplementation(
-      (_repoPath: string, _taskId: string, config: { branch?: string }) => {
+    assembleTaskDirectory: vi
+      .fn()
+      .mockImplementation((_repoPath: string, _taskId: string, config: { branch?: string }) => {
         lastAssembleConfig.branch = config.branch;
         return Promise.resolve("/tmp/test-dir");
-      }
-    ),
+      }),
   })),
 }));
 
@@ -1034,11 +1037,13 @@ describe("TaskService", () => {
       );
 
       vi.mocked(taskStore.update).mockClear();
-      await expect(svc.updateTask("proj-1", "task-1", { assignee: "Alice" })).rejects.toMatchObject({
-        statusCode: 400,
-        code: "INVALID_INPUT",
-        message: expect.stringMatching(/human teammates are disabled/i),
-      });
+      await expect(svc.updateTask("proj-1", "task-1", { assignee: "Alice" })).rejects.toMatchObject(
+        {
+          statusCode: 400,
+          code: "INVALID_INPUT",
+          message: expect.stringMatching(/human teammates are disabled/i),
+        }
+      );
       expect(taskStore.update).not.toHaveBeenCalled();
     });
 

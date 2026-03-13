@@ -332,18 +332,20 @@ describe("Navbar", () => {
     const prev =
       typeof window !== "undefined" && (window as unknown as { electron?: unknown }).electron;
     if (typeof window !== "undefined") {
-      (window as unknown as {
-        electron: {
-          isElectron: true;
-          platform: string;
-          getWindowMaximized: () => Promise<boolean>;
-          onWindowMaximized: (cb: () => void) => () => void;
-          onWindowUnmaximized: (cb: () => void) => () => void;
-          minimizeWindow: () => Promise<void>;
-          maximizeWindow: () => Promise<void>;
-          closeWindow: () => Promise<void>;
-        };
-      }).electron = {
+      (
+        window as unknown as {
+          electron: {
+            isElectron: true;
+            platform: string;
+            getWindowMaximized: () => Promise<boolean>;
+            onWindowMaximized: (cb: () => void) => () => void;
+            onWindowUnmaximized: (cb: () => void) => () => void;
+            minimizeWindow: () => Promise<void>;
+            maximizeWindow: () => Promise<void>;
+            closeWindow: () => Promise<void>;
+          };
+        }
+      ).electron = {
         isElectron: true,
         platform: "win32",
         getWindowMaximized: vi.fn().mockResolvedValue(false),
@@ -371,18 +373,20 @@ describe("Navbar", () => {
     const prev =
       typeof window !== "undefined" && (window as unknown as { electron?: unknown }).electron;
     if (typeof window !== "undefined") {
-      (window as unknown as {
-        electron: {
-          isElectron: true;
-          platform: string;
-          getWindowMaximized: () => Promise<boolean>;
-          onWindowMaximized: (cb: () => void) => () => void;
-          onWindowUnmaximized: (cb: () => void) => () => void;
-          minimizeWindow: () => Promise<void>;
-          maximizeWindow: () => Promise<void>;
-          closeWindow: () => Promise<void>;
-        };
-      }).electron = {
+      (
+        window as unknown as {
+          electron: {
+            isElectron: true;
+            platform: string;
+            getWindowMaximized: () => Promise<boolean>;
+            onWindowMaximized: (cb: () => void) => () => void;
+            onWindowUnmaximized: (cb: () => void) => () => void;
+            minimizeWindow: () => Promise<void>;
+            maximizeWindow: () => Promise<void>;
+            closeWindow: () => Promise<void>;
+          };
+        }
+      ).electron = {
         isElectron: true,
         platform: "win32",
         getWindowMaximized: vi.fn().mockResolvedValue(false),
@@ -593,7 +597,9 @@ describe("Navbar", () => {
           createdAt: "2025-01-01T00:00:00Z",
           updatedAt: "2025-01-01T00:00:00Z",
         };
-        renderNavbar(<Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />);
+        renderNavbar(
+          <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />
+        );
         expect(screen.getByRole("navigation")).toBeInTheDocument();
         expect(screen.getByRole("tab", { name: /Sketch/ })).toBeInTheDocument();
         expect(screen.getByRole("tab", { name: /Plan/ })).toBeInTheDocument();
@@ -614,7 +620,9 @@ describe("Navbar", () => {
           createdAt: "2025-01-01T00:00:00Z",
           updatedAt: "2025-01-01T00:00:00Z",
         };
-        renderNavbar(<Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />);
+        renderNavbar(
+          <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />
+        );
         expect(screen.getByRole("navigation")).toBeInTheDocument();
         expect(screen.getByRole("tab", { name: /Sketch/ })).toBeInTheDocument();
         expect(screen.getByRole("tab", { name: /Plan/ })).toBeInTheDocument();
@@ -803,7 +811,11 @@ describe("Navbar", () => {
       <Navbar project={mockProject} currentPhase="execute" onPhaseChange={vi.fn()} />,
       store
     );
-    expect(screen.getByRole("tab", { name: /Switch to Execute phase/ }).querySelector("[data-testid=nav-button-unread-dot]")).not.toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("tab", { name: /Switch to Execute phase/ })
+        .querySelector("[data-testid=nav-button-unread-dot]")
+    ).not.toBeInTheDocument();
   });
 
   it("clears Execute unread when blocked count is 0 (effect clears even when not on Execute)", () => {
@@ -822,7 +834,11 @@ describe("Navbar", () => {
       <Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />,
       store
     );
-    expect(screen.getByRole("tab", { name: /Switch to Execute phase/ }).querySelector("[data-testid=nav-button-unread-dot]")).not.toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("tab", { name: /Switch to Execute phase/ })
+        .querySelector("[data-testid=nav-button-unread-dot]")
+    ).not.toBeInTheDocument();
   });
 
   it("shows Plan tab with unread dot when phaseUnread.plan is true for current project", () => {
@@ -1052,8 +1068,10 @@ describe("Navbar", () => {
   });
 
   it("shows Help and Settings in nav when running in Electron (matches web behavior)", async () => {
-    const prev = (typeof window !== "undefined" && (window as unknown as { electron?: unknown }).electron);
-    if (typeof window !== "undefined") (window as unknown as { electron: { isElectron: true } }).electron = { isElectron: true };
+    const prev =
+      typeof window !== "undefined" && (window as unknown as { electron?: unknown }).electron;
+    if (typeof window !== "undefined")
+      (window as unknown as { electron: { isElectron: true } }).electron = { isElectron: true };
     mockProjectsList.mockResolvedValue([
       {
         id: "proj-1",
@@ -1165,9 +1183,7 @@ describe("Navbar", () => {
     await user.click(createNewButton);
 
     expect(await screen.findByTestId("onboarding-page")).toBeInTheDocument();
-    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(
-      /\/projects\/create-new/
-    );
+    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(/\/projects\/create-new/);
   });
 
   it("navigates to /onboarding?intended=/projects/add-existing when Add Existing Project clicked and no API keys", async () => {
@@ -1199,9 +1215,7 @@ describe("Navbar", () => {
     await user.click(addExistingButton);
 
     expect(await screen.findByTestId("onboarding-page")).toBeInTheDocument();
-    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(
-      /\/projects\/add-existing/
-    );
+    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(/\/projects\/add-existing/);
   });
 
   it("when useCustomCli true, Create New Project navigates to /projects/create-new", async () => {
@@ -1216,7 +1230,10 @@ describe("Navbar", () => {
               <MemoryRouter initialEntries={["/"]}>
                 <Routes>
                   <Route path="/" element={<Navbar project={null} />} />
-                  <Route path="/projects/create-new" element={<div data-testid="create-new-page">Create New</div>} />
+                  <Route
+                    path="/projects/create-new"
+                    element={<div data-testid="create-new-page">Create New</div>}
+                  />
                 </Routes>
               </MemoryRouter>
             </QueryClientProvider>
@@ -1243,7 +1260,10 @@ describe("Navbar", () => {
               <MemoryRouter initialEntries={["/"]}>
                 <Routes>
                   <Route path="/" element={<Navbar project={null} />} />
-                  <Route path="/projects/add-existing" element={<div data-testid="add-existing-page">Add Existing</div>} />
+                  <Route
+                    path="/projects/add-existing"
+                    element={<div data-testid="add-existing-page">Add Existing</div>}
+                  />
                 </Routes>
               </MemoryRouter>
             </QueryClientProvider>
@@ -1269,7 +1289,10 @@ describe("Navbar", () => {
               <MemoryRouter initialEntries={["/"]}>
                 <Routes>
                   <Route path="/" element={<Navbar project={null} />} />
-                  <Route path="/projects/create-new" element={<div data-testid="create-new-page">Create New</div>} />
+                  <Route
+                    path="/projects/create-new"
+                    element={<div data-testid="create-new-page">Create New</div>}
+                  />
                 </Routes>
               </MemoryRouter>
             </QueryClientProvider>

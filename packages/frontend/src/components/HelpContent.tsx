@@ -437,13 +437,7 @@ function AnalyticsContent({ projectId }: { projectId: string | null }) {
 
 type AgentLogSortKey = "model" | "role" | "durationMs" | "endTime" | "projectName";
 
-function SessionLogModal({
-  sessionId,
-  onClose,
-}: {
-  sessionId: number;
-  onClose: () => void;
-}) {
+function SessionLogModal({ sessionId, onClose }: { sessionId: number; onClose: () => void }) {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -492,15 +486,19 @@ function SessionLogModal({
             className="p-1.5 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
             aria-label="Close"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
         <div className="flex-1 min-h-0 overflow-hidden p-4">
-          {loading && (
-            <div className="text-theme-muted text-sm">Loading…</div>
-          )}
+          {loading && <div className="text-theme-muted text-sm">Loading…</div>}
           {error && (
             <p className="text-theme-error text-sm" role="alert">
               {error}
@@ -582,13 +580,7 @@ function AgentLogContent({
     }
   };
 
-  const SortHeader = ({
-    label,
-    columnKey,
-  }: {
-    label: string;
-    columnKey: AgentLogSortKey;
-  }) => (
+  const SortHeader = ({ label, columnKey }: { label: string; columnKey: AgentLogSortKey }) => (
     <button
       type="button"
       onClick={() => toggleSort(columnKey)}
@@ -639,9 +631,7 @@ function AgentLogContent({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
         <p className="text-theme-muted text-sm">
-          {projectId
-            ? "Past agent runs for this project."
-            : "Past agent runs across all projects."}
+          {projectId ? "Past agent runs for this project." : "Past agent runs across all projects."}
         </p>
         <button
           type="button"
@@ -744,10 +734,7 @@ function AgentLogContent({
         </table>
       </div>
       {logModalSessionId != null && (
-        <SessionLogModal
-          sessionId={logModalSessionId}
-          onClose={() => setLogModalSessionId(null)}
-        />
+        <SessionLogModal sessionId={logModalSessionId} onClose={() => setLogModalSessionId(null)} />
       )}
     </div>
   );
@@ -777,9 +764,7 @@ function KeyboardShortcutsContent() {
               >
                 <td className="px-4 py-2 text-theme-text">{entry.action}</td>
                 <td className="px-4 py-2 font-mono text-theme-text">{entry.keys}</td>
-                <td className="px-4 py-2 text-theme-muted text-xs">
-                  {entry.context ?? "—"}
-                </td>
+                <td className="px-4 py-2 text-theme-muted text-xs">{entry.context ?? "—"}</td>
               </tr>
             ))}
           </tbody>

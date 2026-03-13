@@ -116,12 +116,12 @@ No new REST endpoints are required.
 
 ## Non-Functional Requirements
 
-| Category | Requirement |
-| --- | --- |
+| Category    | Requirement                                                                                                                                                                        |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Reliability | Deterministic repository/environment failures must fail fast and block with remediation after at most one automated repair attempt; avoid repeated requeue loops for setup issues. |
-| Performance | Dependency integrity preflight must use a fast check (`npm ls`) with bounded timeout (target 15-30s) before agent execution. |
-| Usability | Failure messaging for quality-gate/test failures must prioritize actionable diagnostics (failed command + first compiler/test error) with optional expanded detail. |
-| Operability | Structured failure details must be persisted in task/event diagnostics to support debugging, notifications, and post-mortem analysis. |
+| Performance | Dependency integrity preflight must use a fast check (`npm ls`) with bounded timeout (target 15-30s) before agent execution.                                                       |
+| Usability   | Failure messaging for quality-gate/test failures must prioritize actionable diagnostics (failed command + first compiler/test error) with optional expanded detail.                |
+| Operability | Structured failure details must be persisted in task/event diagnostics to support debugging, notifications, and post-mortem analysis.                                              |
 
 ## Open Questions
 
@@ -159,12 +159,12 @@ Open Sprint sits in the “AI-assisted product development” space. Alternative
 
 ### Summary Table
 
-| Dimension            | Open Sprint                    | Lovable / Bolt-style builders   |
-|---------------------|-------------------------------|----------------------------------|
-| Spec / PRD          | SPEC.md at repo root; first-class phase | Implicit or lightweight         |
-| Lifecycle           | Sketch → Plan → Execute → Evaluate → Deliver | Chat → build (and optionally ship) |
-| Task orchestration  | Dependency-aware, priority-ordered tasks | Largely prompt/session-driven   |
-| Feedback loop       | Evaluate maps to tasks; fixes re-enter Execute | Manual or tool-specific         |
-| Agent choice        | Claude, Cursor, OpenAI, LM Studio, custom CLI | Typically vendor’s models/hosted |
-| Offline             | Supported (e.g. LM Studio)    | Generally requires cloud        |
-| Repo / Git          | Works with existing repos; worktree + merger | Often tied to platform repos    |
+| Dimension          | Open Sprint                                    | Lovable / Bolt-style builders      |
+| ------------------ | ---------------------------------------------- | ---------------------------------- |
+| Spec / PRD         | SPEC.md at repo root; first-class phase        | Implicit or lightweight            |
+| Lifecycle          | Sketch → Plan → Execute → Evaluate → Deliver   | Chat → build (and optionally ship) |
+| Task orchestration | Dependency-aware, priority-ordered tasks       | Largely prompt/session-driven      |
+| Feedback loop      | Evaluate maps to tasks; fixes re-enter Execute | Manual or tool-specific            |
+| Agent choice       | Claude, Cursor, OpenAI, LM Studio, custom CLI  | Typically vendor’s models/hosted   |
+| Offline            | Supported (e.g. LM Studio)                     | Generally requires cloud           |
+| Repo / Git         | Works with existing repos; worktree + merger   | Often tied to platform repos       |

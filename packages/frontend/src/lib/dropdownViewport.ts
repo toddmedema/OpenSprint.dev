@@ -98,10 +98,7 @@ export function getDropdownPositionLeftAligned(
 
   const left =
     minWidth > 0
-      ? Math.max(
-          SAFE_INSET,
-          Math.min(anchorRect.right - minWidth, vw - minWidth - SAFE_INSET)
-        )
+      ? Math.max(SAFE_INSET, Math.min(anchorRect.right - minWidth, vw - minWidth - SAFE_INSET))
       : Math.max(SAFE_INSET, anchorRect.left);
 
   const base = {

@@ -8,9 +8,7 @@ import { SourceFeedbackSection } from "./SourceFeedbackSection";
 
 function renderWithRouter(ui: React.ReactElement) {
   return renderWithProviders(
-    <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
-      {ui}
-    </MemoryRouter>
+    <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>{ui}</MemoryRouter>
   );
 }
 

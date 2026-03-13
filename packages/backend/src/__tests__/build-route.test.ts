@@ -9,7 +9,10 @@ import { setSelfImprovementRunInProgressForTest } from "../services/self-improve
 import { API_PREFIX, DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
@@ -105,13 +108,17 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
     });
 
     it("returns selfImprovementRunInProgress true only while a self-improvement run is active", async () => {
-      const resInactive = await request(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+      const resInactive = await request(app).get(
+        `${API_PREFIX}/projects/${projectId}/execute/status`
+      );
       expect(resInactive.status).toBe(200);
       expect(resInactive.body.data.selfImprovementRunInProgress).toBe(false);
 
       setSelfImprovementRunInProgressForTest(projectId, true);
       try {
-        const resActive = await request(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+        const resActive = await request(app).get(
+          `${API_PREFIX}/projects/${projectId}/execute/status`
+        );
         expect(resActive.status).toBe(200);
         expect(resActive.body.data.selfImprovementRunInProgress).toBe(true);
       } finally {

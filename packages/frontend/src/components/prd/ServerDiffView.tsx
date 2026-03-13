@@ -42,11 +42,7 @@ const LINE_TYPE_ARIA: Record<ServerDiffLine["type"], string> = {
   context: "Context line",
 };
 
-export function ServerDiffView({
-  diff,
-  fromVersion,
-  toVersion,
-}: ServerDiffViewProps) {
+export function ServerDiffView({ diff, fromVersion, toVersion }: ServerDiffViewProps) {
   const { lines, summary } = diff;
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -120,71 +116,69 @@ export function ServerDiffView({
         }}
       >
         {lines.length === 0 ? (
-          <div className="p-3 text-theme-muted" data-testid="server-diff-no-changes">No changes</div>
+          <div className="p-3 text-theme-muted" data-testid="server-diff-no-changes">
+            No changes
+          </div>
         ) : (
           <>
-          <pre className="m-0 p-0 whitespace-pre-wrap break-words">
-            {visibleLines.map((line, i) => {
-              const isAdd = line.type === "add";
-              const isRemove = line.type === "remove";
-              const bg = isAdd
-                ? "bg-theme-success-bg"
-                : isRemove
-                  ? "bg-theme-error-bg"
-                  : "";
-              const textColor = isAdd
-                ? "text-theme-success-text"
-                : isRemove
-                  ? "text-theme-error-text"
-                  : "text-theme-text";
-              const prefix = isAdd ? "+ " : isRemove ? "- " : "  ";
-              const ariaLabel = LINE_TYPE_ARIA[line.type];
-              const oldNum = line.oldLineNumber != null ? String(line.oldLineNumber) : "";
-              const newNum = line.newLineNumber != null ? String(line.newLineNumber) : "";
-              return (
-                <div
-                  key={i}
-                  ref={(el) => {
-                    lineRefs.current[i] = el;
-                  }}
-                  role="listitem"
-                  aria-label={`${ariaLabel}: ${line.text.slice(0, 80)}${line.text.length > 80 ? "…" : ""}`}
-                  tabIndex={-1}
-                  className={`flex min-w-0 border-l-2 ${isAdd ? "border-l-theme-success-border" : isRemove ? "border-l-theme-error-border" : "border-l-transparent"} ${bg} ${textColor} ${focusedIndex === i ? "ring-1 ring-inset ring-theme-ring" : ""}`}
-                  data-line-type={line.type}
+            <pre className="m-0 p-0 whitespace-pre-wrap break-words">
+              {visibleLines.map((line, i) => {
+                const isAdd = line.type === "add";
+                const isRemove = line.type === "remove";
+                const bg = isAdd ? "bg-theme-success-bg" : isRemove ? "bg-theme-error-bg" : "";
+                const textColor = isAdd
+                  ? "text-theme-success-text"
+                  : isRemove
+                    ? "text-theme-error-text"
+                    : "text-theme-text";
+                const prefix = isAdd ? "+ " : isRemove ? "- " : "  ";
+                const ariaLabel = LINE_TYPE_ARIA[line.type];
+                const oldNum = line.oldLineNumber != null ? String(line.oldLineNumber) : "";
+                const newNum = line.newLineNumber != null ? String(line.newLineNumber) : "";
+                return (
+                  <div
+                    key={i}
+                    ref={(el) => {
+                      lineRefs.current[i] = el;
+                    }}
+                    role="listitem"
+                    aria-label={`${ariaLabel}: ${line.text.slice(0, 80)}${line.text.length > 80 ? "…" : ""}`}
+                    tabIndex={-1}
+                    className={`flex min-w-0 border-l-2 ${isAdd ? "border-l-theme-success-border" : isRemove ? "border-l-theme-error-border" : "border-l-transparent"} ${bg} ${textColor} ${focusedIndex === i ? "ring-1 ring-inset ring-theme-ring" : ""}`}
+                    data-line-type={line.type}
+                  >
+                    <span
+                      className="shrink-0 w-10 text-right pr-2 py-0.5 text-theme-muted select-none"
+                      aria-hidden
+                    >
+                      {oldNum}
+                    </span>
+                    <span
+                      className="shrink-0 w-10 text-right pr-2 py-0.5 text-theme-muted select-none border-r border-theme-border-subtle"
+                      aria-hidden
+                    >
+                      {newNum}
+                    </span>
+                    <span className="flex-1 py-0.5 pl-1">
+                      {prefix}
+                      {line.text || "\u00a0"}
+                    </span>
+                  </div>
+                );
+              })}
+            </pre>
+            {isCapped && (
+              <div className="px-3 py-2 border-t border-theme-border bg-theme-surface-muted">
+                <button
+                  type="button"
+                  onClick={() => setExpanded(true)}
+                  className="text-sm text-theme-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring rounded"
+                  data-testid="server-diff-show-more"
                 >
-                  <span
-                    className="shrink-0 w-10 text-right pr-2 py-0.5 text-theme-muted select-none"
-                    aria-hidden
-                  >
-                    {oldNum}
-                  </span>
-                  <span
-                    className="shrink-0 w-10 text-right pr-2 py-0.5 text-theme-muted select-none border-r border-theme-border-subtle"
-                    aria-hidden
-                  >
-                    {newNum}
-                  </span>
-                  <span className="flex-1 py-0.5 pl-1">
-                    {prefix}
-                    {line.text || "\u00a0"}
-                  </span>
-                </div>
-              );
-            })}
-          </pre>
-          {isCapped && (
-            <div className="px-3 py-2 border-t border-theme-border bg-theme-surface-muted">
-              <button
-                type="button"
-                onClick={() => setExpanded(true)}
-                className="text-sm text-theme-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring rounded"
-                data-testid="server-diff-show-more"
-              >
-                Show more ({hiddenCount} more line{hiddenCount !== 1 ? "s" : ""})
-              </button>
-            </div>
-          )}
+                  Show more ({hiddenCount} more line{hiddenCount !== 1 ? "s" : ""})
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

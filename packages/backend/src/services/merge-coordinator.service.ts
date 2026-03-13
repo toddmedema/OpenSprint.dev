@@ -46,8 +46,7 @@ const BASELINE_QUALITY_GATE_NOTIFICATION_SOURCE_ID = "merge-quality-gate-baselin
 /** One-sentence explanation for merge failures shown to users (conflicts with main in same files). */
 const HUMAN_MERGE_FAILURE_MESSAGE =
   "The merge could not complete because your branch and main both changed the same files.";
-const HUMAN_QUALITY_GATE_FAILURE_MESSAGE =
-  "Pre-merge quality gates failed (build, lint, or test).";
+const HUMAN_QUALITY_GATE_FAILURE_MESSAGE = "Pre-merge quality gates failed (build, lint, or test).";
 
 type MergeFailureStage = "rebase_before_merge" | "merge_to_main" | "push_rebase" | "quality_gate";
 
@@ -141,6 +140,7 @@ export interface MergeCoordinatorHost {
     removeTaskWorktree(repoPath: string, taskId: string, actualPath?: string): Promise<void>;
     deleteBranch(repoPath: string, branchName: string): Promise<void>;
     getChangedFiles(repoPath: string, branchName: string, baseBranch?: string): Promise<string[]>;
+    prepareMainForPush(repoPath: string, baseBranch?: string): Promise<void>;
     pushMain(repoPath: string, baseBranch?: string): Promise<void>;
     pushMainToOrigin(repoPath: string, baseBranch?: string): Promise<void>;
     isMergeInProgress(repoPath: string): Promise<boolean>;
@@ -319,7 +319,9 @@ export class MergeCoordinatorService {
     );
   }
 
-  private getQualityGateFailureDetails(mergeErr: Error): MergeJobError["qualityGateFailure"] | null {
+  private getQualityGateFailureDetails(
+    mergeErr: Error
+  ): MergeJobError["qualityGateFailure"] | null {
     if (!(mergeErr instanceof MergeJobError) || mergeErr.stage !== "quality_gate") return null;
     return mergeErr.qualityGateFailure ?? null;
   }
@@ -423,17 +425,16 @@ export class MergeCoordinatorService {
     return details.join(" | ");
   }
 
-  private async ensureMergeQualityGates(options: MergeQualityGateRunOptions): Promise<void> {
-    if (!this.host.runMergeQualityGates) return;
-    const failure = await this.host.runMergeQualityGates(options);
-    if (!failure) return;
-
+  private buildMergeQualityGateError(
+    failure: MergeQualityGateFailure,
+    fallbackWorktreePath: string
+  ): MergeJobError {
     const reason = failure.reason.trim().slice(0, 500) || "Unknown quality gate failure";
     const outputSnippet =
       this.toOutputSnippet(failure.outputSnippet ?? failure.output) ?? "No output captured";
     const detail = outputSnippet.length > 0 ? ` | ${outputSnippet}` : "";
     const firstErrorLine = this.getQualityGateFirstErrorLine(failure).slice(0, 300);
-    throw new MergeJobError(
+    return new MergeJobError(
       `Quality gate failed (${failure.command}): ${reason}${detail}`,
       "quality_gate",
       [],
@@ -442,7 +443,7 @@ export class MergeCoordinatorService {
         command: failure.command,
         reason,
         outputSnippet,
-        worktreePath: failure.worktreePath ?? options.worktreePath,
+        worktreePath: failure.worktreePath ?? fallbackWorktreePath,
         firstErrorLine,
         category: failure.category ?? "quality_gate",
         autoRepairAttempted: failure.autoRepairAttempted ?? false,
@@ -453,6 +454,14 @@ export class MergeCoordinatorService {
     );
   }
 
+  private async ensureMergeQualityGates(options: MergeQualityGateRunOptions): Promise<void> {
+    if (!this.host.runMergeQualityGates) return;
+    const failure = await this.host.runMergeQualityGates(options);
+    if (!failure) return;
+
+    throw this.buildMergeQualityGateError(failure, options.worktreePath);
+  }
+
   private baselineCacheKey(projectId: string, baseBranch: string): string {
     return `${projectId}:${baseBranch}`;
   }
@@ -460,14 +469,16 @@ export class MergeCoordinatorService {
   private async getBaselineQualityGateFailure(
     projectId: string,
     repoPath: string,
-    baseBranch: string
+    baseBranch: string,
+    options?: { useCache?: boolean }
   ): Promise<MergeQualityGateFailure | null> {
     if (!this.host.runMergeQualityGates) return null;
 
     const cacheKey = this.baselineCacheKey(projectId, baseBranch);
     const now = Date.now();
     const cached = this.baselineQualityGateCache.get(cacheKey);
-    if (cached && now - cached.checkedAtMs < BASELINE_QUALITY_GATE_CACHE_MS) {
+    const useCache = options?.useCache !== false;
+    if (useCache && cached && now - cached.checkedAtMs < BASELINE_QUALITY_GATE_CACHE_MS) {
       return cached.failure;
     }
 
@@ -519,6 +530,14 @@ export class MergeCoordinatorService {
     }
   }
 
+  private buildBaselineQualityGateDetail(failure: MergeQualityGateFailure): string {
+    const firstErrorLine = this.getQualityGateFirstErrorLine(failure);
+    return compactExecutionText(
+      `cmd: ${failure.command} | error: ${compactExecutionText(firstErrorLine, 220)}`,
+      380
+    );
+  }
+
   private async resolveBaselineQualityGateNotifications(
     projectId: string,
     baseBranch: string
@@ -559,15 +578,15 @@ export class MergeCoordinatorService {
     baseBranch: string,
     failure: MergeQualityGateFailure
   ): Promise<void> {
+    const detail = this.buildBaselineQualityGateDetail(failure);
     const firstErrorLine = this.getQualityGateFirstErrorLine(failure);
-    const detail = compactExecutionText(
-      `cmd: ${failure.command} | error: ${compactExecutionText(firstErrorLine, 220)}`,
-      380
-    );
     const failedGateReason = failure.reason.trim().slice(0, 500) || "Unknown quality gate failure";
     const failedGateOutputSnippet =
       this.toOutputSnippet(failure.outputSnippet ?? failure.output) ??
-      compactExecutionText(firstErrorLine, QUALITY_GATE_OUTPUT_SNIPPET_LIMIT);
+      compactExecutionText(
+        this.getQualityGateFirstErrorLine(failure),
+        QUALITY_GATE_OUTPUT_SNIPPET_LIMIT
+      );
     const worktreePath = failure.worktreePath ?? repoPath;
     const qualityGateDetail = {
       command: failure.command,
@@ -576,8 +595,7 @@ export class MergeCoordinatorService {
       worktreePath,
       firstErrorLine,
     };
-    const attempt =
-      Math.max(1, this.host.taskStore.getCumulativeAttemptsFromIssue(task) + 1) || 1;
+    const attempt = Math.max(1, this.host.taskStore.getCumulativeAttemptsFromIssue(task) + 1) || 1;
     const pausedUntil = new Date(Date.now() + BASELINE_QUALITY_GATE_PAUSE_MS).toISOString();
     const isEnvironmentSetupFailure = failure.category === "environment_setup";
     const remediationAction = isEnvironmentSetupFailure
@@ -586,8 +604,7 @@ export class MergeCoordinatorService {
           worktreePath,
         })
       : null;
-    const nextAction =
-      remediationAction ?? "Paused until baseline quality gates pass";
+    const nextAction = remediationAction ?? "Paused until baseline quality gates pass";
     const requeuedSummary = buildTaskLastExecutionSummary({
       attempt,
       outcome: "requeued",
@@ -676,6 +693,23 @@ export class MergeCoordinatorService {
       .catch(() => {});
   }
 
+  private async createBaselineQualityGateRemediationTask(
+    projectId: string,
+    baseBranch: string,
+    failure: MergeQualityGateFailure
+  ): Promise<void> {
+    const failedGateReason = failure.reason.trim().slice(0, 1200) || "Unknown quality gate failure";
+    const failedGateOutputSnippet =
+      this.toOutputSnippet(failure.outputSnippet ?? failure.output) ?? null;
+    await selfImprovementService.ensureBaselineQualityGateTask(projectId, {
+      baseBranch,
+      command: failure.command,
+      reason: failedGateReason,
+      outputSnippet: failedGateOutputSnippet,
+      worktreePath: failure.worktreePath ?? null,
+    });
+  }
+
   private async releaseMergeSlot(
     projectId: string,
     repoPath: string,
@@ -748,13 +782,7 @@ export class MergeCoordinatorService {
       testResults: slot.phaseResult.testResults ?? undefined,
       startedAt: slot.agent.startedAt,
     });
-    await this.host.sessionManager.archiveSession(
-      repoPath,
-      task.id,
-      slot.attempt,
-      session,
-      wtPath
-    );
+    await this.host.sessionManager.archiveSession(repoPath, task.id, slot.attempt, session, wtPath);
 
     try {
       const changedFiles = await this.host.branchManager.getChangedFiles(
@@ -827,8 +855,7 @@ export class MergeCoordinatorService {
     const allIssuesForEpic = await this.host.taskStore.listAll(projectId);
     const epicId = resolveEpicId(task.id, allIssuesForEpic);
 
-    const isPerEpicIntermediate =
-      mergeStrategy === "per_epic" && epicId != null;
+    const isPerEpicIntermediate = mergeStrategy === "per_epic" && epicId != null;
 
     if (isPerEpicIntermediate) {
       // per_epic + epic task: do not merge to main; close task, record, archive, release slot
@@ -848,8 +875,7 @@ export class MergeCoordinatorService {
       const freshIssues = await this.host.taskStore.listAll(projectId);
       const implTasks = this.getEpicImplementationTasks(freshIssues, epicId);
       const allImplClosed =
-        implTasks.length > 0 &&
-        implTasks.every((i) => (i.status as string) === "closed");
+        implTasks.length > 0 && implTasks.every((i) => (i.status as string) === "closed");
 
       if (!allImplClosed) {
         return;
@@ -863,6 +889,11 @@ export class MergeCoordinatorService {
           baseBranch
         );
         if (baselineFailure) {
+          await this.createBaselineQualityGateRemediationTask(
+            projectId,
+            baseBranch,
+            baselineFailure
+          );
           await this.pauseMergeForBaselineQualityGateFailure(
             projectId,
             repoPath,
@@ -871,6 +902,7 @@ export class MergeCoordinatorService {
             baselineFailure
           );
           await this.releaseMergeSlot(projectId, repoPath, "fail", task.id);
+          this.host.nudge(projectId);
           return;
         }
         await this.ensureMergeQualityGates({
@@ -905,16 +937,23 @@ export class MergeCoordinatorService {
         worktreeKey: slot.worktreeKey,
       });
       this.host.nudge(projectId);
-      this.postCompletionAsync(projectId, repoPath, task.id, { mergedToMain: true }).catch((err) => {
-        log.warn("Post-completion async work failed", { taskId: task.id, err });
-      });
+      this.postCompletionAsync(projectId, repoPath, task.id, { mergedToMain: true }).catch(
+        (err) => {
+          log.warn("Post-completion async work failed", { taskId: task.id, err });
+        }
+      );
       return;
     }
 
     // 2. Attempt merge inside the serialized queue. Rebase now happens there.
     try {
-      const baselineFailure = await this.getBaselineQualityGateFailure(projectId, repoPath, baseBranch);
+      const baselineFailure = await this.getBaselineQualityGateFailure(
+        projectId,
+        repoPath,
+        baseBranch
+      );
       if (baselineFailure) {
+        await this.createBaselineQualityGateRemediationTask(projectId, baseBranch, baselineFailure);
         await this.pauseMergeForBaselineQualityGateFailure(
           projectId,
           repoPath,
@@ -923,6 +962,7 @@ export class MergeCoordinatorService {
           baselineFailure
         );
         await this.releaseMergeSlot(projectId, repoPath, "fail", task.id);
+        this.host.nudge(projectId);
         return;
       }
       await this.ensureMergeQualityGates({
@@ -1058,7 +1098,9 @@ export class MergeCoordinatorService {
       const environmentSetupRemediation = isEnvironmentSetupQualityGateFailure
         ? this.buildEnvironmentSetupRemediation({
             command:
-              qualityGateStructuredDetails.failedGateCommand ?? qualityGateFailureDetails?.command ?? null,
+              qualityGateStructuredDetails.failedGateCommand ??
+              qualityGateFailureDetails?.command ??
+              null,
             worktreePath: qualityGateStructuredDetails.worktreePath,
           })
         : null;
@@ -1079,8 +1121,7 @@ export class MergeCoordinatorService {
 
       const maxMergeFailures = BACKOFF_FAILURE_THRESHOLD * 2;
       if (isEnvironmentSetupQualityGateFailure || cumulativeAttempts >= maxMergeFailures) {
-        const blockedNextAction =
-          environmentSetupRemediation ?? "Blocked pending investigation";
+        const blockedNextAction = environmentSetupRemediation ?? "Blocked pending investigation";
         log.info(`Blocking ${task.id} after ${cumulativeAttempts} ${stageLabel} failures`);
         const blockedSummary = buildTaskLastExecutionSummary({
           attempt: cumulativeAttempts,
@@ -1148,8 +1189,7 @@ export class MergeCoordinatorService {
                 qualityGateFailureDetails?.autoRepairAttempted ?? false,
               qualityGateAutoRepairSucceeded:
                 qualityGateFailureDetails?.autoRepairSucceeded ?? false,
-              qualityGateAutoRepairCommands:
-                qualityGateFailureDetails?.autoRepairCommands ?? [],
+              qualityGateAutoRepairCommands: qualityGateFailureDetails?.autoRepairCommands ?? [],
               failedGateCommand: qualityGateStructuredDetails.failedGateCommand,
               failedGateReason: qualityGateStructuredDetails.failedGateReason,
               failedGateOutputSnippet: qualityGateStructuredDetails.failedGateOutputSnippet,
@@ -1232,10 +1272,8 @@ export class MergeCoordinatorService {
             qualityGateCategory: qualityGateFailureDetails?.category ?? null,
             qualityGateCommand: qualityGateFailureDetails?.command ?? null,
             qualityGateFirstErrorLine: qualityGateFailureDetails?.firstErrorLine ?? null,
-            qualityGateAutoRepairAttempted:
-              qualityGateFailureDetails?.autoRepairAttempted ?? false,
-            qualityGateAutoRepairSucceeded:
-              qualityGateFailureDetails?.autoRepairSucceeded ?? false,
+            qualityGateAutoRepairAttempted: qualityGateFailureDetails?.autoRepairAttempted ?? false,
+            qualityGateAutoRepairSucceeded: qualityGateFailureDetails?.autoRepairSucceeded ?? false,
             qualityGateAutoRepairCommands: qualityGateFailureDetails?.autoRepairCommands ?? [],
             failedGateCommand: qualityGateStructuredDetails.failedGateCommand,
             failedGateReason: qualityGateStructuredDetails.failedGateReason,
@@ -1347,7 +1385,13 @@ export class MergeCoordinatorService {
             // runIfDue checks frequency, hasCodeChangesSince(lastRunAt, baseBranch), and no run in progress.
             selfImprovementService
               .runIfDue(projectId, { trigger: "after_each_plan", planId: planRow.plan_id })
-              .catch((err) => log.warn("Self-improvement after plan completion failed", { projectId, epicId, err }));
+              .catch((err) =>
+                log.warn("Self-improvement after plan completion failed", {
+                  projectId,
+                  epicId,
+                  err,
+                })
+              );
           }
         }
       }
@@ -1389,7 +1433,9 @@ export class MergeCoordinatorService {
         // Self-improvement (after_each_plan): runIfDue does change detection and run-in-progress check.
         selfImprovementService
           .runIfDue(projectId, { trigger: "after_each_plan", planId: planRow.plan_id })
-          .catch((err) => log.warn("Self-improvement after plan completion failed", { projectId, epicId, err }));
+          .catch((err) =>
+            log.warn("Self-improvement after plan completion failed", { projectId, epicId, err })
+          );
       }
       return;
     }
@@ -1407,7 +1453,9 @@ export class MergeCoordinatorService {
         // Self-improvement (after_each_plan): runIfDue does change detection and run-in-progress check.
         selfImprovementService
           .runIfDue(projectId, { trigger: "after_each_plan", planId: planRow.plan_id })
-          .catch((err) => log.warn("Self-improvement after plan completion failed", { projectId, epicId, err }));
+          .catch((err) =>
+            log.warn("Self-improvement after plan completion failed", { projectId, epicId, err })
+          );
       }
       return;
     }
@@ -1431,6 +1479,25 @@ export class MergeCoordinatorService {
     if (!this.pushInProgress.has(projectId)) return;
     const entry = this.pushCompletion.get(projectId);
     if (entry) await entry.promise;
+  }
+
+  private async ensurePreparedMainQualityGates(
+    projectId: string,
+    repoPath: string,
+    baseBranch: string
+  ): Promise<void> {
+    const failure = await this.getBaselineQualityGateFailure(projectId, repoPath, baseBranch, {
+      useCache: false,
+    });
+    if (!failure) return;
+
+    await this.createBaselineQualityGateRemediationTask(projectId, baseBranch, failure);
+    await this.createBaselineQualityGateNotification(
+      projectId,
+      baseBranch,
+      this.buildBaselineQualityGateDetail(failure)
+    );
+    throw this.buildMergeQualityGateError(failure, repoPath);
   }
 
   private async resolvePushRebaseConflicts(options: {
@@ -1504,14 +1571,14 @@ export class MergeCoordinatorService {
           await this.host.branchManager.rebaseAbort(repoPath);
           return {
             ok: false,
-            error:
-              continueErr instanceof Error ? continueErr : new Error(String(continueErr)),
+            error: continueErr instanceof Error ? continueErr : new Error(String(continueErr)),
           };
         }
       }
     }
 
     try {
+      await this.ensurePreparedMainQualityGates(projectId, repoPath, baseBranch);
       await this.host.branchManager.pushMainToOrigin(repoPath, baseBranch);
       log.info("Merger resolved push rebase conflicts, push succeeded", { projectId });
       eventLogService
@@ -1540,10 +1607,7 @@ export class MergeCoordinatorService {
    * On rebase conflict: run merger/rebase-continue rounds until rebase is complete
    * (bounded by MAX_PUSH_REBASE_CONFLICT_ROUNDS). If unresolved, abort and retry on next completion.
    */
-  private async pushMainSafe(
-    projectId: string,
-    repoPath: string
-  ): Promise<PushCompletionStatus> {
+  private async pushMainSafe(projectId: string, repoPath: string): Promise<PushCompletionStatus> {
     await gitCommitQueue.drain();
     await this.host.taskStore.syncForPush(projectId);
 
@@ -1571,7 +1635,9 @@ export class MergeCoordinatorService {
     }
 
     try {
-      await this.host.branchManager.pushMain(repoPath, baseBranch);
+      await this.host.branchManager.prepareMainForPush(repoPath, baseBranch);
+      await this.ensurePreparedMainQualityGates(projectId, repoPath, baseBranch);
+      await this.host.branchManager.pushMainToOrigin(repoPath, baseBranch);
       log.info("Push to origin succeeded", { projectId });
       eventLogService
         .append(repoPath, {
@@ -1583,9 +1649,8 @@ export class MergeCoordinatorService {
         .catch(() => {});
       return "published";
     } catch (err) {
-      let terminalError: Error =
-        err instanceof Error ? err : new Error(String(err));
-      let pushStage: "push_rebase" | "push" = "push";
+      let terminalError: Error = err instanceof Error ? err : new Error(String(err));
+      let pushStage: "push_rebase" | "push" | "quality_gate" = "push";
       if (err instanceof RebaseConflictError) {
         pushStage = "push_rebase";
         const resolution = await this.resolvePushRebaseConflicts({
@@ -1601,6 +1666,9 @@ export class MergeCoordinatorService {
         terminalError = resolution.error;
       } else {
         log.warn("Push failed, will retry on next task completion", { projectId, err });
+      }
+      if (terminalError instanceof MergeJobError && terminalError.stage === "quality_gate") {
+        pushStage = "quality_gate";
       }
       const reason = terminalError.message.slice(0, 500);
       eventLogService

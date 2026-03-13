@@ -86,10 +86,7 @@ export function preloadPhaseChunks(): void {
  * Schedules background preload after the current view is idle so it does not
  * degrade initial page load or current tab responsiveness.
  */
-export function schedulePhasePreload(
-  projectId: string,
-  queryClient: QueryClient
-): void {
+export function schedulePhasePreload(projectId: string, queryClient: QueryClient): void {
   const run = () => {
     preloadPhaseData(projectId, queryClient);
     preloadPhaseChunks();

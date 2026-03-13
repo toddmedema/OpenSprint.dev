@@ -19,9 +19,7 @@ export function ComplexityIcon({ complexity, size = "sm", className = "" }: Comp
 
   const sizeClass = SIZE_CLASSES[size];
   const isSimple =
-    typeof complexity === "number"
-      ? complexity >= 1 && complexity <= 5
-      : complexity === "low";
+    typeof complexity === "number" ? complexity >= 1 && complexity <= 5 : complexity === "low";
   const ariaLabel =
     typeof complexity === "string" && ["low", "medium", "high", "very_high"].includes(complexity)
       ? `${complexity} complexity`

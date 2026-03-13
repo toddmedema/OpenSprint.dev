@@ -27,7 +27,13 @@ import {
 import { addNotification } from "../../store/slices/notificationSlice";
 import { addNotification as addOpenQuestionNotification } from "../../store/slices/openQuestionsSlice";
 import { clearPhaseUnread } from "../../store/slices/unreadPhaseSlice";
-import { usePlanChat, useSinglePlan, usePlans, useMarkPlanComplete, useProjectSettings } from "../../api/hooks";
+import {
+  usePlanChat,
+  useSinglePlan,
+  usePlans,
+  useMarkPlanComplete,
+  useProjectSettings,
+} from "../../api/hooks";
 import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
 import { PhaseLoadingSpinner } from "../../components/PhaseLoadingSpinner";
 import { queryKeys } from "../../api/queryKeys";
@@ -91,11 +97,7 @@ function PlanAuditorOutputSection({
   });
 
   const liveOutputContent =
-    auditorOutput.length > 0
-      ? auditorOutput
-      : !wsConnected
-        ? ""
-        : "Waiting for Auditor output...";
+    auditorOutput.length > 0 ? auditorOutput : !wsConnected ? "" : "Waiting for Auditor output...";
 
   return (
     <div className="border-b border-theme-border">
@@ -117,9 +119,7 @@ function PlanAuditorOutputSection({
               <span className="truncate">
                 {AGENT_ROLE_LABELS.auditor ?? "Auditor"}
                 {activeAuditor.label && ` · ${activeAuditor.label}`}
-                {activeAuditor.startedAt && (
-                  <> · {formatUptime(activeAuditor.startedAt)}</>
-                )}
+                {activeAuditor.startedAt && <> · {formatUptime(activeAuditor.startedAt)}</>}
               </span>
             </div>
           )}
@@ -296,10 +296,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   useEffect(() => {
     if (!planActionsMenuOpen) return;
     const handler = (e: MouseEvent) => {
-      if (
-        planActionsMenuRef.current &&
-        !planActionsMenuRef.current.contains(e.target as Node)
-      ) {
+      if (planActionsMenuRef.current && !planActionsMenuRef.current.contains(e.target as Node)) {
         setPlanActionsMenuOpen(false);
       }
     };
@@ -474,9 +471,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
 
   /** When autoExecutePlans: all planning plans in dependency order (no-task plans get generate+execute, others just execute). */
   const plansEligibleForExecuteAllOrderedIds = useMemo(() => {
-    const ids = plans
-      .filter((p) => p.status === "planning")
-      .map((p) => p.metadata.planId);
+    const ids = plans.filter((p) => p.status === "planning").map((p) => p.metadata.planId);
     if (dependencyGraph?.edges?.length) {
       return topologicalPlanOrder(ids, dependencyGraph.edges);
     }
@@ -843,7 +838,9 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
         await dispatch(
           updatePlan({ projectId, planId: selectedPlanId, content: response.planUpdate })
         );
-        void queryClient.invalidateQueries({ queryKey: queryKeys.plans.versions(projectId, selectedPlanId) });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.plans.versions(projectId, selectedPlanId),
+        });
       }
       void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
       if (selectedPlanId) {
@@ -891,9 +888,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           executingPlanId={executingPlanId}
           planTasksPlanIds={planTasksPlanIds ?? []}
           onPlanAllTasks={handlePlanAllTasks}
-          onExecuteAll={
-            autoExecutePlans ? handleExecuteAllOrGenerateAndExecute : handleExecuteAll
-          }
+          onExecuteAll={autoExecutePlans ? handleExecuteAllOrGenerateAndExecute : handleExecuteAll}
           autoExecutePlans={autoExecutePlans}
           onAddPlan={() => setAddPlanModalOpen(true)}
           searchExpanded={searchExpanded}
@@ -1061,8 +1056,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                       onShip={
                         autoExecutePlans
                           ? () => handleShipOrGenerateAndShip(plan)
-                          : () =>
-                              handleShip(plan.metadata.planId, plan.lastExecutedVersionNumber)
+                          : () => handleShip(plan.metadata.planId, plan.lastExecutedVersionNumber)
                       }
                       onPlanTasks={() => handlePlanTasks(plan.metadata.planId)}
                       onReship={() => handleReship(plan.metadata.planId)}
@@ -1141,7 +1135,12 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
 
       {/* Sidebar: Plan Detail + Chat — show when planContext set so chat persists across reloads (e.g. deep link) */}
       {planContext && (
-        <ResizableSidebar storageKey="plan" defaultWidth={420} responsive={true} onClose={handleClosePlan}>
+        <ResizableSidebar
+          storageKey="plan"
+          defaultWidth={420}
+          responsive={true}
+          onClose={handleClosePlan}
+        >
           {/* Sticky header + scrollable body (matches Execute sidebar) */}
           {selectedPlan ? (
             <PlanDetailContent
@@ -1284,8 +1283,9 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                                   className="btn-primary text-sm w-full py-2 rounded-lg font-medium inline-flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed"
                                   data-testid="execute-button-sidebar"
                                 >
-                                  {(planTasksPlanIds ?? []).includes(selectedPlan.metadata.planId) ||
-                                  executingPlanId === selectedPlan.metadata.planId
+                                  {(planTasksPlanIds ?? []).includes(
+                                    selectedPlan.metadata.planId
+                                  ) || executingPlanId === selectedPlan.metadata.planId
                                     ? "Generating & executing…"
                                     : "Execute"}
                                 </button>
@@ -1362,12 +1362,9 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                     {/* Auditor runs — historical execution logs; hide when selected version is still in Planning */}
                     {(() => {
                       const effectiveVersion =
-                        selectedVersionNumber ??
-                        selectedPlan.currentVersionNumber ??
-                        1;
+                        selectedVersionNumber ?? selectedPlan.currentVersionNumber ?? 1;
                       const lastExec = selectedPlan.lastExecutedVersionNumber;
-                      const showAuditorRuns =
-                        lastExec != null && effectiveVersion <= lastExec;
+                      const showAuditorRuns = lastExec != null && effectiveVersion <= lastExec;
                       return showAuditorRuns ? (
                         <AuditorRunsSection
                           projectId={projectId}

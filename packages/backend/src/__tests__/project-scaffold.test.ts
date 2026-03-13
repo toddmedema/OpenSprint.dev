@@ -155,20 +155,16 @@ vi.mock("child_process", async (importOriginal) => {
 
   execMock[promisify.custom] = (cmd: string, opts?: unknown) =>
     new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-      execMock(
-        cmd,
-        opts ?? {},
-        (err: Error | null, stdout?: string, stderr?: string) => {
-          if (err) {
-            const execErr = err as Error & { stdout?: string; stderr?: string };
-            execErr.stdout = stdout ?? "";
-            execErr.stderr = stderr ?? "";
-            reject(execErr);
-            return;
-          }
-          resolve({ stdout: stdout ?? "", stderr: stderr ?? "" });
+      execMock(cmd, opts ?? {}, (err: Error | null, stdout?: string, stderr?: string) => {
+        if (err) {
+          const execErr = err as Error & { stdout?: string; stderr?: string };
+          execErr.stdout = stdout ?? "";
+          execErr.stderr = stderr ?? "";
+          reject(execErr);
+          return;
         }
-      );
+        resolve({ stdout: stdout ?? "", stderr: stderr ?? "" });
+      });
     });
 
   return {
@@ -356,7 +352,10 @@ describe("ProjectService.scaffoldProject", () => {
         })
         .catch((e) => e);
       expect(err).toMatchObject({ code: "SCAFFOLD_PREREQUISITES_MISSING" });
-      expect((err as { details?: { missing?: string[] } }).details?.missing).toEqual(["Git", "Node.js"]);
+      expect((err as { details?: { missing?: string[] } }).details?.missing).toEqual([
+        "Git",
+        "Node.js",
+      ]);
       expect(err.message).toContain("Git");
       expect(err.message).toContain("Node.js");
       expect(err.message).toContain("https://git-scm.com/");

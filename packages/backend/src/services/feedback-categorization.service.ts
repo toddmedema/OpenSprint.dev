@@ -40,10 +40,7 @@ User feedback: "${truncated}"`;
 /**
  * Build description for plan-execution HIL (large-scope feedback → new plan).
  */
-export function buildPlanExecutionHilDescription(
-  feedbackText: string,
-  planTitle: string
-): string {
+export function buildPlanExecutionHilDescription(feedbackText: string, planTitle: string): string {
   const truncated = feedbackText.length > 150 ? `${feedbackText.slice(0, 150)}…` : feedbackText;
   return `A new plan was created from large-scope feedback. Please review the plan before execution.
 
@@ -466,7 +463,10 @@ export class FeedbackCategorizationService {
     }
   }
 
-  private async handleScopeChange(projectId: string, item: FeedbackItem): Promise<CategorizationResult | null> {
+  private async handleScopeChange(
+    projectId: string,
+    item: FeedbackItem
+  ): Promise<CategorizationResult | null> {
     let proposal: { summary: string; prdUpdates: HarmonizerPrdUpdate[] } | null = null;
     try {
       proposal = await this.chatService.getScopeChangeProposal(projectId, item.text);

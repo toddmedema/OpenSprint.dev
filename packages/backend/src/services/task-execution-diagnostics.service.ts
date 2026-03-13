@@ -84,10 +84,11 @@ function extractConflictFilesFromTask(task: StoredTask): string[] {
 function extractQualityGateDetail(data: JsonRecord): QualityGateDetail | null {
   const nested = asRecord(data.qualityGateDetail);
   const command =
-    asString(data.failedGateCommand) ?? asString(data.qualityGateCommand) ?? asString(nested?.command);
+    asString(data.failedGateCommand) ??
+    asString(data.qualityGateCommand) ??
+    asString(nested?.command);
   const reason = asString(data.failedGateReason) ?? asString(nested?.reason);
-  const outputSnippet =
-    asString(data.failedGateOutputSnippet) ?? asString(nested?.outputSnippet);
+  const outputSnippet = asString(data.failedGateOutputSnippet) ?? asString(nested?.outputSnippet);
   const worktreePath = asString(data.worktreePath) ?? asString(nested?.worktreePath);
   const firstErrorLine =
     asString(data.qualityGateFirstErrorLine) ??
@@ -128,7 +129,9 @@ function withAttemptQualityGateDetail(
   return item;
 }
 
-function attemptQualityGateDetail(attempt: TaskExecutionAttemptItem | null): QualityGateDetail | null {
+function attemptQualityGateDetail(
+  attempt: TaskExecutionAttemptItem | null
+): QualityGateDetail | null {
   if (!attempt) return null;
   return (attempt as TaskExecutionAttemptItemWithQualityGate).qualityGateDetail ?? null;
 }
@@ -257,7 +260,9 @@ function extractOutputHint(outputLog: string): string | null {
     return /[.?]$/.test(line) || (line.length < 150 && !/^[\s\S]*[\d{"]$/.test(line));
   });
   const toSummarize = lastMessageLike ?? lines[lines.length - 1];
-  return toSummarize ? compactExecutionText(toSummarize.replace(/^\s*[A-Z]:\s*/i, "").trim(), 240) : null;
+  return toSummarize
+    ? compactExecutionText(toSummarize.replace(/^\s*[A-Z]:\s*/i, "").trim(), 240)
+    : null;
 }
 
 function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null {
@@ -421,16 +426,16 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
       );
     return withQualityGateDetail(
       {
-      at: event.timestamp,
-      attempt,
-      phase: "merge",
-      outcome,
-      title: titleForOutcome("merge", outcome),
-      summary,
-      blockReason: outcome === "blocked" ? "Merge Failure" : null,
-      mergeStage,
-      conflictedFiles: asStringArray(data.conflictedFiles),
-      nextAction: asString(data.nextAction) ?? defaultNextAction(outcome),
+        at: event.timestamp,
+        attempt,
+        phase: "merge",
+        outcome,
+        title: titleForOutcome("merge", outcome),
+        summary,
+        blockReason: outcome === "blocked" ? "Merge Failure" : null,
+        mergeStage,
+        conflictedFiles: asStringArray(data.conflictedFiles),
+        nextAction: asString(data.nextAction) ?? defaultNextAction(outcome),
       },
       qualityGateDetail
     );
@@ -662,7 +667,8 @@ export class TaskExecutionDiagnosticsService {
     const latestTimelineEvent = timeline.at(-1) ?? null;
     const latestEvent =
       [...timeline].reverse().find((event) => event.outcome !== "running") ?? null;
-    const latestRunningEvent = latestTimelineEvent?.outcome === "running" ? latestTimelineEvent : null;
+    const latestRunningEvent =
+      latestTimelineEvent?.outcome === "running" ? latestTimelineEvent : null;
     const taskQualityGateDetail = extractQualityGateDetail(asRecord(task) ?? {});
 
     const diagnostics: TaskExecutionDiagnostics = {

@@ -6,10 +6,7 @@ import { getPoolConfig } from "../db/client.js";
 import { openSqliteDatabase } from "../db/sqlite-client.js";
 import { classifyDbConnectionError, isDbConnectionError } from "../db/db-errors.js";
 import { getDatabaseDialect } from "@opensprint/shared";
-import {
-  getEffectiveDatabaseConfig,
-  type DatabaseUrlSource,
-} from "./global-settings.service.js";
+import { getEffectiveDatabaseConfig, type DatabaseUrlSource } from "./global-settings.service.js";
 
 const log = createLogger("database-runtime");
 const TEST_DB_NAME = "opensprint_test";
@@ -157,9 +154,7 @@ export class DatabaseRuntimeService {
     ) {
       return;
     }
-    const dialect = this.lastConfig
-      ? getDatabaseDialect(this.lastConfig.databaseUrl)
-      : "postgres";
+    const dialect = this.lastConfig ? getDatabaseDialect(this.lastConfig.databaseUrl) : "postgres";
     const message =
       err instanceof AppError && err.code === ErrorCodes.DATABASE_UNAVAILABLE
         ? err.message

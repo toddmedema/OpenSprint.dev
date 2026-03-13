@@ -68,9 +68,9 @@ describe("migratePlanVersions", () => {
 
     expect(result.migrated).toBe(1);
     expect(client.execute).toHaveBeenCalledTimes(2);
-    const insertCall = vi.mocked(client.execute).mock.calls.find(
-      (c) => String(c[0]).includes("INSERT INTO plan_versions")
-    );
+    const insertCall = vi
+      .mocked(client.execute)
+      .mock.calls.find((c) => String(c[0]).includes("INSERT INTO plan_versions"));
     expect(insertCall).toBeDefined();
     expect(insertCall![1]).toEqual([
       "proj1",
@@ -81,9 +81,9 @@ describe("migratePlanVersions", () => {
       "2026-01-01T00:00:00Z",
       0,
     ]);
-    const updateCall = vi.mocked(client.execute).mock.calls.find(
-      (c) => String(c[0]).includes("UPDATE plans")
-    );
+    const updateCall = vi
+      .mocked(client.execute)
+      .mock.calls.find((c) => String(c[0]).includes("UPDATE plans"));
     expect(updateCall).toBeDefined();
     expect(updateCall![1]).toEqual([null, "proj1", "plan1"]);
   });
@@ -105,9 +105,9 @@ describe("migratePlanVersions", () => {
     const result = await migratePlanVersions(client);
 
     expect(result.migrated).toBe(1);
-    const insertCall = vi.mocked(client.execute).mock.calls.find(
-      (c) => String(c[0]).includes("INSERT INTO plan_versions")
-    );
+    const insertCall = vi
+      .mocked(client.execute)
+      .mock.calls.find((c) => String(c[0]).includes("INSERT INTO plan_versions"));
     expect(insertCall![1]).toEqual([
       "p",
       "x",
@@ -117,9 +117,9 @@ describe("migratePlanVersions", () => {
       "2026-02-01T00:00:00Z",
       1,
     ]);
-    const updateCall = vi.mocked(client.execute).mock.calls.find(
-      (c) => String(c[0]).includes("UPDATE plans")
-    );
+    const updateCall = vi
+      .mocked(client.execute)
+      .mock.calls.find((c) => String(c[0]).includes("UPDATE plans"));
     expect(updateCall![1]).toEqual([1, "p", "x"]);
   });
 
@@ -139,9 +139,9 @@ describe("migratePlanVersions", () => {
 
     await migratePlanVersions(client);
 
-    const updateCall = vi.mocked(client.execute).mock.calls.find(
-      (c) => String(c[0]).includes("UPDATE plans")
-    );
+    const updateCall = vi
+      .mocked(client.execute)
+      .mock.calls.find((c) => String(c[0]).includes("UPDATE plans"));
     expect(updateCall![1]).toEqual([1, "p", "y"]);
   });
 
@@ -161,16 +161,25 @@ describe("migratePlanVersions", () => {
 
     await migratePlanVersions(client);
 
-    const insertCall = vi.mocked(client.execute).mock.calls.find(
-      (c) => String(c[0]).includes("INSERT INTO plan_versions")
-    );
+    const insertCall = vi
+      .mocked(client.execute)
+      .mock.calls.find((c) => String(c[0]).includes("INSERT INTO plan_versions"));
     expect(insertCall![1][2]).toBeNull();
   });
 });
 
 it("is idempotent: only migrates rows where current_version_number IS NULL", async () => {
   const client = createMockClient();
-  vi.mocked(client.query).mockResolvedValueOnce([{ project_id: "p", plan_id: "q", content: "# P", metadata: "{}", shipped_content: null, updated_at: "2026-01-01T00:00:00Z" }]);
+  vi.mocked(client.query).mockResolvedValueOnce([
+    {
+      project_id: "p",
+      plan_id: "q",
+      content: "# P",
+      metadata: "{}",
+      shipped_content: null,
+      updated_at: "2026-01-01T00:00:00Z",
+    },
+  ]);
   vi.mocked(client.execute).mockResolvedValue(1);
 
   const { migratePlanVersions: run } = await import("../services/migrate-plan-versions.service.js");

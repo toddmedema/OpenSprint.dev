@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
 import { CloseButton } from "./CloseButton";
 import { api, isConnectionError } from "../api/client";
-import {
-  AGENT_PROVIDER_OPTIONS,
-  type AgentProviderValue,
-} from "../lib/agentProviders";
+import { AGENT_PROVIDER_OPTIONS, type AgentProviderValue } from "../lib/agentProviders";
 
 const BODY_COPY =
   "At least one agent API key is required to use Open Sprint. Or, select 'Custom/CLI' if you'll be using your own agent or a CLI integration rather than an API.";

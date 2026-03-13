@@ -26,10 +26,7 @@ type InspectResult = {
   remoteMode: GitRemoteMode;
 };
 
-type InspectFn = (
-  repoPath: string,
-  preferredBaseBranch?: string | null
-) => Promise<InspectResult>;
+type InspectFn = (repoPath: string, preferredBaseBranch?: string | null) => Promise<InspectResult>;
 
 interface ProjectGitRuntimeCacheDeps {
   inspect?: InspectFn;
@@ -57,7 +54,10 @@ export class ProjectGitRuntimeCache {
     this.inspect = deps.inspect ?? inspectGitRepoState;
     this.now = deps.now ?? Date.now;
     this.ttlMs = deps.ttlMs ?? DEFAULT_TTL_MS;
-    this.sweepTimer = setInterval(() => this.sweepExpired(), Math.min(this.ttlMs, DEFAULT_SWEEP_MS));
+    this.sweepTimer = setInterval(
+      () => this.sweepExpired(),
+      Math.min(this.ttlMs, DEFAULT_SWEEP_MS)
+    );
     if (this.sweepTimer.unref) this.sweepTimer.unref();
   }
 

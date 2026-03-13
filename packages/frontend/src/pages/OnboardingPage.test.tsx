@@ -376,7 +376,9 @@ describe("OnboardingPage", () => {
     await user.click(screen.getByTestId("onboarding-continue-button"));
 
     await waitFor(() => {
-      expect(screen.getByText("Unable to connect. Please check your network and try again.")).toBeInTheDocument();
+      expect(
+        screen.getByText("Unable to connect. Please check your network and try again.")
+      ).toBeInTheDocument();
     });
     expect(screen.getByTestId("onboarding-try-again")).toBeInTheDocument();
     expect(api.env.saveKey).not.toHaveBeenCalled();
@@ -396,7 +398,9 @@ describe("OnboardingPage", () => {
     await user.click(screen.getByTestId("onboarding-continue-button"));
 
     await waitFor(() => {
-      expect(screen.getByText("Unable to connect. Please check your network and try again.")).toBeInTheDocument();
+      expect(
+        screen.getByText("Unable to connect. Please check your network and try again.")
+      ).toBeInTheDocument();
     });
     expect(screen.getByTestId("onboarding-try-again")).toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();

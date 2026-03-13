@@ -21,7 +21,7 @@ module.exports = async function afterPack(context) {
   execFileSync(
     "/usr/bin/codesign",
     ["--force", "--deep", "--sign", "-", "--timestamp=none", appPath],
-    { stdio: "inherit" },
+    { stdio: "inherit" }
   );
 
   execFileSync("/usr/bin/codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath], {

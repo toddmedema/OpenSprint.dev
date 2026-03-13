@@ -19,9 +19,13 @@ vi.mock("../services/task-store.service.js", () => ({
       status: "success",
       tasksCreatedCount: 0,
     }),
-    runWrite: vi.fn().mockImplementation(async (fn: (client: { execute: () => Promise<void> }) => Promise<void>) => {
-      await fn({ execute: vi.fn().mockResolvedValue(undefined) });
-    }),
+    runWrite: vi
+      .fn()
+      .mockImplementation(
+        async (fn: (client: { execute: () => Promise<void> }) => Promise<void>) => {
+          await fn({ execute: vi.fn().mockResolvedValue(undefined) });
+        }
+      ),
   },
 }));
 
@@ -59,7 +63,9 @@ vi.mock("../services/context-assembler.js", () => ({
 
 vi.mock("../services/settings-store.service.js", () => ({
   updateSettingsInStore: vi.fn().mockResolvedValue(undefined),
-  getSettingsFromStore: vi.fn().mockImplementation((_id: string, defaults: unknown) => Promise.resolve(defaults)),
+  getSettingsFromStore: vi
+    .fn()
+    .mockImplementation((_id: string, defaults: unknown) => Promise.resolve(defaults)),
 }));
 
 vi.mock("../services/agent-instructions.service.js", () => ({
@@ -207,10 +213,12 @@ describe("enrichPriorityAndComplexity", () => {
       ]),
     } as never);
 
-    const items: Array<{ title: string; description?: string; priority?: number; complexity?: number }> = [
-      { title: "Add tests", description: "Unit tests" },
-      { title: "Refactor API" },
-    ];
+    const items: Array<{
+      title: string;
+      description?: string;
+      priority?: number;
+      complexity?: number;
+    }> = [{ title: "Add tests", description: "Unit tests" }, { title: "Refactor API" }];
     const result = await enrichPriorityAndComplexity("proj-1", items, {
       repoPath: "/tmp/repo",
       settings: {} as never,
@@ -247,7 +255,12 @@ describe("enrichPriorityAndComplexity", () => {
 [{"title":"Add tests","priority":1,"complexity":3},{"title":"Refactor API","priority":0,"complexity":7}]`,
     } as never);
 
-    const items: Array<{ title: string; description?: string; priority?: number; complexity?: number }> = [
+    const items: Array<{
+      title: string;
+      description?: string;
+      priority?: number;
+      complexity?: number;
+    }> = [
       { title: "Add tests", description: "Unit tests" },
       { title: "Refactor API", description: "API refactor" },
     ];
@@ -272,7 +285,12 @@ describe("enrichPriorityAndComplexity", () => {
       ]),
     } as never);
 
-    const items: Array<{ title: string; description?: string; priority?: number; complexity?: number }> = [
+    const items: Array<{
+      title: string;
+      description?: string;
+      priority?: number;
+      complexity?: number;
+    }> = [
       { title: "Add tests", description: "Unit tests" },
       { title: "Refactor API", description: "API refactor" },
     ];
@@ -284,9 +302,19 @@ describe("enrichPriorityAndComplexity", () => {
 
     expect(result).toHaveLength(2);
     // Add tests: AI priority 1, complexity from default (5) — _aiAssigned false (missing complexity)
-    expect(result[0]).toMatchObject({ title: "Add tests", priority: 1, complexity: 5, _aiAssigned: false });
+    expect(result[0]).toMatchObject({
+      title: "Add tests",
+      priority: 1,
+      complexity: 5,
+      _aiAssigned: false,
+    });
     // Refactor API: priority from default (2), AI complexity 7 — _aiAssigned false (missing priority)
-    expect(result[1]).toMatchObject({ title: "Refactor API", priority: 2, complexity: 7, _aiAssigned: false });
+    expect(result[1]).toMatchObject({
+      title: "Refactor API",
+      priority: 2,
+      complexity: 7,
+      _aiAssigned: false,
+    });
   });
 
   it("retries enrichment when agent throws", async () => {
@@ -321,7 +349,12 @@ describe("enrichPriorityAndComplexity", () => {
     });
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ title: "Add tests", priority: 2, complexity: 5, _aiAssigned: false });
+    expect(result[0]).toMatchObject({
+      title: "Add tests",
+      priority: 2,
+      complexity: 5,
+      _aiAssigned: false,
+    });
   });
 
   it("sets _aiAssigned true when enrichment throws but main agent provided both priority and complexity", async () => {
@@ -336,7 +369,12 @@ describe("enrichPriorityAndComplexity", () => {
     });
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ title: "Add tests", priority: 1, complexity: 3, _aiAssigned: true });
+    expect(result[0]).toMatchObject({
+      title: "Add tests",
+      priority: 1,
+      complexity: 3,
+      _aiAssigned: true,
+    });
   });
 
   it("sets _aiAssigned false when enrichment throws and main agent provided only one of priority/complexity", async () => {
@@ -351,7 +389,12 @@ describe("enrichPriorityAndComplexity", () => {
     });
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ title: "Add tests", priority: 1, complexity: 5, _aiAssigned: false });
+    expect(result[0]).toMatchObject({
+      title: "Add tests",
+      priority: 1,
+      complexity: 5,
+      _aiAssigned: false,
+    });
   });
 
   it("matches enrichment response by case-insensitive title", async () => {
@@ -363,7 +406,12 @@ describe("enrichPriorityAndComplexity", () => {
       ]),
     } as never);
 
-    const items: Array<{ title: string; description?: string; priority?: number; complexity?: number }> = [
+    const items: Array<{
+      title: string;
+      description?: string;
+      priority?: number;
+      complexity?: number;
+    }> = [
       { title: "Add tests", description: "Unit tests" },
       { title: "Refactor API", description: "API refactor" },
     ];
@@ -387,7 +435,12 @@ describe("enrichPriorityAndComplexity", () => {
       ]),
     } as never);
 
-    const items: Array<{ title: string; description?: string; priority?: number; complexity?: number }> = [
+    const items: Array<{
+      title: string;
+      description?: string;
+      priority?: number;
+      complexity?: number;
+    }> = [
       { title: "Add tests", description: "Unit tests" },
       { title: "Refactor API", description: "API refactor" },
     ];
@@ -398,8 +451,18 @@ describe("enrichPriorityAndComplexity", () => {
     });
 
     expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({ title: "Add tests", priority: 1, complexity: 3, _aiAssigned: true });
-    expect(result[1]).toMatchObject({ title: "Refactor API", priority: 0, complexity: 7, _aiAssigned: true });
+    expect(result[0]).toMatchObject({
+      title: "Add tests",
+      priority: 1,
+      complexity: 3,
+      _aiAssigned: true,
+    });
+    expect(result[1]).toMatchObject({
+      title: "Refactor API",
+      priority: 0,
+      complexity: 7,
+      _aiAssigned: true,
+    });
   });
 
   it("marks _aiAssigned true only when both priority and complexity come from AI (main or enrichment)", async () => {
@@ -488,7 +551,8 @@ describe("SelfImprovementRunnerService", () => {
     const { updateSettingsInStore } = await import("../services/settings-store.service.js");
     vi.mocked(taskStore.create).mockResolvedValue({ id: "os-1", title: "Task" } as never);
     vi.mocked(agentService.invokePlanningAgent).mockResolvedValue({
-      content: '[{"title":"Improve error handling","description":"Add try/catch","priority":1,"complexity":3}]',
+      content:
+        '[{"title":"Improve error handling","description":"Add try/catch","priority":1,"complexity":3}]',
     } as never);
     vi.mocked(updateSettingsInStore).mockResolvedValue(undefined);
   });
@@ -587,13 +651,21 @@ describe("SelfImprovementRunnerService", () => {
       1,
       projectId,
       "Add tests",
-      expect.objectContaining({ priority: 1, complexity: 3, extra: expect.objectContaining({ source: "self-improvement" }) })
+      expect.objectContaining({
+        priority: 1,
+        complexity: 3,
+        extra: expect.objectContaining({ source: "self-improvement" }),
+      })
     );
     expect(taskStore.create).toHaveBeenNthCalledWith(
       2,
       projectId,
       "Refactor API",
-      expect.objectContaining({ priority: 0, complexity: 7, extra: expect.objectContaining({ source: "self-improvement" }) })
+      expect.objectContaining({
+        priority: 0,
+        complexity: 7,
+        extra: expect.objectContaining({ source: "self-improvement" }),
+      })
     );
   });
 
@@ -732,7 +804,9 @@ describe("SelfImprovementRunnerService", () => {
     expect(agentService.invokePlanningAgent).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        tracking: expect.objectContaining({ label: "Self-improvement (assign priority & complexity)" }),
+        tracking: expect.objectContaining({
+          label: "Self-improvement (assign priority & complexity)",
+        }),
       })
     );
   });
@@ -756,14 +830,16 @@ describe("SelfImprovementRunnerService", () => {
     vi.mocked(agentService.invokePlanningAgent)
       .mockResolvedValueOnce({ content: '[{"title":"Item","priority":2,"complexity":5}]' } as never)
       .mockResolvedValueOnce({ content: '[{"title":"Item","priority":2,"complexity":5}]' } as never)
-      .mockResolvedValueOnce({ content: '[{"title":"Item","priority":2,"complexity":5}]' } as never);
+      .mockResolvedValueOnce({
+        content: '[{"title":"Item","priority":2,"complexity":5}]',
+      } as never);
 
     await service.runSelfImprovement(projectId);
 
     expect(agentService.invokePlanningAgent).toHaveBeenCalledTimes(3);
-    const labels = vi.mocked(agentService.invokePlanningAgent).mock.calls.map(
-      (c) => (c[0].tracking as { label: string }).label
-    );
+    const labels = vi
+      .mocked(agentService.invokePlanningAgent)
+      .mock.calls.map((c) => (c[0].tracking as { label: string }).label);
     expect(labels).toContain("Self-improvement (Security implications)");
     expect(labels).toContain("Self-improvement (Performance impact)");
     expect(labels).toContain("Self-improvement (assign priority & complexity)");
@@ -863,7 +939,18 @@ describe("SelfImprovementRunnerService", () => {
       priority: i % 3,
     }));
     // capAndDedupe sorts by priority (0,1,2) and takes first 10: 1,4,7,10,13,2,5,8,11,14
-    const cappedTitles = ["Improvement 1", "Improvement 4", "Improvement 7", "Improvement 10", "Improvement 13", "Improvement 2", "Improvement 5", "Improvement 8", "Improvement 11", "Improvement 14"];
+    const cappedTitles = [
+      "Improvement 1",
+      "Improvement 4",
+      "Improvement 7",
+      "Improvement 10",
+      "Improvement 13",
+      "Improvement 2",
+      "Improvement 5",
+      "Improvement 8",
+      "Improvement 11",
+      "Improvement 14",
+    ];
     const enrichedItems = cappedTitles.map((title, i) => ({
       title,
       priority: i < 5 ? 0 : i < 10 ? 1 : 2,
@@ -992,8 +1079,7 @@ describe("SelfImprovementRunnerService", () => {
           }),
         }) as never
     );
-    const securityError =
-      "Security command failed: Security process exited with code: 45";
+    const securityError = "Security command failed: Security process exited with code: 45";
     vi.mocked(agentService.invokePlanningAgent)
       .mockRejectedValueOnce(new Error(securityError))
       .mockResolvedValueOnce({

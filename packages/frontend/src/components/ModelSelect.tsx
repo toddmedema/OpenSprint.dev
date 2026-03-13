@@ -115,7 +115,13 @@ export function ModelSelect({
       provider === "lmstudio" ? "No models" : `No models${hint ? ` (${hint})` : ""}`;
     return (
       <div className="space-y-1" role="group" aria-label="Model selection">
-        <select id={id} className={className} disabled aria-label="Model selection" aria-invalid="true">
+        <select
+          id={id}
+          className={className}
+          disabled
+          aria-label="Model selection"
+          aria-invalid="true"
+        >
           <option value="">{optionLabel}</option>
         </select>
         <p className="text-xs text-theme-warning-text" role="alert" aria-live="polite">

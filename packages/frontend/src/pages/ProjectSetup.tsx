@@ -146,7 +146,13 @@ export function ProjectSetup() {
         const anthropic = (apiKeys?.ANTHROPIC_API_KEY?.length ?? 0) > 0;
         const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
         const openai = (apiKeys?.OPENAI_API_KEY?.length ?? 0) > 0;
-        const keys = { anthropic, cursor, openai, claudeCli: env.claudeCli, cursorCli: env.cursorCli };
+        const keys = {
+          anthropic,
+          cursor,
+          openai,
+          claudeCli: env.claudeCli,
+          cursorCli: env.cursorCli,
+        };
         setEnvKeys(keys);
         if (!hasSetAgentDefaultRef.current) {
           hasSetAgentDefaultRef.current = true;

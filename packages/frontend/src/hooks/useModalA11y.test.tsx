@@ -9,12 +9,7 @@ function TestModal({ onClose }: { onClose: () => void }) {
   useModalA11y({ containerRef, onClose, isOpen: true });
 
   return (
-    <div
-      role="dialog"
-      ref={containerRef}
-      aria-modal="true"
-      aria-label="Test modal"
-    >
+    <div role="dialog" ref={containerRef} aria-modal="true" aria-label="Test modal">
       <button type="button" onClick={onClose}>
         Close
       </button>

@@ -5,15 +5,13 @@ import path from "path";
 import os from "os";
 import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
-import {
-  API_PREFIX,
-  DEFAULT_HIL_CONFIG,
-  SPEC_MD,
-  prdToSpecMarkdown,
-} from "@opensprint/shared";
+import { API_PREFIX, DEFAULT_HIL_CONFIG, SPEC_MD, prdToSpecMarkdown } from "@opensprint/shared";
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 // Mock TaskStoreService so tests don't require bd CLI or shell
@@ -75,7 +73,9 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
   let originalHome: string | undefined;
 
   afterAll(async () => {
-    const mod = (await import("../services/task-store.service.js")) as { _testPool?: { end: () => Promise<void> } };
+    const mod = (await import("../services/task-store.service.js")) as {
+      _testPool?: { end: () => Promise<void> };
+    };
     if (mod._testPool) await mod._testPool.end();
   });
 
@@ -190,9 +190,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("returns 400 when fromVersion is missing", async () => {
-      const res = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/prd/diff`
-      );
+      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/diff`);
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("INVALID_INPUT");
@@ -215,9 +213,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
         .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
         .send({ content: "Current content" });
 
-      const { notificationService } = await import(
-        "../services/notification.service.js"
-      );
+      const { notificationService } = await import("../services/notification.service.js");
       const notif = await notificationService.createHilApproval({
         projectId,
         source: "eval",
@@ -265,9 +261,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("returns 404 when requestId refers to non-hil_approval notification", async () => {
-      const { notificationService } = await import(
-        "../services/notification.service.js"
-      );
+      const { notificationService } = await import("../services/notification.service.js");
       const openQuestion = await notificationService.create({
         projectId,
         source: "plan",
@@ -285,9 +279,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("returns 400 when requestId is missing", async () => {
-      const res = await request(app).get(
-        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff`
-      );
+      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/proposed-diff`);
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("INVALID_INPUT");

@@ -247,10 +247,10 @@ export async function resetProjectScopedTestData(
   const taskRows = await client.query("SELECT id FROM tasks WHERE project_id = $1", [projectId]);
   const taskIds = taskRows.map((r) => String((r as { id?: unknown }).id ?? "")).filter(Boolean);
   for (const taskId of taskIds) {
-    await client.execute(
-      "DELETE FROM task_dependencies WHERE task_id = $1 OR depends_on_id = $2",
-      [taskId, taskId]
-    );
+    await client.execute("DELETE FROM task_dependencies WHERE task_id = $1 OR depends_on_id = $2", [
+      taskId,
+      taskId,
+    ]);
   }
 
   await client.execute("DELETE FROM tasks WHERE project_id = $1", [projectId]);

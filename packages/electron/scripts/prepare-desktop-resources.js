@@ -15,11 +15,7 @@ const outDir = path.join(repoRoot, "packages", "electron", "desktop-resources");
 const backendExternalDeps = ["better-sqlite3"];
 const SQLITE_MODULE_NAME = "better-sqlite3";
 const SQLITE_RUNTIME_FALLBACK_DIR_NAME = "sqlite-runtime";
-const SQLITE_RUNTIME_FALLBACK_PACKAGES = [
-  SQLITE_MODULE_NAME,
-  "bindings",
-  "file-uri-to-path",
-];
+const SQLITE_RUNTIME_FALLBACK_PACKAGES = [SQLITE_MODULE_NAME, "bindings", "file-uri-to-path"];
 const SQLITE_BINDING_RELATIVE_PATH = path.join(
   "node_modules",
   SQLITE_MODULE_NAME,
@@ -46,7 +42,10 @@ function parseCliOptions(argv) {
     if (!raw.startsWith("--")) continue;
     const [flag, inlineValue] = raw.split("=", 2);
     const nextValue = inlineValue ?? argv[i + 1];
-    if ((flag === "--arch" || flag === "--electron-version" || flag === "--platform") && nextValue) {
+    if (
+      (flag === "--arch" || flag === "--electron-version" || flag === "--platform") &&
+      nextValue
+    ) {
       if (inlineValue == null) {
         i += 1;
       }
@@ -71,7 +70,9 @@ function resolveElectronVersion(cliOptions = {}) {
     electronPkg?.build?.electronVersion ??
     electronPkg?.devDependencies?.electron ??
     electronPkg?.dependencies?.electron;
-  const normalized = String(raw ?? "").trim().replace(/^[^\d]*/, "");
+  const normalized = String(raw ?? "")
+    .trim()
+    .replace(/^[^\d]*/, "");
   if (!normalized) {
     throw new Error(
       `Could not resolve Electron version. Set OPENSPRINT_ELECTRON_VERSION or define electronVersion in ${electronPkgPath}.`
@@ -155,12 +156,7 @@ async function run() {
   console.log("Desktop resources ready at", outDir);
 }
 
-function ensureSqliteRuntimeLoadable(
-  backendOut,
-  electronVersion,
-  targetPlatform,
-  targetArch
-) {
+function ensureSqliteRuntimeLoadable(backendOut, electronVersion, targetPlatform, targetArch) {
   console.log(
     `Verifying ${SQLITE_MODULE_NAME} runtime load (electron=${electronVersion}, platform=${targetPlatform}, arch=${targetArch})...`
   );
@@ -229,7 +225,11 @@ function ensureSqliteRuntimeLoadable(
     };
   }
 
-  logProbeFailure("SQLite runtime verification still failing after source rebuild", probe, rebuiltDiagnostics);
+  logProbeFailure(
+    "SQLite runtime verification still failing after source rebuild",
+    probe,
+    rebuiltDiagnostics
+  );
   const details = JSON.stringify(
     {
       diagnostics: rebuiltDiagnostics,
@@ -458,9 +458,7 @@ function stageSqliteRuntimeFallback(backendOut) {
   );
   const fallbackBindingExists = fs.existsSync(fallbackBindingPath);
   if (!fallbackBindingExists) {
-    throw new Error(
-      `SQLite runtime fallback is missing native binding: ${fallbackBindingPath}`
-    );
+    throw new Error(`SQLite runtime fallback is missing native binding: ${fallbackBindingPath}`);
   }
 
   return {
@@ -529,7 +527,10 @@ function generateTrayIcons(frontendOut) {
       const dotY2x = 2;
       const dotSvg2x = `<svg xmlns="http://www.w3.org/2000/svg" width="${size2x}" height="${size2x}"><circle cx="${dotX2x + dotSize2x / 2}" cy="${dotY2x + dotSize2x / 2}" r="${dotSize2x / 2}" fill="#000000"/></svg>`;
       const basePng2x = await sharp(buf).resize(size2x, size2x).png().toBuffer();
-      const dotOverlay2x = await sharp(Buffer.from(dotSvg2x)).resize(size2x, size2x).png().toBuffer();
+      const dotOverlay2x = await sharp(Buffer.from(dotSvg2x))
+        .resize(size2x, size2x)
+        .png()
+        .toBuffer();
       await sharp(basePng2x)
         .composite([{ input: dotOverlay2x, left: 0, top: 0 }])
         .png()

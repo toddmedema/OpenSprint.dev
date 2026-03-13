@@ -40,14 +40,22 @@ export interface PlanShipStore extends PlanVersioningStore {
     metadata: string;
     is_executed_version?: boolean;
   }): Promise<unknown>;
-  planVersionSetExecutedVersion(projectId: string, planId: string, versionNumber: number): Promise<void>;
+  planVersionSetExecutedVersion(
+    projectId: string,
+    planId: string,
+    versionNumber: number
+  ): Promise<void>;
   planUpdateVersionNumbers(
     projectId: string,
     planId: string,
     updates: { current_version_number?: number; last_executed_version_number?: number | null }
   ): Promise<void>;
   planSetShippedContent(projectId: string, planId: string, content: string): Promise<void>;
-  planUpdateMetadata(projectId: string, planId: string, metadata: Record<string, unknown>): Promise<void>;
+  planUpdateMetadata(
+    projectId: string,
+    planId: string,
+    metadata: Record<string, unknown>
+  ): Promise<void>;
   planGetShippedContent(projectId: string, planId: string): Promise<string | null>;
   listAll(projectId: string): Promise<StoredTask[]>;
   update(
@@ -269,12 +277,13 @@ export class PlanShipService {
       );
     }
 
-    const { fileTree, keyFilesContent, completedTasksJson } = await this.deps.assembleReExecuteContext(
-      repoPath,
-      projectId,
-      epicId ?? "",
-      taskStore.listAll.bind(taskStore)
-    );
+    const { fileTree, keyFilesContent, completedTasksJson } =
+      await this.deps.assembleReExecuteContext(
+        repoPath,
+        projectId,
+        epicId ?? "",
+        taskStore.listAll.bind(taskStore)
+      );
 
     let planOld: string;
     const versionForOld = options?.version_number ?? plan.lastExecutedVersionNumber;

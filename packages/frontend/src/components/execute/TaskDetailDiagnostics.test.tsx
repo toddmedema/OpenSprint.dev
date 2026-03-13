@@ -229,7 +229,8 @@ describe("TaskDetailDiagnostics", () => {
               attempt: 3,
               finalPhase: "orchestrator",
               finalOutcome: "requeued",
-              finalSummary: "Attempt 3 failed before coding started because dependencies were invalid",
+              finalSummary:
+                "Attempt 3 failed before coding started because dependencies were invalid",
               sessionAttemptStatuses: [],
             },
           ],

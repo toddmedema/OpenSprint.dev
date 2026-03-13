@@ -29,7 +29,9 @@ vi.mock("../../queryClient", () => ({
   getQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
-function createStore(preloadedState?: { connection?: { connectionError: boolean; lastRecoveredAt: number | null } }) {
+function createStore(preloadedState?: {
+  connection?: { connectionError: boolean; lastRecoveredAt: number | null };
+}) {
   return configureStore({
     reducer: {
       notification: notificationReducer,

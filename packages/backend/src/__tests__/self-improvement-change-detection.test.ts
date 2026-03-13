@@ -121,8 +121,9 @@ describe("hasCodeChangesSince", () => {
   });
 
   it("returns true when sinceTimestamp triggers git error (e.g. invalid date)", async () => {
-    const real = (shellExecMod as typeof shellExecMod & { __realShellExec: typeof shellExecMod.shellExec })
-      .__realShellExec;
+    const real = (
+      shellExecMod as typeof shellExecMod & { __realShellExec: typeof shellExecMod.shellExec }
+    ).__realShellExec;
     vi.mocked(shellExecMod.shellExec).mockImplementation((cmd: string, opts?: unknown) =>
       cmd.includes("--after")
         ? Promise.reject(new Error("invalid date"))

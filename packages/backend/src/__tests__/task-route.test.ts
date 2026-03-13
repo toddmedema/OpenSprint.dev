@@ -10,7 +10,10 @@ import { API_PREFIX } from "@opensprint/shared";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
@@ -75,7 +78,9 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
   afterAll(async () => {
     process.env.HOME = originalHome;
     await fs.rm(suiteTempDir, { recursive: true, force: true });
-    const mod = (await import("../services/task-store.service.js")) as { _testPool?: { end: () => Promise<void> } };
+    const mod = (await import("../services/task-store.service.js")) as {
+      _testPool?: { end: () => Promise<void> };
+    };
     if (mod._testPool) await mod._testPool.end();
   });
 
@@ -405,7 +410,8 @@ Test review prompt generation.
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send({
           title: "Epic Branch Prepare Test",
-          content: "# Epic Branch\n\n## Overview\n\nTest epic branch in prepare.\n\n## Technical Approach\n- Use epic branch when per_epic.",
+          content:
+            "# Epic Branch\n\n## Overview\n\nTest epic branch in prepare.\n\n## Technical Approach\n- Use epic branch when per_epic.",
           complexity: "low",
           tasks: [{ title: "Task E1", description: "Implement E1", priority: 0, dependsOn: [] }],
         });
@@ -523,7 +529,7 @@ Test review prompt generation.
       const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       expect(res.status).toBe(200);
       const data = res.body.data;
-      const list = Array.isArray(data) ? data : data?.items ?? [];
+      const list = Array.isArray(data) ? data : (data?.items ?? []);
       const found = list.find((t: { id: string }) => t.id === improvementTask.id);
       expect(found).toBeDefined();
       expect(found.source).toBe("self-improvement");

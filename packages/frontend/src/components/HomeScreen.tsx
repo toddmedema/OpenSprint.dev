@@ -200,7 +200,9 @@ export function HomeScreen() {
           }
         } else {
           const r = await api.env.getPrerequisites();
-          setPrerequisites((prev) => (prev ? { ...prev, missing: r.missing, platform: r.platform } : null));
+          setPrerequisites((prev) =>
+            prev ? { ...prev, missing: r.missing, platform: r.platform } : null
+          );
         }
       } catch {
         // ignore poll errors
@@ -295,8 +297,8 @@ export function HomeScreen() {
             <h2 className="text-lg font-semibold text-theme-text mb-3">Installation checklist</h2>
             <p className="text-sm text-theme-muted mb-4">
               Install the following so you can create new projects. We check every few seconds—once
-              everything is installed, we&apos;ll detect it and restart the backend so you can continue
-              without restarting the app.
+              everything is installed, we&apos;ll detect it and restart the backend so you can
+              continue without restarting the app.
             </p>
             <ul className="space-y-2">
               {PREREQ_ITEMS.map((tool) => {
@@ -319,8 +321,13 @@ export function HomeScreen() {
                         Install
                       </a>
                     ) : (
-                      <span className="text-theme-muted flex items-center gap-1.5" aria-label={`${tool} installed`}>
-                        <span className="text-green-600 dark:text-green-400" aria-hidden>✓</span>
+                      <span
+                        className="text-theme-muted flex items-center gap-1.5"
+                        aria-label={`${tool} installed`}
+                      >
+                        <span className="text-green-600 dark:text-green-400" aria-hidden>
+                          ✓
+                        </span>
                         Installed
                       </span>
                     )}
@@ -377,113 +384,113 @@ export function HomeScreen() {
               <div className="text-center py-20 text-theme-muted">Loading projects...</div>
             ) : (
               <div className="grid gap-4 w-full" data-testid="projects-grid">
-            {projects.map((project) => (
-              <div
-                key={project.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => openProject(project)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    openProject(project);
-                  }
-                }}
-                className="card p-4 group cursor-pointer transition-colors hover:bg-theme-info-bg min-w-0"
-                data-testid={`project-card-${project.id}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-theme-text font-medium truncate" title={project.name}>
-                      {project.name}
-                    </div>
-                    <div
-                      className="text-sm text-theme-muted truncate mt-0.5"
-                      title={project.repoPath}
-                    >
-                      {project.repoPath}
-                    </div>
-                  </div>
+                {projects.map((project) => (
                   <div
-                    className="relative flex items-center flex-shrink-0"
-                    ref={menuOpenId === project.id ? menuRef : undefined}
+                    key={project.id}
                     role="button"
-                    tabIndex={-1}
-                    aria-label="Project card menu wrapper"
-                    onClick={(e) => e.stopPropagation()}
+                    tabIndex={0}
+                    onClick={() => openProject(project)}
                     onKeyDown={(e) => {
-                      if (e.key !== "Escape") e.stopPropagation();
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openProject(project);
+                      }
                     }}
+                    className="card p-4 group cursor-pointer transition-colors hover:bg-theme-info-bg min-w-0"
+                    data-testid={`project-card-${project.id}`}
                   >
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const button = e.currentTarget;
-                        if (menuOpenId === project.id) {
-                          setMenuOpenId(null);
-                          setMenuAnchorRect(null);
-                        } else {
-                          setMenuAnchorRect(button.getBoundingClientRect());
-                          setMenuOpenId(project.id);
-                        }
-                      }}
-                      className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
-                      aria-label="Project actions"
-                      aria-expanded={menuOpenId === project.id}
-                      aria-haspopup="menu"
-                      data-testid={`project-card-menu-${project.id}`}
-                    >
-                      <KebabIcon className="w-5 h-5" />
-                    </button>
-                    {menuOpenId === project.id &&
-                      menuAnchorRect &&
-                      createPortal(
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-theme-text font-medium truncate" title={project.name}>
+                          {project.name}
+                        </div>
                         <div
-                          ref={dropdownRef}
-                          className="py-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg"
-                          role="menu"
-                          data-testid={`project-card-dropdown-${project.id}`}
-                          style={getDropdownPositionLeftAligned(menuAnchorRect, {
-                            minWidth: DROPDOWN_MIN_WIDTH,
-                            estimatedHeight: 100,
-                          })}
+                          className="text-sm text-theme-muted truncate mt-0.5"
+                          title={project.repoPath}
                         >
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              modalTriggerRef.current =
-                                menuRef.current?.querySelector("button") ?? null;
-                              setArchiveModal(project);
+                          {project.repoPath}
+                        </div>
+                      </div>
+                      <div
+                        className="relative flex items-center flex-shrink-0"
+                        ref={menuOpenId === project.id ? menuRef : undefined}
+                        role="button"
+                        tabIndex={-1}
+                        aria-label="Project card menu wrapper"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Escape") e.stopPropagation();
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const button = e.currentTarget;
+                            if (menuOpenId === project.id) {
                               setMenuOpenId(null);
                               setMenuAnchorRect(null);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg"
-                          >
-                            Archive
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              modalTriggerRef.current =
-                                menuRef.current?.querySelector("button") ?? null;
-                              setDeleteModal(project);
-                              setMenuOpenId(null);
-                              setMenuAnchorRect(null);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg"
-                          >
-                            Delete
-                          </button>
-                        </div>,
-                        document.body
-                      )}
+                            } else {
+                              setMenuAnchorRect(button.getBoundingClientRect());
+                              setMenuOpenId(project.id);
+                            }
+                          }}
+                          className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+                          aria-label="Project actions"
+                          aria-expanded={menuOpenId === project.id}
+                          aria-haspopup="menu"
+                          data-testid={`project-card-menu-${project.id}`}
+                        >
+                          <KebabIcon className="w-5 h-5" />
+                        </button>
+                        {menuOpenId === project.id &&
+                          menuAnchorRect &&
+                          createPortal(
+                            <div
+                              ref={dropdownRef}
+                              className="py-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg"
+                              role="menu"
+                              data-testid={`project-card-dropdown-${project.id}`}
+                              style={getDropdownPositionLeftAligned(menuAnchorRect, {
+                                minWidth: DROPDOWN_MIN_WIDTH,
+                                estimatedHeight: 100,
+                              })}
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  modalTriggerRef.current =
+                                    menuRef.current?.querySelector("button") ?? null;
+                                  setArchiveModal(project);
+                                  setMenuOpenId(null);
+                                  setMenuAnchorRect(null);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg"
+                              >
+                                Archive
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  modalTriggerRef.current =
+                                    menuRef.current?.querySelector("button") ?? null;
+                                  setDeleteModal(project);
+                                  setMenuOpenId(null);
+                                  setMenuAnchorRect(null);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg"
+                              >
+                                Delete
+                              </button>
+                            </div>,
+                            document.body
+                          )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                ))}
               </div>
             )}
           </>

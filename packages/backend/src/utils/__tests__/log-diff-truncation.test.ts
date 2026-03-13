@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  truncateToThreshold,
-  LOG_DIFF_TRUNCATE_AT_CHARS,
-} from "../log-diff-truncation.js";
+import { truncateToThreshold, LOG_DIFF_TRUNCATE_AT_CHARS } from "../log-diff-truncation.js";
 
 describe("log-diff-truncation", () => {
   describe("truncateToThreshold", () => {

@@ -331,7 +331,9 @@ export class PhaseExecutorService {
     } catch (error) {
       log.error(`Coding phase failed for task ${task.id}`, { error });
       const failureReason =
-        error instanceof RepoPreflightError ? this.formatRepoPreflightFailure(error) : String(error);
+        error instanceof RepoPreflightError
+          ? this.formatRepoPreflightFailure(error)
+          : String(error);
       await this.callbacks.handleTaskFailure(
         projectId,
         repoPath,
@@ -531,10 +533,7 @@ export class PhaseExecutorService {
           };
 
           await fs.mkdir(angleDir, { recursive: true });
-          await writeJsonAtomic(
-            path.join(angleDir, OPENSPRINT_PATHS.assignment),
-            angleAssignment
-          );
+          await writeJsonAtomic(path.join(angleDir, OPENSPRINT_PATHS.assignment), angleAssignment);
 
           const mainRepoAngleDir = path.join(mainRepoActiveDirReview, "review-angles", angle);
           await fs.mkdir(mainRepoAngleDir, { recursive: true });
@@ -679,7 +678,9 @@ export class PhaseExecutorService {
     } catch (error) {
       log.error(`Review phase failed for task ${task.id}`, { error });
       const failureReason =
-        error instanceof RepoPreflightError ? this.formatRepoPreflightFailure(error) : String(error);
+        error instanceof RepoPreflightError
+          ? this.formatRepoPreflightFailure(error)
+          : String(error);
       await this.callbacks.handleTaskFailure(
         projectId,
         repoPath,

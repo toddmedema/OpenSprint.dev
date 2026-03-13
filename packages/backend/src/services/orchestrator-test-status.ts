@@ -53,7 +53,13 @@ export function getOrchestratorTestStatusPromptPath(taskId: string): string {
 }
 
 export function getOrchestratorTestStatusFsPath(basePath: string, taskId: string): string {
-  return path.join(basePath, OPENSPRINT_PATHS.active, taskId, "context", ORCHESTRATOR_TEST_STATUS_FILE);
+  return path.join(
+    basePath,
+    OPENSPRINT_PATHS.active,
+    taskId,
+    "context",
+    ORCHESTRATOR_TEST_STATUS_FILE
+  );
 }
 
 export function buildOrchestratorTestStatusContent(status: OrchestratorTestStatus): string {
@@ -146,7 +152,9 @@ function buildRawOutputSection(rawOutput?: string | null): string {
   }
 
   const clipped =
-    trimmed.length > MAX_OUTPUT_CHARS ? `${trimmed.slice(0, MAX_OUTPUT_CHARS)}\n...[truncated]` : trimmed;
+    trimmed.length > MAX_OUTPUT_CHARS
+      ? `${trimmed.slice(0, MAX_OUTPUT_CHARS)}\n...[truncated]`
+      : trimmed;
 
   return `\n<details>\n<summary>Full Raw Output</summary>\n\n\`\`\`text\n${clipped}\n\`\`\`\n\n</details>\n`;
 }
@@ -219,7 +227,9 @@ function mergeFailureHighlights(
 
   const remainingRaw = [...fromRaw];
   const merged: FailureHighlight[] = fromDetails.map((detail, index) => {
-    let rawIndex = remainingRaw.findIndex((candidate) => failureNamesMatch(detail.name, candidate.name));
+    let rawIndex = remainingRaw.findIndex((candidate) =>
+      failureNamesMatch(detail.name, candidate.name)
+    );
     if (rawIndex === -1 && !detail.error && index < remainingRaw.length) {
       rawIndex = index;
     }
@@ -357,7 +367,10 @@ function shouldSkipGenericFailureHeader(line: string, lines: string[], index: nu
 }
 
 function cleanFailureName(name: string): string {
-  return name.replace(/\s+\(\d+\s*ms\)\s*$/, "").replace(/\s+/g, " ").trim();
+  return name
+    .replace(/\s+\(\d+\s*ms\)\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizeFailureMessage(message: string): string {
@@ -390,7 +403,9 @@ function isPrimaryErrorNoiseLine(line: string): boolean {
 }
 
 function isHighSignalErrorLine(line: string): boolean {
-  return /(AssertionError|TypeError|ReferenceError|SyntaxError|Error:|Expected|expected)/i.test(line);
+  return /(AssertionError|TypeError|ReferenceError|SyntaxError|Error:|Expected|expected)/i.test(
+    line
+  );
 }
 
 function dedupeFailureHighlights(highlights: FailureHighlight[]): FailureHighlight[] {

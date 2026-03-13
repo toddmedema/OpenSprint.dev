@@ -62,15 +62,9 @@ describe("computeLineDiff", () => {
     const removeLines = result.lines.filter((l) => l.type === "remove");
 
     expect(contextLines.length).toBeGreaterThanOrEqual(2); // first, third
-    expect(removeLines).toContainEqual(
-      expect.objectContaining({ type: "remove", text: "second" })
-    );
-    expect(addLines).toContainEqual(
-      expect.objectContaining({ type: "add", text: "modified" })
-    );
-    expect(addLines).toContainEqual(
-      expect.objectContaining({ type: "add", text: "fourth" })
-    );
+    expect(removeLines).toContainEqual(expect.objectContaining({ type: "remove", text: "second" }));
+    expect(addLines).toContainEqual(expect.objectContaining({ type: "add", text: "modified" }));
+    expect(addLines).toContainEqual(expect.objectContaining({ type: "add", text: "fourth" }));
   });
 
   it("empty: both inputs empty", () => {

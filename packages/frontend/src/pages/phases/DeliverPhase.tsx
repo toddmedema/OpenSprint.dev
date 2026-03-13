@@ -4,7 +4,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { DeploymentRecord, DeploymentConfig } from "@opensprint/shared";
 import { getDeploymentTargetConfig } from "@opensprint/shared";
 import { getProjectPhasePath } from "../../lib/phaseRouting";
-import { MOBILE_BREAKPOINT, PHASE_TOOLBAR_BUTTON_SIZE, PHASE_TOOLBAR_HEIGHT } from "../../lib/constants";
+import {
+  MOBILE_BREAKPOINT,
+  PHASE_TOOLBAR_BUTTON_SIZE,
+  PHASE_TOOLBAR_HEIGHT,
+} from "../../lib/constants";
 import { shouldRightAlignDropdown } from "../../lib/dropdownViewport";
 import { useAppDispatch, useAppSelector } from "../../store";
 import {
@@ -99,7 +103,11 @@ function FilterIcon({ className }: { className?: string }) {
   );
 }
 
-export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }: DeliverPhaseProps) {
+export function DeliverPhase({
+  projectId,
+  onOpenSettings,
+  onOpenGlobalSettings,
+}: DeliverPhaseProps) {
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -246,13 +254,9 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
     expoReadiness.expoConfigured &&
     expoReadiness.authOk &&
     expoReadiness.easProjectLinked;
-  const showExpoAuthBanner =
-    isExpoMode && !!expoReadiness && expoReadiness.authOk === false;
+  const showExpoAuthBanner = isExpoMode && !!expoReadiness && expoReadiness.authOk === false;
   const showExpoSetupRequired =
-    isExpoMode &&
-    !!expoReadiness &&
-    !expoReady &&
-    expoReadiness.authOk !== false; // other gaps (install, config, EAS link)
+    isExpoMode && !!expoReadiness && !expoReady && expoReadiness.authOk !== false; // other gaps (install, config, EAS link)
   const showSettingUpExpo =
     isExpoMode &&
     !!expoReadiness &&
@@ -307,8 +311,17 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                   className="inline-flex items-center gap-1.5 text-sm text-theme-status-done"
                   data-testid="expo-ready-indicator"
                 >
-                  <span className="inline-block w-4 h-4 rounded-full bg-theme-status-done flex items-center justify-center" aria-hidden>
-                    <svg className="w-2.5 h-2.5 text-theme-surface" viewBox="0 0 12 12" fill="currentColor" stroke="currentColor" strokeWidth="2">
+                  <span
+                    className="inline-block w-4 h-4 rounded-full bg-theme-status-done flex items-center justify-center"
+                    aria-hidden
+                  >
+                    <svg
+                      className="w-2.5 h-2.5 text-theme-surface"
+                      viewBox="0 0 12 12"
+                      fill="currentColor"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
                       <path d="M2 6l3 3 5-6" />
                     </svg>
                   </span>
@@ -338,7 +351,10 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                     type="button"
                     onClick={handleResetDeliver}
                     disabled={resetLoading}
-                    style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                    style={{
+                      minHeight: PHASE_TOOLBAR_BUTTON_SIZE,
+                      minWidth: PHASE_TOOLBAR_BUTTON_SIZE,
+                    }}
                     className="btn-secondary rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     data-testid="cancel-deployment-button"
                   >
@@ -355,7 +371,10 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                   <button
                     type="button"
                     onClick={handleDeployToBeta}
-                    style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                    style={{
+                      minHeight: PHASE_TOOLBAR_BUTTON_SIZE,
+                      minWidth: PHASE_TOOLBAR_BUTTON_SIZE,
+                    }}
                     className="btn-secondary rounded-sm"
                     data-testid="deploy-beta-button"
                   >
@@ -364,7 +383,10 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                   <button
                     type="button"
                     onClick={handleDeployToProd}
-                    style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                    style={{
+                      minHeight: PHASE_TOOLBAR_BUTTON_SIZE,
+                      minWidth: PHASE_TOOLBAR_BUTTON_SIZE,
+                    }}
                     className="btn-primary rounded-sm"
                     data-testid="deploy-prod-button"
                   >
@@ -373,12 +395,15 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                 </>
               )
             ) : isDeploying ? (
-                <>
+              <>
                 <button
                   type="button"
                   onClick={handleResetDeliver}
                   disabled={resetLoading}
-                  style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                  style={{
+                    minHeight: PHASE_TOOLBAR_BUTTON_SIZE,
+                    minWidth: PHASE_TOOLBAR_BUTTON_SIZE,
+                  }}
                   className="btn-secondary rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   data-testid="cancel-deployment-button"
                 >
@@ -405,7 +430,10 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                           key={t.name}
                           type="button"
                           onClick={() => dispatch(triggerDeliver({ projectId, target: t.name }))}
-                          style={{ minHeight: PHASE_TOOLBAR_BUTTON_SIZE, minWidth: PHASE_TOOLBAR_BUTTON_SIZE }}
+                          style={{
+                            minHeight: PHASE_TOOLBAR_BUTTON_SIZE,
+                            minWidth: PHASE_TOOLBAR_BUTTON_SIZE,
+                          }}
                           className={`rounded-sm ${t.isDefault ? "btn-primary" : "btn-secondary"}`}
                           data-testid={`deploy-to-${t.name}-button`}
                         >
@@ -722,82 +750,83 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
 
           {/* Desktop: detail inline. Mobile: detail only when deploy selected (rendered as overlay below). */}
           {!isMobile && (
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-theme-surface">
-            <div className="px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-theme-border">
-              <h3 className="text-sm font-medium text-theme-text">
-                {selectedRecord ? `Delivery ${formatDate(selectedRecord.startedAt)}` : "Live Log"}
-              </h3>
-              {canRollback && (
-                <button
-                  type="button"
-                  onClick={handleRollback}
-                  disabled={rollbackLoading}
-                  className="min-h-[44px] min-w-[44px] text-sm text-theme-warning-text hover:opacity-80 disabled:opacity-50 flex items-center justify-center"
-                >
-                  {rollbackLoading ? "Rolling back…" : "Rollback"}
-                </button>
-              )}
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-              {expoDeployError && (
-                <div
-                  className="mb-4 p-4 bg-theme-error-bg border border-theme-error-border rounded-lg text-sm text-theme-error-text whitespace-pre-wrap"
-                  data-testid="expo-deploy-auth-error"
-                >
-                  {expoDeployError}
-                  {(onOpenGlobalSettings ?? onOpenSettings) && (
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={onOpenGlobalSettings ?? onOpenSettings}
-                        className="text-brand-600 hover:text-brand-700 font-medium underline"
-                        data-testid="expo-auth-settings-link"
-                      >
-                        Open Settings to add Expo API Token →
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-              <pre
-                className="text-xs font-mono whitespace-pre-wrap text-theme-text bg-theme-code-bg text-theme-code-text p-4 rounded-lg min-h-full"
-                data-testid="deploy-log"
-              >
-                {displayLog.length > 0 ? displayLog.join("") : "(No log output)"}
-              </pre>
-              {selectedRecord?.url && (
-                <div className="mt-3">
-                  <a
-                    href={selectedRecord.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-brand-600 hover:text-brand-700 text-sm"
+            <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-theme-surface">
+              <div className="px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-theme-border">
+                <h3 className="text-sm font-medium text-theme-text">
+                  {selectedRecord ? `Delivery ${formatDate(selectedRecord.startedAt)}` : "Live Log"}
+                </h3>
+                {canRollback && (
+                  <button
+                    type="button"
+                    onClick={handleRollback}
+                    disabled={rollbackLoading}
+                    className="min-h-[44px] min-w-[44px] text-sm text-theme-warning-text hover:opacity-80 disabled:opacity-50 flex items-center justify-center"
                   >
-                    Open delivery →
-                  </a>
-                </div>
-              )}
-              {selectedRecord?.error && (
-                <div className="mt-3 p-3 bg-theme-error-bg border border-theme-error-border rounded text-sm text-theme-error-text">
-                  {selectedRecord.error}
-                  {selectedRecord.fixEpicId && (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        onClick={() => navigate(getProjectPhasePath(effectiveProjectId, "execute"))}
-                        className="text-brand-600 hover:text-brand-700 font-medium underline"
-                        data-testid="fix-epic-link"
-                      >
-                        View fix epic ({selectedRecord.fixEpicId}) →
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+                    {rollbackLoading ? "Rolling back…" : "Rollback"}
+                  </button>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                {expoDeployError && (
+                  <div
+                    className="mb-4 p-4 bg-theme-error-bg border border-theme-error-border rounded-lg text-sm text-theme-error-text whitespace-pre-wrap"
+                    data-testid="expo-deploy-auth-error"
+                  >
+                    {expoDeployError}
+                    {(onOpenGlobalSettings ?? onOpenSettings) && (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={onOpenGlobalSettings ?? onOpenSettings}
+                          className="text-brand-600 hover:text-brand-700 font-medium underline"
+                          data-testid="expo-auth-settings-link"
+                        >
+                          Open Settings to add Expo API Token →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <pre
+                  className="text-xs font-mono whitespace-pre-wrap text-theme-text bg-theme-code-bg text-theme-code-text p-4 rounded-lg min-h-full"
+                  data-testid="deploy-log"
+                >
+                  {displayLog.length > 0 ? displayLog.join("") : "(No log output)"}
+                </pre>
+                {selectedRecord?.url && (
+                  <div className="mt-3">
+                    <a
+                      href={selectedRecord.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand-600 hover:text-brand-700 text-sm"
+                    >
+                      Open delivery →
+                    </a>
+                  </div>
+                )}
+                {selectedRecord?.error && (
+                  <div className="mt-3 p-3 bg-theme-error-bg border border-theme-error-border rounded text-sm text-theme-error-text">
+                    {selectedRecord.error}
+                    {selectedRecord.fixEpicId && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(getProjectPhasePath(effectiveProjectId, "execute"))
+                          }
+                          className="text-brand-600 hover:text-brand-700 font-medium underline"
+                          data-testid="fix-epic-link"
+                        >
+                          View fix epic ({selectedRecord.fixEpicId}) →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
           )}
-
         </div>
 
         {/* Mobile: deploy detail as overlay when a deploy is selected */}
@@ -819,7 +848,9 @@ export function DeliverPhase({ projectId, onOpenSettings, onOpenGlobalSettings }
                 <div className="absolute inset-x-0 bottom-0 top-1/4 bg-theme-surface rounded-t-xl shadow-xl flex flex-col max-h-[90vh]">
                   <div className="px-4 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-theme-border">
                     <h3 className="text-sm font-medium text-theme-text">
-                      {selectedRecord ? `Delivery ${formatDate(selectedRecord.startedAt)}` : "Live Log"}
+                      {selectedRecord
+                        ? `Delivery ${formatDate(selectedRecord.startedAt)}`
+                        : "Live Log"}
                     </h3>
                     <div className="flex flex-wrap items-center gap-2 min-h-[44px]">
                       {canRollback && (

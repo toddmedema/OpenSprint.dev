@@ -39,8 +39,7 @@ vi.mock("../api/client", () => ({
       listVersions: (...args: unknown[]) => mockPlansListVersions(...args),
       getVersion: (...args: unknown[]) => mockPlansGetVersion(...args),
       execute: (...args: unknown[]) => mockPlansExecute(...args),
-      getCrossEpicDependencies: (...args: unknown[]) =>
-        mockGetCrossEpicDependencies(...args),
+      getCrossEpicDependencies: (...args: unknown[]) => mockGetCrossEpicDependencies(...args),
       create: vi.fn(),
       update: vi.fn(),
       archive: vi.fn(),
@@ -55,7 +54,11 @@ vi.mock("../api/client", () => ({
       history: vi.fn().mockResolvedValue({ messages: [] }),
       send: vi.fn().mockResolvedValue({ message: "" }),
     },
-    notifications: { listByProject: vi.fn().mockResolvedValue([]), resolve: vi.fn(), retryRateLimit: vi.fn() },
+    notifications: {
+      listByProject: vi.fn().mockResolvedValue([]),
+      resolve: vi.fn(),
+      retryRateLimit: vi.fn(),
+    },
   },
 }));
 
@@ -167,7 +170,11 @@ function createStore() {
       },
       eval: {},
       websocket: { connected: true, deliverToast: null },
-      openQuestions: { byProject: {}, global: [], async: { project: {}, global: { loading: false } } },
+      openQuestions: {
+        byProject: {},
+        global: [],
+        async: { project: {}, global: { loading: false } },
+      },
       notification: { items: [] },
       unreadPhase: {},
     },

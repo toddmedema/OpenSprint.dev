@@ -14,13 +14,19 @@ vi.mock("node:child_process", async (importOriginal) => {
   const mod = await importOriginal<typeof import("node:child_process")>();
   return {
     ...mod,
-    exec: vi.fn((_cmd: string, _opts: unknown, cb: (err: Error | null, stdout: string, stderr: string) => void) => {
-      setImmediate(() => cb(null, "", ""));
-      return {
-        stdout: { on: vi.fn() },
-        stderr: { on: vi.fn() },
-      };
-    }),
+    exec: vi.fn(
+      (
+        _cmd: string,
+        _opts: unknown,
+        cb: (err: Error | null, stdout: string, stderr: string) => void
+      ) => {
+        setImmediate(() => cb(null, "", ""));
+        return {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+        };
+      }
+    ),
   };
 });
 

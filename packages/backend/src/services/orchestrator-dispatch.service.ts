@@ -109,7 +109,11 @@ export interface OrchestratorDispatchHost {
     getCumulativeAttemptsFromIssue(task: StoredTask): number;
     listAll(projectId: string): Promise<StoredTask[]>;
   };
-  getProjectService(): { getSettings(projectId: string): Promise<{ mergeStrategy?: string; worktreeBaseBranch?: string }> };
+  getProjectService(): {
+    getSettings(
+      projectId: string
+    ): Promise<{ mergeStrategy?: string; worktreeBaseBranch?: string }>;
+  };
   getBranchManager(): { ensureOnMain(repoPath: string, baseBranch: string): Promise<void> };
   getFileScopeAnalyzer(): {
     predict(
@@ -158,9 +162,7 @@ export class OrchestratorDispatchService {
     const allIssues = await taskStore.listAll(projectId);
     const epicId = resolveEpicId(task.id, allIssues);
     const useEpicBranch = mergeStrategy === "per_epic" && epicId != null;
-    const branchName = useEpicBranch
-      ? `opensprint/epic_${epicId}`
-      : `opensprint/${task.id}`;
+    const branchName = useEpicBranch ? `opensprint/epic_${epicId}` : `opensprint/${task.id}`;
     const worktreeKey = useEpicBranch ? `epic_${epicId}` : task.id;
 
     const slot = this.host.createSlot(
@@ -171,12 +173,9 @@ export class OrchestratorDispatchService {
       assignee,
       worktreeKey
     );
-    slot.fileScope = await this.host.getFileScopeAnalyzer().predict(
-      projectId,
-      repoPath,
-      task,
-      { listAll: (p: string) => taskStore.listAll(p) }
-    );
+    slot.fileScope = await this.host
+      .getFileScopeAnalyzer()
+      .predict(projectId, repoPath, task, { listAll: (p: string) => taskStore.listAll(p) });
 
     this.host.transition(projectId, {
       to: "start_task",

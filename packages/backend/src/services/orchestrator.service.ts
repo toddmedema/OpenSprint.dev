@@ -25,10 +25,7 @@ import {
   type PlanComplexity,
   type AgentSuspendReason,
 } from "@opensprint/shared";
-import {
-  taskStore as taskStoreSingleton,
-  type StoredTask,
-} from "./task-store.service.js";
+import { taskStore as taskStoreSingleton, type StoredTask } from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
 import { agentService, createProcessGroupHandle } from "./agent.service.js";
 import { BranchManager } from "./branch-manager.js";
@@ -47,7 +44,6 @@ import { broadcastToProject } from "../websocket/index.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { assertSafeTaskWorktreePath } from "../utils/path-safety.js";
-import { shellExec } from "../utils/shell-exec.js";
 import { TimerRegistry } from "./timer-registry.js";
 import { AgentLifecycleManager, type AgentRunState } from "./agent-lifecycle.js";
 import { heartbeatService } from "./heartbeat.service.js";
@@ -64,7 +60,7 @@ import {
   type MergeQualityGateFailure,
   type MergeQualityGateRunOptions,
 } from "./merge-coordinator.service.js";
-import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
+import { runMergeQualityGates as runMergeQualityGatesShared } from "./merge-quality-gate-runner.js";
 import {
   TaskPhaseCoordinator,
   type TestOutcome,
@@ -118,32 +114,6 @@ import type { FailureType, RetryContext } from "./orchestrator-phase-context.js"
 
 /** Loop kicker interval: 60s — restarts idle orchestrator loop (distinct from 5-min WatchdogService health patrol). */
 const LOOP_KICKER_INTERVAL_MS = 60 * 1000;
-const QUALITY_GATE_FAILURE_OUTPUT_LIMIT = 4000;
-const QUALITY_GATE_FAILURE_REASON_LIMIT = 500;
-const QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS = 20 * 60 * 1000;
-const QUALITY_GATE_ENV_FINGERPRINTS: RegExp[] = [
-  /\bmodule_not_found\b/i,
-  /cannot find module/i,
-  /cannot find package/i,
-  /enoent[\s\S]*node_modules/i,
-  /missing node_modules/i,
-  /no such file or directory[\s\S]*node_modules/i,
-  /native addon/i,
-  /could not locate the bindings file/i,
-  /was compiled against a different node\.js version/i,
-];
-const QUALITY_GATE_NOISE_LINE_PATTERNS: RegExp[] = [
-  /^>\s+/,
-  /^npm (err!|error)\s+(code|path|command|errno|syscall|lifecycle)\b/i,
-  /^at\s+\S+/i,
-  /^node:/i,
-  /^[-=]{3,}$/,
-  /^⎯+/,
-  /^Test Files\b/i,
-  /^Tests\b/i,
-  /^Start at\b/i,
-  /^Duration\b/i,
-];
 
 /**
  * GUPP-style assignment file: everything an agent needs to self-start.
@@ -293,14 +263,15 @@ export class OrchestratorService {
   private _statusService: OrchestratorStatusService | null = null;
   private get statusService(): OrchestratorStatusService {
     if (!this._statusService)
-      this._statusService = new OrchestratorStatusService(
-        this.taskStore,
-        this.projectService
-      );
+      this._statusService = new OrchestratorStatusService(this.taskStore, this.projectService);
     return this._statusService;
   }
-  private loopService = new OrchestratorLoopService(this as unknown as import("./orchestrator-loop.service.js").OrchestratorLoopHost);
-  private dispatchService = new OrchestratorDispatchService(this as unknown as OrchestratorDispatchHost);
+  private loopService = new OrchestratorLoopService(
+    this as unknown as import("./orchestrator-loop.service.js").OrchestratorLoopHost
+  );
+  private dispatchService = new OrchestratorDispatchService(
+    this as unknown as OrchestratorDispatchHost
+  );
 
   private get projectService(): ProjectService {
     if (!this._projectService) this._projectService = new ProjectService();
@@ -549,7 +520,11 @@ export class OrchestratorService {
 
   private async persistCounters(projectId: string, repoPath: string): Promise<void> {
     const state = this.getState(projectId);
-    await this.statusService.persistCounters(projectId, repoPath, state as unknown as StateForStatus);
+    await this.statusService.persistCounters(
+      projectId,
+      repoPath,
+      state as unknown as StateForStatus
+    );
   }
 
   private async loadCounters(repoPath: string): Promise<OrchestratorCounters | null> {
@@ -585,7 +560,11 @@ export class OrchestratorService {
       await heartbeatService.deleteHeartbeat(wtPath, taskId).catch(() => {});
       if (slot?.worktreePath && slot.worktreePath !== repoPath) {
         try {
-          await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? taskId, slot.worktreePath);
+          await this.branchManager.removeTaskWorktree(
+            repoPath,
+            slot.worktreeKey ?? taskId,
+            slot.worktreePath
+          );
         } catch {
           // Best effort; worktree may already be gone
         }
@@ -643,7 +622,11 @@ export class OrchestratorService {
       await heartbeatService.deleteHeartbeat(wtPath, taskId);
       if (slot.worktreePath && slot.worktreePath !== repoPath) {
         try {
-          await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? taskId, slot.worktreePath);
+          await this.branchManager.removeTaskWorktree(
+            repoPath,
+            slot.worktreeKey ?? taskId,
+            slot.worktreePath
+          );
         } catch {
           // Best effort; worktree may already be gone
         }
@@ -711,7 +694,11 @@ export class OrchestratorService {
       await heartbeatService.deleteHeartbeat(wtPath, taskId);
       if (slot.worktreePath && slot.worktreePath !== repoPath) {
         try {
-          await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? taskId, slot.worktreePath);
+          await this.branchManager.removeTaskWorktree(
+            repoPath,
+            slot.worktreeKey ?? taskId,
+            slot.worktreePath
+          );
         } catch {
           // Best effort; worktree may already be gone
         }
@@ -1104,7 +1091,11 @@ export class OrchestratorService {
     await heartbeatService.deleteHeartbeat(wtPath, taskId);
     if (slot.worktreePath && slot.worktreePath !== repoPath) {
       try {
-        await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? taskId, slot.worktreePath);
+        await this.branchManager.removeTaskWorktree(
+          repoPath,
+          slot.worktreeKey ?? taskId,
+          slot.worktreePath
+        );
       } catch {
         // Best effort; worktree may already be gone
       }
@@ -1584,7 +1575,11 @@ export class OrchestratorService {
     await heartbeatService.deleteHeartbeat(wtPath, task.id).catch(() => {});
     if (slot.worktreePath && slot.worktreePath !== repoPath) {
       try {
-        await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? task.id, slot.worktreePath);
+        await this.branchManager.removeTaskWorktree(
+          repoPath,
+          slot.worktreeKey ?? task.id,
+          slot.worktreePath
+        );
       } catch {
         // Best effort
       }
@@ -1685,11 +1680,7 @@ export class OrchestratorService {
       const testCommand = resolveTestCommand(settings) || undefined;
       let changedFiles: string[] = [];
       try {
-        changedFiles = await this.branchManager.getChangedFiles(
-          repoPath,
-          branchName,
-          baseBranch
-        );
+        changedFiles = await this.branchManager.getChangedFiles(repoPath, branchName, baseBranch);
       } catch {
         // Fall back to full suite
       }
@@ -1797,7 +1788,11 @@ export class OrchestratorService {
         await heartbeatService.deleteHeartbeat(wtPath, task.id).catch(() => {});
         if (slot.worktreePath && slot.worktreePath !== repoPath) {
           try {
-            await this.branchManager.removeTaskWorktree(repoPath, slot.worktreeKey ?? task.id, slot.worktreePath);
+            await this.branchManager.removeTaskWorktree(
+              repoPath,
+              slot.worktreeKey ?? task.id,
+              slot.worktreePath
+            );
           } catch {
             // Best effort
           }
@@ -1837,12 +1832,9 @@ export class OrchestratorService {
     const timeoutMs = await this.projectService.getValidationTimeoutMs(projectId, preferredScope);
     const startedAt = Date.now();
     try {
-      const scopedResult = await this.testRunner.runScopedTests(
-        wtPath,
-        changedFiles,
-        testCommand,
-        { timeoutMs }
-      );
+      const scopedResult = await this.testRunner.runScopedTests(wtPath, changedFiles, testCommand, {
+        timeoutMs,
+      });
       const durationMs = Date.now() - startedAt;
       void this.projectService
         .recordValidationDuration(projectId, scopedResult.scope, durationMs)
@@ -1868,7 +1860,9 @@ export class OrchestratorService {
       normalized.includes("test status") ||
       normalized.includes("orchestrator-test-status");
     const mentionsStatusFile = normalized.includes("orchestrator-test-status.md");
-    if (!(mentionsPending && ((mentionsOrchestrator && mentionsValidation) || mentionsStatusFile))) {
+    if (
+      !(mentionsPending && ((mentionsOrchestrator && mentionsValidation) || mentionsStatusFile))
+    ) {
       return false;
     }
 
@@ -1951,29 +1945,30 @@ export class OrchestratorService {
       {
         reviewAngles: settings.reviewAngles,
         includeGeneralReview: settings.includeGeneralReview === true ? true : undefined,
-        ...(angles.length > 1 && !settings.includeGeneralReview && {
-          synthesizeReviewResults: async (outcomes) => {
-            const angleInputs = [...outcomes.entries()]
-              .filter(([, o]) => o.result && (o.status === "approved" || o.status === "rejected"))
-              .map(([angle, o]) => ({ angle, result: o.result! }));
-            if (angleInputs.length === 0) {
-              const first = outcomes.values().next().value;
-              return first ?? { status: "no_result" as const, result: null, exitCode: null };
-            }
-            const synthesized = await reviewSynthesizerService.synthesize(
-              projectId,
-              repoPath,
-              task,
-              angleInputs,
-              this.taskStore
-            );
-            return {
-              status: synthesized.status as "approved" | "rejected",
-              result: synthesized,
-              exitCode: 0,
-            };
-          },
-        }),
+        ...(angles.length > 1 &&
+          !settings.includeGeneralReview && {
+            synthesizeReviewResults: async (outcomes) => {
+              const angleInputs = [...outcomes.entries()]
+                .filter(([, o]) => o.result && (o.status === "approved" || o.status === "rejected"))
+                .map(([angle, o]) => ({ angle, result: o.result! }));
+              if (angleInputs.length === 0) {
+                const first = outcomes.values().next().value;
+                return first ?? { status: "no_result" as const, result: null, exitCode: null };
+              }
+              const synthesized = await reviewSynthesizerService.synthesize(
+                projectId,
+                repoPath,
+                task,
+                angleInputs,
+                this.taskStore
+              );
+              return {
+                status: synthesized.status as "approved" | "rejected",
+                result: synthesized,
+                exitCode: 0,
+              };
+            },
+          }),
       }
     );
     slot.phaseCoordinator = coordinator;
@@ -2454,91 +2449,6 @@ export class OrchestratorService {
     return context;
   }
 
-  private getFirstNonEmptyLine(text: string): string | null {
-    for (const line of text.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (trimmed.length > 0) return trimmed;
-    }
-    return null;
-  }
-
-  private getFirstMeaningfulQualityGateLine(text: string): string | null {
-    for (const line of text.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      if (QUALITY_GATE_NOISE_LINE_PATTERNS.some((pattern) => pattern.test(trimmed))) continue;
-      return trimmed;
-    }
-    return null;
-  }
-
-  private extractShellFailure(
-    command: string,
-    err: unknown
-  ): { reason: string; output: string; firstErrorLine: string } {
-    const e = err as { stdout?: string; stderr?: string; message?: string };
-    const output = [e.stdout ?? "", e.stderr ?? ""]
-      .filter((part) => part.trim().length > 0)
-      .join("\n")
-      .trim()
-      .slice(0, QUALITY_GATE_FAILURE_OUTPUT_LIMIT);
-    const reason = (e.message ?? `Command failed: ${command}`).slice(
-      0,
-      QUALITY_GATE_FAILURE_REASON_LIMIT
-    );
-    const firstErrorLine =
-      this.getFirstMeaningfulQualityGateLine(output) ??
-      this.getFirstNonEmptyLine(output) ??
-      this.getFirstNonEmptyLine(reason) ??
-      "Unknown quality gate failure";
-    return { reason, output, firstErrorLine };
-  }
-
-  private isQualityGateEnvironmentFailure(failure: {
-    reason: string;
-    output: string;
-    firstErrorLine: string;
-  }): boolean {
-    const text = `${failure.reason}\n${failure.output}\n${failure.firstErrorLine}`;
-    return QUALITY_GATE_ENV_FINGERPRINTS.some((fingerprint) => fingerprint.test(text));
-  }
-
-  private async repairQualityGateEnvironment(
-    repoPath: string,
-    wtPath: string
-  ): Promise<{ succeeded: boolean; commands: string[]; output: string }> {
-    const outputParts: string[] = [];
-    const repairRoot = wtPath === repoPath ? wtPath : repoPath;
-    let npmCiSucceeded = false;
-    try {
-      const { stdout, stderr } = await shellExec("npm ci", {
-        cwd: repairRoot,
-        timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
-      });
-      npmCiSucceeded = true;
-      const npmCiOutput = [stdout, stderr].filter(Boolean).join("\n").trim();
-      if (npmCiOutput) outputParts.push(`[npm ci] ${npmCiOutput}`);
-    } catch (err) {
-      const npmCiFailure = this.extractShellFailure("npm ci", err);
-      const npmCiOutput = [npmCiFailure.reason, npmCiFailure.output].filter(Boolean).join("\n").trim();
-      if (npmCiOutput) outputParts.push(`[npm ci] ${npmCiOutput}`);
-    }
-
-    let symlinkSucceeded = true;
-    try {
-      await this.branchManager.symlinkNodeModules(repoPath, wtPath);
-    } catch (err) {
-      symlinkSucceeded = false;
-      outputParts.push(`[symlinkNodeModules] ${getErrorMessage(err)}`);
-    }
-
-    return {
-      succeeded: npmCiSucceeded && symlinkSucceeded,
-      commands: ["npm ci", "symlinkNodeModules"],
-      output: outputParts.join("\n").slice(0, QUALITY_GATE_FAILURE_OUTPUT_LIMIT),
-    };
-  }
-
   private async preflightCheck(
     repoPath: string,
     wtPath: string,
@@ -2601,93 +2511,9 @@ export class OrchestratorService {
   async runMergeQualityGates(
     options: MergeQualityGateRunOptions
   ): Promise<MergeQualityGateFailure | null> {
-    // Test suites mock merge coordination heavily; skip expensive quality-gate execution in test runtime.
-    if (process.env.NODE_ENV === "test") return null;
-
-    const commands = getMergeQualityGateCommands();
-    const cwd = options.worktreePath;
-    const timeoutMs = QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS;
-
-    for (const command of commands) {
-      try {
-        log.info("Running pre-merge quality gate", {
-          projectId: options.projectId,
-          taskId: options.taskId,
-          command,
-          cwd,
-        });
-        await shellExec(command, {
-          cwd,
-          timeout: timeoutMs,
-        });
-      } catch (err) {
-        const initialFailure = this.extractShellFailure(command, err);
-        const isEnvironmentFailure = this.isQualityGateEnvironmentFailure(initialFailure);
-        if (!isEnvironmentFailure) {
-          log.warn("Pre-merge quality gate failed", {
-            projectId: options.projectId,
-            taskId: options.taskId,
-            command,
-            reason: initialFailure.reason,
-          });
-          return {
-            command,
-            reason: initialFailure.reason,
-            output: initialFailure.output,
-            outputSnippet: initialFailure.output.slice(0, 1800),
-            worktreePath: options.worktreePath,
-            firstErrorLine: initialFailure.firstErrorLine,
-            category: "quality_gate",
-            autoRepairAttempted: false,
-            autoRepairSucceeded: false,
-            autoRepairCommands: [],
-            autoRepairOutput: "",
-          };
-        }
-
-        const autoRepair = await this.repairQualityGateEnvironment(options.repoPath, options.worktreePath);
-        try {
-          log.info("Retrying quality gate after environment auto-repair", {
-            projectId: options.projectId,
-            taskId: options.taskId,
-            command,
-            repairCommands: autoRepair.commands,
-          });
-          await shellExec(command, {
-            cwd,
-            timeout: timeoutMs,
-          });
-          continue;
-        } catch (retryErr) {
-          const retryFailure = this.extractShellFailure(command, retryErr);
-          const retryStillEnvironmentFailure = this.isQualityGateEnvironmentFailure(retryFailure);
-          const category = retryStillEnvironmentFailure ? "environment_setup" : "quality_gate";
-          const reason = retryFailure.reason;
-          log.warn("Pre-merge quality gate failed after environment auto-repair retry", {
-            projectId: options.projectId,
-            taskId: options.taskId,
-            command,
-            reason,
-            category,
-          });
-          return {
-            command,
-            reason,
-            output: retryFailure.output,
-            outputSnippet: retryFailure.output.slice(0, 1800),
-            worktreePath: options.worktreePath,
-            firstErrorLine: retryFailure.firstErrorLine,
-            category,
-            autoRepairAttempted: true,
-            autoRepairSucceeded: autoRepair.succeeded,
-            autoRepairCommands: autoRepair.commands,
-            autoRepairOutput: autoRepair.output,
-          };
-        }
-      }
-    }
-
-    return null;
+    return runMergeQualityGatesShared(options, {
+      symlinkNodeModules: this.branchManager.symlinkNodeModules.bind(this.branchManager),
+    });
   }
 }
 

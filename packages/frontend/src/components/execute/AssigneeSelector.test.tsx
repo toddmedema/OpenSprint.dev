@@ -70,11 +70,7 @@ describe("AssigneeSelector", () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     renderWithProviders(
-      <AssigneeSelector
-        {...defaultProps}
-        currentAssignee="Alice"
-        onSelect={onSelect}
-      />
+      <AssigneeSelector {...defaultProps} currentAssignee="Alice" onSelect={onSelect} />
     );
 
     await user.click(screen.getByTestId("assignee-dropdown-trigger"));
@@ -128,13 +124,7 @@ describe("AssigneeSelector", () => {
   });
 
   it("readOnly shows assignee without dropdown", () => {
-    renderWithProviders(
-      <AssigneeSelector
-        {...defaultProps}
-        currentAssignee="Alice"
-        readOnly
-      />
-    );
+    renderWithProviders(<AssigneeSelector {...defaultProps} currentAssignee="Alice" readOnly />);
 
     expect(screen.getByTestId("assignee-read-only")).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
@@ -151,11 +141,7 @@ describe("AssigneeSelector", () => {
 
   it("shows no assignee icon when isAgentAssignee is true", () => {
     renderWithProviders(
-      <AssigneeSelector
-        {...defaultProps}
-        currentAssignee="Frodo"
-        isAgentAssignee={true}
-      />
+      <AssigneeSelector {...defaultProps} currentAssignee="Frodo" isAgentAssignee={true} />
     );
 
     const trigger = screen.getByTestId("assignee-dropdown-trigger");
@@ -172,12 +158,7 @@ describe("AssigneeSelector", () => {
 
   it("readOnly with agent assignee shows label without icon", () => {
     renderWithProviders(
-      <AssigneeSelector
-        {...defaultProps}
-        currentAssignee="Frodo"
-        isAgentAssignee={true}
-        readOnly
-      />
+      <AssigneeSelector {...defaultProps} currentAssignee="Frodo" isAgentAssignee={true} readOnly />
     );
 
     expect(screen.getByTestId("assignee-read-only")).toBeInTheDocument();

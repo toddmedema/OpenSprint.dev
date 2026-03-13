@@ -15,10 +15,7 @@ import {
 } from "../../test/test-utils";
 import type { RenderWithProvidersOptions } from "../../test/test-utils";
 
-function renderSidebar(
-  props: TaskDetailSidebarProps,
-  options?: RenderWithProvidersOptions
-) {
+function renderSidebar(props: TaskDetailSidebarProps, options?: RenderWithProvidersOptions) {
   return renderWithProviders(
     <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
       <TaskDetailSidebar {...props} />
@@ -222,11 +219,7 @@ describe("TaskDetailSidebar", () => {
     mockGet.mockResolvedValue(null);
     mockUpdatePriority.mockResolvedValue({});
     mockUpdateTask.mockImplementation(
-      async (
-        _projectId: string,
-        _taskId: string,
-        updates: { assignee?: string | null }
-      ) => ({
+      async (_projectId: string, _taskId: string, updates: { assignee?: string | null }) => ({
         ...defaultSelectedTaskData,
         assignee: updates.assignee ?? null,
       })
@@ -1274,7 +1267,9 @@ describe("TaskDetailSidebar", () => {
       expect(removeBtn).toBeInTheDocument();
       await user.click(removeBtn);
       expect(screen.getByTestId("sidebar-delete-link-dialog")).toBeInTheDocument();
-      expect(screen.getByText(/Are you sure you want to delete the Blocked on link to Task B\?/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Are you sure you want to delete the Blocked on link to Task B\?/)
+      ).toBeInTheDocument();
       await user.click(screen.getByTestId("sidebar-delete-link-confirm-btn"));
       await waitFor(() => {
         expect(mockRemoveDependency).toHaveBeenCalledWith("proj-1", "epic-1.1", "epic-1.2");
@@ -2073,7 +2068,10 @@ describe("TaskDetailSidebar", () => {
     it("shows assignee dropdown in metadata row when task is not done", () => {
       const props = createMinimalProps({
         selectedTaskData: { ...defaultSelectedTaskData, assignee: "Alice" },
-        teamMembers: [{ id: "alice", name: "Alice" }, { id: "bob", name: "Bob" }],
+        teamMembers: [
+          { id: "alice", name: "Alice" },
+          { id: "bob", name: "Bob" },
+        ],
         enableHumanTeammates: true,
       });
       renderSidebar(props, {
@@ -2117,7 +2115,10 @@ describe("TaskDetailSidebar", () => {
     it("persists assignee change when selecting team member", async () => {
       const user = userEvent.setup();
       const props = createMinimalProps({
-        teamMembers: [{ id: "alice", name: "Alice" }, { id: "bob", name: "Bob" }],
+        teamMembers: [
+          { id: "alice", name: "Alice" },
+          { id: "bob", name: "Bob" },
+        ],
         enableHumanTeammates: true,
       });
       renderSidebar(props, { preloadedState: defaultPreloadedState });
@@ -2346,7 +2347,6 @@ describe("TaskDetailSidebar", () => {
       const callout = screen.getByTestId("task-detail-active-callout");
       expect(callout).toHaveTextContent("Active: Coder");
     });
-
   });
 
   it("collapse/expand interaction is identical for Description, Source Feedback, and Live Output", async () => {
@@ -2684,7 +2684,9 @@ describe("TaskDetailSidebar", () => {
       preloadedState: defaultPreloadedState,
     });
 
-    expect(screen.getByRole("button", { name: /expand execution diagnostics/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /expand execution diagnostics/i })
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("execution-diagnostics-section")).not.toBeInTheDocument();
   });
 

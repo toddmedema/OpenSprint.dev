@@ -37,7 +37,12 @@ describe("open-browser", () => {
     });
 
     expect(result).toEqual({ status: "opened", command: "cmd.exe" });
-    expect(runCommand).toHaveBeenCalledWith("cmd.exe", ["/c", "start", "", "http://localhost:5173"]);
+    expect(runCommand).toHaveBeenCalledWith("cmd.exe", [
+      "/c",
+      "start",
+      "",
+      "http://localhost:5173",
+    ]);
   });
 
   it("logs only when all WSL browser-open strategies fail", async () => {

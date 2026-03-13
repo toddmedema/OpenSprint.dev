@@ -21,15 +21,9 @@ import { eventLogService } from "./event-log.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { createLogger } from "../utils/logger.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
-import {
-  classifyAgentApiError,
-  type AgentApiErrorKind,
-} from "../utils/error-utils.js";
+import { classifyAgentApiError, type AgentApiErrorKind } from "../utils/error-utils.js";
 import { notificationService } from "./notification.service.js";
-import {
-  buildTaskLastExecutionSummary,
-  compactExecutionText,
-} from "./task-execution-summary.js";
+import { buildTaskLastExecutionSummary, compactExecutionText } from "./task-execution-summary.js";
 import { resolveBaseBranch } from "../utils/git-repo-state.js";
 import { buildTestFailureRetrySummary } from "./orchestrator-test-status.js";
 import {
@@ -274,7 +268,10 @@ export class FailureHandlerService {
     if (previousTestFailures) {
       context.previousTestFailures = previousTestFailures;
     }
-    const previousDiff = this.truncateRetryContextText(params.previousDiff, RETRY_CONTEXT_DIFF_LIMIT);
+    const previousDiff = this.truncateRetryContextText(
+      params.previousDiff,
+      RETRY_CONTEXT_DIFF_LIMIT
+    );
     if (previousDiff) {
       context.previousDiff = previousDiff;
     }
@@ -365,8 +362,8 @@ export class FailureHandlerService {
         : null) ?? this.extractCommandFromFailureReason(params.reason);
     const firstErrorLine =
       (params.failureType === "test_failure"
-        ? this.firstFailedTestError(params.testResults ?? params.slot.phaseResult.testResults) ??
-          this.firstActionableFailureOutputLine(validationOutput)
+        ? (this.firstFailedTestError(params.testResults ?? params.slot.phaseResult.testResults) ??
+          this.firstActionableFailureOutputLine(validationOutput))
         : null) ?? this.firstActionableReasonLine(params.reason);
     const outputSnippet = this.toFailureOutputSnippet(validationOutput);
     const worktreePath = params.slot.worktreePath?.trim() || null;
@@ -445,8 +442,7 @@ export class FailureHandlerService {
         ? this.enrichNoResultReason(reason, slot.agent.outputLog)
         : reason;
     const isDependencySetupPreflightFailure =
-      failureType === "repo_preflight" &&
-      this.isDependencySetupPreflightFailure(effectiveReason);
+      failureType === "repo_preflight" && this.isDependencySetupPreflightFailure(effectiveReason);
     const remediationAction = this.remediationActionForFailure(
       failureType,
       isDependencySetupPreflightFailure
@@ -478,7 +474,9 @@ export class FailureHandlerService {
       reason: effectiveReason,
     });
 
-    const apiErrorKind = classifyAgentApiError(new Error(effectiveReason)) as AgentApiErrorKind | null;
+    const apiErrorKind = classifyAgentApiError(
+      new Error(effectiveReason)
+    ) as AgentApiErrorKind | null;
     // Surface failures in the notification system only when not a review-phase failure, or when
     // we will block (review notifications are created in blockTask when retries exceed limit).
     if (slot.phase !== "review") {
@@ -652,9 +650,9 @@ export class FailureHandlerService {
         ? `Attempt ${cumulativeAttempts} failed [timeout]: Agent stopped responding (${inactivityMinutes} min inactivity); task requeued.`
         : remediationAction
           ? `Attempt ${cumulativeAttempts} failed [${failureType}]: ${effectiveReason.slice(0, 500)} Remediation: ${remediationAction}`
-        : failureType === "review_rejection" && reviewFeedback
-          ? `Review rejected (attempt ${cumulativeAttempts}):\n\n${reviewFeedback.slice(0, 2000)}`
-          : `Attempt ${cumulativeAttempts} failed [${failureType}]: ${effectiveReason.slice(0, 500)}`;
+          : failureType === "review_rejection" && reviewFeedback
+            ? `Review rejected (attempt ${cumulativeAttempts}):\n\n${reviewFeedback.slice(0, 2000)}`
+            : `Attempt ${cumulativeAttempts} failed [${failureType}]: ${effectiveReason.slice(0, 500)}`;
     await this.host.taskStore
       .comment(projectId, task.id, commentText)
       .catch((err) => log.warn("Failed to add failure comment", { err }));

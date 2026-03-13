@@ -26,7 +26,9 @@ const { mockDbClient } = vi.hoisted(() => {
     query: vi.fn().mockResolvedValue([]),
     queryOne: vi.fn().mockResolvedValue(undefined),
     execute: vi.fn().mockResolvedValue(0),
-    runInTransaction: vi.fn().mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(client)),
+    runInTransaction: vi
+      .fn()
+      .mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(client)),
   };
   return { mockDbClient: client };
 });
@@ -44,18 +46,22 @@ vi.mock("../services/task-store.service.js", () => ({
     addDependency: vi.fn().mockResolvedValue(undefined),
     syncForPush: vi.fn().mockResolvedValue(undefined),
     getDb: vi.fn().mockResolvedValue(mockDbClient),
-    runWrite: vi.fn().mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(mockDbClient)),
+    runWrite: vi
+      .fn()
+      .mockImplementation(async (fn: (c: unknown) => Promise<unknown>) => fn(mockDbClient)),
   },
   TaskStoreService: vi.fn(),
   SCHEMA_SQL: "",
 }));
 
-const { mockGetNextKey, mockRecordLimitHit, mockRecordInvalidKey, mockClearLimitHit } = vi.hoisted(() => ({
-  mockGetNextKey: vi.fn(),
-  mockRecordLimitHit: vi.fn(),
-  mockRecordInvalidKey: vi.fn(),
-  mockClearLimitHit: vi.fn(),
-}));
+const { mockGetNextKey, mockRecordLimitHit, mockRecordInvalidKey, mockClearLimitHit } = vi.hoisted(
+  () => ({
+    mockGetNextKey: vi.fn(),
+    mockRecordLimitHit: vi.fn(),
+    mockRecordInvalidKey: vi.fn(),
+    mockClearLimitHit: vi.fn(),
+  })
+);
 
 const { mockOpenAICreate, mockOpenAIResponsesCreate } = vi.hoisted(() => ({
   mockOpenAICreate: vi.fn(),
@@ -263,7 +269,9 @@ describe("AgentClient", () => {
             killed: false,
             kill: vi.fn(),
             stdout: {
-              on: vi.fn((_ev: string, fn: (d: Buffer) => void) => fn(Buffer.from("Cursor response"))),
+              on: vi.fn((_ev: string, fn: (d: Buffer) => void) =>
+                fn(Buffer.from("Cursor response"))
+              ),
             },
             stderr: { on: vi.fn() },
             on: vi.fn((ev: string, fn: (code: number) => void) => {
@@ -638,13 +646,13 @@ describe("AgentClient", () => {
           apiKey: "lm-studio",
         })
       );
-      expect(mockOpenAICreate).toHaveBeenCalledWith(
-        expect.objectContaining({ model: "my-model" })
-      );
+      expect(mockOpenAICreate).toHaveBeenCalledWith(expect.objectContaining({ model: "my-model" }));
     });
 
     it("should throw user-facing message when LM Studio is unreachable", async () => {
-      mockOpenAICreate.mockRejectedValue(Object.assign(new Error("fetch failed"), { code: "ECONNREFUSED" }));
+      mockOpenAICreate.mockRejectedValue(
+        Object.assign(new Error("fetch failed"), { code: "ECONNREFUSED" })
+      );
 
       await expect(
         client.invoke({
@@ -830,7 +838,16 @@ describe("AgentClient", () => {
 
         expect(mockSpawn).toHaveBeenCalledWith(
           "C:\\Windows\\System32\\cmd.exe",
-          expect.arrayContaining(["/d", "/s", "/c", "agent", "--print", "--workspace", tmpDir, "--trust"]),
+          expect.arrayContaining([
+            "/d",
+            "/s",
+            "/c",
+            "agent",
+            "--print",
+            "--workspace",
+            tmpDir,
+            "--trust",
+          ]),
           expect.any(Object)
         );
       } finally {
@@ -877,8 +894,12 @@ describe("AgentClient", () => {
       expect(onOutput).toHaveBeenCalledWith(
         expect.stringContaining("[Agent error: Cursor agent CLI was not found. Install:")
       );
-      expect(onOutput.mock.calls[0][0]).toContain("Unix/macOS/Linux: curl https://cursor.com/install -fsS | bash");
-      expect(onOutput.mock.calls[0][0]).toContain("Windows (PowerShell): irm 'https://cursor.com/install?win32=true' | iex");
+      expect(onOutput.mock.calls[0][0]).toContain(
+        "Unix/macOS/Linux: curl https://cursor.com/install -fsS | bash"
+      );
+      expect(onOutput.mock.calls[0][0]).toContain(
+        "Windows (PowerShell): irm 'https://cursor.com/install?win32=true' | iex"
+      );
 
       await fs.rm(tmpDir, { recursive: true, force: true });
     });
@@ -1133,7 +1154,11 @@ describe("AgentClient", () => {
       const taskFilePath = path.join(taskDir, "prompt.md");
       await fs.writeFile(taskFilePath, "# Task\n\nAdd a button", "utf-8");
 
-      mockGetNextKey.mockResolvedValue({ key: "sk-ant-claude-spawn", keyId: "k1", source: "global" });
+      mockGetNextKey.mockResolvedValue({
+        key: "sk-ant-claude-spawn",
+        keyId: "k1",
+        source: "global",
+      });
       mockAnthropicStream.mockImplementation(() => {
         const stream = {
           on: vi.fn((ev: string, fn: (text: string) => void) => {
@@ -1146,7 +1171,9 @@ describe("AgentClient", () => {
             }
             return stream;
           }),
-          finalMessage: vi.fn().mockResolvedValue({ content: [{ type: "text", text: "Claude API output." }] }),
+          finalMessage: vi
+            .fn()
+            .mockResolvedValue({ content: [{ type: "text", text: "Claude API output." }] }),
         };
         return stream;
       });
@@ -1555,7 +1582,10 @@ describe("AgentClient", () => {
       const fs = await import("fs/promises");
       const path = await import("path");
       const os = await import("os");
-      const tmpDir = path.join(os.tmpdir(), `agent-client-output-cursor-session-auth-${Date.now()}`);
+      const tmpDir = path.join(
+        os.tmpdir(),
+        `agent-client-output-cursor-session-auth-${Date.now()}`
+      );
       const taskDir = path.join(tmpDir, ".opensprint/active/bd-a3f8.1");
       await fs.mkdir(taskDir, { recursive: true });
       const taskFilePath = path.join(taskDir, "prompt.md");
@@ -1807,9 +1837,7 @@ describe("AgentClient", () => {
       expect(firstArgs[firstModelIndex + 1]).toBe("composer-1.5");
       expect(secondArgs[secondModelIndex + 1]).toBe("auto");
       expect(mockRecordLimitHit).not.toHaveBeenCalled();
-      expect(onOutput).toHaveBeenCalledWith(
-        expect.stringContaining("Retrying with model auto")
-      );
+      expect(onOutput).toHaveBeenCalledWith(expect.stringContaining("Retrying with model auto"));
 
       await fs.rm(tmpDir, { recursive: true, force: true });
     });
@@ -1849,7 +1877,11 @@ describe("AgentClient", () => {
         await new Promise((resolve) => setTimeout(resolve, 250));
         expect(onExit).not.toHaveBeenCalled();
 
-        await fs.writeFile(path.join(taskDir, "result.json"), JSON.stringify({ status: "success" }), "utf-8");
+        await fs.writeFile(
+          path.join(taskDir, "result.json"),
+          JSON.stringify({ status: "success" }),
+          "utf-8"
+        );
         await vi.waitFor(
           () => {
             expect(onExit).toHaveBeenCalledWith(0);

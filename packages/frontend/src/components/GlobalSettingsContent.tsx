@@ -379,7 +379,9 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
           >
             expo.dev/settings/access-tokens
           </a>
-          . Alternatively, run <code className="text-xs bg-theme-bg-elevated px-1 rounded">npx eas login</code> in your project.
+          . Alternatively, run{" "}
+          <code className="text-xs bg-theme-bg-elevated px-1 rounded">npx eas login</code> in your
+          project.
         </p>
         <div className="flex gap-2 items-end">
           <div className="flex-1">
@@ -408,7 +410,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
               const startTime = Date.now();
               try {
                 const res = await api.globalSettings.put({
-                  expoToken: expoToken === "••••••••" ? undefined : expoToken.trim() ?? "",
+                  expoToken: expoToken === "••••••••" ? undefined : (expoToken.trim() ?? ""),
                 });
                 setExpoTokenConfigured(res.expoTokenConfigured ?? false);
                 setExpoToken(res.expoTokenConfigured ? "••••••••" : "");
@@ -445,8 +447,8 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
         >
           <h3 className="text-sm font-semibold text-theme-text">Upgrade to PostgreSQL</h3>
           <p className="text-xs text-theme-muted mt-1 mb-3">
-            You&apos;re using SQLite. Migrate your data to PostgreSQL for production or
-            multi-user use.
+            You&apos;re using SQLite. Migrate your data to PostgreSQL for production or multi-user
+            use.
           </p>
           <button
             type="button"
@@ -598,8 +600,8 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
             </div>
             <div className="px-5 py-4 space-y-3">
               <p className="text-sm text-theme-text">
-                Enter your PostgreSQL connection URL. All data will be copied from SQLite to the
-                new database, then the app will switch to it.
+                Enter your PostgreSQL connection URL. All data will be copied from SQLite to the new
+                database, then the app will switch to it.
               </p>
               <input
                 type="text"
@@ -686,7 +688,10 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
       </div>
       {typeof window !== "undefined" && window.electron?.isElectron && (
         <div data-testid="desktop-notification-dot-section">
-          <label htmlFor="show-notification-dot-in-menu-bar" className="flex items-center gap-2 cursor-pointer">
+          <label
+            htmlFor="show-notification-dot-in-menu-bar"
+            className="flex items-center gap-2 cursor-pointer"
+          >
             <input
               id="show-notification-dot-in-menu-bar"
               type="checkbox"
@@ -712,7 +717,10 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
           <p className="text-xs text-theme-muted mt-1 ml-6">
             When unchecked, the tray icon will not show a dot when you have pending notifications.
           </p>
-          <label htmlFor="show-running-agent-count-in-menu-bar" className="flex items-center gap-2 cursor-pointer mt-3">
+          <label
+            htmlFor="show-running-agent-count-in-menu-bar"
+            className="flex items-center gap-2 cursor-pointer mt-3"
+          >
             <input
               id="show-running-agent-count-in-menu-bar"
               type="checkbox"

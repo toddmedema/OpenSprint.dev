@@ -315,11 +315,7 @@ describe("global-settings.service", () => {
 
       const updated = await updateGlobalSettings({
         apiKeys: {
-          ANTHROPIC_API_KEY: [
-            { id: "k3" },
-            { id: "k1" },
-            { id: "k2" },
-          ],
+          ANTHROPIC_API_KEY: [{ id: "k3" }, { id: "k1" }, { id: "k2" }],
         },
       });
 

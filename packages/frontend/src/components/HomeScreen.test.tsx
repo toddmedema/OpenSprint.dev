@@ -101,7 +101,9 @@ describe("HomeScreen", () => {
     await screen.findByTestId("installation-checklist");
 
     expect(screen.getByText("Installation checklist")).toBeInTheDocument();
-    expect(screen.getByText(/Install the following so you can create new projects/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Install the following so you can create new projects/)
+    ).toBeInTheDocument();
     const installGit = screen.getByTestId("prereq-install-git");
     const installNodejs = screen.getByTestId("prereq-install-nodejs");
     expect(installGit).toHaveAttribute("href", "https://git-scm.com/download/win");
@@ -240,9 +242,7 @@ describe("HomeScreen", () => {
     await user.click(screen.getByTestId("create-new-button"));
 
     expect(await screen.findByTestId("onboarding-page")).toBeInTheDocument();
-    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(
-      /\/projects\/create-new/
-    );
+    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(/\/projects\/create-new/);
   });
 
   it("navigates to /onboarding?intended=/projects/add-existing when Add Existing clicked and no API keys", async () => {
@@ -266,9 +266,7 @@ describe("HomeScreen", () => {
     await user.click(screen.getByTestId("add-existing-button"));
 
     expect(await screen.findByTestId("onboarding-page")).toBeInTheDocument();
-    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(
-      /\/projects\/add-existing/
-    );
+    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(/\/projects\/add-existing/);
   });
 
   it("when useCustomCli true, Create New navigates to /projects/create-new", async () => {

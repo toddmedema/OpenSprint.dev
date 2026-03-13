@@ -189,9 +189,10 @@ describe("extractJsonArrayFromAgentResponse", () => {
   it("extracts JSON array with leading text (e.g. enrichment agent response)", () => {
     const content = `Here are the items with priority and complexity:
 [{"title":"Add tests","priority":1,"complexity":3},{"title":"Refactor API","priority":0,"complexity":7}]`;
-    const result = extractJsonArrayFromAgentResponse<Array<{ title: string; priority: number; complexity: number }>>(
-      content
-    );
+    const result =
+      extractJsonArrayFromAgentResponse<
+        Array<{ title: string; priority: number; complexity: number }>
+      >(content);
     expect(result).not.toBeNull();
     expect(result).toHaveLength(2);
     expect(result![0]).toEqual({ title: "Add tests", priority: 1, complexity: 3 });
@@ -200,9 +201,8 @@ describe("extractJsonArrayFromAgentResponse", () => {
 
   it("extracts bare JSON array", () => {
     const content = '[{"title":"A","priority":1}]';
-    const result = extractJsonArrayFromAgentResponse<Array<{ title: string; priority: number }>>(
-      content
-    );
+    const result =
+      extractJsonArrayFromAgentResponse<Array<{ title: string; priority: number }>>(content);
     expect(result).not.toBeNull();
     expect(result).toHaveLength(1);
     expect(result![0]).toEqual({ title: "A", priority: 1 });

@@ -71,7 +71,8 @@ export function PlanDetailContent({
     if (isViewingPastVersion && versionContent && !versionQuery.isError) {
       const parsed = parsePlanContent(versionContent.content ?? "");
       return {
-        viewTitle: (versionContent.title ?? parsed.title) || formatPlanIdAsTitle(plan.metadata.planId),
+        viewTitle:
+          (versionContent.title ?? parsed.title) || formatPlanIdAsTitle(plan.metadata.planId),
         viewBody: (parsed.body ?? "").trim() || "_No content yet_",
         isReadOnly: true,
       };
@@ -81,7 +82,14 @@ export function PlanDetailContent({
       viewBody: (body ?? "").trim() || "_No content yet_",
       isReadOnly: false,
     };
-  }, [isViewingPastVersion, versionContent, versionQuery.isError, plan.metadata.planId, displayTitle, body]);
+  }, [
+    isViewingPastVersion,
+    versionContent,
+    versionQuery.isError,
+    plan.metadata.planId,
+    displayTitle,
+    body,
+  ]);
 
   const [titleValue, setTitleValue] = useState(displayTitle);
   const [savedRecently, setSavedRecently] = useState(false);
@@ -175,7 +183,10 @@ export function PlanDetailContent({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1 space-y-1">
           {isReadOnly ? (
-            <h2 className="font-semibold text-theme-text px-2 py-1" data-testid="plan-viewing-title">
+            <h2
+              className="font-semibold text-theme-text px-2 py-1"
+              data-testid="plan-viewing-title"
+            >
               {viewTitle}
             </h2>
           ) : (
@@ -198,7 +209,9 @@ export function PlanDetailContent({
             </>
           )}
         </div>
-        {headerActions && !isReadOnly && <div className="shrink-0 flex items-center gap-2">{headerActions}</div>}
+        {headerActions && !isReadOnly && (
+          <div className="shrink-0 flex items-center gap-2">{headerActions}</div>
+        )}
       </div>
       {showVersionSelector && (
         <div className="flex items-center gap-2 flex-wrap" data-testid="plan-version-selector">
@@ -227,7 +240,8 @@ export function PlanDetailContent({
               {versions.map((v) => {
                 const num = v.version_number ?? 0;
                 const isExecuted =
-                  num === lastExecuted || (v as { is_executed_version?: boolean }).is_executed_version;
+                  num === lastExecuted ||
+                  (v as { is_executed_version?: boolean }).is_executed_version;
                 const label = isExecuted ? `v${num} (Executed)` : `v${num}`;
                 return (
                   <option key={v.id ?? num} value={num}>

@@ -2,11 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createElement } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  usePlanVersions,
-  usePlanVersion,
-  useExecutePlan,
-} from "./plans";
+import { usePlanVersions, usePlanVersion, useExecutePlan } from "./plans";
 
 vi.mock("../client", () => ({
   api: {
@@ -35,8 +31,18 @@ function createWrapper() {
 describe("usePlanVersions", () => {
   beforeEach(() => {
     vi.mocked(api.plans.listVersions).mockResolvedValue([
-      { id: "v1", version_number: 1, created_at: "2025-01-01T00:00:00Z", is_executed_version: false },
-      { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z", is_executed_version: true },
+      {
+        id: "v1",
+        version_number: 1,
+        created_at: "2025-01-01T00:00:00Z",
+        is_executed_version: false,
+      },
+      {
+        id: "v2",
+        version_number: 2,
+        created_at: "2025-01-02T00:00:00Z",
+        is_executed_version: true,
+      },
     ]);
   });
 
@@ -48,10 +54,7 @@ describe("usePlanVersions", () => {
     const listSpy = vi.mocked(api.plans.listVersions);
     const wrapper = createWrapper();
 
-    const { result } = renderHook(
-      () => usePlanVersions("proj-1", "plan-1"),
-      { wrapper }
-    );
+    const { result } = renderHook(() => usePlanVersions("proj-1", "plan-1"), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(listSpy).toHaveBeenCalledWith("proj-1", "plan-1");
@@ -64,10 +67,7 @@ describe("usePlanVersions", () => {
     const listSpy = vi.mocked(api.plans.listVersions);
     const wrapper = createWrapper();
 
-    const { result } = renderHook(
-      () => usePlanVersions(undefined, "plan-1"),
-      { wrapper }
-    );
+    const { result } = renderHook(() => usePlanVersions(undefined, "plan-1"), { wrapper });
 
     await waitFor(() => expect(result.current.isFetching).toBe(false));
     expect(listSpy).not.toHaveBeenCalled();
@@ -78,10 +78,7 @@ describe("usePlanVersions", () => {
     const listSpy = vi.mocked(api.plans.listVersions);
     const wrapper = createWrapper();
 
-    const { result } = renderHook(
-      () => usePlanVersions("proj-1", undefined),
-      { wrapper }
-    );
+    const { result } = renderHook(() => usePlanVersions("proj-1", undefined), { wrapper });
 
     await waitFor(() => expect(result.current.isFetching).toBe(false));
     expect(listSpy).not.toHaveBeenCalled();
@@ -91,10 +88,7 @@ describe("usePlanVersions", () => {
     vi.mocked(api.plans.listVersions).mockRejectedValue(new Error("list versions failed"));
     const wrapper = createWrapper();
 
-    const { result } = renderHook(
-      () => usePlanVersions("proj-1", "plan-1"),
-      { wrapper }
-    );
+    const { result } = renderHook(() => usePlanVersions("proj-1", "plan-1"), { wrapper });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toEqual(new Error("list versions failed"));
@@ -123,10 +117,7 @@ describe("usePlanVersion", () => {
     const getSpy = vi.mocked(api.plans.getVersion);
     const wrapper = createWrapper();
 
-    const { result } = renderHook(
-      () => usePlanVersion("proj-1", "plan-1", 2),
-      { wrapper }
-    );
+    const { result } = renderHook(() => usePlanVersion("proj-1", "plan-1", 2), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(getSpy).toHaveBeenCalledWith("proj-1", "plan-1", 2);
@@ -137,10 +128,7 @@ describe("usePlanVersion", () => {
     const getSpy = vi.mocked(api.plans.getVersion);
     const wrapper = createWrapper();
 
-    const { result } = renderHook(
-      () => usePlanVersion("proj-1", "plan-1", 0),
-      { wrapper }
-    );
+    const { result } = renderHook(() => usePlanVersion("proj-1", "plan-1", 0), { wrapper });
 
     await waitFor(() => expect(result.current.isFetching).toBe(false));
     expect(getSpy).not.toHaveBeenCalled();
@@ -150,10 +138,7 @@ describe("usePlanVersion", () => {
     const getSpy = vi.mocked(api.plans.getVersion);
     const wrapper = createWrapper();
 
-    renderHook(
-      () => usePlanVersion("proj-1", "plan-1", undefined),
-      { wrapper }
-    );
+    renderHook(() => usePlanVersion("proj-1", "plan-1", undefined), { wrapper });
 
     await waitFor(() => expect(getSpy).not.toHaveBeenCalled());
   });
@@ -162,10 +147,7 @@ describe("usePlanVersion", () => {
     vi.mocked(api.plans.getVersion).mockRejectedValue(new Error("get version failed"));
     const wrapper = createWrapper();
 
-    const { result } = renderHook(
-      () => usePlanVersion("proj-1", "plan-1", 2),
-      { wrapper }
-    );
+    const { result } = renderHook(() => usePlanVersion("proj-1", "plan-1", 2), { wrapper });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toEqual(new Error("get version failed"));
@@ -246,9 +228,7 @@ describe("useExecutePlan", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toEqual(new Error("execute failed"));
     const versionsCalls = invalidateSpy.mock.calls.filter(
-      (call) =>
-        Array.isArray(call[0]?.queryKey) &&
-        call[0].queryKey[3] === "versions"
+      (call) => Array.isArray(call[0]?.queryKey) && call[0].queryKey[3] === "versions"
     );
     expect(versionsCalls).toHaveLength(0);
   });

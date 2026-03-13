@@ -411,7 +411,8 @@ function formatAgentError(
   // Cursor: security helper exit 45 (transient; retries usually succeed)
   if (
     agentType === "cursor" &&
-    (lower.includes("security command failed") || (lower.includes("security process") && lower.includes("code") && lower.includes("45")))
+    (lower.includes("security command failed") ||
+      (lower.includes("security process") && lower.includes("code") && lower.includes("45")))
   ) {
     return "Cursor security helper failed (exit 45). Retrying usually helps; if it persists, try running the agent from a terminal or restarting Cursor.";
   }
@@ -497,10 +498,7 @@ function toCursorRotatableApiErrorKind(err: unknown): RotatableApiErrorKind | nu
   return isCursorSessionAuthError(err) ? null : kind;
 }
 
-function getProviderBlockedMessage(
-  provider: ApiKeyProvider,
-  kind: RotatableApiErrorKind
-): string {
+function getProviderBlockedMessage(provider: ApiKeyProvider, kind: RotatableApiErrorKind): string {
   const providerLabel =
     provider === "ANTHROPIC_API_KEY"
       ? "Anthropic"
@@ -2111,20 +2109,13 @@ export class AgentClient {
           kind: exhaustedKind,
           agentType: "openai",
           raw: msg,
-          ...buildApiFailureMessages(
-            "openai",
-            exhaustedKind,
-            { allKeysExhausted: exhaustedKind === "rate_limit" }
-          ),
+          ...buildApiFailureMessages("openai", exhaustedKind, {
+            allKeysExhausted: exhaustedKind === "rate_limit",
+          }),
           isLimitError: exhaustedKind === "rate_limit",
           ...(exhaustedKind === "rate_limit" ? { allKeysExhausted: true } : {}),
         });
-        throw new AppError(
-          400,
-          ErrorCodes.AGENT_INVOKE_FAILED,
-          details.userMessage,
-          details
-        );
+        throw new AppError(400, ErrorCodes.AGENT_INVOKE_FAILED, details.userMessage, details);
       }
 
       const { key, keyId, source } = resolved;
@@ -2141,12 +2132,7 @@ export class AgentClient {
           isLimitError: exhaustedKind === "rate_limit",
           ...(exhaustedKind === "rate_limit" ? { allKeysExhausted: true } : {}),
         });
-        throw new AppError(
-          502,
-          ErrorCodes.AGENT_INVOKE_FAILED,
-          details.userMessage,
-          details
-        );
+        throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, details.userMessage, details);
       }
       triedKeyIds.add(keyId);
 
@@ -2318,20 +2304,13 @@ export class AgentClient {
           kind: exhaustedKind,
           agentType: "google",
           raw: msg,
-          ...buildApiFailureMessages(
-            "google",
-            exhaustedKind,
-            { allKeysExhausted: exhaustedKind === "rate_limit" }
-          ),
+          ...buildApiFailureMessages("google", exhaustedKind, {
+            allKeysExhausted: exhaustedKind === "rate_limit",
+          }),
           isLimitError: exhaustedKind === "rate_limit",
           ...(exhaustedKind === "rate_limit" ? { allKeysExhausted: true } : {}),
         });
-        throw new AppError(
-          400,
-          ErrorCodes.AGENT_INVOKE_FAILED,
-          details.userMessage,
-          details
-        );
+        throw new AppError(400, ErrorCodes.AGENT_INVOKE_FAILED, details.userMessage, details);
       }
 
       const { key, keyId, source } = resolved;
@@ -2348,12 +2327,7 @@ export class AgentClient {
           isLimitError: exhaustedKind === "rate_limit",
           ...(exhaustedKind === "rate_limit" ? { allKeysExhausted: true } : {}),
         });
-        throw new AppError(
-          502,
-          ErrorCodes.AGENT_INVOKE_FAILED,
-          details.userMessage,
-          details
-        );
+        throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, details.userMessage, details);
       }
       triedKeyIds.add(keyId);
 
@@ -2419,7 +2393,8 @@ export class AgentClient {
           ...(toRotatableApiErrorKind(error) === "rate_limit"
             ? buildApiFailureMessages("google", "rate_limit")
             : {
-                userMessage: "Google Gemini failed. Check the configured API key and model in Settings.",
+                userMessage:
+                  "Google Gemini failed. Check the configured API key and model in Settings.",
                 notificationMessage:
                   "Google Gemini needs attention in Settings before work can continue.",
               }),

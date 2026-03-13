@@ -972,7 +972,9 @@ describe("DeliverPhase", () => {
         renderWithRouter(store);
         await waitFor(() => expect(screen.getByText("Delivery History")).toBeInTheDocument());
         expect(screen.getByTestId("delivery-history-mobile-main")).toBeInTheDocument();
-        expect(screen.queryByRole("slider", { name: "Resize delivery history sidebar" })).not.toBeInTheDocument();
+        expect(
+          screen.queryByRole("slider", { name: "Resize delivery history sidebar" })
+        ).not.toBeInTheDocument();
         const deploy1Row = screen.getByText("Staging").closest("button");
         expect(deploy1Row).toBeInTheDocument();
         fireEvent.click(deploy1Row!);

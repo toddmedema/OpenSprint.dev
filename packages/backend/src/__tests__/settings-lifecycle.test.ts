@@ -82,7 +82,10 @@ async function writeProjectToGlobalStore(
 ): Promise<void> {
   const storePath = getProjectSettingsPath(tempDir);
   const raw = await fs.readFile(storePath, "utf-8");
-  const store = JSON.parse(raw) as Record<string, { settings: Record<string, unknown>; updatedAt: string }>;
+  const store = JSON.parse(raw) as Record<
+    string,
+    { settings: Record<string, unknown>; updatedAt: string }
+  >;
   const entry = store[projectId];
   if (entry?.settings) {
     Object.assign(entry.settings, patch);
@@ -609,13 +612,11 @@ describe("Settings API lifecycle", () => {
   });
 
   it("PUT /api/v1/projects/:id/settings ignores selfImprovementLastRunAt and selfImprovementLastCommitSha from client", async () => {
-    const putRes = await request(app)
-      .put(`${API_PREFIX}/projects/${projectId}/settings`)
-      .send({
-        selfImprovementFrequency: "weekly",
-        selfImprovementLastRunAt: "2025-01-15T12:00:00Z",
-        selfImprovementLastCommitSha: "client-set-sha",
-      });
+    const putRes = await request(app).put(`${API_PREFIX}/projects/${projectId}/settings`).send({
+      selfImprovementFrequency: "weekly",
+      selfImprovementLastRunAt: "2025-01-15T12:00:00Z",
+      selfImprovementLastCommitSha: "client-set-sha",
+    });
 
     expect(putRes.status).toBe(200);
     expect(putRes.body.data.selfImprovementFrequency).toBe("weekly");
@@ -635,6 +636,8 @@ describe("Settings API lifecycle", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("INVALID_INPUT");
-    expect(res.body.error?.message).toMatch(/selfImprovementFrequency|never|after_each_plan|daily|weekly/);
+    expect(res.body.error?.message).toMatch(
+      /selfImprovementFrequency|never|after_each_plan|daily|weekly/
+    );
   });
 });

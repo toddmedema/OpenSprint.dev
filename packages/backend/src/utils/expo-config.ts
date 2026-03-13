@@ -13,10 +13,12 @@ const APP_CONFIG_TS = "app.config.ts";
 
 /** Slugify a string for Expo slug (URL-friendly, lowercase, hyphens) */
 function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "") || "app";
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "app"
+  );
 }
 
 export interface ExpoConfigStatus {
@@ -80,7 +82,12 @@ export async function getExpoConfigStatus(repoPath: string): Promise<ExpoConfigS
   return {
     configured: false,
     configPath,
-    reason: !name && !slug ? "Missing expo.name and expo.slug" : !name ? "Missing expo.name" : "Missing expo.slug",
+    reason:
+      !name && !slug
+        ? "Missing expo.name and expo.slug"
+        : !name
+          ? "Missing expo.name"
+          : "Missing expo.slug",
   };
 }
 
@@ -99,7 +106,10 @@ export async function ensureExpoConfig(
   const status = await getExpoConfigStatus(repoPath);
 
   // app.config.js/ts: we don't modify dynamic configs
-  if (status.configPath && (status.configPath.endsWith(".js") || status.configPath.endsWith(".ts"))) {
+  if (
+    status.configPath &&
+    (status.configPath.endsWith(".js") || status.configPath.endsWith(".ts"))
+  ) {
     return { ok: true };
   }
 

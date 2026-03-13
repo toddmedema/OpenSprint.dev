@@ -13,7 +13,10 @@ import { AgentClient } from "../services/agent-client.js";
 import type { AgentConfig } from "@opensprint/shared";
 
 // Avoid loading drizzle-orm/pg-core (vitest resolution can fail in some workspaces)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 const LM_STUDIO_URL = process.env.LM_STUDIO_URL;
@@ -69,11 +72,7 @@ describe("LM Studio integration", () => {
           const taskDir = path.join(tmpDir, ".opensprint", "active", "os-lm.1");
           await fs.mkdir(taskDir, { recursive: true });
           const taskFilePath = path.join(taskDir, "prompt.md");
-          await fs.writeFile(
-            taskFilePath,
-            "# Task\n\nReply with exactly: DONE",
-            "utf-8"
-          );
+          await fs.writeFile(taskFilePath, "# Task\n\nReply with exactly: DONE", "utf-8");
 
           const outputChunks: string[] = [];
           let exitCode: number | null = null;
@@ -146,8 +145,7 @@ describe("LM Studio integration", () => {
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         expect(message).toMatch(/LM Studio/i);
-        const hintsStartOrUrl =
-          /Start|running|port|URL|server|localhost|1234/i.test(message);
+        const hintsStartOrUrl = /Start|running|port|URL|server|localhost|1234/i.test(message);
         expect(hintsStartOrUrl).toBe(true);
       }
     });
@@ -166,14 +164,7 @@ describe("LM Studio integration", () => {
         exitCode = code;
       };
 
-      client.spawnWithTaskFile(
-        unavailableConfig,
-        taskFilePath,
-        tmpDir,
-        onOutput,
-        onExit,
-        "coder"
-      );
+      client.spawnWithTaskFile(unavailableConfig, taskFilePath, tmpDir, onOutput, onExit, "coder");
 
       await new Promise<void>((resolve, reject) => {
         const deadline = Date.now() + 10_000;
@@ -193,8 +184,7 @@ describe("LM Studio integration", () => {
       expect(exitCode).toBe(1);
       const fullOutput = outputChunks.join("");
       expect(fullOutput).toMatch(/LM Studio/i);
-      const hintsStartOrUrl =
-        /Start|running|port|URL|server|localhost|1234/i.test(fullOutput);
+      const hintsStartOrUrl = /Start|running|port|URL|server|localhost|1234/i.test(fullOutput);
       expect(hintsStartOrUrl).toBe(true);
 
       await fs.rm(tmpDir, { recursive: true, force: true });

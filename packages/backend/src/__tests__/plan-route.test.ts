@@ -10,7 +10,10 @@ import { API_PREFIX } from "@opensprint/shared";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 const mockSuggestInvoke = vi.fn();
@@ -389,30 +392,30 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
     "PUT /projects/:id/plans/:planId updates plan title and markdown content",
     { timeout: 60_000 },
     async () => {
-    const planBody = {
-      title: "Original Feature",
-      content: "# Original Feature\n\n## Overview\n\nOriginal content.",
-      complexity: "low",
-    };
+      const planBody = {
+        title: "Original Feature",
+        content: "# Original Feature\n\n## Overview\n\nOriginal content.",
+        complexity: "low",
+      };
 
-    const createRes = await request(app)
-      .post(`${API_PREFIX}/projects/${projectId}/plans`)
-      .send(planBody);
-    expect(createRes.status).toBe(201);
-    const planId = createRes.body.data.metadata.planId;
+      const createRes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
+      expect(createRes.status).toBe(201);
+      const planId = createRes.body.data.metadata.planId;
 
-    const updatedContent =
-      "# Updated Feature Title\n\n## Overview\n\nUpdated markdown body with new content.";
-    const putRes = await request(app)
-      .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
-      .send({ content: updatedContent });
+      const updatedContent =
+        "# Updated Feature Title\n\n## Overview\n\nUpdated markdown body with new content.";
+      const putRes = await request(app)
+        .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
+        .send({ content: updatedContent });
 
-    expect(putRes.status).toBe(200);
-    expect(putRes.body.data.content).toBe(updatedContent);
+      expect(putRes.status).toBe(200);
+      expect(putRes.body.data.content).toBe(updatedContent);
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans/${planId}`);
-    expect(getRes.status).toBe(200);
-    expect(getRes.body.data.content).toBe(updatedContent);
+      const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans/${planId}`);
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.data.content).toBe(updatedContent);
     }
   );
 
@@ -532,7 +535,9 @@ Updated description for task two.`;
     expect(plan.lastModified).toBeDefined();
     expect(typeof plan.lastModified).toBe("string");
     expect(plan.currentVersionNumber).toBe(1);
-    expect(plan.lastExecutedVersionNumber === undefined || plan.lastExecutedVersionNumber === null).toBe(true);
+    expect(
+      plan.lastExecutedVersionNumber === undefined || plan.lastExecutedVersionNumber === null
+    ).toBe(true);
   });
 
   it("POST /projects/:id/plans/:planId/plan-tasks invokes Planner and creates tasks", async () => {
@@ -1195,19 +1200,21 @@ Updated description for task two.`;
 
     it("re-execute with version_number uses that version content for Auditor (plan_old)", async () => {
       mockPlanningAgentInvoke.mockReset();
-      mockPlanningAgentInvoke.mockImplementation((opts: { messages?: Array<{ content: string }> }) => {
-        const content = opts.messages?.[0]?.content ?? "";
-        if (content.includes("plan_old.md") && content.includes("plan_new.md")) {
-          return Promise.resolve({
-            content: JSON.stringify({
-              status: "no_changes_needed",
-              capability_summary: "All done",
-              tasks: [],
-            }),
-          });
+      mockPlanningAgentInvoke.mockImplementation(
+        (opts: { messages?: Array<{ content: string }> }) => {
+          const content = opts.messages?.[0]?.content ?? "";
+          if (content.includes("plan_old.md") && content.includes("plan_new.md")) {
+            return Promise.resolve({
+              content: JSON.stringify({
+                status: "no_changes_needed",
+                capability_summary: "All done",
+                tasks: [],
+              }),
+            });
+          }
+          return Promise.resolve({ content: '{"status":"no_changes_needed"}' });
         }
-        return Promise.resolve({ content: '{"status":"no_changes_needed"}' });
-      });
+      );
 
       const planBody = {
         title: "Re-execute Version Plan",
@@ -1225,9 +1232,7 @@ Updated description for task two.`;
       const planId = createRes.body.data.metadata.planId;
       const epicId = createRes.body.data.metadata.epicId;
 
-      await request(app).post(
-        `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
-      );
+      await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
       await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
         .send({ content: "# Re-execute Version\n\n## Overview\n\nEdited to v2." });
@@ -1241,9 +1246,7 @@ Updated description for task two.`;
       for (const task of planTasks) {
         await taskStore.close(projectId, (task as { id: string }).id, "Done");
       }
-      await request(app).post(
-        `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
-      );
+      await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`);
 
       const reshipRes = await request(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`)
@@ -1256,27 +1259,29 @@ Updated description for task two.`;
           "Re-execute: audit & delta tasks"
       );
       expect(auditorCall).toBeDefined();
-      const prompt = (auditorCall![0] as { messages?: Array<{ content: string }> }).messages?.[0]
-        ?.content ?? "";
+      const prompt =
+        (auditorCall![0] as { messages?: Array<{ content: string }> }).messages?.[0]?.content ?? "";
       expect(prompt).toContain("Initial (v1)"); // plan_old = v1 content
       expect(prompt).toContain("Edited to v2"); // plan_new = current content
     });
 
     it("re-execute without version_number uses last_executed_version_number for Auditor (plan_old)", async () => {
       mockPlanningAgentInvoke.mockReset();
-      mockPlanningAgentInvoke.mockImplementation((opts: { messages?: Array<{ content: string }> }) => {
-        const content = opts.messages?.[0]?.content ?? "";
-        if (content.includes("plan_old.md") && content.includes("plan_new.md")) {
-          return Promise.resolve({
-            content: JSON.stringify({
-              status: "no_changes_needed",
-              capability_summary: "All done",
-              tasks: [],
-            }),
-          });
+      mockPlanningAgentInvoke.mockImplementation(
+        (opts: { messages?: Array<{ content: string }> }) => {
+          const content = opts.messages?.[0]?.content ?? "";
+          if (content.includes("plan_old.md") && content.includes("plan_new.md")) {
+            return Promise.resolve({
+              content: JSON.stringify({
+                status: "no_changes_needed",
+                capability_summary: "All done",
+                tasks: [],
+              }),
+            });
+          }
+          return Promise.resolve({ content: '{"status":"no_changes_needed"}' });
         }
-        return Promise.resolve({ content: '{"status":"no_changes_needed"}' });
-      });
+      );
 
       const planBody = {
         title: "Re-execute No Version Plan",
@@ -1294,9 +1299,7 @@ Updated description for task two.`;
       const planId = createRes.body.data.metadata.planId;
       const epicId = createRes.body.data.metadata.epicId;
 
-      await request(app).post(
-        `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
-      );
+      await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
       await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
         .send({ content: "# Re-execute No Version\n\n## Overview\n\nEdited to v2." });
@@ -1310,9 +1313,7 @@ Updated description for task two.`;
       for (const task of planTasks) {
         await taskStore.close(projectId, (task as { id: string }).id, "Done");
       }
-      await request(app).post(
-        `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
-      );
+      await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`);
 
       // No body: backend must use last_executed_version_number for plan_old
       const reshipRes = await request(app).post(
@@ -1326,8 +1327,8 @@ Updated description for task two.`;
           "Re-execute: audit & delta tasks"
       );
       expect(auditorCall).toBeDefined();
-      const prompt = (auditorCall![0] as { messages?: Array<{ content: string }> }).messages?.[0]
-        ?.content ?? "";
+      const prompt =
+        (auditorCall![0] as { messages?: Array<{ content: string }> }).messages?.[0]?.content ?? "";
       expect(prompt).toContain("Shipped (v1)"); // plan_old = last executed (v1) content
       expect(prompt).toContain("Edited to v2"); // plan_new = current content
     });
@@ -1498,8 +1499,18 @@ Updated description for task two.`;
             complexity: "medium",
             mock_ups: [{ title: "Screen", content: "+---+\n| X |\n+---+" }],
             task_list: [
-              { task_title: "Setup", task_description: "Setup step", task_priority: 0, depends_on: [] },
-              { task_title: "Implement", task_description: "Implement step", task_priority: 1, depends_on: ["Setup"] },
+              {
+                task_title: "Setup",
+                task_description: "Setup step",
+                task_priority: 0,
+                depends_on: [],
+              },
+              {
+                task_title: "Implement",
+                task_description: "Implement step",
+                task_priority: 1,
+                depends_on: ["Setup"],
+              },
             ],
           }),
         });
@@ -2218,9 +2229,7 @@ Feature that depends on auth.
         expect(getBeforeRes.body.data.metadata.reviewedAt).toBeFalsy();
 
         // List plans: plan appears with in_review (Evaluate Pending)
-        const listBeforeRes = await request(app).get(
-          `${API_PREFIX}/projects/${projectId}/plans`
-        );
+        const listBeforeRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
         expect(listBeforeRes.status).toBe(200);
         const planInListBefore = listBeforeRes.body.data?.plans?.find(
           (p: { metadata?: { planId?: string } }) => p.metadata?.planId === planId
@@ -2243,9 +2252,7 @@ Feature that depends on auth.
         expect(getAfterRes.body.data.status).toBe("complete");
 
         // List plans: plan appears complete (Evaluate Resolved/Done)
-        const listAfterRes = await request(app).get(
-          `${API_PREFIX}/projects/${projectId}/plans`
-        );
+        const listAfterRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
         expect(listAfterRes.status).toBe(200);
         const planInListAfter = listAfterRes.body.data?.plans?.find(
           (p: { metadata?: { planId?: string } }) => p.metadata?.planId === planId
@@ -2306,92 +2313,80 @@ Feature that depends on auth.
       }
     );
 
-    it(
-      "returns 200 idempotent when reviewedAt already set",
-      { timeout: 15000 },
-      async () => {
-        const planBody = {
-          title: "Idempotent Mark Complete",
-          content: "# Idempotent\n\nContent.",
-          complexity: "low",
-          tasks: [{ title: "Only task", description: "Only", priority: 0, dependsOn: [] }],
-        };
+    it("returns 200 idempotent when reviewedAt already set", { timeout: 15000 }, async () => {
+      const planBody = {
+        title: "Idempotent Mark Complete",
+        content: "# Idempotent\n\nContent.",
+        complexity: "low",
+        tasks: [{ title: "Only task", description: "Only", priority: 0, dependsOn: [] }],
+      };
 
-        const createRes = await request(app)
-          .post(`${API_PREFIX}/projects/${projectId}/plans`)
-          .send(planBody);
-        expect(createRes.status).toBe(201);
-        const planId = createRes.body.data.metadata.planId;
-        const epicId = createRes.body.data.metadata.epicId;
+      const createRes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
+      expect(createRes.status).toBe(201);
+      const planId = createRes.body.data.metadata.planId;
+      const epicId = createRes.body.data.metadata.epicId;
 
-        await request(app).post(
-          `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
-        );
-        const allIssues = await taskStore.listAll(projectId);
-        const planTasks = allIssues.filter(
-          (i: { id: string; issue_type?: string; type?: string }) =>
-            i.id.startsWith(epicId + ".") && (i.issue_type ?? i.type) !== "epic"
-        );
-        for (const task of planTasks) {
-          await taskStore.close(projectId, (task as { id: string }).id, "Done");
-        }
-
-        const first = await request(app).post(
-          `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
-        );
-        expect(first.status).toBe(200);
-        const reviewedAt = first.body.data.metadata.reviewedAt;
-        expect(reviewedAt).toBeDefined();
-
-        const second = await request(app).post(
-          `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
-        );
-        expect(second.status).toBe(200);
-        expect(second.body.data.metadata.reviewedAt).toBe(reviewedAt);
-        expect(second.body.data.status).toBe("complete");
+      await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
+      const allIssues = await taskStore.listAll(projectId);
+      const planTasks = allIssues.filter(
+        (i: { id: string; issue_type?: string; type?: string }) =>
+          i.id.startsWith(epicId + ".") && (i.issue_type ?? i.type) !== "epic"
+      );
+      for (const task of planTasks) {
+        await taskStore.close(projectId, (task as { id: string }).id, "Done");
       }
-    );
 
-    it(
-      "returns 400 when not all epic tasks are closed",
-      { timeout: 15000 },
-      async () => {
-        const planBody = {
-          title: "Open Tasks Feature",
-          content: "# Open Tasks\n\nContent.",
-          complexity: "medium",
-          tasks: [
-            { title: "Task X", description: "First", priority: 0, dependsOn: [] },
-            { title: "Task Y", description: "Second", priority: 1, dependsOn: [] },
-          ],
-        };
+      const first = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
+      );
+      expect(first.status).toBe(200);
+      const reviewedAt = first.body.data.metadata.reviewedAt;
+      expect(reviewedAt).toBeDefined();
 
-        const createRes = await request(app)
-          .post(`${API_PREFIX}/projects/${projectId}/plans`)
-          .send(planBody);
-        expect(createRes.status).toBe(201);
-        const planId = createRes.body.data.metadata.planId;
-        const epicId = createRes.body.data.metadata.epicId;
+      const second = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.data.metadata.reviewedAt).toBe(reviewedAt);
+      expect(second.body.data.status).toBe("complete");
+    });
 
-        await request(app).post(
-          `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
-        );
-        const allIssues = await taskStore.listAll(projectId);
-        const planTasks = allIssues.filter(
-          (i: { id: string; issue_type?: string; type?: string }) =>
-            i.id.startsWith(epicId + ".") && (i.issue_type ?? i.type) !== "epic"
-        );
-        await taskStore.close(projectId, (planTasks[0] as { id: string }).id, "Done");
-        // Leave planTasks[1] open
+    it("returns 400 when not all epic tasks are closed", { timeout: 15000 }, async () => {
+      const planBody = {
+        title: "Open Tasks Feature",
+        content: "# Open Tasks\n\nContent.",
+        complexity: "medium",
+        tasks: [
+          { title: "Task X", description: "First", priority: 0, dependsOn: [] },
+          { title: "Task Y", description: "Second", priority: 1, dependsOn: [] },
+        ],
+      };
 
-        const markRes = await request(app).post(
-          `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
-        );
-        expect(markRes.status).toBe(400);
-        expect(markRes.body.error?.message).toBe("Plan has open tasks; cannot mark complete");
-        expect(markRes.body.error?.code).toBe("INVALID_INPUT");
-      }
-    );
+      const createRes = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
+      expect(createRes.status).toBe(201);
+      const planId = createRes.body.data.metadata.planId;
+      const epicId = createRes.body.data.metadata.epicId;
+
+      await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
+      const allIssues = await taskStore.listAll(projectId);
+      const planTasks = allIssues.filter(
+        (i: { id: string; issue_type?: string; type?: string }) =>
+          i.id.startsWith(epicId + ".") && (i.issue_type ?? i.type) !== "epic"
+      );
+      await taskStore.close(projectId, (planTasks[0] as { id: string }).id, "Done");
+      // Leave planTasks[1] open
+
+      const markRes = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
+      );
+      expect(markRes.status).toBe(400);
+      expect(markRes.body.error?.message).toBe("Plan has open tasks; cannot mark complete");
+      expect(markRes.body.error?.code).toBe("INVALID_INPUT");
+    });
 
     it("returns 404 when plan not found", async () => {
       const markRes = await request(app).post(

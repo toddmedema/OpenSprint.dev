@@ -8,9 +8,7 @@ type ParsedNvmVersion = {
 
 function parseNvmNodeVersion(entry: string): ParsedNvmVersion | null {
   const normalized = entry.replace(/\\/g, "/");
-  const match = normalized.match(
-    /(?:^|\/)\.nvm\/versions\/node\/v(\d+)\.(\d+)\.(\d+)\/bin\/?$/i
-  );
+  const match = normalized.match(/(?:^|\/)\.nvm\/versions\/node\/v(\d+)\.(\d+)\.(\d+)\/bin\/?$/i);
   if (!match) return null;
 
   return {

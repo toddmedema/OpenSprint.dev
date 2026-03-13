@@ -202,7 +202,9 @@ function parseDatabaseDialect(payload: Record<string, unknown>): DatabaseDialect
   return "unknown";
 }
 
-async function waitForDatabaseStartupStatus(timeoutMs = DB_STARTUP_TIMEOUT_MS): Promise<DbStartupStatus> {
+async function waitForDatabaseStartupStatus(
+  timeoutMs = DB_STARTUP_TIMEOUT_MS
+): Promise<DbStartupStatus> {
   const start = Date.now();
   let lastStatus: Omit<DbStartupStatus, "dialect"> = {
     ok: false,
@@ -541,11 +543,11 @@ interface PrerequisitesCheckResult {
 function getWindowsPathFromRegistry(): string | undefined {
   try {
     const userPath = execSync(
-      'powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable(\'Path\', \'User\')"',
+      "powershell -NoProfile -Command \"[Environment]::GetEnvironmentVariable('Path', 'User')\"",
       { encoding: "utf8", timeout: 5000, windowsHide: true }
     ).trim();
     const machinePath = execSync(
-      'powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable(\'Path\', \'Machine\')"',
+      "powershell -NoProfile -Command \"[Environment]::GetEnvironmentVariable('Path', 'Machine')\"",
       { encoding: "utf8", timeout: 5000, windowsHide: true }
     ).trim();
     const parts = [userPath, machinePath, process.env.PATH].filter(Boolean);
@@ -839,7 +841,8 @@ function createWindow(): void {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("window-maximized");
     });
     mainWindow.on("unmaximize", () => {
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("window-unmaximized");
+      if (mainWindow && !mainWindow.isDestroyed())
+        mainWindow.webContents.send("window-unmaximized");
     });
   }
   mainWindow.once("ready-to-show", () => {
@@ -849,7 +852,12 @@ function createWindow(): void {
     "found-in-page",
     (
       _e: Electron.Event,
-      result: { requestId: number; activeMatchOrdinal: number; matches: number; finalUpdate: boolean }
+      result: {
+        requestId: number;
+        activeMatchOrdinal: number;
+        matches: number;
+        finalUpdate: boolean;
+      }
     ) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("find-result", result);
@@ -1057,7 +1065,9 @@ function setApplicationMenu(): void {
         { role: "reload" as const },
         { role: "toggleDevTools" as const },
         { type: "separator" as const },
-        ...(!isMac ? [{ label: "Settings", click: sendNavigateSettings }, { type: "separator" as const }] : []),
+        ...(!isMac
+          ? [{ label: "Settings", click: sendNavigateSettings }, { type: "separator" as const }]
+          : []),
         { role: "resetZoom" as const },
         { role: "zoomIn" as const },
         { role: "zoomOut" as const },
@@ -1116,12 +1126,7 @@ function killBackend(): Promise<void> {
       resolve();
     };
 
-    if (
-      !pid ||
-      proc.exitCode !== null ||
-      proc.signalCode !== null ||
-      !isProcessAlive(pid)
-    ) {
+    if (!pid || proc.exitCode !== null || proc.signalCode !== null || !isProcessAlive(pid)) {
       finish();
       return;
     }
@@ -1209,7 +1214,10 @@ app.whenReady().then(async () => {
   );
   ipcMain.handle(
     "stop-find-in-page",
-    (event: Electron.IpcMainInvokeEvent, action: "clearSelection" | "keepSelection" | "activateSelection") => {
+    (
+      event: Electron.IpcMainInvokeEvent,
+      action: "clearSelection" | "keepSelection" | "activateSelection"
+    ) => {
       const wc = event.sender;
       if (wc && !wc.isDestroyed()) wc.stopFindInPage(action);
     }
@@ -1250,7 +1258,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle(
     "backend:restartWithPath",
-    async (_event: Electron.IpcMainInvokeEvent, pathOverride: string | undefined): Promise<void> => {
+    async (
+      _event: Electron.IpcMainInvokeEvent,
+      pathOverride: string | undefined
+    ): Promise<void> => {
       await killBackend();
       backendProcess = startBackend(pathOverride ?? undefined);
       await waitForBackend(backendProcess);
@@ -1283,7 +1294,8 @@ app.whenReady().then(async () => {
       backendReady = true;
     } catch (err) {
       startupError = err;
-      const connectedToExistingBackend = await waitForExistingDesktopBackend(EXISTING_BACKEND_WAIT_MS);
+      const connectedToExistingBackend =
+        await waitForExistingDesktopBackend(EXISTING_BACKEND_WAIT_MS);
       if (connectedToExistingBackend) {
         backendLaunchError = null;
         backendReady = true;
@@ -1312,7 +1324,9 @@ app.whenReady().then(async () => {
 
   if (!backendReady) {
     const message =
-      startupError instanceof Error ? startupError.message : String(startupError ?? "unknown error");
+      startupError instanceof Error
+        ? startupError.message
+        : String(startupError ?? "unknown error");
     console.error(message);
     loadBootScreen(`Backend failed to start: ${message}`);
     dialog.showErrorBox(

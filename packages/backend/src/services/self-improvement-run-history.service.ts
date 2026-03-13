@@ -38,13 +38,7 @@ export class SelfImprovementRunHistoryStore {
          VALUES (?, ?, ?, ?, ?)
          RETURNING id, project_id, run_id, completed_at, status, tasks_created_count`
       ),
-      [
-        record.projectId,
-        record.runId,
-        record.completedAt,
-        record.status,
-        record.tasksCreatedCount,
-      ]
+      [record.projectId, record.runId, record.completedAt, record.status, record.tasksCreatedCount]
     );
     return rowToRecord(row as Record<string, unknown>);
   }

@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  getDefaultProviderFromEnvKeys,
-  hasNoApiKeys,
-} from "./agentConfigDefaults";
+import { getDefaultProviderFromEnvKeys, hasNoApiKeys } from "./agentConfigDefaults";
 
 describe("getDefaultProviderFromEnvKeys", () => {
   it("returns claude when anthropic has keys", () => {

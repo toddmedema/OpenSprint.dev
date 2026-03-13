@@ -152,7 +152,9 @@ export function AgentsStep({
       {cursorCliMissing && (
         <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
           <p className="text-sm text-theme-warning-text mb-2">
-            <strong>Cursor CLI not found.</strong> The <code className="font-mono text-xs">agent</code> command is required for Cursor. Install it, then restart your terminal or Open Sprint.
+            <strong>Cursor CLI not found.</strong> The{" "}
+            <code className="font-mono text-xs">agent</code> command is required for Cursor. Install
+            it, then restart your terminal or Open Sprint.
           </p>
           <button
             type="button"
@@ -181,7 +183,9 @@ export function AgentsStep({
             {cursorCliInstalling ? "Installing…" : "Install Cursor CLI"}
           </button>
           {cursorCliInstallResult && (
-            <p className={`text-sm mt-2 ${cursorCliInstallResult.success ? "text-theme-success-text" : "text-theme-error-text"}`}>
+            <p
+              className={`text-sm mt-2 ${cursorCliInstallResult.success ? "text-theme-success-text" : "text-theme-error-text"}`}
+            >
               {cursorCliInstallResult.message}
             </p>
           )}
@@ -221,7 +225,12 @@ export function AgentsStep({
           <div className="flex flex-wrap items-end gap-3">
             <span className="w-16 text-sm font-medium text-theme-text shrink-0">Simple</span>
             <div className="flex-1 min-w-[140px]">
-              <label htmlFor="simple-provider-select" className="block text-sm font-medium text-theme-text mb-1">Provider</label>
+              <label
+                htmlFor="simple-provider-select"
+                className="block text-sm font-medium text-theme-text mb-1"
+              >
+                Provider
+              </label>
               <select
                 id="simple-provider-select"
                 className="input w-full"
@@ -244,7 +253,12 @@ export function AgentsStep({
             </div>
             {simpleComplexityAgent.type === "lmstudio" && (
               <div className="flex-1 min-w-[180px]">
-                <label htmlFor="simple-base-url" className="block text-sm font-medium text-theme-text mb-1">Base URL</label>
+                <label
+                  htmlFor="simple-base-url"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
+                  Base URL
+                </label>
                 <input
                   id="simple-base-url"
                   type="text"
@@ -262,7 +276,12 @@ export function AgentsStep({
             )}
             {simpleComplexityAgent.type !== "custom" ? (
               <div className="flex-1 min-w-[140px]">
-                <label htmlFor="simple-agent-select" className="block text-sm font-medium text-theme-text mb-1">Agent</label>
+                <label
+                  htmlFor="simple-agent-select"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
+                  Agent
+                </label>
                 <ModelSelect
                   id="simple-agent-select"
                   provider={simpleComplexityAgent.type}
@@ -280,7 +299,10 @@ export function AgentsStep({
               </div>
             ) : (
               <div className="flex-1 min-w-[200px]">
-                <label htmlFor="simple-cli-command" className="block text-sm font-medium text-theme-text mb-1">
+                <label
+                  htmlFor="simple-cli-command"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
                   CLI command
                 </label>
                 <input
@@ -303,7 +325,12 @@ export function AgentsStep({
           <div className="flex flex-wrap items-end gap-3">
             <span className="w-16 text-sm font-medium text-theme-text shrink-0">Complex</span>
             <div className="flex-1 min-w-[140px]">
-              <label htmlFor="complex-provider-select" className="block text-sm font-medium text-theme-text mb-1">Provider</label>
+              <label
+                htmlFor="complex-provider-select"
+                className="block text-sm font-medium text-theme-text mb-1"
+              >
+                Provider
+              </label>
               <select
                 id="complex-provider-select"
                 className="input w-full"
@@ -326,7 +353,12 @@ export function AgentsStep({
             </div>
             {complexComplexityAgent.type === "lmstudio" && (
               <div className="flex-1 min-w-[180px]">
-                <label htmlFor="complex-base-url" className="block text-sm font-medium text-theme-text mb-1">Base URL</label>
+                <label
+                  htmlFor="complex-base-url"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
+                  Base URL
+                </label>
                 <input
                   id="complex-base-url"
                   type="text"
@@ -344,7 +376,12 @@ export function AgentsStep({
             )}
             {complexComplexityAgent.type !== "custom" ? (
               <div className="flex-1 min-w-[140px]">
-                <label htmlFor="complex-agent-select" className="block text-sm font-medium text-theme-text mb-1">Agent</label>
+                <label
+                  htmlFor="complex-agent-select"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
+                  Agent
+                </label>
                 <ModelSelect
                   id="complex-agent-select"
                   provider={complexComplexityAgent.type}
@@ -362,7 +399,10 @@ export function AgentsStep({
               </div>
             ) : (
               <div className="flex-1 min-w-[200px]">
-                <label htmlFor="complex-cli-command" className="block text-sm font-medium text-theme-text mb-1">
+                <label
+                  htmlFor="complex-cli-command"
+                  className="block text-sm font-medium text-theme-text mb-1"
+                >
                   CLI command
                 </label>
                 <input
@@ -406,7 +446,12 @@ export function AgentsStep({
         <>
           <hr />
           <div>
-            <label htmlFor="worktree-base-branch-input" className="block text-sm font-medium text-theme-text mb-1">Base branch</label>
+            <label
+              htmlFor="worktree-base-branch-input"
+              className="block text-sm font-medium text-theme-text mb-1"
+            >
+              Base branch
+            </label>
             <p className="text-xs text-theme-muted mb-2">
               Task branches are created from and merged into this branch. Leave blank to auto-detect
               the repo&apos;s base branch during setup.
@@ -434,7 +479,10 @@ export function AgentsStep({
             </p>
             <div className="space-y-4">
               <div>
-                <label htmlFor="max-concurrent-coders-slider" className="block text-sm font-medium text-theme-text mb-2">
+                <label
+                  htmlFor="max-concurrent-coders-slider"
+                  className="block text-sm font-medium text-theme-text mb-2"
+                >
                   Max Concurrent Coders: <span className="font-bold">{maxConcurrentCoders}</span>
                 </label>
                 <input
@@ -455,7 +503,10 @@ export function AgentsStep({
               </div>
               {maxConcurrentCoders > 1 && (
                 <div>
-                  <label htmlFor="unknown-scope-strategy-select" className="block text-sm font-medium text-theme-text mb-1">
+                  <label
+                    htmlFor="unknown-scope-strategy-select"
+                    className="block text-sm font-medium text-theme-text mb-1"
+                  >
                     Unknown Scope Strategy
                   </label>
                   <p className="text-xs text-theme-muted mb-2">

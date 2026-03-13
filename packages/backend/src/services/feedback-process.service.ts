@@ -47,10 +47,8 @@ async function runCategorization(
   item: FeedbackItem,
   deps: FeedbackProcessDeps
 ): Promise<void> {
-  const result = await deps.categorizationService.categorize(
-    projectId,
-    item,
-    (p, f) => deps.getFeedback(p, f)
+  const result = await deps.categorizationService.categorize(projectId, item, (p, f) =>
+    deps.getFeedback(p, f)
   );
 
   if (result.done) {

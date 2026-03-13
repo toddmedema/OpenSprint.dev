@@ -226,7 +226,10 @@ describe("SketchPhase with sketchSlice", () => {
     it("shows loading spinner until PRD state is known (prevents flash)", async () => {
       let resolvePrd: (v: unknown) => void;
       mockPrdGet.mockImplementation(
-        () => new Promise((resolve) => { resolvePrd = resolve; })
+        () =>
+          new Promise((resolve) => {
+            resolvePrd = resolve;
+          })
       );
 
       const queryClient = new QueryClient({
@@ -304,7 +307,9 @@ describe("SketchPhase with sketchSlice", () => {
     it("renders central prompt when prdContent is empty", () => {
       renderSketchPhase();
       expect(screen.getByText("What do you want to build?")).toBeInTheDocument();
-      expect(screen.getByText("Describe your app idea and Open Sprint will generate a PRD.")).toBeInTheDocument();
+      expect(
+        screen.getByText("Describe your app idea and Open Sprint will generate a PRD.")
+      ).toBeInTheDocument();
       expect(screen.getByRole("textbox")).toBeInTheDocument();
     });
 
@@ -312,7 +317,9 @@ describe("SketchPhase with sketchSlice", () => {
       renderSketchPhase();
       expect(screen.getByText(EMPTY_STATE_COPY.sketch.title)).toBeInTheDocument();
       expect(screen.getByText(EMPTY_STATE_COPY.sketch.description)).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: EMPTY_STATE_COPY.sketch.primaryActionLabel })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: EMPTY_STATE_COPY.sketch.primaryActionLabel })
+      ).toBeInTheDocument();
     });
 
     it("renders file upload button in empty state", () => {
@@ -498,7 +505,11 @@ describe("SketchPhase with sketchSlice", () => {
 
       await waitFor(() => {
         expect(screen.getByText("Generating your PRD...")).toBeInTheDocument();
-        expect(screen.getByText(/This may take a moment while Open Sprint crafts your product requirements/)).toBeInTheDocument();
+        expect(
+          screen.getByText(
+            /This may take a moment while Open Sprint crafts your product requirements/
+          )
+        ).toBeInTheDocument();
       });
 
       resolveSend!({ message: "Here is your PRD" });

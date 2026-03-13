@@ -10,6 +10,8 @@ const mockRebaseAbort = vi.fn();
 const mockMergeToMainNoCommit = vi.fn();
 const mockIsMergeInProgress = vi.fn();
 const mockMergeAbort = vi.fn();
+const mockStripRuntimePathsFromMergeResult = vi.fn();
+const mockSymlinkNodeModules = vi.fn();
 
 const mockTaskStoreInit = vi.fn();
 const mockTaskStoreShow = vi.fn();
@@ -21,6 +23,7 @@ const mockRunMergerAgentAndWait = vi.fn();
 const mockEventLogAppend = vi.fn();
 const mockWaitForGitReady = vi.fn();
 const mockShellExec = vi.fn();
+const mockRunMergeQualityGates = vi.fn();
 
 vi.mock("../services/branch-manager.js", () => {
   class RebaseConflictError extends Error {
@@ -47,11 +50,18 @@ vi.mock("../services/branch-manager.js", () => {
       mergeToMainNoCommit: (...args: unknown[]) => mockMergeToMainNoCommit(...args),
       isMergeInProgress: (...args: unknown[]) => mockIsMergeInProgress(...args),
       mergeAbort: (...args: unknown[]) => mockMergeAbort(...args),
+      stripRuntimePathsFromMergeResult: (...args: unknown[]) =>
+        mockStripRuntimePathsFromMergeResult(...args),
+      symlinkNodeModules: (...args: unknown[]) => mockSymlinkNodeModules(...args),
     })),
     RebaseConflictError,
     MergeConflictError,
   };
 });
+
+vi.mock("../services/merge-quality-gate-runner.js", () => ({
+  runMergeQualityGates: (...args: unknown[]) => mockRunMergeQualityGates(...args),
+}));
 
 vi.mock("../services/task-store.service.js", () => ({
   taskStore: {
@@ -110,6 +120,9 @@ describe("GitCommitQueue rebase rounds", () => {
     mockMergeToMainNoCommit.mockResolvedValue({ autoResolvedFiles: [] });
     mockIsMergeInProgress.mockResolvedValue(false);
     mockMergeAbort.mockResolvedValue(undefined);
+    mockStripRuntimePathsFromMergeResult.mockResolvedValue(undefined);
+    mockSymlinkNodeModules.mockResolvedValue(undefined);
+    mockRunMergeQualityGates.mockResolvedValue(null);
     mockRebaseAbort.mockResolvedValue(undefined);
     mockEventLogAppend.mockResolvedValue(undefined);
   });
@@ -170,5 +183,41 @@ describe("GitCommitQueue rebase rounds", () => {
 
     expect(mockRunMergerAgentAndWait).toHaveBeenCalledTimes(12);
     expect(mockRebaseAbort).toHaveBeenCalledTimes(1);
+  });
+
+  it("aborts the merge candidate when merged-tree quality gates fail", async () => {
+    const { gitCommitQueue } = await import("../services/git-commit-queue.service.js");
+
+    mockIsMergeInProgress.mockResolvedValue(true);
+    mockRunMergeQualityGates.mockResolvedValue({
+      command: "npm run test",
+      reason: "Command failed: npm run test",
+      output: "stderr | merged candidate failure",
+      outputSnippet: "stderr | merged candidate failure",
+      firstErrorLine: "stderr | merged candidate failure",
+      worktreePath: "/tmp/repo",
+      category: "quality_gate",
+    });
+
+    await expect(
+      gitCommitQueue.enqueueAndWait({
+        type: "worktree_merge",
+        repoPath: "/tmp/repo",
+        worktreePath: "/tmp/worktree",
+        branchName: "opensprint/os-1234",
+        taskId: "os-1234",
+        taskTitle: "Task title",
+      })
+    ).rejects.toMatchObject({
+      name: "MergeJobError",
+      stage: "quality_gate",
+      qualityGateFailure: expect.objectContaining({
+        command: "npm run test",
+        worktreePath: "/tmp/repo",
+      }),
+    });
+
+    expect(mockStripRuntimePathsFromMergeResult).toHaveBeenCalledWith("/tmp/repo");
+    expect(mockMergeAbort).toHaveBeenCalledWith("/tmp/repo");
   });
 });

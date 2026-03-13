@@ -18,7 +18,12 @@ const VITEST_CONFIG_FILES = [
   "vitest.config.mts",
   "vitest.config.mjs",
 ];
-const JEST_CONFIG_FILES = ["jest.config.js", "jest.config.ts", "jest.config.mjs", "jest.config.cjs"];
+const JEST_CONFIG_FILES = [
+  "jest.config.js",
+  "jest.config.ts",
+  "jest.config.mjs",
+  "jest.config.cjs",
+];
 
 export interface ScopedTestResult extends TestResults {
   /** Raw stdout+stderr output from the test run */
@@ -113,7 +118,9 @@ export class TestRunner {
   ): Promise<ScopedTestResult> {
     const command = testCommand || (await this.detectTestCommand(repoPath));
     const timeoutMs =
-      typeof options?.timeoutMs === "number" && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+      typeof options?.timeoutMs === "number" &&
+      Number.isFinite(options.timeoutMs) &&
+      options.timeoutMs > 0
         ? Math.round(options.timeoutMs)
         : TEST_TIMEOUT_MS;
 
@@ -130,8 +137,10 @@ export class TestRunner {
       };
     }
 
-    const { command: preparedCommand, vitestJsonReportPath } =
-      this.withVitestJsonReporter(command, repoPath);
+    const { command: preparedCommand, vitestJsonReportPath } = this.withVitestJsonReporter(
+      command,
+      repoPath
+    );
     const { stdout, stderr, exitCode } = await this.execWithProcessGroup(
       preparedCommand,
       repoPath,

@@ -6,7 +6,9 @@ describe("resolveSqlitePath", () => {
   it("resolves file URL local paths on non-Windows platforms", () => {
     const platformSpy = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
     try {
-      expect(resolveSqlitePath("file:///tmp/opensprint.sqlite")).toBe(path.resolve("/tmp/opensprint.sqlite"));
+      expect(resolveSqlitePath("file:///tmp/opensprint.sqlite")).toBe(
+        path.resolve("/tmp/opensprint.sqlite")
+      );
     } finally {
       platformSpy.mockRestore();
     }
@@ -15,7 +17,9 @@ describe("resolveSqlitePath", () => {
   it("normalizes Windows drive-letter file URLs without an extra leading slash", () => {
     const platformSpy = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     try {
-      const resolved = resolveSqlitePath("file:///C:/Users/Alice/.opensprint/data/opensprint.sqlite");
+      const resolved = resolveSqlitePath(
+        "file:///C:/Users/Alice/.opensprint/data/opensprint.sqlite"
+      );
       expect(resolved).toBe(
         path.win32.resolve("C:/Users/Alice/.opensprint/data/opensprint.sqlite")
       );

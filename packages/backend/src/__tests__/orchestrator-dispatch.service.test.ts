@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 // Avoid loading drizzle-orm/pg-core (vitest resolution can fail in some workspaces)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {}, planVersionsTable: {} }));
 import type { StoredTask } from "../services/task-store.service.js";
 import {
@@ -54,34 +57,34 @@ describe("OrchestratorDispatchService", () => {
     executeCodingPhase = vi.fn().mockResolvedValue(undefined);
     host = {
       getState: vi.fn().mockReturnValue(state),
-      createSlot: vi
-        .fn()
-        .mockImplementation(
-          (
-            taskId: string,
-            taskTitle: string | null,
-            branchName: string,
-            attempt: number,
-            assignee: string,
-            worktreeKey?: string
-          ) =>
-            ({
-              taskId,
-              taskTitle,
-              branchName,
-              attempt,
-              assignee,
-              worktreeKey,
-              worktreePath: null,
-            }) as DispatchSlotLike
-        ),
+      createSlot: vi.fn().mockImplementation(
+        (
+          taskId: string,
+          taskTitle: string | null,
+          branchName: string,
+          attempt: number,
+          assignee: string,
+          worktreeKey?: string
+        ) =>
+          ({
+            taskId,
+            taskTitle,
+            branchName,
+            attempt,
+            assignee,
+            worktreeKey,
+            worktreePath: null,
+          }) as DispatchSlotLike
+      ),
       transition: vi.fn(),
       persistCounters: vi.fn().mockResolvedValue(undefined),
       getTaskStore: vi.fn().mockReturnValue(taskStore),
       getProjectService: vi
         .fn()
         .mockReturnValue({ getSettings: vi.fn().mockResolvedValue({ mergeStrategy: "per_task" }) }),
-      getBranchManager: vi.fn().mockReturnValue({ ensureOnMain: vi.fn().mockResolvedValue(undefined) }),
+      getBranchManager: vi
+        .fn()
+        .mockReturnValue({ ensureOnMain: vi.fn().mockResolvedValue(undefined) }),
       getFileScopeAnalyzer: vi
         .fn()
         .mockReturnValue({ predict: vi.fn().mockResolvedValue({ modify: ["a.ts"] }) }),

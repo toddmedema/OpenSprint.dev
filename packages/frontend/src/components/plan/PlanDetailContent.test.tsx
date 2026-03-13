@@ -272,8 +272,18 @@ describe("PlanDetailContent", () => {
     it("shows version row with Version label and dropdown when projectId and planId are provided", () => {
       vi.mocked(usePlanVersions).mockReturnValue({
         data: [
-          { id: "v3", version_number: 3, created_at: "2025-01-03T00:00:00Z", is_executed_version: false },
-          { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z", is_executed_version: true },
+          {
+            id: "v3",
+            version_number: 3,
+            created_at: "2025-01-03T00:00:00Z",
+            is_executed_version: false,
+          },
+          {
+            id: "v2",
+            version_number: 2,
+            created_at: "2025-01-02T00:00:00Z",
+            is_executed_version: true,
+          },
         ],
       } as ReturnType<typeof usePlanVersions>);
       const planWithVersion: Plan = {
@@ -347,8 +357,18 @@ describe("PlanDetailContent", () => {
       const onVersionSelect = vi.fn();
       vi.mocked(usePlanVersions).mockReturnValue({
         data: [
-          { id: "v1", version_number: 1, created_at: "2025-01-01T00:00:00Z", is_executed_version: false },
-          { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z", is_executed_version: true },
+          {
+            id: "v1",
+            version_number: 1,
+            created_at: "2025-01-01T00:00:00Z",
+            is_executed_version: false,
+          },
+          {
+            id: "v2",
+            version_number: 2,
+            created_at: "2025-01-02T00:00:00Z",
+            is_executed_version: true,
+          },
         ],
       } as ReturnType<typeof usePlanVersions>);
       const planWithVersion: Plan = {
@@ -373,8 +393,18 @@ describe("PlanDetailContent", () => {
     it("shows read-only view with version in dropdown and Back to current when viewing a past version", async () => {
       vi.mocked(usePlanVersions).mockReturnValue({
         data: [
-          { id: "v1", version_number: 1, created_at: "2025-01-01T00:00:00Z", is_executed_version: false },
-          { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z", is_executed_version: true },
+          {
+            id: "v1",
+            version_number: 1,
+            created_at: "2025-01-01T00:00:00Z",
+            is_executed_version: false,
+          },
+          {
+            id: "v2",
+            version_number: 2,
+            created_at: "2025-01-02T00:00:00Z",
+            is_executed_version: true,
+          },
         ],
       } as ReturnType<typeof usePlanVersions>);
       vi.mocked(usePlanVersion).mockReturnValue({
@@ -416,8 +446,18 @@ describe("PlanDetailContent", () => {
       const onVersionSelect = vi.fn();
       vi.mocked(usePlanVersions).mockReturnValue({
         data: [
-          { id: "v1", version_number: 1, created_at: "2025-01-01T00:00:00Z", is_executed_version: false },
-          { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z", is_executed_version: true },
+          {
+            id: "v1",
+            version_number: 1,
+            created_at: "2025-01-01T00:00:00Z",
+            is_executed_version: false,
+          },
+          {
+            id: "v2",
+            version_number: 2,
+            created_at: "2025-01-02T00:00:00Z",
+            is_executed_version: true,
+          },
         ],
       } as ReturnType<typeof usePlanVersions>);
       vi.mocked(usePlanVersion).mockReturnValue({
@@ -451,8 +491,18 @@ describe("PlanDetailContent", () => {
     it("shows Loading version when viewing past version and version is loading", () => {
       vi.mocked(usePlanVersions).mockReturnValue({
         data: [
-          { id: "v1", version_number: 1, created_at: "2025-01-01T00:00:00Z", is_executed_version: false },
-          { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z", is_executed_version: true },
+          {
+            id: "v1",
+            version_number: 1,
+            created_at: "2025-01-01T00:00:00Z",
+            is_executed_version: false,
+          },
+          {
+            id: "v2",
+            version_number: 2,
+            created_at: "2025-01-02T00:00:00Z",
+            is_executed_version: true,
+          },
         ],
       } as ReturnType<typeof usePlanVersions>);
       vi.mocked(usePlanVersion).mockReturnValue({
@@ -479,8 +529,18 @@ describe("PlanDetailContent", () => {
     it("keeps current version editable when selectedVersionNumber is null or current", () => {
       vi.mocked(usePlanVersions).mockReturnValue({
         data: [
-          { id: "v1", version_number: 1, created_at: "2025-01-01T00:00:00Z", is_executed_version: false },
-          { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z", is_executed_version: true },
+          {
+            id: "v1",
+            version_number: 1,
+            created_at: "2025-01-01T00:00:00Z",
+            is_executed_version: false,
+          },
+          {
+            id: "v2",
+            version_number: 2,
+            created_at: "2025-01-02T00:00:00Z",
+            is_executed_version: true,
+          },
         ],
       } as ReturnType<typeof usePlanVersions>);
       const planWithVersion: Plan = {
@@ -507,8 +567,18 @@ describe("PlanDetailContent", () => {
     it("shows version not found and falls back to current content when GET version returns 404", () => {
       vi.mocked(usePlanVersions).mockReturnValue({
         data: [
-          { id: "v1", version_number: 1, created_at: "2025-01-01T00:00:00Z", is_executed_version: false },
-          { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z", is_executed_version: true },
+          {
+            id: "v1",
+            version_number: 1,
+            created_at: "2025-01-01T00:00:00Z",
+            is_executed_version: false,
+          },
+          {
+            id: "v2",
+            version_number: 2,
+            created_at: "2025-01-02T00:00:00Z",
+            is_executed_version: true,
+          },
         ],
       } as ReturnType<typeof usePlanVersions>);
       vi.mocked(usePlanVersion).mockReturnValue({

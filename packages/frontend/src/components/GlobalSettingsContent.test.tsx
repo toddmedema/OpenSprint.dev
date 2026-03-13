@@ -518,8 +518,11 @@ describe("GlobalSettingsContent", () => {
       if (status === "saving") timestamps.saving = Date.now();
       if (status === "saved") timestamps.saved = Date.now();
     });
-    mockGlobalSettingsPut.mockImplementation(
-      () => Promise.resolve({ databaseUrl: "postgresql://user:***@localhost:5432/opensprint", apiKeys: undefined })
+    mockGlobalSettingsPut.mockImplementation(() =>
+      Promise.resolve({
+        databaseUrl: "postgresql://user:***@localhost:5432/opensprint",
+        apiKeys: undefined,
+      })
     );
 
     renderApp(<GlobalSettingsContent onSaveStateChange={onSaveStateChange} />);

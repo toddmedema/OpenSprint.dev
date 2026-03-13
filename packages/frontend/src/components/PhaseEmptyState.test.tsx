@@ -12,7 +12,11 @@ describe("PhaseEmptyState", () => {
         title={EMPTY_STATE_COPY.plan.title}
         description={EMPTY_STATE_COPY.plan.description}
         illustration={<PhaseEmptyStateLogo />}
-        primaryAction={{ label: EMPTY_STATE_COPY.plan.primaryActionLabel, onClick, "data-testid": "empty-state-new-plan" }}
+        primaryAction={{
+          label: EMPTY_STATE_COPY.plan.primaryActionLabel,
+          onClick,
+          "data-testid": "empty-state-new-plan",
+        }}
       />
     );
     expect(screen.getByText(EMPTY_STATE_COPY.plan.title)).toBeInTheDocument();
@@ -26,10 +30,7 @@ describe("PhaseEmptyState", () => {
 
   it("renders title and description", () => {
     render(
-      <PhaseEmptyState
-        title="No plans yet"
-        description="Create a plan to break down your spec."
-      />
+      <PhaseEmptyState title="No plans yet" description="Create a plan to break down your spec." />
     );
     expect(screen.getByText("No plans yet")).toBeInTheDocument();
     expect(screen.getByText("Create a plan to break down your spec.")).toBeInTheDocument();
@@ -64,12 +65,7 @@ describe("PhaseEmptyState", () => {
   });
 
   it("does not render primary action when not provided", () => {
-    render(
-      <PhaseEmptyState
-        title="No plans yet"
-        description="Create a plan."
-      />
-    );
+    render(<PhaseEmptyState title="No plans yet" description="Create a plan." />);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
@@ -97,7 +93,11 @@ describe("PhaseEmptyState", () => {
           title={spec.title}
           description={spec.description}
           illustration={<PhaseEmptyStateLogo />}
-          primaryAction={{ label: spec.primaryActionLabel, onClick: () => {}, "data-testid": `empty-state-${spec.primaryActionLabel.toLowerCase().replace(/\s+/g, "-")}` }}
+          primaryAction={{
+            label: spec.primaryActionLabel,
+            onClick: () => {},
+            "data-testid": `empty-state-${spec.primaryActionLabel.toLowerCase().replace(/\s+/g, "-")}`,
+          }}
         />
       );
       expect(screen.getByText(spec.title)).toBeInTheDocument();

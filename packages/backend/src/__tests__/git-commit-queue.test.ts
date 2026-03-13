@@ -17,7 +17,10 @@ import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 const execAsync = promisify(exec);
 
 // Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
@@ -94,7 +97,9 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
   let repoPath: string;
 
   afterAll(async () => {
-    const mod = (await import("../services/task-store.service.js")) as { _testPool?: { end: () => Promise<void> } };
+    const mod = (await import("../services/task-store.service.js")) as {
+      _testPool?: { end: () => Promise<void> };
+    };
     if (mod._testPool) await mod._testPool.end();
   });
 
@@ -228,12 +233,18 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
       });
 
       await fs.writeFile(path.join(repoPath, "conflict.txt"), "base\n");
-      await execAsync('git add conflict.txt && git commit -m "add conflict base"', { cwd: repoPath });
+      await execAsync('git add conflict.txt && git commit -m "add conflict base"', {
+        cwd: repoPath,
+      });
       await execAsync("git checkout -b opensprint/task-multi-rebase", { cwd: repoPath });
       await fs.writeFile(path.join(repoPath, "conflict.txt"), "feature-1\n");
-      await execAsync('git add conflict.txt && git commit -m "feature commit 1"', { cwd: repoPath });
+      await execAsync('git add conflict.txt && git commit -m "feature commit 1"', {
+        cwd: repoPath,
+      });
       await fs.writeFile(path.join(repoPath, "conflict.txt"), "feature-2\n");
-      await execAsync('git add conflict.txt && git commit -m "feature commit 2"', { cwd: repoPath });
+      await execAsync('git add conflict.txt && git commit -m "feature commit 2"', {
+        cwd: repoPath,
+      });
       await execAsync("git checkout main", { cwd: repoPath });
       await fs.writeFile(path.join(repoPath, "conflict.txt"), "main-change\n");
       await execAsync('git add conflict.txt && git commit -m "main change"', { cwd: repoPath });

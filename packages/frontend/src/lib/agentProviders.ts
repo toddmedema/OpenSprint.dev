@@ -3,13 +3,7 @@
  * LM Studio and Custom/CLI do not require an API key (needsKeyInput: false).
  */
 
-export type AgentProviderValue =
-  | "claude"
-  | "cursor"
-  | "openai"
-  | "google"
-  | "lmstudio"
-  | "custom";
+export type AgentProviderValue = "claude" | "cursor" | "openai" | "google" | "lmstudio" | "custom";
 
 export interface AgentProviderOption {
   value: AgentProviderValue;

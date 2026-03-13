@@ -57,10 +57,7 @@ export interface ExtractedPlannerTaskArray {
  * Find a planner tasks array recursively.
  * Accepts nested shapes like { result: { tasks: [...] } } in addition to top-level arrays.
  */
-export function findPlannerTaskArray(
-  value: unknown,
-  path = "$"
-): ExtractedPlannerTaskArray | null {
+export function findPlannerTaskArray(value: unknown, path = "$"): ExtractedPlannerTaskArray | null {
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {
       const found = findPlannerTaskArray(value[i], `${path}[${i}]`);

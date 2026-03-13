@@ -21,7 +21,10 @@ const SQLITE_MODULE_PATH_ENV = "OPENSPRINT_SQLITE_MODULE_PATH";
 const DESKTOP_RUNTIME_MANIFEST = "runtime-diagnostics.json";
 
 /** Convert Postgres $1, $2 placeholders to SQLite ? and return params in order. */
-function toSqliteSqlAndParams(sql: string, params: unknown[] = []): { sql: string; params: unknown[] } {
+function toSqliteSqlAndParams(
+  sql: string,
+  params: unknown[] = []
+): { sql: string; params: unknown[] } {
   let out = sql.replace(/\$(\d+)/g, "?");
   // Strip Postgres ::type casts so the same SQL works on both (e.g. COUNT(*)::int)
   out = out.replace(/::(int|integer|bigint|text)\b/gi, "");
@@ -31,9 +34,7 @@ function toSqliteSqlAndParams(sql: string, params: unknown[] = []): { sql: strin
 function runAsync<T>(fn: () => T | Promise<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     setImmediate(() => {
-      Promise.resolve(fn())
-        .then(resolve)
-        .catch(reject);
+      Promise.resolve(fn()).then(resolve).catch(reject);
     });
   });
 }
@@ -109,9 +110,7 @@ function getSqliteBindingPath(modulePath: string): string {
   return path.join(modulePath, "build", "Release", SQLITE_BINDING_FILE_NAME);
 }
 
-function normalizeSqliteModuleExport(
-  loaded: unknown
-): typeof import("better-sqlite3") {
+function normalizeSqliteModuleExport(loaded: unknown): typeof import("better-sqlite3") {
   return (
     (loaded as { default?: typeof import("better-sqlite3") }).default ??
     (loaded as unknown as typeof import("better-sqlite3"))
@@ -148,7 +147,9 @@ async function loadSqliteModule(): Promise<typeof import("better-sqlite3")> {
   }
 }
 
-async function collectDesktopSqliteRuntimeDiagnostics(absPath: string): Promise<Record<string, unknown>> {
+async function collectDesktopSqliteRuntimeDiagnostics(
+  absPath: string
+): Promise<Record<string, unknown>> {
   const cwd = process.cwd();
   const modulePath = path.join(cwd, "node_modules", SQLITE_MODULE_NAME);
   const bindingPath = getSqliteBindingPath(modulePath);
@@ -390,9 +391,7 @@ export function createSqliteDbClient(db: import("better-sqlite3").Database): DbC
 
   return {
     async query(sql: string, params?: unknown[]): Promise<DbRow[]> {
-      return withErrorHandling(async () =>
-        runAsync(() => runQuery(sql, params ?? []))
-      );
+      return withErrorHandling(async () => runAsync(() => runQuery(sql, params ?? [])));
     },
     async queryOne(sql: string, params?: unknown[]): Promise<DbRow | undefined> {
       return withErrorHandling(async () =>
@@ -403,9 +402,7 @@ export function createSqliteDbClient(db: import("better-sqlite3").Database): DbC
       );
     },
     async execute(sql: string, params?: unknown[]): Promise<number> {
-      return withErrorHandling(async () =>
-        runAsync(() => runExecute(sql, params ?? []))
-      );
+      return withErrorHandling(async () => runAsync(() => runExecute(sql, params ?? [])));
     },
     async runInTransaction<T>(fn: (client: DbClient) => Promise<T>): Promise<T> {
       return withErrorHandling(async () =>

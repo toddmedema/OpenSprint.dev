@@ -76,7 +76,10 @@ export function isDbConnectionError(err: unknown): boolean {
   }
 
   const msg = getErrorMessage(err);
-  if ((code === "ERR_DLOPEN_FAILED" || code === "MODULE_NOT_FOUND") && SQLITE_NATIVE_LOAD_RE.test(msg)) {
+  if (
+    (code === "ERR_DLOPEN_FAILED" || code === "MODULE_NOT_FOUND") &&
+    SQLITE_NATIVE_LOAD_RE.test(msg)
+  ) {
     return true;
   }
   return (
@@ -93,7 +96,10 @@ export function classifyDbConnectionError(
   const code = getErrorCode(err);
   const msg = getErrorMessage(err);
 
-  if ((code === "ERR_DLOPEN_FAILED" || code === "MODULE_NOT_FOUND") && SQLITE_NATIVE_LOAD_RE.test(msg)) {
+  if (
+    (code === "ERR_DLOPEN_FAILED" || code === "MODULE_NOT_FOUND") &&
+    SQLITE_NATIVE_LOAD_RE.test(msg)
+  ) {
     return "Open Sprint could not load its SQLite runtime. The desktop installation may be incomplete or built for the wrong CPU architecture. Reinstall Open Sprint using the installer that matches your machine (x64 or arm64).";
   }
   if (SQLITE_NATIVE_LOAD_RE.test(msg)) {
@@ -143,7 +149,11 @@ export function classifyDbConnectionError(
       ? "Open Sprint could not open the database file because of file permissions. Check that the configured folder is writable."
       : "The database rejected the connection; check the username, password, and database name in your settings.";
   }
-  if (/password authentication failed|role .* does not exist|database .* does not exist|relation .* does not exist/i.test(msg)) {
+  if (
+    /password authentication failed|role .* does not exist|database .* does not exist|relation .* does not exist/i.test(
+      msg
+    )
+  ) {
     return "The database rejected the connection; check the username, password, and database name in your settings.";
   }
   if (/EACCES|EPERM|ENOENT|ENOTDIR|ENOSPC|EROFS/i.test(msg)) {

@@ -11,6 +11,7 @@ import { BranchManager, MergeConflictError, RebaseConflictError } from "./branch
 import { ProjectService } from "./project.service.js";
 import { agentService } from "./agent.service.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
+import { runMergeQualityGates } from "./merge-quality-gate-runner.js";
 import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
 import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
@@ -196,6 +197,53 @@ class GitCommitQueueImpl implements GitCommitQueueService {
     };
   }
 
+  private buildQualityGateJobError(
+    failure: {
+      command: string;
+      reason: string;
+      outputSnippet?: string;
+      output?: string;
+      worktreePath?: string;
+      firstErrorLine?: string;
+      category?: "environment_setup" | "quality_gate";
+      autoRepairAttempted?: boolean;
+      autoRepairSucceeded?: boolean;
+      autoRepairCommands?: string[];
+      autoRepairOutput?: string;
+    },
+    worktreePath: string
+  ): MergeJobError {
+    const reason = failure.reason.trim().slice(0, 500) || "Unknown quality gate failure";
+    const outputSnippet = (failure.outputSnippet ?? failure.output ?? "").trim().slice(0, 1800);
+    const detail = outputSnippet.length > 0 ? ` | ${outputSnippet}` : "";
+    const firstErrorLine =
+      failure.firstErrorLine?.trim().slice(0, 300) ||
+      outputSnippet
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.length > 0) ||
+      reason;
+
+    return new MergeJobError(
+      `Quality gate failed (${failure.command}): ${reason}${detail}`,
+      "quality_gate",
+      [],
+      "requeued",
+      {
+        command: failure.command,
+        reason,
+        outputSnippet,
+        worktreePath: failure.worktreePath ?? worktreePath,
+        firstErrorLine,
+        category: failure.category ?? "quality_gate",
+        autoRepairAttempted: failure.autoRepairAttempted ?? false,
+        autoRepairSucceeded: failure.autoRepairSucceeded ?? false,
+        autoRepairCommands: failure.autoRepairCommands,
+        autoRepairOutput: failure.autoRepairOutput,
+      }
+    );
+  }
+
   // ─── Job execution ───
 
   private async processNext(): Promise<void> {
@@ -264,9 +312,11 @@ class GitCommitQueueImpl implements GitCommitQueueService {
       }
       case "worktree_merge": {
         let taskTitle = job.taskTitle ?? job.taskId;
+        let projectId: string | null = null;
         try {
           await this.taskStore.init();
           const project = await this.projectService.getProjectByRepoPath(repoPath);
+          projectId = project?.id ?? null;
           if (project) {
             const issue = await this.taskStore.show(project.id, job.taskId);
             taskTitle = (issue.title as string) || job.taskId;
@@ -309,10 +359,8 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           }
         }
         if (rebaseConflict) {
-          const { projectId, config, testCommand, mergeQualityGates } = await this.getMergeAgentConfig(
-            repoPath,
-            job.taskId
-          );
+          const { projectId, config, testCommand, mergeQualityGates } =
+            await this.getMergeAgentConfig(repoPath, job.taskId);
           const MAX_REBASE_CONFLICT_ROUNDS = 12;
           let round = 0;
           while (rebaseConflict) {
@@ -413,10 +461,8 @@ class GitCommitQueueImpl implements GitCommitQueueService {
               branchName: job.branchName,
               conflictedFiles: mergeErr.conflictedFiles,
             });
-            const { projectId, config, testCommand, mergeQualityGates } = await this.getMergeAgentConfig(
-              repoPath,
-              job.taskId
-            );
+            const { projectId, config, testCommand, mergeQualityGates } =
+              await this.getMergeAgentConfig(repoPath, job.taskId);
             const resolved = await agentService.runMergerAgentAndWait({
               projectId,
               cwd: repoPath,
@@ -431,17 +477,12 @@ class GitCommitQueueImpl implements GitCommitQueueService {
             });
             if (resolved) {
               try {
-                const msg = formatMergeCommitMessage(job.taskId, taskTitle);
                 await waitForGitReady(repoPath);
-                const noHooks = getGitNoHooksPath();
-                await shellExec(
-                  `git add -A && git -c core.hooksPath="${noHooks}" commit -m "${msg.replace(/"/g, '\\"')}"`,
-                  {
-                    cwd: repoPath,
-                    timeout: 30_000,
-                  }
-                );
-                log.info("Merger resolved conflicts, merge commit created", {
+                await shellExec("git add -A", {
+                  cwd: repoPath,
+                  timeout: 30_000,
+                });
+                log.info("Merger resolved conflicts, merge candidate staged", {
                   branchName: job.branchName,
                 });
                 eventLogService
@@ -482,19 +523,42 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           }
         }
 
+        await this.branchManager.stripRuntimePathsFromMergeResult(repoPath);
+
         // If merge was "Already up to date", git does not set MERGE_HEAD — nothing to commit.
         if (!(await this.branchManager.isMergeInProgress(repoPath))) {
           log.info("Already up to date, skipping merge commit", { branchName: job.branchName });
           break;
         }
 
+        const qualityGateFailure = await runMergeQualityGates(
+          {
+            projectId: projectId ?? "unknown",
+            repoPath,
+            worktreePath: repoPath,
+            taskId: job.taskId,
+            branchName: job.branchName,
+            baseBranch,
+          },
+          {
+            symlinkNodeModules: this.branchManager.symlinkNodeModules.bind(this.branchManager),
+          }
+        );
+        if (qualityGateFailure) {
+          await this.branchManager.mergeAbort(repoPath);
+          throw this.buildQualityGateJobError(qualityGateFailure, repoPath);
+        }
+
         const msg = formatMergeCommitMessage(job.taskId, taskTitle);
         await waitForGitReady(repoPath);
         const noHooksMerge = getGitNoHooksPath();
-        await shellExec(`git -c core.hooksPath="${noHooksMerge}" commit -m "${msg.replace(/"/g, '\\"')}"`, {
-          cwd: repoPath,
-          timeout: 30_000,
-        });
+        await shellExec(
+          `git -c core.hooksPath="${noHooksMerge}" commit -m "${msg.replace(/"/g, '\\"')}"`,
+          {
+            cwd: repoPath,
+            timeout: 30_000,
+          }
+        );
         log.info("Merge commit created", { branchName: job.branchName });
         break;
       }

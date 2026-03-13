@@ -68,9 +68,14 @@ describe("api client", () => {
         }),
       } as Response);
 
-      const err = await api.projects.scaffold({ name: "x", parentPath: "/tmp", template: "react" }).catch((e) => e);
+      const err = await api.projects
+        .scaffold({ name: "x", parentPath: "/tmp", template: "react" })
+        .catch((e) => e);
       expect(isApiError(err)).toBe(true);
-      const details = (err as ApiError).details as { repoPath?: string; recovery?: { attempted: boolean } };
+      const details = (err as ApiError).details as {
+        repoPath?: string;
+        recovery?: { attempted: boolean };
+      };
       expect(details?.recovery?.attempted).toBe(true);
     });
 
@@ -80,7 +85,11 @@ describe("api client", () => {
         status: 401,
         statusText: "Unauthorized",
         json: vi.fn().mockResolvedValue({
-          error: { code: "EXPO_TOKEN_REQUIRED", message: "Auth required", prompt: "Go to expo.dev" },
+          error: {
+            code: "EXPO_TOKEN_REQUIRED",
+            message: "Auth required",
+            prompt: "Go to expo.dev",
+          },
         }),
       } as Response);
 
@@ -350,7 +359,12 @@ describe("api client", () => {
 
     it("listVersions calls GET /projects/:projectId/plans/:planId/versions and returns versions array", async () => {
       const versions = [
-        { id: "v1", version_number: 1, created_at: "2025-01-01T00:00:00Z", is_executed_version: true },
+        {
+          id: "v1",
+          version_number: 1,
+          created_at: "2025-01-01T00:00:00Z",
+          is_executed_version: true,
+        },
         { id: "v2", version_number: 2, created_at: "2025-01-02T00:00:00Z" },
       ];
       vi.mocked(fetch).mockResolvedValue({

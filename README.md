@@ -103,16 +103,16 @@ The product spec for Open Sprint lives in `PRD.md`. Each project's Sketch output
 
 ## Common Commands
 
-| Command                 | What it does                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------- |
-| `npm run setup`         | Install dependencies, create default SQLite DB, and apply schema (optional: `USE_POSTGRES=1`)   |
+| Command                                    | What it does                                                                                                   |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `npm run setup`                            | Install dependencies, create default SQLite DB, and apply schema (optional: `USE_POSTGRES=1`)                  |
 | `OPENSPRINT_SETUP_MINIMAL=1 npm run setup` | Install only shared/backend/frontend deps for source development (skips Electron/Puppeteer workspace installs) |
-| `npm run dev`           | Start the backend and frontend                                                                    |
-| `npm run test`          | Run the test suite                                                                                |
-| `npm run lint`          | Run lint checks across workspaces                                                                 |
-| `npm run build`         | Build all packages                                                                                |
-| `npm run start:desktop` | Run the Electron desktop app (builds once, then opens a window)                                  |
-| `npm run build:desktop` | Build installers (for example, `.dmg`, `.exe`, `AppImage`) to `packages/electron/dist/`         |
+| `npm run dev`                              | Start the backend and frontend                                                                                 |
+| `npm run test`                             | Run the test suite                                                                                             |
+| `npm run lint`                             | Run lint checks across workspaces                                                                              |
+| `npm run build`                            | Build all packages                                                                                             |
+| `npm run start:desktop`                    | Run the Electron desktop app (builds once, then opens a window)                                                |
+| `npm run build:desktop`                    | Build installers (for example, `.dmg`, `.exe`, `AppImage`) to `packages/electron/dist/`                        |
 
 ## Troubleshooting
 

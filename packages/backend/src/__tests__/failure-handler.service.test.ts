@@ -438,7 +438,8 @@ describe("FailureHandlerService", () => {
 
   it("persists structured execution diagnostics for test-failure requeues", async () => {
     const slot = makeSlot("/tmp/worktree");
-    slot.phaseResult.validationCommand = "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts";
+    slot.phaseResult.validationCommand =
+      "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts";
     slot.phaseResult.testResults = {
       passed: 0,
       failed: 1,
@@ -774,7 +775,9 @@ describe("FailureHandlerService", () => {
       const mockUpdate = vi.fn().mockResolvedValue(undefined);
       mockHost.taskStore = { ...mockHost.taskStore, update: mockUpdate };
 
-      const taskWithComplexity9 = makeTask() as ReturnType<typeof makeTask> & { complexity?: number };
+      const taskWithComplexity9 = makeTask() as ReturnType<typeof makeTask> & {
+        complexity?: number;
+      };
       taskWithComplexity9.complexity = 9;
 
       await handler.handleTaskFailure(

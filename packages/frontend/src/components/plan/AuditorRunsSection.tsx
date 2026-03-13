@@ -66,17 +66,13 @@ function AuditorRunRow({
             {run.status}
           </span>
         </div>
-        <span className="text-theme-muted text-xs shrink-0">
-          {expanded ? "▼" : "▶"}
-        </span>
+        <span className="text-theme-muted text-xs shrink-0">{expanded ? "▼" : "▶"}</span>
       </button>
       {expanded && (
         <div className="px-3 pb-3 pt-0 border-t border-theme-border-subtle mt-0">
           <div className="mt-2 text-xs prose prose-sm prose-neutral dark:prose-invert max-w-none prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg">
             {hasContent ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {run.assessment!}
-              </ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{run.assessment!}</ReactMarkdown>
             ) : (
               <p className="text-theme-muted italic">No assessment recorded.</p>
             )}
@@ -145,8 +141,8 @@ export function AuditorRunsSection({ projectId, planId }: AuditorRunsSectionProp
         </h4>
         {runList.length === 0 ? (
           <p className="text-sm text-theme-muted">
-            No Auditor runs yet. Runs are recorded when the final review completes
-            for this plan&apos;s epic.
+            No Auditor runs yet. Runs are recorded when the final review completes for this
+            plan&apos;s epic.
           </p>
         ) : (
           <div className="space-y-0">

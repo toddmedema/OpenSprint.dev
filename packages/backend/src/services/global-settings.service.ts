@@ -42,16 +42,24 @@ async function load(): Promise<GlobalSettings> {
       const obj = parsed as Record<string, unknown>;
       const apiKeys = sanitizeApiKeys(obj.apiKeys);
       const useCustomCli =
-        (obj.useCustomCli === true || obj.useCustomCli === false) ? obj.useCustomCli : undefined;
+        obj.useCustomCli === true || obj.useCustomCli === false ? obj.useCustomCli : undefined;
       const databaseUrl = parseDatabaseUrl(obj.databaseUrl);
       const expoToken =
         obj.expoToken != null && typeof obj.expoToken === "string" && obj.expoToken.trim()
           ? obj.expoToken.trim()
           : undefined;
       const showNotificationDotInMenuBar =
-        obj.showNotificationDotInMenuBar === false ? false : obj.showNotificationDotInMenuBar === true ? true : undefined;
+        obj.showNotificationDotInMenuBar === false
+          ? false
+          : obj.showNotificationDotInMenuBar === true
+            ? true
+            : undefined;
       const showRunningAgentCountInMenuBar =
-        obj.showRunningAgentCountInMenuBar === false ? false : obj.showRunningAgentCountInMenuBar === true ? true : undefined;
+        obj.showRunningAgentCountInMenuBar === false
+          ? false
+          : obj.showRunningAgentCountInMenuBar === true
+            ? true
+            : undefined;
       return {
         ...(apiKeys && { apiKeys }),
         ...(useCustomCli !== undefined && { useCustomCli }),

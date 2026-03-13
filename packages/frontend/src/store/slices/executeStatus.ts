@@ -45,9 +45,7 @@ export const statusReducers = {
   },
 };
 
-export function addStatusExtraReducers(
-  builder: ActionReducerMapBuilder<ExecuteState>
-): void {
+export function addStatusExtraReducers(builder: ActionReducerMapBuilder<ExecuteState>): void {
   createAsyncHandlers("status", fetchExecuteStatus, builder, {
     ensureState: ensureAsync,
     onPending: (state) => {

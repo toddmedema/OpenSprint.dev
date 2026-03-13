@@ -55,8 +55,7 @@ export class ReviewSynthesizerService {
 
     const angleBlocks = angleInputs
       .map(({ angle, result }) => {
-        const label =
-          REVIEW_ANGLE_OPTIONS.find((o) => o.value === angle)?.label ?? angle;
+        const label = REVIEW_ANGLE_OPTIONS.find((o) => o.value === angle)?.label ?? angle;
         const status = result.status;
         const summary = result.summary ?? "";
         const issues = result.issues?.length ? result.issues.join("\n- ") : "";
@@ -113,7 +112,9 @@ Synthesize the above into a single report. Output ONLY valid JSON with status, s
       const status = parsed.status === "rejected" ? "rejected" : "approved";
       return {
         status,
-        summary: parsed.summary?.trim() ?? (status === "approved" ? "All angles passed" : "Review rejected"),
+        summary:
+          parsed.summary?.trim() ??
+          (status === "approved" ? "All angles passed" : "Review rejected"),
         ...(parsed.issues?.length ? { issues: parsed.issues } : {}),
         notes: parsed.notes?.trim() ?? "",
       };

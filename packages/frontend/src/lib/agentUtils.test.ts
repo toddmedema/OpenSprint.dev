@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  getPhaseForAgentNavigation,
-  getAgentIconSrc,
-  isPlanningAgent,
-} from "./agentUtils";
+import { getPhaseForAgentNavigation, getAgentIconSrc, isPlanningAgent } from "./agentUtils";
 
 describe("agentUtils", () => {
   describe("getPhaseForAgentNavigation", () => {

@@ -67,8 +67,7 @@ export function validateAssigneeChange(
   options: { status?: string; assignee?: string; claim?: boolean },
   issueId: string
 ): void {
-  const claimLikeTransition =
-    options.status === "in_progress" && options.assignee !== undefined;
+  const claimLikeTransition = options.status === "in_progress" && options.assignee !== undefined;
   if (options.claim || claimLikeTransition || options.assignee === undefined) return;
   const reopening = options.status === "open";
   const assigneeCleared = options.assignee == null || options.assignee.trim() === "";
@@ -153,7 +152,8 @@ export function buildTaskUpdateSets(
     if (options.assignee !== undefined) {
       sets.push(`assignee = $${idx++}`);
       vals.push(options.assignee);
-      const reopening = options.status === "open" && (options.assignee === "" || options.assignee == null);
+      const reopening =
+        options.status === "open" && (options.assignee === "" || options.assignee == null);
       if (reopening) {
         sets.push(`started_at = $${idx++}`);
         vals.push(null);
@@ -206,7 +206,12 @@ export function buildUpdateManySets(
     if (reopening) {
       sets.push(`started_at = $${idx++}`);
       vals.push(null);
-    } else if (u.assignee != null && u.assignee.trim() !== "" && row && (row.started_at == null || row.started_at === "")) {
+    } else if (
+      u.assignee != null &&
+      u.assignee.trim() !== "" &&
+      row &&
+      (row.started_at == null || row.started_at === "")
+    ) {
       sets.push(`started_at = $${idx++}`);
       vals.push(now);
     }

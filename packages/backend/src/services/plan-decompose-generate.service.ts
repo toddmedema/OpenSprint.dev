@@ -51,16 +51,27 @@ export interface PlanDecomposeGenerateDeps {
       projectId: string,
       inputs: Array<Record<string, unknown> & { title: string }>
     ): Promise<Array<{ id: string }>>;
-    addDependencies(projectId: string, deps: Array<{ childId: string; parentId: string; type?: string }>): Promise<void>;
+    addDependencies(
+      projectId: string,
+      deps: Array<{ childId: string; parentId: string; type?: string }>
+    ): Promise<void>;
     addLabel(projectId: string, taskId: string, label: string): Promise<void>;
     close(projectId: string, taskId: string, reason: string): Promise<void | StoredTask>;
-    create(projectId: string, title: string, opts?: Record<string, unknown>): Promise<{ id: string }>;
+    create(
+      projectId: string,
+      title: string,
+      opts?: Record<string, unknown>
+    ): Promise<{ id: string }>;
     update(
       projectId: string,
       taskId: string,
       updates: Record<string, unknown>
     ): Promise<void | StoredTask>;
-    planUpdateMetadata(projectId: string, planId: string, metadata: Record<string, unknown>): Promise<void>;
+    planUpdateMetadata(
+      projectId: string,
+      planId: string,
+      metadata: Record<string, unknown>
+    ): Promise<void>;
   };
   projectService: ProjectService;
   prdService: PrdService;
@@ -184,11 +195,10 @@ export class PlanDecomposeGenerateService {
       epicId = epicResult.id;
       await taskStore.update(projectId, epicId, { description: planId });
       await taskStore.update(projectId, epicId, { status: "blocked" });
-      await taskStore.planUpdateMetadata(
-        projectId,
-        planId,
-        { ...plan.metadata, epicId } as unknown as Record<string, unknown>
-      );
+      await taskStore.planUpdateMetadata(projectId, planId, {
+        ...plan.metadata,
+        epicId,
+      } as unknown as Record<string, unknown>);
       log.info("Created missing epic for plan", { planId, epicId, title });
     } else {
       await taskStore.update(projectId, epicId, { status: "blocked" });
@@ -359,7 +369,9 @@ Required JSON shape:
 }
 
 Plan markdown MUST follow this structure (PRD §7.2.3). Each plan's content must include these sections in order:
-${getPlanMarkdownSections().map((s) => `- ## ${s}`).join("\n")}
+${getPlanMarkdownSections()
+  .map((s) => `- ## ${s}`)
+  .join("\n")}
 
 Template structure: ${getPlanTemplateStructure()}
 
@@ -437,12 +449,7 @@ Field rules: complexity: low, medium, high, or very_high (plan-level).
         sourceId: `draft:${draftId}`,
         questions: openQuestions,
       });
-      await chatService.startPlanDraftConversation(
-        projectId,
-        draftId,
-        description,
-        openQuestions
-      );
+      await chatService.startPlanDraftConversation(projectId, draftId, description, openQuestions);
       broadcastToProject(projectId, {
         type: "notification.added",
         notification: {

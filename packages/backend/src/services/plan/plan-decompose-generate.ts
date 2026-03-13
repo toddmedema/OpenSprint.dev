@@ -3,7 +3,11 @@
  * Pure or thin helpers used by PlanService for suggest, decompose, generate-from-description, and task generation.
  */
 import type { Plan, Prd, SuggestedPlan } from "@opensprint/shared";
-import { normalizeDependsOnPlans, normalizePlanSpec, normalizePlannerTask } from "./planner-normalize.js";
+import {
+  normalizeDependsOnPlans,
+  normalizePlanSpec,
+  normalizePlannerTask,
+} from "./planner-normalize.js";
 import { extractJsonFromAgentResponse } from "../../utils/json-extract.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { ErrorCodes } from "../../middleware/error-codes.js";
@@ -45,10 +49,7 @@ export function buildPrdContextString(prd: Prd): string {
  */
 export function parseDecomposeResponse(content: string): SuggestedPlan[] {
   const parsed =
-    extractJsonFromAgentResponse<{ plans?: unknown[]; plan_list?: unknown[] }>(
-      content,
-      "plans"
-    ) ??
+    extractJsonFromAgentResponse<{ plans?: unknown[]; plan_list?: unknown[] }>(content, "plans") ??
     extractJsonFromAgentResponse<{ plans?: unknown[]; plan_list?: unknown[] }>(
       content,
       "plan_list"
@@ -57,8 +58,7 @@ export function parseDecomposeResponse(content: string): SuggestedPlan[] {
     throw new AppError(
       400,
       ErrorCodes.DECOMPOSE_PARSE_FAILED,
-      "Planning agent did not return valid decomposition JSON. Response: " +
-        content.slice(0, 500),
+      "Planning agent did not return valid decomposition JSON. Response: " + content.slice(0, 500),
       { responsePreview: content.slice(0, 500) }
     );
   }

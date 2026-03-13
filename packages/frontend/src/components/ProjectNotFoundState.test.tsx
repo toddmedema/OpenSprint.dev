@@ -11,7 +11,9 @@ describe("ProjectNotFoundState", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("heading", { level: 1, name: "Project not found" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Project not found" })
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Return to home" })).toHaveAttribute("href", "/");
   });
 

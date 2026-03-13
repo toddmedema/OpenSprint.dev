@@ -122,12 +122,7 @@ const _mockPlanVersionInsertForStore = vi
 const mockPlanUpdateContent = vi
   .fn()
   .mockImplementation(
-    async (
-      projectId: string,
-      planId: string,
-      content: string,
-      currentVersionNumber?: number
-    ) => {
+    async (projectId: string, planId: string, content: string, currentVersionNumber?: number) => {
       const proj = mockPlanStore.get(projectId);
       const row = proj?.get(planId);
       if (row) {
@@ -178,106 +173,108 @@ const mockPlanVersionsByKey = new Map<
   }>
 >();
 
-const mockPlanVersionList = vi.fn().mockImplementation(async (projectId: string, planId: string) => {
-  const key = `${projectId}:${planId}`;
-  const list = mockPlanVersionsByKey.get(key) ?? [];
-  return list
-    .slice()
-    .sort((a, b) => b.version_number - a.version_number)
-    .map((v) => ({
-      id: v.version_number,
-      project_id: projectId,
-      plan_id: planId,
-      version_number: v.version_number,
-      title: v.title,
-      created_at: new Date().toISOString(),
-      is_executed_version: v.is_executed_version,
-    }));
-});
-
-const mockPlanVersionGetByVersionNumber = vi
+const mockPlanVersionList = vi
   .fn()
-  .mockImplementation(
-    async (
-      projectId: string,
-      planId: string,
-      versionNumber: number
-    ): Promise<{
-      id: number;
-      project_id: string;
-      plan_id: string;
-      version_number: number;
-      title: string | null;
-      content: string;
-      metadata: string | null;
-      created_at: string;
-      is_executed_version: boolean;
-    }> => {
-      const key = `${projectId}:${planId}`;
-      const list = mockPlanVersionsByKey.get(key) ?? [];
-      const v = list.find((x) => x.version_number === versionNumber);
-      if (!v) throw new Error(`Plan version ${versionNumber} not found`);
-      return {
-        id: versionNumber,
+  .mockImplementation(async (projectId: string, planId: string) => {
+    const key = `${projectId}:${planId}`;
+    const list = mockPlanVersionsByKey.get(key) ?? [];
+    return list
+      .slice()
+      .sort((a, b) => b.version_number - a.version_number)
+      .map((v) => ({
+        id: v.version_number,
         project_id: projectId,
         plan_id: planId,
         version_number: v.version_number,
         title: v.title,
-        content: v.content,
-        metadata: v.metadata,
         created_at: new Date().toISOString(),
         is_executed_version: v.is_executed_version,
-      };
-    }
-  );
+      }));
+  });
 
-mockPlanVersionInsert.mockImplementation(async (data: {
-  project_id: string;
-  plan_id: string;
-  version_number: number;
-  title?: string | null;
-  content: string;
-  metadata?: string | null;
-  is_executed_version?: boolean;
-}) => {
-  const key = `${data.project_id}:${data.plan_id}`;
-  let list = mockPlanVersionsByKey.get(key);
-  if (!list) {
-    list = [];
-    mockPlanVersionsByKey.set(key, list);
+const mockPlanVersionGetByVersionNumber = vi.fn().mockImplementation(
+  async (
+    projectId: string,
+    planId: string,
+    versionNumber: number
+  ): Promise<{
+    id: number;
+    project_id: string;
+    plan_id: string;
+    version_number: number;
+    title: string | null;
+    content: string;
+    metadata: string | null;
+    created_at: string;
+    is_executed_version: boolean;
+  }> => {
+    const key = `${projectId}:${planId}`;
+    const list = mockPlanVersionsByKey.get(key) ?? [];
+    const v = list.find((x) => x.version_number === versionNumber);
+    if (!v) throw new Error(`Plan version ${versionNumber} not found`);
+    return {
+      id: versionNumber,
+      project_id: projectId,
+      plan_id: planId,
+      version_number: v.version_number,
+      title: v.title,
+      content: v.content,
+      metadata: v.metadata,
+      created_at: new Date().toISOString(),
+      is_executed_version: v.is_executed_version,
+    };
   }
-  list.push({
-    version_number: data.version_number,
-    title: data.title ?? null,
-    content: data.content,
-    metadata: data.metadata ?? null,
-    is_executed_version: data.is_executed_version ?? false,
-  });
-  // Also write to mockPlanVersionsStore so mockListPlanVersions (updatePlan flow) sees versions
-  let proj = mockPlanVersionsStore.get(data.project_id);
-  if (!proj) {
-    proj = new Map();
-    mockPlanVersionsStore.set(data.project_id, proj);
+);
+
+mockPlanVersionInsert.mockImplementation(
+  async (data: {
+    project_id: string;
+    plan_id: string;
+    version_number: number;
+    title?: string | null;
+    content: string;
+    metadata?: string | null;
+    is_executed_version?: boolean;
+  }) => {
+    const key = `${data.project_id}:${data.plan_id}`;
+    let list = mockPlanVersionsByKey.get(key);
+    if (!list) {
+      list = [];
+      mockPlanVersionsByKey.set(key, list);
+    }
+    list.push({
+      version_number: data.version_number,
+      title: data.title ?? null,
+      content: data.content,
+      metadata: data.metadata ?? null,
+      is_executed_version: data.is_executed_version ?? false,
+    });
+    // Also write to mockPlanVersionsStore so mockListPlanVersions (updatePlan flow) sees versions
+    let proj = mockPlanVersionsStore.get(data.project_id);
+    if (!proj) {
+      proj = new Map();
+      mockPlanVersionsStore.set(data.project_id, proj);
+    }
+    const storeList = proj.get(data.plan_id) ?? [];
+    storeList.push({
+      version_number: data.version_number,
+      content: data.content,
+      title: data.title ?? null,
+    });
+    proj.set(data.plan_id, storeList);
+    return {
+      id: data.version_number,
+      project_id: data.project_id,
+      plan_id: data.plan_id,
+      version_number: data.version_number,
+      title: data.title ?? null,
+      content: data.content,
+      metadata: data.metadata ?? null,
+      created_at: new Date().toISOString(),
+      is_executed_version: data.is_executed_version ?? false,
+    };
   }
-  const storeList = proj.get(data.plan_id) ?? [];
-  storeList.push({
-    version_number: data.version_number,
-    content: data.content,
-    title: data.title ?? null,
-  });
-  proj.set(data.plan_id, storeList);
-  return {
-    id: data.version_number,
-    project_id: data.project_id,
-    plan_id: data.plan_id,
-    version_number: data.version_number,
-    title: data.title ?? null,
-    content: data.content,
-    metadata: data.metadata ?? null,
-    created_at: new Date().toISOString(),
-    is_executed_version: data.is_executed_version ?? false,
-  };
-});
+);
 
 const mockPlanVersionSetExecutedVersion = vi.fn().mockResolvedValue(undefined);
 
@@ -342,8 +339,10 @@ vi.mock("../services/task-store.service.js", () => {
     planSetShippedContent: (...args: unknown[]) => mockPlanSetShippedContent(...args),
     planGetShippedContent: (...args: unknown[]) => mockPlanGetShippedContent(...args),
     planVersionList: (...args: unknown[]) => mockPlanVersionList(...args),
-    planVersionGetByVersionNumber: (...args: unknown[]) => mockPlanVersionGetByVersionNumber(...args),
-    planVersionSetExecutedVersion: (...args: unknown[]) => mockPlanVersionSetExecutedVersion(...args),
+    planVersionGetByVersionNumber: (...args: unknown[]) =>
+      mockPlanVersionGetByVersionNumber(...args),
+    planVersionSetExecutedVersion: (...args: unknown[]) =>
+      mockPlanVersionSetExecutedVersion(...args),
     planUpdateVersionNumbers: (...args: unknown[]) => mockPlanUpdateVersionNumbers(...args),
     show: (...args: unknown[]) => mockTaskStoreShow(...args),
     init: vi.fn().mockResolvedValue(undefined),
@@ -709,7 +708,10 @@ describe("PlanService createWithRetry usage", () => {
     await planService.shipPlan(projectId, planId);
     expect(mockPlanVersionInsert).toHaveBeenCalledTimes(1);
     expect(mockPlanVersionInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ version_number: 1, content: "# Edit Then Execute\n\n## Overview\n\nOriginal." })
+      expect.objectContaining({
+        version_number: 1,
+        content: "# Edit Then Execute\n\n## Overview\n\nOriginal.",
+      })
     );
 
     mockPlanVersionInsert.mockClear();
@@ -774,8 +776,20 @@ describe("PlanService createWithRetry usage", () => {
     const planId = plan.metadata.planId;
     const key = `${projectId}:${planId}`;
     mockPlanVersionsByKey.set(key, [
-      { version_number: 1, title: "V1", content: "# V1\n\nContent one.", metadata: null, is_executed_version: false },
-      { version_number: 2, title: "V2", content: "# V2\n\nContent two.", metadata: null, is_executed_version: false },
+      {
+        version_number: 1,
+        title: "V1",
+        content: "# V1\n\nContent one.",
+        metadata: null,
+        is_executed_version: false,
+      },
+      {
+        version_number: 2,
+        title: "V2",
+        content: "# V2\n\nContent two.",
+        metadata: null,
+        is_executed_version: false,
+      },
     ]);
 
     mockPlanVersionInsert.mockClear();
@@ -1124,31 +1138,33 @@ describe("PlanService createWithRetry usage", () => {
 
   it("planTasks retries task generation once in same conversation context", async () => {
     const firstReply = "I drafted tasks, but not as JSON.";
-    mockInvokePlanningAgent.mockImplementation((opts: {
-      tracking?: { label?: string };
-      messages?: Array<{ role: string; content: string }>;
-    }) => {
-      if (opts.tracking?.label === "Task generation") {
-        const userMessages = opts.messages?.filter((m) => m.role === "user") ?? [];
-        if (userMessages.length > 1) {
-          return Promise.resolve({
-            content: JSON.stringify({
-              tasks: [
-                { title: "Retry Task A", description: "First", priority: 1, dependsOn: [] },
-                {
-                  title: "Retry Task B",
-                  description: "Second",
-                  priority: 2,
-                  dependsOn: ["Retry Task A"],
-                },
-              ],
-            }),
-          });
+    mockInvokePlanningAgent.mockImplementation(
+      (opts: {
+        tracking?: { label?: string };
+        messages?: Array<{ role: string; content: string }>;
+      }) => {
+        if (opts.tracking?.label === "Task generation") {
+          const userMessages = opts.messages?.filter((m) => m.role === "user") ?? [];
+          if (userMessages.length > 1) {
+            return Promise.resolve({
+              content: JSON.stringify({
+                tasks: [
+                  { title: "Retry Task A", description: "First", priority: 1, dependsOn: [] },
+                  {
+                    title: "Retry Task B",
+                    description: "Second",
+                    priority: 2,
+                    dependsOn: ["Retry Task A"],
+                  },
+                ],
+              }),
+            });
+          }
+          return Promise.resolve({ content: firstReply });
         }
-        return Promise.resolve({ content: firstReply });
+        return Promise.resolve({ content: JSON.stringify({ taskIdsToClose: [] }) });
       }
-      return Promise.resolve({ content: JSON.stringify({ taskIdsToClose: [] }) });
-    });
+    );
     mockTaskStoreCreateMany.mockResolvedValue([
       { id: "epic-123.1", title: "Retry Task A", type: "task" },
       { id: "epic-123.2", title: "Retry Task B", type: "task" },
@@ -1399,7 +1415,8 @@ describe("PlanService createWithRetry usage", () => {
 
     // Re-execute only allowed for complete plans; set reviewedAt so getPlan returns status "complete"
     const rowNoDelta = mockPlanStore.get(projectId)?.get(planId);
-    if (rowNoDelta) (rowNoDelta.metadata as Record<string, unknown>).reviewedAt = new Date().toISOString();
+    if (rowNoDelta)
+      (rowNoDelta.metadata as Record<string, unknown>).reviewedAt = new Date().toISOString();
 
     mockTaskStoreUpdate.mockClear();
     await planService.reshipPlan(projectId, planId);
@@ -1412,7 +1429,9 @@ describe("PlanService createWithRetry usage", () => {
   });
 
   it("reshipPlan throws 400 when plan status is not complete (e.g. in_review)", async () => {
-    mockTaskStoreCreateMany.mockResolvedValue([{ id: "epic-123.1", title: "Task A", type: "task" }]);
+    mockTaskStoreCreateMany.mockResolvedValue([
+      { id: "epic-123.1", title: "Task A", type: "task" },
+    ]);
     const plan = await planService.createPlan(projectId, {
       title: "In Review Plan",
       content: "# In Review\n\nContent.",
@@ -1470,8 +1489,20 @@ describe("PlanService createWithRetry usage", () => {
 
     const key = `${projectId}:${planId}`;
     mockPlanVersionsByKey.set(key, [
-      { version_number: 1, title: "V1", content: "# V1\n\nOld content.", metadata: null, is_executed_version: true },
-      { version_number: 2, title: "V2", content: "# V2\n\nNew content.", metadata: null, is_executed_version: false },
+      {
+        version_number: 1,
+        title: "V1",
+        content: "# V1\n\nOld content.",
+        metadata: null,
+        is_executed_version: true,
+      },
+      {
+        version_number: 2,
+        title: "V2",
+        content: "# V2\n\nNew content.",
+        metadata: null,
+        is_executed_version: false,
+      },
     ]);
     mockTaskStoreListAll.mockResolvedValue([
       { id: "epic-123", status: "open", type: "epic" },
@@ -1535,8 +1566,20 @@ describe("PlanService createWithRetry usage", () => {
 
     const key = `${projectId}:${planId}`;
     mockPlanVersionsByKey.set(key, [
-      { version_number: 1, title: "V1", content: "# V1\n\nLast executed content.", metadata: null, is_executed_version: true },
-      { version_number: 2, title: "V2", content: "# V2\n\nCurrent (v2).", metadata: null, is_executed_version: false },
+      {
+        version_number: 1,
+        title: "V1",
+        content: "# V1\n\nLast executed content.",
+        metadata: null,
+        is_executed_version: true,
+      },
+      {
+        version_number: 2,
+        title: "V2",
+        content: "# V2\n\nCurrent (v2).",
+        metadata: null,
+        is_executed_version: false,
+      },
     ]);
     const proj = mockPlanStore.get(projectId);
     const planRow = proj?.get(planId);
@@ -1567,7 +1610,9 @@ describe("PlanService createWithRetry usage", () => {
   });
 
   it("reshipPlan throws 400 when plan status is building (epic open, tasks not all closed)", async () => {
-    mockTaskStoreCreateMany.mockResolvedValue([{ id: "epic-123.1", title: "Task A", type: "task" }]);
+    mockTaskStoreCreateMany.mockResolvedValue([
+      { id: "epic-123.1", title: "Task A", type: "task" },
+    ]);
     const plan = await planService.createPlan(projectId, {
       title: "Building Plan",
       content: "# Building\n\nContent.",
@@ -1607,7 +1652,8 @@ describe("PlanService createWithRetry usage", () => {
     const row = proj?.get(planId);
     expect(row).toBeDefined();
     row!.last_executed_version_number = 1;
-    if (row!.metadata) (row!.metadata as Record<string, unknown>).reviewedAt = new Date().toISOString();
+    if (row!.metadata)
+      (row!.metadata as Record<string, unknown>).reviewedAt = new Date().toISOString();
 
     // None started: all children open; reshipPlan uses crudService.getPlan internally, so mock that
     mockTaskStoreListAll.mockResolvedValue([
@@ -2142,7 +2188,10 @@ describe("PlanService createWithRetry usage", () => {
       complexity: "low",
     });
     const epicId = plan.metadata.epicId;
-    expect((mockPlanStore.get(projectId)?.get(plan.metadata.planId)?.metadata as Record<string, unknown>).reviewedAt).toBeNull();
+    expect(
+      (mockPlanStore.get(projectId)?.get(plan.metadata.planId)?.metadata as Record<string, unknown>)
+        .reviewedAt
+    ).toBeNull();
 
     mockPlanUpdateMetadata.mockClear();
     await planService.clearReviewedAtIfNewTasksAdded(projectId, epicId!);

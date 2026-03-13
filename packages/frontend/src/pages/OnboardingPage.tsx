@@ -3,16 +3,12 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { Layout } from "../components/layout/Layout";
 import { api, isConnectionError } from "../api/client";
 import { PREREQ_ITEMS, getPrereqInstallUrl } from "../lib/prerequisites";
-import {
-  AGENT_PROVIDER_OPTIONS,
-  type AgentProviderValue,
-} from "../lib/agentProviders";
+import { AGENT_PROVIDER_OPTIONS, type AgentProviderValue } from "../lib/agentProviders";
 
 type PrerequisitesState = { missing: string[]; platform: string } | null;
 
 const NO_KEY_MESSAGE = "No API key needed — you're good to go.";
-const CONNECTION_ERROR_MESSAGE =
-  "Unable to connect. Please check your network and try again.";
+const CONNECTION_ERROR_MESSAGE = "Unable to connect. Please check your network and try again.";
 
 /**
  * Sanitize intended redirect path to prevent open redirect.
@@ -88,8 +84,7 @@ export function OnboardingPage() {
 
   const providerOption = AGENT_PROVIDER_OPTIONS.find((o) => o.value === provider);
   const needsKeyInput = providerOption?.needsKeyInput ?? true;
-  const isConnectionErr =
-    error !== null && error === CONNECTION_ERROR_MESSAGE;
+  const isConnectionErr = error !== null && error === CONNECTION_ERROR_MESSAGE;
 
   useEffect(() => {
     api.env

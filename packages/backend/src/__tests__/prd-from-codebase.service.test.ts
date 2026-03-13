@@ -23,7 +23,10 @@ const mockInvokePlanningAgent = vi.fn();
 const mockBroadcastToProject = vi.fn();
 
 // Avoid loading drizzle-orm/pg-core (vitest resolution can fail in some workspaces)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 vi.mock("../services/agent.service.js", () => ({
@@ -53,7 +56,11 @@ describe("PrdFromCodebaseService", () => {
       getSettings: vi.fn().mockResolvedValue({
         simpleComplexityAgent: { type: "cursor", model: null, cliCommand: null },
         complexComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
-        hilConfig: { scopeChanges: "automated", architectureDecisions: "automated", dependencyModifications: "automated" },
+        hilConfig: {
+          scopeChanges: "automated",
+          architectureDecisions: "automated",
+          dependencyModifications: "automated",
+        },
       }),
       getRepoPath: vi.fn().mockResolvedValue("/repo"),
     };
@@ -95,7 +102,11 @@ describe("PrdFromCodebaseService", () => {
       getSettings: vi.fn().mockResolvedValue({
         simpleComplexityAgent: { type: "cursor", model: null, cliCommand: null },
         complexComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
-        hilConfig: { scopeChanges: "automated", architectureDecisions: "automated", dependencyModifications: "automated" },
+        hilConfig: {
+          scopeChanges: "automated",
+          architectureDecisions: "automated",
+          dependencyModifications: "automated",
+        },
       }),
       getRepoPath: vi.fn().mockResolvedValue("/repo"),
     };
@@ -118,7 +129,11 @@ describe("PrdFromCodebaseService", () => {
       getSettings: vi.fn().mockResolvedValue({
         simpleComplexityAgent: { type: "cursor", model: null, cliCommand: null },
         complexComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
-        hilConfig: { scopeChanges: "automated", architectureDecisions: "automated", dependencyModifications: "automated" },
+        hilConfig: {
+          scopeChanges: "automated",
+          architectureDecisions: "automated",
+          dependencyModifications: "automated",
+        },
       }),
       getRepoPath: vi.fn().mockResolvedValue("/repo"),
     };
@@ -158,7 +173,8 @@ describe("PrdFromCodebaseService", () => {
     );
 
     await expect(service.generatePrdFromCodebase("proj-1")).rejects.toMatchObject({
-      message: "The planning agent could not generate a PRD from the codebase. Google Gemini hit a rate limit.",
+      message:
+        "The planning agent could not generate a PRD from the codebase. Google Gemini hit a rate limit.",
       details: expect.objectContaining({
         kind: "rate_limit",
         notificationMessage: "Google Gemini hit a rate limit.",

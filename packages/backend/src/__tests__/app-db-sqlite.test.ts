@@ -32,10 +32,9 @@ describe.sequential.skipIf(!betterSqlite3Available)("initAppDb (SQLite)", () => 
       expect(rows).toHaveLength(1);
       expect(rows[0]).toEqual({ one: 1 });
 
-      const tasksRow = await client.queryOne(
-        "SELECT name FROM pragma_table_list WHERE name = ?",
-        ["tasks"]
-      );
+      const tasksRow = await client.queryOne("SELECT name FROM pragma_table_list WHERE name = ?", [
+        "tasks",
+      ]);
       expect(tasksRow?.name).toBe("tasks");
     } finally {
       await appDb.close();
@@ -49,7 +48,16 @@ describe.sequential.skipIf(!betterSqlite3Available)("initAppDb (SQLite)", () => 
       await appDb.runWrite(async (client) => {
         await client.execute(
           "INSERT INTO tasks (id, project_id, title, issue_type, status, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-          [taskId, "proj1", "Test", "task", "open", 2, "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z"]
+          [
+            taskId,
+            "proj1",
+            "Test",
+            "task",
+            "open",
+            2,
+            "2025-01-01T00:00:00Z",
+            "2025-01-01T00:00:00Z",
+          ]
         );
       });
       const client = await appDb.getClient();

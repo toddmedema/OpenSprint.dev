@@ -114,12 +114,7 @@ export function createTasksRouter(taskService: TaskService): Router {
         parentTaskId: string;
         type: "blocks" | "parent-child" | "related";
       };
-      await taskService.addDependency(
-        req.params.projectId,
-        req.params.taskId,
-        parentTaskId,
-        type
-      );
+      await taskService.addDependency(req.params.projectId, req.params.taskId, parentTaskId, type);
       res.status(204).send();
     })
   );

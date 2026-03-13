@@ -78,8 +78,9 @@ describe("ProjectGitRuntimeCache", () => {
   });
 
   it("dedupes concurrent refresh requests for the same project/context", async () => {
-    let resolveInspect: ((value: { baseBranch: string; remoteMode: "publishable" }) => void) | null =
-      null;
+    let resolveInspect:
+      | ((value: { baseBranch: string; remoteMode: "publishable" }) => void)
+      | null = null;
     inspect.mockImplementation(
       () =>
         new Promise<{ baseBranch: string; remoteMode: "publishable" }>((resolve) => {

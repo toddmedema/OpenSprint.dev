@@ -101,7 +101,8 @@ export class PlanVersionStore {
         isExec,
       ]
     );
-    if (!row) throw new AppError(500, ErrorCodes.INTERNAL_ERROR, "Plan version insert did not return row");
+    if (!row)
+      throw new AppError(500, ErrorCodes.INTERNAL_ERROR, "Plan version insert did not return row");
     return rowToStored(row as Record<string, unknown>);
   }
 

@@ -215,8 +215,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   );
   const prdApiBlockedNotification = React.useMemo(
     () =>
-      openQuestionNotifications.find((n) => n.source === "prd" && n.kind === "api_blocked") ??
-      null,
+      openQuestionNotifications.find((n) => n.source === "prd" && n.kind === "api_blocked") ?? null,
     [openQuestionNotifications]
   );
   const questionIdBySection = React.useMemo(() => {
@@ -240,15 +239,11 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   // Show empty-state prompt when no section has substantive content (new projects get SPEC.md with all sections empty)
   const hasPrdContent = Object.values(prdContent).some((c) => String(c ?? "").trim().length > 0);
   const prdEmpty = !Object.values(prdData ?? {}).some((c) => String(c ?? "").trim().length > 0);
-  const { showEmptyState: showPrdEmptyState } = usePhaseLoadingState(
-    prdLoading,
-    prdEmpty
-  );
+  const { showEmptyState: showPrdEmptyState } = usePhaseLoadingState(prdLoading, prdEmpty);
   // Show logo loading until backend definitively indicates whether PRD exists. No intermediate empty PRD view or filler.
   // prdPending: query has not resolved yet (no response from backend).
   // prdEmpty && !showPrdEmptyState: during empty-state delay after fast fetch (avoids flash of app idea prompt).
-  const showLoading =
-    prdPending || (prdEmpty && !showPrdEmptyState);
+  const showLoading = prdPending || (prdEmpty && !showPrdEmptyState);
 
   /* ── Fetch sketch-context when in empty state (for "Generate from codebase" visibility) ── */
   useEffect(() => {

@@ -31,7 +31,9 @@ describe("no-result-reason.service", () => {
     });
     it("returns undefined for non-JSON or init lines", () => {
       expect(extractStructuredNoResultErrorFromJsonLine("")).toBeUndefined();
-      expect(extractStructuredNoResultErrorFromJsonLine('{"type":"system","subtype":"init"}')).toBeUndefined();
+      expect(
+        extractStructuredNoResultErrorFromJsonLine('{"type":"system","subtype":"init"}')
+      ).toBeUndefined();
     });
   });
 

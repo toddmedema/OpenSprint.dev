@@ -20,13 +20,10 @@ const baseUrlSchema = z
   .string()
   .optional()
   .transform((s) => (s === undefined ? undefined : s.trim()))
-  .refine(
-    (s) => s === undefined || s === "" || httpOrHttps.test(s),
-    { message: "baseUrl must be an http or https URL" }
-  )
-  .transform((s) =>
-    s === undefined || s === "" ? s : s.replace(/\/+$/, "")
-  );
+  .refine((s) => s === undefined || s === "" || httpOrHttps.test(s), {
+    message: "baseUrl must be an http or https URL",
+  })
+  .transform((s) => (s === undefined || s === "" ? s : s.replace(/\/+$/, "")));
 
 /**
  * Agent configuration schema (PRD §6.3, §10.2).

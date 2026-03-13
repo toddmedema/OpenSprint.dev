@@ -59,11 +59,7 @@ const createMockTask = (
     ...overrides,
   }) as Task;
 
-const createMockPlan = (
-  epicId: string,
-  title: string,
-  status: Plan["status"] = "building"
-): Plan =>
+const createMockPlan = (epicId: string, title: string, status: Plan["status"] = "building"): Plan =>
   ({
     metadata: {
       planId: `plan-${epicId}`,
@@ -83,9 +79,7 @@ describe("TimelineList", () => {
     vi.clearAllMocks();
     mockUpdateTask.mockImplementation(
       (_projectId: string, taskId: string, updates: { assignee?: string | null }) =>
-        Promise.resolve(
-          createMockTask({ id: taskId, assignee: updates.assignee ?? null }) as never
-        )
+        Promise.resolve(createMockTask({ id: taskId, assignee: updates.assignee ?? null }) as never)
     );
   });
 

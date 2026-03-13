@@ -132,7 +132,8 @@ export class ContextAssembler {
     } else {
       const agentInstructions = await getCombinedInstructions(repoPath, "reviewer");
       const reviewAngles = config.reviewAngles;
-      const includeGeneral = config.includeGeneralReview === true && reviewAngles && reviewAngles.length > 0;
+      const includeGeneral =
+        config.includeGeneralReview === true && reviewAngles && reviewAngles.length > 0;
       if (reviewAngles && reviewAngles.length > 0) {
         // Angle-specific: create review-angles/<angle>/ per angle
         for (const angle of reviewAngles as ReviewAngle[]) {
@@ -318,7 +319,10 @@ export class ContextAssembler {
     if (!match) return `${agentInstructions}\n\n${basePrompt}`;
     const endOfObjective = match.index! + match[1].length;
     return (
-      basePrompt.slice(0, endOfObjective) + "\n\n" + agentInstructions + basePrompt.slice(endOfObjective)
+      basePrompt.slice(0, endOfObjective) +
+      "\n\n" +
+      agentInstructions +
+      basePrompt.slice(endOfObjective)
     );
   }
 
@@ -373,6 +377,23 @@ export class ContextAssembler {
   private resolveTechnicalApproach(context: TaskContext): string {
     if (context.isFeedbackTask) return "";
     return this.extractPlanSection(context.planContent, "Technical Approach");
+  }
+
+  private buildPlanContextBullet(context: TaskContext): string {
+    if (context.isFeedbackTask) {
+      return "- `context/plan.md` — surrounding feature context only (reference-only for feedback tasks; not extra acceptance criteria)\n";
+    }
+    return "- `context/plan.md` — the full feature specification and plan\n";
+  }
+
+  private buildFeedbackTaskScopeGuidance(context: TaskContext): string {
+    if (!context.isFeedbackTask) return "";
+    return [
+      "## Feedback Task Scope",
+      "This task originated from feedback. The original ticket and the task-local acceptance criteria above are the source of truth.",
+      "Use `context/plan.md` only as background context for nearby code and feature intent.",
+      "Do not add scope from a parent plan, mapped epic, or prior review feedback unless that requirement is explicitly restated in the ticket.",
+    ].join("\n\n");
   }
 
   /**
@@ -450,8 +471,10 @@ export class ContextAssembler {
     prompt += `Implement the task. Do not re-explain the task or list options — start implementing.\n\n`;
     prompt += `## Objective\n\n${context.description}\n\n`;
     prompt += `## Context\n\n`;
-    prompt += `You are implementing a task as part of a larger feature. If the task description specifies file paths, use them. If not, infer from the plan's Technical Approach and project structure. Review the provided context files:\n\n`;
-    prompt += `- \`context/plan.md\` — the full feature specification\n`;
+    prompt += context.isFeedbackTask
+      ? `You are implementing a task as part of a larger feature. If the task description specifies file paths, use them. If not, infer from the project structure and surrounding feature context. Review the provided context files:\n\n`
+      : `You are implementing a task as part of a larger feature. If the task description specifies file paths, use them. If not, infer from the plan's Technical Approach and project structure. Review the provided context files:\n\n`;
+    prompt += this.buildPlanContextBullet(context);
     prompt += `- \`context/spec.md\` — relevant product requirements\n`;
     prompt += `- \`context/deps/\` — output from tasks this depends on\n\n`;
 
@@ -463,6 +486,11 @@ export class ContextAssembler {
     const technicalApproach = this.resolveTechnicalApproach(context);
     if (technicalApproach) {
       prompt += `## Technical Approach\n\n${technicalApproach}\n\n`;
+    }
+
+    const feedbackTaskScopeGuidance = this.buildFeedbackTaskScopeGuidance(context);
+    if (feedbackTaskScopeGuidance) {
+      prompt += `${feedbackTaskScopeGuidance}\n\n`;
     }
 
     prompt += `## Instructions\n\n`;
@@ -515,6 +543,9 @@ export class ContextAssembler {
     if (config.reviewFeedback) {
       prompt += `## Review Feedback\n\n`;
       prompt += `The review agent rejected the previous implementation:\n${config.reviewFeedback}\n\n`;
+      if (context.isFeedbackTask) {
+        prompt += `If this feedback asks for work outside the original ticket above, keep the new attempt aligned to the ticket and its acceptance criteria rather than expanding scope.\n\n`;
+      }
     }
 
     if (context.userClarification) {
@@ -630,9 +661,14 @@ export class ContextAssembler {
       prompt += `## Technical Approach\n\n${technicalApproach}\n\n`;
     }
 
+    const feedbackTaskScopeGuidance = this.buildFeedbackTaskScopeGuidance(context);
+    if (feedbackTaskScopeGuidance) {
+      prompt += `${feedbackTaskScopeGuidance}\n\n`;
+    }
+
     prompt += `## Context\n\n`;
     prompt += `Review the provided context files for full requirements and design:\n\n`;
-    prompt += `- \`context/plan.md\` — the full feature specification and plan\n`;
+    prompt += this.buildPlanContextBullet(context);
     prompt += `- \`context/spec.md\` — relevant product requirements\n`;
     prompt += `- \`context/deps/\` — output from dependency tasks this builds on\n\n`;
 
@@ -640,6 +676,9 @@ export class ContextAssembler {
       prompt += `## Prior Review History\n\n`;
       prompt += `This task has been reviewed and rejected before. The coding agent was asked to address these issues. `;
       prompt += `**Pay special attention to verifying that the previously identified problems have actually been fixed.**\n\n`;
+      if (context.isFeedbackTask) {
+        prompt += `If any prior rejection conflicts with the original ticket or task-local acceptance criteria above, the original ticket wins.\n\n`;
+      }
       prompt += `${context.reviewHistory}\n\n`;
     }
 
@@ -685,6 +724,9 @@ export class ContextAssembler {
     prompt += `4. Do NOT rerun the full-suite command \`${config.testCommand}\` from this review prompt. The orchestrator runs validation in parallel and writes the result to \`${testStatusPath}\`.\n`;
     prompt += `   Before finalizing, open that file. If it says \`FAILED\` or \`ERROR\`, reject and cite the relevant failure. If it says \`PENDING\`, continue based on code quality/scope findings and do not reject solely for pending status.\n`;
     prompt += `5. If prior reviews rejected this task, verify each previously cited issue was resolved. If not, reject and list which issues remain.\n`;
+    if (context.isFeedbackTask) {
+      prompt += `   For feedback tasks, do not inherit unrelated requirements from the parent plan or prior review history when they conflict with the original ticket above.\n`;
+    }
     prompt += `6. Write your result to \`.opensprint/active/${config.taskId}/result.json\` using this exact JSON format:\n`;
     prompt += `   If approving (do NOT merge — the orchestrator will merge after you exit):\n`;
     prompt += `   \`\`\`json\n`;
@@ -739,14 +781,22 @@ export class ContextAssembler {
       prompt += `## Technical Approach\n\n${technicalApproach}\n\n`;
     }
 
+    const feedbackTaskScopeGuidance = this.buildFeedbackTaskScopeGuidance(context);
+    if (feedbackTaskScopeGuidance) {
+      prompt += `${feedbackTaskScopeGuidance}\n\n`;
+    }
+
     prompt += `## Context\n\n`;
     prompt += `Review the provided context files for full requirements and design:\n\n`;
-    prompt += `- \`context/plan.md\` — the full feature specification and plan\n`;
+    prompt += this.buildPlanContextBullet(context);
     prompt += `- \`context/spec.md\` — relevant product requirements\n`;
     prompt += `- \`context/deps/\` — output from dependency tasks this builds on\n\n`;
 
     if (context.reviewHistory) {
       prompt += `## Prior Review History\n\n`;
+      if (context.isFeedbackTask) {
+        prompt += `If any prior rejection conflicts with the original ticket or task-local acceptance criteria above, the original ticket wins.\n\n`;
+      }
       prompt += `${context.reviewHistory}\n\n`;
     }
 

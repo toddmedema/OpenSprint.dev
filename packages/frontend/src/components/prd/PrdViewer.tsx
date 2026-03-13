@@ -68,9 +68,7 @@ export function PrdViewer({
                   {formatSectionKey(sectionKey)}
                 </h2>
                 {showInlineDiff && (
-                  <span className="text-xs text-theme-muted font-medium">
-                    Proposed changes
-                  </span>
+                  <span className="text-xs text-theme-muted font-medium">Proposed changes</span>
                 )}
                 {!showInlineDiff && savingSections.includes(sectionKey) && (
                   <span className="text-xs text-theme-muted">Saving...</span>

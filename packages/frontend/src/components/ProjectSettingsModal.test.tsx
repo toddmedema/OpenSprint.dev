@@ -130,9 +130,10 @@ describe("ProjectSettingsModal", () => {
     );
   }
 
-  /** Wait for modal to be ready (no "Settings" header per new layout) */
+  /** Wait for modal to finish loading and render the default basics form. */
   async function waitForModalReady() {
     await screen.findByTestId("settings-modal-content");
+    await screen.findByPlaceholderText("My Awesome App");
   }
 
   it("renders modal with sub-tabs bar and project tabs", async () => {
@@ -226,7 +227,9 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    const simpleBanner = await screen.findByTestId("simple-provider-prerequisite", { timeout: 3000 });
+    const simpleBanner = await screen.findByTestId("simple-provider-prerequisite", {
+      timeout: 3000,
+    });
     expect(simpleBanner).toHaveTextContent(/Anthropic API key required/);
     const link = await screen.findByTestId("configure-api-keys-link-simple", { timeout: 3000 });
     expect(link).toHaveTextContent("add in Global Settings");
@@ -255,7 +258,9 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    const simpleBanner = await screen.findByTestId("simple-provider-prerequisite", { timeout: 3000 });
+    const simpleBanner = await screen.findByTestId("simple-provider-prerequisite", {
+      timeout: 3000,
+    });
     expect(simpleBanner).toHaveTextContent(/Claude CLI not found/);
   });
 
@@ -278,7 +283,9 @@ describe("ProjectSettingsModal", () => {
     const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
     await userEvent.click(agentConfigTab);
 
-    const simpleBanner = await screen.findByTestId("simple-provider-prerequisite", { timeout: 3000 });
+    const simpleBanner = await screen.findByTestId("simple-provider-prerequisite", {
+      timeout: 3000,
+    });
     expect(simpleBanner).toHaveTextContent(/Cursor API key required/);
     const link = await screen.findByTestId("configure-api-keys-link-simple", { timeout: 3000 });
     expect(link).toHaveTextContent("add in Global Settings");
@@ -613,7 +620,9 @@ describe("ProjectSettingsModal", () => {
 
     await screen.findByText(/Self-improvement/);
     expect(
-      screen.getByText(/When the codebase has changed since the last run, a review runs using your code review lenses and creates improvement tasks\./)
+      screen.getByText(
+        /When the codebase has changed since the last run, a review runs using your code review lenses and creates improvement tasks\./
+      )
     ).toBeInTheDocument();
     const select = screen.getByTestId("self-improvement-frequency-select");
     expect(select).toBeInTheDocument();
@@ -630,10 +639,7 @@ describe("ProjectSettingsModal", () => {
     await userEvent.click(workflowTab);
 
     await screen.findByTestId("self-improvement-frequency-select");
-    await userEvent.selectOptions(
-      screen.getByTestId("self-improvement-frequency-select"),
-      "daily"
-    );
+    await userEvent.selectOptions(screen.getByTestId("self-improvement-frequency-select"), "daily");
 
     await waitFor(() =>
       expect(mockUpdateSettings).toHaveBeenCalledWith(
@@ -744,7 +750,12 @@ describe("ProjectSettingsModal", () => {
     expect(screen.queryByText("Team Members")).not.toBeInTheDocument();
 
     await userEvent.click(checkbox);
-    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledWith("proj-1", expect.objectContaining({ enableHumanTeammates: true })));
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({ enableHumanTeammates: true })
+      )
+    );
   });
 
   it("Team tab when enableHumanTeammates true shows team members list and add button", async () => {
@@ -1139,9 +1150,7 @@ describe("ProjectSettingsModal", () => {
     );
 
     const taskSection = screen.getByTestId("task-complexity-section");
-    expect(explainer.compareDocumentPosition(taskSection)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
+    expect(explainer.compareDocumentPosition(taskSection)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("Agent Config tab has no sub help text under Simple or Complex agent selection", async () => {
@@ -1300,7 +1309,9 @@ describe("ProjectSettingsModal", () => {
     const workflowTab = screen.getByRole("button", { name: "Workflow" });
     await userEvent.click(workflowTab);
 
-    expect(screen.getByTestId("git-remote-mode")).toHaveTextContent("Checking remote configuration...");
+    expect(screen.getByTestId("git-remote-mode")).toHaveTextContent(
+      "Checking remote configuration..."
+    );
     expect(screen.getByTestId("git-runtime-refresh-status")).toHaveTextContent(
       "Checking live Git status..."
     );
@@ -1333,7 +1344,9 @@ describe("ProjectSettingsModal", () => {
     const workflowTab = screen.getByRole("button", { name: "Workflow" });
     await userEvent.click(workflowTab);
 
-    expect(screen.getByTestId("git-remote-mode")).toHaveTextContent("Checking remote configuration...");
+    expect(screen.getByTestId("git-remote-mode")).toHaveTextContent(
+      "Checking remote configuration..."
+    );
     await waitFor(() => expect(mockGetSettings).toHaveBeenCalledTimes(2), { timeout: 2500 });
     await waitFor(() =>
       expect(screen.getByTestId("git-remote-mode")).toHaveTextContent("Remote configured")
@@ -1451,7 +1464,9 @@ describe("ProjectSettingsModal", () => {
       screen.getByText(/Per task \(default\): merge each task to main when complete/)
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Per epic: build entire plan\/epic on one branch; merge once all tasks are done/)
+      screen.getByText(
+        /Per epic: build entire plan\/epic on one branch; merge once all tasks are done/
+      )
     ).toBeInTheDocument();
   });
 

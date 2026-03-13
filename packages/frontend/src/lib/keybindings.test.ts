@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { getKeyboardShortcuts } from "./keybindings";
 
 describe("keybindings", () => {
-
   it("getKeyboardShortcuts returns all app shortcuts with action and keys", () => {
     const shortcuts = getKeyboardShortcuts();
     expect(shortcuts.length).toBeGreaterThanOrEqual(8);

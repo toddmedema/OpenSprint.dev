@@ -38,9 +38,7 @@ export const taskPatchBodySchema = z
   })
   .refine(
     (data) =>
-      data.priority !== undefined ||
-      data.complexity !== undefined ||
-      data.assignee !== undefined,
+      data.priority !== undefined || data.complexity !== undefined || data.assignee !== undefined,
     {
       message: "At least one of priority, complexity, or assignee is required",
     }

@@ -302,7 +302,10 @@ export function ApiKeysSection({
           const entries = getEntriesForProvider(provider);
           return (
             <div key={provider} className="mb-4">
-              <label htmlFor={`api-key-add-${provider}`} className="block text-xs font-medium text-theme-muted mb-2">
+              <label
+                htmlFor={`api-key-add-${provider}`}
+                className="block text-xs font-medium text-theme-muted mb-2"
+              >
                 {PROVIDER_LABELS[provider]}
               </label>
               <div className="space-y-3">
@@ -333,7 +336,9 @@ export function ApiKeysSection({
                     : undefined;
                   const displayLabel =
                     editedLabels[entry.id] ??
-                    (newKeys[provider]?.find((x) => x.id === entry.id)?.label ?? entry.label ?? "");
+                    newKeys[provider]?.find((x) => x.id === entry.id)?.label ??
+                    entry.label ??
+                    "";
                   const isDragging = draggedEntryId === entry.id;
                   const isDropTarget = dragOverIndex === index;
                   return (
@@ -475,7 +480,8 @@ export function ApiKeysSection({
                       {entry.invalidAt && (
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-xs text-theme-muted">
-                            Marked invalid at {formatLimitHitAt(entry.invalidAt)} — update this key or retry
+                            Marked invalid at {formatLimitHitAt(entry.invalidAt)} — update this key
+                            or retry
                           </p>
                           {onClearLimitHit && (
                             <button
@@ -521,12 +527,7 @@ export function ApiKeysSection({
 
 function DragHandleIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      fill="currentColor"
-      viewBox="0 0 24 24"
-      aria-hidden
-    >
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
       <path d="M8 6a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm0 6a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm0 6a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm8-12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm0 6a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm0 6a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" />
     </svg>
   );

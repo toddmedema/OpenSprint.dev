@@ -75,12 +75,13 @@ export const DEFAULT_API_PORT = 3100;
 export const API_PREFIX = "/api/v1";
 
 /** Plan status display order (planning → building → in_review → complete) */
-export const PLAN_STATUS_ORDER: Record<"planning" | "building" | "in_review" | "complete", number> = {
-  planning: 0,
-  building: 1,
-  in_review: 2,
-  complete: 3,
-};
+export const PLAN_STATUS_ORDER: Record<"planning" | "building" | "in_review" | "complete", number> =
+  {
+    planning: 0,
+    building: 1,
+    in_review: 2,
+    complete: 3,
+  };
 
 /** Task priority labels */
 export const PRIORITY_LABELS: Record<number, string> = {

@@ -68,13 +68,11 @@ export function ProjectSettingsContent() {
   const handleTabChange = async (tab: SettingsSubTab) => {
     await modalRef.current?.persist();
     setActiveTab(tab);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set(TAB_PARAM, tab);
-        return next;
-      }
-    );
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set(TAB_PARAM, tab);
+      return next;
+    });
   };
 
   return (

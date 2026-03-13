@@ -55,7 +55,10 @@ describe("settings-store.service", () => {
       )
     );
 
-    const result = await getSettingsWithMetaFromStore("proj-1", makeSettings({ testFramework: null }));
+    const result = await getSettingsWithMetaFromStore(
+      "proj-1",
+      makeSettings({ testFramework: null })
+    );
     expect(result.settings).not.toHaveProperty("apiKeys");
     expect(result.settings.testFramework).toBe("vitest");
     expect(result.updatedAt).toBeTruthy();
@@ -94,10 +97,11 @@ describe("settings-store.service", () => {
     await setSettingsInStore("proj-1", makeSettings());
     await deleteSettingsFromStore("proj-1");
 
-    await expect(getSettingsWithMetaFromStore("proj-1", makeSettings({ testFramework: null }))).resolves
-      .toEqual({
-        settings: makeSettings({ testFramework: null }),
-        updatedAt: null,
-      });
+    await expect(
+      getSettingsWithMetaFromStore("proj-1", makeSettings({ testFramework: null }))
+    ).resolves.toEqual({
+      settings: makeSettings({ testFramework: null }),
+      updatedAt: null,
+    });
   });
 });

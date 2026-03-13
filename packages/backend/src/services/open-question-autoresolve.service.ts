@@ -71,14 +71,16 @@ export async function maybeAutoRespond(
     const questionTexts = notification.questions.map((q) => q.text).filter(Boolean);
     if (questionTexts.length === 0) return;
 
-    const prd = await getPrdService().getPrd(projectId).catch(() => null);
+    const prd = await getPrdService()
+      .getPrd(projectId)
+      .catch(() => null);
     const prdContext = prd ? buildPrdContextFromSections(prd.sections) : "No PRD available.";
 
-    const repoPath = await getProjectService().getRepoPath(projectId).catch(() => undefined);
+    const repoPath = await getProjectService()
+      .getRepoPath(projectId)
+      .catch(() => undefined);
     const agentConfig = getAgentForPlanningRole(settings, "dreamer");
-    const instructions = repoPath
-      ? await getCombinedInstructions(repoPath, "dreamer")
-      : "";
+    const instructions = repoPath ? await getCombinedInstructions(repoPath, "dreamer") : "";
 
     const prompt = `You are helping resolve an open question so work can proceed without manual input.
 
@@ -212,7 +214,11 @@ ${questionTexts.map((t) => `- ${t}`).join("\n")}`;
         break;
       }
       default:
-        log.warn("Unknown notification source for auto-respond", { source, projectId, notificationId });
+        log.warn("Unknown notification source for auto-respond", {
+          source,
+          projectId,
+          notificationId,
+        });
     }
   } catch (err) {
     log.error("Open-question auto-respond failed", {

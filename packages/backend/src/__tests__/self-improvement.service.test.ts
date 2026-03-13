@@ -22,6 +22,8 @@ vi.mock("../services/self-improvement-change-detection.js", () => ({
 vi.mock("../services/task-store.service.js", () => ({
   taskStore: {
     create: vi.fn().mockResolvedValue({ id: "os-1", title: "Task" }),
+    listAll: vi.fn().mockResolvedValue([]),
+    update: vi.fn().mockResolvedValue({ id: "os-1", title: "Task" }),
     insertSelfImprovementRunHistory: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -29,7 +31,8 @@ vi.mock("../services/task-store.service.js", () => ({
 vi.mock("../services/agent.service.js", () => ({
   agentService: {
     invokePlanningAgent: vi.fn().mockResolvedValue({
-      content: '[{"title":"Add tests","description":"Unit tests for X","priority":1,"complexity":3}]',
+      content:
+        '[{"title":"Add tests","description":"Unit tests for X","priority":1,"complexity":3}]',
     }),
   },
 }));
@@ -51,7 +54,9 @@ vi.mock("../services/context-assembler.js", () => ({
 
 vi.mock("../services/settings-store.service.js", () => ({
   updateSettingsInStore: vi.fn().mockResolvedValue(undefined),
-  getSettingsFromStore: vi.fn().mockImplementation((_id: string, defaults: unknown) => Promise.resolve(defaults)),
+  getSettingsFromStore: vi
+    .fn()
+    .mockImplementation((_id: string, defaults: unknown) => Promise.resolve(defaults)),
 }));
 
 vi.mock("../services/agent-instructions.service.js", () => ({
@@ -68,14 +73,16 @@ describe("SelfImprovementService", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    const { hasCodeChangesSince } = await import("../services/self-improvement-change-detection.js");
+    const { hasCodeChangesSince } =
+      await import("../services/self-improvement-change-detection.js");
     vi.mocked(hasCodeChangesSince).mockResolvedValue(true);
     service = new SelfImprovementService();
   });
 
   describe("change detection gate", () => {
     it("returns skipped no_changes when repo has not changed since last run", async () => {
-      const { hasCodeChangesSince } = await import("../services/self-improvement-change-detection.js");
+      const { hasCodeChangesSince } =
+        await import("../services/self-improvement-change-detection.js");
       const { taskStore } = await import("../services/task-store.service.js");
       vi.mocked(hasCodeChangesSince).mockResolvedValue(false);
 
@@ -87,7 +94,8 @@ describe("SelfImprovementService", () => {
 
     it("passes baseBranch from settings to hasCodeChangesSince", async () => {
       const { ProjectService } = await import("../services/project.service.js");
-      const { hasCodeChangesSince } = await import("../services/self-improvement-change-detection.js");
+      const { hasCodeChangesSince } =
+        await import("../services/self-improvement-change-detection.js");
       vi.mocked(ProjectService).mockImplementation(
         () =>
           ({
@@ -153,9 +161,19 @@ describe("SelfImprovementService", () => {
         () =>
           ({
             getProject: vi.fn().mockResolvedValue({ id: "proj-1", repoPath: "/tmp/repo" }),
-            getSettings: vi.fn()
-              .mockResolvedValueOnce({ selfImprovementFrequency: "daily", selfImprovementLastRunAt: undefined, worktreeBaseBranch: "main" })
-              .mockResolvedValue({ selfImprovementFrequency: "daily", selfImprovementLastRunAt: undefined, selfImprovementLastCommitSha: undefined, worktreeBaseBranch: "main" }),
+            getSettings: vi
+              .fn()
+              .mockResolvedValueOnce({
+                selfImprovementFrequency: "daily",
+                selfImprovementLastRunAt: undefined,
+                worktreeBaseBranch: "main",
+              })
+              .mockResolvedValue({
+                selfImprovementFrequency: "daily",
+                selfImprovementLastRunAt: undefined,
+                selfImprovementLastCommitSha: undefined,
+                worktreeBaseBranch: "main",
+              }),
           }) as never
       );
       service = new SelfImprovementService();
@@ -253,6 +271,81 @@ describe("SelfImprovementService", () => {
 
       expect(result).toMatchObject({ tasksCreated: 1, runId: expect.any(String) });
       expect(taskStore.create).toHaveBeenCalled();
+    });
+  });
+
+  describe("ensureBaselineQualityGateTask", () => {
+    it("creates a critical self-improvement task when no open remediation task exists", async () => {
+      const { taskStore } = await import("../services/task-store.service.js");
+      vi.mocked(taskStore.listAll).mockResolvedValue([]);
+      vi.mocked(taskStore.create).mockResolvedValue({
+        id: "os-remediate",
+        title: "Restore baseline quality gates on main",
+      } as never);
+
+      const result = await service.ensureBaselineQualityGateTask(projectId, {
+        baseBranch: "main",
+        command: "npm run test",
+        reason: "Command failed: npm run test",
+        outputSnippet: "src/foo.test.ts:42: expected true to be false",
+        worktreePath: "/tmp/repo",
+      });
+
+      expect(result).toEqual({ taskId: "os-remediate", created: true });
+      expect(taskStore.create).toHaveBeenCalledWith(
+        projectId,
+        "Restore baseline quality gates on main",
+        expect.objectContaining({
+          type: "bug",
+          priority: 0,
+          complexity: 6,
+          extra: expect.objectContaining({
+            source: "self-improvement",
+            selfImprovementKind: "baseline-quality-gate",
+            baselineQualityGateSource: "merge-quality-gate-baseline",
+            baselineBaseBranch: "main",
+            failedGateCommand: "npm run test",
+          }),
+        })
+      );
+      expect(taskStore.update).not.toHaveBeenCalled();
+    });
+
+    it("reuses and refreshes an open remediation task for the same base branch", async () => {
+      const { taskStore } = await import("../services/task-store.service.js");
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        {
+          id: "os-existing",
+          status: "open",
+          source: "self-improvement",
+          selfImprovementKind: "baseline-quality-gate",
+          baselineBaseBranch: "main",
+        } as never,
+      ]);
+
+      const result = await service.ensureBaselineQualityGateTask(projectId, {
+        baseBranch: "main",
+        command: "npm run lint",
+        reason: "Command failed: npm run lint",
+        outputSnippet: "eslint found errors",
+        worktreePath: "/tmp/repo",
+      });
+
+      expect(result).toEqual({ taskId: "os-existing", created: false });
+      expect(taskStore.update).toHaveBeenCalledWith(
+        projectId,
+        "os-existing",
+        expect.objectContaining({
+          title: "Restore baseline quality gates on main",
+          priority: 0,
+          complexity: 6,
+          extra: expect.objectContaining({
+            failedGateCommand: "npm run lint",
+            baselineBaseBranch: "main",
+          }),
+        })
+      );
+      expect(taskStore.create).not.toHaveBeenCalled();
     });
   });
 });

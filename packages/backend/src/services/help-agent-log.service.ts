@@ -55,7 +55,9 @@ function formatModelLabel(
   if (hasSession) {
     const rawType = (sessionAgentType as string) ?? "";
     const provider =
-      PROVIDER_LABELS[rawType] ?? (rawType.toLowerCase() === "unknown" ? "Unknown" : rawType) ?? "Unknown";
+      PROVIDER_LABELS[rawType] ??
+      (rawType.toLowerCase() === "unknown" ? "Unknown" : rawType) ??
+      "Unknown";
     const sessionModel = (sessionAgentModel ?? "").trim();
     let modelPart: string;
     if (sessionModel && !isUnknownModel(sessionModel)) {
@@ -120,9 +122,7 @@ export async function getAgentLog(projectId: string | null): Promise<AgentLogEnt
   return rows.map((r) => {
     const storedRole = r.role as string | null | undefined;
     const agentId = r.agent_id as string;
-    const role = storedRole
-      ? formatRoleName(storedRole)
-      : formatRoleName(agentId);
+    const role = storedRole ? formatRoleName(storedRole) : formatRoleName(agentId);
     const modelLabel = formatModelLabel(
       r.session_agent_type as string | null | undefined,
       r.session_agent_model as string | null | undefined,
@@ -160,10 +160,9 @@ function formatRoleName(agentId: string): string {
  */
 export async function getSessionLog(sessionId: number): Promise<string | null> {
   const client = await taskStore.getDb();
-  const rows = await client.query(
-    "SELECT output_log FROM agent_sessions WHERE id = $1",
-    [sessionId]
-  );
+  const rows = await client.query("SELECT output_log FROM agent_sessions WHERE id = $1", [
+    sessionId,
+  ]);
   const row = rows[0];
   if (!row || row.output_log == null || row.output_log === "") {
     return null;

@@ -235,7 +235,9 @@ describe("GlobalNotificationBell", () => {
         projectId: "proj-1",
         source: "plan" as const,
         sourceId: "draft:draft-1",
-        questions: [{ id: "q1", text: "Clarify volunteer scope?", createdAt: "2025-01-01T00:00:00Z" }],
+        questions: [
+          { id: "q1", text: "Clarify volunteer scope?", createdAt: "2025-01-01T00:00:00Z" },
+        ],
         status: "open" as const,
         createdAt: "2025-01-01T00:00:00Z",
         resolvedAt: null,

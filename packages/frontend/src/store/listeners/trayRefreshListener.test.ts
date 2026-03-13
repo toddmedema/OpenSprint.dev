@@ -23,7 +23,9 @@ vi.mock("../../api/client", () => ({
 const originalWindow = globalThis.window;
 
 function mockElectron() {
-  (globalThis as unknown as { window: { electron?: { refreshTray: () => Promise<void> } } }).window = {
+  (
+    globalThis as unknown as { window: { electron?: { refreshTray: () => Promise<void> } } }
+  ).window = {
     ...originalWindow,
     electron: { refreshTray: mockRefreshTray, isElectron: true as const },
   };

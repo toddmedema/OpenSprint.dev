@@ -44,10 +44,7 @@ function renderActiveAgentsList() {
             phase?: string;
             startedAt?: string;
           }>) {
-            if (
-              (agent.phase === "coding" || agent.phase === "review") &&
-              agent.startedAt
-            ) {
+            if ((agent.phase === "coding" || agent.phase === "review") && agent.startedAt) {
               const key = agent.taskId ?? agent.id;
               const existing = taskIdToStartedAt[key];
               if (!existing || agent.startedAt < existing) {

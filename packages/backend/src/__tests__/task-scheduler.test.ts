@@ -130,14 +130,9 @@ describe("TaskScheduler", () => {
         t.id === "blocked" ? ["blocker"] : []
       );
 
-      const result = await scheduler.selectTasks(
-        "proj",
-        "/repo",
-        [blocked],
-        new Map(),
-        1,
-        { allIssues }
-      );
+      const result = await scheduler.selectTasks("proj", "/repo", [blocked], new Map(), 1, {
+        allIssues,
+      });
 
       expect(result).toHaveLength(1);
       expect(result[0].task.id).toBe("blocked");

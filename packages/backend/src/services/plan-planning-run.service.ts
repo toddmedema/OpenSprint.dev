@@ -12,7 +12,9 @@ export interface PlanningRunStore {
   getDb(): Promise<{
     queryOne(sql: string, params?: unknown[]): Promise<Record<string, unknown> | undefined>;
   }>;
-  runWrite<T>(fn: (client: { execute: (sql: string, params?: unknown[]) => Promise<number> }) => Promise<T>): Promise<T>;
+  runWrite<T>(
+    fn: (client: { execute: (sql: string, params?: unknown[]) => Promise<number> }) => Promise<T>
+  ): Promise<T>;
 }
 
 export interface PlanPlanningRunDeps {

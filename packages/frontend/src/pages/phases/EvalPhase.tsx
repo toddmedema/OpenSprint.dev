@@ -356,7 +356,10 @@ function buildPlanReplyPlanIdByFeedbackId(items: FeedbackItem[]): Record<string,
 function partitionFeedbackTreeByPlanReplies(
   tree: FeedbackTreeNode[],
   planReplyPlanIdByFeedbackId: Record<string, string>
-): { standaloneTree: FeedbackTreeNode[]; planReplyNodesByPlanId: Record<string, FeedbackTreeNode[]> } {
+): {
+  standaloneTree: FeedbackTreeNode[];
+  planReplyNodesByPlanId: Record<string, FeedbackTreeNode[]>;
+} {
   const planReplyNodesByPlanId: Record<string, FeedbackTreeNode[]> = {};
 
   const isSameNodeSequence = (a: FeedbackTreeNode[], b: FeedbackTreeNode[]): boolean =>

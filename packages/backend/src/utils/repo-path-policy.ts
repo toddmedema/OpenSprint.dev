@@ -1,8 +1,5 @@
 import path from "node:path";
-import {
-  isWindowsMountedWslPath,
-  UNSUPPORTED_WSL_REPO_PATH_MESSAGE,
-} from "@opensprint/shared";
+import { isWindowsMountedWslPath, UNSUPPORTED_WSL_REPO_PATH_MESSAGE } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { getBackendRuntimeInfo, type BackendRuntimeInfo } from "./runtime-info.js";

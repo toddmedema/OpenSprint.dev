@@ -304,15 +304,15 @@ describe("useExecuteSwimlanes", () => {
       const { result } = renderHook(() => useExecuteSwimlanes(tasks, plans, "all", ""));
       expect(result.current.blockedSwimlanes).toHaveLength(2);
       expect(
-        result.current.blockedSwimlanes.every((s) => s.tasks.every((t) => t.kanbanColumn === "blocked"))
+        result.current.blockedSwimlanes.every((s) =>
+          s.tasks.every((t) => t.kanbanColumn === "blocked")
+        )
       ).toBe(true);
       expect(result.current.blockedSwimlanes.flatMap((s) => s.tasks)).toHaveLength(2);
     });
 
     it("blockedSwimlanes is empty when statusFilter is not all", () => {
-      const tasks: Task[] = [
-        task({ id: "epic-a.1", kanbanColumn: "blocked", epicId: "epic-a" }),
-      ];
+      const tasks: Task[] = [task({ id: "epic-a.1", kanbanColumn: "blocked", epicId: "epic-a" })];
       const plans: Plan[] = [plan()];
       const { result } = renderHook(() => useExecuteSwimlanes(tasks, plans, "blocked", ""));
       expect(result.current.blockedSwimlanes).toHaveLength(0);
@@ -340,9 +340,7 @@ describe("useExecuteSwimlanes", () => {
     });
 
     it("Planning chip appears immediately left of Up Next", () => {
-      const tasks: Task[] = [
-        task({ id: "epic-a.1", epicId: "epic-a", kanbanColumn: "ready" }),
-      ];
+      const tasks: Task[] = [task({ id: "epic-a.1", epicId: "epic-a", kanbanColumn: "ready" })];
       const plans: Plan[] = [
         plan({
           metadata: { planId: "p1", epicId: "epic-a", shippedAt: null, complexity: "medium" },

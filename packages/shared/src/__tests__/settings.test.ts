@@ -870,7 +870,8 @@ describe("parseSettings deployment migration", () => {
     };
     const parsed = parseSettings(raw);
     expect(parsed.deployment.targets).toHaveLength(2);
-    const defaultTarget = parsed.deployment.targets?.find((t) => t.isDefault) ?? parsed.deployment.targets?.[0];
+    const defaultTarget =
+      parsed.deployment.targets?.find((t) => t.isDefault) ?? parsed.deployment.targets?.[0];
     expect(defaultTarget?.envVars).toEqual({ A: "1", B: "2" });
   });
 
@@ -1057,15 +1058,15 @@ describe("validateApiKeyEntry", () => {
   });
 
   it("throws when limitHitAt is present but not a string", () => {
-    expect(() =>
-      validateApiKeyEntry({ id: "x", value: "secret", limitHitAt: 123 })
-    ).toThrow("limitHitAt must be a string");
+    expect(() => validateApiKeyEntry({ id: "x", value: "secret", limitHitAt: 123 })).toThrow(
+      "limitHitAt must be a string"
+    );
   });
 
   it("throws when invalidAt is present but not a string", () => {
-    expect(() =>
-      validateApiKeyEntry({ id: "x", value: "secret", invalidAt: 123 })
-    ).toThrow("invalidAt must be a string");
+    expect(() => validateApiKeyEntry({ id: "x", value: "secret", invalidAt: 123 })).toThrow(
+      "invalidAt must be a string"
+    );
   });
 
   it("accepts optional label and includes it in output", () => {
@@ -1090,9 +1091,7 @@ describe("mergeApiKeysWithCurrent", () => {
 
   it("preserves value when id exists and value omitted (masked)", () => {
     const current: ApiKeys = {
-      ANTHROPIC_API_KEY: [
-        { id: "k1", value: "sk-ant-secret", invalidAt: "2025-02-25T12:00:00Z" },
-      ],
+      ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-secret", invalidAt: "2025-02-25T12:00:00Z" }],
     };
     const incoming = {
       ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••" }],
@@ -1672,7 +1671,12 @@ describe("getProvidersRequiringApiKeys", () => {
   it("does not add a provider for lmstudio (excluded from API key resolution)", () => {
     const agents = [
       { type: "lmstudio" as const, model: "local-model", cliCommand: null },
-      { type: "lmstudio" as const, model: "other-model", cliCommand: null, baseUrl: "http://localhost:1234" },
+      {
+        type: "lmstudio" as const,
+        model: "other-model",
+        cliCommand: null,
+        baseUrl: "http://localhost:1234",
+      },
     ];
     expect(getProvidersRequiringApiKeys(agents)).toEqual([]);
   });

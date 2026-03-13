@@ -53,9 +53,7 @@ export function TaskDetailAgentOutput({
         archivedLoading ? (
           <div className="p-4 text-theme-muted text-sm">Loading archived sessions...</div>
         ) : archivedSessions.length === 0 ? (
-          <div className="p-4 text-theme-muted text-sm">
-            No archived sessions for this task.
-          </div>
+          <div className="p-4 text-theme-muted text-sm">No archived sessions for this task.</div>
         ) : (
           <ArchivedSessionView sessions={archivedSessions} />
         )
@@ -70,9 +68,7 @@ export function TaskDetailAgentOutput({
                 />
                 Connecting to live output…
               </div>
-              <p className="text-xs text-theme-muted">
-                If the connection fails, you can retry.
-              </p>
+              <p className="text-xs text-theme-muted">If the connection fails, you can retry.</p>
               <button
                 type="button"
                 onClick={() => dispatch(wsConnect({ projectId }))}

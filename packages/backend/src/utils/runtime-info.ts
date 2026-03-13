@@ -28,9 +28,7 @@ function readProcVersion(): string | null {
   }
 }
 
-export function detectBackendRuntime(
-  options: RuntimeDetectionOptions = {}
-): BackendRuntimeInfo {
+export function detectBackendRuntime(options: RuntimeDetectionOptions = {}): BackendRuntimeInfo {
   const platform = normalizePlatform(options.platform ?? process.platform);
   const env = options.env ?? process.env;
   const osRelease = (options.osRelease ?? os.release()).toLowerCase();

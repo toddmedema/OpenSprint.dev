@@ -6,10 +6,17 @@ import type {
   GeneratePlanResult,
   Notification,
 } from "@opensprint/shared";
-import { getCodebaseContextFromRepo, hasExistingCode as hasExistingCodeInRepo } from "./plan/plan-codebase-context.js";
+import {
+  getCodebaseContextFromRepo,
+  hasExistingCode as hasExistingCodeInRepo,
+} from "./plan/plan-codebase-context.js";
 import { assembleReExecuteContext as assembleReExecuteContextFromModule } from "./plan/plan-codebase-context.js";
 import { ProjectService } from "./project.service.js";
-import { taskStore as taskStoreSingleton, type TaskStoreService, type StoredTask } from "./task-store.service.js";
+import {
+  taskStore as taskStoreSingleton,
+  type TaskStoreService,
+  type StoredTask,
+} from "./task-store.service.js";
 import { ChatService } from "./chat.service.js";
 import { notificationService } from "./notification.service.js";
 import { PrdService } from "./prd.service.js";
@@ -24,10 +31,7 @@ export class PlanService {
   private readonly projectService: ProjectService;
   private readonly taskStore: TaskStoreService;
 
-  constructor(
-    projectService?: ProjectService,
-    taskStore?: TaskStoreService
-  ) {
+  constructor(projectService?: ProjectService, taskStore?: TaskStoreService) {
     this.projectService = projectService ?? new ProjectService();
     this.taskStore = taskStore ?? taskStoreSingleton;
   }
@@ -76,7 +80,11 @@ export class PlanService {
           taskStore: this.taskStore,
           projectService: this.projectService,
           prdService: this.prdService,
-          createPlan: (projectId, body) => this.planCrudService.createPlan(projectId, body as Parameters<PlanCrudService["createPlan"]>[1]),
+          createPlan: (projectId, body) =>
+            this.planCrudService.createPlan(
+              projectId,
+              body as Parameters<PlanCrudService["createPlan"]>[1]
+            ),
           getPlan: (
             projectId,
             planId,
@@ -273,7 +281,9 @@ export class PlanService {
   }
 
   /** AI-assisted decomposition (suggest only): returns suggested plans, does not create. */
-  async suggestPlans(projectId: string): Promise<{ plans: import("@opensprint/shared").SuggestedPlan[] }> {
+  async suggestPlans(
+    projectId: string
+  ): Promise<{ plans: import("@opensprint/shared").SuggestedPlan[] }> {
     return this.planDecomposeGenerateService.suggestPlans(projectId);
   }
 

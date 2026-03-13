@@ -42,9 +42,7 @@ export interface TaskPhaseCoordinatorOptions {
    * When provided and multiple angles are used (and not includeGeneralReview), the synthesizer runs before resolving.
    * It receives all angle outcomes and returns a single synthesized ReviewOutcome.
    */
-  synthesizeReviewResults?: (
-    outcomes: Map<string, ReviewOutcome>
-  ) => Promise<ReviewOutcome>;
+  synthesizeReviewResults?: (outcomes: Map<string, ReviewOutcome>) => Promise<ReviewOutcome>;
 }
 
 export class TaskPhaseCoordinator {
@@ -65,7 +63,11 @@ export class TaskPhaseCoordinator {
     const angles = options?.reviewAngles?.filter(Boolean) ?? [];
     const includeGeneral = options?.includeGeneralReview === true && angles.length > 0;
     this.expectedReviewKeys = new Set(
-      includeGeneral ? [DEFAULT_REVIEW_KEY, ...angles] : angles.length > 0 ? angles : [DEFAULT_REVIEW_KEY]
+      includeGeneral
+        ? [DEFAULT_REVIEW_KEY, ...angles]
+        : angles.length > 0
+          ? angles
+          : [DEFAULT_REVIEW_KEY]
     );
     this.synthesizeReviewResults = options?.synthesizeReviewResults;
     this.useSynthesis =
@@ -191,7 +193,9 @@ export class TaskPhaseCoordinator {
           },
         ];
       });
-      const dedupedContext = [...new Map(combinedContext.map((ctx) => [JSON.stringify(ctx), ctx])).values()];
+      const dedupedContext = [
+        ...new Map(combinedContext.map((ctx) => [JSON.stringify(ctx), ctx])).values(),
+      ];
       return {
         status: "no_result",
         result: null,

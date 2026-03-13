@@ -321,7 +321,10 @@ describe("RecoveryService — stale heartbeat recovery", () => {
         expect.objectContaining({
           taskId: "task-orphan",
           event: "recovery.agent_assignee_no_process_reset",
-          data: expect.objectContaining({ assignee: "Frodo", reason: "no process for agent assignee" }),
+          data: expect.objectContaining({
+            assignee: "Frodo",
+            reason: "no process for agent assignee",
+          }),
         })
       );
       expect(vi.mocked(taskStore.comment)).toHaveBeenCalledWith(

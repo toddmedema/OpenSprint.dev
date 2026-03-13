@@ -4340,7 +4340,10 @@ describe("EvalPhase feedback form", () => {
     });
 
     it("truncates long feedback and shows show more button", async () => {
-      const longLines = Array.from({ length: FEEDBACK_TEXT_COLLAPSE_LINES + 5 }, (_, i) => `Row ${i + 1}`).join("\n");
+      const longLines = Array.from(
+        { length: FEEDBACK_TEXT_COLLAPSE_LINES + 5 },
+        (_, i) => `Row ${i + 1}`
+      ).join("\n");
       const feedback: FeedbackItem[] = [
         { ...mockFeedbackItems[0], id: "fb-long", text: longLines },
         ...mockFeedbackItems.slice(1),
@@ -4361,7 +4364,10 @@ describe("EvalPhase feedback form", () => {
 
     it("show more expands to full text and toggles to show less", async () => {
       const user = userEvent.setup();
-      const longLines = Array.from({ length: FEEDBACK_TEXT_COLLAPSE_LINES + 3 }, (_, i) => `Line ${i + 1}`).join("\n");
+      const longLines = Array.from(
+        { length: FEEDBACK_TEXT_COLLAPSE_LINES + 3 },
+        (_, i) => `Line ${i + 1}`
+      ).join("\n");
       const feedback: FeedbackItem[] = [
         { ...mockFeedbackItems[0], id: "fb-long", text: longLines },
         ...mockFeedbackItems.slice(1),
@@ -4385,7 +4391,10 @@ describe("EvalPhase feedback form", () => {
 
     it("show less collapses back to truncated view", async () => {
       const user = userEvent.setup();
-      const longLines = Array.from({ length: FEEDBACK_TEXT_COLLAPSE_LINES + 2 }, (_, i) => `Row ${i + 1}`).join("\n");
+      const longLines = Array.from(
+        { length: FEEDBACK_TEXT_COLLAPSE_LINES + 2 },
+        (_, i) => `Row ${i + 1}`
+      ).join("\n");
       const feedback: FeedbackItem[] = [
         { ...mockFeedbackItems[0], id: "fb-long", text: longLines },
         ...mockFeedbackItems.slice(1),

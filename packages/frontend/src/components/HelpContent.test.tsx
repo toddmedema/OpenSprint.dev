@@ -98,10 +98,7 @@ describe("HelpContent", () => {
 
     await user.click(screen.getByRole("tab", { name: "Analytics" }));
 
-    expect(screen.getByRole("tab", { name: "Analytics" })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    );
+    expect(screen.getByRole("tab", { name: "Analytics" })).toHaveAttribute("aria-selected", "true");
     expect(api.help.analytics).toHaveBeenCalledWith(null);
     expect(screen.getByTestId("help-analytics-chart")).toBeInTheDocument();
   });
@@ -138,7 +135,12 @@ describe("HelpContent", () => {
   it("Agent log tab shows table and calls agentLog API", async () => {
     const user = userEvent.setup();
     vi.mocked(api.help.agentLog).mockResolvedValue([
-      { model: "claude-sonnet-4", role: "Coder", durationMs: 45000, endTime: "2025-03-01T12:00:00Z" },
+      {
+        model: "claude-sonnet-4",
+        role: "Coder",
+        durationMs: 45000,
+        endTime: "2025-03-01T12:00:00Z",
+      },
       {
         model: "claude-sonnet-4",
         role: "claude-sonnet",
@@ -150,10 +152,7 @@ describe("HelpContent", () => {
 
     await user.click(screen.getByRole("tab", { name: "Agent log" }));
 
-    expect(screen.getByRole("tab", { name: "Agent log" })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    );
+    expect(screen.getByRole("tab", { name: "Agent log" })).toHaveAttribute("aria-selected", "true");
     expect(api.help.agentLog).toHaveBeenCalledWith(null);
     expect(screen.getByText("Coder")).toBeInTheDocument();
     expect(screen.getByText("claude-sonnet")).toBeInTheDocument();
@@ -174,7 +173,12 @@ describe("HelpContent", () => {
     const user = userEvent.setup();
     vi.mocked(api.help.agentLog).mockResolvedValue([
       { model: "", role: "Coder", durationMs: 10000, endTime: "2025-03-01T12:00:00Z" },
-      { model: "Cursor Composer 1.5", role: "Reviewer", durationMs: 20000, endTime: "2025-03-01T11:00:00Z" },
+      {
+        model: "Cursor Composer 1.5",
+        role: "Reviewer",
+        durationMs: 20000,
+        endTime: "2025-03-01T11:00:00Z",
+      },
     ]);
     renderHelpContent();
 
@@ -187,8 +191,19 @@ describe("HelpContent", () => {
   it("Agent log shows Log column and magnifying glass only for rows with sessionId", async () => {
     const user = userEvent.setup();
     vi.mocked(api.help.agentLog).mockResolvedValue([
-      { model: "claude-sonnet-4", role: "Coder", durationMs: 45000, endTime: "2025-03-01T12:00:00Z", sessionId: 1 },
-      { model: "claude-sonnet-4", role: "Reviewer", durationMs: 120000, endTime: "2025-03-01T11:00:00Z" },
+      {
+        model: "claude-sonnet-4",
+        role: "Coder",
+        durationMs: 45000,
+        endTime: "2025-03-01T12:00:00Z",
+        sessionId: 1,
+      },
+      {
+        model: "claude-sonnet-4",
+        role: "Reviewer",
+        durationMs: 120000,
+        endTime: "2025-03-01T11:00:00Z",
+      },
     ]);
     renderHelpContent();
 
@@ -202,9 +217,17 @@ describe("HelpContent", () => {
   it("Agent log opens modal with session content when magnifying glass clicked", async () => {
     const user = userEvent.setup();
     vi.mocked(api.help.agentLog).mockResolvedValue([
-      { model: "claude-sonnet-4", role: "Coder", durationMs: 45000, endTime: "2025-03-01T12:00:00Z", sessionId: 1 },
+      {
+        model: "claude-sonnet-4",
+        role: "Coder",
+        durationMs: 45000,
+        endTime: "2025-03-01T12:00:00Z",
+        sessionId: 1,
+      },
     ]);
-    vi.mocked(api.help.sessionLog).mockResolvedValue({ content: "Raw session output line 1\nLine 2" });
+    vi.mocked(api.help.sessionLog).mockResolvedValue({
+      content: "Raw session output line 1\nLine 2",
+    });
     renderHelpContent();
 
     await user.click(screen.getByRole("tab", { name: "Agent log" }));

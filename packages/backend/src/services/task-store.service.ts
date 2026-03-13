@@ -31,7 +31,12 @@ import {
 } from "./self-improvement-run-history.service.js";
 import { toPgParams } from "../db/sql-params.js";
 import { getDatabaseUrl } from "./global-settings.service.js";
-import type { StoredTask, CreateOpts, CreateInput, TaskChangeCallback } from "./task-store.types.js";
+import type {
+  StoredTask,
+  CreateOpts,
+  CreateInput,
+  TaskChangeCallback,
+} from "./task-store.types.js";
 import {
   resolveEpicId,
   getBlockersFromIssue,
@@ -50,13 +55,40 @@ import {
 } from "./task-store-helpers.js";
 import { cascadeDeleteTaskReferences } from "./task-store-cascade.js";
 import { TaskStorePlanAuditorSIFacade } from "./task-store-facades.js";
+import { parseTaskLastExecutionSummary } from "./task-execution-summary.js";
 
-export type { StoredTask, CreateOpts, CreateInput, TaskChangeCallback } from "./task-store.types.js";
+export type {
+  StoredTask,
+  CreateOpts,
+  CreateInput,
+  TaskChangeCallback,
+} from "./task-store.types.js";
 export { resolveEpicId, getBlockersFromIssue, getParentId } from "./task-store-helpers.js";
 /** Re-export plan types for consumers that import from task-store. */
 export type { PlanInsertData, StoredPlan } from "./plan-store.service.js";
 
 const log = createLogger("task-store");
+const NON_RETRYABLE_BLOCK_FAILURE_TYPES = new Set([
+  "review_rejection",
+  "repo_preflight",
+  "environment_setup",
+]);
+
+function getBlockedTaskFailureType(task: StoredTask): string | null {
+  const lastExecution = parseTaskLastExecutionSummary(
+    (task as { last_execution_summary?: unknown }).last_execution_summary
+  );
+  if (typeof lastExecution?.failureType === "string" && lastExecution.failureType.trim() !== "") {
+    return lastExecution.failureType.trim().toLowerCase();
+  }
+
+  const retryContext = (task as { next_retry_context?: unknown }).next_retry_context;
+  if (!retryContext || typeof retryContext !== "object") return null;
+  const failureType = (retryContext as { failureType?: unknown }).failureType;
+  return typeof failureType === "string" && failureType.trim() !== ""
+    ? failureType.trim().toLowerCase()
+    : null;
+}
 
 export class TaskStoreService {
   private client: DbClient | null = null;
@@ -70,7 +102,10 @@ export class TaskStoreService {
   /** Optional callback to emit WebSocket events on task create/update/close. */
   private onTaskChange: TaskChangeCallback | null = null;
 
-  private planStore = new PlanStore(() => this.ensureClient(), () => this.getDrizzle());
+  private planStore = new PlanStore(
+    () => this.ensureClient(),
+    () => this.getDrizzle()
+  );
   private planVersionStore = new PlanVersionStore(() => this.ensureClient());
   private auditorRunStore = new AuditorRunStore(() => this.ensureClient());
   private selfImprovementRunHistoryStore = new SelfImprovementRunHistoryStore(() =>
@@ -477,8 +512,9 @@ export class TaskStoreService {
 
   /**
    * List tasks blocked by technical errors (Merge Failure, Coding Failure) that are eligible
-   * for auto-retry. Excludes human-feedback blocks. Only returns tasks whose last_auto_retry_at
-   * is null or older than AUTO_RETRY_BLOCKED_INTERVAL_MS (8 hours).
+   * for auto-retry. Excludes human-feedback blocks plus deterministic/setup or review failures
+   * that should stay blocked until someone intervenes. Only returns tasks whose
+   * last_auto_retry_at is null or older than AUTO_RETRY_BLOCKED_INTERVAL_MS (8 hours).
    */
   async listBlockedByTechnicalErrorEligibleForRetry(projectId: string): Promise<StoredTask[]> {
     await this.ensureInitialized();
@@ -491,6 +527,8 @@ export class TaskStoreService {
     const cutoff = now - AUTO_RETRY_BLOCKED_INTERVAL_MS;
     return blocked.filter((t) => {
       if (!isBlockedByTechnicalError(t.block_reason)) return false;
+      const failureType = getBlockedTaskFailureType(t);
+      if (failureType && NON_RETRYABLE_BLOCK_FAILURE_TYPES.has(failureType)) return false;
       const lastRetry = t.last_auto_retry_at;
       if (!lastRetry) return true;
       const lastRetryMs = new Date(lastRetry).getTime();
@@ -512,7 +550,8 @@ export class TaskStoreService {
     for (const issue of allIssues) {
       if (issue.status !== "open") continue;
       if (issue.issue_type === "epic") continue;
-      const mergePausedUntilRaw = (issue as Record<string, unknown>).merge_quality_gate_paused_until;
+      const mergePausedUntilRaw = (issue as Record<string, unknown>)
+        .merge_quality_gate_paused_until;
       if (typeof mergePausedUntilRaw === "string") {
         const mergePausedUntilMs = Date.parse(mergePausedUntilRaw);
         if (Number.isFinite(mergePausedUntilMs) && mergePausedUntilMs > Date.now()) {
@@ -795,7 +834,9 @@ export class TaskStoreService {
         options.last_auto_retry_at !== undefined;
       const row = needRow
         ? await client.queryOne(
-            toPgParams("SELECT status, started_at, extra FROM tasks WHERE id = ? AND project_id = ?"),
+            toPgParams(
+              "SELECT status, started_at, extra FROM tasks WHERE id = ? AND project_id = ?"
+            ),
             [id, projectId]
           )
         : null;
@@ -821,7 +862,12 @@ export class TaskStoreService {
         mergedExtra = mergeExtraForUpdateHelper(existing, options);
       }
 
-      const { sets, vals, nextIdx } = buildTaskUpdateSetsHelper(options, now, rowShape, mergedExtra);
+      const { sets, vals, nextIdx } = buildTaskUpdateSetsHelper(
+        options,
+        now,
+        rowShape,
+        mergedExtra
+      );
       vals.push(id, projectId);
       const updateSql = `UPDATE tasks SET ${sets.join(", ")} WHERE id = $${nextIdx} AND project_id = $${nextIdx + 1}`;
       const modified = await client.execute(updateSql, vals);
@@ -1345,11 +1391,7 @@ export class TaskStoreService {
     planId: string,
     versionNumber: number
   ): Promise<PlanVersionRow> {
-    return this.planAuditorSIFacade.planVersionGetByVersionNumber(
-      projectId,
-      planId,
-      versionNumber
-    );
+    return this.planAuditorSIFacade.planVersionGetByVersionNumber(projectId, planId, versionNumber);
   }
 
   async planVersionInsert(data: PlanVersionInsert): Promise<PlanVersionRow> {
@@ -1361,21 +1403,14 @@ export class TaskStoreService {
     planId: string,
     versionNumber: number
   ): Promise<void> {
-    return this.planAuditorSIFacade.planVersionSetExecutedVersion(
-      projectId,
-      planId,
-      versionNumber
-    );
+    return this.planAuditorSIFacade.planVersionSetExecutedVersion(projectId, planId, versionNumber);
   }
 
   async planDelete(projectId: string, planId: string): Promise<boolean> {
     return this.planAuditorSIFacade.planDelete(projectId, planId);
   }
 
-  async listPlanVersions(
-    projectId: string,
-    planId: string
-  ): Promise<PlanVersionListItem[]> {
+  async listPlanVersions(projectId: string, planId: string): Promise<PlanVersionListItem[]> {
     return this.planAuditorSIFacade.listPlanVersions(projectId, planId);
   }
 
@@ -1384,21 +1419,14 @@ export class TaskStoreService {
     planId: string,
     versionNumber: number
   ): Promise<PlanVersionRow> {
-    return this.planAuditorSIFacade.getPlanVersionByNumber(
-      projectId,
-      planId,
-      versionNumber
-    );
+    return this.planAuditorSIFacade.getPlanVersionByNumber(projectId, planId, versionNumber);
   }
 
   async auditorRunInsert(record: AuditorRunInsert): Promise<AuditorRunRecord> {
     return this.planAuditorSIFacade.auditorRunInsert(record);
   }
 
-  async listAuditorRunsByPlanId(
-    projectId: string,
-    planId: string
-  ): Promise<AuditorRunRecord[]> {
+  async listAuditorRunsByPlanId(projectId: string, planId: string): Promise<AuditorRunRecord[]> {
     return this.planAuditorSIFacade.listAuditorRunsByPlanId(projectId, planId);
   }
 

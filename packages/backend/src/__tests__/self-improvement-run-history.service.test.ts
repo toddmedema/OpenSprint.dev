@@ -94,9 +94,6 @@ describe("SelfImprovementRunHistoryStore", () => {
     const store = new SelfImprovementRunHistoryStore(() => mockClient as never);
     await store.listByProjectId("proj-1");
 
-    expect(mockClient.query).toHaveBeenCalledWith(
-      expect.any(String),
-      ["proj-1", 50]
-    );
+    expect(mockClient.query).toHaveBeenCalledWith(expect.any(String), ["proj-1", 50]);
   });
 });

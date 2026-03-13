@@ -150,7 +150,11 @@ export function mockViewport(width: number, height = 667): () => void {
   const origWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
   const origHeight = typeof window !== "undefined" ? window.innerHeight : 768;
   if (typeof window !== "undefined") {
-    Object.defineProperty(window, "innerWidth", { value: width, writable: true, configurable: true });
+    Object.defineProperty(window, "innerWidth", {
+      value: width,
+      writable: true,
+      configurable: true,
+    });
     Object.defineProperty(window, "innerHeight", {
       value: height,
       writable: true,

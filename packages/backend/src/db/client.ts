@@ -16,11 +16,7 @@ function rethrowDatabaseError(err: unknown): never {
   }
   if (isDbConnectionError(err)) {
     databaseRuntime.handleOperationalFailure(err);
-    throw new AppError(
-      503,
-      ErrorCodes.DATABASE_UNAVAILABLE,
-      classifyDbConnectionError(err)
-    );
+    throw new AppError(503, ErrorCodes.DATABASE_UNAVAILABLE, classifyDbConnectionError(err));
   }
   throw err;
 }

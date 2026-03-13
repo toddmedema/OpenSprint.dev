@@ -10,10 +10,7 @@ export function useExpoReadiness(
   return useQuery({
     queryKey: queryKeys.deliver.expoReadiness(projectId ?? ""),
     queryFn: () => api.deliver.expoReadiness(projectId!),
-    enabled:
-      Boolean(projectId) &&
-      options?.deploymentMode === "expo" &&
-      options?.enabled !== false,
+    enabled: Boolean(projectId) && options?.deploymentMode === "expo" && options?.enabled !== false,
   });
 }
 

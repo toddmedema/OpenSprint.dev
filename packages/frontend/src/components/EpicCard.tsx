@@ -311,7 +311,7 @@ export function EpicCard({
                   </button>
                 )}
               </div>
-            ) : (plan.taskCount > 0 || autoExecutePlans) ? (
+            ) : plan.taskCount > 0 || autoExecutePlans ? (
               <button
                 type="button"
                 onClick={(e) => {

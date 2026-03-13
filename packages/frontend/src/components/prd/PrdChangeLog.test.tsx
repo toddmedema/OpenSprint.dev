@@ -13,7 +13,10 @@ vi.mock("../../api/client", () => ({
     },
   },
   isApiError: (err: unknown) =>
-    err !== null && typeof err === "object" && "code" in err && (err as { code: string }).code === "NOT_FOUND",
+    err !== null &&
+    typeof err === "object" &&
+    "code" in err &&
+    (err as { code: string }).code === "NOT_FOUND",
 }));
 
 const entryWithDocVersion: PrdHistoryEntry = {
@@ -71,9 +74,7 @@ describe("PrdChangeLog", () => {
       fromVersion: "3",
       toVersion: "current",
       diff: {
-        lines: [
-          { type: "context", text: "line", oldLineNumber: 1, newLineNumber: 1 },
-        ],
+        lines: [{ type: "context", text: "line", oldLineNumber: 1, newLineNumber: 1 }],
         summary: { additions: 0, deletions: 0 },
       },
     });

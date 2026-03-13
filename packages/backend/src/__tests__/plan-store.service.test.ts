@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 
 // Avoid loading drizzle-orm in test (vitest resolution can fail in some workspaces)
-vi.mock("drizzle-orm", () => ({ and: (...args: unknown[]) => args, eq: (a: unknown, b: unknown) => [a, b] }));
+vi.mock("drizzle-orm", () => ({
+  and: (...args: unknown[]) => args,
+  eq: (a: unknown, b: unknown) => [a, b],
+}));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 import { PlanStore } from "../services/plan-store.service.js";
@@ -97,7 +100,10 @@ describe("PlanStore", () => {
     const db = {
       insert: vi.fn().mockReturnValue({ values }),
     };
-    const store = new PlanStore(() => client, async () => db as unknown as DrizzlePg);
+    const store = new PlanStore(
+      () => client,
+      async () => db as unknown as DrizzlePg
+    );
 
     const metadata = JSON.stringify({ planId: "plan-1", epicId: "epic-1" });
     await store.planInsert("proj-1", "plan-1", {
@@ -140,16 +146,16 @@ describe("PlanStore", () => {
     await expect(store.planUpdateContent("proj-1", "plan-404", "# Missing")).rejects.toMatchObject({
       code: "PLAN_NOT_FOUND",
     });
-    await expect(store.planSetShippedContent("proj-1", "plan-404", "ship")).rejects.toMatchObject(
-      {
-        code: "PLAN_NOT_FOUND",
-      }
-    );
+    await expect(store.planSetShippedContent("proj-1", "plan-404", "ship")).rejects.toMatchObject({
+      code: "PLAN_NOT_FOUND",
+    });
   });
 
   it("reads and writes shipped content", async () => {
     const client = createDbClient();
-    client.queryOne.mockResolvedValueOnce({ 1: 1 }).mockResolvedValueOnce({ shipped_content: "ok" });
+    client.queryOne
+      .mockResolvedValueOnce({ 1: 1 })
+      .mockResolvedValueOnce({ shipped_content: "ok" });
     client.execute.mockResolvedValue(1);
     const store = new PlanStore(() => client);
 

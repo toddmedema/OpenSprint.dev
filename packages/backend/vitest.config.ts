@@ -6,9 +6,7 @@ import { defineConfig } from "vitest/config";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const parallelism =
-  typeof os.availableParallelism === "function"
-    ? os.availableParallelism()
-    : os.cpus().length;
+  typeof os.availableParallelism === "function" ? os.availableParallelism() : os.cpus().length;
 const coverageReporters =
   process.env.CI === "true" || process.env.CI === "1"
     ? ["text-summary", "json-summary", "lcovonly"]

@@ -53,6 +53,7 @@ vi.mock("../services/branch-manager.js", () => {
       removeTaskWorktree: vi.fn(),
       deleteBranch: vi.fn(),
       getChangedFiles: vi.fn(),
+      prepareMainForPush: vi.fn(),
       pushMain: vi.fn(),
       pushMainToOrigin: vi.fn(),
       isMergeInProgress: vi.fn(),
@@ -152,6 +153,10 @@ vi.mock("../services/final-review.service.js", () => ({
 vi.mock("../services/self-improvement.service.js", () => ({
   selfImprovementService: {
     runIfDue: vi.fn().mockResolvedValue(undefined),
+    ensureBaselineQualityGateTask: vi.fn().mockResolvedValue({
+      taskId: "os-baseline-fix",
+      created: true,
+    }),
   },
 }));
 
@@ -222,7 +227,8 @@ describe("MergeCoordinatorService", () => {
     });
     mockBroadcastToProject.mockReset();
     mockResolveBaseBranch.mockImplementation(
-      async (_repoPath: string, preferredBaseBranch?: string | null) => preferredBaseBranch ?? "main"
+      async (_repoPath: string, preferredBaseBranch?: string | null) =>
+        preferredBaseBranch ?? "main"
     );
     mockInspectGitRepoState.mockResolvedValue({
       isGitRepo: true,
@@ -270,6 +276,7 @@ describe("MergeCoordinatorService", () => {
         removeTaskWorktree: mockRemoveTaskWorktree.mockResolvedValue(undefined),
         deleteBranch: mockDeleteBranch.mockResolvedValue(undefined),
         getChangedFiles: vi.fn().mockResolvedValue([]),
+        prepareMainForPush: vi.fn().mockResolvedValue(undefined),
         pushMain: vi.fn().mockResolvedValue(undefined),
         pushMainToOrigin: vi.fn().mockResolvedValue(undefined),
         isMergeInProgress: vi.fn().mockResolvedValue(false),
@@ -633,8 +640,9 @@ describe("MergeCoordinatorService", () => {
   });
 
   it("persists retry context when quality-gate failures reach blocked threshold", async () => {
-    (mockHost.taskStore.getCumulativeAttemptsFromIssue as unknown as ReturnType<typeof vi.fn>)
-      .mockReturnValue(5);
+    (
+      mockHost.taskStore.getCumulativeAttemptsFromIssue as unknown as ReturnType<typeof vi.fn>
+    ).mockReturnValue(5);
     mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
       if (options.worktreePath === repoPath) return null; // baseline gate passes in this test
       return {
@@ -707,17 +715,28 @@ describe("MergeCoordinatorService", () => {
     );
   });
 
-  it("pauses merge when baseline quality gates on main fail and emits one blocker notification", async () => {
-    mockHost.runMergeQualityGates = vi.fn().mockResolvedValue({
-      command: "npm run test",
-      reason: "Command failed: npm run test",
-      output: "stderr | baseline failure",
-      firstErrorLine: "stderr | baseline failure",
-      category: "quality_gate",
+  it("creates a self-improvement task and pauses merging when baseline quality gates on main fail", async () => {
+    const { selfImprovementService } = await import("../services/self-improvement.service.js");
+    mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
+      if (options.worktreePath !== repoPath) return null;
+      return {
+        command: "npm run test",
+        reason: "Command failed: npm run test",
+        output: "stderr | baseline failure",
+        firstErrorLine: "stderr | baseline failure",
+        category: "quality_gate",
+      };
     });
 
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
 
+    expect(selfImprovementService.ensureBaselineQualityGateTask).toHaveBeenCalledWith(projectId, {
+      baseBranch: "main",
+      command: "npm run test",
+      reason: "Command failed: npm run test",
+      outputSnippet: "stderr | baseline failure",
+      worktreePath: null,
+    });
     expect(mockGitQueueEnqueueAndWait).not.toHaveBeenCalled();
     expect(mockHost.taskStore.setMergeStage).toHaveBeenCalledWith(
       projectId,
@@ -730,41 +749,54 @@ describe("MergeCoordinatorService", () => {
       expect.objectContaining({
         status: "open",
         assignee: "",
-        extra: expect.objectContaining({
-          merge_quality_gate_paused_until: expect.any(String),
-          last_execution_summary: expect.objectContaining({
-            summary: expect.stringContaining(
-              "Merge paused: baseline quality gates on main are failing"
-            ),
-          }),
-        }),
       })
     );
     expect(mockNotificationCreateAgentFailed).toHaveBeenCalledTimes(1);
-    expect(mockNotificationCreateAgentFailed).toHaveBeenCalledWith(
-      expect.objectContaining({
-        projectId,
-        source: "execute",
-        sourceId: "merge-quality-gate-baseline:main",
-      })
-    );
 
     hostState.slots.set(taskId, makeSlot());
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+    expect(selfImprovementService.ensureBaselineQualityGateTask).toHaveBeenCalledTimes(2);
     expect(mockNotificationCreateAgentFailed).toHaveBeenCalledTimes(1);
-    expect(mockHost.runMergeQualityGates).toHaveBeenCalledTimes(1);
+    expect(
+      mockHost.runMergeQualityGates.mock.calls.filter(
+        ([options]) => (options as { worktreePath: string }).worktreePath === repoPath
+      )
+    ).toHaveLength(1);
+  });
+
+  it("does not resolve the baseline blocker notification while baseline is still failing", async () => {
+    const { selfImprovementService } = await import("../services/self-improvement.service.js");
+    mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
+      if (options.worktreePath !== repoPath) return null;
+      return {
+        command: "npm run test",
+        reason: "Command failed: npm run test",
+        output: "stderr | baseline failure",
+        firstErrorLine: "stderr | baseline failure",
+        category: "quality_gate",
+      };
+    });
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(selfImprovementService.ensureBaselineQualityGateTask).toHaveBeenCalledTimes(1);
+    expect(mockNotificationCreateAgentFailed).toHaveBeenCalledTimes(1);
+    expect(mockNotificationResolve).not.toHaveBeenCalled();
   });
 
   it("resolves baseline blocker notification when baseline quality gates recover", async () => {
     let nowMs = 1_000_000;
     const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
     try {
-      mockHost.runMergeQualityGates = vi.fn().mockResolvedValue({
-        command: "npm run test",
-        reason: "Command failed: npm run test",
-        output: "stderr | baseline failure",
-        firstErrorLine: "stderr | baseline failure",
-        category: "quality_gate",
+      mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
+        if (options.worktreePath !== repoPath) return null;
+        return {
+          command: "npm run test",
+          reason: "Command failed: npm run test",
+          output: "stderr | baseline failure",
+          firstErrorLine: "stderr | baseline failure",
+          category: "quality_gate",
+        };
       });
 
       await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
@@ -1003,7 +1035,12 @@ describe("MergeCoordinatorService", () => {
   it("does not invoke runIfDue when task has no epic (Execute click alone does not trigger)", async () => {
     const { selfImprovementService } = await import("../services/self-improvement.service.js");
     mockHost.taskStore.listAll.mockResolvedValue([
-      { id: "os-standalone", title: "Top-level task", status: "closed", issue_type: "task" } as never,
+      {
+        id: "os-standalone",
+        title: "Top-level task",
+        status: "closed",
+        issue_type: "task",
+      } as never,
     ]);
 
     await coordinator.postCompletionAsync(projectId, repoPath, "os-standalone");
@@ -1072,11 +1109,15 @@ describe("MergeCoordinatorService", () => {
 
   it("resolves sequential push rebase conflicts in a single push cycle", async () => {
     const { RebaseConflictError } = await import("../services/branch-manager.js");
-    const pushMain = mockHost.branchManager.pushMain as unknown as ReturnType<typeof vi.fn>;
-    const rebaseContinue =
-      mockHost.branchManager.rebaseContinue as unknown as ReturnType<typeof vi.fn>;
-    const pushMainToOrigin =
-      mockHost.branchManager.pushMainToOrigin as unknown as ReturnType<typeof vi.fn>;
+    const prepareMainForPush = mockHost.branchManager.prepareMainForPush as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const rebaseContinue = mockHost.branchManager.rebaseContinue as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const pushMainToOrigin = mockHost.branchManager.pushMainToOrigin as unknown as ReturnType<
+      typeof vi.fn
+    >;
     const rebaseAbort = mockHost.branchManager.rebaseAbort as unknown as ReturnType<typeof vi.fn>;
     mockInspectGitRepoState.mockResolvedValue({
       isGitRepo: true,
@@ -1090,7 +1131,8 @@ describe("MergeCoordinatorService", () => {
       identity: { name: "Test", email: "test@test.com", valid: true },
     });
 
-    pushMain.mockRejectedValueOnce(new RebaseConflictError(["first.ts"]));
+    mockHost.runMergeQualityGates = vi.fn().mockResolvedValue(null);
+    prepareMainForPush.mockRejectedValueOnce(new RebaseConflictError(["first.ts"]));
     rebaseContinue
       .mockRejectedValueOnce(new RebaseConflictError(["second.ts"]))
       .mockResolvedValueOnce(undefined);
@@ -1114,17 +1156,29 @@ describe("MergeCoordinatorService", () => {
         conflictedFiles: ["second.ts"],
       })
     );
+    expect(mockHost.runMergeQualityGates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId,
+        repoPath,
+        worktreePath: repoPath,
+        taskId: "baseline:main",
+      })
+    );
     expect(pushMainToOrigin).toHaveBeenCalledWith(repoPath, "main");
     expect(rebaseAbort).not.toHaveBeenCalled();
   });
 
   it("aborts and fails push when sequential push rebase conflicts exceed max rounds", async () => {
     const { RebaseConflictError } = await import("../services/branch-manager.js");
-    const pushMain = mockHost.branchManager.pushMain as unknown as ReturnType<typeof vi.fn>;
-    const rebaseContinue =
-      mockHost.branchManager.rebaseContinue as unknown as ReturnType<typeof vi.fn>;
-    const pushMainToOrigin =
-      mockHost.branchManager.pushMainToOrigin as unknown as ReturnType<typeof vi.fn>;
+    const prepareMainForPush = mockHost.branchManager.prepareMainForPush as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const rebaseContinue = mockHost.branchManager.rebaseContinue as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const pushMainToOrigin = mockHost.branchManager.pushMainToOrigin as unknown as ReturnType<
+      typeof vi.fn
+    >;
     const rebaseAbort = mockHost.branchManager.rebaseAbort as unknown as ReturnType<typeof vi.fn>;
     const merger = mockHost.runMergerAgentAndWait as unknown as ReturnType<typeof vi.fn>;
     mockInspectGitRepoState.mockResolvedValue({
@@ -1139,7 +1193,7 @@ describe("MergeCoordinatorService", () => {
       identity: { name: "Test", email: "test@test.com", valid: true },
     });
 
-    pushMain.mockRejectedValueOnce(new RebaseConflictError(["first.ts"]));
+    prepareMainForPush.mockRejectedValueOnce(new RebaseConflictError(["first.ts"]));
     rebaseContinue.mockRejectedValue(new RebaseConflictError(["next.ts"]));
     merger.mockResolvedValue(true);
 
@@ -1147,6 +1201,56 @@ describe("MergeCoordinatorService", () => {
 
     expect(merger).toHaveBeenCalledTimes(12);
     expect(rebaseAbort).toHaveBeenCalledTimes(1);
+    expect(pushMainToOrigin).not.toHaveBeenCalled();
+  });
+
+  it("does not publish a rebased main candidate when its baseline quality gates fail", async () => {
+    const { selfImprovementService } = await import("../services/self-improvement.service.js");
+    const prepareMainForPush = mockHost.branchManager.prepareMainForPush as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const pushMainToOrigin = mockHost.branchManager.pushMainToOrigin as unknown as ReturnType<
+      typeof vi.fn
+    >;
+
+    mockInspectGitRepoState.mockResolvedValue({
+      isGitRepo: true,
+      hasHead: true,
+      currentBranch: "main",
+      baseBranch: "main",
+      hasOrigin: true,
+      originReachable: true,
+      remoteMode: "remote",
+      originUrl: "git@github.com:opensprint/opensprint.git",
+      identity: { name: "Test", email: "test@test.com", valid: true },
+    });
+    prepareMainForPush.mockResolvedValue(undefined);
+    mockHost.runMergeQualityGates = vi.fn().mockResolvedValue({
+      command: "npm run test",
+      reason: "Command failed: npm run test",
+      output: "stderr | rebased main failure",
+      firstErrorLine: "stderr | rebased main failure",
+      category: "quality_gate",
+      worktreePath: repoPath,
+    });
+
+    await coordinator.postCompletionAsync(projectId, repoPath, taskId);
+
+    expect(mockHost.runMergeQualityGates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId,
+        repoPath,
+        worktreePath: repoPath,
+        taskId: "baseline:main",
+      })
+    );
+    expect(selfImprovementService.ensureBaselineQualityGateTask).toHaveBeenCalledWith(projectId, {
+      baseBranch: "main",
+      command: "npm run test",
+      reason: "Command failed: npm run test",
+      outputSnippet: "stderr | rebased main failure",
+      worktreePath: repoPath,
+    });
     expect(pushMainToOrigin).not.toHaveBeenCalled();
   });
 
@@ -1201,12 +1305,7 @@ describe("MergeCoordinatorService", () => {
           { ...epicAndTasks[2], status: "open" },
         ]);
 
-      await coordinator.performMergeAndDone(
-        projectId,
-        repoPath,
-        makeEpicTask(),
-        epicBranchName
-      );
+      await coordinator.performMergeAndDone(projectId, repoPath, makeEpicTask(), epicBranchName);
 
       expect(mockGitQueueEnqueueAndWait).not.toHaveBeenCalled();
       expect(mockHost.taskStore.close).toHaveBeenCalledWith(
@@ -1271,12 +1370,7 @@ describe("MergeCoordinatorService", () => {
         title: "Epic task 2",
       });
 
-      await coordinator.performMergeAndDone(
-        projectId,
-        repoPath,
-        lastTask(),
-        epicBranchName
-      );
+      await coordinator.performMergeAndDone(projectId, repoPath, lastTask(), epicBranchName);
 
       expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1357,12 +1451,7 @@ describe("MergeCoordinatorService", () => {
         title: "Epic task 2",
       });
 
-      await coordinator.performMergeAndDone(
-        projectId,
-        repoPath,
-        lastTask(),
-        epicBranchName
-      );
+      await coordinator.performMergeAndDone(projectId, repoPath, lastTask(), epicBranchName);
 
       const { triggerDeployForEvent } = await import("../services/deploy-trigger.service.js");
       await vi.waitFor(() => {
