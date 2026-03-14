@@ -488,7 +488,7 @@ describe("TimelineList", () => {
     const completedSection = screen.getByTestId("timeline-section-completed");
     const stickyWrapper = activeSection.querySelector(".sticky");
     expect(stickyWrapper).toBeInTheDocument();
-    expect(stickyWrapper).toHaveClass("top-0", "z-10");
+    expect(stickyWrapper).toHaveClass("top-[-0.5rem]", "sm:top-[-0.75rem]", "z-10");
     expect(completedSection.querySelector(".sticky")).toBeInTheDocument();
   });
 
