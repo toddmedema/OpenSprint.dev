@@ -1,6 +1,6 @@
 /**
  * Verification test: dev servers use source-direct imports.
- * - Root dev script builds shared first, then watches via concurrently.
+ * - Root dev script removes shared/dist first, then watches via concurrently.
  * - Frontend Vite config aliases @opensprint/shared to source for HMR.
  * - Both frontend and backend vitest configs alias to source for npm test.
  */
@@ -14,10 +14,10 @@ const repoRoot = resolve(__dirname, "../../../..");
 const sharedRoot = resolve(__dirname, "../..");
 
 describe("dev config (source-direct imports)", () => {
-  it("root dev script builds shared and starts concurrently", () => {
+  it("root dev script removes shared/dist and starts concurrently", () => {
     const pkg = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf-8"));
     const devScript = pkg.scripts?.dev ?? "";
-    expect(devScript).toContain("build -w packages/shared");
+    expect(devScript).toContain("rm -rf packages/shared/dist");
     expect(devScript).toContain("concurrently");
   });
 

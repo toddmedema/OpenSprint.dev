@@ -10,7 +10,7 @@
     "packages/electron"
   ],
   "scripts": {
-    "dev": "npm run build -w packages/shared && bash scripts/ensure-postgres-running.sh && concurrently \"npm run dev -w packages/shared\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "rm -rf packages/shared/dist && bash scripts/ensure-postgres-running.sh && concurrently \"npm run dev -w packages/shared\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "npm run dev -w packages/backend",
     "dev:frontend": "npm run dev -w packages/frontend",
     "build": "npm run build -w packages/shared && npm run build -w packages/backend && npm run build -w packages/frontend",
