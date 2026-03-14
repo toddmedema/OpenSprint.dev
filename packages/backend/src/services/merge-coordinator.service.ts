@@ -44,6 +44,7 @@ const BASELINE_QUALITY_GATE_CACHE_MS = 60_000;
 const BASELINE_QUALITY_GATE_PAUSE_MS = 5 * 60_000;
 const BASELINE_QUALITY_GATE_PAUSED_UNTIL_KEY = "merge_quality_gate_paused_until";
 const BASELINE_QUALITY_GATE_NOTIFICATION_SOURCE_ID = "merge-quality-gate-baseline";
+const BASELINE_QUALITY_GATE_TASK_SOURCE = "merge-quality-gate-baseline";
 
 /** One-sentence explanation for merge failures shown to users (conflicts with main in same files). */
 const HUMAN_MERGE_FAILURE_MESSAGE =
@@ -466,6 +467,28 @@ export class MergeCoordinatorService {
     return `${projectId}:${baseBranch}`;
   }
 
+  private isBaselineQualityGateRemediationTask(
+    task: StoredTask,
+    baseBranch: string
+  ): boolean {
+    const source = (task as { source?: unknown }).source;
+    const kind = (task as { selfImprovementKind?: unknown }).selfImprovementKind;
+    const sourceId = (task as { baselineQualityGateSource?: unknown }).baselineQualityGateSource;
+    const taskBaseBranch = (task as { baselineBaseBranch?: unknown }).baselineBaseBranch;
+
+    if (source !== "self-improvement") return false;
+    if (
+      kind !== "baseline-quality-gate" &&
+      sourceId !== BASELINE_QUALITY_GATE_TASK_SOURCE
+    ) {
+      return false;
+    }
+    if (typeof taskBaseBranch === "string" && taskBaseBranch.trim() !== "") {
+      return taskBaseBranch === baseBranch;
+    }
+    return true;
+  }
+
   private async getBaselineQualityGateFailure(
     projectId: string,
     repoPath: string,
@@ -884,27 +907,34 @@ export class MergeCoordinatorService {
 
       // Last task in epic: merge epic branch to main, then push and cleanup via postCompletionAsync
       try {
-        const baselineFailure = await this.getBaselineQualityGateFailure(
-          projectId,
-          repoPath,
-          baseBranch
-        );
-        if (baselineFailure) {
-          await this.createBaselineQualityGateRemediationTask(
-            projectId,
-            baseBranch,
-            baselineFailure
-          );
-          await this.pauseMergeForBaselineQualityGateFailure(
+        if (!this.isBaselineQualityGateRemediationTask(task, baseBranch)) {
+          const baselineFailure = await this.getBaselineQualityGateFailure(
             projectId,
             repoPath,
-            task,
-            baseBranch,
-            baselineFailure
+            baseBranch
           );
-          await this.releaseMergeSlot(projectId, repoPath, "fail", task.id);
-          this.host.nudge(projectId);
-          return;
+          if (baselineFailure) {
+            await this.createBaselineQualityGateRemediationTask(
+              projectId,
+              baseBranch,
+              baselineFailure
+            );
+            await this.pauseMergeForBaselineQualityGateFailure(
+              projectId,
+              repoPath,
+              task,
+              baseBranch,
+              baselineFailure
+            );
+            await this.releaseMergeSlot(projectId, repoPath, "fail", task.id);
+            this.host.nudge(projectId);
+            return;
+          }
+        } else {
+          log.info("Skipping baseline-on-main precheck for baseline remediation task", {
+            taskId: task.id,
+            baseBranch,
+          });
         }
         await this.ensureMergeQualityGates({
           projectId,
@@ -948,23 +978,34 @@ export class MergeCoordinatorService {
 
     // 2. Attempt merge inside the serialized queue. Rebase now happens there.
     try {
-      const baselineFailure = await this.getBaselineQualityGateFailure(
-        projectId,
-        repoPath,
-        baseBranch
-      );
-      if (baselineFailure) {
-        await this.createBaselineQualityGateRemediationTask(projectId, baseBranch, baselineFailure);
-        await this.pauseMergeForBaselineQualityGateFailure(
+      if (!this.isBaselineQualityGateRemediationTask(task, baseBranch)) {
+        const baselineFailure = await this.getBaselineQualityGateFailure(
           projectId,
           repoPath,
-          task,
-          baseBranch,
-          baselineFailure
+          baseBranch
         );
-        await this.releaseMergeSlot(projectId, repoPath, "fail", task.id);
-        this.host.nudge(projectId);
-        return;
+        if (baselineFailure) {
+          await this.createBaselineQualityGateRemediationTask(
+            projectId,
+            baseBranch,
+            baselineFailure
+          );
+          await this.pauseMergeForBaselineQualityGateFailure(
+            projectId,
+            repoPath,
+            task,
+            baseBranch,
+            baselineFailure
+          );
+          await this.releaseMergeSlot(projectId, repoPath, "fail", task.id);
+          this.host.nudge(projectId);
+          return;
+        }
+      } else {
+        log.info("Skipping baseline-on-main precheck for baseline remediation task", {
+          taskId: task.id,
+          baseBranch,
+        });
       }
       await this.ensureMergeQualityGates({
         projectId,

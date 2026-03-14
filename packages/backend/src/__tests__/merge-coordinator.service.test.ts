@@ -169,7 +169,7 @@ describe("MergeCoordinatorService", () => {
   const taskId = "os-abc1";
   const branchName = `opensprint/${taskId}`;
 
-  const makeTask = (): StoredTask => ({
+  const makeTask = (overrides: Partial<StoredTask> = {}): StoredTask => ({
     id: taskId,
     title: "Test task",
     status: "open",
@@ -181,6 +181,7 @@ describe("MergeCoordinatorService", () => {
     description: "",
     created: new Date().toISOString(),
     updated: new Date().toISOString(),
+    ...overrides,
   });
 
   const makeSlot = (worktreePath: string | null = "/tmp/worktree"): MergeSlot => ({
@@ -760,6 +761,56 @@ describe("MergeCoordinatorService", () => {
     expect(
       mockHost.runMergeQualityGates.mock.calls.filter(
         ([options]) => (options as { worktreePath: string }).worktreePath === repoPath
+      )
+    ).toHaveLength(1);
+  });
+
+  it("lets the baseline remediation task bypass the baseline-on-main precheck while still merging through worktree gates", async () => {
+    const { selfImprovementService } = await import("../services/self-improvement.service.js");
+    mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
+      if (options.worktreePath === repoPath) {
+        return {
+          command: "npm run test",
+          reason: "Command failed: npm run test",
+          output: "stderr | baseline failure",
+          firstErrorLine: "stderr | baseline failure",
+          category: "quality_gate",
+        };
+      }
+      return null;
+    });
+
+    await coordinator.performMergeAndDone(
+      projectId,
+      repoPath,
+      makeTask({
+        source: "self-improvement",
+        selfImprovementKind: "baseline-quality-gate",
+        baselineQualityGateSource: "merge-quality-gate-baseline",
+        baselineBaseBranch: "main",
+      }),
+      branchName
+    );
+
+    expect(selfImprovementService.ensureBaselineQualityGateTask).not.toHaveBeenCalled();
+    expect(mockNotificationCreateAgentFailed).not.toHaveBeenCalled();
+    expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "worktree_merge",
+        repoPath,
+        worktreePath: "/tmp/worktree",
+        branchName,
+        taskId,
+      })
+    );
+    expect(
+      mockHost.runMergeQualityGates.mock.calls.filter(
+        ([options]) => (options as { worktreePath: string }).worktreePath === repoPath
+      )
+    ).toHaveLength(0);
+    expect(
+      mockHost.runMergeQualityGates.mock.calls.filter(
+        ([options]) => (options as { worktreePath: string }).worktreePath === "/tmp/worktree"
       )
     ).toHaveLength(1);
   });
