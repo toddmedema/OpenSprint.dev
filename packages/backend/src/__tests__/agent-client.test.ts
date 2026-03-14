@@ -16,6 +16,22 @@ vi.mock("child_process", () => ({
   spawn: (...args: unknown[]) => mockSpawn(...args),
 }));
 
+const { mockLogInfo, mockLogWarn, mockLogError, mockLogDebug } = vi.hoisted(() => ({
+  mockLogInfo: vi.fn(),
+  mockLogWarn: vi.fn(),
+  mockLogError: vi.fn(),
+  mockLogDebug: vi.fn(),
+}));
+
+vi.mock("../utils/logger.js", () => ({
+  createLogger: () => ({
+    info: (...args: unknown[]) => mockLogInfo(...args),
+    warn: (...args: unknown[]) => mockLogWarn(...args),
+    error: (...args: unknown[]) => mockLogError(...args),
+    debug: (...args: unknown[]) => mockLogDebug(...args),
+  }),
+}));
+
 vi.mock("../services/agent-process-registry.js", () => ({
   registerAgentProcess: vi.fn(),
   unregisterAgentProcess: vi.fn(),
