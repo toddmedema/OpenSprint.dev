@@ -377,6 +377,36 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
     expect(res.body.error?.code).toBe("FEEDBACK_NOT_FOUND");
   });
 
+  it("POST /projects/:id/feedback/:feedbackId/cancel should return 409 when a linked task is done", async () => {
+    const task = await taskStore.create(projectId, "Done task", {});
+    await taskStore.close(projectId, task.id, "completed");
+
+    await feedbackStore.insertFeedback(
+      projectId,
+      {
+        id: "fb-cancel-done",
+        text: "Feedback with done task",
+        category: "bug",
+        mappedPlanId: null,
+        createdTaskIds: [task.id],
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      },
+      null
+    );
+
+    const res = await request(app).post(
+      `${API_PREFIX}/projects/${projectId}/feedback/fb-cancel-done/cancel`
+    );
+
+    expect(res.status).toBe(409);
+    expect(res.body.error?.code).toBe("FEEDBACK_HAS_DONE_TASK");
+    expect(res.body.error?.message).toMatch(/at least one linked task is done/i);
+
+    const item = await feedbackStore.getFeedback(projectId, "fb-cancel-done");
+    expect(item.status).toBe("pending");
+  });
+
   it("POST /projects/:id/feedback/:feedbackId/recategorize should accept answer and append to feedback text", async () => {
     await feedbackStore.insertFeedback(
       projectId,

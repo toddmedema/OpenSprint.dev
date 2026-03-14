@@ -22,6 +22,7 @@ vi.mock("../services/active-agents.service.js", () => ({
     register: (...args: unknown[]) => mockRegister(...args),
     unregister: (...args: unknown[]) => mockUnregister(...args),
     list: vi.fn().mockReturnValue([]),
+    listEntries: vi.fn().mockReturnValue([]),
   },
 }));
 
@@ -2327,6 +2328,74 @@ describe.skipIf(!feedbackServicePostgresOk)("FeedbackService", () => {
       await expect(feedbackService.getFeedback(projectId, "fb-cancel-4")).rejects.toMatchObject({
         message: expect.stringContaining("fb-cancel-4"),
       });
+    });
+
+    it("should reject with 409 when any linked task is done", async () => {
+      await feedbackStore.insertFeedback(
+        projectId,
+        {
+          id: "fb-cancel-5",
+          text: "One task done",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: ["task-done-a", "task-done-b"],
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        },
+        null
+      );
+
+      const { taskStore } = await import("../services/task-store.service.js");
+      (taskStore.show as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({ id: "task-done-a", status: "open" })
+        .mockResolvedValueOnce({ id: "task-done-b", status: "closed" });
+
+      await expect(
+        feedbackService.cancelFeedback(projectId, "fb-cancel-5")
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        code: "FEEDBACK_HAS_DONE_TASK",
+        message: expect.stringContaining("at least one linked task is done"),
+      });
+
+      await expect(feedbackService.getFeedback(projectId, "fb-cancel-5")).resolves.toMatchObject({
+        id: "fb-cancel-5",
+        status: "pending",
+      });
+    });
+
+    it("should unregister Analyst agent when one is categorizing this feedback", async () => {
+      const { activeAgentsService } = await import("../services/active-agents.service.js");
+      await feedbackStore.insertFeedback(
+        projectId,
+        {
+          id: "fb-cancel-agent",
+          text: "Cancel while categorizing",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        },
+        null
+      );
+
+      vi.mocked(activeAgentsService.listEntries).mockReturnValueOnce([
+        {
+          id: "feedback-categorize-proj-1-fb-cancel-agent-123",
+          projectId,
+          phase: "eval",
+          role: "analyst",
+          label: "Feedback categorization",
+          startedAt: new Date().toISOString(),
+          feedbackId: "fb-cancel-agent",
+        },
+      ]);
+
+      const result = await feedbackService.cancelFeedback(projectId, "fb-cancel-agent");
+
+      expect(result.status).toBe("cancelled");
+      expect(mockUnregister).toHaveBeenCalledWith("feedback-categorize-proj-1-fb-cancel-agent-123");
     });
   });
 

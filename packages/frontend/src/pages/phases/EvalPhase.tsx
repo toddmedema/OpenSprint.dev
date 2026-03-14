@@ -396,25 +396,21 @@ function partitionFeedbackTreeByPlanReplies(
   return { standaloneTree, planReplyNodesByPlanId };
 }
 
-/** Task columns that indicate feedback is in progress (agent may be working). */
-const IN_PROGRESS_TASK_COLUMNS = ["in_progress", "in_review"] as const;
 const EMPTY_TASK_SUMMARY_BY_ID: Record<string, { kanbanColumn: string }> = {};
 
-/** Show Cancel when feedback is in progress: Analyst has created tasks and an agent may be working. */
+/** Show Cancel when feedback is pending and no linked task is done. Available anytime before any task is done (including no tasks yet, or while categorizing). */
 function canShowCancelButton(
   item: FeedbackItem,
   taskSummaryById: Record<string, { kanbanColumn: string }>
 ): boolean {
   if (item.status !== "pending") return false;
   const taskIds = item.createdTaskIds ?? [];
-  if (taskIds.length === 0) return false;
-  return taskIds.some((tid) => {
+  if (taskIds.length === 0) return true;
+  const hasDoneTask = taskIds.some((tid) => {
     const t = taskSummaryById[tid];
-    if (!t) return false;
-    return IN_PROGRESS_TASK_COLUMNS.includes(
-      t.kanbanColumn as (typeof IN_PROGRESS_TASK_COLUMNS)[number]
-    );
+    return t?.kanbanColumn === "done";
   });
+  return !hasDoneTask;
 }
 
 interface FeedbackCardProps {
@@ -698,6 +694,22 @@ const FeedbackCard = memo(
                       <PriorityIcon priority={item.userPriority} size="sm" />
                       {PRIORITY_LABELS[item.userPriority]}
                     </span>
+                  )}
+                  {canShowCancelButton(item, taskSummaryById) && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onCancel(item.id);
+                      }}
+                      className="float-right ml-2 mb-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium bg-theme-border-subtle text-theme-muted hover:bg-theme-border transition-colors flex-shrink-0"
+                      title="Cancel feedback and delete associated tasks"
+                      aria-label="Cancel"
+                      data-testid="feedback-cancel-button"
+                    >
+                      Cancel
+                    </button>
                   )}
                   <span
                     className="float-right ml-2 mb-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium bg-theme-border-subtle text-theme-muted flex-shrink-0"

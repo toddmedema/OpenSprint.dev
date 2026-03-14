@@ -23,6 +23,8 @@ export const ErrorCodes = {
   /** Cannot change assignee while task is in progress. */
   ASSIGNEE_LOCKED: "ASSIGNEE_LOCKED",
   NO_EPIC: "NO_EPIC",
+  /** Cannot cancel feedback once at least one linked task is done. */
+  FEEDBACK_HAS_DONE_TASK: "FEEDBACK_HAS_DONE_TASK",
   DECOMPOSE_PARSE_FAILED: "DECOMPOSE_PARSE_FAILED",
   DECOMPOSE_JSON_INVALID: "DECOMPOSE_JSON_INVALID",
   DECOMPOSE_EMPTY: "DECOMPOSE_EMPTY",

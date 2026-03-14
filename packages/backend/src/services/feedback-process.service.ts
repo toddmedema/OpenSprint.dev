@@ -55,6 +55,20 @@ async function runCategorization(
     return;
   }
 
+  // If user cancelled feedback while Analyst was running, skip apply so we don't create orphan tasks
+  try {
+    const current = await deps.getFeedback(projectId, item.id);
+    if (current.status !== "pending") {
+      return;
+    }
+  } catch (err) {
+    const code = (err as { code?: string })?.code;
+    if (code === ErrorCodes.FEEDBACK_NOT_FOUND) {
+      return;
+    }
+    throw err;
+  }
+
   await applyCategorizationResult(
     projectId,
     item,

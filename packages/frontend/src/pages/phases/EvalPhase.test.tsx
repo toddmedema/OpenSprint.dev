@@ -2667,8 +2667,8 @@ describe("EvalPhase feedback form", () => {
       await waitFor(() => expect(screen.getByText("Parent with replies")).toBeInTheDocument());
 
       const collapseBtn = screen.getByTestId("collapse-replies-fb-order-parent");
-      const cancelBtn = screen.getByTestId("feedback-cancel-button");
       const actionsRow = collapseBtn.closest("[data-testid='feedback-card-actions-row']");
+      const cancelBtn = within(actionsRow!).getByTestId("feedback-cancel-button");
       expect(actionsRow).toBeInTheDocument();
       const buttons = within(actionsRow!).getAllByRole("button");
       const collapseIdx = buttons.indexOf(collapseBtn);
@@ -3402,7 +3402,7 @@ describe("EvalPhase feedback form", () => {
         expect(screen.getByRole("button", { name: /^Cancel$/ })).toBeInTheDocument();
       });
 
-      it("hides Cancel button when linked tasks are only in backlog or ready", async () => {
+      it("shows Cancel button when linked tasks are only in backlog or ready", async () => {
         const feedbackWithTasks: FeedbackItem[] = [
           {
             id: "fb-cancel-2",
@@ -3431,10 +3431,10 @@ describe("EvalPhase feedback form", () => {
         await waitFor(() => {
           expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
         });
-        expect(screen.queryByTestId("feedback-cancel-button")).not.toBeInTheDocument();
+        expect(screen.getByTestId("feedback-cancel-button")).toBeInTheDocument();
       });
 
-      it("hides Cancel button for feedback with no linked tasks", async () => {
+      it("shows Cancel button for feedback with no linked tasks", async () => {
         const feedbackNoTasks: FeedbackItem[] = [
           {
             id: "fb-cancel-3",
@@ -3459,6 +3459,69 @@ describe("EvalPhase feedback form", () => {
 
         await waitFor(() => {
           expect(screen.getByText("No tasks yet")).toBeInTheDocument();
+        });
+        expect(screen.getByTestId("feedback-cancel-button")).toBeInTheDocument();
+      });
+
+      it("shows Cancel button while feedback is being categorized", async () => {
+        const categorizingFeedback: FeedbackItem[] = [
+          {
+            id: "fb-categorizing",
+            text: "New feedback",
+            category: "bug",
+            mappedPlanId: null,
+            createdTaskIds: [],
+            status: "pending",
+            createdAt: "2024-01-01T00:00:02Z",
+          },
+        ];
+        const store = createStore({ evalFeedback: categorizingFeedback });
+        const queryClient = createQueryClientWithFeedbackPreloaded(categorizingFeedback);
+
+        renderWithProviders(
+          <MemoryRouter>
+            <EvalPhase projectId="proj-1" />
+          </MemoryRouter>,
+          { store, queryClient }
+        );
+
+        await waitFor(() => {
+          expect(screen.getByLabelText("Categorizing feedback")).toBeInTheDocument();
+        });
+        expect(screen.getByTestId("feedback-cancel-button")).toBeInTheDocument();
+      });
+
+      it("hides Cancel button when any linked task is done", async () => {
+        const feedbackWithDoneTask: FeedbackItem[] = [
+          {
+            id: "fb-cancel-done",
+            text: "One task done",
+            category: "bug",
+            mappedPlanId: null,
+            createdTaskIds: ["task-1", "task-2"],
+            status: "pending",
+            createdAt: "2024-01-01T00:00:01Z",
+          },
+        ];
+        const executeTasks: Task[] = [
+          createMockTask({ id: "task-1", kanbanColumn: "in_progress" }),
+          createMockTask({ id: "task-2", kanbanColumn: "done" }),
+        ];
+        const store = createStore({
+          evalFeedback: feedbackWithDoneTask,
+          executeTasks,
+        });
+        const queryClient = createQueryClientWithFeedbackPreloaded(feedbackWithDoneTask);
+
+        renderWithProviders(
+          <MemoryRouter>
+            <EvalPhase projectId="proj-1" />
+          </MemoryRouter>,
+          { store, queryClient }
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
         });
         expect(screen.queryByTestId("feedback-cancel-button")).not.toBeInTheDocument();
       });
