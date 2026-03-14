@@ -132,7 +132,7 @@ describe("PrdChangeLog", () => {
     );
 
     await user.click(screen.getByTestId("compare-to-current"));
-    expect(screen.getByTestId("version-diff-loading")).toBeInTheDocument();
+    expect(await screen.findByTestId("version-diff-loading")).toBeInTheDocument();
 
     await screen.findByTestId("server-diff-view");
     expect(screen.queryByTestId("version-diff-loading")).not.toBeInTheDocument();

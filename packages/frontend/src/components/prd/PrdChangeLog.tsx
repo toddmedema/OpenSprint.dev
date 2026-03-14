@@ -116,7 +116,10 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
                   {entry.documentVersion != null && (
                     <button
                       type="button"
-                      onClick={() => setDiffModalFromVersion(entry.documentVersion!)}
+                      onClick={() => {
+                        setDiffLoading(true);
+                        setDiffModalFromVersion(entry.documentVersion!);
+                      }}
                       className="text-theme-accent hover:underline shrink-0"
                       data-testid="compare-to-current"
                     >
