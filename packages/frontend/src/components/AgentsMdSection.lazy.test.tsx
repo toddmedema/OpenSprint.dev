@@ -1,14 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ThemeProvider } from "../contexts/ThemeContext";
-import { AgentsMdSection } from "./AgentsMdSection";
 
 const mockGetAgentsInstructions = vi.fn();
 const mockUpdateAgentsInstructions = vi.fn();
 
 const mockGetAgentsInstructionsForRole = vi.fn();
 const mockUpdateAgentsInstructionsForRole = vi.fn();
+let resolveMDEditorImport: (() => void) | null = null;
 
 vi.mock("../api/client", () => ({
   api: {
@@ -43,7 +42,7 @@ vi.mock("@uiw/react-md-editor", () => {
     </div>
   );
   return new Promise<{ default: typeof MockMDEditor }>((resolve) => {
-    setTimeout(() => resolve({ default: MockMDEditor }), 50);
+    resolveMDEditorImport = () => resolve({ default: MockMDEditor });
   });
 });
 
@@ -51,7 +50,9 @@ describe("AgentsMdSection lazy-loading", () => {
   const projectId = "proj-1";
 
   beforeEach(() => {
+    vi.resetModules();
     vi.clearAllMocks();
+    resolveMDEditorImport = null;
     vi.stubGlobal(
       "matchMedia",
       vi.fn(() => ({
@@ -66,31 +67,50 @@ describe("AgentsMdSection lazy-loading", () => {
     mockUpdateAgentsInstructions.mockResolvedValue({ saved: true });
   });
 
-  it("shows Loading editor... while MDEditor chunk is loading", async () => {
-    const user = userEvent.setup();
-    render(
+  async function renderSection() {
+    const [{ ThemeProvider }, { AgentsMdSection }] = await Promise.all([
+      import("../contexts/ThemeContext"),
+      import("./AgentsMdSection"),
+    ]);
+
+    return render(
       <ThemeProvider>
         <AgentsMdSection projectId={projectId} />
       </ThemeProvider>
     );
+  }
+
+  it("shows Loading editor... while MDEditor chunk is loading", async () => {
+    const user = userEvent.setup();
+    await renderSection();
 
     await screen.findByTestId("agents-md-view");
     await user.click(screen.getByTestId("agents-md-edit"));
 
-    expect(screen.getByTestId("agents-md-editor-loading")).toBeInTheDocument();
+    expect(resolveMDEditorImport).not.toBeNull();
+    expect(await screen.findByTestId("agents-md-editor-loading")).toBeInTheDocument();
     expect(screen.getByText("Loading editor...")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveMDEditorImport?.();
+      await Promise.resolve();
+    });
+    await screen.findByTestId("mock-md-editor");
   });
 
   it("shows editor after lazy load completes", async () => {
     const user = userEvent.setup();
-    render(
-      <ThemeProvider>
-        <AgentsMdSection projectId={projectId} />
-      </ThemeProvider>
-    );
+    await renderSection();
 
     await screen.findByTestId("agents-md-view");
     await user.click(screen.getByTestId("agents-md-edit"));
+
+    if (resolveMDEditorImport) {
+      await act(async () => {
+        resolveMDEditorImport?.();
+        await Promise.resolve();
+      });
+    }
 
     expect(await screen.findByTestId("mock-md-editor")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /bold/i })).toBeInTheDocument();
