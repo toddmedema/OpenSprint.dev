@@ -148,6 +148,25 @@ export class TaskStorePlanAuditorSIFacade {
     });
   }
 
+  async planVersionUpdateContent(
+    projectId: string,
+    planId: string,
+    versionNumber: number,
+    content: string,
+    title?: string | null
+  ): Promise<void> {
+    return this.deps.withWriteLock(async () => {
+      await this.deps.ensureInitialized();
+      await this.deps.planVersionStore.updateContent(
+        projectId,
+        planId,
+        versionNumber,
+        content,
+        title
+      );
+    });
+  }
+
   async planVersionSetExecutedVersion(
     projectId: string,
     planId: string,

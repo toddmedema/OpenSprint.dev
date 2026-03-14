@@ -26,6 +26,13 @@ export interface PlanVersioningStore {
     metadata: string;
     is_executed_version?: boolean;
   }): Promise<unknown>;
+  planVersionUpdateContent(
+    projectId: string,
+    planId: string,
+    versionNumber: number,
+    content: string,
+    title?: string | null
+  ): Promise<void>;
   planVersionGetByVersionNumber(
     projectId: string,
     planId: string,
@@ -68,7 +75,28 @@ export async function ensurePlanHasAtLeastOneVersion(
 }
 
 /**
- * Create a new plan version for an update. If no versions exist, creates v1 from current row content, then creates nextVersion from newContent.
+ * Update the current plan version in place (no new version). Use when the current version has no tasks yet.
+ * Rule: create a new plan version only when the current version already has ≥1 task; otherwise modify in place.
+ * Ensures at least one version exists, then updates that version's content/title. Returns the version number (unchanged).
+ * Caller must call store.planUpdateContent(projectId, planId, newContent, versionNumber).
+ */
+export async function updateCurrentVersionInPlace(
+  projectId: string,
+  planId: string,
+  row: PlanVersioningRow,
+  newContent: string,
+  store: PlanVersioningStore
+): Promise<number> {
+  await ensurePlanHasAtLeastOneVersion(projectId, planId, store);
+  const versionNumber = row.current_version_number ?? 1;
+  const title = titleFromFirstHeading(newContent) ?? null;
+  await store.planVersionUpdateContent(projectId, planId, versionNumber, newContent, title);
+  return versionNumber;
+}
+
+/**
+ * Create a new plan version for an update. Use only when the current version already has ≥1 task (otherwise caller should use updateCurrentVersionInPlace).
+ * If no versions exist, creates v1 from current row content, then creates nextVersion from newContent.
  * Returns the version number that was written for newContent. Caller must call store.planUpdateContent(projectId, planId, newContent, nextVersion).
  */
 export async function createVersionOnUpdate(

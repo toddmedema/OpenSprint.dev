@@ -685,7 +685,7 @@ export class ChatService {
       const stripped = this.stripPlanUpdate(responseContent).trim();
       // When response is only PLAN_UPDATE, show "Plan updated" instead of full plan content
       displayContent = stripped ? stripped : planUpdateContent ? "Plan updated" : responseContent;
-      // Return planUpdate so client can PATCH plan (creates new version + syncs tasks)
+      // Return planUpdate so client can PATCH plan (versioning: new version only if plan has tasks, else in-place; syncs tasks)
       if (planUpdateContent) {
         planUpdate = planUpdateContent;
       }

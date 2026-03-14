@@ -55,6 +55,10 @@ Schema is applied on init via `runSchema` in `packages/backend/src/db/schema.ts`
 - When the user clicks "Execute!", the orchestrator sets the epic to `status: "open"` via `TaskStoreService.update`, making child tasks eligible for execution.
 - Tasks in `ready()` must have: status=`open`, not an epic, and all `blocks` dependencies closed. Tasks whose epic is blocked are excluded.
 
+### Plan versioning
+
+- When the user (or planner agent) updates a plan's markdown: if the **current plan version has no tasks yet**, the backend **updates that version in place**. If the current version **already has one or more tasks**, the backend **creates a new plan version** for the update. The planner does not need to choose; the backend applies this rule on each save.
+
 ---
 
 ## Glossary (docs/glossary.md)

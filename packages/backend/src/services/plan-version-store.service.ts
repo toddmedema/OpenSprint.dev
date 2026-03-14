@@ -147,6 +147,24 @@ export class PlanVersionStore {
     return rowToStored(row as Record<string, unknown>);
   }
 
+  /** Update content and title of an existing plan version (in-place update). */
+  async updateContent(
+    projectId: string,
+    planId: string,
+    versionNumber: number,
+    content: string,
+    title?: string | null
+  ): Promise<void> {
+    const client = this.getClient();
+    const titleVal = title ?? null;
+    await client.execute(
+      toPgParams(
+        `UPDATE plan_versions SET content = ?, title = ? WHERE project_id = ? AND plan_id = ? AND version_number = ?`
+      ),
+      [content, titleVal, projectId, planId, versionNumber]
+    );
+  }
+
   /** Set is_executed_version=true for the given version and false for all other versions of the same plan. */
   async setExecutedVersion(
     projectId: string,

@@ -276,6 +276,33 @@ mockPlanVersionInsert.mockImplementation(
   }
 );
 
+const mockPlanVersionUpdateContent = vi.fn().mockImplementation(
+  async (
+    projectId: string,
+    planId: string,
+    versionNumber: number,
+    content: string,
+    title?: string | null
+  ) => {
+    const key = `${projectId}:${planId}`;
+    const list = mockPlanVersionsByKey.get(key);
+    if (list) {
+      const v = list.find((x) => x.version_number === versionNumber);
+      if (v) {
+        v.content = content;
+        v.title = title ?? null;
+      }
+    }
+    const proj = mockPlanVersionsStore.get(projectId);
+    const storeList = proj?.get(planId) ?? [];
+    const entry = storeList.find((x: { version_number: number }) => x.version_number === versionNumber);
+    if (entry) {
+      entry.content = content;
+      entry.title = title ?? null;
+    }
+  }
+);
+
 const mockPlanVersionSetExecutedVersion = vi.fn().mockResolvedValue(undefined);
 
 const mockPlanUpdateVersionNumbers = vi
@@ -335,6 +362,7 @@ vi.mock("../services/task-store.service.js", () => {
     planUpdateContent: (...args: unknown[]) => mockPlanUpdateContent(...args),
     listPlanVersions: (...args: unknown[]) => mockListPlanVersions(...args),
     planVersionInsert: (...args: unknown[]) => mockPlanVersionInsert(...args),
+    planVersionUpdateContent: (...args: unknown[]) => mockPlanVersionUpdateContent(...args),
     planUpdateMetadata: (...args: unknown[]) => mockPlanUpdateMetadata(...args),
     planSetShippedContent: (...args: unknown[]) => mockPlanSetShippedContent(...args),
     planGetShippedContent: (...args: unknown[]) => mockPlanGetShippedContent(...args),
@@ -2091,13 +2119,36 @@ describe("PlanService createWithRetry usage", () => {
     expect(plan.lastExecutedVersionNumber).toBe(2);
   });
 
-  it("updatePlan creates new plan version on each save; two saves yield three versions", async () => {
+  it("updatePlan with no tasks updates in place; two saves yield one version", async () => {
+    mockTaskStoreListAll.mockResolvedValue([]);
     const plan = await planService.createPlan(projectId, {
       title: "V Plan",
       content: "# V Plan\n\nInitial.",
       complexity: "low",
     });
     const planId = plan.metadata.planId as string;
+    await planService.updatePlan(projectId, planId, { content: "# V Plan\n\nFirst save." });
+    await planService.updatePlan(projectId, planId, { content: "# V Plan\n\nSecond save." });
+    const versions = await mockListPlanVersions(projectId, planId);
+    expect(versions).toHaveLength(1);
+    expect(versions[0].version_number).toBe(1);
+    const after = await planService.getPlan(projectId, planId);
+    expect(after.currentVersionNumber).toBe(1);
+    expect(after.content).toBe("# V Plan\n\nSecond save.");
+    expect(after.lastExecutedVersionNumber).toBeUndefined();
+  });
+
+  it("updatePlan with tasks creates new plan version on each save; two saves yield three versions", async () => {
+    const plan = await planService.createPlan(projectId, {
+      title: "V Plan",
+      content: "# V Plan\n\nInitial.",
+      complexity: "low",
+    });
+    const planId = plan.metadata.planId as string;
+    const epicId = plan.metadata.epicId as string;
+    mockTaskStoreListAll.mockResolvedValue([
+      { id: `${epicId}.1`, issue_type: "task", status: "open", title: "A task" },
+    ]);
     await planService.updatePlan(projectId, planId, { content: "# V Plan\n\nFirst save." });
     await planService.updatePlan(projectId, planId, { content: "# V Plan\n\nSecond save." });
     const versions = await mockListPlanVersions(projectId, planId);
@@ -2111,6 +2162,7 @@ describe("PlanService createWithRetry usage", () => {
   });
 
   it("updatePlan leaves last_executed_version_number unchanged", async () => {
+    mockTaskStoreListAll.mockResolvedValue([]);
     const plan = await planService.createPlan(projectId, {
       title: "Executed Plan",
       content: "# Executed Plan\n\nInitial.",
@@ -2124,7 +2176,7 @@ describe("PlanService createWithRetry usage", () => {
 
     await planService.updatePlan(projectId, planId, { content: "# Executed Plan\n\nEdited." });
     const after = await planService.getPlan(projectId, planId);
-    expect(after.currentVersionNumber).toBe(2);
+    expect(after.currentVersionNumber).toBe(1);
     expect(after.lastExecutedVersionNumber).toBe(2);
   });
 

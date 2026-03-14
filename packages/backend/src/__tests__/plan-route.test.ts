@@ -419,7 +419,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
     }
   );
 
-  it("PUT /projects/:id/plans/:planId creates new plan version on each save; list versions returns incremented count", async () => {
+  it("PUT /projects/:id/plans/:planId with no tasks updates in place; list versions returns one version", async () => {
     const planBody = {
       title: "Versioned Feature",
       content: "# Versioned Feature\n\n## Overview\n\nInitial content.",
@@ -430,6 +430,38 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       .send(planBody);
     expect(createRes.status).toBe(201);
     const planId = createRes.body.data.metadata.planId;
+
+    await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
+      .send({ content: "# Versioned Feature\n\n## Overview\n\nFirst save." });
+    await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
+      .send({ content: "# Versioned Feature\n\n## Overview\n\nSecond save." });
+
+    const versionsRes = await request(app).get(
+      `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
+    );
+    expect(versionsRes.status).toBe(200);
+    expect(versionsRes.body.data.versions).toHaveLength(1);
+    expect(versionsRes.body.data.versions[0].version_number).toBe(1);
+  });
+
+  it("PUT /projects/:id/plans/:planId with tasks creates new plan version on each save; list versions returns three", async () => {
+    const planBody = {
+      title: "Versioned Feature",
+      content: "# Versioned Feature\n\n## Overview\n\nInitial content.",
+      complexity: "low",
+    };
+    const createRes = await request(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send(planBody);
+    expect(createRes.status).toBe(201);
+    const planId = createRes.body.data.metadata.planId;
+    const epicId = createRes.body.data.metadata.epicId as string;
+    await taskStore.create(projectId, "A task under the plan", {
+      type: "task",
+      parentId: epicId,
+    });
 
     await request(app)
       .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)

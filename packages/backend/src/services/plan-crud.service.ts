@@ -26,6 +26,7 @@ import {
 import {
   ensurePlanHasAtLeastOneVersion as ensurePlanHasAtLeastOneVersionFn,
   createVersionOnUpdate,
+  updateCurrentVersionInPlace,
   type PlanVersioningStore,
 } from "./plan-versioning.service.js";
 import { syncPlanTasksFromContent } from "./plan-task-sync.service.js";
@@ -459,7 +460,7 @@ export class PlanCrudService {
     return plan;
   }
 
-  /** Update a Plan's markdown. Creates a new plan version on each save. */
+  /** Update a Plan's markdown. Creates a new plan version only when the current version already has tasks; otherwise updates in place. */
   async updatePlan(projectId: string, planId: string, body: { content: string }): Promise<Plan> {
     const row = await this.taskStore.planGet(projectId, planId);
     if (!row) {
@@ -468,17 +469,32 @@ export class PlanCrudService {
       });
     }
 
-    const nextVersion = await createVersionOnUpdate(
-      projectId,
-      planId,
-      {
-        content: row.content,
-        metadata: row.metadata,
-        current_version_number: row.current_version_number,
-      },
-      body.content,
-      this.taskStore
-    );
+    const epicId = (row.metadata?.epicId as string) ?? "";
+    const { total: taskCount } = epicId
+      ? await this.countTasks(projectId, epicId)
+      : { total: 0 };
+    const versioningRow = {
+      content: row.content,
+      metadata: row.metadata,
+      current_version_number: row.current_version_number,
+    };
+
+    const nextVersion =
+      taskCount > 0
+        ? await createVersionOnUpdate(
+            projectId,
+            planId,
+            versioningRow,
+            body.content,
+            this.taskStore
+          )
+        : await updateCurrentVersionInPlace(
+            projectId,
+            planId,
+            versioningRow,
+            body.content,
+            this.taskStore
+          );
 
     await this.taskStore.planUpdateContent(projectId, planId, body.content, nextVersion);
 

@@ -181,4 +181,19 @@ describe("PlanVersionStore", () => {
       code: "PLAN_VERSION_NOT_FOUND",
     });
   });
+
+  it("updateContent runs UPDATE with content and title", async () => {
+    const client = createDbClient();
+    client.execute.mockResolvedValue(1);
+    const store = new PlanVersionStore(() => client);
+
+    await store.updateContent("proj-1", "plan-1", 1, "# New content\n\nBody.", "New title");
+
+    expect(client.execute).toHaveBeenCalledTimes(1);
+    const [sql, params] = client.execute.mock.calls[0] as [string, unknown[]];
+    expect(String(sql)).toContain("UPDATE plan_versions");
+    expect(String(sql)).toContain("content = ");
+    expect(String(sql)).toContain("title = ");
+    expect(params).toEqual(["# New content\n\nBody.", "New title", "proj-1", "plan-1", 1]);
+  });
 });

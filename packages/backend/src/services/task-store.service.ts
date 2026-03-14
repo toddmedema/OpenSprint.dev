@@ -1398,6 +1398,22 @@ export class TaskStoreService {
     return this.planAuditorSIFacade.planVersionInsert(data);
   }
 
+  async planVersionUpdateContent(
+    projectId: string,
+    planId: string,
+    versionNumber: number,
+    content: string,
+    title?: string | null
+  ): Promise<void> {
+    return this.planAuditorSIFacade.planVersionUpdateContent(
+      projectId,
+      planId,
+      versionNumber,
+      content,
+      title
+    );
+  }
+
   async planVersionSetExecutedVersion(
     projectId: string,
     planId: string,

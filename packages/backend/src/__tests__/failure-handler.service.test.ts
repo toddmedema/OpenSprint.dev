@@ -8,6 +8,16 @@ import {
 import { eventLogService } from "../services/event-log.service.js";
 import { notificationService } from "../services/notification.service.js";
 
+// Silence failure-handler logger so expected log.error() calls don't write to stderr and fail CI
+vi.mock("../utils/logger.js", () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  }),
+}));
+
 vi.mock("../services/event-log.service.js", () => ({
   eventLogService: { append: vi.fn().mockResolvedValue(undefined) },
 }));
