@@ -1407,6 +1407,24 @@ export class BranchManager {
     const wtPath = actualPath ?? this.getWorktreePath(worktreeKey);
     const registeredPath = await this.resolveRegisteredWorktreePath(repoPath, worktreeKey, wtPath);
     if (!registeredPath) {
+      // Use same resolution as validateDisposableWorktreePath (realpath) so we
+      // consistently detect repo root and return early on all platforms (e.g. macOS
+      // /var vs /private/var); avoid calling removeWorktreeDirectorySafely which
+      // would log.error when path-safety rejects the same path.
+      const resolvedRepo = await fs.realpath(repoPath).catch(() => path.resolve(repoPath));
+      const resolvedCandidate = await fs.realpath(wtPath).catch(() => path.resolve(wtPath));
+      // Normalize both to canonical form so we detect repo root when one path came from
+      // path.resolve fallback (e.g. /var/...) and the other from realpath (/private/var/...).
+      const normRepo = await fs.realpath(resolvedRepo).catch(() => resolvedRepo);
+      const normCandidate = await fs.realpath(resolvedCandidate).catch(() => resolvedCandidate);
+      if (normRepo === normCandidate) {
+        log.warn("Refusing unsafe worktree cleanup target (repo root)", {
+          taskId: worktreeKey,
+          candidatePath: wtPath,
+          err: "Refusing to treat the repository root as a disposable worktree",
+        });
+        return;
+      }
       await this.removeWorktreeDirectorySafely(
         repoPath,
         worktreeKey,

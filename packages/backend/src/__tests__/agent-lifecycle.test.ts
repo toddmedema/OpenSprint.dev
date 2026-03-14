@@ -238,14 +238,16 @@ describe("AgentLifecycleManager", () => {
         "utf-8"
       );
 
-      await vi.advanceTimersByTimeAsync(1_200);
+      await vi.advanceTimersByTimeAsync(600);
+      // Timer callback started fs.readFile (real I/O); yield so it and its .then() run
+      vi.useRealTimers();
+      await new Promise((r) => setTimeout(r, 50));
 
       expect(handle.kill).toHaveBeenCalledTimes(1);
       expect(onDone).toHaveBeenCalledWith(0);
       expect(runState.activeProcess).toBeNull();
       expect(runState.exitHandled).toBe(true);
       expect(mockDeleteHeartbeat).toHaveBeenCalledWith(tmpDir, "task-1", undefined);
-      vi.useRealTimers();
     });
 
     it("does not timeout while a shell tool call is still active", async () => {
