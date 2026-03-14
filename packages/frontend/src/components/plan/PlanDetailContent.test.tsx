@@ -83,6 +83,22 @@ describe("PlanDetailContent", () => {
     expect(screen.getByTestId("body-markdown")).toHaveTextContent("Implement the Plan phase.");
   });
 
+  it("hides markdown Mockup(s) section when plan has structured metadata.mockups to avoid duplicate sections", () => {
+    const planWithMockups: Plan = {
+      ...mockPlan,
+      content:
+        "# My Plan\n\n## Overview\n\nSummary.\n\n## Mockup\n\nASCII wireframe here.",
+      metadata: {
+        ...mockPlan.metadata,
+        mockups: [{ title: "Screen 1", content: "wireframe content" }],
+      },
+    };
+    render(<PlanDetailContent plan={planWithMockups} onContentSave={onContentSave} />);
+    expect(screen.getByRole("button", { name: /overview/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /expand mockup/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /collapse mockup/i })).not.toBeInTheDocument();
+  });
+
   it("calls onContentSave when title is changed and blurred", async () => {
     const user = userEvent.setup();
     render(<PlanDetailContent plan={mockPlan} onContentSave={onContentSave} />);

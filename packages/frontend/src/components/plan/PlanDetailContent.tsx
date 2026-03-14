@@ -178,6 +178,19 @@ export function PlanDetailContent({
     [viewBody]
   );
 
+  /** When structured mockups exist in metadata, hide the markdown "Mockup(s)" section to avoid duplicate sections. */
+  const sectionsToRender = useMemo(() => {
+    const hasStructuredMockups =
+      plan.metadata.mockups && plan.metadata.mockups.length > 0;
+    if (!hasStructuredMockups) return sections.map((s, i) => ({ section: s, originalIndex: i }));
+    return sections
+      .map((s, i) => ({ section: s, originalIndex: i }))
+      .filter(({ section: s }) => {
+        const t = s.title.trim().toLowerCase();
+        return t !== "mockup" && t !== "mockups";
+      });
+  }, [sections, plan.metadata.mockups]);
+
   const [sectionExpanded, setSectionExpanded] = useState<Record<number, boolean>>(() => ({}));
   const setSectionExpandedAt = useCallback((index: number, expanded: boolean) => {
     setSectionExpanded((prev) => ({ ...prev, [index]: expanded }));
@@ -292,16 +305,18 @@ export function PlanDetailContent({
           Loading version…
         </div>
       ) : (
-        sections.map((section, index) => (
+        sectionsToRender.map(({ section, originalIndex }) => (
           <CollapsibleSection
-            key={`${section.title}-${index}`}
+            key={`${section.title}-${originalIndex}`}
             title={section.title}
-            expanded={sectionExpanded[index] ?? true}
-            onToggle={() => setSectionExpandedAt(index, !(sectionExpanded[index] ?? true))}
+            expanded={sectionExpanded[originalIndex] ?? true}
+            onToggle={() =>
+              setSectionExpandedAt(originalIndex, !(sectionExpanded[originalIndex] ?? true))
+            }
             expandAriaLabel={`Expand ${section.title}`}
             collapseAriaLabel={`Collapse ${section.title}`}
-            contentId={`plan-section-${index}-content`}
-            headerId={`plan-section-${index}-header`}
+            contentId={`plan-section-${originalIndex}-content`}
+            headerId={`plan-section-${originalIndex}-header`}
             contentClassName="p-4 pt-0"
           >
             <div
@@ -309,10 +324,13 @@ export function PlanDetailContent({
               className="prose prose-sm max-w-none text-theme-text text-xs [&>div>:first-child]:!mt-0"
             >
               <PrdSectionEditor
-                sectionKey={`plan-section-${index}`}
+                sectionKey={`plan-section-${originalIndex}`}
                 markdown={section.content || "_No content yet_"}
                 onSave={(_key, md) =>
-                  handleSectionSave(index, !md || md === "_No content yet_" ? "" : md)
+                  handleSectionSave(
+                    originalIndex,
+                    !md || md === "_No content yet_" ? "" : md
+                  )
                 }
                 disabled={isReadOnly}
                 lightMode
