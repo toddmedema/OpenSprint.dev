@@ -1061,6 +1061,29 @@ describe("OrchestratorService (slot-based model)", () => {
       }
     });
 
+    it("finds the first meaningful error line even when it appears after long passing output", async () => {
+      const previousNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = "development";
+      try {
+        const longPassingOutput = `${"✓ passing test\n".repeat(400)}AssertionError: expected 401 to be 403`;
+        mockShellExec.mockRejectedValueOnce({
+          message: "Command failed: npm run test",
+          stdout: longPassingOutput,
+          stderr: "",
+        });
+
+        const failure = await runMergeQualityGates();
+
+        expect(failure).toMatchObject({
+          command: "npm run lint",
+          category: "quality_gate",
+          firstErrorLine: "AssertionError: expected 401 to be 403",
+        });
+      } finally {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+    });
+
     it("runs one env auto-repair and continues gates when retry succeeds", async () => {
       const previousNodeEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = "development";

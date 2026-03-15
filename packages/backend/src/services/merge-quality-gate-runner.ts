@@ -80,18 +80,18 @@ function extractShellFailure(
   err: unknown
 ): { reason: string; output: string; firstErrorLine: string } {
   const e = err as { stdout?: string; stderr?: string; message?: string };
-  const output = [e.stdout ?? "", e.stderr ?? ""]
+  const rawOutput = [e.stdout ?? "", e.stderr ?? ""]
     .filter((part) => part.trim().length > 0)
     .join("\n")
-    .trim()
-    .slice(0, QUALITY_GATE_FAILURE_OUTPUT_LIMIT);
+    .trim();
+  const output = rawOutput.slice(0, QUALITY_GATE_FAILURE_OUTPUT_LIMIT);
   const reason = (e.message ?? `Command failed: ${command}`).slice(
     0,
     QUALITY_GATE_FAILURE_REASON_LIMIT
   );
   const firstErrorLine =
-    getFirstMeaningfulErrorLine(output) ??
-    getFirstNonEmptyLine(output) ??
+    getFirstMeaningfulErrorLine(rawOutput) ??
+    getFirstNonEmptyLine(rawOutput) ??
     getFirstNonEmptyLine(reason) ??
     "Unknown quality gate failure";
   return { reason, output, firstErrorLine };

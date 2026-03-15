@@ -530,6 +530,26 @@ export class ContextAssembler {
       prompt += `## Previous Attempt\n\n`;
       prompt += `This is attempt ${config.attempt}. The previous attempt failed:\n${config.previousFailure}\n\n`;
 
+      if (config.qualityGateDetail) {
+        const detail = config.qualityGateDetail;
+        prompt += `### Quality Gate Failure\n\n`;
+        if (detail.command) {
+          prompt += `Failed command: \`${detail.command}\`\n\n`;
+        }
+        if (detail.firstErrorLine) {
+          prompt += `First actionable error:\n\`${detail.firstErrorLine}\`\n\n`;
+        } else if (detail.reason) {
+          prompt += `Failure reason:\n\`${detail.reason}\`\n\n`;
+        }
+        if (detail.outputSnippet) {
+          prompt += `Condensed gate output:\n\n\`\`\`\n${detail.outputSnippet.slice(0, 2000)}\n\`\`\`\n\n`;
+        }
+        if (detail.worktreePath) {
+          prompt += `Gate worktree: \`${detail.worktreePath}\`\n\n`;
+        }
+        prompt += `Fix the merge-gate failure directly before reporting success.\n\n`;
+      }
+
       if (config.previousTestOutput) {
         if (config.previousTestFailures?.trim()) {
           prompt += `### Highlighted Test Failures\n\n${config.previousTestFailures.trim()}\n\n`;

@@ -31,7 +31,10 @@ import { createLogger } from "../utils/logger.js";
 import { buildTaskLastExecutionSummary, compactExecutionText } from "./task-execution-summary.js";
 import { inspectGitRepoState, resolveBaseBranch } from "../utils/git-repo-state.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
-import type { RetryContext } from "./orchestrator-phase-context.js";
+import type {
+  RetryContext,
+  RetryQualityGateDetail,
+} from "./orchestrator-phase-context.js";
 
 const log = createLogger("merge-coordinator");
 const _MAX_PUSH_REBASE_RESOLUTION_ROUNDS = 12;
@@ -290,18 +293,36 @@ export class MergeCoordinatorService {
   private buildRetryContextForMergeFailure(
     stage: MergeFailureStage,
     mergeFailureReason: string,
-    failureTypeOverride?: RetryContext["failureType"]
+    failureTypeOverride?: RetryContext["failureType"],
+    qualityGateDetail?: RetryQualityGateDetail | null
   ): RetryContext {
     const stageLabel = stage === "quality_gate" ? "pre-merge quality gate" : "merge";
+    const detailSummary =
+      stage === "quality_gate" && qualityGateDetail
+        ? [
+            qualityGateDetail.command ? `cmd: ${qualityGateDetail.command}` : null,
+            qualityGateDetail.firstErrorLine
+              ? `error: ${qualityGateDetail.firstErrorLine}`
+              : qualityGateDetail.reason
+                ? `reason: ${qualityGateDetail.reason}`
+                : null,
+          ]
+            .filter((part): part is string => part != null && part.trim().length > 0)
+            .join(" | ")
+        : "";
     const previousFailure = compactExecutionText(
-      `${stageLabel} failed: ${mergeFailureReason}`,
+      `${stageLabel} failed: ${mergeFailureReason}${detailSummary ? ` (${detailSummary})` : ""}`,
       MERGE_RETRY_CONTEXT_FAILURE_LIMIT
     );
-    return {
+    const retryContext: RetryContext = {
       previousFailure,
       failureType:
         failureTypeOverride ?? (stage === "quality_gate" ? "coding_failure" : "merge_conflict"),
     };
+    if (stage === "quality_gate" && qualityGateDetail) {
+      retryContext.qualityGateDetail = qualityGateDetail;
+    }
+    return retryContext;
   }
 
   private getFirstNonEmptyLine(text: string): string | null {
@@ -639,11 +660,12 @@ export class MergeCoordinatorService {
     });
     const retryContext: RetryContext = {
       previousFailure: compactExecutionText(
-        `baseline quality gates failed on ${baseBranch}: ${failure.reason}`,
+        `baseline quality gates failed on ${baseBranch}: ${failure.reason} (cmd: ${failure.command} | error: ${firstErrorLine})`,
         MERGE_RETRY_CONTEXT_FAILURE_LIMIT
       ),
       failureType: isEnvironmentSetupFailure ? "environment_setup" : "coding_failure",
     };
+    retryContext.qualityGateDetail = qualityGateDetail;
 
     await this.host.taskStore.setMergeStage(projectId, task.id, "quality_gate");
     await this.host.taskStore.update(projectId, task.id, {
@@ -1158,7 +1180,8 @@ export class MergeCoordinatorService {
       const retryContext = this.buildRetryContextForMergeFailure(
         normalizedStage,
         mergeFailureReason,
-        isEnvironmentSetupQualityGateFailure ? "environment_setup" : undefined
+        isEnvironmentSetupQualityGateFailure ? "environment_setup" : undefined,
+        qualityGateStructuredDetails.qualityGateDetail
       );
 
       const maxMergeFailures = BACKOFF_FAILURE_THRESHOLD * 2;

@@ -17,6 +17,14 @@ export type FailureType =
   | "merge_conflict"
   | "coding_failure";
 
+export interface RetryQualityGateDetail {
+  command?: string | null;
+  reason?: string | null;
+  outputSnippet?: string | null;
+  worktreePath?: string | null;
+  firstErrorLine?: string | null;
+}
+
 export interface RetryContext {
   previousFailure?: string;
   reviewFeedback?: string;
@@ -24,6 +32,7 @@ export interface RetryContext {
   previousTestOutput?: string;
   previousTestFailures?: string;
   previousDiff?: string;
+  qualityGateDetail?: RetryQualityGateDetail;
   failureType?: FailureType;
 }
 

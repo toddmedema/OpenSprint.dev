@@ -187,6 +187,14 @@ export interface ActiveTaskConfig {
   previousTestFailures?: string | null;
   /** Git diff from the previous attempt (when branch was preserved) */
   previousDiff?: string | null;
+  /** Structured quality-gate diagnostics from the previous merge attempt, when available */
+  qualityGateDetail?: {
+    command?: string | null;
+    reason?: string | null;
+    outputSnippet?: string | null;
+    worktreePath?: string | null;
+    firstErrorLine?: string | null;
+  } | null;
   /** Whether this retry reuses an existing branch with prior commits */
   useExistingBranch?: boolean;
   /** Human-in-the-loop config: agents use this to know when to ask (confirm all vs major only vs full autonomy) */

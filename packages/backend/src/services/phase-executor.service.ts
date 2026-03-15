@@ -245,6 +245,7 @@ export class PhaseExecutorService {
         previousTestOutput: retryContext?.previousTestOutput ?? null,
         previousTestFailures: retryContext?.previousTestFailures ?? null,
         previousDiff: retryContext?.previousDiff ?? null,
+        qualityGateDetail: retryContext?.qualityGateDetail ?? null,
         useExistingBranch: retryContext?.useExistingBranch ?? false,
         hilConfig: settings.hilConfig,
         aiAutonomyLevel: settings.aiAutonomyLevel,

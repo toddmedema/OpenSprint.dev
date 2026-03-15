@@ -6,7 +6,11 @@
 import { getAgentName } from "@opensprint/shared";
 import type { StoredTask } from "./task-store.service.js";
 import { resolveEpicId } from "./task-store.service.js";
-import type { FailureType, RetryContext } from "./orchestrator-phase-context.js";
+import type {
+  FailureType,
+  RetryContext,
+  RetryQualityGateDetail,
+} from "./orchestrator-phase-context.js";
 import { resolveBaseBranch } from "../utils/git-repo-state.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -28,6 +32,61 @@ const FAILURE_TYPES: FailureType[] = [
   "merge_conflict",
   "coding_failure",
 ];
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() !== "" ? value : undefined;
+}
+
+function extractQualityGateDetail(value: unknown): RetryQualityGateDetail | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  const command = nonEmptyString(record.command);
+  const reason = nonEmptyString(record.reason);
+  const outputSnippet = nonEmptyString(record.outputSnippet);
+  const worktreePath = nonEmptyString(record.worktreePath);
+  const firstErrorLine = nonEmptyString(record.firstErrorLine);
+  if (!command && !reason && !outputSnippet && !worktreePath && !firstErrorLine) {
+    return undefined;
+  }
+  return {
+    command: command ?? null,
+    reason: reason ?? null,
+    outputSnippet: outputSnippet ?? null,
+    worktreePath: worktreePath ?? null,
+    firstErrorLine: firstErrorLine ?? null,
+  };
+}
+
+function extractQualityGateDetailFromTask(task: StoredTask): RetryQualityGateDetail | undefined {
+  const record = task as Record<string, unknown>;
+  const nested = extractQualityGateDetail(record.qualityGateDetail);
+  const command = nonEmptyString(record.failedGateCommand) ?? nested?.command ?? undefined;
+  const reason = nonEmptyString(record.failedGateReason) ?? nested?.reason ?? undefined;
+  const outputSnippet =
+    nonEmptyString(record.failedGateOutputSnippet) ?? nested?.outputSnippet ?? undefined;
+  const worktreePath = nonEmptyString(record.worktreePath) ?? nested?.worktreePath ?? undefined;
+  const firstErrorLine =
+    nonEmptyString(record.qualityGateFirstErrorLine) ??
+    nonEmptyString(record.firstErrorLine) ??
+    nested?.firstErrorLine ??
+    undefined;
+
+  if (!command && !reason && !outputSnippet && !worktreePath && !firstErrorLine) {
+    return undefined;
+  }
+
+  return {
+    command: command ?? null,
+    reason: reason ?? null,
+    outputSnippet: outputSnippet ?? null,
+    worktreePath: worktreePath ?? null,
+    firstErrorLine: firstErrorLine ?? null,
+  };
+}
 
 function extractRetryContext(task: StoredTask): RetryContext | undefined {
   const raw = (task as Record<string, unknown>)[NEXT_RETRY_CONTEXT_KEY];
@@ -51,6 +110,11 @@ function extractRetryContext(task: StoredTask): RetryContext | undefined {
   }
   if (typeof record.previousDiff === "string" && record.previousDiff.trim() !== "") {
     retryContext.previousDiff = record.previousDiff;
+  }
+  const qualityGateDetail =
+    extractQualityGateDetail(record.qualityGateDetail) ?? extractQualityGateDetailFromTask(task);
+  if (qualityGateDetail) {
+    retryContext.qualityGateDetail = qualityGateDetail;
   }
   if (
     typeof record.failureType === "string" &&

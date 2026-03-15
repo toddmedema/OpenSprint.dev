@@ -183,6 +183,45 @@ describe("OrchestratorDispatchService", () => {
     );
   });
 
+  it("hydrates structured quality-gate detail from task fields for redispatch", async () => {
+    const task = {
+      ...baseTask("os-9013"),
+      next_retry_context: {
+        previousFailure: "Pre-merge quality gate failed",
+        failureType: "coding_failure",
+      },
+      failedGateCommand: "npm run test",
+      failedGateReason: "Command failed: npm run test",
+      failedGateOutputSnippet: "AssertionError: expected 401 to be 403",
+      qualityGateDetail: {
+        command: "npm run test",
+        reason: "Command failed: npm run test",
+        outputSnippet: "AssertionError: expected 401 to be 403",
+        firstErrorLine: "AssertionError: expected 401 to be 403",
+        worktreePath: "/tmp/repo/.worktrees/os-9013",
+      },
+    } as StoredTask;
+
+    await service.dispatchTask(projectId, repoPath, task, 1);
+
+    expect(executeCodingPhase).toHaveBeenCalledWith(
+      projectId,
+      repoPath,
+      task,
+      expect.objectContaining({ taskId: task.id }),
+      expect.objectContaining({
+        previousFailure: "Pre-merge quality gate failed",
+        failureType: "coding_failure",
+        qualityGateDetail: expect.objectContaining({
+          command: "npm run test",
+          firstErrorLine: "AssertionError: expected 401 to be 403",
+          worktreePath: "/tmp/repo/.worktrees/os-9013",
+        }),
+        useExistingBranch: false,
+      })
+    );
+  });
+
   it("resumes baseline-paused tasks at merge instead of relaunching a coder", async () => {
     const task = {
       ...baseTask("os-3456"),

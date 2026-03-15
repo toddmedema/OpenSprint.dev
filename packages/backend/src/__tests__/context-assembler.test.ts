@@ -300,6 +300,51 @@ User authentication.
     expect(agentIdx).toBeLessThan(prompt.indexOf("## Context"));
   });
 
+  it("includes structured quality-gate diagnostics in the retry prompt when available", async () => {
+    await fs.writeFile(
+      path.join(repoPath, SPEC_MD),
+      "# Product Specification\n\nTest product.",
+      "utf-8"
+    );
+
+    const config = {
+      invocation_id: "bd-a3f8.10",
+      agent_role: "coder" as const,
+      taskId: "bd-a3f8.10",
+      repoPath,
+      branch: "opensprint/bd-a3f8.10",
+      testCommand: "npm test",
+      attempt: 2,
+      phase: "coding" as const,
+      previousFailure: "Pre-merge quality gate failed",
+      reviewFeedback: null as string | null,
+      qualityGateDetail: {
+        command: "npm run test",
+        reason: "Command failed: npm run test",
+        outputSnippet: "AssertionError: expected 401 to be 403",
+        firstErrorLine: "AssertionError: expected 401 to be 403",
+        worktreePath: "/tmp/repo/.worktrees/bd-a3f8.10",
+      },
+    };
+
+    const taskDir = await assembler.assembleTaskDirectory(repoPath, config.taskId, config, {
+      taskId: config.taskId,
+      title: "Fix retry diagnostics",
+      description: "Make merge retries actionable.",
+      planContent: "# Plan\n\n## Acceptance Criteria\n- Fix the prompt",
+      prdExcerpt: "# Product Requirements\n\nTest product.",
+      dependencyOutputs: [],
+    });
+
+    const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
+    expect(prompt).toContain("## Previous Attempt");
+    expect(prompt).toContain("### Quality Gate Failure");
+    expect(prompt).toContain("Failed command: `npm run test`");
+    expect(prompt).toContain("AssertionError: expected 401 to be 403");
+    expect(prompt).toContain("Gate worktree: `/tmp/repo/.worktrees/bd-a3f8.10`");
+    expect(prompt).toContain("Fix the merge-gate failure directly before reporting success.");
+  });
+
   it("should include general-only agent instructions when coder role file is missing", async () => {
     await fs.writeFile(
       path.join(repoPath, SPEC_MD),
