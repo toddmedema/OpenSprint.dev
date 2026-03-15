@@ -53,6 +53,8 @@ A small team that builds software for clients. They need to move quickly from cl
 | First-time user task completion       | > 80% complete a full Sketch-Execute cycle | Onboarding funnel analytics        |
 | Test coverage                         | > 80% code coverage with passing E2E tests | Automated coverage reporting       |
 
+**Coverage enforcement in CI:** The merge gate (`.github/workflows/merge-gate.yml`) runs `npm run test:coverage` for the shared, backend, and frontend workspaces. Vitest is configured with coverage thresholds (backend 75%, frontend 70%); the CI job fails if any workspace is below its threshold. The SPEC target of >80% remains the long-term goal.
+
 ## Feature List
 
 Add under Execute phase:

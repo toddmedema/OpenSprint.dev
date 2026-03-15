@@ -472,6 +472,49 @@ describe("AgentService", () => {
       expect(String(sessionParams[8])).toContain("Resolved conflict in src/conflict.ts");
     });
 
+    it("persists filtered merger output (no tool_call or code-context noise) in agent_sessions", async () => {
+      mockSpawnWithTaskFile.mockImplementation(
+        (
+          _config: unknown,
+          _path: unknown,
+          _cwd: unknown,
+          onOutput: (chunk: string) => void,
+          onExit: (code: number | null) => void
+        ) => {
+          setImmediate(() => {
+            onOutput('{"type":"text","text":"Resolving conflicts"}\n');
+            onOutput('{"type":"tool_call","subtype":"started","call_id":"c1"}\n');
+            onOutput('{"lineNumber":1,"content":"code","isContextLine":true}\n');
+            onOutput('ingestOutputChunk(runState, chunk);\n');
+            onOutput('{"type":"text","text":"Done"}\n');
+            onExit(0);
+          });
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      await service.runMergerAgentAndWait({
+        projectId: "proj-123",
+        cwd: "/tmp/repo",
+        config: { type: "cursor", model: null, cliCommand: null },
+        phase: "merge_to_main",
+        taskId: "os-1",
+        branchName: "opensprint/os-1",
+        conflictedFiles: ["src/conflict.ts"],
+      });
+
+      const sessionInsert = mockDbClient.execute.mock.calls.find(
+        (call) => typeof call[0] === "string" && call[0].includes("INSERT INTO agent_sessions")
+      );
+      expect(sessionInsert).toBeDefined();
+      const outputLog = String((sessionInsert?.[1] as unknown[])?.[8] ?? "");
+      expect(outputLog).toContain("Resolving conflicts");
+      expect(outputLog).toContain("Done");
+      expect(outputLog).not.toContain("tool_call");
+      expect(outputLog).not.toContain("lineNumber");
+      expect(outputLog).not.toContain("ingestOutputChunk");
+    });
+
     it("returns false when merger agent exits with non-zero code", async () => {
       mockSpawnWithTaskFile.mockImplementation(
         (

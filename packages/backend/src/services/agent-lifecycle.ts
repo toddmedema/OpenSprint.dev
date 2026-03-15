@@ -20,6 +20,8 @@ import { eventLogService } from "./event-log.service.js";
 import { broadcastToProject, sendAgentOutputToProject } from "../websocket/index.js";
 import { TimerRegistry } from "./timer-registry.js";
 import { createLogger } from "../utils/logger.js";
+import { createAgentOutputFilter } from "../utils/agent-output-filter.js";
+import type { AgentOutputFilter } from "../utils/agent-output-filter.js";
 
 const log = createLogger("agent-lifecycle");
 
@@ -74,6 +76,8 @@ export interface AgentRunState {
   suspendDeadlineMs?: number;
   /** Stop output file tail (used after GUPP recovery); cleared when tail is stopped */
   outputTailStop?: () => void;
+  /** Stateful filter for live/persisted output (tool-call and code-context noise removed). */
+  outputFilter?: AgentOutputFilter;
 }
 
 export interface AgentRunParams {
@@ -141,6 +145,7 @@ export class AgentLifecycleManager {
     runState.outputParseBuffer = "";
     runState.activeToolCallIds.clear();
     runState.activeToolCallSummaries.clear();
+    runState.outputFilter = createAgentOutputFilter();
     this.setRunningState(runState, Date.now());
     runState.lastOutputAtIso = undefined;
 
@@ -168,10 +173,12 @@ export class AgentLifecycleManager {
       outputLogPath,
       projectId,
       onOutput: (chunk: string) => {
-        const toolEvents = ingestOutputChunk(runState, chunk);
+        const toolEvents = updateToolCallState(runState, chunk);
         this.recordToolActivity(params, toolEvents);
+        const filtered = runState.outputFilter!.filter(chunk);
+        if (filtered) appendOutputLog(runState, filtered);
+        if (filtered) sendAgentOutputToProject(projectId, taskId, filtered);
         void this.recordOutputActivity(params, runState, Date.now());
-        sendAgentOutputToProject(projectId, taskId, chunk);
       },
       onExit: async (code: number | null) => {
         if (runState.exitHandled) return;
@@ -224,6 +231,7 @@ export class AgentLifecycleManager {
     runState.outputParseBuffer = "";
     runState.activeToolCallIds.clear();
     runState.activeToolCallSummaries.clear();
+    runState.outputFilter = createAgentOutputFilter();
     runState.exitHandled = false;
     runState.killedDueToTimeout = false;
     runState.lifecycleState = "running";
@@ -400,10 +408,12 @@ export class AgentLifecycleManager {
           if (bytesRead > 0) {
             readOffset += bytesRead;
             const chunk = buf.subarray(0, bytesRead).toString();
-            const toolEvents = ingestOutputChunk(runState, chunk);
+            const toolEvents = updateToolCallState(runState, chunk);
             this.recordToolActivity(params, toolEvents);
+            const filtered = runState.outputFilter!.filter(chunk);
+            if (filtered) appendOutputLog(runState, filtered);
+            if (filtered) sendAgentOutputToProject(projectId, taskId, filtered);
             void this.recordOutputActivity(params, runState, s.mtimeMs || Date.now());
-            sendAgentOutputToProject(projectId, taskId, chunk);
           }
         } finally {
           await fh.close();
@@ -608,7 +618,7 @@ export class AgentLifecycleManager {
           const buf = Buffer.alloc(stat.size - start);
           const { bytesRead } = await fh.read(buf, 0, buf.length, start);
           if (bytesRead > 0) {
-            ingestOutputChunk(runState, buf.subarray(0, bytesRead).toString());
+            updateToolCallState(runState, buf.subarray(0, bytesRead).toString());
           }
         } finally {
           await fh.close();
@@ -666,11 +676,6 @@ interface ToolCallLifecycleEvent {
   kind: "started" | "completed";
   callId: string;
   summary: string | null;
-}
-
-function ingestOutputChunk(state: AgentRunState, chunk: string): ToolCallLifecycleEvent[] {
-  appendOutputLog(state, chunk);
-  return updateToolCallState(state, chunk);
 }
 
 function updateToolCallState(state: AgentRunState, chunk: string): ToolCallLifecycleEvent[] {

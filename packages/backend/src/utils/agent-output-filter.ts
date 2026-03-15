@@ -1,29 +1,29 @@
 /**
- * Filters live agent output to display only messages/content, hiding extra metadata.
- * Supports:
- * - Cursor agent stream-json (NDJSON): extracts text from message_delta, text, content_block_delta
- * - Plain text (Claude CLI, custom agents): passes through unchanged
- * Drops tool-call/code-context noise: type "tool_call", lineNumber/content/isContextLine,
- * and lines containing onOutput or ingestOutputChunk.
+ * Filters agent output for live stream and persisted log: show only user-facing
+ * messages; drop tool-call, code-context, and internal callback noise.
+ *
+ * Noise filtered out:
+ * - NDJSON type "tool_call" (tool lifecycle events)
+ * - Code-context entries (lineNumber/content/isContextLine)
+ * - Lines containing internal names: onOutput, ingestOutputChunk
  */
 
+/** Substrings that indicate internal/code noise; lines containing these are dropped */
 const NOISE_SUBSTRINGS = ["onOutput", "ingestOutputChunk"];
 
 function isNoiseLine(rawLine: string): boolean {
   return NOISE_SUBSTRINGS.some((s) => rawLine.includes(s));
 }
 
+/** Code-context shape: lineNumber + (content or isContextLine) */
 function isCodeContextEntry(o: Record<string, unknown>): boolean {
   const hasLineNumber =
     typeof o.lineNumber === "number" ||
-    (typeof o.lineNumber === "string" && (o.lineNumber as string).trim() !== "");
+    (typeof o.lineNumber === "string" && o.lineNumber.trim() !== "");
   if (!hasLineNumber) return false;
   return "content" in o || "isContextLine" in o;
 }
 
-/**
- * Extract text from a content array (message.content or similar).
- */
 function extractTextFromContentArray(content: unknown[]): string | null {
   const parts: string[] = [];
   for (const block of content) {
@@ -37,14 +37,18 @@ function extractTextFromContentArray(content: unknown[]): string | null {
 
 /**
  * Extract displayable content from a single JSON event.
- * Returns the text to show, or null if the event should be hidden (metadata only).
+ * Returns the text to show, or null if the event should be hidden (noise).
  */
 function extractContentFromEvent(obj: unknown, rawLine: string): string | null {
   if (obj === null || typeof obj !== "object") return null;
   if (isNoiseLine(rawLine)) return null;
 
   const o = obj as Record<string, unknown>;
+
+  // Explicitly drop tool-call lifecycle (noise)
   if (o.type === "tool_call") return null;
+
+  // Drop code-context entries (lineNumber/content/isContextLine)
   if (isCodeContextEntry(o)) return null;
 
   const nestedError =
@@ -67,12 +71,8 @@ function extractContentFromEvent(obj: unknown, rawLine: string): string | null {
     return `[Agent error: ${explicitErrorMessage}]\n`;
   }
 
-  // Cursor/Anthropic: {"type":"text","text":"..."}
-  if (o.type === "text" && typeof o.text === "string") {
-    return o.text;
-  }
+  if (o.type === "text" && typeof o.text === "string") return o.text;
 
-  // message_delta: {"type":"message_delta","delta":{"content":"..."}}
   if (
     o.type === "message_delta" &&
     o.delta &&
@@ -81,39 +81,28 @@ function extractContentFromEvent(obj: unknown, rawLine: string): string | null {
     return (o.delta as Record<string, unknown>).content as string;
   }
 
-  // content_block_delta: {"type":"content_block_delta","delta":{"text":"..."}} or delta.thinking
   if (o.type === "content_block_delta" && o.delta) {
     const delta = o.delta as Record<string, unknown>;
     if (delta.type === "thinking" && typeof delta.thinking === "string") {
       return delta.thinking;
     }
-    if (typeof delta.text === "string") {
-      return delta.text;
-    }
+    if (typeof delta.text === "string") return delta.text;
   }
 
-  // message: {"type":"message","content":[{"type":"text","text":"..."}]}
   if (o.type === "message" && Array.isArray(o.content)) {
     return extractTextFromContentArray(o.content);
   }
 
-  // Cursor Composer: {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"..."}]}}
   if (o.type === "assistant" && o.message && typeof o.message === "object") {
     const msg = o.message as Record<string, unknown>;
-    if (Array.isArray(msg.content)) {
-      return extractTextFromContentArray(msg.content);
-    }
+    if (Array.isArray(msg.content)) return extractTextFromContentArray(msg.content);
   }
 
-  // content_block_start with text: {"type":"content_block_start","content_block":{"type":"text","text":"..."}}
   if (o.type === "content_block_start" && o.content_block) {
     const block = o.content_block as Record<string, unknown>;
-    if (block.type === "text" && typeof block.text === "string") {
-      return block.text;
-    }
+    if (block.type === "text" && typeof block.text === "string") return block.text;
   }
 
-  // thinking: {"type":"thinking","content":"..."} or {"type":"thinking","thinking":"..."} or {"type":"thinking","subtype":"delta","text":"..."} (Cursor Composer)
   if (o.type === "thinking") {
     const content =
       typeof o.content === "string"
@@ -124,15 +113,12 @@ function extractContentFromEvent(obj: unknown, rawLine: string): string | null {
             ? o.text
             : null;
     if (!content) return null;
-    // Cursor emits many tiny thinking delta chunks; adding a newline per chunk causes hard wraps.
     return o.subtype === "delta" ? content : content + "\n";
   }
 
-  // Generic: {"content":"..."} or {"text":"..."}
   if (typeof o.content === "string") return o.content;
   if (typeof o.text === "string") return o.text;
 
-  // Metadata events (tool_use, tool_result, etc.) - hide
   return null;
 }
 
@@ -146,10 +132,7 @@ export interface AgentOutputFilter {
 }
 
 /**
- * Creates an isolated agent output filter instance.
- * Each instance has its own line buffer - use one per stream to avoid state leaking.
- *
- * @returns Filter instance with filter() and reset() methods
+ * Stateful filter for streaming chunks. Use one instance per agent run.
  */
 export function createAgentOutputFilter(): AgentOutputFilter {
   let lineBuffer = "";
@@ -161,13 +144,14 @@ export function createAgentOutputFilter(): AgentOutputFilter {
 
       lineBuffer += chunk;
       const lines = lineBuffer.split("\n");
-      lineBuffer = lines.pop() ?? ""; // Keep incomplete line in buffer
+      lineBuffer = lines.pop() ?? "";
 
       const results: string[] = [];
 
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
+
         if (isNoiseLine(trimmed)) continue;
 
         try {
@@ -187,14 +171,9 @@ export function createAgentOutputFilter(): AgentOutputFilter {
             previousLineWasThinkingDelta = false;
           }
         } catch {
-          // Not valid JSON - treat as plain text and pass through unless noise
-          if (previousLineWasThinkingDelta) {
-            results.push("\n");
-          }
+          if (previousLineWasThinkingDelta) results.push("\n");
           previousLineWasThinkingDelta = false;
-          if (!isNoiseLine(line)) {
-            results.push(line + "\n");
-          }
+          results.push(line + "\n");
         }
       }
 
@@ -208,18 +187,14 @@ export function createAgentOutputFilter(): AgentOutputFilter {
 }
 
 /**
- * Filters full NDJSON text (or plain text) in one pass.
- * Use for backfill and archived output; keep streaming filter for live chunks.
- *
- * @param raw - Full NDJSON text or plain text
- * @returns Filtered displayable text
+ * One-pass filter for full text (e.g. backfill from file, archived log).
  */
 export function filterAgentOutput(raw: string): string {
   if (!raw) return "";
   const f = createAgentOutputFilter();
   let result = f.filter(raw);
   if (!raw.endsWith("\n")) {
-    result += f.filter("\n"); // flush incomplete line
+    result += f.filter("\n");
   }
   return result;
 }

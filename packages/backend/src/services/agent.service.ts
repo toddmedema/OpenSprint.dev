@@ -31,6 +31,7 @@ import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { taskStore } from "./task-store.service.js";
 import { createLogger } from "../utils/logger.js";
 import { LOG_DIFF_TRUNCATE_AT_CHARS, truncateToThreshold } from "../utils/log-diff-truncation.js";
+import { filterAgentOutput } from "../utils/agent-output-filter.js";
 
 const log = createLogger("agent-service");
 
@@ -522,7 +523,8 @@ export class AgentService {
   private async recordMergerSession(params: MergerSessionRecordParams): Promise<void> {
     const taskLabel = params.taskId.trim() || "(no task id)";
     const fallbackOutput = `[Merger ${params.outcome}] phase=${params.phase} task=${taskLabel} branch=${params.branchName}\n`;
-    const outputLog = params.outputLog.trim().length > 0 ? params.outputLog : fallbackOutput;
+    const rawLog = params.outputLog.trim().length > 0 ? params.outputLog : fallbackOutput;
+    const outputLog = filterAgentOutput(rawLog);
     const truncatedOutput = truncateToThreshold(outputLog, LOG_DIFF_TRUNCATE_AT_CHARS);
     const failureReason =
       params.outcome === "failed" ? "Merger agent could not resolve conflicts cleanly." : null;

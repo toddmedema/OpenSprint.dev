@@ -1,589 +1,589 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="281" failures="0" errors="0" time="0.807">
-    <testsuite name="src/__tests__/agent.test.ts" timestamp="2026-03-13T16:09:08.839Z" hostname="todd.local" tests="17" failures="0" errors="0" skipped="0" time="0.005261625">
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getSlotForRole &gt; returns coding for coder and reviewer" time="0.000748583">
+<testsuites name="vitest tests" tests="281" failures="0" errors="0" time="0.804">
+    <testsuite name="src/__tests__/agent.test.ts" timestamp="2026-03-15T00:12:19.230Z" hostname="todd.local" tests="17" failures="0" errors="0" skipped="0" time="0.004516792">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getSlotForRole &gt; returns coding for coder and reviewer" time="0.000663875">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getSlotForRole &gt; returns planning for all other roles" time="0.000170166">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getSlotForRole &gt; returns planning for all other roles" time="0.000152875">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_LABELS &gt; has human-readable label for each role" time="0.000281375">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_LABELS &gt; has human-readable label for each role" time="0.000167959">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_CANONICAL_ORDER &gt; matches README/PRD agent table order" time="0.000426583">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_CANONICAL_ORDER &gt; matches README/PRD agent table order" time="0.00040325">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_PHASES &gt; has phase(s) for each role matching README table" time="0.000342667">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_PHASES &gt; has phase(s) for each role matching README table" time="0.000304875">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_DESCRIPTIONS &gt; has entry for all 9 roles in AGENT_ROLE_CANONICAL_ORDER" time="0.00038375">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_DESCRIPTIONS &gt; has entry for all 9 roles in AGENT_ROLE_CANONICAL_ORDER" time="0.000398667">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_DESCRIPTIONS &gt; matches README table descriptions exactly for all 9 agents" time="0.000145542">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_DESCRIPTIONS &gt; matches README table descriptions exactly for all 9 agents" time="0.000154709">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; sortAgentsByCanonicalOrder &gt; sorts agents by canonical role order" time="0.000143125">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; sortAgentsByCanonicalOrder &gt; sorts agents by canonical role order" time="0.000145875">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; sortAgentsByCanonicalOrder &gt; sorts entries with getAgent when provided" time="0.00017825">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; sortAgentsByCanonicalOrder &gt; sorts entries with getAgent when provided" time="0.000095167">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; sortAgentsByCanonicalOrder &gt; uses phase-derived role when role is missing (coding→coder, review→reviewer)" time="0.000091875">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; sortAgentsByCanonicalOrder &gt; uses phase-derived role when role is missing (coding→coder, review→reviewer)" time="0.000091167">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_PHASES (consistency check) &gt; has phase(s) for each role matching agent.ts source of truth" time="0.000162">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_PHASES (consistency check) &gt; has phase(s) for each role matching agent.ts source of truth" time="0.000186041">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_PHASES (consistency check) &gt; covers all roles in AGENT_ROLE_CANONICAL_ORDER" time="0.000296917">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_PHASES (consistency check) &gt; covers all roles in AGENT_ROLE_CANONICAL_ORDER" time="0.000342334">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_PHASES (consistency check) &gt; matches README table phases for all 9 agents" time="0.000154417">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; AGENT_ROLE_PHASES (consistency check) &gt; matches README table phases for all 9 agents" time="0.00018275">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getRoleDisplayLabel &gt; returns role label only when name is absent" time="0.000087791">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getRoleDisplayLabel &gt; returns role label only when name is absent" time="0.000127">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getRoleDisplayLabel &gt; returns role (name) when name is present" time="0.000071625">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getRoleDisplayLabel &gt; returns role (name) when name is present" time="0.00008275">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getRoleDisplayLabel &gt; falls back to phase label when role is unknown" time="0.00006975">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getRoleDisplayLabel &gt; falls back to phase label when role is unknown" time="0.000079833">
         </testcase>
-        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getRoleDisplayLabel &gt; ignores empty or whitespace-only name" time="0.000064708">
-        </testcase>
-    </testsuite>
-    <testsuite name="src/__tests__/build-config.test.ts" timestamp="2026-03-13T16:09:08.841Z" hostname="todd.local" tests="5" failures="0" errors="0" skipped="0" time="0.002122708">
-        <testcase classname="src/__tests__/build-config.test.ts" name="build config (production dist output) &gt; tsconfig.build.json has outDir ./dist" time="0.0007595">
-        </testcase>
-        <testcase classname="src/__tests__/build-config.test.ts" name="build config (production dist output) &gt; tsconfig.build.json has rootDir ./src" time="0.000211375">
-        </testcase>
-        <testcase classname="src/__tests__/build-config.test.ts" name="build config (production dist output) &gt; package.json build script uses tsconfig.build.json" time="0.000194958">
-        </testcase>
-        <testcase classname="src/__tests__/build-config.test.ts" name="build config (production dist output) &gt; package.json exports dist for production (import/require)" time="0.000178292">
-        </testcase>
-        <testcase classname="src/__tests__/build-config.test.ts" name="build config (production dist output) &gt; build produces dist/index.js and dist/index.d.ts when run" time="0.000124958">
+        <testcase classname="src/__tests__/agent.test.ts" name="AgentRole and slot mapping &gt; getRoleDisplayLabel &gt; ignores empty or whitespace-only name" time="0.000077875">
         </testcase>
     </testsuite>
-    <testsuite name="src/__tests__/constants.test.ts" timestamp="2026-03-13T16:09:08.842Z" hostname="todd.local" tests="33" failures="0" errors="0" skipped="0" time="0.005004792">
-        <testcase classname="src/__tests__/constants.test.ts" name="COMMIT_MESSAGE_TITLE_MAX_LENGTH &gt; is 45 for commit message / task title display truncation" time="0.000758667">
+    <testsuite name="src/__tests__/build-config.test.ts" timestamp="2026-03-15T00:12:19.231Z" hostname="todd.local" tests="5" failures="0" errors="0" skipped="0" time="0.001892333">
+        <testcase classname="src/__tests__/build-config.test.ts" name="build config (production dist output) &gt; tsconfig.build.json has outDir ./dist" time="0.000712042">
         </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="getTestCommandForFramework &gt; returns &apos;&apos; for null" time="0.000166583">
+        <testcase classname="src/__tests__/build-config.test.ts" name="build config (production dist output) &gt; tsconfig.build.json has rootDir ./src" time="0.00013075">
         </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="getTestCommandForFramework &gt; returns &apos;&apos; for &apos;none&apos;" time="0.000121208">
+        <testcase classname="src/__tests__/build-config.test.ts" name="build config (production dist output) &gt; package.json build script uses tsconfig.build.json" time="0.00015875">
         </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="getTestCommandForFramework &gt; returns &apos;npm test&apos; for &apos;jest&apos;" time="0.0001405">
+        <testcase classname="src/__tests__/build-config.test.ts" name="build config (production dist output) &gt; package.json exports dist for production (import/require)" time="0.000158125">
         </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="getTestCommandForFramework &gt; returns &apos;node ./node_modules/vitest/vitest.mjs…&apos; for &apos;vitest&apos;" time="0.000096959">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="resolveTestCommand &gt; resolves &apos;pytest&apos;" time="0.000307291">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="resolveTestCommand &gt; resolves &apos;node ./node_modules/vitest/vitest.mjs…&apos;" time="0.000064958">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="resolveTestCommand &gt; resolves &apos;npm test&apos;" time="0.000048084">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="resolveTestCommand &gt; resolves &apos;npm test&apos;" time="0.000452291">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps slot +0 to &apos;Frodo&apos;" time="0.000106833">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps slot 1 to &apos;Samwise&apos;" time="0.000043833">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps slot 13 to &apos;Frodo&apos;" time="0.000039083">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps &apos;coder&apos; slot +0 to &apos;Frodo&apos;" time="0.000105459">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps &apos;reviewer&apos; slot +0 to &apos;Boromir&apos;" time="0.000037333">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps &apos;dreamer&apos; slot +0 to &apos;Gandalf&apos;" time="0.000034459">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; wraps role-specific names by modulo" time="0.000050167">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; falls back to the coder pool for unknown roles" time="0.000042708">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns true for &apos;Frodo&apos;" time="0.000053084">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns true for &apos;Boromir&apos;" time="0.000034458">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns false for &apos;agent-1&apos;" time="0.000034875">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns false for null" time="0.000033958">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns false for undefined" time="0.000033792">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns false for &apos;&apos;" time="0.000033625">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns true for &apos;Merge Failure&apos;" time="0.00005475">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns true for &apos;Coding Failure&apos;" time="0.000034208">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for &apos;Open Question&apos;" time="0.000034792">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for &apos;API Blocked&apos;" time="0.000033583">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for &apos;Waiting for Human&apos;" time="0.000034417">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for null" time="0.000033542">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for undefined" time="0.000033417">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for &apos;&apos;" time="0.000033458">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="technical block constants &gt; keep the known technical reasons" time="0.000372041">
-        </testcase>
-        <testcase classname="src/__tests__/constants.test.ts" name="technical block constants &gt; uses an eight-hour blocked retry interval" time="0.000049458">
+        <testcase classname="src/__tests__/build-config.test.ts" name="build config (production dist output) &gt; build produces dist/index.js and dist/index.d.ts when run" time="0.000110125">
         </testcase>
     </testsuite>
-    <testsuite name="src/__tests__/desktop-artifact-names.test.ts" timestamp="2026-03-13T16:09:08.844Z" hostname="todd.local" tests="3" failures="0" errors="0" skipped="0" time="0.001803834">
-        <testcase classname="src/__tests__/desktop-artifact-names.test.ts" name="desktop artifact names (fixed for permalinks) &gt; electron build.mac.artifactName is set and does not contain version" time="0.000859625">
+    <testsuite name="src/__tests__/constants.test.ts" timestamp="2026-03-15T00:12:19.232Z" hostname="todd.local" tests="33" failures="0" errors="0" skipped="0" time="0.003824417">
+        <testcase classname="src/__tests__/constants.test.ts" name="COMMIT_MESSAGE_TITLE_MAX_LENGTH &gt; is 45 for commit message / task title display truncation" time="0.000672958">
         </testcase>
-        <testcase classname="src/__tests__/desktop-artifact-names.test.ts" name="desktop artifact names (fixed for permalinks) &gt; electron build.win.artifactName is set and does not contain version" time="0.000254042">
+        <testcase classname="src/__tests__/constants.test.ts" name="getTestCommandForFramework &gt; returns &apos;&apos; for null" time="0.000100125">
         </testcase>
-        <testcase classname="src/__tests__/desktop-artifact-names.test.ts" name="desktop artifact names (fixed for permalinks) &gt; electron build.linux.artifactName is set and does not contain version" time="0.000158042">
+        <testcase classname="src/__tests__/constants.test.ts" name="getTestCommandForFramework &gt; returns &apos;&apos; for &apos;none&apos;" time="0.000052959">
         </testcase>
-    </testsuite>
-    <testsuite name="src/__tests__/dev-config.test.ts" timestamp="2026-03-13T16:09:08.845Z" hostname="todd.local" tests="11" failures="0" errors="0" skipped="0" time="0.004396708">
-        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; root dev script builds shared and starts concurrently" time="0.000801833">
+        <testcase classname="src/__tests__/constants.test.ts" name="getTestCommandForFramework &gt; returns &apos;npm test&apos; for &apos;jest&apos;" time="0.000057333">
         </testcase>
-        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; frontend vite.config aliases @opensprint/shared to source" time="0.000652667">
+        <testcase classname="src/__tests__/constants.test.ts" name="getTestCommandForFramework &gt; returns &apos;node ./node_modules/vitest/vitest.mjs…&apos; for &apos;vitest&apos;" time="0.000047041">
         </testcase>
-        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; backend vitest.config aliases @opensprint/shared to source" time="0.000218708">
+        <testcase classname="src/__tests__/constants.test.ts" name="resolveTestCommand &gt; resolves &apos;pytest&apos;" time="0.000075875">
         </testcase>
-        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; frontend vitest.config aliases @opensprint/shared to source" time="0.000141833">
+        <testcase classname="src/__tests__/constants.test.ts" name="resolveTestCommand &gt; resolves &apos;node ./node_modules/vitest/vitest.mjs…&apos;" time="0.000049542">
         </testcase>
-        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; shared package exports have src fallback when dist absent" time="0.000210208">
+        <testcase classname="src/__tests__/constants.test.ts" name="resolveTestCommand &gt; resolves &apos;npm test&apos;" time="0.000045208">
         </testcase>
-        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; dev script runs shared in watch mode alongside backend and frontend" time="0.000200584">
+        <testcase classname="src/__tests__/constants.test.ts" name="resolveTestCommand &gt; resolves &apos;npm test&apos;" time="0.000046041">
         </testcase>
-        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; dev script starts both backend and frontend via concurrently" time="0.000127417">
+        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps slot +0 to &apos;Frodo&apos;" time="0.000073667">
         </testcase>
-        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; setup script builds shared before applying database schema" time="0.0002015">
+        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps slot 1 to &apos;Samwise&apos;" time="0.000047125">
         </testcase>
-        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; setup script falls back from opensprint login to postgres login for local bootstrap" time="0.000359083">
+        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps slot 13 to &apos;Frodo&apos;" time="0.000045584">
         </testcase>
-        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; setup script runs local credential bootstrap even when WSL skips service management" time="0.00035075">
+        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps &apos;coder&apos; slot +0 to &apos;Frodo&apos;" time="0.000076">
         </testcase>
-        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; setup script supports sudo-based peer auth bootstrap for WSL postgres installs" time="0.00029775">
+        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps &apos;reviewer&apos; slot +0 to &apos;Boromir&apos;" time="0.000065166">
         </testcase>
-    </testsuite>
-    <testsuite name="src/__tests__/plan-tasks.test.ts" timestamp="2026-03-13T16:09:08.846Z" hostname="todd.local" tests="8" failures="0" errors="0" skipped="0" time="0.004314333">
-        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; returns empty array when content is empty" time="0.001099167">
+        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; maps &apos;dreamer&apos; slot +0 to &apos;Gandalf&apos;" time="0.00004975">
         </testcase>
-        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; returns empty array when no Tasks or Instructions section" time="0.000343">
+        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; wraps role-specific names by modulo" time="0.000088417">
         </testcase>
-        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; parses ## Tasks section with ### Title blocks" time="0.000739792">
+        <testcase classname="src/__tests__/constants.test.ts" name="agent naming &gt; falls back to the coder pool for unknown roles" time="0.0000585">
         </testcase>
-        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; parses numbered ### headings (e.g. ### 1. Title)" time="0.00024275">
+        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns true for &apos;Frodo&apos;" time="0.000067083">
         </testcase>
-        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; uses ## Instructions when ## Tasks is absent" time="0.000230084">
+        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns true for &apos;Boromir&apos;" time="0.000047459">
         </testcase>
-        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; prefers ## Tasks over ## Instructions" time="0.000165">
+        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns false for &apos;agent-1&apos;" time="0.00004575">
         </testcase>
-        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; handles case-insensitive section names" time="0.000343167">
+        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns false for null" time="0.000046792">
         </testcase>
-        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; handles task with empty description" time="0.000250875">
+        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns false for undefined" time="0.000046458">
         </testcase>
-    </testsuite>
-    <testsuite name="src/__tests__/plan-template.test.ts" timestamp="2026-03-13T16:09:08.846Z" hostname="todd.local" tests="11" failures="0" errors="0" skipped="0" time="0.006766458">
-        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; PLAN_MARKDOWN_SECTIONS &gt; includes all PRD §7.2.3 required sections" time="0.001543041">
+        <testcase classname="src/__tests__/constants.test.ts" name="isAgentAssignee &gt; returns false for &apos;&apos;" time="0.000142375">
         </testcase>
-        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; getPlanTemplate &gt; returns template with feature title as H1" time="0.000238042">
+        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns true for &apos;Merge Failure&apos;" time="0.000074667">
         </testcase>
-        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; getPlanTemplate &gt; includes all required sections" time="0.000363292">
+        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns true for &apos;Coding Failure&apos;" time="0.000047083">
         </testcase>
-        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; getPlanTemplate &gt; handles empty title by using &apos;Feature&apos;" time="0.000094416">
+        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for &apos;Open Question&apos;" time="0.000045667">
         </testcase>
-        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; getPlanTemplate &gt; trims whitespace from title" time="0.000091459">
+        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for &apos;API Blocked&apos;" time="0.000043167">
         </testcase>
-        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; returns no missing sections when all are present" time="0.001535708">
+        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for &apos;Waiting for Human&apos;" time="0.000042708">
         </testcase>
-        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; identifies missing sections" time="0.000956125">
+        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for null" time="0.00004275">
         </testcase>
-        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; handles empty content" time="0.000157041">
+        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for undefined" time="0.000042167">
         </testcase>
-        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; handles content with only whitespace" time="0.000337916">
+        <testcase classname="src/__tests__/constants.test.ts" name="isBlockedByTechnicalError &gt; returns false for &apos;&apos;" time="0.000042833">
         </testcase>
-        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; matches section with parenthetical (e.g. Acceptance Criteria (with testable conditions))" time="0.000153458">
+        <testcase classname="src/__tests__/constants.test.ts" name="technical block constants &gt; keep the known technical reasons" time="0.000438083">
         </testcase>
-        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; is case-insensitive for section matching" time="0.000136833">
+        <testcase classname="src/__tests__/constants.test.ts" name="technical block constants &gt; uses an eight-hour blocked retry interval" time="0.000063">
         </testcase>
     </testsuite>
-    <testsuite name="src/__tests__/plan.test.ts" timestamp="2026-03-13T16:09:08.847Z" hostname="todd.local" tests="10" failures="0" errors="0" skipped="0" time="0.003105959">
-        <testcase classname="src/__tests__/plan.test.ts" name="Plan version types &gt; PlanVersionSummary has id, version_number, created_at, optional is_executed_version" time="0.0006125">
+    <testsuite name="src/__tests__/desktop-artifact-names.test.ts" timestamp="2026-03-15T00:12:19.233Z" hostname="todd.local" tests="3" failures="0" errors="0" skipped="0" time="0.001719833">
+        <testcase classname="src/__tests__/desktop-artifact-names.test.ts" name="desktop artifact names (fixed for permalinks) &gt; electron build.mac.artifactName is set and does not contain version" time="0.000815">
         </testcase>
-        <testcase classname="src/__tests__/plan.test.ts" name="Plan version types &gt; PlanVersionContent has version_number, title, content, optional metadata, created_at, optional is_executed_version" time="0.000271334">
+        <testcase classname="src/__tests__/desktop-artifact-names.test.ts" name="desktop artifact names (fixed for permalinks) &gt; electron build.win.artifactName is set and does not contain version" time="0.000152375">
         </testcase>
-        <testcase classname="src/__tests__/plan.test.ts" name="Plan version types &gt; Plan accepts optional currentVersionNumber and lastExecutedVersionNumber" time="0.000135417">
-        </testcase>
-        <testcase classname="src/__tests__/plan.test.ts" name="PlanMetadata &gt; accepts optional reviewedAt as null or ISO timestamp" time="0.000142792">
-        </testcase>
-        <testcase classname="src/__tests__/plan.test.ts" name="PLAN_STATUS_ORDER &gt; orders planning &lt; building &lt; in_review &lt; complete" time="0.000094416">
-        </testcase>
-        <testcase classname="src/__tests__/plan.test.ts" name="sortPlansByStatus &gt; &apos;orders planning before building befor…&apos;" time="0.000334833">
-        </testcase>
-        <testcase classname="src/__tests__/plan.test.ts" name="sortPlansByStatus &gt; &apos;preserves relative order inside the s…&apos;" time="0.000066208">
-        </testcase>
-        <testcase classname="src/__tests__/plan.test.ts" name="sortPlansByStatus &gt; returns a new array without mutating the input order" time="0.000345833">
-        </testcase>
-        <testcase classname="src/__tests__/plan.test.ts" name="sortPlansByStatus &gt; handles an empty array" time="0.000148458">
-        </testcase>
-        <testcase classname="src/__tests__/plan.test.ts" name="sortPlansByStatus &gt; sends unknown statuses to the end via the fallback order" time="0.000082666">
+        <testcase classname="src/__tests__/desktop-artifact-names.test.ts" name="desktop artifact names (fixed for permalinks) &gt; electron build.linux.artifactName is set and does not contain version" time="0.000124125">
         </testcase>
     </testsuite>
-    <testsuite name="src/__tests__/settings.test.ts" timestamp="2026-03-13T16:09:08.849Z" hostname="todd.local" tests="164" failures="0" errors="0" skipped="0" time="0.020632791">
-        <testcase classname="src/__tests__/settings.test.ts" name="DEFAULT_HIL_CONFIG &gt; defaults all three categories to automated for new projects" time="0.000673209">
+    <testsuite name="src/__tests__/dev-config.test.ts" timestamp="2026-03-15T00:12:19.234Z" hostname="todd.local" tests="11" failures="0" errors="0" skipped="0" time="0.003251958">
+        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; root dev script removes shared/dist and starts concurrently" time="0.000889209">
         </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForComplexity &gt; should return simpleComplexityAgent for low" time="0.000157875">
+        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; frontend vite.config aliases @opensprint/shared to source" time="0.000253792">
         </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForComplexity &gt; should return simpleComplexityAgent for medium" time="0.000075333">
+        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; backend vitest.config aliases @opensprint/shared to source" time="0.000150042">
         </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForComplexity &gt; should return complexComplexityAgent for high" time="0.000063458">
+        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; frontend vitest.config aliases @opensprint/shared to source" time="0.000142208">
         </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForComplexity &gt; should return complexComplexityAgent for very_high" time="0.000055208">
+        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; shared package exports have src fallback when dist absent" time="0.000153709">
         </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForComplexity &gt; should return simpleComplexityAgent when complexity is undefined" time="0.0000735">
+        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; dev script runs shared in watch mode alongside backend and frontend" time="0.000129459">
         </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForPlanningRole &gt; Dreamer always returns complexComplexityAgent" time="0.000153458">
+        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; dev script starts both backend and frontend via concurrently" time="0.000114458">
         </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForPlanningRole &gt; Analyst always returns simpleComplexityAgent" time="0.000077167">
+        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; setup script builds shared before applying database schema" time="0.000202208">
         </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForPlanningRole &gt; Planner/Harmonizer/Auditor/Summarizer inherit plan complexity" time="0.000374417">
+        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; setup script falls back from opensprint login to postgres login for local bootstrap" time="0.000259166">
         </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should pass through two-tier format unchanged" time="0.000416375">
+        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; setup script runs local credential bootstrap even when WSL skips service management" time="0.000134333">
         </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should default both tiers when missing" time="0.000352083">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should default gitWorkingMode to worktree when parseSettings receives empty object" time="0.000063667">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should use provided simple/complex when present" time="0.000086625">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should default gitWorkingMode to worktree when missing" time="0.000059166">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should default gitWorkingMode to worktree when invalid" time="0.000062167">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should preserve gitWorkingMode branches when valid" time="0.000054875">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should preserve gitWorkingMode worktree when valid" time="0.000051792">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should parse and preserve valid reviewAngles" time="0.000186">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should filter invalid reviewAngles and return undefined when empty" time="0.000113917">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should return undefined for reviewAngles when array is empty" time="0.000118375">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should parse enableHumanTeammates (default false)" time="0.00011775">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should round-trip teamMembers through parseSettings" time="0.000183375">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should filter invalid teamMembers entries and trim id/name" time="0.000086458">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should return empty array for teamMembers when array is empty (explicit clear)" time="0.000065">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should preserve a valid aiAutonomyLevel" time="0.000126959">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should default to per_task when parseSettings receives empty object" time="0.000068958">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should yield per_epic when mergeStrategy is per_epic" time="0.000079916">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should yield per_task when mergeStrategy is per_task" time="0.000061958">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should normalize invalid mergeStrategy to per_task" time="0.000059083">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should normalize non-string mergeStrategy to per_task" time="0.000057292">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should default to per_task when mergeStrategy is missing" time="0.000069083">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should preserve mergeStrategy on round-trip" time="0.000121083">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when parseSettings receives empty object" time="0.000060333">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when worktreeBaseBranch is empty string" time="0.000072709">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when worktreeBaseBranch is whitespace only" time="0.000060083">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when worktreeBaseBranch contains invalid chars (spaces)" time="0.000058167">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when worktreeBaseBranch contains invalid chars" time="0.000055209">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should preserve valid worktreeBaseBranch main" time="0.000052625">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should preserve valid worktreeBaseBranch with slash" time="0.000052417">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should preserve valid worktreeBaseBranch with underscore, hyphen, dot" time="0.000053917">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should trim valid worktreeBaseBranch" time="0.000053333">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when worktreeBaseBranch is not a string" time="0.0000565">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; VALID_SELF_IMPROVEMENT_FREQUENCIES contains never, after_each_plan, daily, weekly" time="0.00008225">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; SELF_IMPROVEMENT_FREQUENCY_OPTIONS has one option per frequency with labels" time="0.000499459">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should default to never when parseSettings receives empty object" time="0.000058542">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should default to never when selfImprovementFrequency is missing" time="0.000057209">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should preserve valid selfImprovementFrequency values" time="0.000113708">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should normalize invalid selfImprovementFrequency to never" time="0.000054125">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should pass through selfImprovementLastRunAt and selfImprovementLastCommitSha when present" time="0.000094667">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should leave selfImprovementLastRunAt and selfImprovementLastCommitSha undefined when missing or invalid" time="0.000069083">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; autoExecutePlans &gt; should default to false when parseSettings receives empty object" time="0.000052958">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; autoExecutePlans &gt; should default to false when autoExecutePlans is missing" time="0.000053334">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; autoExecutePlans &gt; should preserve true when autoExecutePlans is true" time="0.000067667">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; autoExecutePlans &gt; should normalize non-boolean to false" time="0.000072792">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDefaultDeploymentTarget &gt; returns first isDefault target when targets exist" time="0.000073833">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDefaultDeploymentTarget &gt; returns first target when no isDefault and targets exist" time="0.000048833">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDefaultDeploymentTarget &gt; returns config.target when no targets array" time="0.000046208">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDefaultDeploymentTarget &gt; returns production when no targets and no target" time="0.00004525">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetConfig &gt; returns target config by name" time="0.000332084">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetConfig &gt; returns undefined when target not found" time="0.000065167">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetConfig &gt; returns undefined when no targets" time="0.000819792">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForDeployEvent &gt; returns targets with matching autoDeployTrigger" time="0.000148708">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForDeployEvent &gt; treats missing autoDeployTrigger as none" time="0.000072166">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForDeployEvent &gt; returns empty array when no targets" time="0.000070458">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForDeployEvent &gt; returns empty array when targets is empty" time="0.000047208">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForNightlyDeploy &gt; returns targets with autoDeployTrigger nightly" time="0.000067167">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForNightlyDeploy &gt; returns empty array when no nightly targets" time="0.000156625">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForNightlyDeploy &gt; returns empty array when targets is empty" time="0.000047167">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates autoDeployOnEpicCompletion to default target autoDeployTrigger" time="0.000419">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates autoDeployOnEvalResolution to default target autoDeployTrigger" time="0.00022925">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates both flags: autoDeployOnEpicCompletion takes precedence" time="0.000149041">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates to existing default target in targets array" time="0.000372375">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; does not add migration when legacy flags are false or absent" time="0.00009575">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates top-level envVars into default target when targets exist" time="0.000145">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates top-level envVars into staging and production targets when no targets (Expo)" time="0.000127166">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; accepts and persists easProjectId when mode is expo" time="0.0000655">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates legacy expoConfig.projectId to easProjectId when mode is expo" time="0.000066625">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; prefers easProjectId over expoConfig.projectId when both present" time="0.000055">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetsForUi &gt; returns synthetic staging and production for expo mode with no targets" time="0.000155333">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetsForUi &gt; returns targets array for custom mode" time="0.000231542">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetsForUi &gt; returns empty array for custom mode with no targets" time="0.000059917">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns ANTHROPIC_API_KEY for claude" time="0.000056167">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns CURSOR_API_KEY for cursor" time="0.000049417">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns OPENAI_API_KEY for openai" time="0.00004125">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns GOOGLE_API_KEY for google" time="0.000039458">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns null for claude-cli and custom" time="0.000049125">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns null for lmstudio (excluded from API key provider resolution)" time="0.000039041">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="API_KEY_PROVIDERS &gt; includes ANTHROPIC_API_KEY, CURSOR_API_KEY, OPENAI_API_KEY, and GOOGLE_API_KEY" time="0.0002685">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; accepts valid entry with id and value" time="0.000099333">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; accepts entry with limitHitAt" time="0.000055625">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; accepts entry with invalidAt" time="0.000053125">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; trims id" time="0.000044958">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; throws when entry is not an object" time="0.000480625">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; throws when id is missing or empty" time="0.00016675">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; throws when value is not a string" time="0.0000755">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; throws when limitHitAt is present but not a string" time="0.000072292">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; throws when invalidAt is present but not a string" time="0.000071166">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; accepts optional label and includes it in output" time="0.000126959">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; returns current when incoming is null or invalid" time="0.0001895">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; preserves value when id exists and value omitted (masked)" time="0.000090875">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; replaces value when new value provided" time="0.00014825">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; removes providers not in incoming (replace semantics)" time="0.000085083">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; adds new entry with new id" time="0.00010425">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; merges OPENAI_API_KEY entries" time="0.000068041">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; preserves label when value omitted (masked)" time="0.000063333">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; uses incoming label when provided" time="0.000062708">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; preserves order of incoming array (drag-to-reorder)" time="0.000090625">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; returns undefined for null" time="0.00008125">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; returns undefined for non-object" time="0.00011925">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; returns undefined for empty object" time="0.000042666">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; sanitizes valid apiKeys for known providers" time="0.000087083">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; preserves label when present" time="0.00012025">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; ignores unknown provider keys" time="0.000048083">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; skips invalid entries within array" time="0.000111">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="isLimitHitExpired &gt; returns true when limitHitAt is undefined" time="0.000061375">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="isLimitHitExpired &gt; returns true when limitHitAt is older than 24h" time="0.000077792">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="isLimitHitExpired &gt; returns false when limitHitAt is within 24h" time="0.000054291">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="isLimitHitExpired &gt; returns true for invalid ISO string" time="0.00005825">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="isLimitHitExpired &gt; returns true when date coercion throws" time="0.000072333">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings — apiKeys ignored (stored in global settings only) &gt; does not include apiKeys in output (project-level keys removed)" time="0.000104584">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings — apiKeys ignored (stored in global settings only) &gt; does not include apiKeys when absent" time="0.0000655">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="maskApiKeysForResponse &gt; returns undefined for undefined apiKeys" time="0.000076209">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="maskApiKeysForResponse &gt; returns undefined for empty apiKeys" time="0.000044625">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="maskApiKeysForResponse &gt; masks values and preserves id and marker timestamps" time="0.0000945">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="maskApiKeysForResponse &gt; never includes value in output" time="0.000146583">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="maskApiKeysForResponse &gt; preserves label in masked output" time="0.000076333">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="DEFAULT_DATABASE_URL &gt; is the local Docker Postgres URL (deprecated, use getDefaultDatabaseUrl for default)" time="0.000059167">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDefaultDatabaseUrl &gt; returns path under homedir ending in opensprint.sqlite" time="0.000142625">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; accepts valid postgresql URL" time="0.000147417">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; accepts valid postgres URL" time="0.000099292">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; accepts remote Supabase-style URL" time="0.000052667">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; trims whitespace" time="0.000048708">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; throws when empty or not a string" time="0.000262208">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; throws when scheme is not postgres/postgresql or SQLite path" time="0.000314125">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; accepts SQLite URLs and paths" time="0.000096208">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; normalizes legacy sqlite:/file: shorthand prefixes" time="0.000189416">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; throws for sqlite:// or file:// without path" time="0.000121458">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; throws when URL is malformed (missing host)" time="0.000071791">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; throws the generic parser error for malformed PostgreSQL URLs" time="0.000079833">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDatabaseDialect &gt; returns postgres for postgres/postgresql URLs" time="0.000074375">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getDatabaseDialect &gt; returns sqlite for sqlite/file URLs and paths" time="0.000084541">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; redacts password, keeps host and port visible" time="0.000069584">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; handles URL without password" time="0.00006225">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; returns empty string for empty input" time="0.000051916">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; returns *** for invalid URL" time="0.000053333">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; returns canonical SQLite URLs and paths unchanged" time="0.000065917">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; normalizes legacy SQLite shorthand to canonical path/URL" time="0.000107042">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="isLocalDatabaseUrl &gt; returns true for localhost" time="0.000169834">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="isLocalDatabaseUrl &gt; returns true for 127.0.0.1" time="0.000066458">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="isLocalDatabaseUrl &gt; returns false for remote hosts" time="0.00006375">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="isLocalDatabaseUrl &gt; returns false for invalid URL" time="0.0000825">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; returns ANTHROPIC_API_KEY when claude in use" time="0.000103">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; returns CURSOR_API_KEY only when both agents are cursor" time="0.000054292">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; returns ANTHROPIC_API_KEY for claude-cli" time="0.000048917">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; returns OPENAI_API_KEY when openai in use" time="0.00005">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; returns OPENAI_API_KEY with other providers when mixed" time="0.000207042">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; does not add a provider for lmstudio (excluded from API key resolution)" time="0.000054083">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns ANTHROPIC_API_KEY for claude only (not claude-cli)" time="0.000070209">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns CURSOR_API_KEY when cursor in use" time="0.00004775">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns both when claude and cursor in use" time="0.000046">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns empty for claude-cli and custom only" time="0.000045167">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns OPENAI_API_KEY when openai in use" time="0.000049666">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns OPENAI_API_KEY with other providers when mixed" time="0.000104875">
-        </testcase>
-        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; does not add a provider for lmstudio (excluded from API key resolution)" time="0.0000485">
+        <testcase classname="src/__tests__/dev-config.test.ts" name="dev config (source-direct imports) &gt; setup script supports sudo-based peer auth bootstrap for WSL postgres installs" time="0.000142625">
         </testcase>
     </testsuite>
-    <testsuite name="src/__tests__/spec-serializer.test.ts" timestamp="2026-03-13T16:09:08.864Z" hostname="todd.local" tests="3" failures="0" errors="0" skipped="0" time="0.002263541">
-        <testcase classname="src/__tests__/spec-serializer.test.ts" name="spec-serializer &gt; round-trips Prd to markdown and back" time="0.001286959">
+    <testsuite name="src/__tests__/plan-tasks.test.ts" timestamp="2026-03-15T00:12:19.234Z" hostname="todd.local" tests="8" failures="0" errors="0" skipped="0" time="0.003478167">
+        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; returns empty array when content is empty" time="0.000946667">
         </testcase>
-        <testcase classname="src/__tests__/spec-serializer.test.ts" name="spec-serializer &gt; handles dynamic sections (e.g. competitive_landscape)" time="0.000281958">
+        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; returns empty array when no Tasks or Instructions section" time="0.000229334">
         </testcase>
-        <testcase classname="src/__tests__/spec-serializer.test.ts" name="spec-serializer &gt; handles empty sections" time="0.000103042">
+        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; parses ## Tasks section with ### Title blocks" time="0.000731292">
         </testcase>
-    </testsuite>
-    <testsuite name="src/__tests__/task-complexity.test.ts" timestamp="2026-03-13T16:09:08.864Z" hostname="todd.local" tests="7" failures="0" errors="0" skipped="0" time="0.002331125">
-        <testcase classname="src/__tests__/task-complexity.test.ts" name="complexityToDisplay &gt; returns Simple for 1-5" time="0.000724375">
+        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; parses numbered ### headings (e.g. ### 1. Title)" time="0.000211625">
         </testcase>
-        <testcase classname="src/__tests__/task-complexity.test.ts" name="complexityToDisplay &gt; returns Complex for 6-10" time="0.000284084">
+        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; uses ## Instructions when ## Tasks is absent" time="0.000142709">
         </testcase>
-        <testcase classname="src/__tests__/task-complexity.test.ts" name="complexityToDisplay &gt; returns null for undefined or invalid" time="0.000107916">
+        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; prefers ## Tasks over ## Instructions" time="0.000114916">
         </testcase>
-        <testcase classname="src/__tests__/task-complexity.test.ts" name="clampTaskComplexity &gt; returns value for valid integer 1-10" time="0.000153583">
+        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; handles case-insensitive section names" time="0.000173917">
         </testcase>
-        <testcase classname="src/__tests__/task-complexity.test.ts" name="clampTaskComplexity &gt; returns undefined for invalid types" time="0.000103125">
-        </testcase>
-        <testcase classname="src/__tests__/task-complexity.test.ts" name="clampTaskComplexity &gt; returns undefined for out-of-range integers" time="0.000088792">
-        </testcase>
-        <testcase classname="src/__tests__/task-complexity.test.ts" name="clampTaskComplexity &gt; exports valid range constants" time="0.000073875">
+        <testcase classname="src/__tests__/plan-tasks.test.ts" name="parsePlanTasks &gt; handles task with empty description" time="0.000135917">
         </testcase>
     </testsuite>
-    <testsuite name="src/__tests__/task-ids.test.ts" timestamp="2026-03-13T16:09:08.865Z" hostname="todd.local" tests="9" failures="0" errors="0" skipped="0" time="0.002241917">
-        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;opensprint.dev-xyz.2&apos; for &apos;opensprint.dev-xyz.2.1&apos;" time="0.0006405">
+    <testsuite name="src/__tests__/plan-template.test.ts" timestamp="2026-03-15T00:12:19.235Z" hostname="todd.local" tests="11" failures="0" errors="0" skipped="0" time="0.004404584">
+        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; PLAN_MARKDOWN_SECTIONS &gt; includes all PRD §7.2.3 required sections" time="0.000937833">
         </testcase>
-        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;opensprint.dev-8rx.10&apos; for &apos;opensprint.dev-8rx.10.0&apos;" time="0.0001995">
+        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; getPlanTemplate &gt; returns template with feature title as H1" time="0.000212958">
         </testcase>
-        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;bd-a3f8&apos; for &apos;bd-a3f8.1&apos;" time="0.000068417">
+        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; getPlanTemplate &gt; includes all required sections" time="0.000190167">
         </testcase>
-        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;opensprint.dev-xyz&apos; for &apos;opensprint.dev-xyz.2&apos;" time="0.000057125">
+        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; getPlanTemplate &gt; handles empty title by using &apos;Feature&apos;" time="0.000069667">
         </testcase>
-        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;opensprint.dev-8rx&apos; for &apos;opensprint.dev-8rx.10&apos;" time="0.000050834">
+        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; getPlanTemplate &gt; trims whitespace from title" time="0.000069416">
         </testcase>
-        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;opensprint.dev-xyz&apos; for &apos;opensprint.dev-xyz&apos;" time="0.000065542">
+        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; returns no missing sections when all are present" time="0.000869083">
         </testcase>
-        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;bd-a3f8&apos; for &apos;bd-a3f8&apos;" time="0.00005125">
+        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; identifies missing sections" time="0.000801334">
         </testcase>
-        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;epic1&apos; for &apos;epic1&apos;" time="0.000041792">
+        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; handles empty content" time="0.000143209">
         </testcase>
-        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;a.b.c&apos; for &apos;a.b.c.123&apos;" time="0.000224291">
+        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; handles content with only whitespace" time="0.000149667">
+        </testcase>
+        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; matches section with parenthetical (e.g. Acceptance Criteria (with testable conditions))" time="0.000114833">
+        </testcase>
+        <testcase classname="src/__tests__/plan-template.test.ts" name="plan-template &gt; validatePlanContent &gt; is case-insensitive for section matching" time="0.000104667">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__tests__/plan.test.ts" timestamp="2026-03-15T00:12:19.235Z" hostname="todd.local" tests="10" failures="0" errors="0" skipped="0" time="0.002905875">
+        <testcase classname="src/__tests__/plan.test.ts" name="Plan version types &gt; PlanVersionSummary has id, version_number, created_at, optional is_executed_version" time="0.000734708">
+        </testcase>
+        <testcase classname="src/__tests__/plan.test.ts" name="Plan version types &gt; PlanVersionContent has version_number, title, content, optional metadata, created_at, optional is_executed_version" time="0.000135666">
+        </testcase>
+        <testcase classname="src/__tests__/plan.test.ts" name="Plan version types &gt; Plan accepts optional currentVersionNumber and lastExecutedVersionNumber" time="0.000121667">
+        </testcase>
+        <testcase classname="src/__tests__/plan.test.ts" name="PlanMetadata &gt; accepts optional reviewedAt as null or ISO timestamp" time="0.00011225">
+        </testcase>
+        <testcase classname="src/__tests__/plan.test.ts" name="PLAN_STATUS_ORDER &gt; orders planning &lt; building &lt; in_review &lt; complete" time="0.00010375">
+        </testcase>
+        <testcase classname="src/__tests__/plan.test.ts" name="sortPlansByStatus &gt; &apos;orders planning before building befor…&apos;" time="0.000419583">
+        </testcase>
+        <testcase classname="src/__tests__/plan.test.ts" name="sortPlansByStatus &gt; &apos;preserves relative order inside the s…&apos;" time="0.000072375">
+        </testcase>
+        <testcase classname="src/__tests__/plan.test.ts" name="sortPlansByStatus &gt; returns a new array without mutating the input order" time="0.00023875">
+        </testcase>
+        <testcase classname="src/__tests__/plan.test.ts" name="sortPlansByStatus &gt; handles an empty array" time="0.000153">
+        </testcase>
+        <testcase classname="src/__tests__/plan.test.ts" name="sortPlansByStatus &gt; sends unknown statuses to the end via the fallback order" time="0.000094709">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__tests__/settings.test.ts" timestamp="2026-03-15T00:12:19.236Z" hostname="todd.local" tests="164" failures="0" errors="0" skipped="0" time="0.021814625">
+        <testcase classname="src/__tests__/settings.test.ts" name="DEFAULT_HIL_CONFIG &gt; defaults all three categories to automated for new projects" time="0.000799833">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForComplexity &gt; should return simpleComplexityAgent for low" time="0.000130166">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForComplexity &gt; should return simpleComplexityAgent for medium" time="0.000076375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForComplexity &gt; should return complexComplexityAgent for high" time="0.000071208">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForComplexity &gt; should return complexComplexityAgent for very_high" time="0.000066541">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForComplexity &gt; should return simpleComplexityAgent when complexity is undefined" time="0.000063291">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForPlanningRole &gt; Dreamer always returns complexComplexityAgent" time="0.000114625">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForPlanningRole &gt; Analyst always returns simpleComplexityAgent" time="0.000154125">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getAgentForPlanningRole &gt; Planner/Harmonizer/Auditor/Summarizer inherit plan complexity" time="0.000424875">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should pass through two-tier format unchanged" time="0.000393458">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should default both tiers when missing" time="0.000479375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should default gitWorkingMode to worktree when parseSettings receives empty object" time="0.000071208">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should use provided simple/complex when present" time="0.000102708">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should default gitWorkingMode to worktree when missing" time="0.000070417">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should default gitWorkingMode to worktree when invalid" time="0.000078">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should preserve gitWorkingMode branches when valid" time="0.000066375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should preserve gitWorkingMode worktree when valid" time="0.000065833">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should parse and preserve valid reviewAngles" time="0.000113375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should filter invalid reviewAngles and return undefined when empty" time="0.000076542">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should return undefined for reviewAngles when array is empty" time="0.00007825">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should parse enableHumanTeammates (default false)" time="0.000115875">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should round-trip teamMembers through parseSettings" time="0.000194792">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should filter invalid teamMembers entries and trim id/name" time="0.000107834">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should return empty array for teamMembers when array is empty (explicit clear)" time="0.000076458">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; should preserve a valid aiAutonomyLevel" time="0.000083208">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should default to per_task when parseSettings receives empty object" time="0.000081958">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should yield per_epic when mergeStrategy is per_epic" time="0.000095208">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should yield per_task when mergeStrategy is per_task" time="0.00007375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should normalize invalid mergeStrategy to per_task" time="0.000137958">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should normalize non-string mergeStrategy to per_task" time="0.0000715">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should default to per_task when mergeStrategy is missing" time="0.000083875">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; mergeStrategy &gt; should preserve mergeStrategy on round-trip" time="0.000141959">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when parseSettings receives empty object" time="0.000072083">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when worktreeBaseBranch is empty string" time="0.000083166">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when worktreeBaseBranch is whitespace only" time="0.00006925">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when worktreeBaseBranch contains invalid chars (spaces)" time="0.00006725">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when worktreeBaseBranch contains invalid chars" time="0.000067958">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should preserve valid worktreeBaseBranch main" time="0.00012825">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should preserve valid worktreeBaseBranch with slash" time="0.000068666">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should preserve valid worktreeBaseBranch with underscore, hyphen, dot" time="0.000068208">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should trim valid worktreeBaseBranch" time="0.000132458">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; worktreeBaseBranch &gt; should default to main when worktreeBaseBranch is not a string" time="0.000067333">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; VALID_SELF_IMPROVEMENT_FREQUENCIES contains never, after_each_plan, daily, weekly" time="0.000080375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; SELF_IMPROVEMENT_FREQUENCY_OPTIONS has one option per frequency with labels" time="0.000591292">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should default to never when parseSettings receives empty object" time="0.000833708">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should default to never when selfImprovementFrequency is missing" time="0.0001015">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should preserve valid selfImprovementFrequency values" time="0.000153833">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should normalize invalid selfImprovementFrequency to never" time="0.000071209">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should pass through selfImprovementLastRunAt and selfImprovementLastCommitSha when present" time="0.0001175">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; selfImprovementFrequency &gt; should leave selfImprovementLastRunAt and selfImprovementLastCommitSha undefined when missing or invalid" time="0.000086375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; autoExecutePlans &gt; should default to false when parseSettings receives empty object" time="0.000068625">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; autoExecutePlans &gt; should default to false when autoExecutePlans is missing" time="0.000064375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; autoExecutePlans &gt; should preserve true when autoExecutePlans is true" time="0.000081916">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings &gt; autoExecutePlans &gt; should normalize non-boolean to false" time="0.00008375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDefaultDeploymentTarget &gt; returns first isDefault target when targets exist" time="0.00010125">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDefaultDeploymentTarget &gt; returns first target when no isDefault and targets exist" time="0.000061375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDefaultDeploymentTarget &gt; returns config.target when no targets array" time="0.000057541">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDefaultDeploymentTarget &gt; returns production when no targets and no target" time="0.000050209">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetConfig &gt; returns target config by name" time="0.00045425">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetConfig &gt; returns undefined when target not found" time="0.000066083">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetConfig &gt; returns undefined when no targets" time="0.000052917">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForDeployEvent &gt; returns targets with matching autoDeployTrigger" time="0.000149791">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForDeployEvent &gt; treats missing autoDeployTrigger as none" time="0.000074542">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForDeployEvent &gt; returns empty array when no targets" time="0.000082375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForDeployEvent &gt; returns empty array when targets is empty" time="0.000054666">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForNightlyDeploy &gt; returns targets with autoDeployTrigger nightly" time="0.00008775">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForNightlyDeploy &gt; returns empty array when no nightly targets" time="0.000061875">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getTargetsForNightlyDeploy &gt; returns empty array when targets is empty" time="0.000058167">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates autoDeployOnEpicCompletion to default target autoDeployTrigger" time="0.000532708">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates autoDeployOnEvalResolution to default target autoDeployTrigger" time="0.000179084">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates both flags: autoDeployOnEpicCompletion takes precedence" time="0.000168792">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates to existing default target in targets array" time="0.000182417">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; does not add migration when legacy flags are false or absent" time="0.000109">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates top-level envVars into default target when targets exist" time="0.000287833">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates top-level envVars into staging and production targets when no targets (Expo)" time="0.000237334">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; accepts and persists easProjectId when mode is expo" time="0.000089916">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; migrates legacy expoConfig.projectId to easProjectId when mode is expo" time="0.000093667">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings deployment migration &gt; prefers easProjectId over expoConfig.projectId when both present" time="0.000070708">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetsForUi &gt; returns synthetic staging and production for expo mode with no targets" time="0.000185167">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetsForUi &gt; returns targets array for custom mode" time="0.000125208">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDeploymentTargetsForUi &gt; returns empty array for custom mode with no targets" time="0.00005675">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns ANTHROPIC_API_KEY for claude" time="0.0000665">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns CURSOR_API_KEY for cursor" time="0.000048">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns OPENAI_API_KEY for openai" time="0.000047209">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns GOOGLE_API_KEY for google" time="0.000048291">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns null for claude-cli and custom" time="0.000057916">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProviderForAgentType &gt; returns null for lmstudio (excluded from API key provider resolution)" time="0.0000445">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="API_KEY_PROVIDERS &gt; includes ANTHROPIC_API_KEY, CURSOR_API_KEY, OPENAI_API_KEY, and GOOGLE_API_KEY" time="0.000326125">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; accepts valid entry with id and value" time="0.000120333">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; accepts entry with limitHitAt" time="0.000068042">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; accepts entry with invalidAt" time="0.000061417">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; trims id" time="0.000051542">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; throws when entry is not an object" time="0.000456875">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; throws when id is missing or empty" time="0.00016925">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; throws when value is not a string" time="0.000075458">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; throws when limitHitAt is present but not a string" time="0.0000825">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; throws when invalidAt is present but not a string" time="0.00009275">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateApiKeyEntry &gt; accepts optional label and includes it in output" time="0.000075959">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; returns current when incoming is null or invalid" time="0.000158666">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; preserves value when id exists and value omitted (masked)" time="0.000091791">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; replaces value when new value provided" time="0.000070792">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; removes providers not in incoming (replace semantics)" time="0.000079916">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; adds new entry with new id" time="0.000111125">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; merges OPENAI_API_KEY entries" time="0.000067166">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; preserves label when value omitted (masked)" time="0.000072333">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; uses incoming label when provided" time="0.000069083">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="mergeApiKeysWithCurrent &gt; preserves order of incoming array (drag-to-reorder)" time="0.000102">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; returns undefined for null" time="0.000083208">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; returns undefined for non-object" time="0.00006375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; returns undefined for empty object" time="0.000048959">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; sanitizes valid apiKeys for known providers" time="0.000115">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; preserves label when present" time="0.000063208">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; ignores unknown provider keys" time="0.000053167">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="sanitizeApiKeys &gt; skips invalid entries within array" time="0.000109667">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="isLimitHitExpired &gt; returns true when limitHitAt is undefined" time="0.000067291">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="isLimitHitExpired &gt; returns true when limitHitAt is older than 24h" time="0.000079791">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="isLimitHitExpired &gt; returns false when limitHitAt is within 24h" time="0.000053292">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="isLimitHitExpired &gt; returns true for invalid ISO string" time="0.000059208">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="isLimitHitExpired &gt; returns true when date coercion throws" time="0.000143">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings — apiKeys ignored (stored in global settings only) &gt; does not include apiKeys in output (project-level keys removed)" time="0.000097416">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="parseSettings — apiKeys ignored (stored in global settings only) &gt; does not include apiKeys when absent" time="0.000066666">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="maskApiKeysForResponse &gt; returns undefined for undefined apiKeys" time="0.00007875">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="maskApiKeysForResponse &gt; returns undefined for empty apiKeys" time="0.000047333">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="maskApiKeysForResponse &gt; masks values and preserves id and marker timestamps" time="0.000117333">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="maskApiKeysForResponse &gt; never includes value in output" time="0.000081833">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="maskApiKeysForResponse &gt; preserves label in masked output" time="0.000071083">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="DEFAULT_DATABASE_URL &gt; is the local Docker Postgres URL (deprecated, use getDefaultDatabaseUrl for default)" time="0.000048291">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDefaultDatabaseUrl &gt; returns path under homedir ending in opensprint.sqlite" time="0.000146666">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; accepts valid postgresql URL" time="0.000275167">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; accepts valid postgres URL" time="0.00019375">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; accepts remote Supabase-style URL" time="0.000063541">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; trims whitespace" time="0.000055916">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; throws when empty or not a string" time="0.000197459">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; throws when scheme is not postgres/postgresql or SQLite path" time="0.000334708">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; accepts SQLite URLs and paths" time="0.000108584">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; normalizes legacy sqlite:/file: shorthand prefixes" time="0.00013825">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; throws for sqlite:// or file:// without path" time="0.000128584">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; throws when URL is malformed (missing host)" time="0.000077083">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="validateDatabaseUrl &gt; throws the generic parser error for malformed PostgreSQL URLs" time="0.000080667">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDatabaseDialect &gt; returns postgres for postgres/postgresql URLs" time="0.000095583">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getDatabaseDialect &gt; returns sqlite for sqlite/file URLs and paths" time="0.000100959">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; redacts password, keeps host and port visible" time="0.000098708">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; handles URL without password" time="0.000072083">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; returns empty string for empty input" time="0.000058708">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; returns *** for invalid URL" time="0.000056458">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; returns canonical SQLite URLs and paths unchanged" time="0.0000705">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="maskDatabaseUrl &gt; normalizes legacy SQLite shorthand to canonical path/URL" time="0.000106333">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="isLocalDatabaseUrl &gt; returns true for localhost" time="0.000109">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="isLocalDatabaseUrl &gt; returns true for 127.0.0.1" time="0.000061541">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="isLocalDatabaseUrl &gt; returns false for remote hosts" time="0.000067666">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="isLocalDatabaseUrl &gt; returns false for invalid URL" time="0.000132666">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; returns ANTHROPIC_API_KEY when claude in use" time="0.000127666">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; returns CURSOR_API_KEY only when both agents are cursor" time="0.000065875">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; returns ANTHROPIC_API_KEY for claude-cli" time="0.000055334">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; returns OPENAI_API_KEY when openai in use" time="0.000054709">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; returns OPENAI_API_KEY with other providers when mixed" time="0.000133417">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersInUse &gt; does not add a provider for lmstudio (excluded from API key resolution)" time="0.000063125">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns ANTHROPIC_API_KEY for claude only (not claude-cli)" time="0.000087333">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns CURSOR_API_KEY when cursor in use" time="0.000057">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns both when claude and cursor in use" time="0.00005725">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns empty for claude-cli and custom only" time="0.000054125">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns OPENAI_API_KEY when openai in use" time="0.000052292">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; returns OPENAI_API_KEY with other providers when mixed" time="0.000112417">
+        </testcase>
+        <testcase classname="src/__tests__/settings.test.ts" name="getProvidersRequiringApiKeys &gt; does not add a provider for lmstudio (excluded from API key resolution)" time="0.000057292">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__tests__/spec-serializer.test.ts" timestamp="2026-03-15T00:12:19.244Z" hostname="todd.local" tests="3" failures="0" errors="0" skipped="0" time="0.001936375">
+        <testcase classname="src/__tests__/spec-serializer.test.ts" name="spec-serializer &gt; round-trips Prd to markdown and back" time="0.001105">
+        </testcase>
+        <testcase classname="src/__tests__/spec-serializer.test.ts" name="spec-serializer &gt; handles dynamic sections (e.g. competitive_landscape)" time="0.0001635">
+        </testcase>
+        <testcase classname="src/__tests__/spec-serializer.test.ts" name="spec-serializer &gt; handles empty sections" time="0.000097958">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__tests__/task-complexity.test.ts" timestamp="2026-03-15T00:12:19.245Z" hostname="todd.local" tests="7" failures="0" errors="0" skipped="0" time="0.002198708">
+        <testcase classname="src/__tests__/task-complexity.test.ts" name="complexityToDisplay &gt; returns Simple for 1-5" time="0.000761959">
+        </testcase>
+        <testcase classname="src/__tests__/task-complexity.test.ts" name="complexityToDisplay &gt; returns Complex for 6-10" time="0.000131667">
+        </testcase>
+        <testcase classname="src/__tests__/task-complexity.test.ts" name="complexityToDisplay &gt; returns null for undefined or invalid" time="0.000116">
+        </testcase>
+        <testcase classname="src/__tests__/task-complexity.test.ts" name="clampTaskComplexity &gt; returns value for valid integer 1-10" time="0.000267167">
+        </testcase>
+        <testcase classname="src/__tests__/task-complexity.test.ts" name="clampTaskComplexity &gt; returns undefined for invalid types" time="0.000124125">
+        </testcase>
+        <testcase classname="src/__tests__/task-complexity.test.ts" name="clampTaskComplexity &gt; returns undefined for out-of-range integers" time="0.000081542">
+        </testcase>
+        <testcase classname="src/__tests__/task-complexity.test.ts" name="clampTaskComplexity &gt; exports valid range constants" time="0.000078625">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/__tests__/task-ids.test.ts" timestamp="2026-03-15T00:12:19.245Z" hostname="todd.local" tests="9" failures="0" errors="0" skipped="0" time="0.001737458">
+        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;opensprint.dev-xyz.2&apos; for &apos;opensprint.dev-xyz.2.1&apos;" time="0.000630458">
+        </testcase>
+        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;opensprint.dev-8rx.10&apos; for &apos;opensprint.dev-8rx.10.0&apos;" time="0.00009925">
+        </testcase>
+        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;bd-a3f8&apos; for &apos;bd-a3f8.1&apos;" time="0.000061584">
+        </testcase>
+        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;opensprint.dev-xyz&apos; for &apos;opensprint.dev-xyz.2&apos;" time="0.00004975">
+        </testcase>
+        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;opensprint.dev-8rx&apos; for &apos;opensprint.dev-8rx.10&apos;" time="0.000051416">
+        </testcase>
+        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;opensprint.dev-xyz&apos; for &apos;opensprint.dev-xyz&apos;" time="0.00004625">
+        </testcase>
+        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;bd-a3f8&apos; for &apos;bd-a3f8&apos;" time="0.000046792">
+        </testcase>
+        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;epic1&apos; for &apos;epic1&apos;" time="0.000049791">
+        </testcase>
+        <testcase classname="src/__tests__/task-ids.test.ts" name="getEpicId &gt; returns &apos;a.b.c&apos; for &apos;a.b.c.123&apos;" time="0.000047875">
         </testcase>
     </testsuite>
 </testsuites>

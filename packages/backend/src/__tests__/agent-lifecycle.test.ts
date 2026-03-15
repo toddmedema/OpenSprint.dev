@@ -174,7 +174,7 @@ describe("AgentLifecycleManager", () => {
       expect(timers.has("inactivity")).toBe(false);
     });
 
-    it("appends output chunks to runState.outputLog", () => {
+    it("appends filtered output chunks to runState.outputLog and sends filtered live output", () => {
       let capturedOnOutput: ((chunk: string) => void) | undefined;
       mockInvokeCodingAgent.mockImplementation(
         (_path: string, _config: unknown, options: { onOutput?: (chunk: string) => void }) => {
@@ -185,12 +185,50 @@ describe("AgentLifecycleManager", () => {
 
       manager.run(baseParams, runState, timers);
 
-      capturedOnOutput?.("chunk1");
-      capturedOnOutput?.("chunk2");
+      // Plain text with newlines is passed through; tool_call and code-context are filtered
+      capturedOnOutput?.("chunk1\n");
+      capturedOnOutput?.("chunk2\n");
 
-      expect(runState.outputLog).toEqual(["chunk1", "chunk2"]);
-      expect(mockSendAgentOutputToProject).toHaveBeenCalledWith("proj-1", "task-1", "chunk1");
-      expect(mockSendAgentOutputToProject).toHaveBeenCalledWith("proj-1", "task-1", "chunk2");
+      expect(runState.outputLog).toEqual(["chunk1\n", "chunk2\n"]);
+      expect(mockSendAgentOutputToProject).toHaveBeenCalledWith("proj-1", "task-1", "chunk1\n");
+      expect(mockSendAgentOutputToProject).toHaveBeenCalledWith("proj-1", "task-1", "chunk2\n");
+    });
+
+    it("does not append or send tool_call and code-context noise", () => {
+      let capturedOnOutput: ((chunk: string) => void) | undefined;
+      mockInvokeCodingAgent.mockImplementation(
+        (_path: string, _config: unknown, options: { onOutput?: (chunk: string) => void }) => {
+          capturedOnOutput = options.onOutput;
+          return { kill: vi.fn(), pid: 9999 };
+        }
+      );
+
+      manager.run(baseParams, runState, timers);
+
+      capturedOnOutput?.('{"type":"text","text":"User message"}\n');
+      capturedOnOutput?.(
+        '{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{}}\n'
+      );
+      capturedOnOutput?.(
+        '{"lineNumber":1,"content":"snippet","isContextLine":true}\n'
+      );
+      capturedOnOutput?.('{"type":"text","text":"Done"}\n');
+
+      const joined = runState.outputLog.join("");
+      expect(joined).toContain("User message");
+      expect(joined).toContain("Done");
+      expect(joined).not.toContain("tool_call");
+      expect(joined).not.toContain("lineNumber");
+      expect(mockSendAgentOutputToProject).toHaveBeenCalledWith(
+        "proj-1",
+        "task-1",
+        expect.stringContaining("User message")
+      );
+      expect(mockSendAgentOutputToProject).toHaveBeenCalledWith(
+        "proj-1",
+        "task-1",
+        expect.stringContaining("Done")
+      );
     });
 
     it("does not call onDone twice when onExit is invoked multiple times", async () => {

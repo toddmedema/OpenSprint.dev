@@ -52,6 +52,7 @@ import { TaskScheduler } from "./task-scheduler.js";
 import { normalizeCodingStatus, normalizeReviewStatus } from "./result-normalizers.js";
 import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
+import { filterAgentOutput } from "../utils/agent-output-filter.js";
 import { PhaseExecutorService, type PhaseExecutorHost } from "./phase-executor.service.js";
 import { agentIdentityService } from "./agent-identity.service.js";
 import { FailureHandlerService, type FailureHandlerHost } from "./failure-handler.service.js";
@@ -820,8 +821,9 @@ export class OrchestratorService {
   private async hydrateRecoveredOutputLog(agent: AgentRunState, promptPath: string): Promise<void> {
     const outputLogPath = path.join(path.dirname(promptPath), OPENSPRINT_PATHS.agentOutputLog);
     try {
-      const output = await fs.readFile(outputLogPath, "utf-8");
-      if (!output) return;
+      const raw = await fs.readFile(outputLogPath, "utf-8");
+      if (!raw) return;
+      const output = filterAgentOutput(raw);
       agent.outputLog = [output];
       agent.outputLogBytes = Buffer.byteLength(output);
       const now = Date.now();
@@ -1518,7 +1520,8 @@ export class OrchestratorService {
       OPENSPRINT_PATHS.agentOutputLog
     );
     try {
-      return await fs.readFile(outputLogPath, "utf-8");
+      const raw = await fs.readFile(outputLogPath, "utf-8");
+      return filterAgentOutput(raw);
     } catch {
       return "";
     }
