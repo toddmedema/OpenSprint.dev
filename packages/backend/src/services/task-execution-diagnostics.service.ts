@@ -240,6 +240,44 @@ function titleForOutcome(phase: TaskExecutionPhase, outcome: TaskExecutionOutcom
   return `${labelForPhase(phase)} completed`;
 }
 
+function mergeBlockReasonForStage(mergeStage: string | null, fallback: string | null): string | null {
+  if (fallback) return fallback;
+  return mergeStage === "quality_gate" ? "Quality Gate Failure" : "Merge Failure";
+}
+
+function mergeFailureTypeForStage(mergeStage: string | null, fallback: string | null): string | null {
+  if (fallback) return fallback;
+  return mergeStage === "quality_gate" ? "merge_quality_gate" : "merge_conflict";
+}
+
+function summarizeMergeFailure(params: {
+  mergeStage: string | null;
+  reason: string | null;
+  qualityGateSummary: string | null;
+  summary: string | null;
+}): string {
+  if (params.qualityGateSummary) return params.qualityGateSummary;
+  if (params.summary) return params.summary;
+  if (params.mergeStage === "quality_gate") {
+    return compactExecutionText(
+      `Quality gate failed${params.reason ? `: ${params.reason}` : ""}`,
+      500
+    );
+  }
+  return compactExecutionText(
+    `Merge failed${params.mergeStage ? ` during ${params.mergeStage}` : ""}${params.reason ? `: ${params.reason}` : ""}`,
+    500
+  );
+}
+
+function titleForMergeFailure(
+  outcome: Extract<TaskExecutionOutcome, "requeued" | "blocked">,
+  mergeStage: string | null
+): string {
+  if (mergeStage !== "quality_gate") return titleForOutcome("merge", outcome);
+  return outcome === "blocked" ? "Quality gate blocked" : "Quality gate failed";
+}
+
 function extractOutputHint(outputLog: string): string | null {
   const compact = outputLog.replace(/\r/g, "");
   const agentError = compact.match(/\[Agent error:\s*([^\]]+)\]/i);
@@ -417,22 +455,29 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
     const reason = asString(data.reason);
     const qualityGateDetail = extractQualityGateDetail(data);
     const qualityGateSummary = buildActionableFailureSummaryFromData(data);
-    const summary =
-      qualityGateSummary ??
-      asString(data.summary) ??
-      compactExecutionText(
-        `Merge failed${mergeStage ? ` during ${mergeStage}` : ""}${reason ? `: ${reason}` : ""}`,
-        500
-      );
+    const blockReason = outcome === "blocked"
+      ? mergeBlockReasonForStage(mergeStage, asString(data.blockReason))
+      : null;
+    const failureType = mergeFailureTypeForStage(mergeStage, asString(data.failureType));
+    const summary = summarizeMergeFailure({
+      mergeStage,
+      reason,
+      qualityGateSummary,
+      summary: asString(data.summary),
+    });
     return withQualityGateDetail(
       {
         at: event.timestamp,
         attempt,
         phase: "merge",
         outcome,
-        title: titleForOutcome("merge", outcome),
+        title:
+          outcome === "requeued" || outcome === "blocked"
+            ? titleForMergeFailure(outcome, mergeStage)
+            : titleForOutcome("merge", outcome),
         summary,
-        blockReason: outcome === "blocked" ? "Merge Failure" : null,
+        failureType,
+        blockReason,
         mergeStage,
         conflictedFiles: asStringArray(data.conflictedFiles),
         nextAction: asString(data.nextAction) ?? defaultNextAction(outcome),
@@ -657,15 +702,20 @@ export class TaskExecutionDiagnosticsService {
       if (
         latestAttempt.finalOutcome === "running" &&
         task.status === "blocked" &&
-        task.block_reason === "Merge Failure"
+        (task.block_reason === "Merge Failure" || task.block_reason === "Quality Gate Failure")
       ) {
         latestAttempt.finalPhase = "merge";
         latestAttempt.finalOutcome = "blocked";
         latestAttempt.blockReason = task.block_reason;
+        latestAttempt.failureType =
+          lastExecution?.failureType ??
+          mergeFailureTypeForStage(fallbackMergeStage, latestAttempt.failureType ?? null);
         latestAttempt.finalSummary =
           lastExecution?.summary ??
           compactExecutionText(
-            `Attempt ${latestAttempt.attempt} merge failed${fallbackMergeStage ? ` during ${fallbackMergeStage}` : ""}`,
+            fallbackMergeStage === "quality_gate"
+              ? `Attempt ${latestAttempt.attempt} quality gate failed`
+              : `Attempt ${latestAttempt.attempt} merge failed${fallbackMergeStage ? ` during ${fallbackMergeStage}` : ""}`,
             500
           );
       }

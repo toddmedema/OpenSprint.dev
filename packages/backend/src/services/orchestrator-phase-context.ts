@@ -15,6 +15,7 @@ export type FailureType =
   | "timeout"
   | "no_result"
   | "merge_conflict"
+  | "merge_quality_gate"
   | "coding_failure";
 
 export interface RetryQualityGateDetail {

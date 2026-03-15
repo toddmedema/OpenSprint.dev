@@ -92,7 +92,7 @@ export interface Task {
   sourceFeedbackIds?: string[];
   /** Task-level complexity (1-10). When absent, inferred from epic's plan. */
   complexity?: TaskComplexity;
-  /** Reason task was blocked (e.g. Coding Failure, Merge Failure). Set when status becomes blocked. */
+  /** Reason task was blocked (e.g. Coding Failure, Merge Failure, Quality Gate Failure). */
   blockReason?: string | null;
   /** Lightweight execution summary for list/detail surfaces. Derived from tasks.extra.last_execution_summary. */
   lastExecutionSummary?: string | null;

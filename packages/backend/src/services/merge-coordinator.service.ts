@@ -53,6 +53,8 @@ const BASELINE_QUALITY_GATE_TASK_SOURCE = "merge-quality-gate-baseline";
 const HUMAN_MERGE_FAILURE_MESSAGE =
   "The merge could not complete because your branch and main both changed the same files.";
 const HUMAN_QUALITY_GATE_FAILURE_MESSAGE = "Pre-merge quality gates failed (build, lint, or test).";
+const MERGE_CONFLICT_BLOCK_REASON = "Merge Failure";
+const QUALITY_GATE_BLOCK_REASON = "Quality Gate Failure";
 
 type MergeFailureStage = "rebase_before_merge" | "merge_to_main" | "push_rebase" | "quality_gate";
 
@@ -290,6 +292,18 @@ export class MergeCoordinatorService {
       : HUMAN_MERGE_FAILURE_MESSAGE;
   }
 
+  private getMergeFailureBlockReason(stage: MergeFailureStage): string {
+    return stage === "quality_gate" ? QUALITY_GATE_BLOCK_REASON : MERGE_CONFLICT_BLOCK_REASON;
+  }
+
+  private getMergeFailureType(
+    stage: MergeFailureStage,
+    failureTypeOverride?: RetryContext["failureType"]
+  ): RetryContext["failureType"] {
+    if (failureTypeOverride) return failureTypeOverride;
+    return stage === "quality_gate" ? "merge_quality_gate" : "merge_conflict";
+  }
+
   private buildRetryContextForMergeFailure(
     stage: MergeFailureStage,
     mergeFailureReason: string,
@@ -316,8 +330,7 @@ export class MergeCoordinatorService {
     );
     const retryContext: RetryContext = {
       previousFailure,
-      failureType:
-        failureTypeOverride ?? (stage === "quality_gate" ? "coding_failure" : "merge_conflict"),
+      failureType: this.getMergeFailureType(stage, failureTypeOverride),
     };
     if (stage === "quality_gate" && qualityGateDetail) {
       retryContext.qualityGateDetail = qualityGateDetail;
@@ -653,6 +666,7 @@ export class MergeCoordinatorService {
       attempt,
       outcome: "requeued",
       phase: "merge",
+      failureType: isEnvironmentSetupFailure ? "environment_setup" : "merge_quality_gate",
       summary: compactExecutionText(
         `Merge paused: baseline quality gates on ${baseBranch} are failing (${detail})${remediationAction ? `. Remediation: ${remediationAction}` : ""}.`,
         500
@@ -663,7 +677,7 @@ export class MergeCoordinatorService {
         `baseline quality gates failed on ${baseBranch}: ${failure.reason} (cmd: ${failure.command} | error: ${firstErrorLine})`,
         MERGE_RETRY_CONTEXT_FAILURE_LIMIT
       ),
-      failureType: isEnvironmentSetupFailure ? "environment_setup" : "coding_failure",
+      failureType: isEnvironmentSetupFailure ? "environment_setup" : "merge_quality_gate",
     };
     retryContext.qualityGateDetail = qualityGateDetail;
 
@@ -698,6 +712,7 @@ export class MergeCoordinatorService {
         data: {
           reason: `Baseline quality gates failing on ${baseBranch}: ${failure.reason}`,
           stage: "quality_gate",
+          failureType: retryContext.failureType ?? null,
           branchName: baseBranch,
           conflictedFiles: [],
           attempt,
@@ -725,6 +740,7 @@ export class MergeCoordinatorService {
         data: {
           attempt,
           phase: "merge",
+          failureType: retryContext.failureType ?? null,
           mergeStage: "quality_gate",
           conflictedFiles: [],
           summary: requeuedSummary.summary,
@@ -1183,6 +1199,11 @@ export class MergeCoordinatorService {
         isEnvironmentSetupQualityGateFailure ? "environment_setup" : undefined,
         qualityGateStructuredDetails.qualityGateDetail
       );
+      const mergeBlockReason = this.getMergeFailureBlockReason(normalizedStage);
+      const mergeFailureType = this.getMergeFailureType(
+        normalizedStage,
+        isEnvironmentSetupQualityGateFailure ? "environment_setup" : undefined
+      );
 
       const maxMergeFailures = BACKOFF_FAILURE_THRESHOLD * 2;
       if (isEnvironmentSetupQualityGateFailure || cumulativeAttempts >= maxMergeFailures) {
@@ -1192,7 +1213,8 @@ export class MergeCoordinatorService {
           attempt: cumulativeAttempts,
           outcome: "blocked",
           phase: "merge",
-          blockReason: "Merge Failure",
+          failureType: mergeFailureType,
+          blockReason: mergeBlockReason,
           summary: compactExecutionText(
             `Attempt ${cumulativeAttempts} ${stageLabel} failed: ${humanFailureMessage}${qualityGateSummarySuffix}${environmentSetupRemediation ? ` | remediation: ${environmentSetupRemediation}` : ""}`,
             500
@@ -1201,7 +1223,7 @@ export class MergeCoordinatorService {
         await this.host.taskStore.update(projectId, task.id, {
           status: "blocked",
           assignee: "",
-          block_reason: "Merge Failure",
+          block_reason: mergeBlockReason,
           extra: {
             last_execution_summary: blockedSummary,
             [NEXT_RETRY_CONTEXT_KEY]: retryContext,
@@ -1240,11 +1262,12 @@ export class MergeCoordinatorService {
             data: {
               reason: mergeFailureReason,
               stage: normalizedStage,
+              failureType: mergeFailureType,
               branchName: failedBranchName,
               conflictedFiles,
               attempt: cumulativeAttempts,
               resolvedBy: "blocked",
-              blockReason: "Merge Failure",
+              blockReason: mergeBlockReason,
               scopeConfidence,
               summary: blockedSummary.summary,
               qualityGateCategory: qualityGateFailureDetails?.category ?? null,
@@ -1273,7 +1296,8 @@ export class MergeCoordinatorService {
             data: {
               attempt: cumulativeAttempts,
               phase: "merge",
-              blockReason: "Merge Failure",
+              failureType: mergeFailureType,
+              blockReason: mergeBlockReason,
               mergeStage: normalizedStage,
               conflictedFiles,
               summary: blockedSummary.summary,
@@ -1294,6 +1318,7 @@ export class MergeCoordinatorService {
         attempt: cumulativeAttempts,
         outcome: "requeued",
         phase: "merge",
+        failureType: mergeFailureType,
         summary: compactExecutionText(
           `Attempt ${cumulativeAttempts} ${stageLabel} failed: ${humanFailureMessage}${qualityGateSummarySuffix}`,
           500
@@ -1328,6 +1353,7 @@ export class MergeCoordinatorService {
           data: {
             reason: mergeFailureReason,
             stage: normalizedStage,
+            failureType: mergeFailureType,
             branchName: failedBranchName,
             conflictedFiles,
             attempt: cumulativeAttempts,
@@ -1358,6 +1384,7 @@ export class MergeCoordinatorService {
           data: {
             attempt: cumulativeAttempts,
             phase: "merge",
+            failureType: mergeFailureType,
             mergeStage: normalizedStage,
             conflictedFiles,
             summary: requeuedSummary.summary,

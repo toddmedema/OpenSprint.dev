@@ -505,7 +505,7 @@ export class ContextAssembler {
 
     prompt += `${config.useExistingBranch ? "4" : "3"}. Write comprehensive tests (unit, and integration where applicable).\n`;
     prompt += `${config.useExistingBranch ? "5" : "4"}. **Commit after each logical unit** — with descriptive messages (e.g., "Add login API endpoint", "Add auth tests"). Do not wait until the end to commit. This protects your work if the process is interrupted.\n`;
-    prompt += `${config.useExistingBranch ? "6" : "5"}. Run only the smallest targeted, non-watch test command you need while iterating. Do NOT run the full-suite command \`${config.testCommand}\` yourself unless the task explicitly requires it; the orchestrator runs final validation after you finish. Never use watch mode or leave test processes running in the background.\n`;
+    prompt += `${config.useExistingBranch ? "6" : "5"}. Run the smallest relevant non-watch verification for the workspaces you touch while iterating. Prefer scoped tests first, and add scoped build/typecheck and lint commands whenever your changes could affect them (for example TypeScript, exported interfaces, build config, or linted frontend/backend code). Do NOT run the full-suite command \`${config.testCommand}\` or other root-wide validation commands yourself unless the task explicitly requires it; the orchestrator runs final validation after you finish. Never use watch mode or leave test processes running in the background.\n`;
     const resultJsonPath =
       config.repoPath && config.taskId
         ? path.join(config.repoPath, ".opensprint", "active", config.taskId, "result.json")

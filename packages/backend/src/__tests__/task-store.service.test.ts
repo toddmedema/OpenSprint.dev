@@ -380,10 +380,11 @@ suite("TaskStoreService", () => {
   });
 
   describe("listBlockedByTechnicalErrorEligibleForRetry", () => {
-    it("returns tasks blocked by Merge Failure or Coding Failure with no last_auto_retry_at", async () => {
+    it("returns tasks blocked by Merge Failure, Quality Gate Failure, or Coding Failure with no last_auto_retry_at", async () => {
       const t1 = await store.create(TEST_PROJECT_ID, "Task 1");
       const t2 = await store.create(TEST_PROJECT_ID, "Task 2");
       const t3 = await store.create(TEST_PROJECT_ID, "Task 3");
+      const t4 = await store.create(TEST_PROJECT_ID, "Task 4");
       await store.update(TEST_PROJECT_ID, t1.id, {
         status: "blocked",
         block_reason: "Merge Failure",
@@ -396,9 +397,13 @@ suite("TaskStoreService", () => {
         status: "blocked",
         block_reason: "Open Question",
       });
+      await store.update(TEST_PROJECT_ID, t4.id, {
+        status: "blocked",
+        block_reason: "Quality Gate Failure",
+      });
       const eligible = await store.listBlockedByTechnicalErrorEligibleForRetry(TEST_PROJECT_ID);
       const ids = eligible.map((t) => t.id).sort();
-      expect(ids).toEqual([t1.id, t2.id].sort());
+      expect(ids).toEqual([t1.id, t2.id, t4.id].sort());
     });
 
     it("excludes tasks blocked by human-feedback reasons", async () => {

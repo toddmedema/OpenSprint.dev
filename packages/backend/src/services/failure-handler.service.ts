@@ -10,6 +10,7 @@ import type { TestResults } from "@opensprint/shared";
 import {
   AGENT_INACTIVITY_TIMEOUT_MS,
   BACKOFF_FAILURE_THRESHOLD,
+  getProviderForAgentType,
   MAX_PRIORITY_BEFORE_BLOCK,
   TASK_COMPLEXITY_MAX,
   TASK_COMPLEXITY_MIN,
@@ -24,6 +25,7 @@ import { ErrorCodes } from "../middleware/error-codes.js";
 import { classifyAgentApiError, type AgentApiErrorKind } from "../utils/error-utils.js";
 import { isLostInternetMessage } from "../utils/connectivity-check.js";
 import { notificationService } from "./notification.service.js";
+import { markProviderOutageBackoff } from "./provider-outage-backoff.service.js";
 import { buildTaskLastExecutionSummary, compactExecutionText } from "./task-execution-summary.js";
 import { resolveBaseBranch } from "../utils/git-repo-state.js";
 import { buildTestFailureRetrySummary } from "./orchestrator-test-status.js";
@@ -71,6 +73,11 @@ const FAILURE_DIAGNOSTIC_NOISE_PATTERNS: RegExp[] = [
   /^caused by:/i,
   /^⎯+/,
   /^[-=]{3,}$/,
+];
+const CURSOR_PROVIDER_OUTAGE_PATTERNS: RegExp[] = [
+  /failed to reach the cursor api/i,
+  /\bcursor api\b.*\b(service unavailable|unavailable|connection error|failed)\b/i,
+  /\bcursor api error\b.*\b(fetch failed|socket hang up|econnreset|econnrefused|enotfound|eai_again|unable to connect|connection error)\b/i,
 ];
 
 type FailureDiagnosticDetail = {
@@ -231,6 +238,21 @@ export class FailureHandlerService {
   private isOfflineConnectivityFailure(failureType: FailureType, reason: string): boolean {
     if (failureType !== "no_result") return false;
     return isLostInternetMessage(reason);
+  }
+
+  private isCursorProviderOutageFailure(
+    failureType: FailureType,
+    reason: string,
+    options: {
+      agentType: string;
+      apiErrorKind: AgentApiErrorKind | null;
+      offlineConnectivityFailure: boolean;
+    }
+  ): boolean {
+    if (failureType !== "no_result") return false;
+    if (options.agentType !== "cursor") return false;
+    if (options.apiErrorKind || options.offlineConnectivityFailure) return false;
+    return CURSOR_PROVIDER_OUTAGE_PATTERNS.some((pattern) => pattern.test(reason));
   }
 
   private truncateRetryContextText(value: string | undefined, limit: number): string | undefined {
@@ -484,6 +506,35 @@ export class FailureHandlerService {
       new Error(effectiveReason)
     ) as AgentApiErrorKind | null;
     const offlineConnectivityFailure = this.isOfflineConnectivityFailure(failureType, effectiveReason);
+    const failSettings = await this.host.projectService.getSettings(projectId);
+    const agentConfig = failSettings.simpleComplexityAgent;
+    const agentProvider = getProviderForAgentType(
+      agentConfig.type as import("@opensprint/shared").AgentType
+    );
+    const cursorProviderOutageFailure = this.isCursorProviderOutageFailure(
+      failureType,
+      effectiveReason,
+      {
+        agentType: agentConfig.type,
+        apiErrorKind,
+        offlineConnectivityFailure,
+      }
+    );
+    let providerOutageBackoff:
+      | {
+          attempts: number;
+          durationMs: number;
+          until: string;
+        }
+      | null = null;
+    if (cursorProviderOutageFailure && agentProvider === "CURSOR_API_KEY") {
+      providerOutageBackoff = markProviderOutageBackoff(
+        projectId,
+        agentProvider,
+        effectiveReason
+      );
+      nextAction = `Pause new Cursor launches until ${providerOutageBackoff.until}`;
+    }
     // Surface failures in the notification system only when not a review-phase failure, or when
     // we will block (review notifications are created in blockTask when retries exceed limit).
     if (slot.phase !== "review") {
@@ -549,9 +600,6 @@ export class FailureHandlerService {
         }
       }
     }
-
-    const failSettings = await this.host.projectService.getSettings(projectId);
-    const agentConfig = failSettings.simpleComplexityAgent;
 
     // Log all failures (including review rejections) to event log for Execution Diagnostics
     eventLogService
@@ -664,15 +712,21 @@ export class FailureHandlerService {
       .comment(projectId, task.id, commentText)
       .catch((err) => log.warn("Failed to add failure comment", { err }));
 
-    if (failureType === "no_result" && (apiErrorKind || offlineConnectivityFailure)) {
+    if (
+      failureType === "no_result" &&
+      (apiErrorKind || offlineConnectivityFailure || providerOutageBackoff)
+    ) {
+      const shouldNudgeAfterReopen = Boolean(apiErrorKind) && !offlineConnectivityFailure;
       const retrySummary = buildTaskLastExecutionSummary({
         attempt: cumulativeAttempts,
         outcome: "requeued",
         phase: slot.phase,
         failureType,
-        summary: offlineConnectivityFailure
-          ? `${failureSummary}. Waiting for internet connectivity to recover.`
-          : `${failureSummary}. Waiting for API issue to be resolved.`,
+        summary: providerOutageBackoff
+          ? `${failureSummary}. Provider outage detected; pausing new Cursor launches until ${providerOutageBackoff.until}.`
+          : offlineConnectivityFailure
+            ? `${failureSummary}. Waiting for internet connectivity to recover.`
+            : `${failureSummary}. Waiting for API issue to be resolved.`,
       });
       await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
         baseBranch,
@@ -699,7 +753,9 @@ export class FailureHandlerService {
         testResults: null,
         reason: effectiveReason.slice(0, 500),
       });
-      this.host.nudge(projectId);
+      if (shouldNudgeAfterReopen) {
+        this.host.nudge(projectId);
+      }
       return;
     }
 

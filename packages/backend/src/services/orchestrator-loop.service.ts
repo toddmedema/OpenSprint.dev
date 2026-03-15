@@ -16,6 +16,7 @@ import { broadcastToProject } from "../websocket/index.js";
 import { createLogger } from "../utils/logger.js";
 import { getNextKey } from "./api-key-resolver.service.js";
 import { isExhausted, clearExhausted } from "./api-key-exhausted.service.js";
+import { getProviderOutageBackoff } from "./provider-outage-backoff.service.js";
 import { getComplexityForAgent } from "./plan-complexity.js";
 import { isSelfImprovementRunInProgress } from "./self-improvement-runner.service.js";
 import { WorktreeBranchInUseError } from "./branch-manager.js";
@@ -223,6 +224,8 @@ export class OrchestratorLoopService {
       }
 
       const dispatchableTasks: SchedulerResult[] = [];
+      let skippedForProviderExhaustion = 0;
+      let skippedForProviderBackoff = 0;
       for (const st of selected) {
         const complexity = await getComplexityForAgent(projectId, repoPath, st.task, taskStore);
         const agentConfig = getAgentForComplexity(
@@ -230,7 +233,20 @@ export class OrchestratorLoopService {
           complexity
         );
         const provider = getProviderForAgentType(agentConfig.type);
+        const outageBackoff = provider ? getProviderOutageBackoff(projectId, provider) : null;
+        if (provider && outageBackoff) {
+          skippedForProviderBackoff += 1;
+          log.info("Skipping task: provider outage backoff active", {
+            projectId,
+            taskId: st.task.id,
+            provider,
+            backoffUntil: outageBackoff.until,
+            backoffAttempts: outageBackoff.attempts,
+          });
+          continue;
+        }
         if (provider && isExhausted(projectId, provider)) {
+          skippedForProviderExhaustion += 1;
           log.info("Skipping task: provider exhausted", {
             projectId,
             taskId: st.task.id,
@@ -256,12 +272,16 @@ export class OrchestratorLoopService {
       }
 
       if (dispatchableTasks.length === 0) {
-        log.info("No dispatchable tasks after conflict-aware scheduling or provider exhaustion", {
+        log.info("No dispatchable tasks after conflict-aware scheduling or provider checks", {
           projectId,
           readyTasks: readyTasks.length,
           activeSlots: state.slots.size,
+          skippedForProviderExhaustion,
+          skippedForProviderBackoff,
         });
-        await this.host.ensureApiBlockedNotificationsForExhaustedProviders(projectId);
+        if (skippedForProviderExhaustion > 0) {
+          await this.host.ensureApiBlockedNotificationsForExhaustedProviders(projectId);
+        }
         if (state.loopRunId === myRunId) state.loopActive = false;
         broadcastToProject(projectId, {
           type: "execute.status",

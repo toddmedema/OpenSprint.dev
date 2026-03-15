@@ -587,7 +587,7 @@ describe("MergeCoordinatorService", () => {
           }),
           next_retry_context: expect.objectContaining({
             previousFailure: expect.stringContaining("quality gate failed"),
-            failureType: "coding_failure",
+            failureType: "merge_quality_gate",
           }),
         }),
       })
@@ -602,7 +602,7 @@ describe("MergeCoordinatorService", () => {
           }),
           next_retry_context: expect.objectContaining({
             previousFailure: expect.stringContaining("quality gate failed"),
-            failureType: "coding_failure",
+            failureType: "merge_quality_gate",
           }),
         }),
       })
@@ -664,7 +664,7 @@ describe("MergeCoordinatorService", () => {
       taskId,
       expect.objectContaining({
         status: "blocked",
-        block_reason: "Merge Failure",
+        block_reason: "Quality Gate Failure",
         extra: expect.objectContaining({
           failedGateCommand: "npm run lint",
           failedGateReason: "Command failed with exit code 1",
@@ -682,7 +682,7 @@ describe("MergeCoordinatorService", () => {
           }),
           next_retry_context: expect.objectContaining({
             previousFailure: expect.stringContaining("quality gate failed"),
-            failureType: "coding_failure",
+            failureType: "merge_quality_gate",
           }),
         }),
       })
@@ -697,7 +697,7 @@ describe("MergeCoordinatorService", () => {
           }),
           next_retry_context: expect.objectContaining({
             previousFailure: expect.stringContaining("quality gate failed"),
-            failureType: "coding_failure",
+            failureType: "merge_quality_gate",
           }),
         }),
       })
@@ -921,7 +921,7 @@ describe("MergeCoordinatorService", () => {
       taskId,
       expect.objectContaining({
         status: "blocked",
-        block_reason: "Merge Failure",
+        block_reason: "Quality Gate Failure",
         extra: expect.objectContaining({
           next_retry_context: expect.objectContaining({
             failureType: "environment_setup",

@@ -43,8 +43,12 @@ export const BACKOFF_FAILURE_THRESHOLD = 3;
 /** Maximum task priority value; tasks at this level get blocked on next demotion (PRDv2 §9.1) */
 export const MAX_PRIORITY_BEFORE_BLOCK = 4;
 
-/** Block reasons that indicate technical errors (merge failure, coding failure). Tasks with these can be auto-retried. */
-export const TECHNICAL_BLOCK_REASONS = ["Merge Failure", "Coding Failure"] as const;
+/** Block reasons that indicate technical errors. Tasks with these can be auto-retried. */
+export const TECHNICAL_BLOCK_REASONS = [
+  "Merge Failure",
+  "Quality Gate Failure",
+  "Coding Failure",
+] as const;
 
 /** Block reason when Coder emits open_questions (human clarification needed) */
 export const OPEN_QUESTION_BLOCK_REASON = "Open Question";

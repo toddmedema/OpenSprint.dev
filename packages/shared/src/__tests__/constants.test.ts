@@ -95,6 +95,7 @@ describe("isAgentAssignee", () => {
 describe("isBlockedByTechnicalError", () => {
   it.each([
     { reason: "Merge Failure", expected: true },
+    { reason: "Quality Gate Failure", expected: true },
     { reason: "Coding Failure", expected: true },
     { reason: "Open Question", expected: false },
     { reason: "API Blocked", expected: false },
@@ -110,6 +111,7 @@ describe("isBlockedByTechnicalError", () => {
 describe("technical block constants", () => {
   it("keep the known technical reasons", () => {
     expect(TECHNICAL_BLOCK_REASONS).toContain("Merge Failure");
+    expect(TECHNICAL_BLOCK_REASONS).toContain("Quality Gate Failure");
     expect(TECHNICAL_BLOCK_REASONS).toContain("Coding Failure");
   });
 

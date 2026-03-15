@@ -1,7 +1,7 @@
 /**
  * Auto-retry service for tasks blocked by technical errors.
  *
- * Runs every 8 hours. Unblocks tasks with block_reason "Merge Failure" or "Coding Failure"
+ * Runs every 8 hours. Unblocks tasks with block_reason "Merge Failure", "Quality Gate Failure", or "Coding Failure"
  * (technical errors). Never retries tasks blocked on human feedback (e.g. Open Question, API blocked).
  * Limits retry to once per 8-hour window per task via last_auto_retry_at.
  */

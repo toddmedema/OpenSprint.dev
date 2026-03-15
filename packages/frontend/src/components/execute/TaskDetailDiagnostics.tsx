@@ -24,6 +24,13 @@ const EXECUTION_OUTCOME_LABELS: Record<TaskExecutionOutcome, string> = {
   completed: "Completed",
 };
 
+const MERGE_STAGE_LABELS: Record<string, string> = {
+  rebase_before_merge: "Rebase before merge",
+  merge_to_main: "Merge to main",
+  push_rebase: "Push rebase",
+  quality_gate: "Quality gate",
+};
+
 function truncateDiagnosticsText(text: string, limit = 180): string {
   const compact = text.replace(/\s+/g, " ").trim();
   if (compact.length <= limit) return compact;
@@ -55,6 +62,10 @@ function firstNonEmptyLine(value: string | null | undefined): string | null {
     if (trimmed.length > 0) return trimmed;
   }
   return null;
+}
+
+function formatMergeStageLabel(mergeStage: string): string {
+  return MERGE_STAGE_LABELS[mergeStage] ?? mergeStage.replace(/_/g, " ");
 }
 
 interface DiagnosticsFailurePresentation {
@@ -298,7 +309,9 @@ export function TaskDetailDiagnostics({
                     </div>
                   )}
                   {attempt.mergeStage && (
-                    <div className="mt-1 text-theme-muted">Merge stage: {attempt.mergeStage}</div>
+                    <div className="mt-1 text-theme-muted">
+                      Stage: {formatMergeStageLabel(attempt.mergeStage)}
+                    </div>
                   )}
                   {(attempt.conflictedFiles?.length ?? 0) > 0 && (
                     <div className="mt-1 text-theme-muted">

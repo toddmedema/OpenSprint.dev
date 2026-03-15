@@ -174,8 +174,13 @@ User authentication.
     expect(prompt).toContain("context/deps/");
     expect(prompt).toContain("Commit after each logical unit");
     expect(prompt).toContain("Do not wait until the end to commit");
-    expect(prompt).toContain("Run only the smallest targeted, non-watch test command");
-    expect(prompt).toContain("Do NOT run the full-suite command `npm test` yourself");
+    expect(prompt).toContain(
+      "Run the smallest relevant non-watch verification for the workspaces you touch while iterating"
+    );
+    expect(prompt).toContain("add scoped build/typecheck and lint commands");
+    expect(prompt).toContain(
+      "Do NOT run the full-suite command `npm test` or other root-wide validation commands yourself"
+    );
     expect(prompt).toContain("Never use watch mode");
     expect(prompt).toContain("Never run destructive cleanup commands");
     // Terminology: use "done" and "finish" instead of "complete" (feedback consistency)

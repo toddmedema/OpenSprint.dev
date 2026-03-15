@@ -7,6 +7,10 @@ import {
 } from "../services/failure-handler.service.js";
 import { eventLogService } from "../services/event-log.service.js";
 import { notificationService } from "../services/notification.service.js";
+import {
+  clearProviderOutageBackoff,
+  getProviderOutageBackoff,
+} from "../services/provider-outage-backoff.service.js";
 
 // Silence failure-handler logger so expected log.error() calls don't write to stderr and fail CI
 vi.mock("../utils/logger.js", () => ({
@@ -668,6 +672,7 @@ describe("FailureHandlerService", () => {
         taskId,
         expect.objectContaining({ status: "blocked" })
       );
+      expect(mockHost.nudge).toHaveBeenCalledWith(projectId);
     });
 
     it("requeues no_result failures caused by lost internet without API-blocked notification", async () => {
@@ -723,6 +728,63 @@ describe("FailureHandlerService", () => {
           }),
         })
       );
+      expect(mockHost.nudge).not.toHaveBeenCalled();
+    });
+
+    it("backs off Cursor relaunches when the provider itself is unreachable", async () => {
+      const outageProjectId = "proj-cursor-outage";
+      const slot = makeSlot("/tmp/worktree");
+      slot.agent.outputLog = [
+        "[Agent error: Failed to reach the Cursor API. fetch failed ECONNRESET]\n",
+      ];
+      const mockUpdate = vi.fn().mockResolvedValue(undefined);
+      const mockDeleteAssignment = vi.fn().mockResolvedValue(undefined);
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+      mockHost.taskStore = {
+        ...mockHost.taskStore,
+        update: mockUpdate,
+      };
+      mockHost.deleteAssignment = mockDeleteAssignment;
+
+      try {
+        await handler.handleTaskFailure(
+          outageProjectId,
+          repoPath,
+          makeTask(),
+          branchName,
+          "The coding agent stopped without reporting whether the task succeeded or failed.",
+          null,
+          "no_result"
+        );
+
+        expect(mockExecuteCodingPhase).not.toHaveBeenCalled();
+        expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, taskId, "/tmp/worktree");
+        expect(mockDeleteAssignment).toHaveBeenCalledWith(repoPath, taskId);
+        expect(mockUpdate).toHaveBeenCalledWith(
+          outageProjectId,
+          taskId,
+          expect.objectContaining({
+            status: "open",
+            assignee: "",
+            extra: expect.objectContaining({
+              last_execution_summary: expect.objectContaining({
+                outcome: "requeued",
+                failureType: "no_result",
+                summary: expect.stringContaining("pausing new Cursor launches until"),
+              }),
+            }),
+          })
+        );
+        expect(mockHost.nudge).not.toHaveBeenCalled();
+        expect(getProviderOutageBackoff(outageProjectId, "CURSOR_API_KEY")).toEqual(
+          expect.objectContaining({ attempts: 1 })
+        );
+      } finally {
+        clearProviderOutageBackoff(outageProjectId, "CURSOR_API_KEY");
+      }
     });
 
     it("ignores punctuation-only no_result fragments when enriching the failure reason", async () => {

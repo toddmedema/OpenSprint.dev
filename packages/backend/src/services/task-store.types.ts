@@ -25,7 +25,7 @@ export interface StoredTask {
   }>;
   dependency_count?: number;
   dependent_count?: number;
-  /** Reason task was blocked (e.g. Coding Failure, Merge Failure). Stored in extra when status is blocked. */
+  /** Reason task was blocked (e.g. Coding Failure, Merge Failure, Quality Gate Failure). Stored in extra when status is blocked. */
   block_reason?: string | null;
   /** ISO timestamp of last auto-retry (technical-error unblock). Stored in extra. */
   last_auto_retry_at?: string | null;

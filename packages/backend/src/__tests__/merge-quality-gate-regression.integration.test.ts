@@ -273,7 +273,7 @@ describe("Cross-service quality-gate regression integration", () => {
       ...task,
       status: "blocked",
       labels: ["attempts:1", "merge_stage:quality_gate"],
-      block_reason: "Merge Failure",
+      block_reason: "Quality Gate Failure",
       ...blockedExtra,
     };
 

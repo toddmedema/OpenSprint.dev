@@ -59,42 +59,134 @@ function getFirstNonEmptyLine(value: string | null | undefined): string | null {
   );
 }
 
-/** Runner/npm noise we skip when looking for the first meaningful error line. */
-const NOISE_LINE = /^\s*(>|npm ERR!)/;
+const QUALITY_GATE_NOISE_PATTERNS: RegExp[] = [
+  /^\s*> /,
+  /^\s*npm (error|err!)/i,
+  /^\s*lifecycle script .* failed/i,
+  /^\s*exit code \d+/i,
+  /^\s*stderr \|/i,
+  /^\s*RUN\s+v?\d/i,
+  /^\s*Test Files\s+\d+\s+passed/i,
+  /^\s*Tests\s+\d+\s+passed/i,
+  /^\s*Start at /i,
+  /^\s*Duration /i,
+  /^\s*[|\\/-]{2,}\s*$/,
+  /^\s*[=-]{3,}\s*$/,
+  /^\s*✓\s+/,
+  /^\s*at\s+\S+/,
+  /^\s*node:/i,
+];
 
-/** Lines that look like a real compiler/test error (file:line, error TS, Error:, etc.). */
-const MEANINGFUL_ERROR_LINE =
-  /error\s+TS\d+|Error:|AssertionError:|:\s*error\s|Cannot find|failed|FAIL\s|\.(ts|tsx|js|jsx):\d+/i;
+const QUALITY_GATE_ACTIONABLE_PATTERNS: Array<{ pattern: RegExp; score: number }> = [
+  { pattern: /\berror TS\d+\b/i, score: 130 },
+  { pattern: /\b(AssertionError|TypeError|ReferenceError|SyntaxError|RangeError):/i, score: 125 },
+  { pattern: /\bCannot find (module|package)\b/i, score: 120 },
+  {
+    pattern: /\b(not exported by|does not provide an export named|failed to resolve import)\b/i,
+    score: 115,
+  },
+  { pattern: /\b\d+:\d+\s+error\b/i, score: 110 },
+  { pattern: /\.(ts|tsx|js|jsx|mts|cts|mjs|cjs)\b.*[:(]\d+([:,)]\d+)?/i, score: 105 },
+  { pattern: /^\s*FAIL\b/i, score: 100 },
+  { pattern: /\b(Expected|Received):\b/, score: 95 },
+  { pattern: /\berror during build\b/i, score: 90 },
+  { pattern: /\b(Command failed|failed)\b/i, score: 75 },
+  { pattern: /\bError:/i, score: 70 },
+];
+
+function isNoiseLine(line: string): boolean {
+  return QUALITY_GATE_NOISE_PATTERNS.some((pattern) => pattern.test(line));
+}
+
+function actionableScore(line: string): number {
+  let score = 0;
+  for (const rule of QUALITY_GATE_ACTIONABLE_PATTERNS) {
+    if (rule.pattern.test(line)) {
+      score = Math.max(score, rule.score);
+    }
+  }
+  return score;
+}
+
+function getMeaningfulErrorIndex(lines: string[]): number {
+  let bestIndex = -1;
+  let bestScore = 0;
+
+  lines.forEach((line, index) => {
+    if (!line || isNoiseLine(line)) return;
+    const score = actionableScore(line);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+
+  if (bestIndex >= 0) return bestIndex;
+  return lines.findIndex((line) => line.length > 0 && !isNoiseLine(line));
+}
+
+function getRelevantOutputSnippet(value: string | null | undefined): string {
+  if (!value) return "";
+  const lines = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return "";
+
+  const primaryIndex = getMeaningfulErrorIndex(lines);
+  if (primaryIndex < 0) return "";
+
+  const start = Math.max(0, primaryIndex - 1);
+  const end = Math.min(lines.length, primaryIndex + 6);
+  const snippetLines: string[] = [];
+
+  for (let index = start; index < end; index += 1) {
+    const line = lines[index]!;
+    if (isNoiseLine(line)) continue;
+    snippetLines.push(line);
+    if (snippetLines.length >= 6) break;
+  }
+
+  if (snippetLines.length === 0) {
+    snippetLines.push(lines[primaryIndex]!);
+  }
+
+  return snippetLines.join("\n").slice(0, QUALITY_GATE_FAILURE_OUTPUT_LIMIT);
+}
 
 function getFirstMeaningfulErrorLine(value: string | null | undefined): string | null {
   if (!value) return null;
-  const lines = value.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0);
-  const meaningful = lines.find(
-    (line) => !NOISE_LINE.test(line) && MEANINGFUL_ERROR_LINE.test(line)
-  );
-  return meaningful ?? getFirstNonEmptyLine(value);
+  const lines = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return null;
+  const meaningfulIndex = getMeaningfulErrorIndex(lines);
+  return meaningfulIndex >= 0 ? lines[meaningfulIndex]! : getFirstNonEmptyLine(value);
 }
 
 function extractShellFailure(
   command: string,
   err: unknown
-): { reason: string; output: string; firstErrorLine: string } {
+): { reason: string; output: string; outputSnippet: string; firstErrorLine: string } {
   const e = err as { stdout?: string; stderr?: string; message?: string };
   const rawOutput = [e.stdout ?? "", e.stderr ?? ""]
     .filter((part) => part.trim().length > 0)
     .join("\n")
     .trim();
   const output = rawOutput.slice(0, QUALITY_GATE_FAILURE_OUTPUT_LIMIT);
+  const outputSnippet = getRelevantOutputSnippet(rawOutput) || output;
   const reason = (e.message ?? `Command failed: ${command}`).slice(
     0,
     QUALITY_GATE_FAILURE_REASON_LIMIT
   );
   const firstErrorLine =
     getFirstMeaningfulErrorLine(rawOutput) ??
+    getFirstNonEmptyLine(outputSnippet) ??
     getFirstNonEmptyLine(rawOutput) ??
     getFirstNonEmptyLine(reason) ??
     "Unknown quality gate failure";
-  return { reason, output, firstErrorLine };
+  return { reason, output, outputSnippet, firstErrorLine };
 }
 
 function isQualityGateEnvironmentFailure(failure: {
@@ -189,7 +281,7 @@ export async function runMergeQualityGates(
           command,
           reason: initialFailure.reason,
           output: initialFailure.output,
-          outputSnippet: initialFailure.output.slice(0, 1800),
+          outputSnippet: initialFailure.outputSnippet.slice(0, 1800),
           worktreePath: options.worktreePath,
           firstErrorLine: initialFailure.firstErrorLine,
           category: "quality_gate",
@@ -235,7 +327,7 @@ export async function runMergeQualityGates(
           command,
           reason: retryFailure.reason,
           output: retryFailure.output,
-          outputSnippet: retryFailure.output.slice(0, 1800),
+          outputSnippet: retryFailure.outputSnippet.slice(0, 1800),
           worktreePath: options.worktreePath,
           firstErrorLine: retryFailure.firstErrorLine,
           category,

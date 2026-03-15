@@ -188,7 +188,7 @@ describe("OrchestratorDispatchService", () => {
       ...baseTask("os-9013"),
       next_retry_context: {
         previousFailure: "Pre-merge quality gate failed",
-        failureType: "coding_failure",
+        failureType: "merge_quality_gate",
       },
       failedGateCommand: "npm run test",
       failedGateReason: "Command failed: npm run test",
@@ -211,7 +211,7 @@ describe("OrchestratorDispatchService", () => {
       expect.objectContaining({ taskId: task.id }),
       expect.objectContaining({
         previousFailure: "Pre-merge quality gate failed",
-        failureType: "coding_failure",
+        failureType: "merge_quality_gate",
         qualityGateDetail: expect.objectContaining({
           command: "npm run test",
           firstErrorLine: "AssertionError: expected 401 to be 403",
@@ -230,7 +230,7 @@ describe("OrchestratorDispatchService", () => {
       merge_quality_gate_paused_until: "2026-03-14T10:00:00.000Z",
       next_retry_context: {
         previousFailure: "baseline quality gates failed on main: Command failed: npm run lint",
-        failureType: "coding_failure",
+        failureType: "merge_quality_gate",
       },
     } as StoredTask;
 

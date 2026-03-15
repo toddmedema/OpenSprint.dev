@@ -511,7 +511,7 @@ export class TaskStoreService {
   }
 
   /**
-   * List tasks blocked by technical errors (Merge Failure, Coding Failure) that are eligible
+   * List tasks blocked by technical errors (Merge Failure, Quality Gate Failure, Coding Failure) that are eligible
    * for auto-retry. Excludes human-feedback blocks plus deterministic/setup or review failures
    * that should stay blocked until someone intervenes. Only returns tasks whose
    * last_auto_retry_at is null or older than AUTO_RETRY_BLOCKED_INTERVAL_MS (8 hours).

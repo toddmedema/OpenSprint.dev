@@ -292,6 +292,64 @@ describe("TaskExecutionDiagnosticsService", () => {
     });
   });
 
+  it("classifies blocked quality-gate merges separately from merge conflicts", async () => {
+    taskStore.show.mockResolvedValue({
+      id: taskId,
+      status: "blocked",
+      labels: ["attempts:4", "merge_stage:quality_gate"],
+      block_reason: "Quality Gate Failure",
+      last_execution_summary: {
+        at: "2026-03-02T12:00:00.000Z",
+        attempt: 4,
+        outcome: "blocked",
+        phase: "merge",
+        failureType: "merge_quality_gate",
+        blockReason: "Quality Gate Failure",
+        summary: "Attempt 4 quality gate failed: npm run build: error TS2304",
+      },
+    });
+    taskStore.getCumulativeAttemptsFromIssue.mockReturnValue(4);
+    sessionManager.listSessions.mockResolvedValue([]);
+    mockReadForTask.mockResolvedValue([
+      {
+        timestamp: "2026-03-02T12:00:00.000Z",
+        projectId,
+        taskId,
+        event: "merge.failed",
+        data: {
+          attempt: 4,
+          stage: "quality_gate",
+          failureType: "merge_quality_gate",
+          resolvedBy: "blocked",
+          blockReason: "Quality Gate Failure",
+          failedGateCommand: "npm run build",
+          failedGateReason: "Command failed with exit code 1",
+          qualityGateFirstErrorLine: "error TS2304: Cannot find name 'foo'",
+          nextAction: "Blocked pending investigation",
+        },
+      },
+    ]);
+
+    const service = new TaskExecutionDiagnosticsService(
+      projectService as never,
+      taskStore as never,
+      sessionManager as never
+    );
+
+    const diagnostics = await service.getDiagnostics(projectId, taskId);
+
+    expect(diagnostics.blockReason).toBe("Quality Gate Failure");
+    expect(diagnostics.latestFailureType).toBe("merge_quality_gate");
+    expect(diagnostics.latestSummary).toContain("npm run build: error TS2304");
+    expect(diagnostics.attempts[0]).toEqual(
+      expect.objectContaining({
+        blockReason: "Quality Gate Failure",
+        failureType: "merge_quality_gate",
+        mergeStage: "quality_gate",
+      })
+    );
+  });
+
   it("prefers the latest execution failure detail over stale task-level gate metadata after requeue", async () => {
     taskStore.show.mockResolvedValue({
       id: taskId,

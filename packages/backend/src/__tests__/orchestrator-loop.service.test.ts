@@ -12,6 +12,7 @@ const mockBroadcastToProject = vi.fn();
 const mockGetNextKey = vi.fn();
 const mockIsExhausted = vi.fn();
 const mockClearExhausted = vi.fn();
+const mockGetProviderOutageBackoff = vi.fn();
 const mockGetComplexityForAgent = vi.fn();
 
 vi.mock("../services/notification.service.js", () => ({
@@ -31,6 +32,10 @@ vi.mock("../services/api-key-resolver.service.js", () => ({
 vi.mock("../services/api-key-exhausted.service.js", () => ({
   isExhausted: (...args: unknown[]) => mockIsExhausted(...args),
   clearExhausted: (...args: unknown[]) => mockClearExhausted(...args),
+}));
+
+vi.mock("../services/provider-outage-backoff.service.js", () => ({
+  getProviderOutageBackoff: (...args: unknown[]) => mockGetProviderOutageBackoff(...args),
 }));
 
 vi.mock("../services/plan-complexity.js", () => ({
@@ -88,6 +93,7 @@ describe("OrchestratorLoopService", () => {
     mockGetNextKey.mockResolvedValue(null);
     mockIsExhausted.mockReturnValue(false);
     mockClearExhausted.mockReset();
+    mockGetProviderOutageBackoff.mockReturnValue(null);
     mockGetComplexityForAgent.mockResolvedValue("low");
     delete process.env.OPENSPRINT_MAX_NEW_TASKS_PER_LOOP;
 
@@ -190,5 +196,28 @@ describe("OrchestratorLoopService", () => {
       expect.objectContaining({ id: "os-1" }),
       2
     );
+  });
+
+  it("skips dispatch when the selected provider is under outage backoff", async () => {
+    host.getProjectService = vi.fn().mockReturnValue({
+      getRepoPath: vi.fn().mockResolvedValue(repoPath),
+      getSettings: vi.fn().mockResolvedValue({
+        gitWorkingMode: "worktree",
+        maxConcurrentCoders: 3,
+        unknownScopeStrategy: "conservative",
+        simpleComplexityAgent: { type: "cursor", model: null },
+        complexComplexityAgent: { type: "cursor", model: null },
+      }),
+    });
+    mockGetProviderOutageBackoff.mockReturnValue({
+      attempts: 2,
+      until: "2026-03-15T12:15:00.000Z",
+      reason: "Failed to reach the Cursor API",
+    });
+
+    await service.runLoop(projectId);
+
+    expect(dispatchTask).not.toHaveBeenCalled();
+    expect(host.ensureApiBlockedNotificationsForExhaustedProviders).not.toHaveBeenCalled();
   });
 });

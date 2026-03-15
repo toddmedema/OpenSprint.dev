@@ -2606,12 +2606,12 @@ describe("TaskDetailSidebar", () => {
         ...defaultSelectedTaskData,
         kanbanColumn: "blocked" as const,
         status: "blocked" as const,
-        blockReason: "Merge Failure",
+        blockReason: "Quality Gate Failure",
       },
       diagnostics: {
         taskId: "epic-1.1",
         taskStatus: "blocked",
-        blockReason: "Merge Failure",
+        blockReason: "Quality Gate Failure",
         cumulativeAttempts: 4,
         latestSummary: "Quality gate failed during merge checks",
         latestFailureType: "environment_setup",
@@ -2661,6 +2661,7 @@ describe("TaskDetailSidebar", () => {
       "Run npm ci in the repository root and re-link worktree node_modules."
     );
     expect(screen.getByTestId("execution-attempt-4")).toHaveTextContent("Merge · Failures");
+    expect(screen.getByTestId("execution-attempt-4")).toHaveTextContent("Stage: Quality gate");
   });
 
   it("hides Execution diagnostics content when diagnosticsSectionExpanded is false", () => {
