@@ -121,6 +121,27 @@ function isNoRebaseInProgressError(err: unknown): boolean {
   return /no rebase in progress/i.test(getErrorText(err));
 }
 
+/** True when git branch -D failed because the branch does not exist (e.g. unblock before prepare). */
+function isBranchNotFoundError(err: unknown): boolean {
+  const text = getErrorText(err);
+  if (
+    /branch\s+.*not\s+found|not\s+found.*branch/i.test(text) ||
+    (text.includes("branch") && text.includes("not found"))
+  ) {
+    return true;
+  }
+  // Fallback: exec rejection may not include stderr on the error in some environments
+  if (err && typeof err === "object") {
+    const obj = err as Record<string, unknown>;
+    const code = obj.code ?? obj.exitCode;
+    const cmd = typeof obj.cmd === "string" ? obj.cmd : String(obj.cmd ?? "");
+    if (code === 1 && /branch\s+-D\s+/.test(cmd)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function shouldAttemptRebaseSkip(err: unknown): boolean {
   const text = getErrorText(err).toLowerCase();
   if (!text) return false;
@@ -272,17 +293,35 @@ export class BranchManager {
     branchName: string,
     baseBranch: string = "main"
   ): Promise<void> {
+    const deleteTaskBranch = async (): Promise<void> => {
+      try {
+        await this.git(repoPath, `branch -D ${branchName}`);
+      } catch (deleteErr: unknown) {
+        if (isBranchNotFoundError(deleteErr)) {
+          return; // Branch already gone (e.g. unblock before prepare)
+        }
+        throw deleteErr;
+      }
+    };
+
     try {
-      // Reset any uncommitted changes
-      await this.git(repoPath, "reset --hard HEAD");
-      await this.git(repoPath, "clean -fd");
-      // Switch back to base branch
-      await this.git(repoPath, `checkout ${baseBranch}`);
-      // Delete the task branch
-      await this.git(repoPath, `branch -D ${branchName}`);
+      const currentBranch = await this.getCurrentBranch(repoPath).catch(() => "");
+      if (currentBranch === branchName) {
+        // We're on the task branch: reset, switch to base, then delete
+        await this.git(repoPath, "reset --hard HEAD");
+        await this.git(repoPath, "clean -fd");
+        await this.git(repoPath, `checkout ${baseBranch}`);
+        await deleteTaskBranch();
+      } else {
+        // Not on task branch (e.g. unblock before any prepare): just delete if it exists
+        await deleteTaskBranch();
+      }
     } catch (error) {
+      if (isBranchNotFoundError(error)) {
+        // Branch didn't exist; goal achieved, no need to log or recover
+        return;
+      }
       log.error("Failed to revert branch", { branchName, error });
-      // Force checkout base branch even if something failed
       try {
         await this.git(repoPath, `checkout -f ${baseBranch}`);
       } catch {
