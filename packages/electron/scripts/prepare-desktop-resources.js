@@ -134,12 +134,67 @@ function resolveTargetPlatform(cliOptions = {}) {
   return targetPlatform;
 }
 
+function hasPythonDistutils(pythonPath) {
+  if (!pythonPath) return false;
+  try {
+    execFileSync(
+      pythonPath,
+      [
+        "-c",
+        "import distutils.version; import sys; sys.stdout.write('ok')",
+      ],
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+      }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveNativeBuildPython() {
+  const envCandidates = [
+    process.env.OPENSPRINT_NATIVE_BUILD_PYTHON,
+    process.env.npm_config_python,
+    process.env.PYTHON,
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+  const pathCandidates =
+    process.platform === "darwin"
+      ? ["/usr/bin/python3", "/opt/homebrew/bin/python3", "/usr/local/bin/python3", "python3"]
+      : ["python3"];
+
+  for (const candidate of [...envCandidates, ...pathCandidates]) {
+    if (hasPythonDistutils(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function createNativeBuildEnv() {
+  const env = { ...process.env };
+  const pythonPath = resolveNativeBuildPython();
+  if (pythonPath) {
+    env.PYTHON = pythonPath;
+    env.npm_config_python = pythonPath;
+  }
+  return env;
+}
+
 async function run() {
   console.log("Preparing desktop resources...");
   const cliOptions = parseCliOptions(process.argv.slice(2));
   const electronVersion = resolveElectronVersion(cliOptions);
   const targetArch = resolveTargetArch(cliOptions);
   const targetPlatform = resolveTargetPlatform(cliOptions);
+  const nativeBuildEnv = createNativeBuildEnv();
+  const selectedPython = nativeBuildEnv.npm_config_python?.trim();
+  if (selectedPython) {
+    console.log(`Using Python for native module rebuilds: ${selectedPython}`);
+  }
 
   if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });
@@ -156,19 +211,20 @@ async function run() {
   );
   execSync("npm ci --omit=dev --ignore-scripts=false --no-audit --no-fund", {
     cwd: backendOut,
-    env: process.env,
+    env: nativeBuildEnv,
     stdio: "inherit",
   });
   console.log("Rebuilding native modules for Electron...");
   execSync(
     `npx electron-rebuild --version ${electronVersion} --module-dir ${backendOut} --arch ${targetArch}`,
-    { cwd: electronPackageDir, stdio: "inherit" }
+    { cwd: electronPackageDir, env: nativeBuildEnv, stdio: "inherit" }
   );
   const sqliteRuntimeDiagnostics = ensureSqliteRuntimeLoadable(
     backendOut,
     electronVersion,
     targetPlatform,
-    targetArch
+    targetArch,
+    nativeBuildEnv
   );
 
   console.log("Pruning non-runtime files from backend node_modules...");
@@ -188,7 +244,13 @@ async function run() {
   console.log("Desktop resources ready at", outDir);
 }
 
-function ensureSqliteRuntimeLoadable(backendOut, electronVersion, targetPlatform, targetArch) {
+function ensureSqliteRuntimeLoadable(
+  backendOut,
+  electronVersion,
+  targetPlatform,
+  targetArch,
+  nativeBuildEnv
+) {
   console.log(
     `Verifying ${SQLITE_MODULE_NAME} runtime load (electron=${electronVersion}, platform=${targetPlatform}, arch=${targetArch})...`
   );
@@ -238,7 +300,7 @@ function ensureSqliteRuntimeLoadable(backendOut, electronVersion, targetPlatform
   console.warn(`Attempting source rebuild for ${SQLITE_MODULE_NAME}...`);
   execSync(
     `npx electron-rebuild --version ${electronVersion} --module-dir ${backendOut} --arch ${targetArch} -f`,
-    { cwd: electronPackageDir, stdio: "inherit" }
+    { cwd: electronPackageDir, env: nativeBuildEnv, stdio: "inherit" }
   );
 
   const rebuiltDiagnostics = collectSqliteRuntimeDiagnostics(
