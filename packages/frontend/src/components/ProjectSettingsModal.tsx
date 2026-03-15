@@ -836,15 +836,6 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
 
                 {activeTab === "agents" && (
                   <div className="space-y-6">
-                    <section
-                      className="p-4 rounded-lg bg-theme-bg-elevated border border-theme-border"
-                      data-testid="agent-config-how-this-works"
-                    >
-                      <p className="text-sm text-theme-muted">
-                        How this works: Simple agents handle low/medium complexity tasks; Complex
-                        agents handle high/very_high complexity tasks.
-                      </p>
-                    </section>
                     <div data-testid="task-complexity-section">
                       <h3 className="text-sm font-semibold text-theme-text mb-3">
                         Task Complexity

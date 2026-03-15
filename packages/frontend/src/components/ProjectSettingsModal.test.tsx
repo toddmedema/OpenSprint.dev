@@ -1136,23 +1136,6 @@ describe("ProjectSettingsModal", () => {
     );
   });
 
-  it("Agent Config tab shows How this works explainer before Task Complexity", async () => {
-    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
-    await waitForModalReady();
-
-    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
-    await userEvent.click(agentConfigTab);
-
-    const explainer = await screen.findByTestId("agent-config-how-this-works");
-    expect(explainer).toBeInTheDocument();
-    expect(explainer).toHaveTextContent(
-      "How this works: Simple agents handle low/medium complexity tasks; Complex agents handle high/very_high complexity tasks."
-    );
-
-    const taskSection = screen.getByTestId("task-complexity-section");
-    expect(explainer.compareDocumentPosition(taskSection)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-  });
-
   it("Agent Config tab has no sub help text under Simple or Complex agent selection", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await waitForModalReady();

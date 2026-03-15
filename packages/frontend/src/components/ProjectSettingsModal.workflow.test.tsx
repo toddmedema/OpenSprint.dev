@@ -115,7 +115,6 @@ describe("ProjectSettingsModal workflow integration", () => {
     await screen.findByTestId("settings-modal-content");
     await user.click(screen.getByRole("button", { name: "Agent Config" }));
 
-    expect(screen.getByTestId("agent-config-how-this-works")).toBeInTheDocument();
     expect(screen.getByText("Simple")).toBeInTheDocument();
     expect(screen.getByText("Complex")).toBeInTheDocument();
     expect(screen.getByTestId("agents-advanced-section")).toBeInTheDocument();
