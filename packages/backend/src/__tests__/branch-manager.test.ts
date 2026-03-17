@@ -41,7 +41,10 @@ describe("BranchManager", () => {
 
   beforeEach(async () => {
     branchManager = new BranchManager();
-    repoPath = path.join(os.tmpdir(), `opensprint-branch-test-${Date.now()}`);
+    repoPath = path.join(
+      os.tmpdir(),
+      `opensprint-branch-test-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    );
     await fs.mkdir(repoPath, { recursive: true });
   });
 

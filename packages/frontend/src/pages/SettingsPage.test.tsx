@@ -121,7 +121,15 @@ describe("SettingsPage", () => {
       { timeout: 1000 }
     );
 
-    expect(addSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
+    await waitFor(
+      () => {
+        const beforeunloadAdd = addSpy.mock.calls.find(
+          (c) => c[0] === "beforeunload" && typeof c[1] === "function"
+        );
+        expect(beforeunloadAdd).toBeDefined();
+      },
+      { timeout: 500 }
+    );
 
     await waitFor(
       () => {
@@ -132,7 +140,10 @@ describe("SettingsPage", () => {
 
     await waitFor(
       () => {
-        expect(removeSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
+        const beforeunloadRemove = removeSpy.mock.calls.find(
+          (c) => c[0] === "beforeunload" && typeof c[1] === "function"
+        );
+        expect(beforeunloadRemove).toBeDefined();
       },
       { timeout: 500 }
     );
