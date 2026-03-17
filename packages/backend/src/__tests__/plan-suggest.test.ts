@@ -18,7 +18,6 @@ const mockInvoke = vi.fn();
 const mockRegister = vi.fn();
 const mockUnregister = vi.fn();
 
-// Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
   eq: (a: unknown, b: unknown) => [a, b],

@@ -12,7 +12,6 @@ import os from "os";
 import { AgentClient } from "../services/agent-client.js";
 import type { AgentConfig } from "@opensprint/shared";
 
-// Avoid loading drizzle-orm/pg-core (vitest resolution can fail in some workspaces)
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
   eq: (a: unknown, b: unknown) => [a, b],

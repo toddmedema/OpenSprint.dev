@@ -9,7 +9,6 @@ import {
   DEFAULT_WORKFLOW,
 } from "../services/workflow-engine.service.js";
 
-// Avoid loading drizzle-orm/pg-core (vitest resolution can fail in some workspaces)
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
   eq: (a: unknown, b: unknown) => [a, b],

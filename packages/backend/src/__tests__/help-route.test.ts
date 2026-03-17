@@ -19,7 +19,6 @@ vi.mock("../services/beads.service.js", () => ({
   },
 }));
 
-// Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
   eq: (a: unknown, b: unknown) => [a, b],

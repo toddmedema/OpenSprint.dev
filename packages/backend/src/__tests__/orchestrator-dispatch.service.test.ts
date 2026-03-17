@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-// Avoid loading drizzle-orm/pg-core (vitest resolution can fail in some workspaces)
+
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
   eq: (a: unknown, b: unknown) => [a, b],

@@ -10,7 +10,6 @@ import { taskStore } from "../services/task-store.service.js";
 import { setGlobalSettings } from "../services/global-settings.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
-// Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
   eq: (a: unknown, b: unknown) => [a, b],

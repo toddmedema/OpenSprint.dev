@@ -15,7 +15,6 @@ import { getExpoConfigStatus } from "../utils/expo-config.js";
 import { checkExpoAuth } from "../utils/expo-auth-check.js";
 import { isEasProjectLinked } from "../utils/eas-project-link.js";
 
-// Avoid loading drizzle-orm/pg-core when task-store mock uses importOriginal (vitest resolution can fail)
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
   eq: (a: unknown, b: unknown) => [a, b],

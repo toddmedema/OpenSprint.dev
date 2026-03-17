@@ -3,6 +3,12 @@
  * (via app, composition, agent.service, etc.) do not fail with "Failed to load url @google/genai".
  * The package has ESM resolution issues under Vite's transform; this mock is applied before
  * any test file loads.
+ *
+ * Drizzle-orm / pg-core: Tests that mock task-store (or other modules) with vi.mock(..., async (importOriginal) => ...)
+ * should avoid loading drizzle-orm/pg-core in the same file when the mock uses importOriginal, because
+ * Vitest's resolution can fail in some workspaces. In those tests, mock drizzle-orm (and optionally
+ * ../db/drizzle-schema-pg.js) before importing the module under test. See test files that use
+ * createMockDbClient or task-store mocks for examples.
  */
 import { vi } from "vitest";
 
