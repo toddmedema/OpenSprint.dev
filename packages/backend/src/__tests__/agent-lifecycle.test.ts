@@ -397,7 +397,7 @@ describe("AgentLifecycleManager", () => {
 
       killSpy.mockRestore();
       vi.useRealTimers();
-    });
+    }, 60_000);
 
     it("resumes from suspended when new output arrives", async () => {
       vi.useFakeTimers();

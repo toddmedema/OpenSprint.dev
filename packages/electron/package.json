@@ -27,7 +27,7 @@
     "build:linux": "node scripts/build-target.js --platform linux",
     "build:linux:x64": "node scripts/build-target.js --platform linux --arch x64",
     "build:linux:arm64": "node scripts/build-target.js --platform linux --arch arm64",
-    "test": "vitest run"
+    "test": "npx vitest run"
   },
   "dependencies": {},
   "devDependencies": {
