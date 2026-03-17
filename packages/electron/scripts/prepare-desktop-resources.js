@@ -181,6 +181,43 @@ function createNativeBuildEnv() {
   return env;
 }
 
+function resolveNpxExecutable() {
+  return process.platform === "win32" ? "npx.cmd" : "npx";
+}
+
+function buildElectronRebuildArgs({
+  electronVersion,
+  moduleDir,
+  targetArch,
+  force = false,
+  buildFromSource = false,
+}) {
+  const args = [
+    "electron-rebuild",
+    "--version",
+    electronVersion,
+    "--module-dir",
+    moduleDir,
+    "--arch",
+    targetArch,
+  ];
+  if (force) {
+    args.push("--force");
+  }
+  if (buildFromSource) {
+    args.push("--build-from-source");
+  }
+  return args;
+}
+
+function runElectronRebuild(options, nativeBuildEnv) {
+  execFileSync(resolveNpxExecutable(), buildElectronRebuildArgs(options), {
+    cwd: electronPackageDir,
+    env: nativeBuildEnv,
+    stdio: "inherit",
+  });
+}
+
 async function run() {
   console.log("Preparing desktop resources...");
   const cliOptions = parseCliOptions(process.argv.slice(2));
@@ -212,9 +249,13 @@ async function run() {
     stdio: "inherit",
   });
   console.log("Rebuilding native modules for Electron...");
-  execSync(
-    `npx electron-rebuild --version ${electronVersion} --module-dir ${backendOut} --arch ${targetArch}`,
-    { cwd: electronPackageDir, env: nativeBuildEnv, stdio: "inherit" }
+  runElectronRebuild(
+    {
+      electronVersion,
+      moduleDir: backendOut,
+      targetArch,
+    },
+    nativeBuildEnv
   );
   const sqliteRuntimeDiagnostics = ensureSqliteRuntimeLoadable(
     backendOut,
@@ -295,9 +336,15 @@ function ensureSqliteRuntimeLoadable(
 
   logProbeFailure("Initial SQLite runtime verification failed", probe, initialDiagnostics);
   console.warn(`Attempting source rebuild for ${SQLITE_MODULE_NAME}...`);
-  execSync(
-    `npx electron-rebuild --version ${electronVersion} --module-dir ${backendOut} --arch ${targetArch} -f`,
-    { cwd: electronPackageDir, env: nativeBuildEnv, stdio: "inherit" }
+  runElectronRebuild(
+    {
+      electronVersion,
+      moduleDir: backendOut,
+      targetArch,
+      force: true,
+      buildFromSource: true,
+    },
+    nativeBuildEnv
   );
 
   const rebuiltDiagnostics = collectSqliteRuntimeDiagnostics(
@@ -640,6 +687,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildElectronRebuildArgs,
   parseCliOptions,
   resolveElectronVersion,
   resolveInstalledElectronVersion,

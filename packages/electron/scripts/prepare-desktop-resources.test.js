@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
 const {
+  buildElectronRebuildArgs,
   normalizeElectronVersion,
   resolveConfiguredElectronVersion,
   resolveElectronVersion,
@@ -37,5 +38,27 @@ describe("prepare-desktop-resources", () => {
 
   it("resolves a configured fallback version from package.json", () => {
     expect(resolveConfiguredElectronVersion()).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it("uses a real source rebuild for forced native recovery", () => {
+    expect(
+      buildElectronRebuildArgs({
+        electronVersion: "41.0.2",
+        moduleDir: "/tmp/backend",
+        targetArch: "arm64",
+        force: true,
+        buildFromSource: true,
+      })
+    ).toEqual([
+      "electron-rebuild",
+      "--version",
+      "41.0.2",
+      "--module-dir",
+      "/tmp/backend",
+      "--arch",
+      "arm64",
+      "--force",
+      "--build-from-source",
+    ]);
   });
 });
