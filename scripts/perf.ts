@@ -9,7 +9,7 @@
  * Prerequisites:
  * - Backend running on port 3100 (npm run dev:backend)
  * - Frontend running on port 5173 (npm run dev:frontend)
- * - At least one project with at least one task (for sidebar open/close)
+ * - Optional: at least one project with at least one task (for execute/sidebar metrics)
  *
  * Usage:
  *   npm run perf
@@ -54,21 +54,25 @@ async function fetchJson<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function getProjectAndTask(): Promise<{ projectId: string; taskId: string } | null> {
+async function getProjectAndTask(): Promise<{ projectId: string | null; taskId: string | null }> {
   const projectsRes = await fetchJson<{ data?: { id: string }[] }>(`${API_BASE}/projects`);
   const projects = projectsRes?.data ?? [];
-  if (!Array.isArray(projects) || projects.length === 0) return null;
+  if (!Array.isArray(projects) || projects.length === 0) {
+    return { projectId: null, taskId: null };
+  }
 
-  const projectId = projects[0].id;
+  const projectId = projects[0]?.id ?? null;
+  if (!projectId) {
+    return { projectId: null, taskId: null };
+  }
   const tasksRes = await fetchJson<{ data?: { id: string }[] | { items: { id: string }[] } }>(
     `${API_BASE}/projects/${projectId}/tasks?limit=50`
   );
   const raw = tasksRes?.data;
   const tasks = Array.isArray(raw) ? raw : ((raw as { items?: { id: string }[] })?.items ?? []);
   const taskIds = tasks.map((t: { id: string }) => t.id);
-  if (taskIds.length === 0) return null;
 
-  return { projectId, taskId: taskIds[0] };
+  return { projectId, taskId: taskIds[0] ?? null };
 }
 
 async function waitFor(ms: number): Promise<void> {
@@ -137,12 +141,14 @@ async function runPerf(browser: Browser): Promise<PerfMetrics> {
     metrics.memory.jsHeapUsed = memAfterLoad.jsHeapUsed;
     metrics.memory.jsHeapTotal = memAfterLoad.jsHeapTotal;
 
-    await page.goto(`${APP_URL}/projects/${projectId}/execute`, {
-      waitUntil: "networkidle2",
-      timeout: 30000,
-    });
+    if (projectId) {
+      await page.goto(`${APP_URL}/projects/${projectId}/execute`, {
+        waitUntil: "networkidle2",
+        timeout: 30000,
+      });
 
-    await waitFor(500);
+      await waitFor(500);
+    }
 
     if (projectId && taskId) {
       const openStart = Date.now();
@@ -177,6 +183,8 @@ async function runPerf(browser: Browser): Promise<PerfMetrics> {
 
       const memAfterClose = await collectPageMetrics(page);
       metrics.memory.afterSidebarClose = memAfterClose.jsHeapUsed;
+    } else {
+      metrics.sidebarSkippedReason = projectId ? "no-task" : "no-project";
     }
   } finally {
     await page.close();
@@ -222,7 +230,13 @@ function printReport(metrics: PerfMetrics): void {
       console.log(`  Close to hidden:    ${metrics.sidebar.closeToHidden} ms`);
     }
   } else {
-    console.log("\nSidebar: Not opened (no tasks in project).");
+    const reason =
+      metrics.sidebarSkippedReason === "no-project"
+        ? "no projects found"
+        : metrics.sidebarSkippedReason === "no-task"
+          ? "no tasks in project"
+          : "no eligible task found";
+    console.log(`\nSidebar: Not opened (${reason}).`);
   }
   console.log("");
 }
