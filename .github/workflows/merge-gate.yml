@@ -53,20 +53,23 @@ jobs:
         run: npm run ${{ matrix.gate }}
       # Test gate runs tests with coverage; thresholds are enforced (Vitest exits non-zero if unmet).
       # Backend 75%, frontend 70% (SPEC >80% aspirational). Job fails if any workspace is below threshold.
+      # Frontend run includes E2E tests (*.e2e.test.tsx). Step is bounded (20m) so the gate cannot hang.
       - name: Run tests with coverage (enforce thresholds)
         if: matrix.gate == 'test'
         run: |
           set -e
           mkdir -p artifacts/test-results
 
-          for workspace in shared backend frontend; do
-            npm run test:coverage -w packages/$workspace -- \
-              --reporter=default \
-              --reporter=junit \
-              --reporter=json \
-              --outputFile.junit=../../artifacts/test-results/$workspace-junit.xml \
-              --outputFile.json=../../artifacts/test-results/$workspace-results.json
-          done
+          timeout 20m bash -c '
+            for workspace in shared backend frontend; do
+              npm run test:coverage -w packages/$workspace -- \
+                --reporter=default \
+                --reporter=junit \
+                --reporter=json \
+                --outputFile.junit=../../artifacts/test-results/$workspace-junit.xml \
+                --outputFile.json=../../artifacts/test-results/$workspace-results.json
+            done
+          '
       - name: Upload test reports
         if: always() && matrix.gate == 'test'
         uses: actions/upload-artifact@v6

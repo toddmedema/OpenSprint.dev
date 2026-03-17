@@ -20,6 +20,9 @@ export * from "./types/workflow.js";
 // Constants
 export * from "./constants/index.js";
 
+// Error codes and failure types → user-facing messages (UI and notifications)
+export * from "./error-messages.js";
+
 // SPEC.md serialization (Sketch phase output)
 export * from "./spec-serializer.js";
 

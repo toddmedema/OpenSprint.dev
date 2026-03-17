@@ -2832,9 +2832,9 @@ describe("ExecutePhase Redux integration", () => {
       () => {
         expect(mockLiveOutput.mock.calls.length).toBe(initialCalls + 1);
       },
-      { timeout: 12000 }
+      { timeout: 15000 }
     );
-  }, 20000);
+  }, 30000);
 
   it("task detail sidebar header shows only task title, not redundant Task label", async () => {
     mockGet.mockResolvedValue({

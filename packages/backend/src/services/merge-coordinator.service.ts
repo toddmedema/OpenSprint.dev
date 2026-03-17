@@ -11,6 +11,7 @@
 
 import {
   BACKOFF_FAILURE_THRESHOLD,
+  QUALITY_GATE_FAILURE_MESSAGE,
   resolveTestCommand,
   type AgentConfig,
   type TestResults,
@@ -49,7 +50,6 @@ const BASELINE_QUALITY_GATE_TASK_SOURCE = "merge-quality-gate-baseline";
 /** One-sentence explanation for merge failures shown to users (conflicts with main in same files). */
 const HUMAN_MERGE_FAILURE_MESSAGE =
   "The merge could not complete because your branch and main both changed the same files.";
-const HUMAN_QUALITY_GATE_FAILURE_MESSAGE = "Pre-merge quality gates failed (build, lint, or test).";
 const MERGE_CONFLICT_BLOCK_REASON = "Merge Failure";
 const QUALITY_GATE_BLOCK_REASON = "Quality Gate Failure";
 
@@ -286,7 +286,7 @@ export class MergeCoordinatorService {
 
   private getHumanFailureMessage(stage: MergeFailureStage): string {
     return stage === "quality_gate"
-      ? HUMAN_QUALITY_GATE_FAILURE_MESSAGE
+      ? QUALITY_GATE_FAILURE_MESSAGE
       : HUMAN_MERGE_FAILURE_MESSAGE;
   }
 
@@ -692,7 +692,7 @@ export class MergeCoordinatorService {
     await this.host.taskStore.comment(
       projectId,
       task.id,
-      `Merge paused because baseline quality gates on ${baseBranch} are failing. ${HUMAN_QUALITY_GATE_FAILURE_MESSAGE} Details: ${detail}.${remediationAction ? ` Remediation: ${remediationAction}` : ""}`
+      `Merge paused because baseline quality gates on ${baseBranch} are failing. ${QUALITY_GATE_FAILURE_MESSAGE} Details: ${detail}.${remediationAction ? ` Remediation: ${remediationAction}` : ""}`
     );
     await this.createBaselineQualityGateNotification(projectId, baseBranch, detail);
     eventLogService

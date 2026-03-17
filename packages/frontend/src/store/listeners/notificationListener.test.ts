@@ -323,8 +323,9 @@ describe("notificationListener", () => {
 
     await waitFor(() => {
       expect(store.getState().notification.items).toHaveLength(1);
+      // Server message + centralized hint from shared error-messages
       expect(store.getState().notification.items[0].message).toBe(
-        "Cannot change assignee while task is in progress"
+        "Cannot change assignee while task is in progress The change was reverted."
       );
     });
   });

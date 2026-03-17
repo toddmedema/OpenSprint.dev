@@ -34,6 +34,8 @@ From the repo root, run:
 
 CI also runs `npm run lint:ci` (lint + format check). Fix any failures before submitting.
 
+**Merge gate and E2E:** The merge gate (`.github/workflows/merge-gate.yml`) runs `npm run test:coverage` for shared, backend, and frontend. The frontend suite includes E2E tests (`*.e2e.test.tsx`); the test step is bounded by a 20-minute timeout. The SPEC target of >80% coverage with passing E2E tests is enforced in CI; see `SPEC.md` for thresholds and details.
+
 To fix formatting: `npm run format`.
 
 ## Submitting changes

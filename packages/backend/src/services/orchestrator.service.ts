@@ -11,6 +11,7 @@ import type {
 } from "@opensprint/shared";
 import {
   AGENT_INACTIVITY_TIMEOUT_MS,
+  getFailureTypeTitle,
   OPENSPRINT_PATHS,
   resolveTestCommand,
   DEFAULT_REVIEW_MODE,
@@ -2161,7 +2162,9 @@ export class OrchestratorService {
       "Pre-merge quality gates failed";
     const firstErrorLine = detail?.firstErrorLine?.trim();
     const prefix =
-      failureType === "environment_setup" ? "Environment setup failed" : "Quality gate failed";
+      failureType === "environment_setup"
+        ? getFailureTypeTitle("environment_setup")
+        : getFailureTypeTitle("quality_gate");
     const commandPart = command ? ` (${command})` : "";
     const detailPart =
       firstErrorLine && firstErrorLine !== reason ? `: ${reason} | ${firstErrorLine}` : `: ${reason}`;

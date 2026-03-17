@@ -1,3 +1,4 @@
+import { getFailureTypeTitle, getQualityGateTitle } from "@opensprint/shared";
 import type {
   AgentSession,
   TaskExecutionAttemptItem,
@@ -266,7 +267,7 @@ function summarizeMergeFailure(params: {
   if (params.summary) return params.summary;
   if (params.mergeStage === "quality_gate") {
     return compactExecutionText(
-      `Quality gate failed${params.reason ? `: ${params.reason}` : ""}`,
+      `${getFailureTypeTitle("quality_gate")}${params.reason ? `: ${params.reason}` : ""}`,
       500
     );
   }
@@ -281,7 +282,7 @@ function titleForMergeFailure(
   mergeStage: string | null
 ): string {
   if (mergeStage !== "quality_gate") return titleForOutcome("merge", outcome);
-  return outcome === "blocked" ? "Quality gate blocked" : "Quality gate failed";
+  return getQualityGateTitle(outcome === "blocked");
 }
 
 function extractOutputHint(outputLog: string): string | null {

@@ -1,5 +1,6 @@
 import { createListenerMiddleware, isRejected, isFulfilled } from "@reduxjs/toolkit";
 import type { SerializedError } from "@reduxjs/toolkit";
+import { getErrorCodeHint } from "@opensprint/shared";
 import { DEDUP_SKIP } from "../dedup";
 import { addNotification, dismissNotification } from "../slices/notificationSlice";
 import { setConnectionError, dbStatusRestored } from "../slices/connectionSlice";
@@ -14,22 +15,9 @@ import {
 } from "../../lib/agentApiError";
 import { fetchProjectNotifications } from "../slices/openQuestionsSlice";
 
-/** One-line actionable hints for known API error codes (backend ErrorCodes). */
+/** One-line actionable hints for known API error codes (backend ErrorCodes). Uses shared central map. */
 export function getApiErrorHint(code: string | undefined): string | null {
-  if (!code) return null;
-  const hints: Record<string, string> = {
-    NO_GATE_TASK: "Generate tasks first or add a gating task in Plan.",
-    NO_EPIC: "Plan has no epic. Use Generate Tasks to generate tasks first.",
-    AGENT_INVOKE_FAILED: "Check agent login or Project Settings → Agent Config.",
-    AGENT_CLI_REQUIRED: "Install the agent CLI (see Project Settings → Agent Config).",
-    CURSOR_API_ERROR: "Check Cursor agent login or API key in Project Settings.",
-    ANTHROPIC_API_KEY_MISSING: "Add Anthropic API key in Global Settings → API keys.",
-    ISSUE_NOT_FOUND: "Task or session may have been removed.",
-    SESSION_NOT_FOUND: "Task or session may have been removed.",
-    PROJECT_NOT_FOUND: "Project may have been removed.",
-    PLAN_NOT_FOUND: "Plan may have been removed.",
-  };
-  return hints[code] ?? null;
+  return getErrorCodeHint(code);
 }
 
 /** Hints for errors identified by message content (e.g. git worktree conflicts). */
@@ -161,7 +149,7 @@ notificationListener.startListening({
         : msg === "Rejected"
           ? "Something went wrong. Try again or refresh the page."
           : msg);
-    const hint = getApiErrorHint(code) ?? getMessageBasedHint(msg);
+    const hint = getErrorCodeHint(code) ?? getMessageBasedHint(msg);
     const displayMessage = hint && displayBase === msg ? `${msg} ${hint}` : displayBase;
     listenerApi.dispatch(addNotification({ message: displayMessage, severity: "error" }));
   },

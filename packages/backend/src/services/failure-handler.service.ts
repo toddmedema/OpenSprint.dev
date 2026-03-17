@@ -11,6 +11,7 @@ import {
   AGENT_INACTIVITY_TIMEOUT_MS,
   BACKOFF_FAILURE_THRESHOLD,
   getProviderForAgentType,
+  getRemediationForFailureType,
   MAX_PRIORITY_BEFORE_BLOCK,
   TASK_COMPLEXITY_MAX,
   TASK_COMPLEXITY_MIN,
@@ -52,12 +53,6 @@ const RETRY_CONTEXT_TEST_FAILURES_LIMIT = 2000;
 const RETRY_CONTEXT_DIFF_LIMIT = 6000;
 const FAILURE_DIAGNOSTIC_OUTPUT_LIMIT = 1800;
 const FAILURE_DIAGNOSTIC_LINE_LIMIT = 300;
-const PREFLIGHT_DEPENDENCY_REMEDIATION =
-  "Run npm ci in the repository root, then fix invalid dependencies before retrying.";
-const PREFLIGHT_GIT_REMEDIATION =
-  "Fix repository git setup (base branch and git identity), then retry.";
-const ENVIRONMENT_SETUP_REMEDIATION =
-  "Run npm ci in the repository root, re-link worktree node_modules, then retry.";
 const FAILURE_DIAGNOSTIC_REASON_PATTERNS: RegExp[] = [
   /^tests? failed:/i,
   /^command failed(?::|\b)/i,
@@ -329,12 +324,10 @@ export class FailureHandlerService {
     isDependencySetupPreflightFailure: boolean
   ): string | null {
     if (failureType === "environment_setup") {
-      return ENVIRONMENT_SETUP_REMEDIATION;
+      return getRemediationForFailureType("environment_setup");
     }
     if (failureType === "repo_preflight") {
-      return isDependencySetupPreflightFailure
-        ? PREFLIGHT_DEPENDENCY_REMEDIATION
-        : PREFLIGHT_GIT_REMEDIATION;
+      return getRemediationForFailureType("repo_preflight", isDependencySetupPreflightFailure);
     }
     return null;
   }
