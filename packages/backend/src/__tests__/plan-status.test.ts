@@ -139,6 +139,14 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
   });
 
   afterEach(async () => {
+    if (planStatusTaskStore && projectId) {
+      try {
+        const db = await planStatusTaskStore.getDb();
+        await db.execute("DELETE FROM planning_runs WHERE project_id = $1", [projectId]);
+      } catch {
+        // Ignore if store unavailable or already torn down
+      }
+    }
     process.env.HOME = originalHome;
     await fs.rm(tempDir, { recursive: true, force: true });
   });
@@ -390,6 +398,7 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
     };
 
     const db = await planStatusTaskStore.getDb();
+    await db.execute("DELETE FROM planning_runs WHERE project_id = $1", [projectId]);
     await db.execute(
       `INSERT INTO planning_runs (id, project_id, created_at, prd_snapshot, plans_created)
        VALUES ($1, $2, $3, $4, $5)`,
