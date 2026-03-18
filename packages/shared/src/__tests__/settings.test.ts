@@ -617,6 +617,59 @@ describe("parseSettings", () => {
       ).toBe(false);
     });
   });
+
+  describe("runAgentEnhancementExperiments", () => {
+    it("should default to false when parseSettings receives empty object", () => {
+      const parsed = parseSettings({});
+      expect(parsed.runAgentEnhancementExperiments).toBe(false);
+    });
+
+    it("should default to false when runAgentEnhancementExperiments is missing", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+      });
+      expect(parsed.runAgentEnhancementExperiments).toBe(false);
+    });
+
+    it("should preserve true when runAgentEnhancementExperiments is true", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        runAgentEnhancementExperiments: true,
+      });
+      expect(parsed.runAgentEnhancementExperiments).toBe(true);
+    });
+
+    it("should normalize non-boolean to false", () => {
+      expect(
+        parseSettings({
+          simpleComplexityAgent: lowAgent,
+          complexComplexityAgent: highAgent,
+          runAgentEnhancementExperiments: "yes",
+        }).runAgentEnhancementExperiments
+      ).toBe(false);
+      expect(
+        parseSettings({
+          simpleComplexityAgent: lowAgent,
+          complexComplexityAgent: highAgent,
+          runAgentEnhancementExperiments: 1,
+        }).runAgentEnhancementExperiments
+      ).toBe(false);
+    });
+
+    it("should round-trip runAgentEnhancementExperiments through parseSettings", () => {
+      const raw = {
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        runAgentEnhancementExperiments: true,
+      };
+      const parsed = parseSettings(raw);
+      expect(parsed.runAgentEnhancementExperiments).toBe(true);
+      const roundTripped = parseSettings(parsed);
+      expect(roundTripped.runAgentEnhancementExperiments).toBe(true);
+    });
+  });
 });
 
 describe("getDefaultDeploymentTarget", () => {

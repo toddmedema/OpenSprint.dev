@@ -6,7 +6,7 @@ Open Sprint is a web application that guides users through the complete software
 
 The platform pairs a browser-based interface with a background agent CLI, enabling AI to autonomously execute development tasks while keeping the user in control of strategy and direction. The core philosophy is that humans should focus on _what_ to build and _why_, while AI handles _how_ to build it.
 
-Open Sprint supports multiple agent backends (Claude, Cursor, OpenAI, LM Studio for local models, and custom CLI agents), comprehensive automated testing including end-to-end and integration tests, configurable human-in-the-loop thresholds, and full offline operation for users with local agent setups (including LM Studio).
+Open Sprint supports multiple agent backends (Claude, Cursor, OpenAI, LM Studio for local models, and custom CLI agents), comprehensive automated testing including end-to-end and integration tests, configurable human-in-the-loop thresholds, and full offline operation for users with local agent setups (including LM Studio). An opt-in **closed-loop agent self-improvement** flow runs audits and, when enabled, an experiment pipeline (replay mining, candidate behavior generation, baseline vs candidate replay, scoring, and optional promotion) with approval and behavior versioning.
 
 ## Problem Statement
 
@@ -64,6 +64,12 @@ Add under Execute phase:
 - **Environment-aware failure policy:** Classify deterministic environment failures as `repo_preflight` or `environment_setup` and block/pause with remediation guidance instead of repeatedly requeueing coding attempts.
 - **Actionable diagnostics-first failures:** For quality-gate and test failures, surface primary diagnostics as `failed command + first compiler/test error`, with expandable structured details for deeper troubleshooting.
 
+Add under Self-Improvement:
+
+- **Opt-in agent enhancement experiments:** New project setting `runAgentEnhancementExperiments` (boolean, default false). When off, self-improvement runs are audit-only (existing behavior); when on, runs execute the experiment pipeline (replay mining, candidate behavior generation, baseline vs candidate replay, scoring) and optional promotion governed by project autonomy (confirm_all / major_only / full).
+- **Self-improvement status and history UI:** Live status row (Idle, Running audit, Running experiments, Awaiting approval), stage label when running (e.g. Collecting replay cases, Generating candidate, Replaying, Scoring, Promoting), summary row (Last run, Last outcome, Active behavior version, Pending promotion), and Recent runs list with outcome badges (No changes, Tasks created, Candidate rejected, Promotion pending, Promoted, Failed).
+- **Approval and rollback:** Notification `self_improvement_approval` deep-links to project settings; card shows candidate diff, replay sample size, baseline vs candidate metrics, and Promote / Reject actions; API support to promote, reject, or rollback to a previous promoted behavior version.
+
 ## Technical Architecture
 
 **Repo preflight and dependency integrity**
@@ -89,6 +95,13 @@ Add under Execute phase:
 - Route deterministic env/setup failures to block/pause with remediation text rather than repeated requeue behavior.
 - Build user-visible failure summaries from structured gate data, prioritizing failed command plus first meaningful compiler/test error line.
 
+**Closed-loop agent self-improvement**
+
+- Retain existing self-improvement audit flow (frequency-driven review, task creation). When `runAgentEnhancementExperiments` is true, run an experiment pipeline after the audit: mine replay-grade Execute sessions, generate candidate behavior (general/role instruction overlays, prompt template overrides for coder, reviewer, final review, self-improvement), run baseline vs candidate replay in disposable worktrees, score (task success quality first; retry/review regressions and latency/cost as guardrails), then promote, queue approval, or reject per project autonomy.
+- Persist behavior versions (promoted and candidate bundles) with version id and timestamps; support rollback to a previously promoted version.
+- Expose current run status (idle, running_audit, running_experiments, awaiting_approval) and optional stage when running; persist and expose run history (timestamp, mode, outcome, summary, promoted/pending refs).
+- Attach replay metadata to Execute sessions (e.g. in assignment or run context): base_commit_sha, behavior_version, template_version for replay and versioning.
+
 ## Data Model
 
 Add optional structured failure detail fields for quality-gate and merge failures.
@@ -103,9 +116,17 @@ Add optional structured failure detail fields for quality-gate and merge failure
 - **Failure type model** recognizes `environment_setup` for deterministic setup failures after repair attempts.
 - No schema migration is required when these values are stored in existing extensible JSON fields.
 
+**Self-improvement and agent enhancement**
+
+- **Project settings:** Add `runAgentEnhancementExperiments?: boolean` (default false).
+- **Behavior versions:** New store (table or namespaced records) for promoted and candidate behavior bundles (general/role instructions, template overrides) with version id and timestamps.
+- **Experiment runs:** Per-run metadata: project id, timestamp, mode (audit_only | audit_and_experiments), stage/status, outcome (no_changes | tasks_created | candidate_rejected | promotion_pending | promoted | failed), summary, optional promoted version id or pending candidate id.
+- **Execute sessions:** Optional replay metadata (base_commit_sha, behavior_version, template_version) in assignment or run context.
+- **Notifications:** Support kind `self_improvement_approval` with payload for project id and optional candidate id (and deep-link info).
+
 ## API Contracts
 
-No new REST endpoints are required.
+No new REST endpoints are required for quality-gate/diagnostics.
 
 - Existing task/execution diagnostics responses should expose structured quality-gate failure detail when present, either as a dedicated object (for example `qualityGateDetail`) or embedded in existing diagnostic payloads.
 - Structured detail should carry at least:
@@ -116,6 +137,16 @@ No new REST endpoints are required.
 - Event-stream payloads (including `merge.failed`, `task.requeued`, `task.blocked`) should include these fields in `data` so real-time UI and notifications can show actionable diagnostics.
 - Backward compatibility requirement: consumers must ignore unknown fields.
 
+**Self-improvement**
+
+- **Project settings GET/PATCH:** Include `runAgentEnhancementExperiments` in request/response; PATCH validates boolean.
+- **GET `/projects/:id/self-improvement/status`:** Response includes idle | running_audit | running_experiments | awaiting_approval; when running, optional `stage` (e.g. collecting_replay_cases | generating_candidate | replaying | scoring | promoting); when awaiting approval, optional `pendingCandidateId` and summary fields.
+- **GET `/projects/:id/self-improvement/history`:** List of runs (timestamp, mode, outcome, summary, optional promotedVersionId or pendingCandidateId); pagination or limit (e.g. last 20).
+- **POST `/projects/:id/self-improvement/approve`:** Promote pending candidate; returns updated status and history entry.
+- **POST `/projects/:id/self-improvement/reject`:** Reject pending candidate; returns updated status and history entry.
+- **POST `/projects/:id/self-improvement/rollback`:** Body `{ "behaviorVersionId": "..." }`; revert active agent behavior to specified promoted version; returns updated status.
+- **Notifications/events:** Payload for `self_improvement_approval` includes project id, candidate id, and deep-link info (e.g. path to project settings and fragment/query for self-improvement card).
+
 ## Non-Functional Requirements
 
 | Category    | Requirement                                                                                                                                                                        |
@@ -124,6 +155,7 @@ No new REST endpoints are required.
 | Performance | Dependency integrity preflight must use a fast check (`npm ls`) with bounded timeout (target 15-30s) before agent execution.                                                       |
 | Usability   | Failure messaging for quality-gate/test failures must prioritize actionable diagnostics (failed command + first compiler/test error) with optional expanded detail.                |
 | Operability | Structured failure details must be persisted in task/event diagnostics to support debugging, notifications, and post-mortem analysis.                                              |
+| Operability | Only one self-improvement run per project at a time; experiment failures mark run as Failed with no partial promotion; approval and rollback are explicit user/API actions.        |
 
 ## Open Questions
 

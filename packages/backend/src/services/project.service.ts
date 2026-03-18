@@ -220,6 +220,7 @@ function buildDefaultSettings(): ProjectSettings {
     worktreeBaseBranch: "main",
     selfImprovementFrequency: "never",
     autoExecutePlans: false,
+    runAgentEnhancementExperiments: false,
   };
 }
 
@@ -277,6 +278,7 @@ function toCanonicalSettings(s: ProjectSettings): ProjectSettings {
       selfImprovementLastCommitSha: s.selfImprovementLastCommitSha,
     }),
     autoExecutePlans: s.autoExecutePlans === true,
+    runAgentEnhancementExperiments: s.runAgentEnhancementExperiments === true,
   };
 }
 
@@ -1154,6 +1156,20 @@ export class ProjectService {
         ? sanitizedUpdates.autoExecutePlans === true
         : (current.autoExecutePlans ?? false);
     if (
+      sanitizedUpdates.runAgentEnhancementExperiments !== undefined &&
+      typeof sanitizedUpdates.runAgentEnhancementExperiments !== "boolean"
+    ) {
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "runAgentEnhancementExperiments must be a boolean"
+      );
+    }
+    const runAgentEnhancementExperiments =
+      sanitizedUpdates.runAgentEnhancementExperiments !== undefined
+        ? sanitizedUpdates.runAgentEnhancementExperiments === true
+        : (current.runAgentEnhancementExperiments ?? false);
+    if (
       sanitizedUpdates.validationTimeoutMsOverride !== undefined &&
       sanitizedUpdates.validationTimeoutMsOverride !== null &&
       (typeof sanitizedUpdates.validationTimeoutMsOverride !== "number" ||
@@ -1194,6 +1210,7 @@ export class ProjectService {
       mergeStrategy,
       selfImprovementFrequency,
       autoExecutePlans,
+      runAgentEnhancementExperiments,
       validationTimeoutMsOverride,
     };
     const updated: ProjectSettings = {

@@ -669,6 +669,8 @@ export interface ProjectSettings {
   nextRunAt?: string;
   /** When true, Plan phase supports single-step Execute (generate tasks and run); when false, two-step flow (Generate Tasks then Execute). Default: false. */
   autoExecutePlans?: boolean;
+  /** When true, self-improvement runs execute the experiment/promote pipeline; when false, runs are audit-only. Default: false. */
+  runAgentEnhancementExperiments?: boolean;
 }
 
 /** Planning agent roles — Dreamer/Analyst use fixed tiers; others inherit plan complexity */
@@ -870,6 +872,7 @@ export function parseSettings(raw: unknown): ProjectSettings {
     autoExecutePlans: r?.autoExecutePlans === true,
   };
 
+  const runAgentEnhancementExperiments = r?.runAgentEnhancementExperiments === true;
   const { apiKeys: _omitApiKeys, ...rest } = r as Partial<ProjectSettings> & { apiKeys?: unknown };
   if (simpleObj && typeof simpleObj === "object" && complexObj && typeof complexObj === "object") {
     const simple = simpleObj as AgentConfig;
@@ -879,6 +882,7 @@ export function parseSettings(raw: unknown): ProjectSettings {
       simpleComplexityAgent: simple,
       complexComplexityAgent: complex,
       ...base,
+      runAgentEnhancementExperiments,
     } as ProjectSettings;
   }
   const simple =
@@ -892,6 +896,7 @@ export function parseSettings(raw: unknown): ProjectSettings {
     simpleComplexityAgent: simple,
     complexComplexityAgent: complex,
     ...base,
+    runAgentEnhancementExperiments,
   } as ProjectSettings;
 }
 

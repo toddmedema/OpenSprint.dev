@@ -2,7 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@opensprint/shared": ["../shared/dist/index.d.ts"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["src/__tests__/**"]

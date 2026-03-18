@@ -99,6 +99,11 @@ vi.mock("../websocket/index.js", () => ({
   broadcastToProject: (...args: unknown[]) => mockBroadcastToProject(...args),
 }));
 
+const mockMaybeAutoRespond = vi.fn().mockResolvedValue(undefined);
+vi.mock("../services/open-question-autoresolve.service.js", () => ({
+  maybeAutoRespond: (...args: unknown[]) => mockMaybeAutoRespond(...args),
+}));
+
 const chatRouteTaskStoreMod = await import("../services/task-store.service.js");
 const chatRoutePostgresOk =
   (chatRouteTaskStoreMod as { _postgresAvailable?: boolean })._postgresAvailable ?? false;
@@ -123,6 +128,7 @@ describe.skipIf(!chatRoutePostgresOk)("Chat REST API", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockMaybeAutoRespond.mockResolvedValue(undefined);
     mockInvokePlanningAgent.mockResolvedValue({
       content: "I'd be happy to help you design your product. What are your main goals?",
     });

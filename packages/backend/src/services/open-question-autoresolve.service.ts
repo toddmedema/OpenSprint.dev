@@ -165,10 +165,20 @@ ${questionTexts.map((t) => `- ${t}`).join("\n")}`;
       }
       case "plan": {
         const draftId = sourceId.startsWith("draft:") ? sourceId.slice("draft:".length) : sourceId;
-        await getChatService().sendMessage(projectId, {
-          message: answer,
-          context: `plan-draft:${draftId}`,
-        });
+        try {
+          await getChatService().sendMessage(projectId, {
+            message: answer,
+            context: `plan-draft:${draftId}`,
+          });
+        } catch (sendErr) {
+          log.warn("Plan-draft sendMessage failed during open-question auto-respond; leaving notification unresolved", {
+            projectId,
+            notificationId,
+            sourceId,
+            err: sendErr,
+          });
+          return;
+        }
         await notificationService.resolve(projectId, notificationId);
         broadcastToProject(projectId, {
           type: "notification.resolved",

@@ -186,16 +186,10 @@ export interface ApiKeyUpdateEntry {
 export type ApiKeysUpdate = Partial<Record<ApiKeyProvider, ApiKeyUpdateEntry[]>>;
 /**
  * Default database path relative to ~/.opensprint (used by scripts that cannot import shared).
- * Full default URL is getDefaultDatabaseUrl().
+ * Full default URL is built in backend via getDefaultDatabaseUrl() (Node only).
  */
 export declare const DEFAULT_DATABASE_PATH_RELATIVE = "data/opensprint.sqlite";
-/**
- * Return the default database URL (SQLite under ~/.opensprint/data/opensprint.sqlite).
- * Use when no databaseUrl is configured in env or global-settings.
- * Node only (uses os.homedir and path).
- */
-export declare function getDefaultDatabaseUrl(): string;
-/** @deprecated Use getDefaultDatabaseUrl() for default. Kept for tests that need a fixed string. */
+/** @deprecated Use backend getDefaultDatabaseUrl() for default. Kept for tests that need a fixed string. */
 export declare const DEFAULT_DATABASE_URL = "postgresql://opensprint:opensprint@localhost:5432/opensprint";
 /** Global settings stored at ~/.opensprint/global-settings.json */
 export interface GlobalSettings {
@@ -339,6 +333,8 @@ export interface ProjectSettings {
     nextRunAt?: string;
     /** When true, Plan phase supports single-step Execute (generate tasks and run); when false, two-step flow (Generate Tasks then Execute). Default: false. */
     autoExecutePlans?: boolean;
+    /** When true, self-improvement runs execute the experiment/promote pipeline; when false, runs are audit-only. Default: false. */
+    runAgentEnhancementExperiments?: boolean;
 }
 /** Planning agent roles — Dreamer/Analyst use fixed tiers; others inherit plan complexity */
 export type PlanningRole = "dreamer" | "planner" | "harmonizer" | "analyst" | "summarizer" | "auditor";

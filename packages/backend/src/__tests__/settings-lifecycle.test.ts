@@ -276,6 +276,7 @@ describe("Settings API lifecycle", () => {
     expect(res.body.data.selfImprovementFrequency).toBeDefined();
     expect(res.body.data.selfImprovementFrequency).toBe("never");
     expect(res.body.data.autoExecutePlans).toBe(false);
+    expect(res.body.data.runAgentEnhancementExperiments).toBe(false);
     // selfImprovementLastRunAt and selfImprovementLastCommitSha are optional; present only when set by internal runs
     expect(res.body.data.gitRuntimeStatus).toEqual({
       lastCheckedAt: null,
@@ -641,5 +642,41 @@ describe("Settings API lifecycle", () => {
     expect(res.body.error?.message).toMatch(
       /selfImprovementFrequency|never|after_each_plan|daily|weekly/
     );
+  });
+
+  it("PUT /api/v1/projects/:id/settings accepts and persists runAgentEnhancementExperiments; GET returns it", async () => {
+    const getRes0 = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    expect(getRes0.status).toBe(200);
+    expect(getRes0.body.data.runAgentEnhancementExperiments).toBe(false);
+
+    const putRes = await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({ runAgentEnhancementExperiments: true });
+
+    expect(putRes.status).toBe(200);
+    expect(putRes.body.data.runAgentEnhancementExperiments).toBe(true);
+
+    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.runAgentEnhancementExperiments).toBe(true);
+
+    const settings = await readProjectFromGlobalStore(tempDir, projectId);
+    expect(settings.runAgentEnhancementExperiments).toBe(true);
+
+    await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({ runAgentEnhancementExperiments: false });
+    const getRes2 = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    expect(getRes2.body.data.runAgentEnhancementExperiments).toBe(false);
+  });
+
+  it("PUT /api/v1/projects/:id/settings rejects invalid runAgentEnhancementExperiments with 400", async () => {
+    const res = await request(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({ runAgentEnhancementExperiments: "yes" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error?.code).toBe("INVALID_INPUT");
+    expect(res.body.error?.message).toMatch(/runAgentEnhancementExperiments|boolean/);
   });
 });

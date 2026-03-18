@@ -1,5 +1,3 @@
-import os from "os";
-import path from "path";
 /** Resolve the default target name from targets array (first isDefault, or first entry, or config.target). */
 export function getDefaultDeploymentTarget(config) {
     const targets = config.targets;
@@ -211,19 +209,10 @@ export const SELF_IMPROVEMENT_FREQUENCY_OPTIONS = [
 ];
 /**
  * Default database path relative to ~/.opensprint (used by scripts that cannot import shared).
- * Full default URL is getDefaultDatabaseUrl().
+ * Full default URL is built in backend via getDefaultDatabaseUrl() (Node only).
  */
 export const DEFAULT_DATABASE_PATH_RELATIVE = "data/opensprint.sqlite";
-/**
- * Return the default database URL (SQLite under ~/.opensprint/data/opensprint.sqlite).
- * Use when no databaseUrl is configured in env or global-settings.
- * Node only (uses os.homedir and path).
- */
-export function getDefaultDatabaseUrl() {
-    const homedir = os.homedir();
-    return path.join(homedir, ".opensprint", "data", "opensprint.sqlite");
-}
-/** @deprecated Use getDefaultDatabaseUrl() for default. Kept for tests that need a fixed string. */
+/** @deprecated Use backend getDefaultDatabaseUrl() for default. Kept for tests that need a fixed string. */
 export const DEFAULT_DATABASE_URL = "postgresql://opensprint:opensprint@localhost:5432/opensprint";
 const SQLITE_PATH_RE = /^(?:[./]|[a-zA-Z]:[\\/]|\\\\)|\.(?:sqlite3?|db)$/i;
 const LEGACY_SQLITE_PREFIX_RE = /^sqlite:(?!\/\/)/i;
@@ -533,6 +522,7 @@ export function parseSettings(raw) {
             : undefined,
         autoExecutePlans: r?.autoExecutePlans === true,
     };
+    const runAgentEnhancementExperiments = r?.runAgentEnhancementExperiments === true;
     const { apiKeys: _omitApiKeys, ...rest } = r;
     if (simpleObj && typeof simpleObj === "object" && complexObj && typeof complexObj === "object") {
         const simple = simpleObj;
@@ -542,6 +532,7 @@ export function parseSettings(raw) {
             simpleComplexityAgent: simple,
             complexComplexityAgent: complex,
             ...base,
+            runAgentEnhancementExperiments,
         };
     }
     const simple = (simpleObj && typeof simpleObj === "object" ? simpleObj : null) ??
@@ -553,6 +544,7 @@ export function parseSettings(raw) {
         simpleComplexityAgent: simple,
         complexComplexityAgent: complex,
         ...base,
+        runAgentEnhancementExperiments,
     };
 }
 /** Default HIL configuration (all categories default to automated for new projects) */
