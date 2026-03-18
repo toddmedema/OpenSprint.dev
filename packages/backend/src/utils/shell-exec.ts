@@ -1,17 +1,27 @@
 /**
  * Shell execution utility.
  * Uses an explicit shell path to avoid ENOENT when /bin/sh is unavailable
- * (e.g. in sandboxed test environments). Prefers process.env.SHELL, falls
- * back to /bin/bash on Unix.
+ * (e.g. in sandboxed test environments). Prefers process.env.SHELL when that
+ * path exists, else /bin/bash or /bin/sh so spawn never gets a missing path.
  */
 
 import { exec, ExecOptions } from "child_process";
+import fs from "fs";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
-/** Shell path for exec. Avoids default /bin/sh which may not exist in sandboxes. */
-const SHELL = process.env.SHELL || (process.platform === "win32" ? undefined : "/bin/bash");
+/** Resolve shell path for exec: only use paths that exist to avoid ENOENT. */
+function resolveShell(): string | undefined {
+  if (process.platform === "win32") return undefined;
+  const envShell = process.env.SHELL;
+  if (envShell && fs.existsSync(envShell)) return envShell;
+  if (fs.existsSync("/bin/bash")) return "/bin/bash";
+  if (fs.existsSync("/bin/sh")) return "/bin/sh";
+  return undefined;
+}
+
+const SHELL = resolveShell();
 
 /**
  * Execute a shell command. Uses SHELL when available to avoid ENOENT on spawn.
