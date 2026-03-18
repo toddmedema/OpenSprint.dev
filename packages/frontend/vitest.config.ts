@@ -38,10 +38,10 @@ export default defineConfig({
         "src/components/icons/**",
       ],
       thresholds: {
-        statements: 70,
-        branches: 60,
-        functions: 70,
-        lines: 70,
+        statements: 80,
+        branches: 70,
+        functions: 73, // 73.6% current; raise to 80% as coverage improves
+        lines: 80,
       },
     },
   },
