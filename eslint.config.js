@@ -17,6 +17,8 @@ export default [
       "**/*.config.js",
       "**/*.config.mjs",
       "**/*.config.cjs",
+      "packages/shared/src/**/*.js",
+      "packages/shared/src/**/*.js.map",
     ],
   },
   // Shared base config for TypeScript

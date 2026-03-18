@@ -108,8 +108,7 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
     };
     await mod._resetSharedDb?.();
 
-    repoPath = path.join(os.tmpdir(), `git-queue-test-${Date.now()}`);
-    await fs.mkdir(repoPath, { recursive: true });
+    repoPath = await fs.mkdtemp(path.join(os.tmpdir(), "git-queue-test-"));
     await execAsync("git init", { cwd: repoPath });
     await execAsync("git checkout -b main", { cwd: repoPath });
     await fs.writeFile(path.join(repoPath, "README"), "initial");

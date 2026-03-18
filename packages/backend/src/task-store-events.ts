@@ -3,12 +3,38 @@
  * Called from index.ts at startup; tests can call with mock broadcast to verify events.
  */
 import type { TaskEventPayload, ServerEvent } from "@opensprint/shared";
+import { mapStatusToKanban, type KanbanColumn } from "@opensprint/shared";
+import { getMergeStageFromIssue } from "./services/task-store-helpers.js";
 import { taskStore, type StoredTask } from "./services/task-store.service.js";
+
+const WAITING_TO_MERGE_STAGES = ["quality_gate", "merge_to_main", "rebase_before_merge"] as const;
+
+function storedTaskToKanbanColumn(task: StoredTask): KanbanColumn {
+  if (task.status === "open") {
+    const mergeStage = getMergeStageFromIssue(task);
+    if (mergeStage && (WAITING_TO_MERGE_STAGES as readonly string[]).includes(mergeStage)) {
+      return "waiting_to_merge";
+    }
+  }
+  return mapStatusToKanban(task.status as string);
+}
+
+function getMergePausedFromTask(task: StoredTask): {
+  mergePausedUntil?: string;
+  mergeWaitingOnMain?: boolean;
+} {
+  const raw = (task as Record<string, unknown>).merge_quality_gate_paused_until;
+  if (typeof raw !== "string") return {};
+  const ts = Date.parse(raw);
+  if (Number.isNaN(ts) || ts <= Date.now()) return {};
+  return { mergePausedUntil: raw, mergeWaitingOnMain: true };
+}
 
 function storedTaskToPayload(task: StoredTask): TaskEventPayload {
   const parentDep = (task.dependencies ?? []).find((d) => d.type === "parent-child");
   const parentId = parentDep?.depends_on_id ?? null;
   const source = (task as { source?: string }).source;
+  const mergePaused = getMergePausedFromTask(task);
   return {
     id: task.id,
     title: task.title,
@@ -23,7 +49,10 @@ function storedTaskToPayload(task: StoredTask): TaskEventPayload {
     close_reason: task.close_reason ?? null,
     parentId: parentId ?? null,
     ...(source ? { source } : {}),
-  };
+    kanbanColumn: storedTaskToKanbanColumn(task),
+    ...(mergePaused.mergePausedUntil ? { mergePausedUntil: mergePaused.mergePausedUntil } : {}),
+    ...(mergePaused.mergeWaitingOnMain ? { mergeWaitingOnMain: mergePaused.mergeWaitingOnMain } : {}),
+  } as TaskEventPayload;
 }
 
 export type BroadcastFn = (projectId: string, event: ServerEvent) => void;
@@ -37,6 +66,7 @@ export function wireTaskStoreEvents(broadcast: BroadcastFn): void {
         task: storedTaskToPayload(task),
       });
     } else if (changeType === "update") {
+      const mergePaused = getMergePausedFromTask(task);
       broadcast(projectId, {
         type: "task.updated",
         taskId: task.id,
@@ -46,7 +76,10 @@ export function wireTaskStoreEvents(broadcast: BroadcastFn): void {
         blockReason: (task as StoredTask & { block_reason?: string }).block_reason ?? null,
         title: task.title,
         description: task.description ?? undefined,
-      });
+        kanbanColumn: storedTaskToKanbanColumn(task),
+        ...(mergePaused.mergePausedUntil ? { mergePausedUntil: mergePaused.mergePausedUntil } : {}),
+        ...(mergePaused.mergeWaitingOnMain ? { mergeWaitingOnMain: mergePaused.mergeWaitingOnMain } : {}),
+      } as ServerEvent);
     } else {
       broadcast(projectId, {
         type: "task.closed",

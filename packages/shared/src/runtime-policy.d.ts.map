@@ -1,0 +1,1 @@
+{"version":3,"file":"runtime-policy.d.ts","sourceRoot":"","sources":["runtime-policy.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,kBAAkB,EAAE,MAAM,gBAAgB,CAAC;AAEzD,eAAO,MAAM,iCAAiC,8IAC+F,CAAC;AAE9I,wBAAgB,uBAAuB,CAAC,QAAQ,EAAE,MAAM,GAAG,OAAO,CAEjE;AAED,wBAAgB,uBAAuB,CACrC,OAAO,EAAE,IAAI,CAAC,kBAAkB,EAAE,gBAAgB,CAAC,GAClD,OAAO,CAET"}

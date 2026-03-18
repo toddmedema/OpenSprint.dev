@@ -1,6 +1,7 @@
 import type { AgentPhase, AgentRuntimeState, AgentSuspendReason, TestResults } from "./agent.js";
 import type { FeedbackItem } from "./feedback.js";
 import type { ScopeChangeMetadata, ScopeChangeProposedUpdate } from "./notification.js";
+import type { KanbanColumn } from "./task.js";
 
 // ─── Server → Client Events ───
 
@@ -19,6 +20,12 @@ export interface TaskUpdatedEvent {
   title?: string;
   /** Optional; when present (e.g. plan-task-sync), syncs description into execute state */
   description?: string;
+  /** Optional; server-computed kanban column (e.g. waiting_to_merge). */
+  kanbanColumn?: KanbanColumn;
+  /** Optional; when merge is paused due to baseline quality gates on main (ISO string). */
+  mergePausedUntil?: string;
+  /** Optional; true when merge is waiting on main. */
+  mergeWaitingOnMain?: boolean;
 }
 
 /** Minimal task payload for create/close events (relevant task data) */
@@ -37,6 +44,12 @@ export interface TaskEventPayload {
   parentId?: string | null;
   /** Task source (e.g. 'self-improvement'). From tasks.extra.source. */
   source?: string;
+  /** Optional; server-computed kanban column (e.g. waiting_to_merge). */
+  kanbanColumn?: KanbanColumn;
+  /** Optional; when merge is paused due to baseline quality gates on main (ISO string). */
+  mergePausedUntil?: string;
+  /** Optional; true when merge is waiting on main. */
+  mergeWaitingOnMain?: boolean;
 }
 
 export interface TaskCreatedEvent {

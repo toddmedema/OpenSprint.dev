@@ -1,0 +1,1 @@
+{"version":3,"file":"runtime-policy.js","sourceRoot":"","sources":["runtime-policy.ts"],"names":[],"mappings":"AAEA,MAAM,CAAC,MAAM,iCAAiC,GAC5C,2IAA2I,CAAC;AAE9I,MAAM,UAAU,uBAAuB,CAAC,QAAgB;IACtD,OAAO,sBAAsB,CAAC,IAAI,CAAC,QAAQ,CAAC,IAAI,EAAE,CAAC,CAAC;AACtD,CAAC;AAED,MAAM,UAAU,uBAAuB,CACrC,OAAmD;IAEnD,OAAO,OAAO,CAAC,cAAc,KAAK,eAAe,CAAC;AACpD,CAAC"}
