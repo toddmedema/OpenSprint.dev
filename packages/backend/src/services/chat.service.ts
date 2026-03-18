@@ -634,8 +634,8 @@ export class ChatService {
       const parsed =
         extractJsonFromAgentResponse<Record<string, unknown>>(responseContent, "open_questions") ??
         extractJsonFromAgentResponse<Record<string, unknown>>(responseContent, "openQuestions") ??
-        extractJsonFromAgentResponse<Record<string, unknown>>(responseContent, "title") ??
-        extractJsonFromAgentResponse<Record<string, unknown>>(responseContent, "plan_title");
+        extractJsonFromAgentResponse<Record<string, unknown>>(responseContent, "plan_title") ??
+        extractJsonFromAgentResponse<Record<string, unknown>>(responseContent, "title");
 
       if (!parsed) {
         throw new AppError(

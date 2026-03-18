@@ -12,7 +12,6 @@ import {
   maskDatabaseUrl,
   maskApiKeysForResponse,
   validateDatabaseUrl,
-  getDefaultDatabaseUrl,
   getDatabaseDialect,
   type GlobalSettingsResponse,
   type ApiKeyProvider,
@@ -24,6 +23,7 @@ import {
   getGlobalSettings,
   updateGlobalSettings,
   getEffectiveDatabaseConfig,
+  getDefaultDatabaseUrl,
 } from "../services/global-settings.service.js";
 import { migrateSqliteToPostgres } from "../services/migrate-to-postgres.service.js";
 import { clearLimitHit } from "../services/api-key-resolver.service.js";

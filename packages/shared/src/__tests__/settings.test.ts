@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   DEFAULT_HIL_CONFIG,
   DEFAULT_DATABASE_URL,
-  getDefaultDatabaseUrl,
   getAgentForComplexity,
   getAgentForPlanningRole,
   parseSettings,
@@ -1390,15 +1389,6 @@ describe("DEFAULT_DATABASE_URL", () => {
     expect(DEFAULT_DATABASE_URL).toBe(
       "postgresql://opensprint:opensprint@localhost:5432/opensprint"
     );
-  });
-});
-
-describe("getDefaultDatabaseUrl", () => {
-  it("returns path under homedir ending in opensprint.sqlite", () => {
-    const url = getDefaultDatabaseUrl();
-    expect(url).toContain(".opensprint");
-    expect(url).toContain("opensprint.sqlite");
-    expect(url).not.toMatch(/^postgres/);
   });
 });
 

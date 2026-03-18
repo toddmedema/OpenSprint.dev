@@ -11,8 +11,8 @@ import {
   updateGlobalSettings,
   getDatabaseUrl,
   ensureDefaultDatabaseUrl,
+  getDefaultDatabaseUrl,
 } from "../services/global-settings.service.js";
-import { getDefaultDatabaseUrl } from "@opensprint/shared";
 
 describe("global-settings.service", () => {
   let tempDir: string;

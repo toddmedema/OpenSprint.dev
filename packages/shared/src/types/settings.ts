@@ -1,5 +1,3 @@
-import os from "os";
-import path from "path";
 import type { AgentType } from "./agent.js";
 import type { PlanComplexity } from "./plan.js";
 
@@ -398,21 +396,11 @@ export type ApiKeysUpdate = Partial<Record<ApiKeyProvider, ApiKeyUpdateEntry[]>>
 
 /**
  * Default database path relative to ~/.opensprint (used by scripts that cannot import shared).
- * Full default URL is getDefaultDatabaseUrl().
+ * Full default URL is built in backend via getDefaultDatabaseUrl() (Node only).
  */
 export const DEFAULT_DATABASE_PATH_RELATIVE = "data/opensprint.sqlite";
 
-/**
- * Return the default database URL (SQLite under ~/.opensprint/data/opensprint.sqlite).
- * Use when no databaseUrl is configured in env or global-settings.
- * Node only (uses os.homedir and path).
- */
-export function getDefaultDatabaseUrl(): string {
-  const homedir = os.homedir();
-  return path.join(homedir, ".opensprint", "data", "opensprint.sqlite");
-}
-
-/** @deprecated Use getDefaultDatabaseUrl() for default. Kept for tests that need a fixed string. */
+/** @deprecated Use backend getDefaultDatabaseUrl() for default. Kept for tests that need a fixed string. */
 export const DEFAULT_DATABASE_URL = "postgresql://opensprint:opensprint@localhost:5432/opensprint";
 
 /** Global settings stored at ~/.opensprint/global-settings.json */

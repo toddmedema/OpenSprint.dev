@@ -424,8 +424,8 @@ Field rules: complexity: low, medium, high, or very_high (plan-level).
     const parsed: Record<string, unknown> | null =
       extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "open_questions") ??
       extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "openQuestions") ??
-      extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "title") ??
-      extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "plan_title");
+      extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "plan_title") ??
+      extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "title");
 
     if (!parsed) {
       throw new AppError(
