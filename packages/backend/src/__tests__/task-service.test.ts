@@ -529,6 +529,113 @@ describe("TaskService", () => {
     expect(taskB!.kanbanColumn).toBe("backlog");
   });
 
+  it("listTasks: open task with merge_stage label returns kanbanColumn waiting_to_merge", async () => {
+    for (const stage of ["quality_gate", "merge_to_main", "rebase_before_merge"]) {
+      mockTaskStoreState.listAll = [
+        {
+          id: "task-wtm",
+          title: "Waiting to merge",
+          status: "open",
+          issue_type: "task",
+          labels: [`merge_stage:${stage}`],
+          dependencies: [],
+          created_at: "2024-01-01T00:00:00Z",
+          updated_at: "2024-01-01T00:00:00Z",
+        },
+      ] as StoredTask[];
+
+      const tasks = await taskService.listTasks("proj-1");
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].kanbanColumn).toBe("waiting_to_merge");
+    }
+  });
+
+  it("getTask: open task with merge_stage returns kanbanColumn waiting_to_merge", async () => {
+    mockTaskStoreState.listAll = [
+      {
+        id: "task-wtm",
+        title: "Waiting to merge",
+        status: "open",
+        issue_type: "task",
+        labels: ["merge_stage:merge_to_main"],
+        dependencies: [],
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      },
+    ] as StoredTask[];
+
+    const task = await taskService.getTask("proj-1", "task-wtm");
+    expect(task.kanbanColumn).toBe("waiting_to_merge");
+  });
+
+  it("listTasks: when merge_quality_gate_paused_until is future ISO string, response includes mergePausedUntil and mergeWaitingOnMain", async () => {
+    const futureIso = new Date(Date.now() + 86400000).toISOString();
+    mockTaskStoreState.listAll = [
+      {
+        id: "task-paused",
+        title: "Paused on main",
+        status: "open",
+        issue_type: "task",
+        labels: ["merge_stage:quality_gate"],
+        merge_quality_gate_paused_until: futureIso,
+        dependencies: [],
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      },
+    ] as StoredTask[];
+
+    const tasks = await taskService.listTasks("proj-1");
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].kanbanColumn).toBe("waiting_to_merge");
+    expect(tasks[0].mergePausedUntil).toBe(futureIso);
+    expect(tasks[0].mergeWaitingOnMain).toBe(true);
+  });
+
+  it("getTask: when merge_quality_gate_paused_until is future ISO string, response includes mergePausedUntil and mergeWaitingOnMain", async () => {
+    const futureIso = new Date(Date.now() + 86400000).toISOString();
+    mockTaskStoreState.listAll = [
+      {
+        id: "task-paused",
+        title: "Paused on main",
+        status: "open",
+        issue_type: "task",
+        labels: ["merge_stage:quality_gate"],
+        merge_quality_gate_paused_until: futureIso,
+        dependencies: [],
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      },
+    ] as StoredTask[];
+
+    const task = await taskService.getTask("proj-1", "task-paused");
+    expect(task.kanbanColumn).toBe("waiting_to_merge");
+    expect(task.mergePausedUntil).toBe(futureIso);
+    expect(task.mergeWaitingOnMain).toBe(true);
+  });
+
+  it("listTasks: past merge_quality_gate_paused_until does not set mergePausedUntil or mergeWaitingOnMain", async () => {
+    const pastIso = "2020-01-01T00:00:00Z";
+    mockTaskStoreState.listAll = [
+      {
+        id: "task-past",
+        title: "Past pause",
+        status: "open",
+        issue_type: "task",
+        labels: ["merge_stage:quality_gate"],
+        merge_quality_gate_paused_until: pastIso,
+        dependencies: [],
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      },
+    ] as StoredTask[];
+
+    const tasks = await taskService.listTasks("proj-1");
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].kanbanColumn).toBe("waiting_to_merge");
+    expect(tasks[0].mergePausedUntil).toBeUndefined();
+    expect(tasks[0].mergeWaitingOnMain).toBeUndefined();
+  });
+
   it("getReadyTasks returns only ready tasks (excludes tasks with open blockers)", async () => {
     mockTaskStoreState.listAll = [
       { id: "blocker-1", status: "closed", issue_type: "task", dependencies: [] },

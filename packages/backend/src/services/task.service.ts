@@ -26,6 +26,7 @@ import { BranchManager } from "./branch-manager.js";
 import { FeedbackService } from "./feedback.service.js";
 import type { StoredTask } from "./task-store.service.js";
 import { resolveEpicId } from "./task-store.service.js";
+import { getMergeStageFromIssue } from "./task-store-helpers.js";
 import { createLogger } from "../utils/logger.js";
 import { parseTaskLastExecutionSummary } from "./task-execution-summary.js";
 import { resolveBaseBranch } from "../utils/git-repo-state.js";
@@ -311,6 +312,17 @@ export class TaskService {
     );
     const source = (issue as { source?: string }).source;
 
+    const mergePausedUntilRaw = (issue as Record<string, unknown>).merge_quality_gate_paused_until;
+    let mergePausedUntil: string | undefined;
+    let mergeWaitingOnMain = false;
+    if (typeof mergePausedUntilRaw === "string" && mergePausedUntilRaw.trim() !== "") {
+      const parsed = new Date(mergePausedUntilRaw).getTime();
+      if (!Number.isNaN(parsed) && parsed > Date.now()) {
+        mergePausedUntil = mergePausedUntilRaw;
+        mergeWaitingOnMain = true;
+      }
+    }
+
     return {
       id,
       title: issue.title ?? "",
@@ -340,6 +352,7 @@ export class TaskService {
           }
         : {}),
       ...(source ? { source } : {}),
+      ...(mergePausedUntil ? { mergePausedUntil, mergeWaitingOnMain } : {}),
     };
   }
 
@@ -349,6 +362,17 @@ export class TaskService {
     idToIssue: Map<string, StoredTask>
   ): KanbanColumn {
     const status = (issue.status as string) ?? "open";
+
+    if (status === "open") {
+      const mergeStage = getMergeStageFromIssue(issue);
+      if (
+        mergeStage === "quality_gate" ||
+        mergeStage === "merge_to_main" ||
+        mergeStage === "rebase_before_merge"
+      ) {
+        return "waiting_to_merge";
+      }
+    }
 
     if (status === "closed") return "done";
     if (status === "blocked") return "blocked";
