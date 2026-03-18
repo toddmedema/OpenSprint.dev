@@ -141,20 +141,44 @@ export class TestRunner {
       command,
       repoPath
     );
-    const { stdout, stderr, exitCode } = await this.execWithProcessGroup(
+    const { stdout, stderr, exitCode, timedOut } = await this.execWithProcessGroup(
       preparedCommand,
       repoPath,
       timeoutMs
     );
-    const rawOutput = stdout + "\n" + stderr;
+    const timeoutError = `Test command timed out after ${Math.round(timeoutMs / 1000)}s`;
+    const rawOutput = [
+      timedOut ? `Error: ${timeoutError}` : null,
+      stdout,
+      stderr,
+    ]
+      .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+      .join("\n");
     const parsedVitestJson = await this.parseVitestJsonReport(vitestJsonReportPath);
 
-    if (exitCode === 0) {
+    if (!timedOut && exitCode === 0) {
       const parsed = parsedVitestJson ?? this.parseTestOutput(rawOutput, preparedCommand);
       return { ...parsed, rawOutput, executedCommand: preparedCommand, scope: "full" };
     }
 
     const results = parsedVitestJson ?? this.parseTestOutput(rawOutput, preparedCommand);
+    if (timedOut) {
+      const timeoutFailure: TestResultDetail = {
+        name: "Test execution",
+        status: "failed",
+        duration: 0,
+        error: timeoutError,
+      };
+      return {
+        ...results,
+        failed: Math.max(results.failed, 1),
+        total: Math.max(results.total, results.passed + results.skipped + 1),
+        details: [timeoutFailure, ...results.details],
+        rawOutput,
+        executedCommand: preparedCommand,
+        scope: "full",
+      };
+    }
     if (results.failed === 0) {
       const fallbackFailure: TestResultDetail = {
         name: "Test execution",
@@ -216,11 +240,17 @@ export class TestRunner {
     command: string,
     cwd: string,
     timeoutMs: number
-  ): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
+  ): Promise<{
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+    timedOut: boolean;
+  }> {
     return new Promise((resolve) => {
       let stdout = "";
       let stderr = "";
       let settled = false;
+      let timedOut = false;
       const shellCommand = this.getShellCommand(command);
 
       const child = spawn(shellCommand.executable, shellCommand.args, {
@@ -251,6 +281,7 @@ export class TestRunner {
       };
 
       const timeout = setTimeout(() => {
+        timedOut = true;
         killProcessGroup();
       }, timeoutMs);
 
@@ -269,7 +300,7 @@ export class TestRunner {
         if (child.pid) {
           unregisterAgentProcess(child.pid, { processGroup: true });
         }
-        resolve({ stdout, stderr, exitCode });
+        resolve({ stdout, stderr, exitCode, timedOut });
       };
 
       child.on("close", (code) => finish(code));

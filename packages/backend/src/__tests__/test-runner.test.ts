@@ -8,6 +8,7 @@ import { TestRunner } from "../services/test-runner.js";
 const mockSpawn = vi.fn();
 const mockRegisterAgentProcess = vi.fn();
 const mockUnregisterAgentProcess = vi.fn();
+const mockSignalProcessGroup = vi.fn();
 
 vi.mock("child_process", () => ({
   spawn: (...args: unknown[]) => mockSpawn(...args),
@@ -16,6 +17,10 @@ vi.mock("child_process", () => ({
 vi.mock("../services/agent-process-registry.js", () => ({
   registerAgentProcess: (...args: unknown[]) => mockRegisterAgentProcess(...args),
   unregisterAgentProcess: (...args: unknown[]) => mockUnregisterAgentProcess(...args),
+}));
+
+vi.mock("../utils/process-group.js", () => ({
+  signalProcessGroup: (...args: unknown[]) => mockSignalProcessGroup(...args),
 }));
 
 function createMockChild(stdout: string, stderr: string, exitCode: number) {
@@ -58,6 +63,53 @@ function createMockChild(stdout: string, stderr: string, exitCode: number) {
   return child;
 }
 
+function createHangingMockChild(stdout = "", stderr = "") {
+  const listeners: { event: string; cb: (arg?: unknown) => void }[] = [];
+  const stdoutListeners: ((data: Buffer) => void)[] = [];
+  const stderrListeners: ((data: Buffer) => void)[] = [];
+  let emitted = false;
+  let closed = false;
+
+  const emitData = () => {
+    if (emitted) return;
+    emitted = true;
+    setImmediate(() => {
+      if (stdout) stdoutListeners.forEach((cb) => cb(Buffer.from(stdout)));
+      if (stderr) stderrListeners.forEach((cb) => cb(Buffer.from(stderr)));
+    });
+  };
+
+  return {
+    child: {
+      pid: 12345,
+      stdout: {
+        on: (event: string, cb: (data: Buffer) => void) => {
+          if (event === "data") stdoutListeners.push(cb);
+          emitData();
+        },
+      },
+      stderr: {
+        on: (event: string, cb: (data: Buffer) => void) => {
+          if (event === "data") stderrListeners.push(cb);
+          emitData();
+        },
+      },
+      on: (event: string, cb: (arg?: unknown) => void) => {
+        listeners.push({ event, cb });
+        emitData();
+      },
+      unref: () => {},
+    },
+    close: (exitCode: number | null) => {
+      if (closed) return;
+      closed = true;
+      setImmediate(() => {
+        listeners.filter((l) => l.event === "close").forEach((l) => l.cb(exitCode));
+      });
+    },
+  };
+}
+
 describe("TestRunner", () => {
   let runner: TestRunner;
 
@@ -66,6 +118,7 @@ describe("TestRunner", () => {
     mockSpawn.mockClear();
     mockRegisterAgentProcess.mockClear();
     mockUnregisterAgentProcess.mockClear();
+    mockSignalProcessGroup.mockClear();
   });
 
   describe("runTestsWithOutput", () => {
@@ -183,6 +236,27 @@ describe("TestRunner", () => {
       expect(result.details[0]?.status).toBe("failed");
       expect(result.details[0]?.error).toContain("Command not found");
       expect(result.executedCommand).toBe("nonexistent-command");
+    });
+
+    it("surfaces timed out test commands as timeout failures instead of warning-only output", async () => {
+      const hangingChild = createHangingMockChild(
+        "The CJS build of Vite's Node API is deprecated."
+      );
+      mockSpawn.mockReturnValue(hangingChild.child);
+      mockSignalProcessGroup.mockImplementation(() => {
+        hangingChild.close(null);
+      });
+
+      const result = await runner.runTestsWithOutput(
+        "/tmp/repo",
+        "node ./node_modules/vitest/vitest.mjs run",
+        { timeoutMs: 10 }
+      );
+
+      expect(result.failed).toBe(1);
+      expect(result.details[0]?.error).toContain("timed out after 0s");
+      expect(result.rawOutput).toContain("Error: Test command timed out after 0s");
+      expect(result.rawOutput).toContain("The CJS build of Vite's Node API is deprecated.");
     });
 
     it("returns empty results when no test command is provided and no package.json", async () => {

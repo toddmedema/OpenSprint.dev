@@ -26,6 +26,7 @@ vi.mock("../services/task-store.service.js", () => ({
     update: vi.fn().mockResolvedValue(undefined),
     listAll: vi.fn().mockResolvedValue([]),
     listInProgressWithAgentAssignee: vi.fn().mockResolvedValue([]),
+    listInProgressWithoutAssignee: vi.fn().mockResolvedValue([]),
     comment: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -90,6 +91,8 @@ describe("RecoveryService — stale heartbeat recovery", () => {
     mockFindOrphanedAssignments.mockResolvedValue([]);
     mockFindOrphanedAssignmentsFromWorktrees.mockResolvedValue([]);
     mockReadAssignmentAt.mockResolvedValue(null);
+    vi.mocked(taskStore.listInProgressWithAgentAssignee).mockResolvedValue([]);
+    vi.mocked(taskStore.listInProgressWithoutAssignee).mockResolvedValue([]);
     vi.mocked(taskStore.show).mockResolvedValue({
       id: "task-stale",
       status: "in_progress",
@@ -462,6 +465,67 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       expect(vi.mocked(taskStore.update)).not.toHaveBeenCalledWith(
         "proj-1",
         "task-active",
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe("assignee-less in_progress tasks", () => {
+    it("resets stale in-progress tasks that have no assignee, slot, or active agent", async () => {
+      const staleUpdatedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      vi.mocked(taskStore.listInProgressWithoutAssignee).mockResolvedValue([
+        {
+          id: "task-merge-retry",
+          project_id: "proj-1",
+          title: "Merge retry task",
+          status: "in_progress",
+          assignee: "",
+          updated_at: staleUpdatedAt,
+        } as never,
+      ]);
+
+      const result = await service.runFullRecovery("proj-1", tmpDir, host);
+
+      expect(result.requeued).toContain("task-merge-retry");
+      expect(vi.mocked(taskStore.update)).toHaveBeenCalledWith(
+        "proj-1",
+        "task-merge-retry",
+        expect.objectContaining({ status: "open", assignee: "" })
+      );
+      expect(vi.mocked(eventLogService.append)).toHaveBeenCalledWith(
+        tmpDir,
+        expect.objectContaining({
+          taskId: "task-merge-retry",
+          event: "recovery.in_progress_without_assignee_reset",
+          data: expect.objectContaining({
+            reason: "in_progress task had no assignee, slot, or active agent",
+            updatedAt: staleUpdatedAt,
+          }),
+        })
+      );
+      expect(vi.mocked(taskStore.comment)).toHaveBeenCalledWith(
+        "proj-1",
+        "task-merge-retry",
+        "Watchdog: in-progress task had no assignee or active slot. Task requeued for next attempt."
+      );
+    });
+
+    it("does not reset recently updated assignee-less in-progress tasks", async () => {
+      vi.mocked(taskStore.listInProgressWithoutAssignee).mockResolvedValue([
+        {
+          id: "task-just-started",
+          status: "in_progress",
+          assignee: "",
+          updated_at: new Date().toISOString(),
+        } as never,
+      ]);
+
+      const result = await service.runFullRecovery("proj-1", tmpDir, host);
+
+      expect(result.requeued).toEqual([]);
+      expect(vi.mocked(taskStore.update)).not.toHaveBeenCalledWith(
+        "proj-1",
+        "task-just-started",
         expect.any(Object)
       );
     });

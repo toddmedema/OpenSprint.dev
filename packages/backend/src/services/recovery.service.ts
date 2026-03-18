@@ -135,18 +135,28 @@ export class RecoveryService {
     // 3. Orphaned in_progress tasks
     const orphanResult = await this.recoverOrphanedTasks(projectId, repoPath, excludeIds);
     result.requeued.push(...orphanResult);
+    orphanResult.forEach((taskId) => excludeIds.add(taskId));
 
-    // 4. Stale git lock removal
+    // 4. Stranded merge retries: in_progress but no assignee, slot, or active agent.
+    const assigneeLessResult = await this.recoverAssigneeLessInProgressTasks(
+      projectId,
+      repoPath,
+      excludeIds
+    );
+    result.requeued.push(...assigneeLessResult);
+    assigneeLessResult.forEach((taskId) => excludeIds.add(taskId));
+
+    // 5. Stale git lock removal
     const lockCleaned = await this.cleanStaleGitLocks(projectId, repoPath);
     if (lockCleaned) result.cleaned.push(".git/index.lock");
 
-    // 5. Reconcile slots vs task store
+    // 6. Reconcile slots vs task store
     if (host.removeStaleSlot) {
       const reconciled = await this.reconcileSlots(projectId, repoPath, host);
       result.cleaned.push(...reconciled);
     }
 
-    // 6. Prune orphan worktrees (closed tasks, missing tasks) — prevents accumulation
+    // 7. Prune orphan worktrees (closed tasks, missing tasks) — prevents accumulation
     const pruned = await this.pruneOrphanWorktrees(projectId, repoPath, excludeIds);
     if (pruned.length > 0) {
       result.cleaned.push(...pruned.map((id) => `worktree:${id}`));
@@ -414,6 +424,64 @@ export class RecoveryService {
 
     if (recovered.length > 0) {
       log.warn("Recovered orphaned tasks", { count: recovered.length, recovered });
+    }
+    return recovered;
+  }
+
+  private async recoverAssigneeLessInProgressTasks(
+    projectId: string,
+    repoPath: string,
+    excludeIds: Set<string>
+  ): Promise<string[]> {
+    const stranded = await this.taskStore.listInProgressWithoutAssignee(projectId);
+    const cutoffMs = Date.now() - HEARTBEAT_STALE_MS;
+    const toRecover = stranded.filter((task) => {
+      if (excludeIds.has(task.id)) return false;
+      const updatedAtMs = Date.parse(task.updated_at ?? "");
+      return Number.isFinite(updatedAtMs) && updatedAtMs <= cutoffMs;
+    });
+    const recovered: string[] = [];
+
+    for (const task of toRecover) {
+      try {
+        await this.recoverTask(projectId, repoPath, task);
+        recovered.push(task.id);
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: task.id,
+            event: "recovery.in_progress_without_assignee_reset",
+            data: {
+              reason: "in_progress task had no assignee, slot, or active agent",
+              updatedAt: task.updated_at ?? null,
+            },
+          })
+          .catch((err) =>
+            log.debug("Best-effort event log append failed", { taskId: task.id, err })
+          );
+        await this.taskStore
+          .comment(
+            projectId,
+            task.id,
+            "Watchdog: in-progress task had no assignee or active slot. Task requeued for next attempt."
+          )
+          .catch((err) =>
+            log.warn("Failed to comment on recovered assignee-less task", {
+              taskId: task.id,
+              err,
+            })
+          );
+      } catch (err) {
+        log.warn("Failed to recover assignee-less in-progress task", {
+          taskId: task.id,
+          err: (err as Error).message,
+        });
+      }
+    }
+
+    if (recovered.length > 0) {
+      log.warn("Recovered assignee-less in-progress tasks", { count: recovered.length, recovered });
     }
     return recovered;
   }

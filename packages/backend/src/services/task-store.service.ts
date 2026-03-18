@@ -496,6 +496,13 @@ export class TaskStoreService {
     return all.filter((t) => t.status === "in_progress" && isAgentAssignee(t.assignee));
   }
 
+  async listInProgressWithoutAssignee(projectId: string): Promise<StoredTask[]> {
+    const all = await this.list(projectId);
+    return all.filter(
+      (t) => t.status === "in_progress" && (!t.assignee || t.assignee.trim().length === 0)
+    );
+  }
+
   /**
    * List project IDs that have at least one task with status in_progress.
    * Used by scripts (e.g. reset in-progress tasks to open).
