@@ -538,6 +538,43 @@ Test review prompt generation.
   );
 
   it(
+    "GET /tasks returns waiting_to_merge and mergePausedUntil/mergeWaitingOnMain for task in merge pipeline",
+    { timeout: 20000 },
+    async () => {
+      const wtmTask = await taskStore.create(projectId, "Waiting to merge task", {
+        type: "task",
+        priority: 1,
+      });
+      await taskStore.addLabel(projectId, wtmTask.id, "merge_stage:quality_gate");
+
+      let res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      expect(res.status).toBe(200);
+      const data = res.body.data;
+      const list = Array.isArray(data) ? data : (data?.items ?? []);
+      const found = list.find((t: { id: string }) => t.id === wtmTask.id);
+      expect(found).toBeDefined();
+      expect(found.kanbanColumn).toBe("waiting_to_merge");
+      expect(found.mergePausedUntil).toBeUndefined();
+      expect(found.mergeWaitingOnMain).toBeUndefined();
+
+      const futureIso = new Date(Date.now() + 86400000).toISOString();
+      await taskStore.update(projectId, wtmTask.id, {
+        extra: { merge_quality_gate_paused_until: futureIso },
+      });
+
+      res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      expect(res.status).toBe(200);
+      const data2 = res.body.data;
+      const list2 = Array.isArray(data2) ? data2 : (data2?.items ?? []);
+      const found2 = list2.find((t: { id: string }) => t.id === wtmTask.id);
+      expect(found2).toBeDefined();
+      expect(found2.kanbanColumn).toBe("waiting_to_merge");
+      expect(found2.mergePausedUntil).toBe(futureIso);
+      expect(found2.mergeWaitingOnMain).toBe(true);
+    }
+  );
+
+  it(
     "GET /tasks/:taskId returns sourceFeedbackIds when task has discovered-from dep to feedback source task",
     {
       timeout: 20000,
