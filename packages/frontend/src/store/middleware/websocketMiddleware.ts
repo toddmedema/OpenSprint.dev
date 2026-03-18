@@ -402,6 +402,9 @@ export const websocketMiddleware: Middleware = (storeApi) => {
             blockReason: event.blockReason,
             title: event.title,
             description: event.description,
+            kanbanColumn: event.kanbanColumn,
+            mergePausedUntil: event.mergePausedUntil,
+            mergeWaitingOnMain: event.mergeWaitingOnMain,
           })
         );
         const synced = syncTaskFromExecuteStateToQueryCache(qc, getState, projectId, event.taskId);

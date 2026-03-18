@@ -978,6 +978,43 @@ describe("websocketMiddleware", () => {
       });
     });
 
+    it("passes kanbanColumn and merge hint fields through taskUpdated on task.updated", async () => {
+      const store = createStore();
+      const { setTasks } = await import("../slices/executeSlice");
+      store.dispatch(
+        setTasks([
+          {
+            id: "task-1",
+            title: "Task 1",
+            kanbanColumn: "backlog",
+            priority: 1,
+            assignee: null,
+            epicId: "epic-1",
+          },
+        ])
+      );
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      wsInstance!.simulateMessage({
+        type: "task.updated",
+        taskId: "task-1",
+        status: "open",
+        assignee: null,
+        kanbanColumn: "waiting_to_merge",
+        mergePausedUntil: "2025-03-18T12:00:00Z",
+        mergeWaitingOnMain: true,
+      });
+
+      await vi.waitFor(() => {
+        const task = selectTasks(store.getState()).find((t) => t.id === "task-1");
+        expect(task?.kanbanColumn).toBe("waiting_to_merge");
+        expect(task?.mergePausedUntil).toBe("2025-03-18T12:00:00Z");
+        expect(task?.mergeWaitingOnMain).toBe(true);
+      });
+    });
+
     it("dispatches updateFeedbackItem on feedback.updated when event includes item (no refetch)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));

@@ -1,6 +1,6 @@
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { ActionReducerMapBuilder } from "@reduxjs/toolkit";
-import type { Task, TaskPriority } from "@opensprint/shared";
+import type { Task, TaskPriority, KanbanColumn } from "@opensprint/shared";
 import { mapStatusToKanban } from "@opensprint/shared";
 import type { TaskEventPayload } from "@opensprint/shared";
 import type { ExecuteState } from "./executeTypes";
@@ -34,23 +34,45 @@ export const taskListReducers = {
       blockReason?: string | null;
       title?: string;
       description?: string;
+      kanbanColumn?: KanbanColumn;
+      mergePausedUntil?: string | null;
+      mergeWaitingOnMain?: boolean;
     }>
   ) {
     ensureTasksState(state);
-    const { taskId, status, assignee, priority, blockReason, title, description } = action.payload;
+    const {
+      taskId,
+      status,
+      assignee,
+      priority,
+      blockReason,
+      title,
+      description,
+      kanbanColumn,
+      mergePausedUntil,
+      mergeWaitingOnMain,
+    } = action.payload;
     const task = state.tasksById[taskId];
     if (task) {
       if (status !== undefined) {
-        task.kanbanColumn = mapStatusToKanban(status);
+        if (kanbanColumn !== undefined) {
+          task.kanbanColumn = kanbanColumn;
+        } else {
+          task.kanbanColumn = mapStatusToKanban(status);
+        }
         if (status === "open" || status === "in_progress" || status === "closed") {
           task.status = status;
         }
+      } else if (kanbanColumn !== undefined) {
+        task.kanbanColumn = kanbanColumn;
       }
       if (assignee !== undefined) task.assignee = assignee;
       if (priority !== undefined) task.priority = priority;
       if (blockReason !== undefined) task.blockReason = blockReason;
       if (title !== undefined) task.title = title;
       if (description !== undefined) task.description = description;
+      if (mergePausedUntil !== undefined) task.mergePausedUntil = mergePausedUntil;
+      if (mergeWaitingOnMain !== undefined) task.mergeWaitingOnMain = mergeWaitingOnMain;
     }
   },
   /** Live-update: add task from WebSocket task.created event. */

@@ -1,6 +1,21 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import type { Task, TaskPriority, TaskType } from "@opensprint/shared";
+import type { Task, TaskPriority, TaskType, KanbanColumn } from "@opensprint/shared";
 import { mapStatusToKanban } from "@opensprint/shared";
+
+const VALID_KANBAN_COLUMNS: readonly KanbanColumn[] = [
+  "planning",
+  "backlog",
+  "ready",
+  "in_progress",
+  "in_review",
+  "done",
+  "blocked",
+  "waiting_to_merge",
+];
+
+function isValidKanbanColumn(v: unknown): v is KanbanColumn {
+  return typeof v === "string" && (VALID_KANBAN_COLUMNS as readonly string[]).includes(v);
+}
 import type { TaskEventPayload } from "@opensprint/shared";
 import { api } from "../../api/client";
 import { normalizeTaskListResponse } from "../../api/taskList";
@@ -212,7 +227,10 @@ export const unblockTask = createAsyncThunk(
 export function taskEventPayloadToTask(p: TaskEventPayload): Task {
   const issueType = (p.issue_type ?? "task") as TaskType;
   const isEpic = issueType === "epic";
-  return {
+  const kanbanColumn = isValidKanbanColumn(p.kanbanColumn)
+    ? p.kanbanColumn
+    : mapStatusToKanban(p.status);
+  const task: Task = {
     id: p.id,
     title: p.title,
     description: p.description ?? "",
@@ -223,13 +241,16 @@ export function taskEventPayloadToTask(p: TaskEventPayload): Task {
     labels: p.labels ?? [],
     dependencies: [],
     epicId: isEpic ? null : (p.parentId ?? null),
-    kanbanColumn: mapStatusToKanban(p.status),
+    kanbanColumn,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
     startedAt: null,
     completedAt: p.status === "closed" ? p.updated_at : null,
     ...("source" in p && p.source ? { source: p.source } : {}),
   };
+  if (p.mergePausedUntil !== undefined) task.mergePausedUntil = p.mergePausedUntil;
+  if (p.mergeWaitingOnMain !== undefined) task.mergeWaitingOnMain = p.mergeWaitingOnMain;
+  return task;
 }
 
 /** Converts task array to tasksById + taskIdsOrder (deduped by id). Exported for tests. */

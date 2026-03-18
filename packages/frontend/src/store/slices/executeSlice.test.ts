@@ -407,6 +407,24 @@ describe("executeSlice", () => {
       expect(task?.description).toBe("Updated description");
     });
 
+    it("taskUpdated uses server kanbanColumn and sets merge hint fields when provided", () => {
+      const store = createStore();
+      store.dispatch(setTasks([mockTask]));
+      store.dispatch(
+        taskUpdated({
+          taskId: "task-1",
+          status: "open",
+          kanbanColumn: "waiting_to_merge",
+          mergePausedUntil: "2025-03-18T12:00:00Z",
+          mergeWaitingOnMain: true,
+        })
+      );
+      const task = selectTasks(store.getState())[0];
+      expect(task.kanbanColumn).toBe("waiting_to_merge");
+      expect(task.mergePausedUntil).toBe("2025-03-18T12:00:00Z");
+      expect(task.mergeWaitingOnMain).toBe(true);
+    });
+
     it("taskCreated adds task from WebSocket payload (live-update)", () => {
       const store = createStore();
       store.dispatch(
@@ -428,6 +446,31 @@ describe("executeSlice", () => {
       expect(tasks[0].title).toBe("New Task");
       expect(tasks[0].kanbanColumn).toBe("backlog");
       expect(tasks[0].epicId).toBe("os-new");
+    });
+
+    it("taskCreated uses server kanbanColumn and merge fields from list payload when present", () => {
+      const store = createStore();
+      store.dispatch(
+        taskCreated({
+          id: "os-w2m.1",
+          title: "Waiting to Merge Task",
+          issue_type: "task",
+          status: "open",
+          priority: 2,
+          assignee: null,
+          created_at: "2025-01-01T00:00:00Z",
+          updated_at: "2025-01-01T00:00:00Z",
+          parentId: "os-w2m",
+          kanbanColumn: "waiting_to_merge",
+          mergePausedUntil: "2025-03-18T12:00:00Z",
+          mergeWaitingOnMain: true,
+        })
+      );
+      const tasks = selectTasks(store.getState());
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].kanbanColumn).toBe("waiting_to_merge");
+      expect(tasks[0].mergePausedUntil).toBe("2025-03-18T12:00:00Z");
+      expect(tasks[0].mergeWaitingOnMain).toBe(true);
     });
 
     it("taskCreated does not duplicate when task already exists", () => {
