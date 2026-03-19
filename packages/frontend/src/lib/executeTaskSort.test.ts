@@ -55,6 +55,20 @@ describe("sortEpicTasksByStatus", () => {
     ]);
   });
 
+  it("places waiting_to_merge after ready and before backlog", () => {
+    const tasks = [
+      createTask({ id: "a", kanbanColumn: "backlog", priority: 0 }),
+      createTask({ id: "b", kanbanColumn: "ready", priority: 0 }),
+      createTask({ id: "c", kanbanColumn: "waiting_to_merge", priority: 0 }),
+    ];
+    const sorted = sortEpicTasksByStatus(tasks);
+    expect(sorted.map((t) => t.kanbanColumn)).toEqual([
+      "ready",
+      "waiting_to_merge",
+      "backlog",
+    ]);
+  });
+
   it("places planning and blocked after backlog, before done", () => {
     const tasks = [
       createTask({ id: "a", kanbanColumn: "done", priority: 0 }),
@@ -114,8 +128,9 @@ describe("getTimelineSection", () => {
     expect(getTimelineSection("in_review")).toBe(TIMELINE_SECTION.active);
   });
 
-  it("maps ready, backlog, planning, blocked to queue", () => {
+  it("maps ready, waiting_to_merge, backlog, planning, blocked to queue", () => {
     expect(getTimelineSection("ready")).toBe(TIMELINE_SECTION.queue);
+    expect(getTimelineSection("waiting_to_merge")).toBe(TIMELINE_SECTION.queue);
     expect(getTimelineSection("backlog")).toBe(TIMELINE_SECTION.queue);
     expect(getTimelineSection("planning")).toBe(TIMELINE_SECTION.queue);
     expect(getTimelineSection("blocked")).toBe(TIMELINE_SECTION.queue);

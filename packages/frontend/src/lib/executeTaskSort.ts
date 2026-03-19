@@ -14,7 +14,7 @@ export type TimelineSection = (typeof TIMELINE_SECTION)[keyof typeof TIMELINE_SE
 export function getTimelineSection(column: KanbanColumn): TimelineSection {
   if (column === "in_progress" || column === "in_review") return TIMELINE_SECTION.active;
   if (column === "done") return TIMELINE_SECTION.completed;
-  return TIMELINE_SECTION.queue; // ready, backlog, planning, blocked
+  return TIMELINE_SECTION.queue; // ready, waiting_to_merge, backlog, planning, blocked
 }
 
 /** Tier order for timeline sort: active (0) → queue (1) → completed (2) */
@@ -57,23 +57,23 @@ export function sortTasksForTimeline(tasks: Task[]): Task[] {
 
 /**
  * Display order for epic card task list in Execute tab.
- * In Progress → In Review → Ready → Backlog → Done.
+ * In Progress → In Review → Ready → Waiting to Merge → Backlog → Done.
  * Planning and blocked are grouped after backlog, before done.
  */
 const STATUS_ORDER: Record<KanbanColumn, number> = {
   in_progress: 0,
   in_review: 1,
   ready: 2,
-  backlog: 3,
-  planning: 4,
-  blocked: 5,
-  waiting_to_merge: 6,
+  waiting_to_merge: 3,
+  backlog: 4,
+  planning: 5,
+  blocked: 6,
   done: 7,
 };
 
 /**
  * Sort epic subtasks by status priority for Execute tab display.
- * Groups: In Progress → In Review → Ready → Backlog → Done.
+ * Groups: In Progress → In Review → Ready → Waiting to Merge → Backlog → Done.
  * Within each status group: priority (0 highest) then ID as tiebreaker.
  *
  * @param tasks - Tasks to sort (not mutated)
