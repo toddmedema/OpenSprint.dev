@@ -29,7 +29,7 @@ jobs:
         env:
           POSTGRES_USER: opensprint
           POSTGRES_PASSWORD: opensprint
-          POSTGRES_DB: opensprint_test
+          POSTGRES_DB: opensprint
         ports:
           - 5432:5432
         options: >-
@@ -109,7 +109,7 @@ jobs:
         run: npm run build
       - name: Run perf check (start backend + frontend, then perf:ci)
         env:
-          DATABASE_URL: postgres://opensprint:opensprint@localhost:5432/opensprint_test
+          DATABASE_URL: postgres://opensprint:opensprint@localhost:5432/opensprint
         run: |
           npm run start -w packages/backend &
           for i in $(seq 1 30); do

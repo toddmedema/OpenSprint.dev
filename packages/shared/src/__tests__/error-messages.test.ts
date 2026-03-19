@@ -7,6 +7,7 @@ import {
   REMEDIATION_PREFLIGHT_DEPENDENCY,
   REMEDIATION_PREFLIGHT_GIT,
   getErrorCodeHint,
+  getQualityGateFailureLabel,
   getFailureTypeTitle,
   getQualityGateTitle,
   getRemediationForFailureType,
@@ -50,6 +51,20 @@ describe("getFailureTypeTitle", () => {
 
   it("returns title for repo_preflight", () => {
     expect(getFailureTypeTitle("repo_preflight")).toBe("Repo preflight failed");
+  });
+
+  it("falls back to the raw type when the label is unknown", () => {
+    expect(getFailureTypeTitle("mystery_failure" as never)).toBe("mystery_failure");
+  });
+});
+
+describe("getQualityGateFailureLabel", () => {
+  it("returns the environment-specific label when setup failed", () => {
+    expect(getQualityGateFailureLabel("environment_setup")).toBe("Environment setup failed");
+  });
+
+  it("returns the quality-gate label for merge-quality failures", () => {
+    expect(getQualityGateFailureLabel("merge_quality_gate")).toBe("Quality gate failed");
   });
 });
 

@@ -149,6 +149,18 @@ describe("AgentRole and slot mapping", () => {
       expect(sorted[0].phase).toBe("coding");
       expect(sorted[1].phase).toBe("review");
     });
+
+    it("sorts agents with unknown phases after canonical roles", () => {
+      const agents = [
+        { id: "1", phase: "qa", role: undefined, label: "Q", startedAt: "" },
+        { id: "2", phase: "coding", role: undefined, label: "C", startedAt: "" },
+        { id: "3", phase: undefined, role: undefined, label: "N", startedAt: "" },
+      ];
+
+      const sorted = sortAgentsByCanonicalOrder(agents);
+
+      expect(sorted.map((agent) => agent.phase ?? "")).toEqual(["coding", "", "qa"]);
+    });
   });
 
   describe("AGENT_ROLE_PHASES (consistency check)", () => {
@@ -208,6 +220,10 @@ describe("AgentRole and slot mapping", () => {
     it("falls back to phase label when role is unknown", () => {
       expect(getRoleDisplayLabel({ phase: "coding" })).toBe("Coding");
       expect(getRoleDisplayLabel({ phase: "plan", name: "Gandalf" })).toBe("Plan (Gandalf)");
+    });
+
+    it("falls back to the raw phase when there is no known phase label", () => {
+      expect(getRoleDisplayLabel({ phase: "qa" })).toBe("qa");
     });
 
     it("ignores empty or whitespace-only name", () => {

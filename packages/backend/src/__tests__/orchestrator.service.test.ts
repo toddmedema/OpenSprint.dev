@@ -13,6 +13,7 @@ import { RepoPreflightError } from "../utils/git-repo-state.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import type { ReviewAgentResult } from "@opensprint/shared";
 import { OPEN_QUESTION_BLOCK_REASON } from "@opensprint/shared";
+import { buildOrchestratorTestStatusContent } from "../services/orchestrator-test-status.js";
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
@@ -1552,6 +1553,73 @@ describe("OrchestratorService (slot-based model)", () => {
       });
       expect(mockTaskStoreClose).toHaveBeenCalledWith(projectId, task.id, expect.any(String));
     });
+
+    it("completes recovered review assignments from persisted PASSED validation without rerunning tests", async () => {
+      const task = {
+        ...makeTask("task-review-passed"),
+        status: "in_progress",
+        assignee: "Boromir",
+      };
+      const host = orchestrator.getRecoveryHost();
+      const activeDir = path.join(repoPath, ".opensprint", "active", task.id);
+      const contextDir = path.join(activeDir, "context");
+
+      mockGetSettings.mockResolvedValue({
+        ...defaultSettings,
+        reviewMode: "always",
+        simpleComplexityAgent: { type: "cursor", model: "gpt-5", cliCommand: null },
+        complexComplexityAgent: { type: "cursor", model: "gpt-5", cliCommand: null },
+      });
+      mockGetChangedFiles.mockResolvedValue(["src/foo.ts"]);
+      mockReadResult.mockResolvedValue({
+        status: "approved",
+        summary: "Looks good",
+        notes: "",
+      });
+      await fs.mkdir(contextDir, { recursive: true });
+      await fs.writeFile(path.join(activeDir, "agent-output.log"), "Recovered review output\n");
+      await fs.writeFile(
+        path.join(contextDir, "orchestrator-test-status.md"),
+        buildOrchestratorTestStatusContent({
+          status: "passed",
+          testCommand: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+          mergeQualityGates: ["npm run build", "npm run test"],
+          results: {
+            passed: 3,
+            failed: 0,
+            skipped: 0,
+            total: 3,
+            details: [],
+          },
+          updatedAt: "2026-03-18T23:00:00.000Z",
+        }),
+        "utf-8"
+      );
+
+      const completed = await host.handleCompletedAssignment?.(projectId, repoPath, task as never, {
+        taskId: task.id,
+        projectId,
+        phase: "review",
+        branchName: `opensprint/${task.id}`,
+        worktreePath: repoPath,
+        promptPath: path.join(activeDir, "prompt.md"),
+        agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+        attempt: 2,
+        createdAt: "2026-03-02T10:00:00.000Z",
+      });
+
+      expect(completed).toBe(true);
+      expect(mockRunScopedTests).not.toHaveBeenCalled();
+      await vi.waitFor(() => {
+        expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
+          expect.objectContaining({
+            taskId: task.id,
+            branchName: `opensprint/${task.id}`,
+          })
+        );
+      });
+      expect(mockTaskStoreClose).toHaveBeenCalledWith(projectId, task.id, expect.any(String));
+    });
   });
 
   describe("single task dispatch (maxConcurrentCoders=1)", () => {
@@ -2131,6 +2199,84 @@ describe("OrchestratorService (slot-based model)", () => {
           command: "npm run lint",
           firstErrorLine: "src/foo.ts: error TS2304: Cannot find name 'x'",
         })
+      );
+    });
+
+    it("falls back to task failure when finalization throws unexpectedly", async () => {
+      const { task } = setupSingleTaskFlow("task-review-finalize-error");
+      mockTaskStoreReady.mockResolvedValueOnce([task]);
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      const mergeSpy = vi
+        .spyOn(
+          (
+            orchestrator as unknown as {
+              mergeCoordinator: { performMergeAndDone: (...args: unknown[]) => Promise<void> };
+            }
+          ).mergeCoordinator,
+          "performMergeAndDone"
+        )
+        .mockRejectedValue(new Error("merge finalize boom"));
+      const failureSpy = vi
+        .spyOn(
+          (
+            orchestrator as unknown as {
+              failureHandler: {
+                handleTaskFailure: (...args: unknown[]) => Promise<void>;
+              };
+            }
+          ).failureHandler,
+          "handleTaskFailure"
+        )
+        .mockResolvedValue(undefined);
+
+      const invokeResolve = orchestrator as unknown as {
+        resolveTestAndReview(
+          projectId: string,
+          repoPath: string,
+          task: typeof task,
+          branchName: string,
+          testOutcome: {
+            status: "passed";
+            results: { passed: number; failed: number };
+          },
+          reviewOutcome: {
+            status: "approved";
+            result: { status: "approved"; summary: string; notes: string };
+            exitCode: number;
+          }
+        ): Promise<void>;
+      };
+
+      await invokeResolve.resolveTestAndReview(
+        projectId,
+        repoPath,
+        task,
+        `opensprint/${task.id}`,
+        {
+          status: "passed",
+          results: { passed: 1, failed: 0 },
+        },
+        {
+          status: "approved",
+          result: { status: "approved", summary: "Looks good", notes: "" },
+          exitCode: 0,
+        }
+      );
+
+      expect(mergeSpy).toHaveBeenCalledWith(projectId, repoPath, task, `opensprint/${task.id}`);
+      expect(failureSpy).toHaveBeenCalledWith(
+        projectId,
+        repoPath,
+        task,
+        `opensprint/${task.id}`,
+        "Failed to finalize review/test outcome: merge finalize boom",
+        null,
+        "agent_crash"
       );
     });
   });

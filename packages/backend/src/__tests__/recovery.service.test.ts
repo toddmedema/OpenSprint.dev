@@ -405,6 +405,54 @@ describe("RecoveryService — stale heartbeat recovery", () => {
     expect(vi.mocked(taskStore.update)).not.toHaveBeenCalled();
   });
 
+  it("completes slotted tasks with terminal result.json during slot reconciliation", async () => {
+    const completedHost = {
+      getSlottedTaskIds: () => ["task-stale"],
+      getActiveAgentIds: () => [] as string[],
+      handleCompletedAssignment: vi.fn().mockResolvedValue(true),
+      removeStaleSlot: vi.fn().mockResolvedValue(undefined),
+    };
+    const promptDir = path.join(tmpDir, ".opensprint", "active", "task-stale");
+    await fs.mkdir(promptDir, { recursive: true });
+    await fs.writeFile(
+      path.join(promptDir, "result.json"),
+      JSON.stringify({ status: "approved", summary: "done" }),
+      "utf-8"
+    );
+
+    vi.mocked(taskStore.listAll).mockResolvedValue([
+      {
+        id: "task-stale",
+        status: "in_progress",
+        assignee: "Boromir",
+      } as never,
+    ]);
+    mockReadAssignmentAt.mockResolvedValue({
+      taskId: "task-stale",
+      projectId: "proj-1",
+      phase: "review",
+      branchName: "opensprint/task-stale",
+      worktreePath: tmpDir,
+      promptPath: path.join(promptDir, "prompt.md"),
+      agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+      attempt: 3,
+      createdAt: new Date().toISOString(),
+    });
+
+    const result = await service.runFullRecovery("proj-1", tmpDir, completedHost);
+
+    expect(completedHost.handleCompletedAssignment).toHaveBeenCalledWith(
+      "proj-1",
+      tmpDir,
+      expect.objectContaining({ id: "task-stale" }),
+      expect.objectContaining({ phase: "review", attempt: 3 })
+    );
+    expect(result.cleaned).toContain("task-stale");
+    expect(result.requeued).toEqual([]);
+    expect(vi.mocked(taskStore.update)).not.toHaveBeenCalled();
+    expect(completedHost.removeStaleSlot).not.toHaveBeenCalled();
+  });
+
   describe("orphaned in_progress tasks (agent assignee, no process)", () => {
     it("resets tasks with agent assignee when no slot or active agent", async () => {
       vi.mocked(taskStore.listInProgressWithAgentAssignee).mockResolvedValue([

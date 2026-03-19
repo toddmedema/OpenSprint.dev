@@ -3,12 +3,20 @@ import {
   buildOrchestratorTestStatusContent,
   buildTestFailureRetrySummary,
   getOrchestratorTestStatusPromptPath,
+  getOrchestratorTestStatusStateFsPath,
+  parseOrchestratorTestStatusContent,
 } from "../services/orchestrator-test-status.js";
 
 describe("orchestrator-test-status", () => {
   it("builds a prompt path under the task context directory", () => {
     expect(getOrchestratorTestStatusPromptPath("os-1234")).toBe(
       ".opensprint/active/os-1234/context/orchestrator-test-status.md"
+    );
+  });
+
+  it("builds a state path under the task context directory", () => {
+    expect(getOrchestratorTestStatusStateFsPath("/repo", "os-1234")).toBe(
+      "/repo/.opensprint/active/os-1234/context/orchestrator-test-status.json"
     );
   });
 
@@ -153,5 +161,35 @@ describe("orchestrator-test-status", () => {
     expect(summary).toContain(
       "- src/bar.test.ts > auth > allows valid token — TypeError: Cannot read properties of undefined"
     );
+  });
+
+  it("parses legacy markdown-only PASSED status files for restart recovery", () => {
+    const content = buildOrchestratorTestStatusContent({
+      status: "passed",
+      testCommand: "node ./node_modules/vitest/vitest.mjs run",
+      mergeQualityGates: ["npm run build", "npm run test"],
+      results: {
+        passed: 5,
+        failed: 0,
+        skipped: 1,
+        total: 6,
+        details: [],
+      },
+      updatedAt: "2026-03-18T23:00:00.000Z",
+    });
+
+    expect(parseOrchestratorTestStatusContent(content)).toEqual({
+      status: "passed",
+      testCommand: "node ./node_modules/vitest/vitest.mjs run",
+      mergeQualityGates: ["npm run build", "npm run test"],
+      results: {
+        passed: 5,
+        failed: 0,
+        skipped: 1,
+        total: 6,
+        details: [],
+      },
+      updatedAt: "2026-03-18T23:00:00.000Z",
+    });
   });
 });

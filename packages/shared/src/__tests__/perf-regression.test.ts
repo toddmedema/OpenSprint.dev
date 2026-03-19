@@ -95,6 +95,25 @@ describe("checkPerfRegressions", () => {
     expect(regressions[0].metric).toBe("firstContentfulPaint");
   });
 
+  it("skips TTI and FCP comparisons when baseline metrics are missing", () => {
+    const baseline = minimalMetrics({
+      load: {
+        ...minimalMetrics().load,
+        timeToInteractive: undefined,
+        firstContentfulPaint: undefined,
+      },
+    });
+    const current = minimalMetrics({
+      load: {
+        ...minimalMetrics().load,
+        timeToInteractive: 7000,
+        firstContentfulPaint: 1300,
+      },
+    });
+
+    expect(checkPerfRegressions(baseline, current)).toEqual([]);
+  });
+
   it("returns regression when jsHeapUsed exceeds delta", () => {
     const baseline = minimalMetrics({
       memory: { ...minimalMetrics().memory, jsHeapUsed: 200_000_000 },
@@ -155,5 +174,22 @@ describe("checkPerfRegressions", () => {
     const regressions = checkPerfRegressions(baseline, current);
     expect(regressions).toHaveLength(1);
     expect(regressions[0].metric).toBe("sidebarCloseToHidden");
+  });
+
+  it("reports peak sidebar heap regression when both runs opened the sidebar", () => {
+    const base = minimalMetrics();
+    const baseline = minimalMetrics({
+      sidebarOpened: true,
+      memory: { ...base.memory, peakAfterSidebarOpen: 200_000_000 },
+    });
+    const cur = minimalMetrics();
+    const current = minimalMetrics({
+      sidebarOpened: true,
+      memory: { ...cur.memory, peakAfterSidebarOpen: 260_000_000 },
+    }); // +30%, max 20%
+
+    const regressions = checkPerfRegressions(baseline, current);
+    expect(regressions).toHaveLength(1);
+    expect(regressions[0].metric).toBe("peakAfterSidebarOpen");
   });
 });

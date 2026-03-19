@@ -23,9 +23,11 @@ export default defineConfig({
     coverage: {
       all: true,
       provider: "v8",
-      include: ["src/**/*.ts"],
+      excludeAfterRemap: true,
+      include: ["src/**/*.{ts,js}"],
       exclude: [
         "src/__tests__/**",
+        "src/**/*.d.ts",
         "src/index.ts",
         "src/types/api.ts",
         "src/types/agent.ts",

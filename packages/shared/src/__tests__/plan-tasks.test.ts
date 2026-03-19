@@ -130,4 +130,16 @@ Has description.
     expect(result[0]).toEqual({ title: "Title only", description: "" });
     expect(result[1].title).toBe("Next task");
   });
+
+  it("returns empty array when the Tasks section is present but has no task headings", () => {
+    const content = `# Feature
+
+## Tasks
+
+Only prose here.
+Still no heading.
+`;
+
+    expect(parsePlanTasks(content)).toEqual([]);
+  });
 });

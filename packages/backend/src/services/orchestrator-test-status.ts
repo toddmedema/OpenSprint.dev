@@ -1,7 +1,9 @@
 import path from "path";
 import { OPENSPRINT_PATHS, type TestResults } from "@opensprint/shared";
+import type { FailureType, RetryQualityGateDetail } from "./orchestrator-phase-context.js";
 
 export const ORCHESTRATOR_TEST_STATUS_FILE = "orchestrator-test-status.md";
+export const ORCHESTRATOR_TEST_STATUS_STATE_FILE = "orchestrator-test-status.json";
 const MAX_OUTPUT_SNIPPET_CHARS = 1_800;
 const MAX_OUTPUT_SNIPPET_LINES = 40;
 const MAX_OUTPUT_CHARS = 20_000;
@@ -52,6 +54,11 @@ export type OrchestratorTestStatus =
       updatedAt?: string;
     };
 
+export type PersistedOrchestratorTestStatus = OrchestratorTestStatus & {
+  failureType?: FailureType;
+  qualityGateDetail?: RetryQualityGateDetail | null;
+};
+
 export function getOrchestratorTestStatusPromptPath(taskId: string): string {
   return `${OPENSPRINT_PATHS.active}/${taskId}/context/${ORCHESTRATOR_TEST_STATUS_FILE}`;
 }
@@ -63,6 +70,16 @@ export function getOrchestratorTestStatusFsPath(basePath: string, taskId: string
     taskId,
     "context",
     ORCHESTRATOR_TEST_STATUS_FILE
+  );
+}
+
+export function getOrchestratorTestStatusStateFsPath(basePath: string, taskId: string): string {
+  return path.join(
+    basePath,
+    OPENSPRINT_PATHS.active,
+    taskId,
+    "context",
+    ORCHESTRATOR_TEST_STATUS_STATE_FILE
   );
 }
 
@@ -121,6 +138,112 @@ export function buildOrchestratorTestStatusContent(status: OrchestratorTestStatu
   }
 
   return content;
+}
+
+export function parseOrchestratorTestStatusContent(
+  content: string
+): PersistedOrchestratorTestStatus | null {
+  if (!content.trim()) return null;
+
+  const statusMatch = content.match(/- Status:\s*`([A-Z]+)`/);
+  const status = statusMatch?.[1]?.toLowerCase();
+  if (status !== "pending" && status !== "passed" && status !== "failed" && status !== "error") {
+    return null;
+  }
+
+  const updatedAt =
+    content.match(/- Updated:\s*`([^`]+)`/)?.[1]?.trim() ||
+    new Date().toISOString();
+  const rawCommand = content.match(/- Validation command:\s*`([^`]*)`/)?.[1] ?? null;
+  const testCommand = rawCommand && rawCommand !== "(not configured)" ? rawCommand : null;
+  const mergeQualityGates = extractBacktickedList(
+    content.match(/- Merge quality gates:\s*(.+)/)?.[1] ?? ""
+  );
+
+  const passed = parseCount(content, "Passed");
+  const failed = parseCount(content, "Failed");
+  const skipped = parseCount(content, "Skipped");
+  const total = parseCount(content, "Total");
+  const results =
+    passed != null && failed != null && skipped != null && total != null
+      ? {
+          passed,
+          failed,
+          skipped,
+          total,
+          details: [],
+        }
+      : undefined;
+  const errorMessage = extractSectionBody(content, "Error");
+  const rawOutput = extractCodeBlockAfterHeading(content, "Output Snippet");
+
+  switch (status) {
+    case "pending":
+      return {
+        status,
+        updatedAt,
+        testCommand,
+        ...(mergeQualityGates.length > 0 && { mergeQualityGates }),
+      };
+    case "passed":
+      return {
+        status,
+        updatedAt,
+        testCommand,
+        ...(mergeQualityGates.length > 0 && { mergeQualityGates }),
+        ...(results && { results }),
+      };
+    case "failed":
+      return {
+        status,
+        updatedAt,
+        testCommand,
+        ...(mergeQualityGates.length > 0 && { mergeQualityGates }),
+        ...(results && { results }),
+        ...(rawOutput ? { rawOutput } : {}),
+      };
+    case "error":
+      return {
+        status,
+        updatedAt,
+        testCommand,
+        ...(mergeQualityGates.length > 0 && { mergeQualityGates }),
+        ...(rawOutput ? { rawOutput } : {}),
+        ...(errorMessage ? { errorMessage } : {}),
+      };
+  }
+}
+
+function parseCount(content: string, label: string): number | null {
+  const value = content.match(new RegExp(`- ${label}:\\s*(\\d+)`))?.[1];
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function extractBacktickedList(raw: string): string[] {
+  const matches = [...raw.matchAll(/`([^`]+)`/g)];
+  return matches.map((match) => match[1]!.trim()).filter(Boolean);
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractSectionBody(content: string, heading: string): string | null {
+  const pattern = new RegExp(
+    `## ${escapeRegExp(heading)}\\n\\n([\\s\\S]*?)(?:\\n## |\\n<details>|$)`,
+    "m"
+  );
+  return content.match(pattern)?.[1]?.trim() || null;
+}
+
+function extractCodeBlockAfterHeading(content: string, heading: string): string | null {
+  const pattern = new RegExp(
+    `## ${escapeRegExp(heading)}\\n\\n\`\`\`text\\n([\\s\\S]*?)\\n\`\`\``,
+    "m"
+  );
+  return content.match(pattern)?.[1]?.trim() || null;
 }
 
 export function buildTestFailureRetrySummary(

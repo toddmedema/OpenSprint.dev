@@ -524,7 +524,8 @@ export class RecoveryService {
     if (slottedIds.length === 0) return [];
 
     const allIssues = await this.taskStore.listAll(projectId);
-    const validIds = new Set(allIssues.map((i) => i.id).filter(Boolean) as string[]);
+    const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
+    const validIds = new Set(idToIssue.keys());
 
     // Do not remove slots when listAll returned no tasks; avoid killing agents on empty list.
     if (validIds.size === 0) {
@@ -542,6 +543,57 @@ export class RecoveryService {
       if (!validIds.has(taskId)) {
         log.warn("Removing stale slot: task no longer in task store", { projectId, taskId });
         await host.removeStaleSlot!(projectId, taskId, repoPath);
+        stale.push(taskId);
+        continue;
+      }
+
+      const task = idToIssue.get(taskId);
+      if (!task) continue;
+
+      const assignment = await this.readAssignment(repoPath, taskId);
+      if (!assignment) continue;
+
+      const heartbeat = assignment.worktreePath
+        ? await heartbeatService.readHeartbeat(assignment.worktreePath, taskId)
+        : null;
+      const pidAlive =
+        heartbeat != null &&
+        typeof heartbeat.processGroupLeaderPid === "number" &&
+        heartbeat.processGroupLeaderPid > 0 &&
+        isProcessAlive(heartbeat.processGroupLeaderPid);
+
+      if (!pidAlive && host.handleCompletedAssignment) {
+        const terminalResult = await this.readTerminalAssignmentResult(assignment);
+        if (terminalResult) {
+          log.warn("Completing slotted task from terminal result", {
+            projectId,
+            taskId,
+            phase: assignment.phase,
+            attempt: assignment.attempt,
+            status: terminalResult,
+          });
+          const completed = await host.handleCompletedAssignment(
+            projectId,
+            repoPath,
+            task,
+            assignment
+          );
+          if (completed) {
+            stale.push(taskId);
+            continue;
+          }
+        }
+      }
+
+      if (!pidAlive) {
+        log.warn("Recovering dead slotted task", {
+          projectId,
+          taskId,
+          phase: assignment.phase,
+          attempt: assignment.attempt,
+        });
+        await host.removeStaleSlot!(projectId, taskId, repoPath);
+        await this.recoverTask(projectId, repoPath, task);
         stale.push(taskId);
       }
     }

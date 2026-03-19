@@ -57,6 +57,7 @@ describe("agent naming", () => {
     { slot: 0, expected: "Frodo" },
     { slot: 1, expected: "Samwise" },
     { slot: 13, expected: "Frodo" },
+    { slot: -1, expected: "Will" },
   ])("maps slot $slot to $expected", ({ slot, expected }) => {
     expect(getAgentName(slot)).toBe(expected);
   });
@@ -72,6 +73,10 @@ describe("agent naming", () => {
   it("wraps role-specific names by modulo", () => {
     const reviewerCount = AGENT_NAMES_BY_ROLE.reviewer.length;
     expect(getAgentNameForRole("reviewer", reviewerCount)).toBe(getAgentNameForRole("reviewer", 0));
+  });
+
+  it("wraps negative slot indexes back to the end of the role list", () => {
+    expect(getAgentNameForRole("reviewer", -1)).toBe("Angbor");
   });
 
   it("falls back to the coder pool for unknown roles", () => {

@@ -801,6 +801,11 @@ describe("getTargetsForNightlyDeploy", () => {
     const config: DeploymentConfig = { mode: "custom", targets: [] };
     expect(getTargetsForNightlyDeploy(config)).toEqual([]);
   });
+
+  it("returns empty array when targets are omitted", () => {
+    const config: DeploymentConfig = { mode: "custom" };
+    expect(getTargetsForNightlyDeploy(config)).toEqual([]);
+  });
 });
 
 describe("parseSettings deployment migration", () => {
@@ -1022,6 +1027,72 @@ describe("getDeploymentTargetsForUi", () => {
     const config: DeploymentConfig = { mode: "custom" };
     const targets = getDeploymentTargetsForUi(config);
     expect(targets).toEqual([]);
+  });
+
+  it("returns synthetic expo targets when mode is expo and targets is an empty array", () => {
+    const config: DeploymentConfig = { mode: "expo", targets: [] };
+    const targets = getDeploymentTargetsForUi(config);
+    expect(targets).toEqual([
+      { name: "staging", autoDeployTrigger: "none" },
+      { name: "production", autoDeployTrigger: "none" },
+    ]);
+  });
+});
+
+describe("parseSettings validation timing helpers", () => {
+  it("preserves valid timeout overrides and sanitizes timing samples", () => {
+    const parsed = parseSettings({
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+      validationTimeoutMsOverride: 90_400,
+      validationTimingProfile: {
+        scoped: [1200.2, "bad", -5, Number.POSITIVE_INFINITY, 800],
+        full: [5000.9, 3000.1],
+        updatedAt: " 2026-03-18T00:00:00.000Z ",
+      },
+    });
+
+    expect(parsed.validationTimeoutMsOverride).toBe(90_400);
+    expect(parsed.validationTimingProfile).toEqual({
+      scoped: [1200, 800],
+      full: [5001, 3000],
+      updatedAt: "2026-03-18T00:00:00.000Z",
+    });
+  });
+
+  it("drops invalid timeout overrides and empty timing profiles", () => {
+    const parsed = parseSettings({
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+      validationTimeoutMsOverride: 10,
+      validationTimingProfile: {
+        scoped: ["bad", -1],
+        full: [],
+        updatedAt: "   ",
+      },
+    });
+
+    expect(parsed.validationTimeoutMsOverride).toBeUndefined();
+    expect(parsed.validationTimingProfile).toBeUndefined();
+  });
+
+  it("preserves explicit null timeout overrides", () => {
+    const parsed = parseSettings({
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+      validationTimeoutMsOverride: null,
+    });
+
+    expect(parsed.validationTimeoutMsOverride).toBeNull();
   });
 });
 

@@ -150,4 +150,18 @@ describe("sortPlansByStatus", () => {
       "plan-custom",
     ]);
   });
+
+  it("falls back for unknown statuses on either side of the comparison", () => {
+    const plans = [
+      { ...createPlan("plan-custom-a", "planning"), status: "custom_a" as never },
+      createPlan("plan-building", "building"),
+      { ...createPlan("plan-custom-b", "planning"), status: "custom_b" as never },
+    ];
+
+    expect(sortPlansByStatus(plans).map((plan) => plan.metadata.planId)).toEqual([
+      "plan-building",
+      "plan-custom-a",
+      "plan-custom-b",
+    ]);
+  });
 });
