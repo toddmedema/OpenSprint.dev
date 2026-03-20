@@ -21,6 +21,7 @@ import { CrashRecoveryService } from "./crash-recovery.service.js";
 import { ProjectService } from "./project.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { eventLogService } from "./event-log.service.js";
+import type { RetryContext } from "./orchestrator-phase-context.js";
 import { isProcessAlive, terminateProcessGroup } from "../utils/process-group.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -81,6 +82,7 @@ export interface GuppAssignment {
   promptPath: string;
   agentConfig: unknown;
   attempt: number;
+  retryContext?: RetryContext;
   createdAt: string;
 }
 

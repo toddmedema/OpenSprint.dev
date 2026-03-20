@@ -53,6 +53,7 @@ export class TaskPhaseCoordinator {
   private readonly expectedReviewKeys: Set<string>;
   private readonly reviewOutcomes = new Map<string, ReviewOutcome>();
   private resolved = false;
+  private resolutionPromise: Promise<void> | null = null;
   private readonly synthesizeReviewResults?: (
     outcomes: Map<string, ReviewOutcome>
   ) => Promise<ReviewOutcome>;
@@ -79,15 +80,21 @@ export class TaskPhaseCoordinator {
       typeof options?.synthesizeReviewResults === "function";
   }
 
-  setTestOutcome(outcome: TestOutcome): void {
-    if (this.resolved) return;
+  async setTestOutcome(outcome: TestOutcome): Promise<void> {
+    if (this.resolved) {
+      await this.resolutionPromise;
+      return;
+    }
     this.testOutcome = outcome;
     log.info("Test outcome received", { taskId: this.taskId, status: outcome.status });
-    this.tryResolve();
+    await this.tryResolve();
   }
 
-  setReviewOutcome(outcome: ReviewOutcome, angle?: string): void {
-    if (this.resolved) return;
+  async setReviewOutcome(outcome: ReviewOutcome, angle?: string): Promise<void> {
+    if (this.resolved) {
+      await this.resolutionPromise;
+      return;
+    }
     const key = this.resolveReviewKey(angle);
     this.reviewOutcomes.set(key, outcome);
     log.info("Review outcome received", {
@@ -97,13 +104,18 @@ export class TaskPhaseCoordinator {
       received: this.reviewOutcomes.size,
       expected: this.expectedReviewKeys.size,
     });
-    this.tryResolve();
+    await this.tryResolve();
   }
 
   private synthesizing = false;
 
-  private tryResolve(): void {
-    if (this.resolved || !this.testOutcome || this.synthesizing) return;
+  private async tryResolve(): Promise<void> {
+    if (!this.testOutcome) return;
+    if (this.resolutionPromise) {
+      await this.resolutionPromise;
+      return;
+    }
+    if (this.resolved || this.synthesizing) return;
     const reviewOutcome = this.getAggregatedReviewOutcome();
     if (!reviewOutcome) return;
 
@@ -117,9 +129,10 @@ export class TaskPhaseCoordinator {
         test: this.testOutcome.status,
         review: reviewOutcome.status,
       });
-      this.resolve(this.testOutcome, reviewOutcome).catch((err) => {
+      this.resolutionPromise = this.resolve(this.testOutcome, reviewOutcome).catch((err) => {
         log.error("Phase resolution failed", { taskId: this.taskId, err });
       });
+      await this.resolutionPromise;
       return;
     }
 
@@ -129,7 +142,7 @@ export class TaskPhaseCoordinator {
         taskId: this.taskId,
         reviewCount: this.reviewOutcomes.size,
       });
-      this.synthesizeReviewResults(new Map(this.reviewOutcomes))
+      this.resolutionPromise = this.synthesizeReviewResults(new Map(this.reviewOutcomes))
         .then((synthesized) => {
           this.resolved = true;
           log.info("Synthesis complete, resolving", {
@@ -147,6 +160,7 @@ export class TaskPhaseCoordinator {
           this.resolved = true;
           return this.resolve(this.testOutcome!, reviewOutcome);
         });
+      await this.resolutionPromise;
       return;
     }
 
@@ -157,9 +171,10 @@ export class TaskPhaseCoordinator {
       review: reviewOutcome.status,
       reviewCount: this.reviewOutcomes.size,
     });
-    this.resolve(this.testOutcome, reviewOutcome).catch((err) => {
+    this.resolutionPromise = this.resolve(this.testOutcome, reviewOutcome).catch((err) => {
       log.error("Phase resolution failed", { taskId: this.taskId, err });
     });
+    await this.resolutionPromise;
   }
 
   private resolveReviewKey(angle?: string): string {

@@ -83,3 +83,20 @@ export function parseDecomposeResponse(content: string): SuggestedPlan[] {
     };
   }) as SuggestedPlan[];
 }
+
+export function parseDecomposeResponseOrNull(content: string): SuggestedPlan[] | null {
+  try {
+    return parseDecomposeResponse(content);
+  } catch {
+    return null;
+  }
+}
+
+export function explainDecomposeResponseFailure(content: string): string | undefined {
+  try {
+    parseDecomposeResponse(content);
+    return undefined;
+  } catch (error) {
+    return error instanceof AppError ? error.message : undefined;
+  }
+}

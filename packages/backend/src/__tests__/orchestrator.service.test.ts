@@ -69,6 +69,7 @@ const {
   mockAssembleTaskDirectory,
   mockGetActiveDir,
   mockReadResult,
+  mockReadRawResult,
   mockClearResult,
   mockCreateSession,
   mockArchiveSession,
@@ -99,6 +100,7 @@ const {
   mockNotificationCreate,
   mockMaybeAutoRespond,
   mockRecordAttempt,
+  mockCreateBaselineWorkspace,
 } = vi.hoisted(() => ({
   mockBroadcastToProject: vi.fn(),
   mockSendAgentOutputToProject: vi.fn(),
@@ -145,6 +147,7 @@ const {
   mockAssembleTaskDirectory: vi.fn(),
   mockGetActiveDir: vi.fn(),
   mockReadResult: vi.fn(),
+  mockReadRawResult: vi.fn(),
   mockClearResult: vi.fn(),
   mockCreateSession: vi.fn(),
   mockArchiveSession: vi.fn(),
@@ -184,6 +187,7 @@ const {
   }),
   mockMaybeAutoRespond: vi.fn().mockResolvedValue(undefined),
   mockRecordAttempt: vi.fn().mockResolvedValue(undefined),
+  mockCreateBaselineWorkspace: vi.fn(),
 }));
 
 vi.mock("../websocket/index.js", () => ({
@@ -318,6 +322,7 @@ vi.mock("../services/session-manager.js", () => {
   const mockInstance = {
     getActiveDir: mockGetActiveDir,
     readResult: mockReadResult,
+    readRawResult: (...args: unknown[]) => mockReadRawResult(...args),
     clearResult: mockClearResult,
     createSession: mockCreateSession,
     archiveSession: mockArchiveSession,
@@ -404,6 +409,12 @@ vi.mock("../services/api-key-exhausted.service.js", () => ({
   isExhausted: vi.fn().mockReturnValue(false),
   clearExhausted: vi.fn(),
   markExhausted: vi.fn(),
+}));
+
+vi.mock("../services/validation-workspace.service.js", () => ({
+  validationWorkspaceService: {
+    createBaselineWorkspace: (...args: unknown[]) => mockCreateBaselineWorkspace(...args),
+  },
 }));
 
 vi.mock("../utils/git-repo-state.js", async (importOriginal) => {
@@ -568,6 +579,10 @@ describe("OrchestratorService (slot-based model)", () => {
     });
     mockShellExec.mockResolvedValue({ stdout: "", stderr: "" });
     mockGetMergeQualityGateCommands.mockReturnValue(["npm run lint", "npm run test"]);
+    mockCreateBaselineWorkspace.mockResolvedValue({
+      worktreePath: repoPath,
+      cleanup: vi.fn().mockResolvedValue(undefined),
+    });
     mockResolveBaseBranch.mockResolvedValue("main");
     mockCheckDependencyIntegrity.mockResolvedValue(undefined);
     mockEnsureDependenciesHealthy.mockResolvedValue({
@@ -611,6 +626,22 @@ describe("OrchestratorService (slot-based model)", () => {
       taskDescription: "",
     });
     mockCreateProcessGroupHandle.mockReturnValue({ kill: vi.fn(), pid: 12345 });
+    mockReadRawResult.mockImplementation(async (...args: unknown[]) => {
+      const value = await mockReadResult(...args);
+      if (value !== undefined) {
+        if (typeof value === "string" || value == null) return value;
+        return JSON.stringify(value);
+      }
+      const [basePath, taskId, angle] = args as [string, string, string | undefined];
+      const resultPath = angle
+        ? path.join(basePath, ".opensprint", "active", taskId, "review-angles", angle, "result.json")
+        : path.join(basePath, ".opensprint", "active", taskId, "result.json");
+      try {
+        return await fs.readFile(resultPath, "utf-8");
+      } catch {
+        return null;
+      }
+    });
   });
 
   afterEach(async () => {
@@ -715,9 +746,167 @@ describe("OrchestratorService (slot-based model)", () => {
   });
 
   describe("coding no_result recovery", () => {
+    it("relaunches coder once when result.json is malformed", async () => {
+      const { task, wtPath } = setupSingleTaskFlow("task-repair-result");
+      mockReadRawResult.mockResolvedValue("{ invalid json");
+      mockWriteJsonAtomic.mockImplementation(async (filePath: string, data: unknown) => {
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+      });
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockInvokeCodingAgent).toHaveBeenCalledTimes(1);
+      });
+
+      const invokeHandleCodingDone = orchestrator as unknown as {
+        handleCodingDone(
+          projectId: string,
+          repoPath: string,
+          task: typeof task,
+          branchName: string,
+          exitCode: number | null
+        ): Promise<void>;
+      };
+
+      await invokeHandleCodingDone.handleCodingDone(
+        projectId,
+        repoPath,
+        task,
+        `opensprint/${task.id}`,
+        0
+      );
+
+      expect(mockInvokeCodingAgent).toHaveBeenCalledTimes(2);
+      expect(mockNotificationCreate).not.toHaveBeenCalled();
+      expect(mockTaskStoreComment).not.toHaveBeenCalled();
+
+      const assignmentPath = path.join(
+        wtPath,
+        ".opensprint",
+        "active",
+        task.id,
+        "assignment.json"
+      );
+      const assignment = JSON.parse(await fs.readFile(assignmentPath, "utf-8")) as {
+        retryContext?: { structuredOutputRepairAttempted?: boolean; previousFailure?: string };
+      };
+      expect(assignment.retryContext?.structuredOutputRepairAttempted).toBe(true);
+      expect(assignment.retryContext?.previousFailure).toContain("result.json");
+    });
+
+    it("uses synthesized open questions after the repair retry is exhausted", async () => {
+      const { task, wtPath } = setupSingleTaskFlow("task-repair-open-question");
+      mockReadRawResult.mockResolvedValue(null);
+      mockWriteJsonAtomic.mockImplementation(async (filePath: string, data: unknown) => {
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+      });
+      mockNotificationCreate.mockImplementation(
+        async (input: {
+          projectId: string;
+          source: string;
+          sourceId: string;
+          questions: Array<{ id: string; text: string }>;
+        }) => ({
+          id: "oq-repair",
+          projectId: input.projectId,
+          source: input.source,
+          sourceId: input.sourceId,
+          questions: input.questions,
+          status: "open",
+          createdAt: "2026-03-13T23:12:13.000Z",
+          resolvedAt: null,
+        })
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      const assignmentPath = path.join(
+        wtPath,
+        ".opensprint",
+        "active",
+        task.id,
+        "assignment.json"
+      );
+      const baseAssignment = JSON.parse(await fs.readFile(assignmentPath, "utf-8")) as Record<
+        string,
+        unknown
+      >;
+      await fs.writeFile(
+        assignmentPath,
+        JSON.stringify(
+          {
+            ...baseAssignment,
+            retryContext: {
+              structuredOutputRepairAttempted: true,
+              useExistingBranch: true,
+            },
+          },
+          null,
+          2
+        ),
+        "utf-8"
+      );
+
+      const state = (
+        orchestrator as unknown as { getState: (id: string) => { slots: Map<string, unknown> } }
+      ).getState(projectId);
+      const slot = state.slots.get(task.id) as {
+        branchName?: string;
+        agent: { outputLog: string[]; killedDueToTimeout: boolean };
+      };
+      slot.agent.outputLog = [
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"How do you want me to proceed?\\n- Keep the formatting change\\n- Drop the formatting change"}]}}\n',
+      ];
+      slot.agent.killedDueToTimeout = false;
+
+      const invokeHandleCodingDone = orchestrator as unknown as {
+        handleCodingDone(
+          projectId: string,
+          repoPath: string,
+          task: typeof task,
+          branchName: string,
+          exitCode: number | null
+        ): Promise<void>;
+      };
+
+      await invokeHandleCodingDone.handleCodingDone(
+        projectId,
+        repoPath,
+        task,
+        `opensprint/${task.id}`,
+        0
+      );
+
+      expect(mockInvokeCodingAgent).toHaveBeenCalledTimes(1);
+      expect(mockNotificationCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId,
+          source: "execute",
+          sourceId: task.id,
+        })
+      );
+      expect(mockTaskStoreUpdate).toHaveBeenCalledWith(
+        projectId,
+        task.id,
+        expect.objectContaining({
+          status: "blocked",
+          block_reason: OPEN_QUESTION_BLOCK_REASON,
+        })
+      );
+    });
+
     it("turns structured terminal clarification output into blocked open questions", async () => {
-      const { task } = setupSingleTaskFlow("task-open-question");
+      const { task, wtPath } = setupSingleTaskFlow("task-open-question");
       mockReadResult.mockResolvedValue(null);
+      mockWriteJsonAtomic.mockImplementation(async (filePath: string, data: unknown) => {
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+      });
       mockNotificationCreate.mockImplementation(
         async (input: {
           projectId: string;
@@ -740,6 +929,33 @@ describe("OrchestratorService (slot-based model)", () => {
       await vi.waitFor(() => {
         expect(mockWriteJsonAtomic).toHaveBeenCalled();
       });
+
+      const assignmentPath = path.join(
+        wtPath,
+        ".opensprint",
+        "active",
+        task.id,
+        "assignment.json"
+      );
+      const baseAssignment = JSON.parse(await fs.readFile(assignmentPath, "utf-8")) as Record<
+        string,
+        unknown
+      >;
+      await fs.writeFile(
+        assignmentPath,
+        JSON.stringify(
+          {
+            ...baseAssignment,
+            retryContext: {
+              structuredOutputRepairAttempted: true,
+              useExistingBranch: true,
+            },
+          },
+          null,
+          2
+        ),
+        "utf-8"
+      );
 
       const state = (
         orchestrator as unknown as { getState: (id: string) => { slots: Map<string, unknown> } }
@@ -806,8 +1022,12 @@ describe("OrchestratorService (slot-based model)", () => {
     });
 
     it("turns assistant chat clarification output into blocked open questions", async () => {
-      const { task } = setupSingleTaskFlow("task-open-question-chat");
+      const { task, wtPath } = setupSingleTaskFlow("task-open-question-chat");
       mockReadResult.mockResolvedValue(null);
+      mockWriteJsonAtomic.mockImplementation(async (filePath: string, data: unknown) => {
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+      });
       mockNotificationCreate.mockImplementation(
         async (input: {
           projectId: string;
@@ -830,6 +1050,33 @@ describe("OrchestratorService (slot-based model)", () => {
       await vi.waitFor(() => {
         expect(mockWriteJsonAtomic).toHaveBeenCalled();
       });
+
+      const assignmentPath = path.join(
+        wtPath,
+        ".opensprint",
+        "active",
+        task.id,
+        "assignment.json"
+      );
+      const baseAssignment = JSON.parse(await fs.readFile(assignmentPath, "utf-8")) as Record<
+        string,
+        unknown
+      >;
+      await fs.writeFile(
+        assignmentPath,
+        JSON.stringify(
+          {
+            ...baseAssignment,
+            retryContext: {
+              structuredOutputRepairAttempted: true,
+              useExistingBranch: true,
+            },
+          },
+          null,
+          2
+        ),
+        "utf-8"
+      );
 
       const state = (
         orchestrator as unknown as { getState: (id: string) => { slots: Map<string, unknown> } }
@@ -883,6 +1130,48 @@ describe("OrchestratorService (slot-based model)", () => {
           block_reason: OPEN_QUESTION_BLOCK_REASON,
         })
       );
+    });
+  });
+
+  describe("review structured output recovery", () => {
+    it("relaunches reviewer once when result.json is malformed", async () => {
+      const { task } = setupSingleTaskFlow("task-review-repair");
+      mockReadRawResult.mockResolvedValue("{ invalid json");
+      mockWriteJsonAtomic.mockImplementation(async (filePath: string, data: unknown) => {
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+      });
+      mockInvokeReviewAgent.mockImplementation(
+        (_prompt: string, _config: unknown, _opts: { onExit: (code: number | null) => void }) => {
+          return { kill: vi.fn(), pid: 67890 };
+        }
+      );
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      const invokeHandleReviewDone = orchestrator as unknown as {
+        handleReviewDone(
+          projectId: string,
+          repoPath: string,
+          task: typeof task,
+          branchName: string,
+          exitCode: number | null,
+          angle?: "security" | "performance"
+        ): Promise<void>;
+      };
+
+      await invokeHandleReviewDone.handleReviewDone(
+        projectId,
+        repoPath,
+        task,
+        `opensprint/${task.id}`,
+        0
+      );
+
+      expect(mockInvokeReviewAgent).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1470,6 +1759,16 @@ describe("OrchestratorService (slot-based model)", () => {
         testsPassed: 0,
         notes: "",
       });
+      mockReadRawResult.mockResolvedValue(
+        JSON.stringify({
+          status: "success",
+          summary: "Recovered cleanly",
+          filesChanged: [],
+          testsWritten: 0,
+          testsPassed: 0,
+          notes: "",
+        })
+      );
 
       const completed = await host.handleCompletedAssignment?.(projectId, repoPath, task as never, {
         taskId: task.id,
@@ -1486,14 +1785,8 @@ describe("OrchestratorService (slot-based model)", () => {
       expect(completed).toBe(true);
       expect(mockInvokeCodingAgent).not.toHaveBeenCalled();
       await vi.waitFor(() => {
-        expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
-          expect.objectContaining({
-            taskId: task.id,
-            branchName: `opensprint/${task.id}`,
-          })
-        );
+        expect(mockTaskStoreClose).toHaveBeenCalledWith(projectId, task.id, expect.any(String));
       });
-      expect(mockTaskStoreClose).toHaveBeenCalledWith(projectId, task.id, expect.any(String));
     });
 
     it("completes recovered angle-specific review assignments from terminal result.json without respawning the reviewer", async () => {
@@ -1527,6 +1820,9 @@ describe("OrchestratorService (slot-based model)", () => {
         JSON.stringify({ status: "approved", summary: "Looks good", notes: "" }),
         "utf-8"
       );
+      mockReadRawResult.mockResolvedValue(
+        JSON.stringify({ status: "approved", summary: "Looks good", notes: "" })
+      );
       await fs.writeFile(path.join(angleDir, "agent-output.log"), "Recovered review output\n");
 
       const completed = await host.handleCompletedAssignment?.(projectId, repoPath, task as never, {
@@ -1544,14 +1840,8 @@ describe("OrchestratorService (slot-based model)", () => {
       expect(completed).toBe(true);
       expect(mockInvokeReviewAgent).not.toHaveBeenCalled();
       await vi.waitFor(() => {
-        expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
-          expect.objectContaining({
-            taskId: task.id,
-            branchName: `opensprint/${task.id}`,
-          })
-        );
+        expect(mockTaskStoreClose).toHaveBeenCalledWith(projectId, task.id, expect.any(String));
       });
-      expect(mockTaskStoreClose).toHaveBeenCalledWith(projectId, task.id, expect.any(String));
     });
 
     it("completes recovered review assignments from persisted PASSED validation without rerunning tests", async () => {
@@ -1576,6 +1866,13 @@ describe("OrchestratorService (slot-based model)", () => {
         summary: "Looks good",
         notes: "",
       });
+      mockReadRawResult.mockResolvedValue(
+        JSON.stringify({
+          status: "approved",
+          summary: "Looks good",
+          notes: "",
+        })
+      );
       await fs.mkdir(contextDir, { recursive: true });
       await fs.writeFile(path.join(activeDir, "agent-output.log"), "Recovered review output\n");
       await fs.writeFile(
@@ -1611,14 +1908,8 @@ describe("OrchestratorService (slot-based model)", () => {
       expect(completed).toBe(true);
       expect(mockRunScopedTests).not.toHaveBeenCalled();
       await vi.waitFor(() => {
-        expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledWith(
-          expect.objectContaining({
-            taskId: task.id,
-            branchName: `opensprint/${task.id}`,
-          })
-        );
+        expect(mockTaskStoreClose).toHaveBeenCalledWith(projectId, task.id, expect.any(String));
       });
-      expect(mockTaskStoreClose).toHaveBeenCalledWith(projectId, task.id, expect.any(String));
     });
   });
 

@@ -387,6 +387,18 @@ describe("AgentService", () => {
   });
 
   describe("runMergerAgentAndWait", () => {
+    async function writeMergeResult(
+      cwd: string,
+      result: { status: "success" | "failed"; summary: string }
+    ): Promise<void> {
+      await fs.mkdir(path.join(cwd, ".opensprint"), { recursive: true });
+      await fs.writeFile(
+        path.join(cwd, ".opensprint", "merge-result.json"),
+        JSON.stringify(result),
+        "utf-8"
+      );
+    }
+
     it("includes destructive-command guardrails in merger prompts", async () => {
       const prompt = await (
         service as unknown as {
@@ -414,9 +426,12 @@ describe("AgentService", () => {
 
       expect(prompt).toContain("Do NOT run destructive cleanup commands");
       expect(prompt).toContain("git clean -fdx");
+      expect(prompt).toContain(".opensprint/merge-result.json");
     });
 
     it("returns true when merger agent exits with code 0", async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-merger-success-test-"));
+      await fs.mkdir(path.join(tempDir, ".opensprint"), { recursive: true });
       mockSpawnWithTaskFile.mockImplementation(
         (
           _config: unknown,
@@ -425,54 +440,71 @@ describe("AgentService", () => {
           onOutput: (chunk: string) => void,
           onExit: (code: number | null) => void
         ) => {
-          setImmediate(() => {
-            onOutput("Resolved conflict in src/conflict.ts\n");
-            onExit(0);
-          });
+          void fs
+            .writeFile(
+              path.join(tempDir, ".opensprint", "merge-result.json"),
+              JSON.stringify({
+                status: "success",
+                summary: "Resolved conflict in src/conflict.ts",
+              }),
+              "utf-8"
+            )
+            .then(() => {
+              setImmediate(() => {
+                onOutput("Resolved conflict in src/conflict.ts\n");
+                onExit(0);
+              });
+            });
           return { kill: vi.fn(), pid: 12345 };
         }
       );
 
       const config: AgentConfig = { type: "cursor", model: null, cliCommand: null };
-      const result = await service.runMergerAgentAndWait({
-        projectId: "proj-123",
-        cwd: "/tmp/repo",
-        config,
-        phase: "merge_to_main",
-        taskId: "os-1",
-        branchName: "opensprint/os-1",
-        conflictedFiles: ["src/conflict.ts"],
-        testCommand: "npm test",
-      });
+      try {
+        const result = await service.runMergerAgentAndWait({
+          projectId: "proj-123",
+          cwd: tempDir,
+          config,
+          phase: "merge_to_main",
+          taskId: "os-1",
+          branchName: "opensprint/os-1",
+          conflictedFiles: ["src/conflict.ts"],
+          testCommand: "npm test",
+        });
 
-      expect(result).toBe(true);
-      expect(mockSpawnWithTaskFile).toHaveBeenCalledWith(
-        config,
-        expect.stringContaining("opensprint-merger-"),
-        "/tmp/repo",
-        expect.any(Function),
-        expect.any(Function),
-        "merger",
-        undefined,
-        "proj-123"
-      );
-      expect(mockShellExec).toHaveBeenCalledWith("git diff --check", {
-        cwd: "/tmp/repo",
-        timeout: 10_000,
-      });
-      const sessionInsert = mockDbClient.execute.mock.calls.find(
-        (call) => typeof call[0] === "string" && call[0].includes("INSERT INTO agent_sessions")
-      );
-      expect(sessionInsert).toBeDefined();
-      const sessionParams = sessionInsert?.[1] as unknown[];
-      expect(sessionParams[0]).toBe("proj-123");
-      expect(sessionParams[2]).toBe(1);
-      expect(sessionParams[3]).toBe("cursor");
-      expect(sessionParams[7]).toBe("success");
-      expect(String(sessionParams[8])).toContain("Resolved conflict in src/conflict.ts");
+        expect(result).toBe(true);
+        expect(mockSpawnWithTaskFile).toHaveBeenCalledWith(
+          config,
+          expect.stringContaining("opensprint-merger-"),
+          tempDir,
+          expect.any(Function),
+          expect.any(Function),
+          "merger",
+          undefined,
+          "proj-123"
+        );
+        expect(mockShellExec).toHaveBeenCalledWith("git diff --check", {
+          cwd: tempDir,
+          timeout: 10_000,
+        });
+        const sessionInsert = mockDbClient.execute.mock.calls.find(
+          (call) => typeof call[0] === "string" && call[0].includes("INSERT INTO agent_sessions")
+        );
+        expect(sessionInsert).toBeDefined();
+        const sessionParams = sessionInsert?.[1] as unknown[];
+        expect(sessionParams[0]).toBe("proj-123");
+        expect(sessionParams[2]).toBe(1);
+        expect(sessionParams[3]).toBe("cursor");
+        expect(sessionParams[7]).toBe("success");
+        expect(String(sessionParams[8])).toContain("Resolved conflict in src/conflict.ts");
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
     });
 
     it("persists filtered merger output (no tool_call or code-context noise) in agent_sessions", async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-merger-filtered-test-"));
+      await fs.mkdir(path.join(tempDir, ".opensprint"), { recursive: true });
       mockSpawnWithTaskFile.mockImplementation(
         (
           _config: unknown,
@@ -481,41 +513,58 @@ describe("AgentService", () => {
           onOutput: (chunk: string) => void,
           onExit: (code: number | null) => void
         ) => {
-          setImmediate(() => {
-            onOutput('{"type":"text","text":"Resolving conflicts"}\n');
-            onOutput('{"type":"tool_call","subtype":"started","call_id":"c1"}\n');
-            onOutput('{"lineNumber":1,"content":"code","isContextLine":true}\n');
-            onOutput("ingestOutputChunk(runState, chunk);\n");
-            onOutput('{"type":"text","text":"Done"}\n');
-            onExit(0);
-          });
+          void fs
+            .writeFile(
+              path.join(tempDir, ".opensprint", "merge-result.json"),
+              JSON.stringify({
+                status: "success",
+                summary: "Resolved conflict in src/conflict.ts",
+              }),
+              "utf-8"
+            )
+            .then(() => {
+              setImmediate(() => {
+                onOutput('{"type":"text","text":"Resolving conflicts"}\n');
+                onOutput('{"type":"tool_call","subtype":"started","call_id":"c1"}\n');
+                onOutput('{"lineNumber":1,"content":"code","isContextLine":true}\n');
+                onOutput("ingestOutputChunk(runState, chunk);\n");
+                onOutput('{"type":"text","text":"Done"}\n');
+                onExit(0);
+              });
+            });
           return { kill: vi.fn(), pid: 12345 };
         }
       );
 
-      await service.runMergerAgentAndWait({
-        projectId: "proj-123",
-        cwd: "/tmp/repo",
-        config: { type: "cursor", model: null, cliCommand: null },
-        phase: "merge_to_main",
-        taskId: "os-1",
-        branchName: "opensprint/os-1",
-        conflictedFiles: ["src/conflict.ts"],
-      });
+      try {
+        await service.runMergerAgentAndWait({
+          projectId: "proj-123",
+          cwd: tempDir,
+          config: { type: "cursor", model: null, cliCommand: null },
+          phase: "merge_to_main",
+          taskId: "os-1",
+          branchName: "opensprint/os-1",
+          conflictedFiles: ["src/conflict.ts"],
+        });
 
-      const sessionInsert = mockDbClient.execute.mock.calls.find(
-        (call) => typeof call[0] === "string" && call[0].includes("INSERT INTO agent_sessions")
-      );
-      expect(sessionInsert).toBeDefined();
-      const outputLog = String((sessionInsert?.[1] as unknown[])?.[8] ?? "");
-      expect(outputLog).toContain("Resolving conflicts");
-      expect(outputLog).toContain("Done");
-      expect(outputLog).not.toContain("tool_call");
-      expect(outputLog).not.toContain("lineNumber");
-      expect(outputLog).not.toContain("ingestOutputChunk");
+        const sessionInsert = mockDbClient.execute.mock.calls.find(
+          (call) => typeof call[0] === "string" && call[0].includes("INSERT INTO agent_sessions")
+        );
+        expect(sessionInsert).toBeDefined();
+        const outputLog = String((sessionInsert?.[1] as unknown[])?.[8] ?? "");
+        expect(outputLog).toContain("Resolving conflicts");
+        expect(outputLog).toContain("Done");
+        expect(outputLog).not.toContain("tool_call");
+        expect(outputLog).not.toContain("lineNumber");
+        expect(outputLog).not.toContain("ingestOutputChunk");
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
     });
 
     it("returns false when merger agent exits with non-zero code", async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-merger-failed-test-"));
+      await fs.mkdir(path.join(tempDir, ".opensprint"), { recursive: true });
       mockSpawnWithTaskFile.mockImplementation(
         (
           _config: unknown,
@@ -524,35 +573,104 @@ describe("AgentService", () => {
           _onOutput: unknown,
           onExit: (code: number | null) => void
         ) => {
-          setImmediate(() => onExit(1));
+          void fs
+            .writeFile(
+              path.join(tempDir, ".opensprint", "merge-result.json"),
+              JSON.stringify({
+                status: "failed",
+                summary: "Unable to resolve conflicts cleanly",
+              }),
+              "utf-8"
+            )
+            .then(() => setImmediate(() => onExit(1)));
           return { kill: vi.fn(), pid: 12345 };
         }
       );
 
       const config: AgentConfig = { type: "claude", model: "claude-sonnet-4", cliCommand: null };
-      const result = await service.runMergerAgentAndWait({
-        projectId: "proj-123",
-        cwd: "/tmp/repo",
-        config,
-        phase: "rebase_before_merge",
-        taskId: "os-2",
-        branchName: "opensprint/os-2",
-        conflictedFiles: ["src/conflict.ts"],
-      });
+      try {
+        const result = await service.runMergerAgentAndWait({
+          projectId: "proj-123",
+          cwd: tempDir,
+          config,
+          phase: "rebase_before_merge",
+          taskId: "os-2",
+          branchName: "opensprint/os-2",
+          conflictedFiles: ["src/conflict.ts"],
+        });
 
-      expect(result).toBe(false);
-      const sessionInsert = mockDbClient.execute.mock.calls.find(
-        (call) => typeof call[0] === "string" && call[0].includes("INSERT INTO agent_sessions")
-      );
-      expect(sessionInsert).toBeDefined();
-      const sessionParams = sessionInsert?.[1] as unknown[];
-      expect(sessionParams[0]).toBe("proj-123");
-      expect(sessionParams[3]).toBe("claude");
-      expect(sessionParams[7]).toBe("failed");
-      expect(String(sessionParams[8]).length).toBeGreaterThan(0);
+        expect(result).toBe(false);
+        const sessionInsert = mockDbClient.execute.mock.calls.find(
+          (call) => typeof call[0] === "string" && call[0].includes("INSERT INTO agent_sessions")
+        );
+        expect(sessionInsert).toBeDefined();
+        const sessionParams = sessionInsert?.[1] as unknown[];
+        expect(sessionParams[0]).toBe("proj-123");
+        expect(sessionParams[3]).toBe("claude");
+        expect(sessionParams[7]).toBe("failed");
+        expect(String(sessionParams[8]).length).toBeGreaterThan(0);
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
     });
 
-    it("uses baseBranch in merger prompt when provided", async () => {
+    it("retries once when merge-result.json is malformed", async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-merger-retry-test-"));
+      let attempt = 0;
+      mockSpawnWithTaskFile.mockImplementation(
+        (
+          _config: unknown,
+          promptPath: string,
+          _cwd: unknown,
+          _onOutput: unknown,
+          onExit: (code: number | null) => void
+        ) => {
+          attempt += 1;
+          if (attempt === 1) {
+            void fs
+              .mkdir(path.join(tempDir, ".opensprint"), { recursive: true })
+              .then(() =>
+                fs.writeFile(path.join(tempDir, ".opensprint", "merge-result.json"), "{ invalid")
+              )
+              .then(() => setImmediate(() => onExit(0)));
+          } else {
+            const prompt = fsSync.readFileSync(promptPath, "utf-8");
+            expect(prompt).toContain("Structured Output Repair");
+            void writeMergeResult(tempDir, {
+              status: "success",
+              summary: "Resolved after repair prompt",
+            }).then(() => setImmediate(() => onExit(0)));
+          }
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      try {
+        const result = await service.runMergerAgentAndWait({
+          projectId: "proj-123",
+          cwd: tempDir,
+          config: { type: "cursor", model: null, cliCommand: null },
+          phase: "merge_to_main",
+          taskId: "os-1",
+          branchName: "opensprint/os-1",
+          conflictedFiles: ["src/conflict.ts"],
+        });
+
+        expect(result).toBe(true);
+        expect(mockSpawnWithTaskFile).toHaveBeenCalledTimes(2);
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("returns false when git verification fails even with a valid merge result", async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-merger-verify-test-"));
+      mockShellExec.mockImplementation(async (command: string) => {
+        if (command === "git diff --check") {
+          throw new Error("diff check failed");
+        }
+        return { stdout: "", stderr: "" };
+      });
       mockSpawnWithTaskFile.mockImplementation(
         (
           _config: unknown,
@@ -561,27 +679,76 @@ describe("AgentService", () => {
           _onOutput: unknown,
           onExit: (code: number | null) => void
         ) => {
-          setImmediate(() => onExit(0));
+          void writeMergeResult(tempDir, {
+            status: "success",
+            summary: "Looks resolved",
+          }).then(() => setImmediate(() => onExit(0)));
+          return { kill: vi.fn(), pid: 12345 };
+        }
+      );
+
+      try {
+        const result = await service.runMergerAgentAndWait({
+          projectId: "proj-123",
+          cwd: tempDir,
+          config: { type: "cursor", model: null, cliCommand: null },
+          phase: "merge_to_main",
+          taskId: "os-1",
+          branchName: "opensprint/os-1",
+          conflictedFiles: ["src/conflict.ts"],
+        });
+
+        expect(result).toBe(false);
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("uses baseBranch in merger prompt when provided", async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-merger-base-test-"));
+      await fs.mkdir(path.join(tempDir, ".opensprint"), { recursive: true });
+      mockSpawnWithTaskFile.mockImplementation(
+        (
+          _config: unknown,
+          _path: unknown,
+          _cwd: unknown,
+          _onOutput: unknown,
+          onExit: (code: number | null) => void
+        ) => {
+          void fs
+            .writeFile(
+              path.join(tempDir, ".opensprint", "merge-result.json"),
+              JSON.stringify({
+                status: "success",
+                summary: "Resolved conflict in src/a.ts",
+              }),
+              "utf-8"
+            )
+            .then(() => setImmediate(() => onExit(0)));
           return { kill: vi.fn(), pid: 12345 };
         }
       );
       mockShellExec.mockResolvedValue({ stdout: "", stderr: "" });
 
-      await service.runMergerAgentAndWait({
-        projectId: "proj-123",
-        cwd: "/tmp/repo",
-        config: { type: "cursor", model: null, cliCommand: null },
-        phase: "merge_to_main",
-        taskId: "os-1",
-        branchName: "opensprint/os-1",
-        conflictedFiles: ["src/a.ts"],
-        baseBranch: "develop",
-      });
+      try {
+        await service.runMergerAgentAndWait({
+          projectId: "proj-123",
+          cwd: tempDir,
+          config: { type: "cursor", model: null, cliCommand: null },
+          phase: "merge_to_main",
+          taskId: "os-1",
+          branchName: "opensprint/os-1",
+          conflictedFiles: ["src/a.ts"],
+          baseBranch: "develop",
+        });
 
-      const logCalls = mockShellExec.mock.calls.filter((c) => String(c[0]).includes("git log"));
-      const diffCalls = mockShellExec.mock.calls.filter((c) => String(c[0]).includes("git diff"));
-      expect(logCalls.some((c) => String(c[0]).includes("develop"))).toBe(true);
-      expect(diffCalls.some((c) => String(c[0]).includes("develop"))).toBe(true);
+        const logCalls = mockShellExec.mock.calls.filter((c) => String(c[0]).includes("git log"));
+        const diffCalls = mockShellExec.mock.calls.filter((c) => String(c[0]).includes("git diff"));
+        expect(logCalls.some((c) => String(c[0]).includes("develop"))).toBe(true);
+        expect(diffCalls.some((c) => String(c[0]).includes("develop"))).toBe(true);
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
     });
 
     it("prepends combined agent instructions for merger role to the merger prompt", async () => {
@@ -605,7 +772,10 @@ describe("AgentService", () => {
             onExit: (code: number | null) => void
           ) => {
             writtenPrompt = fsSync.readFileSync(promptPath, "utf-8");
-            setImmediate(() => onExit(0));
+            void writeMergeResult(tempDir, {
+              status: "success",
+              summary: "Resolved conflict in src/a.ts",
+            }).then(() => setImmediate(() => onExit(0)));
             return { kill: vi.fn(), pid: 12345 };
           }
         );
@@ -621,11 +791,17 @@ describe("AgentService", () => {
           conflictedFiles: ["src/a.ts"],
         });
 
+        expect(writtenPrompt).toContain("## Open Sprint Defaults");
+        expect(writtenPrompt).toContain("### Merger Defaults");
+        expect(writtenPrompt).toContain("Resolve only the merge or rebase problem in front of you");
         expect(writtenPrompt).toContain("## Agent Instructions");
         expect(writtenPrompt).toContain("General agent instructions.");
         expect(writtenPrompt).toContain("## Role-specific Instructions");
         expect(writtenPrompt).toContain("Merger-specific: prefer preserving both sides.");
         expect(writtenPrompt).toContain("# Merger Agent: Resolve Git Conflicts");
+        expect(writtenPrompt.indexOf("## Open Sprint Defaults")).toBeLessThan(
+          writtenPrompt.indexOf("## Agent Instructions")
+        );
         expect(writtenPrompt.indexOf("## Agent Instructions")).toBeLessThan(
           writtenPrompt.indexOf("# Merger Agent: Resolve Git Conflicts")
         );

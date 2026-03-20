@@ -5,6 +5,10 @@ import type { AgentRole } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { taskStore } from "./task-store.service.js";
 import { assertMigrationCompleteForResource } from "./migration-guard.service.js";
+import {
+  getOpenSprintDefaultInstructions,
+  OPENSPRINT_DEFAULT_INSTRUCTIONS_HEADING,
+} from "./agent-default-instructions.js";
 
 const projectService = new ProjectService();
 
@@ -86,10 +90,12 @@ export class AgentInstructionsService {
 export const agentInstructionsService = new AgentInstructionsService();
 
 /**
- * Returns combined agent instructions: general (AGENTS.md) plus optional role-specific content.
+ * Returns combined agent instructions: Open Sprint defaults, project general (AGENTS.md),
+ * and optional project role-specific content.
  * Role must be in AGENT_ROLE_CANONICAL_ORDER.
  *
  * Format:
+ * - `## Open Sprint Defaults\n\n` + shared + role defaults
  * - `## Agent Instructions\n\n` + general content
  * - If role content exists: `\n\n## Role-specific Instructions\n\n` + role content
  */
@@ -122,7 +128,11 @@ export async function getCombinedInstructions(repoPath: string, role: AgentRole)
     roleContent = await readFileOrEmpty(rolePath);
   }
 
-  let result = `## Agent Instructions\n\n${generalContent}`;
+  const defaultInstructions = getOpenSprintDefaultInstructions(role);
+
+  let result =
+    `${OPENSPRINT_DEFAULT_INSTRUCTIONS_HEADING}\n\n${defaultInstructions}` +
+    `\n\n## Agent Instructions\n\n${generalContent}`;
   if (roleContent.trim()) {
     result += `\n\n## Role-specific Instructions\n\n${roleContent.trim()}`;
   }

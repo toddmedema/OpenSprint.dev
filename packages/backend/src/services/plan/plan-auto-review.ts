@@ -8,10 +8,10 @@ import { AUTO_REVIEW_SYSTEM_PROMPT } from "./plan-prompts.js";
 import { buildPlanTaskSummaryFromCreated } from "./plan-decompose-generate.js";
 import { buildCodebaseContextForAutoReview } from "./plan-codebase-context.js";
 import { runPlannerWithRepoGuard } from "./plan-repo-guard.js";
-import { agentService } from "../agent.service.js";
 import { getCombinedInstructions } from "../agent-instructions.service.js";
 import { extractJsonFromAgentResponse } from "../../utils/json-extract.js";
 import { createLogger } from "../../utils/logger.js";
+import { invokeStructuredPlanningAgent } from "../structured-agent-output.service.js";
 
 const log = createLogger("plan-auto-review");
 
@@ -55,7 +55,7 @@ export async function runAutoReviewPlanAgainstRepo(
       repoPath: deps.repoPath,
       label: "Plan auto-review",
       run: () =>
-        agentService.invokePlanningAgent({
+        invokeStructuredPlanningAgent({
           projectId: deps.projectId,
           role: "planner",
           config: getAgentForPlanningRole(deps.settings as ProjectSettings, "planner"),
@@ -69,13 +69,19 @@ export async function runAutoReviewPlanAgainstRepo(
             role: "planner",
             label: "Plan auto-review",
           },
+          contract: {
+            parse: (content) =>
+              extractJsonFromAgentResponse<{
+                taskIdsToClose?: string[];
+                reason?: string;
+              }>(content, "taskIdsToClose"),
+            repairPrompt:
+              'Return valid JSON only in this shape: {"taskIdsToClose":["task-id"],"reason":"optional"}',
+          },
         }),
     });
 
-    const parsed = extractJsonFromAgentResponse<{
-      taskIdsToClose?: string[];
-      reason?: string;
-    }>(response.content, "taskIdsToClose");
+    const parsed = response.parsed;
     if (!parsed) {
       log.warn("Auto-review agent did not return valid JSON, skipping");
       return;

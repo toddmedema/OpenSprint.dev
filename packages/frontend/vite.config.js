@@ -7,6 +7,9 @@ export default defineConfig({
     plugins: [react()],
     build: {
         manifest: true,
+        // The markdown editor bundle is lazy-loaded but legitimately large.
+        // Keep warning noise low while preserving the existing chunk strategy.
+        chunkSizeWarningLimit: 1700,
     },
     resolve: {
         alias: {

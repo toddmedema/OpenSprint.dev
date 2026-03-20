@@ -33,6 +33,7 @@ import { buildAutonomyDescription } from "./autonomy-description.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { maybeAutoRespond } from "./open-question-autoresolve.service.js";
 import { activeAgentsService } from "./active-agents.service.js";
+import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 
 const log = createLogger("chat");
 const ARCHITECTURE_SECTIONS = ["technical_architecture", "data_model", "api_contracts"] as const;
@@ -69,6 +70,16 @@ const SECTION_DISPLAY_NAMES: Record<string, string> = {
   data_model: "Data Model",
   api_contracts: "API Contracts",
 };
+const HARMONIZER_REPAIR_PROMPT = `Return valid JSON only in one of these forms:
+{"status":"no_changes_needed"}
+or
+{"status":"success","prd_updates":[{"section":"feature_list","action":"update","content":"Markdown content","change_log_entry":"One sentence summary"}]}
+Do not include prose outside the JSON.`;
+const PLAN_DRAFT_REPAIR_PROMPT = `Return valid JSON only. Either:
+{"open_questions":[{"id":"q1","text":"Clarification question"}]}
+or
+{"title":"Feature Name","content":"# Feature Name\\n\\n...","complexity":"medium","mockups":[{"title":"Main Screen","content":"ASCII wireframe"}]}
+Do not include prose outside the JSON.`;
 
 /**
  * Build a user-friendly description for architecture decision HIL approval (PRD §6.5.1).
@@ -554,6 +565,7 @@ export class ChatService {
     messages.push({ role: "user", content: agentPrompt });
 
     let responseContent: string;
+    let draftParsed: Record<string, unknown> | null = null;
 
     // Register agent for unified active-agents view (Design: phase design, Plan: phase plan, Execute: task chat)
     const agentId =
@@ -585,25 +597,54 @@ export class ChatService {
         role: trackingRole,
         messagesLen: messages.length,
       });
-      const response = await agentService.invokePlanningAgent({
-        projectId,
-        role: trackingRole,
-        config: agentConfig,
-        messages,
-        systemPrompt,
-        cwd: repoPath,
-        ...(body.images?.length ? { images: body.images } : {}),
-        tracking: {
-          id: agentId,
-          projectId,
-          phase,
-          role: trackingRole,
-          label,
-          ...(isPlanContext && planId && { planId }),
-        },
-      });
+      const response = isPlanDraftContext
+        ? await invokeStructuredPlanningAgent({
+            projectId,
+            role: "planner",
+            config: agentConfig,
+            messages,
+            systemPrompt,
+            cwd: repoPath,
+            ...(body.images?.length ? { images: body.images } : {}),
+            tracking: {
+              id: agentId,
+              projectId,
+              phase,
+              role: "planner",
+              label,
+            },
+            contract: {
+              parse: (content) =>
+                extractJsonFromAgentResponse<Record<string, unknown>>(content, "open_questions") ??
+                extractJsonFromAgentResponse<Record<string, unknown>>(content, "openQuestions") ??
+                extractJsonFromAgentResponse<Record<string, unknown>>(content, "plan_title") ??
+                extractJsonFromAgentResponse<Record<string, unknown>>(content, "title"),
+              repairPrompt: PLAN_DRAFT_REPAIR_PROMPT,
+            },
+          })
+        : await agentService.invokePlanningAgent({
+            projectId,
+            role: trackingRole,
+            config: agentConfig,
+            messages,
+            systemPrompt,
+            cwd: repoPath,
+            ...(body.images?.length ? { images: body.images } : {}),
+            tracking: {
+              id: agentId,
+              projectId,
+              phase,
+              role: trackingRole,
+              label,
+              ...(isPlanContext && planId && { planId }),
+            },
+          });
 
-      const normalizedResponse = normalizeAgentErrorResponse(response.content ?? "");
+      const rawContent = "rawContent" in response ? response.rawContent : response.content ?? "";
+      if ("parsed" in response) {
+        draftParsed = response.parsed;
+      }
+      const normalizedResponse = normalizeAgentErrorResponse(rawContent);
       if (!normalizedResponse.trim()) {
         throw new AppError(
           502,
@@ -631,11 +672,7 @@ export class ChatService {
       // Execute task chat: no structured blocks; use response as-is
       displayContent = responseContent;
     } else if (isPlanDraftContext && draftId) {
-      const parsed =
-        extractJsonFromAgentResponse<Record<string, unknown>>(responseContent, "open_questions") ??
-        extractJsonFromAgentResponse<Record<string, unknown>>(responseContent, "openQuestions") ??
-        extractJsonFromAgentResponse<Record<string, unknown>>(responseContent, "plan_title") ??
-        extractJsonFromAgentResponse<Record<string, unknown>>(responseContent, "title");
+      const parsed = draftParsed;
 
       if (!parsed) {
         throw new AppError(
@@ -794,7 +831,7 @@ export class ChatService {
 
     const agentId = `harmonizer-build-it-${projectId}-${planId}-${Date.now()}`;
 
-    const response = await agentService.invokePlanningAgent({
+    const response = await invokeStructuredPlanningAgent({
       projectId,
       role: "harmonizer",
       config: agentConfig,
@@ -809,12 +846,16 @@ export class ChatService {
         label: "Syncing PRD with Plan Execution",
         planId,
       },
+      contract: {
+        parse: parseHarmonizerResult,
+        repairPrompt: HARMONIZER_REPAIR_PROMPT,
+      },
     });
 
-    const responseContent = response?.content ?? "";
+    const responseContent = response.rawContent;
     if (!responseContent) return;
 
-    const result = parseHarmonizerResult(responseContent);
+    const result = response.parsed;
     if (!result || result.status === "no_changes_needed" || result.prdUpdates.length === 0) return;
 
     const filtered = await this.filterArchitectureUpdatesWithHil(
@@ -856,7 +897,7 @@ export class ChatService {
 
     const agentId = `harmonizer-scope-preview-${projectId}-${Date.now()}`;
 
-    const response = await agentService.invokePlanningAgent({
+    const response = await invokeStructuredPlanningAgent({
       projectId,
       role: "harmonizer",
       config: agentConfig,
@@ -870,12 +911,16 @@ export class ChatService {
         role: "harmonizer",
         label: "Scope-change proposal",
       },
+      contract: {
+        parse: parseHarmonizerResultFull,
+        repairPrompt: HARMONIZER_REPAIR_PROMPT,
+      },
     });
 
-    const responseContent = response?.content ?? "";
+    const responseContent = response.rawContent;
     if (!responseContent) return null;
 
-    const result = parseHarmonizerResultFull(responseContent);
+    const result = response.parsed;
     if (!result || result.status === "no_changes_needed" || result.prdUpdates.length === 0)
       return null;
 
@@ -937,7 +982,7 @@ export class ChatService {
 
     const agentId = `harmonizer-scope-change-${projectId}-${Date.now()}`;
 
-    const response = await agentService.invokePlanningAgent({
+    const response = await invokeStructuredPlanningAgent({
       projectId,
       role: "harmonizer",
       config: agentConfig,
@@ -951,12 +996,16 @@ export class ChatService {
         role: "harmonizer",
         label: "Scope-change PRD sync",
       },
+      contract: {
+        parse: parseHarmonizerResult,
+        repairPrompt: HARMONIZER_REPAIR_PROMPT,
+      },
     });
 
-    const responseContent = response?.content ?? "";
+    const responseContent = response.rawContent;
     if (!responseContent) return;
 
-    const result = parseHarmonizerResult(responseContent);
+    const result = response.parsed;
     if (!result || result.status === "no_changes_needed" || result.prdUpdates.length === 0) return;
 
     const filtered = await this.filterArchitectureUpdatesWithHil(

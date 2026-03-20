@@ -299,6 +299,11 @@ User authentication.
     });
 
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
+    expect(prompt).toContain("## Open Sprint Defaults");
+    expect(prompt).toContain("### Shared Defaults");
+    expect(prompt).toContain("Stay provider-agnostic");
+    expect(prompt).toContain("### Coder Defaults");
+    expect(prompt).toContain("Commit logical units as you go");
     expect(prompt).toContain("## Agent Instructions");
     expect(prompt).toContain("General Rules");
     expect(prompt).toContain("Always run tests before committing");
@@ -306,8 +311,11 @@ User authentication.
     expect(prompt).toContain("Prefer TypeScript. Use strict mode.");
     expect(prompt).toContain("# Task: Implement login");
     // Agent instructions appear after title/objective
+    const defaultsIdx = prompt.indexOf("## Open Sprint Defaults");
     const agentIdx = prompt.indexOf("## Agent Instructions");
     const objectiveIdx = prompt.indexOf("## Objective");
+    expect(defaultsIdx).toBeGreaterThan(objectiveIdx);
+    expect(defaultsIdx).toBeLessThan(agentIdx);
     expect(agentIdx).toBeGreaterThan(objectiveIdx);
     expect(agentIdx).toBeLessThan(prompt.indexOf("## Context"));
   });
@@ -401,6 +409,8 @@ User authentication.
     });
 
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
+    expect(prompt).toContain("## Open Sprint Defaults");
+    expect(prompt).toContain("### Coder Defaults");
     expect(prompt).toContain("## Agent Instructions");
     expect(prompt).toContain("General Rules");
     expect(prompt).toContain("Shared instructions for all agents");

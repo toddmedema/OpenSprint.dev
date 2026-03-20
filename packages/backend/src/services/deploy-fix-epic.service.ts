@@ -7,12 +7,12 @@
  */
 
 import { taskStore } from "./task-store.service.js";
-import { agentService } from "./agent.service.js";
 import { ProjectService } from "./project.service.js";
 import { getAgentForPlanningRole } from "@opensprint/shared";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { createLogger } from "../utils/logger.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
+import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 
 const log = createLogger("deploy-fix-epic");
 const projectService = new ProjectService();
@@ -92,7 +92,7 @@ Output your response as JSON with status and tasks array.`;
 
   let response;
   try {
-    response = await agentService.invokePlanningAgent({
+    response = await invokeStructuredPlanningAgent({
       projectId,
       role: "planner",
       config: getAgentForPlanningRole(settings, "planner"),
@@ -106,23 +106,29 @@ Output your response as JSON with status and tasks array.`;
         role: "planner",
         label: "Create deploy fix epic",
       },
+      contract: {
+        parse: (content) =>
+          extractJsonFromAgentResponse<{
+            status?: string;
+            tasks?: Array<{
+              index?: number;
+              title: string;
+              description?: string;
+              priority?: number;
+              depends_on?: number[];
+              complexity?: number;
+            }>;
+          }>(content, "tasks"),
+        repairPrompt:
+          'Return valid JSON only in this shape: {"status":"success|failed","tasks":[{"index":0,"title":"...","description":"...","priority":1,"depends_on":[],"complexity":5}]}',
+      },
     });
   } catch (err) {
     log.error("Planning agent invocation failed", { err });
     return null;
   }
 
-  const parsed = extractJsonFromAgentResponse<{
-    status?: string;
-    tasks?: Array<{
-      index?: number;
-      title: string;
-      description?: string;
-      priority?: number;
-      depends_on?: number[];
-      complexity?: number;
-    }>;
-  }>(response.content, "tasks");
+  const parsed = response.parsed;
   if (!parsed) {
     log.warn("Agent did not return valid JSON with tasks");
     return null;

@@ -4,7 +4,7 @@
  */
 
 import type { StoredTask } from "./task-store.service.js";
-import type { AgentConfig, ApiKeyProvider, TestResults } from "@opensprint/shared";
+import type { AgentConfig, ApiKeyProvider, ReviewAngle, TestResults } from "@opensprint/shared";
 
 export type FailureType =
   | "test_failure"
@@ -31,6 +31,7 @@ export interface RetryContext {
   previousFailure?: string;
   reviewFeedback?: string;
   useExistingBranch?: boolean;
+  structuredOutputRepairAttempted?: boolean;
   previousTestOutput?: string;
   previousTestFailures?: string;
   previousDiff?: string;
@@ -69,7 +70,10 @@ export interface AgentSlotLike {
   >;
   /** When true, general reviewer runs alongside angle-specific reviewers (multi-angle review). */
   includeGeneralReview?: boolean;
+  retryContext?: RetryContext;
 }
+
+export type ReviewRetryTarget = "general" | ReviewAngle;
 
 /** Callbacks PhaseExecutor needs from ResultHandler (passed from Orchestrator) */
 export interface PhaseExecutorCallbacks {
@@ -121,7 +125,9 @@ export interface ResultHandlerCallbacks {
     projectId: string,
     repoPath: string,
     task: StoredTask,
-    branchName: string
+    branchName: string,
+    retryContext?: RetryContext,
+    reviewTarget?: ReviewRetryTarget
   ): Promise<void>;
 }
 

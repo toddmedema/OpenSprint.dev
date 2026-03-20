@@ -9,7 +9,6 @@ import type { ReviewAngle } from "@opensprint/shared";
 import { REVIEW_ANGLE_OPTIONS, clampTaskComplexity } from "@opensprint/shared";
 import { getAgentForPlanningRole } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
-import { agentService } from "./agent.service.js";
 import { ProjectService } from "./project.service.js";
 import { PlanService } from "./plan.service.js";
 import { ContextAssembler } from "./context-assembler.js";
@@ -24,6 +23,7 @@ import { createLogger } from "../utils/logger.js";
 import { shellExec } from "../utils/shell-exec.js";
 import { notificationService } from "./notification.service.js";
 import { broadcastToProject } from "../websocket/index.js";
+import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 
 const log = createLogger("self-improvement-runner");
 
@@ -134,7 +134,7 @@ export async function enrichPriorityAndComplexity(
   let lastErr: unknown;
   for (let attempt = 0; attempt < ENRICHMENT_MAX_RETRIES; attempt++) {
     try {
-      const response = await agentService.invokePlanningAgent({
+      const response = await invokeStructuredPlanningAgent<ParsedPriorityComplexity>({
         projectId,
         role: "auditor",
         config,
@@ -149,12 +149,25 @@ export async function enrichPriorityAndComplexity(
           label: "Self-improvement (assign priority & complexity)",
           planId: undefined,
         },
+        contract: {
+          parse: (content) => {
+            const parsed = parsePriorityComplexityResponse(
+              content,
+              items.map((item) => item.title)
+            );
+            const hasEntries =
+              parsed.byTitle.size > 0 ||
+              parsed.byIndex.some((entry) => entry.priority != null || entry.complexity != null);
+            return hasEntries ? parsed : null;
+          },
+          repairPrompt:
+            'Return valid JSON only as an array of objects in this shape: [{"title":"Task title","priority":1,"complexity":5}]',
+          invalidReason: () => "Response did not include any valid priority/complexity assignments.",
+          onExhausted: (): ParsedPriorityComplexity => ({ byTitle: new Map(), byIndex: [] }),
+        },
       });
 
-      const parsed = parsePriorityComplexityResponse(
-        response.content,
-        items.map((i) => i.title)
-      );
+      const parsed = response.parsed ?? { byTitle: new Map(), byIndex: [] };
       return items.map((item, i) => {
         // Prefer title-based match; fall back to index when counts align (agent returns same order)
         let assigned = parsed.byTitle.get(item.title.trim());
@@ -585,7 +598,7 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
 
       const agentId = `self-improvement-${lens}-${projectId}-${runId}`;
       try {
-        const response = await agentService.invokePlanningAgent({
+        const response = await invokeStructuredPlanningAgent({
           projectId,
           role: "auditor",
           config,
@@ -600,9 +613,21 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
             label: `Self-improvement (${angleLabel})`,
             planId: options?.planId,
           },
+          contract: {
+            parse: (content) => {
+              const items = parseImprovementList(content);
+              return items.length === 0 || !items.every((item) => isFallbackOrErrorTask(item))
+                ? items
+                : null;
+            },
+            repairPrompt:
+              'Return only structured improvement tasks. Preferred format: a JSON array of {"title":"...","description":"...","priority":0-4,"complexity":1-10}.',
+            invalidReason: () => "Response did not include parseable improvement tasks.",
+            onExhausted: ({ repairRawContent }) => parseImprovementList(repairRawContent),
+          },
         });
 
-        const items = parseImprovementList(response.content);
+        const items = response.parsed ?? parseImprovementList(response.rawContent);
         for (const item of items) {
           allItems.push(item);
         }

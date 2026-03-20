@@ -7,9 +7,9 @@ import { getAgentForPlanningRole } from "@opensprint/shared";
 import { VALID_COMPLEXITIES } from "./plan/plan-prompts.js";
 import { COMPLEXITY_EVALUATION_SYSTEM_PROMPT } from "./plan/plan-prompts.js";
 import { ProjectService } from "./project.service.js";
-import { agentService } from "./agent.service.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
+import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 
 export interface PlanComplexityEvaluationDeps {
   projectService: ProjectService;
@@ -39,7 +39,7 @@ export class PlanComplexityEvaluationService {
     const agentId = `plan-complexity-${projectId}-${Date.now()}`;
 
     const systemPrompt = `${COMPLEXITY_EVALUATION_SYSTEM_PROMPT}\n\n${await getCombinedInstructions(repoPath, "planner")}`;
-    const response = await agentService.invokePlanningAgent({
+    const response = await invokeStructuredPlanningAgent({
       projectId,
       role: "planner",
       config: getAgentForPlanningRole(settings, "planner"),
@@ -53,12 +53,16 @@ export class PlanComplexityEvaluationService {
         role: "planner",
         label: "Complexity evaluation",
       },
+      contract: {
+        parse: (content) =>
+          extractJsonFromAgentResponse<{ complexity?: string }>(content, "complexity"),
+        repairPrompt:
+          'Return valid JSON only in this shape: {"complexity":"low|medium|high|very_high"}',
+        onExhausted: () => ({ complexity: "medium" }),
+      },
     });
 
-    const parsed = extractJsonFromAgentResponse<{ complexity?: string }>(
-      response.content,
-      "complexity"
-    );
+    const parsed = response.parsed;
     if (parsed) {
       const c = parsed.complexity;
       if (c && VALID_COMPLEXITIES.includes(c as PlanComplexity)) {

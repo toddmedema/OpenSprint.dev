@@ -7,7 +7,6 @@
 
 import type { ReviewAgentResult } from "@opensprint/shared";
 import { REVIEW_ANGLE_OPTIONS } from "@opensprint/shared";
-import { agentService } from "./agent.service.js";
 import { ProjectService } from "./project.service.js";
 import { getAgentForComplexity } from "@opensprint/shared";
 import { getComplexityForAgent } from "./plan-complexity.js";
@@ -16,6 +15,7 @@ import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { createLogger } from "../utils/logger.js";
 import type { TaskStoreService } from "./task-store.service.js";
 import type { StoredTask } from "./task-store.service.js";
+import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 
 const log = createLogger("review-synthesizer");
 
@@ -78,7 +78,7 @@ Synthesize the above into a single report. Output ONLY valid JSON with status, s
 
     const systemPrompt = `${SYNTHESIZER_SYSTEM_PROMPT}\n\n${await getCombinedInstructions(repoPath, "reviewer")}`;
     try {
-      const response = await agentService.invokePlanningAgent({
+      const response = await invokeStructuredPlanningAgent({
         projectId,
         role: "reviewer",
         config: agentConfig,
@@ -92,14 +92,20 @@ Synthesize the above into a single report. Output ONLY valid JSON with status, s
           role: "reviewer",
           label: "Review Synthesizer",
         },
+        contract: {
+          parse: (content) =>
+            extractJsonFromAgentResponse<{
+              status?: string;
+              summary?: string;
+              issues?: string[];
+              notes?: string;
+            }>(content, "status"),
+          repairPrompt:
+            'Return valid JSON only in this shape: {"status":"approved","summary":"...","notes":""} or {"status":"rejected","summary":"...","issues":["..."],"notes":"..."}',
+        },
       });
 
-      const parsed = extractJsonFromAgentResponse<{
-        status?: string;
-        summary?: string;
-        issues?: string[];
-        notes?: string;
-      }>(response.content, "status");
+      const parsed = response.parsed;
 
       if (!parsed || !parsed.status) {
         log.warn("Synthesizer did not return valid JSON, using programmatic merge", {

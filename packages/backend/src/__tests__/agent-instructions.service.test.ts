@@ -4,6 +4,10 @@ import path from "path";
 import os from "os";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { getCombinedInstructions } from "../services/agent-instructions.service.js";
+import {
+  getOpenSprintDefaultInstructions,
+  OPENSPRINT_DEFAULT_INSTRUCTIONS_HEADING,
+} from "../services/agent-default-instructions.js";
 
 const { mockDbClient } = vi.hoisted(() => {
   const client = {
@@ -41,6 +45,21 @@ vi.mock("../services/task-store.service.js", () => ({
 describe("getCombinedInstructions", () => {
   let tempDir: string;
 
+  function defaultSection(
+    role:
+      | "dreamer"
+      | "planner"
+      | "harmonizer"
+      | "analyst"
+      | "summarizer"
+      | "auditor"
+      | "coder"
+      | "reviewer"
+      | "merger"
+  ): string {
+    return `${OPENSPRINT_DEFAULT_INSTRUCTIONS_HEADING}\n\n${getOpenSprintDefaultInstructions(role)}`;
+  }
+
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-agent-instructions-test-"));
   });
@@ -55,7 +74,7 @@ describe("getCombinedInstructions", () => {
 
     const result = await getCombinedInstructions(tempDir, "coder");
 
-    expect(result).toBe(`## Agent Instructions\n\n${generalContent}`);
+    expect(result).toBe(`${defaultSection("coder")}\n\n## Agent Instructions\n\n${generalContent}`);
   });
 
   it("returns general + role content when both exist", async () => {
@@ -72,7 +91,8 @@ describe("getCombinedInstructions", () => {
     const result = await getCombinedInstructions(tempDir, "coder");
 
     expect(result).toBe(
-      `## Agent Instructions\n\n${generalContent}\n\n## Role-specific Instructions\n\n${roleContent}`
+      `${defaultSection("coder")}\n\n## Agent Instructions\n\n${generalContent}` +
+        `\n\n## Role-specific Instructions\n\n${roleContent}`
     );
   });
 
@@ -84,7 +104,9 @@ describe("getCombinedInstructions", () => {
 
     const result = await getCombinedInstructions(tempDir, "reviewer");
 
-    expect(result).toBe(`## Agent Instructions\n\n${generalContent}`);
+    expect(result).toBe(
+      `${defaultSection("reviewer")}\n\n## Agent Instructions\n\n${generalContent}`
+    );
   });
 
   it("returns general content only when role file has only whitespace", async () => {
@@ -99,13 +121,15 @@ describe("getCombinedInstructions", () => {
 
     const result = await getCombinedInstructions(tempDir, "merger");
 
-    expect(result).toBe(`## Agent Instructions\n\n${generalContent}`);
+    expect(result).toBe(
+      `${defaultSection("merger")}\n\n## Agent Instructions\n\n${generalContent}`
+    );
   });
 
-  it("returns header + empty general when AGENTS.md is missing and role file is missing", async () => {
+  it("returns defaults plus empty general section when AGENTS.md is missing and role file is missing", async () => {
     const result = await getCombinedInstructions(tempDir, "dreamer");
 
-    expect(result).toBe("## Agent Instructions\n\n");
+    expect(result).toBe(`${defaultSection("dreamer")}\n\n## Agent Instructions\n\n`);
   });
 
   it("returns header + role content when AGENTS.md is missing but role file exists", async () => {
@@ -120,8 +144,26 @@ describe("getCombinedInstructions", () => {
     const result = await getCombinedInstructions(tempDir, "dreamer");
 
     expect(result).toBe(
-      `## Agent Instructions\n\n\n\n## Role-specific Instructions\n\n${roleContent}`
+      `${defaultSection("dreamer")}\n\n## Agent Instructions\n\n` +
+        `\n\n## Role-specific Instructions\n\n${roleContent}`
     );
+  });
+
+  it("layers defaults before project general and role-specific instructions", async () => {
+    const generalContent = "Project general overrides.";
+    const roleContent = "Project coder overrides.";
+    await fs.writeFile(path.join(tempDir, "AGENTS.md"), generalContent, "utf-8");
+    await fs.mkdir(path.join(tempDir, OPENSPRINT_PATHS.agents), { recursive: true });
+    await fs.writeFile(path.join(tempDir, OPENSPRINT_PATHS.agents, "coder.md"), roleContent);
+
+    const result = await getCombinedInstructions(tempDir, "coder");
+
+    const defaultsIndex = result.indexOf(OPENSPRINT_DEFAULT_INSTRUCTIONS_HEADING);
+    const generalIndex = result.indexOf("## Agent Instructions");
+    const roleIndex = result.indexOf("## Role-specific Instructions");
+    expect(defaultsIndex).toBeGreaterThanOrEqual(0);
+    expect(generalIndex).toBeGreaterThan(defaultsIndex);
+    expect(roleIndex).toBeGreaterThan(generalIndex);
   });
 
   it("works for all valid roles in AGENT_ROLE_CANONICAL_ORDER", async () => {
@@ -148,6 +190,7 @@ describe("getCombinedInstructions", () => {
 
       const result = await getCombinedInstructions(tempDir, role);
 
+      expect(result).toContain(OPENSPRINT_DEFAULT_INSTRUCTIONS_HEADING);
       expect(result).toContain("## Agent Instructions");
       expect(result).toContain("general");
       expect(result).toContain("## Role-specific Instructions");

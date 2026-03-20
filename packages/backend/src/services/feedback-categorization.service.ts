@@ -7,7 +7,6 @@
 import crypto from "crypto";
 import type { FeedbackItem, FeedbackCategory, ProposedTask, Plan } from "@opensprint/shared";
 import { getAgentForPlanningRole, clampTaskComplexity } from "@opensprint/shared";
-import { agentService } from "./agent.service.js";
 import { hilService } from "./hil-service.js";
 import { ChatService } from "./chat.service.js";
 import { PlanService } from "./plan.service.js";
@@ -24,6 +23,7 @@ import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { maybeAutoRespond } from "./open-question-autoresolve.service.js";
 import { createLogger } from "../utils/logger.js";
 import { ProjectService } from "./project.service.js";
+import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 
 const log = createLogger("feedback-categorization");
 
@@ -173,7 +173,7 @@ export class FeedbackCategorizationService {
     const systemPrompt = `${baseSystemPrompt}\n\n${await getCombinedInstructions(project.repoPath, "analyst")}`;
 
     try {
-      const response = await agentService.invokePlanningAgent({
+      const response = await invokeStructuredPlanningAgent({
         projectId,
         role: "analyst",
         config: getAgentForPlanningRole(settings, "analyst"),
@@ -194,9 +194,15 @@ export class FeedbackCategorizationService {
           label: "Feedback categorization",
           feedbackId: item.id,
         },
+        contract: {
+          parse: (content) => extractJsonFromAgentResponse<Record<string, unknown>>(content),
+          repairPrompt: `Return valid JSON only with this shape:
+{"category":"bug|feature|ux|scope","mapped_plan_id":null,"mapped_epic_id":null,"is_scope_change":false,"is_large_scope":false,"proposed_tasks":[],"link_to_existing_task_ids":[],"update_existing_tasks":{},"open_questions":[]}
+Use the same fields and types described in the original instructions. Do not include prose outside the JSON.`,
+        },
       });
 
-      const parsed = extractJsonFromAgentResponse<Record<string, unknown>>(response.content);
+      const parsed = response.parsed;
       if (parsed) {
         const validCategories: FeedbackCategory[] = ["bug", "feature", "ux", "scope"];
         const rawCategory = parsed.category;

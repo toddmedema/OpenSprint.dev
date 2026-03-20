@@ -101,6 +101,8 @@ export interface ActiveTaskConfig {
   } | null;
   /** Whether this retry reuses an existing branch with prior commits */
   useExistingBranch?: boolean;
+  /** True when this rerun exists only to repair invalid structured output from the previous attempt. */
+  structuredOutputRepairAttempted?: boolean;
   /** Human-in-the-loop config: agents use this to know when to ask (confirm all vs major only vs full autonomy) */
   hilConfig?: {
     scopeChanges: string;

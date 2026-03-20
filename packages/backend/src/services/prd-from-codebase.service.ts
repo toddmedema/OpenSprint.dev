@@ -3,13 +3,13 @@ import { PlanService } from "./plan.service.js";
 import { ChatService } from "./chat.service.js";
 import { PrdService } from "./prd.service.js";
 import { ProjectService } from "./project.service.js";
-import { agentService } from "./agent.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
+import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 
 const log = createLogger("prd-from-codebase");
 
@@ -37,6 +37,12 @@ Guidelines:
 - Do NOT include a top-level section header (e.g. "## 1. Executive Summary") inside the block — start with body content. Sub-headers like ### 3.1 are fine.
 - Do NOT output placeholder content like "TBD". Infer reasonable content from the code or omit the section.
 - Output multiple PRD_UPDATE blocks so the PRD is populated with as many sections as you can confidently derive.`;
+const PRD_UPDATE_REPAIR_PROMPT = `Return only PRD_UPDATE blocks in this format:
+[PRD_UPDATE:executive_summary]
+Markdown content
+[/PRD_UPDATE]
+
+You may return multiple PRD_UPDATE blocks. Do not include prose outside the blocks.`;
 
 export class PrdFromCodebaseService {
   private planService: PlanService | null = null;
@@ -77,7 +83,7 @@ Output PRD_UPDATE blocks for each section you can derive.`;
     let responseContent: string;
     try {
       log.info("Invoking planning agent for PRD from codebase", { projectId });
-      const response = await agentService.invokePlanningAgent({
+      const response = await invokeStructuredPlanningAgent<string>({
         projectId,
         role: "dreamer",
         config: agentConfig,
@@ -91,8 +97,13 @@ Output PRD_UPDATE blocks for each section you can derive.`;
           role: "dreamer",
           label: "Generate PRD from codebase",
         },
+        contract: {
+          parse: (content) =>
+            this.chatService.parsePrdUpdatesFromContent(content).length > 0 ? content : null,
+          repairPrompt: PRD_UPDATE_REPAIR_PROMPT,
+        },
       });
-      responseContent = response.content ?? "";
+      responseContent = response.rawContent;
     } catch (error) {
       const msg = getErrorMessage(error);
       log.error("PRD from codebase agent failed", { projectId, error });

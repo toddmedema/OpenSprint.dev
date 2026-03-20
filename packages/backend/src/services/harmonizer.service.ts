@@ -21,6 +21,17 @@ const VALID_SECTION_KEYS: PrdSectionKey[] = [
   "open_questions",
 ];
 
+function isLegacyNoChangesNeeded(content: string): boolean {
+  const normalized = content.trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    normalized.includes("no updates needed") ||
+    normalized.includes("no changes needed") ||
+    normalized.includes("already aligned") ||
+    normalized.includes("already reflects")
+  );
+}
+
 /** Harmonizer result.json format per PRD 12.3.3 */
 export interface HarmonizerResult {
   status: "success" | "no_changes_needed" | "failed";
@@ -136,6 +147,10 @@ export function parseHarmonizerResultFull(
     if (status === "success" && (!parsed.prd_updates || parsed.prd_updates.length === 0)) {
       return { status: "no_changes_needed", prdUpdates: [] };
     }
+  }
+
+  if (isLegacyNoChangesNeeded(content)) {
+    return { status: "no_changes_needed", prdUpdates: [] };
   }
 
   return null;

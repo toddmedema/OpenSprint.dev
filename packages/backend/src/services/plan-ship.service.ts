@@ -13,7 +13,6 @@ import type { PlanCrudService } from "./plan-crud.service.js";
 import type { PlanDecomposeGenerateService } from "./plan-decompose-generate.service.js";
 import { ProjectService } from "./project.service.js";
 import type { StoredTask } from "./task-store.service.js";
-import { agentService } from "./agent.service.js";
 import { buildAuditorPrompt, parseAuditorResult } from "./auditor.service.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { AppError } from "../middleware/error-handler.js";
@@ -21,6 +20,7 @@ import { ErrorCodes } from "../middleware/error-codes.js";
 import { sendPlanAgentOutputToProject } from "../websocket/index.js";
 import { appendPlanAgentOutput, clearPlanAgentOutput } from "./plan-agent-output-buffer.service.js";
 import { createLogger } from "../utils/logger.js";
+import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 
 const log = createLogger("plan-ship");
 
@@ -338,12 +338,12 @@ ${planNew}`;
     const agentIdAuditor = `auditor-${projectId}-${planId}-${Date.now()}`;
 
     const settings = await this.deps.projectService.getSettings(projectId);
-    let auditorResponse: { content: string };
+    let auditorResponse;
     try {
       const auditorSystemPrompt =
         "You are the Auditor agent for Open Sprint (PRD §12.3.6). Audit the app's current capabilities and generate delta tasks for re-execution.\n\n" +
         (await getCombinedInstructions(repoPath, "auditor"));
-      auditorResponse = await agentService.invokePlanningAgent({
+      auditorResponse = await invokeStructuredPlanningAgent({
         projectId,
         role: "auditor",
         config: getAgentForPlanningRole(settings, "auditor", plan.metadata.complexity),
@@ -362,12 +362,17 @@ ${planNew}`;
           appendPlanAgentOutput(projectId, planId, chunk);
           sendPlanAgentOutputToProject(projectId, planId, chunk);
         },
+        contract: {
+          parse: parseAuditorResult,
+          repairPrompt:
+            'Return valid JSON only in one of these forms: {"status":"no_changes_needed","capability_summary":"..."} or {"status":"success","capability_summary":"...","tasks":[{"index":0,"title":"...","description":"...","priority":1,"depends_on":[],"complexity":5}]} or {"status":"failed"}',
+        },
       });
     } finally {
       clearPlanAgentOutput(projectId, planId);
     }
 
-    const auditorResult = parseAuditorResult(auditorResponse.content);
+    const auditorResult = auditorResponse.parsed;
     if (!auditorResult || auditorResult.status === "failed") {
       log.error("Auditor failed or returned invalid result, falling back to full rebuild");
       return this.shipPlan(projectId, planId, options);

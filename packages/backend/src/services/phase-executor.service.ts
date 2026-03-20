@@ -31,6 +31,7 @@ import { markExhausted } from "./api-key-exhausted.service.js";
 import type {
   AgentSlotLike,
   PhaseExecutorCallbacks,
+  ReviewRetryTarget,
   RetryContext,
   TaskAssignmentLike,
 } from "./orchestrator-phase-context.js";
@@ -60,7 +61,8 @@ export interface PhaseExecutorHost {
     wtPath: string,
     taskId: string,
     baseBranch?: string,
-    reviewAngles?: ReviewAngle[]
+    reviewAngles?: ReviewAngle[],
+    clearGeneralResult?: boolean
   ): Promise<void>;
   runSummarizer(
     projectId: string,
@@ -157,6 +159,7 @@ export class PhaseExecutorService {
     }
 
     try {
+      slot.retryContext = retryContext;
       if (!this.isTaskStillActive(projectId, task.id)) {
         return;
       }
@@ -183,13 +186,23 @@ export class PhaseExecutorService {
           slot.worktreeKey != null
             ? { worktreeKey: slot.worktreeKey, branchName: slot.branchName }
             : undefined;
-        wtPath = await this.host.branchManager.createTaskWorktree(
-          repoPath,
-          task.id,
-          baseBranch,
-          worktreeOptions
-        );
-        assertSafeTaskWorktreePath(repoPath, task.id, wtPath);
+        const canReuseExistingWorktree =
+          retryContext?.useExistingBranch === true &&
+          retryContext.structuredOutputRepairAttempted === true &&
+          typeof slot.worktreePath === "string" &&
+          slot.worktreePath.trim() !== "";
+        if (canReuseExistingWorktree) {
+          wtPath = slot.worktreePath!;
+          assertSafeTaskWorktreePath(repoPath, task.id, wtPath);
+        } else {
+          wtPath = await this.host.branchManager.createTaskWorktree(
+            repoPath,
+            task.id,
+            baseBranch,
+            worktreeOptions
+          );
+          assertSafeTaskWorktreePath(repoPath, task.id, wtPath);
+        }
       }
       (slot as { worktreePath: string | null }).worktreePath = wtPath;
 
@@ -197,7 +210,7 @@ export class PhaseExecutorService {
         return;
       }
 
-      if (retryContext?.useExistingBranch) {
+      if (retryContext?.useExistingBranch && !retryContext.structuredOutputRepairAttempted) {
         await this.host.branchManager.waitForGitReady(wtPath);
         try {
           await this.host.branchManager.rebaseOntoMain(wtPath, baseBranch);
@@ -279,6 +292,7 @@ export class PhaseExecutorService {
         previousDiff: retryContext?.previousDiff ?? null,
         qualityGateDetail: retryContext?.qualityGateDetail ?? null,
         useExistingBranch: retryContext?.useExistingBranch ?? false,
+        structuredOutputRepairAttempted: retryContext?.structuredOutputRepairAttempted ?? false,
         hilConfig: settings.hilConfig,
         aiAutonomyLevel: settings.aiAutonomyLevel,
       };
@@ -397,7 +411,9 @@ export class PhaseExecutorService {
     projectId: string,
     repoPath: string,
     task: StoredTask,
-    branchName: string
+    branchName: string,
+    retryContext?: RetryContext,
+    reviewTarget?: ReviewRetryTarget
   ): Promise<void> {
     const state = this.host.getState(projectId);
     const slot = state.slots.get(task.id);
@@ -411,11 +427,20 @@ export class PhaseExecutorService {
     if (wtPath !== repoPath) {
       assertSafeTaskWorktreePath(repoPath, task.id, wtPath);
     }
-    const reviewAngles = [
+    slot.retryContext = retryContext;
+    const configuredReviewAngles = [
       ...new Set((settings.reviewAngles ?? []).filter(Boolean)),
     ] as ReviewAngle[];
-    const includeGeneralReview = settings.includeGeneralReview === true && reviewAngles.length > 0;
-    const useAngleSpecificReview = reviewAngles.length > 0;
+    const targetAngle =
+      reviewTarget && reviewTarget !== "general" ? (reviewTarget as ReviewAngle) : undefined;
+    const runOnlyGeneralReview = reviewTarget === "general";
+    const reviewAngles = targetAngle ? [targetAngle] : configuredReviewAngles;
+    const includeGeneralReview =
+      !runOnlyGeneralReview &&
+      !targetAngle &&
+      settings.includeGeneralReview === true &&
+      reviewAngles.length > 0;
+    const useAngleSpecificReview = !runOnlyGeneralReview && reviewAngles.length > 0;
 
     try {
       await this.host.preflightCheck(
@@ -423,9 +448,8 @@ export class PhaseExecutorService {
         wtPath,
         task.id,
         baseBranch,
-        settings.reviewAngles && settings.reviewAngles.length > 0
-          ? settings.reviewAngles
-          : undefined
+        useAngleSpecificReview ? reviewAngles : undefined,
+        !targetAngle
       );
 
       const config: ActiveTaskConfig = {
@@ -437,12 +461,13 @@ export class PhaseExecutorService {
         testCommand: resolveTestCommand(settings) || 'echo "No test command configured"',
         attempt: slot.attempt,
         phase: "review",
-        previousFailure: null,
-        reviewFeedback: null,
+        previousFailure: retryContext?.previousFailure ?? null,
+        reviewFeedback: retryContext?.reviewFeedback ?? null,
+        useExistingBranch: retryContext?.useExistingBranch ?? false,
+        structuredOutputRepairAttempted: retryContext?.structuredOutputRepairAttempted ?? false,
         hilConfig: settings.hilConfig,
         aiAutonomyLevel: settings.aiAutonomyLevel,
-        ...(settings.reviewAngles &&
-          settings.reviewAngles.length > 0 && { reviewAngles: settings.reviewAngles }),
+        ...(reviewAngles.length > 0 && { reviewAngles }),
         ...(includeGeneralReview && { includeGeneralReview: true }),
       };
 
@@ -557,13 +582,13 @@ export class PhaseExecutorService {
           .catch(() => {});
       };
 
-      if (includeGeneralReview) {
+      if (includeGeneralReview || runOnlyGeneralReview) {
         slot.includeGeneralReview = true;
         runGeneralAgent();
       }
 
       if (useAngleSpecificReview) {
-        slot.reviewAgents = new Map();
+        slot.reviewAgents = targetAngle ? (slot.reviewAgents ?? new Map()) : new Map();
         const runAnglesSequentiallyForStability =
           process.env.OPENSPRINT_SERIALIZE_CURSOR_REVIEW_ANGLES === "1" &&
           agentConfig.type === "cursor" &&
@@ -687,7 +712,7 @@ export class PhaseExecutorService {
         } else {
           await Promise.all(reviewAngles.map(async (angle) => spawnAngleReviewer(angle)));
         }
-      } else {
+      } else if (!runOnlyGeneralReview) {
         slot.reviewAgents = undefined;
         this.host.lifecycleManager.run(
           {

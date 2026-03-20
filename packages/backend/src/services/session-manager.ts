@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
-import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import { OPENSPRINT_DIR, OPENSPRINT_PATHS } from "@opensprint/shared";
 import { heartbeatService } from "./heartbeat.service.js";
 import type {
   AgentSession,
@@ -15,6 +15,45 @@ import { getSafeTaskActiveDir } from "../utils/path-safety.js";
 import { taskStore } from "./task-store.service.js";
 import type { ProjectService } from "./project.service.js";
 import { LOG_DIFF_TRUNCATE_AT_CHARS, truncateToThreshold } from "../utils/log-diff-truncation.js";
+
+export interface RawJsonReadResult<T> {
+  raw: string | null;
+  parsed: T | null;
+}
+
+export function getTaskResultPath(repoPath: string, taskId: string, angle?: ReviewAngle): string {
+  const activeDir = getSafeTaskActiveDir(repoPath, taskId);
+  if (angle) {
+    return path.join(activeDir, "review-angles", angle, "result.json");
+  }
+  return path.join(activeDir, "result.json");
+}
+
+export function getMergeResultPath(repoPath: string): string {
+  return path.join(repoPath, OPENSPRINT_DIR, "merge-result.json");
+}
+
+async function readJsonFileWithRaw<T>(filePath: string): Promise<RawJsonReadResult<T>> {
+  try {
+    const raw = await fs.readFile(filePath, "utf-8");
+    try {
+      return {
+        raw,
+        parsed: JSON.parse(raw) as T,
+      };
+    } catch {
+      return {
+        raw,
+        parsed: null,
+      };
+    }
+  } catch {
+    return {
+      raw: null,
+      parsed: null,
+    };
+  }
+}
 
 /**
  * Manages active task directories and session archival.
@@ -41,11 +80,7 @@ export class SessionManager {
    * When angle is provided: .opensprint/active/<taskId>/review-angles/<angle>/result.json
    */
   getResultPath(repoPath: string, taskId: string, angle?: ReviewAngle): string {
-    const activeDir = this.getActiveDir(repoPath, taskId);
-    if (angle) {
-      return path.join(activeDir, "review-angles", angle, "result.json");
-    }
-    return path.join(activeDir, "result.json");
+    return getTaskResultPath(repoPath, taskId, angle);
   }
 
   /**
@@ -54,13 +89,21 @@ export class SessionManager {
    * When angle is provided: reads from review-angles/<angle>/result.json.
    */
   async readResult(repoPath: string, taskId: string, angle?: ReviewAngle): Promise<unknown | null> {
-    const resultPath = this.getResultPath(repoPath, taskId, angle);
-    try {
-      const raw = await fs.readFile(resultPath, "utf-8");
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
+    const { parsed } = await this.readResultWithRaw(repoPath, taskId, angle);
+    return parsed;
+  }
+
+  async readResultWithRaw(
+    repoPath: string,
+    taskId: string,
+    angle?: ReviewAngle
+  ): Promise<RawJsonReadResult<unknown>> {
+    return readJsonFileWithRaw(this.getResultPath(repoPath, taskId, angle));
+  }
+
+  async readRawResult(repoPath: string, taskId: string, angle?: ReviewAngle): Promise<string | null> {
+    const { raw } = await this.readResultWithRaw(repoPath, taskId, angle);
+    return raw;
   }
 
   /**
@@ -73,6 +116,32 @@ export class SessionManager {
     const resultPath = this.getResultPath(repoPath, taskId, angle);
     try {
       await fs.unlink(resultPath);
+    } catch {
+      // File may not exist
+    }
+  }
+
+  getMergeResultPath(repoPath: string): string {
+    return getMergeResultPath(repoPath);
+  }
+
+  async readMergeResult(repoPath: string): Promise<unknown | null> {
+    const { parsed } = await this.readMergeResultWithRaw(repoPath);
+    return parsed;
+  }
+
+  async readMergeResultWithRaw(repoPath: string): Promise<RawJsonReadResult<unknown>> {
+    return readJsonFileWithRaw(this.getMergeResultPath(repoPath));
+  }
+
+  async readRawMergeResult(repoPath: string): Promise<string | null> {
+    const { raw } = await this.readMergeResultWithRaw(repoPath);
+    return raw;
+  }
+
+  async clearMergeResult(repoPath: string): Promise<void> {
+    try {
+      await fs.unlink(this.getMergeResultPath(repoPath));
     } catch {
       // File may not exist
     }

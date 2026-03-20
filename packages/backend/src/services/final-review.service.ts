@@ -11,7 +11,6 @@
 import type { ReviewAngle } from "@opensprint/shared";
 import { REVIEW_ANGLE_OPTIONS } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
-import { agentService } from "./agent.service.js";
 import { getAgentForPlanningRole } from "@opensprint/shared";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { PlanService } from "./plan.service.js";
@@ -19,6 +18,7 @@ import { ProjectService } from "./project.service.js";
 import { ContextAssembler, REVIEW_ANGLE_CHECKLISTS } from "./context-assembler.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { createLogger } from "../utils/logger.js";
+import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 
 const log = createLogger("final-review");
 
@@ -169,7 +169,7 @@ Assess the implementation against the plan scope. Return JSON with status, asses
     const startedAt = new Date().toISOString();
     const finalReviewSystemPrompt = `${FINAL_REVIEW_SYSTEM_PROMPT}\n\n${await getCombinedInstructions(repoPath, "auditor")}`;
     try {
-      const response = await agentService.invokePlanningAgent({
+      const response = await invokeStructuredPlanningAgent({
         projectId,
         role: "auditor",
         config: getAgentForPlanningRole(settings, "auditor"),
@@ -184,9 +184,19 @@ Assess the implementation against the plan scope. Return JSON with status, asses
           label: "Final review",
           planId,
         },
+        contract: {
+          parse: (content) =>
+            extractJsonFromAgentResponse<{
+              status?: string;
+              assessment?: string;
+              proposedTasks?: Array<{ title?: string; description?: string; priority?: number }>;
+            }>(content, "status"),
+          repairPrompt:
+            'Return valid JSON only in this shape: {"status":"pass|issues","assessment":"...","proposedTasks":[{"title":"...","description":"...","priority":1}]}',
+        },
       });
 
-      const result = this.parseFinalReviewResponse(response.content, projectId, epicId);
+      const result = this.parseFinalReviewResponse(response.rawContent, projectId, epicId);
       await this.persistAuditorRun(
         projectId,
         planId,
@@ -248,7 +258,7 @@ Respond with ONLY valid JSON (no markdown):
       const prompt = `${basePrompt}${checklistBlock}\n\nFocus ONLY on the ${label} angle.`;
       const agentId = `final-review-${angle}-${projectId}-${epicId}-${Date.now()}`;
       try {
-        const response = await agentService.invokePlanningAgent({
+        const response = await invokeStructuredPlanningAgent({
           projectId,
           role: "auditor",
           config,
@@ -263,12 +273,18 @@ Respond with ONLY valid JSON (no markdown):
             label: `Final review (${label})`,
             planId,
           },
+          contract: {
+            parse: (content) =>
+              extractJsonFromAgentResponse<{
+                status?: string;
+                assessment?: string;
+                proposedTasks?: Array<{ title?: string; description?: string; priority?: number }>;
+              }>(content, "status"),
+            repairPrompt:
+              'Return valid JSON only in this shape: {"status":"pass|issues","assessment":"...","proposedTasks":[{"title":"...","description":"...","priority":1}]}',
+          },
         });
-        const parsed = extractJsonFromAgentResponse<{
-          status?: string;
-          assessment?: string;
-          proposedTasks?: Array<{ title?: string; description?: string; priority?: number }>;
-        }>(response.content, "status");
+        const parsed = response.parsed;
         const status = parsed?.status === "issues" ? "issues" : "pass";
         const proposedTasks: FinalReviewProposedTask[] = (parsed?.proposedTasks ?? [])
           .filter((t) => t.title && t.description)
@@ -334,7 +350,7 @@ Rules:
 
     const startedAt = new Date().toISOString();
     try {
-      const response = await agentService.invokePlanningAgent({
+      const response = await invokeStructuredPlanningAgent({
         projectId,
         role: "auditor",
         config: getAgentForPlanningRole(settings, "auditor"),
@@ -349,12 +365,18 @@ Rules:
           label: "Epic Review Synthesizer",
           planId,
         },
+        contract: {
+          parse: (content) =>
+            extractJsonFromAgentResponse<{
+              status?: string;
+              assessment?: string;
+              proposedTasks?: Array<{ title?: string; description?: string; priority?: number }>;
+            }>(content, "status"),
+          repairPrompt:
+            'Return valid JSON only in this shape: {"status":"pass|issues","assessment":"...","proposedTasks":[{"title":"...","description":"...","priority":1}]}',
+        },
       });
-      const parsed = extractJsonFromAgentResponse<{
-        status?: string;
-        assessment?: string;
-        proposedTasks?: Array<{ title?: string; description?: string; priority?: number }>;
-      }>(response.content, "status");
+      const parsed = response.parsed;
       const status = parsed?.status === "issues" ? "issues" : "pass";
       const proposedTasks: FinalReviewProposedTask[] = (parsed?.proposedTasks ?? [])
         .filter((t) => t.title && t.description)

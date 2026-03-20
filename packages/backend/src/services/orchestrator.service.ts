@@ -50,7 +50,6 @@ import { AgentLifecycleManager, type AgentRunState } from "./agent-lifecycle.js"
 import { heartbeatService } from "./heartbeat.service.js";
 import { FileScopeAnalyzer, type FileScope } from "./file-scope-analyzer.js";
 import { TaskScheduler } from "./task-scheduler.js";
-import { normalizeCodingStatus, normalizeReviewStatus } from "./result-normalizers.js";
 import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
 import { filterAgentOutput } from "../utils/agent-output-filter.js";
@@ -74,6 +73,7 @@ import { reviewSynthesizerService } from "./review-synthesizer.service.js";
 import { validateTransition } from "./task-state-machine.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { isExhausted } from "./api-key-exhausted.service.js";
+import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 import {
   buildTaskLastExecutionSummary,
   compactExecutionText,
@@ -115,17 +115,28 @@ import {
   buildReviewNoResultFailureReason,
   synthesizeCodingResultFromOutput,
 } from "./no-result-reason.service.js";
+import {
+  describeStructuredOutputProblem,
+  parseCodingAgentResult,
+  parseReviewAgentResult,
+} from "./agent-result-validation.js";
 
 const log = createLogger("orchestrator");
 
 import type {
   FailureType,
+  ReviewRetryTarget,
   RetryContext,
   RetryQualityGateDetail,
+  TaskAssignmentLike,
 } from "./orchestrator-phase-context.js";
 
 /** Loop kicker interval: 60s — restarts idle orchestrator loop (distinct from 5-min WatchdogService health patrol). */
 const LOOP_KICKER_INTERVAL_MS = 60 * 1000;
+const CODING_RESULT_EXPECTED_SHAPE =
+  'a JSON object like {"status":"success","summary":"..."} or {"status":"failed","summary":"...","open_questions":[{"id":"q1","text":"..."}]}';
+const REVIEW_RESULT_EXPECTED_SHAPE =
+  'a JSON object like {"status":"approved","summary":"..."} or {"status":"rejected","summary":"...","issues":["..."],"notes":"..."}';
 
 /**
  * GUPP-style assignment file: everything an agent needs to self-start.
@@ -207,6 +218,7 @@ export interface AgentSlot {
   phaseCoordinator?: TaskPhaseCoordinator;
   /** Display name for this slot (e.g. "Frodo", "Boromir"); set at start_task or enter_review. */
   assignee?: string;
+  retryContext?: RetryContext;
 }
 
 interface OrchestratorState {
@@ -920,10 +932,7 @@ export class OrchestratorService {
       return false;
     }
 
-    const result = (await this.sessionManager.readResult(
-      assignment.worktreePath,
-      task.id
-    )) as CodingAgentResult | null;
+    const { result } = await this.readCodingResultWithRaw(assignment.worktreePath, task.id);
     const exitCode = this.getTerminalResultExitCode(result);
     if (exitCode == null) return false;
 
@@ -940,6 +949,7 @@ export class OrchestratorService {
         this.getRecoveredWorktreeKey(assignment)
       );
       slot.worktreePath = assignment.worktreePath;
+      slot.retryContext = assignment.retryContext;
       slot.agent.startedAt = assignment.createdAt;
       await this.hydrateRecoveredOutputLog(slot.agent, assignment.promptPath);
       this.transition(projectId, {
@@ -1024,6 +1034,7 @@ export class OrchestratorService {
         this.getRecoveredWorktreeKey(assignment)
       );
       slot.worktreePath = assignment.worktreePath;
+      slot.retryContext = assignment.retryContext;
       slot.agent.startedAt = assignment.createdAt;
       await this.hydrateRecoveredOutputLog(slot.agent, assignment.promptPath);
       state.slots.set(task.id, slot);
@@ -1050,7 +1061,7 @@ export class OrchestratorService {
             recoveredTestOutcome,
             persistedTestStatus
           );
-          coordinator.setTestOutcome(recoveredTestOutcome);
+          await coordinator.setTestOutcome(recoveredTestOutcome);
         }
       } else {
         await this.startReviewCoordinatorAndTests(
@@ -1067,7 +1078,7 @@ export class OrchestratorService {
       const recoveredTestOutcome = this.toRecoveredTestOutcome(persistedTestStatus);
       if (recoveredTestOutcome) {
         this.applyRecoveredTestOutcome(slot.phaseResult, recoveredTestOutcome, persistedTestStatus);
-        slot.phaseCoordinator.setTestOutcome(recoveredTestOutcome);
+        await slot.phaseCoordinator.setTestOutcome(recoveredTestOutcome);
       }
     }
 
@@ -1909,30 +1920,46 @@ export class OrchestratorService {
     }
     const wtPath = slot.worktreePath ?? repoPath;
 
-    const readResultWithTimeout = async (): Promise<CodingAgentResult | null> => {
+    const readResultWithTimeout = async (): Promise<{
+      raw: string | null;
+      result: CodingAgentResult | null;
+    }> => {
       const timeoutMs = 15_000;
       return (await Promise.race([
-        this.sessionManager.readResult(wtPath, task.id),
+        this.readCodingResultWithRaw(wtPath, task.id),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("readResult timeout")), timeoutMs)
         ),
       ]).catch((err) => {
         log.warn("readResult failed or timed out", { taskId: task.id, err });
-        return null;
-      })) as CodingAgentResult | null;
+        return {
+          raw: null,
+          result: null,
+        };
+      })) as {
+        raw: string | null;
+        result: CodingAgentResult | null;
+      };
     };
 
-    let result = await readResultWithTimeout();
-
-    if (result && result.status) {
-      normalizeCodingStatus(result);
-    }
+    const { raw: rawResult, result: parsedResult } = await readResultWithTimeout();
+    let result = parsedResult;
 
     if (!result) {
+      const retried = await this.retryCodingStructuredOutputRepair(
+        projectId,
+        repoPath,
+        task,
+        slot,
+        rawResult
+      );
+      if (retried) {
+        return;
+      }
+
       const synthesizedResult = synthesizeCodingResultFromOutput(slot.agent.outputLog);
       if (synthesizedResult) {
         result = synthesizedResult;
-        normalizeCodingStatus(result);
         log.info("Synthesized coding result from structured terminal agent output", {
           taskId: task.id,
           status: result.status,
@@ -2343,7 +2370,7 @@ export class OrchestratorService {
             mergeQualityGates,
             errorMessage: "Slot removed during tests",
           });
-          coordinator.setTestOutcome({
+          void coordinator.setTestOutcome({
             status: "error",
             errorMessage: "Slot removed during tests",
           });
@@ -2361,7 +2388,7 @@ export class OrchestratorService {
             results: scopedResult,
             rawOutput: scopedResult.rawOutput,
           });
-          coordinator.setTestOutcome({
+          void coordinator.setTestOutcome({
             status: "failed",
             results: scopedResult,
             rawOutput: scopedResult.rawOutput,
@@ -2390,7 +2417,7 @@ export class OrchestratorService {
                   : "merge_quality_gate",
               qualityGateDetail: detail,
             });
-            coordinator.setTestOutcome({
+            void coordinator.setTestOutcome({
               status: "failed",
               failureType:
                 qualityGateFailure.category === "environment_setup"
@@ -2408,7 +2435,7 @@ export class OrchestratorService {
             mergeQualityGates,
             results: scopedResult,
           });
-          coordinator.setTestOutcome({ status: "passed", results: scopedResult });
+          void coordinator.setTestOutcome({ status: "passed", results: scopedResult });
         }
       })
       .catch((err) => {
@@ -2419,7 +2446,7 @@ export class OrchestratorService {
           mergeQualityGates,
           errorMessage: String(err),
         });
-        coordinator.setTestOutcome({ status: "error", errorMessage: String(err) });
+        void coordinator.setTestOutcome({ status: "error", errorMessage: String(err) });
       });
   }
 
@@ -2583,33 +2610,155 @@ export class OrchestratorService {
     projectId: string,
     repoPath: string,
     task: StoredTask,
-    branchName: string
+    branchName: string,
+    retryContext?: RetryContext,
+    reviewTarget?: ReviewRetryTarget
   ): Promise<void> {
-    return this.phaseExecutor.executeReviewPhase(projectId, repoPath, task, branchName);
+    return this.phaseExecutor.executeReviewPhase(
+      projectId,
+      repoPath,
+      task,
+      branchName,
+      retryContext,
+      reviewTarget
+    );
+  }
+
+  private getAssignmentPath(wtPath: string, taskId: string, angle?: ReviewAngle): string {
+    return angle
+      ? path.join(
+          wtPath,
+          OPENSPRINT_PATHS.active,
+          taskId,
+          "review-angles",
+          angle,
+          OPENSPRINT_PATHS.assignment
+        )
+      : path.join(wtPath, OPENSPRINT_PATHS.active, taskId, OPENSPRINT_PATHS.assignment);
+  }
+
+  private async readAssignmentForRun(
+    wtPath: string,
+    taskId: string,
+    angle?: ReviewAngle
+  ): Promise<TaskAssignmentLike | null> {
+    try {
+      const raw = await fs.readFile(this.getAssignmentPath(wtPath, taskId, angle), "utf-8");
+      return JSON.parse(raw) as TaskAssignmentLike;
+    } catch {
+      return null;
+    }
+  }
+
+  private async readCodingResultWithRaw(
+    wtPath: string,
+    taskId: string
+  ): Promise<{ raw: string | null; result: CodingAgentResult | null }> {
+    const raw = await this.sessionManager.readRawResult(wtPath, taskId);
+    return {
+      raw,
+      result: parseCodingAgentResult(raw),
+    };
   }
 
   private async readReviewResult(
     wtPath: string,
     taskId: string,
-    angle?: string
+    angle?: ReviewAngle
   ): Promise<ReviewAgentResult | null> {
-    if (!angle) {
-      return (await this.sessionManager.readResult(wtPath, taskId)) as ReviewAgentResult | null;
+    const { result } = await this.readReviewResultWithRaw(wtPath, taskId, angle);
+    return result;
+  }
+
+  private async readReviewResultWithRaw(
+    wtPath: string,
+    taskId: string,
+    angle?: ReviewAngle
+  ): Promise<{ raw: string | null; result: ReviewAgentResult | null }> {
+    const raw = await this.sessionManager.readRawResult(wtPath, taskId, angle);
+    return {
+      raw,
+      result: parseReviewAgentResult(raw),
+    };
+  }
+
+  private async retryCodingStructuredOutputRepair(
+    projectId: string,
+    repoPath: string,
+    task: StoredTask,
+    slot: AgentSlot,
+    rawResult: string | null
+  ): Promise<boolean> {
+    const wtPath = slot.worktreePath ?? repoPath;
+    const assignment = await this.readAssignmentForRun(wtPath, task.id);
+    if (assignment?.retryContext?.structuredOutputRepairAttempted) {
+      return false;
     }
-    const angleResultPath = path.join(
-      wtPath,
-      OPENSPRINT_PATHS.active,
-      taskId,
-      "review-angles",
-      angle,
-      "result.json"
+
+    const retryContext: RetryContext = {
+      ...(assignment?.retryContext ?? slot.retryContext ?? {}),
+      previousFailure: describeStructuredOutputProblem({
+        fileLabel: `.opensprint/active/${task.id}/result.json`,
+        rawContent: rawResult,
+        expectedShape: CODING_RESULT_EXPECTED_SHAPE,
+      }),
+      useExistingBranch: true,
+      structuredOutputRepairAttempted: true,
+    };
+
+    log.warn("Retrying coder once to repair structured output", {
+      projectId,
+      taskId: task.id,
+      branchName: slot.branchName,
+    });
+
+    await this.executeCodingPhase(projectId, repoPath, task, slot, retryContext);
+    return true;
+  }
+
+  private async retryReviewStructuredOutputRepair(
+    projectId: string,
+    repoPath: string,
+    task: StoredTask,
+    slot: AgentSlot,
+    rawResult: string | null,
+    angle?: ReviewAngle
+  ): Promise<boolean> {
+    const wtPath = slot.worktreePath ?? repoPath;
+    const assignment = await this.readAssignmentForRun(wtPath, task.id, angle);
+    if (assignment?.retryContext?.structuredOutputRepairAttempted) {
+      return false;
+    }
+
+    const retryContext: RetryContext = {
+      ...(assignment?.retryContext ?? {}),
+      previousFailure: describeStructuredOutputProblem({
+        fileLabel: angle
+          ? `.opensprint/active/${task.id}/review-angles/${angle}/result.json`
+          : `.opensprint/active/${task.id}/result.json`,
+        rawContent: rawResult,
+        expectedShape: REVIEW_RESULT_EXPECTED_SHAPE,
+      }),
+      useExistingBranch: true,
+      structuredOutputRepairAttempted: true,
+    };
+
+    log.warn("Retrying reviewer once to repair structured output", {
+      projectId,
+      taskId: task.id,
+      branchName: slot.branchName,
+      angle: angle ?? "general",
+    });
+
+    await this.executeReviewPhase(
+      projectId,
+      repoPath,
+      task,
+      slot.branchName,
+      retryContext,
+      angle ?? "general"
     );
-    try {
-      const raw = await fs.readFile(angleResultPath, "utf-8");
-      return JSON.parse(raw) as ReviewAgentResult;
-    } catch {
-      return null;
-    }
+    return true;
   }
 
   private async handleReviewDone(
@@ -2639,10 +2788,20 @@ export class OrchestratorService {
       return;
     }
     const wtPath = slot.worktreePath ?? repoPath;
-    const result = await this.readReviewResult(wtPath, task.id, angle);
+    const { raw: rawResult, result } = await this.readReviewResultWithRaw(wtPath, task.id, angle);
 
-    if (result && result.status) {
-      normalizeReviewStatus(result);
+    if (!result) {
+      const retried = await this.retryReviewStructuredOutputRepair(
+        projectId,
+        repoPath,
+        task,
+        slot,
+        rawResult,
+        angle
+      );
+      if (retried) {
+        return;
+      }
     }
 
     const reviewAgentState = angle ? slot.reviewAgents?.get(angle) : undefined;
@@ -2689,7 +2848,7 @@ export class OrchestratorService {
             log.warn("Failed to record reviewer run for Agent Log (coordinated approved)", { err })
           );
       }
-      slot.phaseCoordinator.setReviewOutcome(
+      await slot.phaseCoordinator.setReviewOutcome(
         {
           status,
           result,
@@ -3031,7 +3190,7 @@ export class OrchestratorService {
     const summarizerId = `summarizer-${projectId}-${taskId}-${Date.now()}`;
 
     try {
-      const summarizerResponse = await agentService.invokePlanningAgent({
+      const summarizerResponse = await invokeStructuredPlanningAgent({
         projectId,
         role: "summarizer",
         config: getAgentForPlanningRole(settings, "summarizer", planComplexity),
@@ -3045,12 +3204,15 @@ export class OrchestratorService {
           role: "summarizer",
           label: "Context condensation",
         },
+        contract: {
+          parse: (content) =>
+            extractJsonFromAgentResponse<{ status: string; summary?: string }>(content, "status"),
+          repairPrompt:
+            'Return valid JSON only in this shape: {"status":"success","summary":"..."} or {"status":"failed"}',
+        },
       });
 
-      const parsed = extractJsonFromAgentResponse<{ status: string; summary?: string }>(
-        summarizerResponse.content,
-        "status"
-      );
+      const parsed = summarizerResponse.parsed;
       if (parsed && parsed.status === "success" && parsed.summary?.trim()) {
         log.info("Summarizer condensed context for task", { taskId });
         return {
@@ -3075,7 +3237,8 @@ export class OrchestratorService {
     wtPath: string,
     taskId: string,
     baseBranch?: string,
-    reviewAngles?: ReviewAngle[]
+    reviewAngles?: ReviewAngle[],
+    clearGeneralResult: boolean = true
   ): Promise<void> {
     if (wtPath !== repoPath) {
       assertSafeTaskWorktreePath(repoPath, taskId, wtPath);
@@ -3106,7 +3269,9 @@ export class OrchestratorService {
 
     await this.branchManager.checkDependencyIntegrity(repoPath, wtPath);
 
-    await this.sessionManager.clearResult(wtPath, taskId);
+    if (clearGeneralResult) {
+      await this.sessionManager.clearResult(wtPath, taskId);
+    }
     if (reviewAngles && reviewAngles.length > 0) {
       for (const angle of reviewAngles) {
         await this.sessionManager.clearResult(wtPath, taskId, angle);

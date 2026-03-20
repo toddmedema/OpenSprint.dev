@@ -411,6 +411,23 @@ export class ContextAssembler {
     ].join("\n\n");
   }
 
+  private buildStructuredOutputRepairSection(params: {
+    enabled?: boolean;
+    resultPath: string;
+    previousFailure?: string | null;
+  }): string {
+    if (!params.enabled) return "";
+    let section =
+      "## Structured Output Repair\n\n" +
+      `The previous attempt did not produce a valid structured result at \`${params.resultPath}\`.\n\n` +
+      "Reuse the current branch/worktree state. Do not start over. First inspect the existing result file if it exists, then correct it so it matches the required JSON contract exactly.\n\n" +
+      "Only make code changes if they are still needed to justify the corrected result. Before you exit, ensure the structured result file is valid JSON with the exact required status values.\n\n";
+    if (params.previousFailure?.trim()) {
+      section += `Previous problem:\n${params.previousFailure.trim()}\n\n`;
+    }
+    return section;
+  }
+
   /**
    * Collect diffs/summaries from completed dependency tasks for context assembly (PRD §7.3.2).
    * Only uses approved sessions (tasks that reached Done); skips gating tasks and failed attempts.
@@ -578,6 +595,12 @@ export class ContextAssembler {
         prompt += `Focus fixes on the specific failing assertions. Avoid broad refactors unless the failure indicates a design flaw. Fix the failing tests without breaking the passing ones.\n\n`;
       }
     }
+
+    prompt += this.buildStructuredOutputRepairSection({
+      enabled: config.structuredOutputRepairAttempted,
+      resultPath: resultJsonPath,
+      previousFailure: config.previousFailure,
+    });
 
     if (config.reviewFeedback) {
       prompt += `## Review Feedback\n\n`;
@@ -777,6 +800,12 @@ export class ContextAssembler {
     prompt += `   \`\`\`\n`;
     prompt += `   The \`status\` field MUST be exactly \`"approved"\` or \`"rejected"\`. The \`summary\` field is required. \`issues\` and \`notes\` are optional.\n\n`;
 
+    prompt += this.buildStructuredOutputRepairSection({
+      enabled: config.structuredOutputRepairAttempted,
+      resultPath: `.opensprint/active/${config.taskId}/result.json`,
+      previousFailure: config.previousFailure,
+    });
+
     prompt += `## Important\n\n`;
     prompt += `- In rejection feedback, cite file:line or snippet. Vague feedback like "improve tests" is not actionable.\n`;
     prompt += `- Do NOT approve out of lenience. If acceptance criteria are unmet or tests fail, reject.\n`;
@@ -883,6 +912,12 @@ export class ContextAssembler {
     prompt += `   { "status": "rejected", "summary": "One-line reason for rejection", "issues": ["Specific issue 1", "Specific issue 2"], "notes": "Additional context" }\n`;
     prompt += `   \`\`\`\n`;
     prompt += `   The \`status\` field MUST be exactly \`"approved"\` or \`"rejected"\`. The \`summary\` field is required.\n\n`;
+
+    prompt += this.buildStructuredOutputRepairSection({
+      enabled: config.structuredOutputRepairAttempted,
+      resultPath: `.opensprint/active/${config.taskId}/review-angles/${angle}/result.json`,
+      previousFailure: config.previousFailure,
+    });
 
     prompt += `## Important\n\n`;
     prompt += `- In rejection feedback, cite file:line or snippet. Vague feedback is not actionable.\n`;

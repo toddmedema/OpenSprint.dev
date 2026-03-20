@@ -25,13 +25,17 @@ import {
   getPlanMarkdownSections,
   getPlanTemplateStructure,
 } from "./plan/plan-prompts.js";
-import { buildPrdContextString, parseDecomposeResponse } from "./plan/plan-decompose-generate.js";
+import {
+  buildPrdContextString,
+  explainDecomposeResponseFailure,
+  parseDecomposeResponse,
+  parseDecomposeResponseOrNull,
+} from "./plan/plan-decompose-generate.js";
 import { runAutoReviewPlanAgainstRepo } from "./plan/plan-auto-review.js";
 import { runPlannerWithRepoGuard } from "./plan/plan-repo-guard.js";
 import { generateAndCreateTasks as generateAndCreateTasksImpl } from "./plan/plan-task-generation.js";
 import { ProjectService } from "./project.service.js";
 import type { StoredTask } from "./task-store.service.js";
-import { agentService } from "./agent.service.js";
 import { PrdService } from "./prd.service.js";
 import { buildAutonomyDescription } from "./autonomy-description.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
@@ -41,8 +45,16 @@ import { broadcastToProject } from "../websocket/index.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { createLogger } from "../utils/logger.js";
+import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 
 const log = createLogger("plan-decompose-generate");
+const DECOMPOSE_REPAIR_PROMPT =
+  'Return valid JSON only with a top-level "plans" array (or "plan_list"). Do not include prose outside the JSON.';
+const GENERATE_PLAN_REPAIR_PROMPT = `Return valid JSON only. Either:
+{"open_questions":[{"id":"q1","text":"Clarification question"}]}
+or
+{"title":"Feature Name","content":"# Feature Name\\n\\n...","complexity":"medium","mockups":[{"title":"Main Screen","content":"ASCII wireframe"}]}
+Do not include prose outside the JSON.`;
 
 export interface PlanDecomposeGenerateDeps {
   taskStore: {
@@ -257,7 +269,7 @@ export class PlanDecomposeGenerateService {
       repoPath,
       label: "Feature decomposition (suggest)",
       run: () =>
-        agentService.invokePlanningAgent({
+        invokeStructuredPlanningAgent({
           projectId,
           role: "planner",
           config: getAgentForPlanningRole(settings, "planner"),
@@ -271,10 +283,15 @@ export class PlanDecomposeGenerateService {
             role: "planner",
             label: "Feature decomposition (suggest)",
           },
+          contract: {
+            parse: parseDecomposeResponseOrNull,
+            repairPrompt: DECOMPOSE_REPAIR_PROMPT,
+            invalidReason: explainDecomposeResponseFailure,
+          },
         }),
     });
 
-    const planSpecs = parseDecomposeResponse(response.content);
+    const planSpecs = response.parsed ?? parseDecomposeResponse(response.rawContent);
     return { plans: planSpecs };
   }
 
@@ -299,7 +316,7 @@ export class PlanDecomposeGenerateService {
       repoPath,
       label: "Feature decomposition",
       run: () =>
-        agentService.invokePlanningAgent({
+        invokeStructuredPlanningAgent({
           projectId,
           role: "planner",
           config: getAgentForPlanningRole(settings, "planner"),
@@ -313,10 +330,15 @@ export class PlanDecomposeGenerateService {
             role: "planner",
             label: "Feature decomposition",
           },
+          contract: {
+            parse: parseDecomposeResponseOrNull,
+            repairPrompt: DECOMPOSE_REPAIR_PROMPT,
+            invalidReason: explainDecomposeResponseFailure,
+          },
         }),
     });
 
-    const planSpecs = parseDecomposeResponse(response.content);
+    const planSpecs = response.parsed ?? parseDecomposeResponse(response.rawContent);
 
     const created: Plan[] = [];
     for (const spec of planSpecs) {
@@ -395,7 +417,7 @@ Field rules: complexity: low, medium, high, or very_high (plan-level).
       repoPath,
       label: "Generate plan from description",
       run: () =>
-        agentService.invokePlanningAgent({
+        invokeStructuredPlanningAgent({
           projectId,
           role: "planner",
           config: getAgentForPlanningRole(settings, "planner"),
@@ -409,21 +431,29 @@ Field rules: complexity: low, medium, high, or very_high (plan-level).
             role: "planner",
             label: "Generate plan from description",
           },
+          contract: {
+            parse: (content) =>
+              extractJsonFromAgentResponse<Record<string, unknown>>(content, "open_questions") ??
+              extractJsonFromAgentResponse<Record<string, unknown>>(content, "openQuestions") ??
+              extractJsonFromAgentResponse<Record<string, unknown>>(content, "plan_title") ??
+              extractJsonFromAgentResponse<Record<string, unknown>>(content, "title"),
+            repairPrompt: GENERATE_PLAN_REPAIR_PROMPT,
+            invalidReason: (content) =>
+              content.trim()
+                ? `Planning agent did not return a valid plan. Response: ${content.slice(0, 500)}`
+                : "Planning agent returned no parseable content.",
+          },
         }),
     });
 
-    const parsed: Record<string, unknown> | null =
-      extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "open_questions") ??
-      extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "openQuestions") ??
-      extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "plan_title") ??
-      extractJsonFromAgentResponse<Record<string, unknown>>(response.content, "title");
+    const parsed = response.parsed;
 
     if (!parsed) {
       throw new AppError(
         400,
         ErrorCodes.DECOMPOSE_PARSE_FAILED,
-        "Planning agent did not return a valid plan. Response: " + response.content.slice(0, 500),
-        { responsePreview: response.content.slice(0, 500) }
+        "Planning agent did not return a valid plan. Response: " + response.rawContent.slice(0, 500),
+        { responsePreview: response.rawContent.slice(0, 500) }
       );
     }
 
@@ -475,8 +505,9 @@ Field rules: complexity: low, medium, high, or very_high (plan-level).
       throw new AppError(
         400,
         ErrorCodes.DECOMPOSE_PARSE_FAILED,
-        "Planning agent did not return a valid plan. Response: " + response.content.slice(0, 500),
-        { responsePreview: response.content.slice(0, 500) }
+        "Planning agent did not return a valid plan. Response: " +
+          response.rawContent.slice(0, 500),
+        { responsePreview: response.rawContent.slice(0, 500) }
       );
     }
 

@@ -7,12 +7,12 @@ import { getAgentForPlanningRole } from "@opensprint/shared";
 import { normalizePlannerTask, findPlannerTaskArray } from "./planner-normalize.js";
 import { TASK_GENERATION_SYSTEM_PROMPT, TASK_GENERATION_RETRY_PROMPT } from "./plan-prompts.js";
 import { runPlannerWithRepoGuard } from "./plan-repo-guard.js";
-import { agentService } from "../agent.service.js";
 import { buildAutonomyDescription } from "../autonomy-description.js";
 import { getCombinedInstructions } from "../agent-instructions.service.js";
 import { broadcastToProject } from "../../websocket/index.js";
 import { extractJsonFromAgentResponse } from "../../utils/json-extract.js";
 import { createLogger } from "../../utils/logger.js";
+import { invokeStructuredPlanningAgent } from "../structured-agent-output.service.js";
 
 const log = createLogger("plan-task-generation");
 
@@ -124,7 +124,7 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
     repoPath,
     label: "Task generation",
     run: () =>
-      agentService.invokePlanningAgent({
+      invokeStructuredPlanningAgent({
         projectId,
         role: "planner",
         config: plannerConfig,
@@ -139,64 +139,25 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
           label: "Task generation",
           planId: plan.metadata.planId,
         },
+        contract: {
+          parse: (content) => {
+            const parsed = parseTaskGenerationContent(content);
+            return parsed.ok ? parsed.rawTasks : null;
+          },
+          repairPrompt: TASK_GENERATION_RETRY_PROMPT,
+          invalidReason: (content) => {
+            const parsed = parseTaskGenerationContent(content);
+            return parsed.ok ? undefined : parsed.parseFailureReason;
+          },
+        },
       }),
   });
 
-  let parsedOutput = parseTaskGenerationContent(response?.content);
-  const firstParseFailureReason = !parsedOutput.ok ? parsedOutput.parseFailureReason : undefined;
-  if (!parsedOutput.ok) {
-    log.warn("Task generation parse failed on first attempt; retrying once", {
-      planId: plan.metadata.planId,
-      reason: parsedOutput.parseFailureReason,
-    });
-
-    const retryMessages: Array<{ role: "user" | "assistant"; content: string }> = [
-      ...initialMessages,
-    ];
-    if (typeof response?.content === "string" && response.content.trim().length > 0) {
-      retryMessages.push({ role: "assistant", content: response.content });
-    }
-    retryMessages.push({
-      role: "user",
-      content:
-        `${TASK_GENERATION_RETRY_PROMPT}\n\n` +
-        `Previous parse failure: ${parsedOutput.parseFailureReason}`,
-    });
-
-    const retryResponse = await runPlannerWithRepoGuard({
-      repoPath,
-      label: "Task generation retry",
-      run: () =>
-        agentService.invokePlanningAgent({
-          projectId,
-          role: "planner",
-          config: plannerConfig,
-          messages: retryMessages,
-          systemPrompt: taskGenSystemPrompt,
-          cwd: repoPath,
-          tracking: {
-            id: `${agentId}-retry`,
-            projectId,
-            phase: "plan",
-            role: "planner",
-            label: "Task generation",
-            planId: plan.metadata.planId,
-          },
-        }),
-    });
-    parsedOutput = parseTaskGenerationContent(retryResponse?.content);
-  }
-
-  if (!parsedOutput.ok) {
-    const finalParseFailureReason =
-      parsedOutput.parseFailureReason === "Planner returned no text content." &&
-      firstParseFailureReason
-        ? firstParseFailureReason
-        : parsedOutput.parseFailureReason;
+  if (!response.parsed) {
+    const finalParseFailureReason = response.invalidReason;
     log.warn("Task generation agent did not return valid task JSON after retry", {
       planId: plan.metadata.planId,
       reason: finalParseFailureReason,
-      retryReason: parsedOutput.parseFailureReason,
     });
     return {
       count: 0,
@@ -205,7 +166,7 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
     };
   }
 
-  const rawTasks = parsedOutput.rawTasks;
+  const rawTasks = response.parsed;
   const tasks = rawTasks.map((t) => normalizePlannerTask(t, rawTasks));
 
   const sourceVersion = plan.currentVersionNumber ?? 1;

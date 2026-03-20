@@ -97,7 +97,7 @@ describe("AgentsMdSection", () => {
     await screen.findByTestId("agents-md-view");
     const title = screen.getByRole("heading", { level: 3, name: "Agent Instructions" });
     const subtext = screen.getByText(
-      /Shared instructions for all agents\. Edit to customize behavior/
+      /Project-specific overrides for all agents\. Open Sprint defaults are always applied\./
     );
     const editBtn = screen.getByTestId("agents-md-edit");
     const headerBlock = title.closest("div");
@@ -112,7 +112,9 @@ describe("AgentsMdSection", () => {
     renderSection();
 
     await screen.findByTestId("agents-md-view");
-    expect(screen.getByText(/No agent instructions yet. Click Edit to add./)).toBeInTheDocument();
+    expect(
+      screen.getByText(/No project-specific overrides yet. Open Sprint defaults still apply\./)
+    ).toBeInTheDocument();
   });
 
   it("shows loading state initially", () => {
@@ -376,8 +378,21 @@ describe("AgentsMdSection", () => {
       expect(mockGetAgentsInstructionsForRole).toHaveBeenCalledWith(projectId, "coder")
     );
     expect(
-      screen.getByText(
-        /No role-specific instructions. Add instructions that apply only to this agent./
+      screen.getByText(/No role-specific override yet. Open Sprint defaults still apply\./)
+    ).toBeInTheDocument();
+  });
+
+  it("describes role tabs as project-specific overrides layered on defaults", async () => {
+    mockGetAgentsInstructionsForRole.mockResolvedValue({ content: "" });
+    const user = userEvent.setup();
+    renderSection({ testMode: true });
+
+    await screen.findByTestId("agents-md-view");
+    await user.click(screen.getByTestId("agents-tab-coder"));
+
+    expect(
+      await screen.findByText(
+        /Project-specific overrides for Coder\. Combined with Open Sprint defaults and General/
       )
     ).toBeInTheDocument();
   });

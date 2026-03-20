@@ -122,9 +122,8 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
   );
 
   const tabLabel = AGENT_TABS.find((t) => t.key === activeTab)?.label ?? "General";
-  const rolePlaceholder =
-    "No role-specific instructions. Add instructions that apply only to this agent.";
-  const generalEmptyText = "No agent instructions yet. Click Edit to add.";
+  const rolePlaceholder = "No role-specific override yet. Open Sprint defaults still apply.";
+  const generalEmptyText = "No project-specific overrides yet. Open Sprint defaults still apply.";
 
   const handleTabKeyDown = useCallback(
     (e: React.KeyboardEvent, tabIndex: number) => {
@@ -220,8 +219,8 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
             </h3>
             <p className="text-xs leading-tight text-theme-muted mt-0.5">
               {activeTab === "general"
-                ? "Shared instructions for all agents. Edit to customize behavior for this project."
-                : `Role-specific instructions for ${tabLabel}. Combined with General when this agent runs.`}
+                ? "Project-specific overrides for all agents. Open Sprint defaults are always applied."
+                : `Project-specific overrides for ${tabLabel}. Combined with Open Sprint defaults and General when this agent runs.`}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -254,8 +253,8 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
                   onBlur={() => void handleSave()}
                   placeholder={
                     activeTab === "general"
-                      ? "# Agent Instructions\n\nAdd instructions for your agents..."
-                      : rolePlaceholder
+                      ? "# Agent Instructions\n\nAdd project-specific overrides for your agents..."
+                      : "Add project-specific overrides that apply only to this agent."
                   }
                   data-testid="agents-md-textarea"
                 />
@@ -270,8 +269,8 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
                     textareaProps={{
                       placeholder:
                         activeTab === "general"
-                          ? "# Agent Instructions\n\nAdd instructions for your agents..."
-                          : rolePlaceholder,
+                          ? "# Agent Instructions\n\nAdd project-specific overrides for your agents..."
+                          : "Add project-specific overrides that apply only to this agent.",
                       onBlur: () => void handleSave(),
                     }}
                     extraCommands={[

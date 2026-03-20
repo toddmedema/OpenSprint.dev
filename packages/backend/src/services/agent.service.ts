@@ -32,6 +32,11 @@ import { taskStore } from "./task-store.service.js";
 import { createLogger } from "../utils/logger.js";
 import { LOG_DIFF_TRUNCATE_AT_CHARS, truncateToThreshold } from "../utils/log-diff-truncation.js";
 import { filterAgentOutput } from "../utils/agent-output-filter.js";
+import {
+  describeStructuredOutputProblem,
+  parseMergerAgentResult,
+} from "./agent-result-validation.js";
+import { getMergeResultPath } from "./session-manager.js";
 
 const log = createLogger("agent-service");
 
@@ -222,6 +227,9 @@ type MergerSessionRecordParams = {
   outputLog: string;
   outcome: "success" | "failed";
 };
+
+const MERGER_RESULT_EXPECTED_SHAPE =
+  'a JSON object like {"status":"success","summary":"..."} or {"status":"failed","summary":"..."}';
 
 /** Create a handle for a detached agent process group after backend restart. */
 export function createProcessGroupHandle(processGroupLeaderPid: number): CodingAgentHandle {
@@ -565,7 +573,10 @@ export class AgentService {
     }
   }
 
-  private async buildMergerPrompt(options: RunMergerAgentOptions): Promise<string> {
+  private async buildMergerPrompt(
+    options: RunMergerAgentOptions,
+    repairContext?: string
+  ): Promise<string> {
     const baseBranch = options.baseBranch ?? "main";
     const [agentInstructions, statusShort, diffFilterU, mainLog, branchDiffStat] =
       await Promise.all([
@@ -586,6 +597,13 @@ export class AgentService {
       options.mergeQualityGates && options.mergeQualityGates.length > 0
         ? options.mergeQualityGates.map((cmd) => `- ${cmd}`).join("\n")
         : "- (not provided)";
+    const resultPath = ".opensprint/merge-result.json";
+    const repairSection = repairContext?.trim()
+      ? `## Structured Output Repair\n\n` +
+        `Your previous attempt did not produce a valid \`${resultPath}\` file.\n\n` +
+        `${repairContext.trim()}\n\n` +
+        `Reuse the current conflict-resolution state. Do not start over unless the git state itself is still wrong. Fix the structured output file before you exit.\n\n`
+      : "";
 
     const basePrompt = `# Merger Agent: Resolve Git Conflicts
 
@@ -617,12 +635,21 @@ ${mainLog || "(no output)"}
 ### Branch diff stat vs ${baseBranch}
 ${branchDiffStat || "(no output)"}
 
-## Your Task
+${repairSection}## Your Task
 
 1. Resolve every unmerged file and stage the resolved files.
 2. Prefer preserving both sides when they are compatible.
 3. Keep the branch compatible with the required quality gates above.
 4. Verify there are no remaining conflict markers or unmerged paths.
+5. Write your result to \`${resultPath}\` using this exact JSON format:
+   \`\`\`json
+   { "status": "success", "summary": "Brief description of how you resolved the conflicts" }
+   \`\`\`
+   If you cannot resolve the conflicts, write:
+   \`\`\`json
+   { "status": "failed", "summary": "Why the conflicts could not be resolved" }
+   \`\`\`
+   The \`status\` field MUST be exactly \`"success"\` or \`"failed"\`.
 
 ## Rules
 
@@ -661,6 +688,32 @@ ${branchDiffStat || "(no output)"}
     }
   }
 
+  private async readMergerResultWithRaw(
+    cwd: string
+  ): Promise<{ raw: string | null; parsed: ReturnType<typeof parseMergerAgentResult> }> {
+    const resultPath = getMergeResultPath(cwd);
+    try {
+      const raw = await fs.readFile(resultPath, "utf-8");
+      return {
+        raw,
+        parsed: parseMergerAgentResult(raw),
+      };
+    } catch {
+      return {
+        raw: null,
+        parsed: null,
+      };
+    }
+  }
+
+  private async clearMergerResult(cwd: string): Promise<void> {
+    try {
+      await fs.unlink(getMergeResultPath(cwd));
+    } catch {
+      // File may not exist
+    }
+  }
+
   /**
    * Run the merger agent and wait for it to complete.
    * Returns true if the agent exited with code 0 (success), false otherwise.
@@ -671,29 +724,66 @@ ${branchDiffStat || "(no output)"}
     const runId = `merger-${options.projectId}-${options.taskId || "push"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const startedAt = new Date().toISOString();
     const outputChunks: string[] = [];
-    const promptPath = path.join(
-      os.tmpdir(),
-      `opensprint-merger-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.md`
-    );
-    await fs.writeFile(promptPath, await this.buildMergerPrompt(options));
     try {
-      const exitedCleanly = await new Promise<boolean>((resolve) => {
-        this.invokeMergerAgent(promptPath, options.config, {
-          cwd: options.cwd,
-          onOutput: (chunk) => outputChunks.push(chunk),
-          onExit: (code) => resolve(code === 0),
-          projectId: options.projectId,
-          tracking: {
-            id: runId,
-            projectId: options.projectId,
-            phase: "execute",
-            role: "merger",
-            label: "Merger conflict resolution",
-            branchName: options.branchName,
-          },
+      const runAttempt = async (params?: {
+        repairContext?: string;
+        trackingIdSuffix?: string;
+        trackingLabelSuffix?: string;
+      }): Promise<{ exitedCleanly: boolean; raw: string | null; parsed: ReturnType<typeof parseMergerAgentResult>; verified: boolean }> => {
+        await this.clearMergerResult(options.cwd);
+        const promptPath = path.join(
+          os.tmpdir(),
+          `opensprint-merger-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.md`
+        );
+        await fs.writeFile(promptPath, await this.buildMergerPrompt(options, params?.repairContext));
+        try {
+          const exitedCleanly = await new Promise<boolean>((resolve) => {
+            this.invokeMergerAgent(promptPath, options.config, {
+              cwd: options.cwd,
+              onOutput: (chunk) => outputChunks.push(chunk),
+              onExit: (code) => resolve(code === 0),
+              projectId: options.projectId,
+              tracking: {
+                id: `${runId}${params?.trackingIdSuffix ?? ""}`,
+                projectId: options.projectId,
+                phase: "execute",
+                role: "merger",
+                label: `Merger conflict resolution${params?.trackingLabelSuffix ?? ""}`,
+                branchName: options.branchName,
+              },
+            });
+          });
+          const { raw, parsed } = await this.readMergerResultWithRaw(options.cwd);
+          const verified =
+            exitedCleanly && parsed?.status === "success"
+              ? await this.verifyMergerResult(options.cwd)
+              : false;
+          return { exitedCleanly, raw, parsed, verified };
+        } finally {
+          await fs.unlink(promptPath).catch(() => {});
+        }
+      };
+
+      let attemptResult = await runAttempt();
+      if (!attemptResult.parsed) {
+        const repairContext = describeStructuredOutputProblem({
+          fileLabel: ".opensprint/merge-result.json",
+          rawContent: attemptResult.raw,
+          expectedShape: MERGER_RESULT_EXPECTED_SHAPE,
         });
-      });
-      const verified = exitedCleanly ? await this.verifyMergerResult(options.cwd) : false;
+        log.warn("Retrying merger once to repair structured output", {
+          projectId: options.projectId,
+          taskId: options.taskId,
+          branchName: options.branchName,
+        });
+        attemptResult = await runAttempt({
+          repairContext,
+          trackingIdSuffix: "-repair",
+          trackingLabelSuffix: " (repair structured output)",
+        });
+      }
+
+      const verified = attemptResult.verified;
       const completedAt = new Date().toISOString();
       await this.recordMergerSession({
         runId,
@@ -709,7 +799,7 @@ ${branchDiffStat || "(no output)"}
       });
       return verified;
     } finally {
-      await fs.unlink(promptPath).catch(() => {});
+      await this.clearMergerResult(options.cwd).catch(() => {});
     }
   }
 
