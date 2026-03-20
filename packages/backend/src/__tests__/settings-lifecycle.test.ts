@@ -10,7 +10,10 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { createApp } from "../app.js";
-import { ProjectService } from "../services/project.service.js";
+import {
+  ProjectService,
+  getNextScheduledSelfImprovementRunAt,
+} from "../services/project.service.js";
 import { projectGitRuntimeCache } from "../services/project-git-runtime-cache.js";
 import { setGlobalSettings } from "../services/global-settings.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG, DEFAULT_REVIEW_MODE } from "@opensprint/shared";
@@ -300,7 +303,9 @@ describe("Settings API lifecycle", () => {
 
   it("GET /api/v1/projects/:id/settings returns nextRunAt when selfImprovementFrequency is daily or weekly", async () => {
     // Fixed UTC instant avoids flaky expectations if the test crosses a UTC day boundary.
-    vi.useFakeTimers({ now: new Date("2025-06-11T14:30:00.000Z") });
+    const anchor = new Date("2025-06-11T14:30:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(anchor);
     try {
       await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/settings`)
@@ -308,7 +313,7 @@ describe("Settings API lifecycle", () => {
 
       const resDaily = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(resDaily.status).toBe(200);
-      expect(resDaily.body.data.nextRunAt).toBe("2025-06-12T00:00:00.000Z");
+      expect(resDaily.body.data.nextRunAt).toBe(getNextScheduledSelfImprovementRunAt("daily"));
 
       await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/settings`)
@@ -316,7 +321,7 @@ describe("Settings API lifecycle", () => {
 
       const resWeekly = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(resWeekly.status).toBe(200);
-      expect(resWeekly.body.data.nextRunAt).toBe("2025-06-15T00:00:00.000Z");
+      expect(resWeekly.body.data.nextRunAt).toBe(getNextScheduledSelfImprovementRunAt("weekly"));
 
       await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/settings`)

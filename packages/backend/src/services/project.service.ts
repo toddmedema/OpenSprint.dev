@@ -73,8 +73,11 @@ const VALIDATION_TIMEOUT_MULTIPLIER = 1.8;
 const VALIDATION_TIMING_SAMPLE_LIMIT = 30;
 
 /** Next midnight UTC (daily) or next Sunday 00:00 UTC (weekly). Used for nextRunAt in settings response. */
-function getNextScheduledSelfImprovementRunAt(frequency: "daily" | "weekly"): string {
-  const n = new Date();
+export function getNextScheduledSelfImprovementRunAt(
+  frequency: "daily" | "weekly",
+  now: Date = new Date()
+): string {
+  const n = now;
   const y = n.getUTCFullYear();
   const m = n.getUTCMonth();
   const d = n.getUTCDate();

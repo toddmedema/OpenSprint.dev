@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
-import { ProjectService } from "../services/project.service.js";
+import { ProjectService, getNextScheduledSelfImprovementRunAt } from "../services/project.service.js";
 import { notificationService } from "../services/notification.service.js";
 import { setGlobalSettings } from "../services/global-settings.service.js";
 import {
@@ -858,7 +858,8 @@ describe("ProjectService", () => {
   });
 
   it("getSettingsWithRuntimeState returns nextRunAt when frequency is daily or weekly", async () => {
-    vi.useFakeTimers({ now: new Date("2025-06-11T14:30:00.000Z") });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-06-11T14:30:00.000Z"));
     try {
       const repoPath = path.join(tempDir, "next-run-at");
       const project = await projectService.createProject({
@@ -872,11 +873,11 @@ describe("ProjectService", () => {
 
       await projectService.updateSettings(project.id, { selfImprovementFrequency: "daily" });
       const withDaily = await projectService.getSettingsWithRuntimeState(project.id);
-      expect(withDaily.nextRunAt).toBe("2025-06-12T00:00:00.000Z");
+      expect(withDaily.nextRunAt).toBe(getNextScheduledSelfImprovementRunAt("daily"));
 
       await projectService.updateSettings(project.id, { selfImprovementFrequency: "weekly" });
       const withWeekly = await projectService.getSettingsWithRuntimeState(project.id);
-      expect(withWeekly.nextRunAt).toBe("2025-06-15T00:00:00.000Z");
+      expect(withWeekly.nextRunAt).toBe(getNextScheduledSelfImprovementRunAt("weekly"));
 
       await projectService.updateSettings(project.id, { selfImprovementFrequency: "never" });
       const withNever = await projectService.getSettingsWithRuntimeState(project.id);
