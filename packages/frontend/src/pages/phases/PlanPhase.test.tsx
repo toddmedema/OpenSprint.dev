@@ -8,6 +8,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
 import { PlanPhase, getPlanChatMessageDisplay } from "./PlanPhase";
+import { PHASE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 import { api } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
 import projectReducer from "../../store/slices/projectSlice";
@@ -327,6 +328,20 @@ describe("PlanPhase Redux integration", () => {
     // Plan cards do not show task list container or task list UI
     expect(screen.queryByTestId("plan-list-view")).toBeInTheDocument();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  });
+
+  it("main scroll column uses the same inset tokens as Execute phase", () => {
+    const store = createStore();
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <PlanPhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>,
+      { wrapper: PlanPhaseWrapper }
+    );
+    const mainScroll = screen.getByTestId("plan-main-scroll");
+    expect(mainScroll.className).toBe(PHASE_MAIN_SCROLL_CLASSNAME);
   });
 
   it("renders plans from Redux state via useAppSelector", () => {

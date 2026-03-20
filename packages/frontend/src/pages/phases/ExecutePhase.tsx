@@ -45,6 +45,7 @@ import { TimelineList } from "../../components/execute/TimelineList";
 import { clearPhaseUnread } from "../../store/slices/unreadPhaseSlice";
 import { PhaseEmptyState, PhaseEmptyStateLogo } from "../../components/PhaseEmptyState";
 import { getProjectPhasePath } from "../../lib/phaseRouting";
+import { PHASE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 import { EMPTY_STATE_COPY } from "../../lib/emptyStateCopy";
 
 interface ExecutePhaseProps {
@@ -381,7 +382,7 @@ export function ExecutePhase({
 
         <div
           ref={executeScrollRef}
-          className="flex-1 min-h-0 overflow-auto pt-2 sm:pt-3 px-4 sm:px-6 pb-4 sm:pb-6"
+          className={PHASE_MAIN_SCROLL_CLASSNAME}
           data-testid="execute-main-scroll"
         >
           {baselineStatus === "failing" && (

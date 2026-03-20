@@ -65,6 +65,7 @@ import { formatPlanIdAsTitle } from "../../lib/formatting";
 import { matchesPlanSearchQuery } from "../../lib/planSearchFilter";
 import { parseDetailParams, getProjectPhasePath } from "../../lib/phaseRouting";
 import { shouldRightAlignDropdown } from "../../lib/dropdownViewport";
+import { PHASE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 
 /** Display text for plan chat: show "Plan updated" when agent response contains [PLAN_UPDATE] */
 export function getPlanChatMessageDisplay(content: string): string {
@@ -943,7 +944,10 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           handleSearchKeyDown={handleSearchKeyDown}
         />
 
-        <div className="flex-1 min-h-0 overflow-auto p-4 md:p-6">
+        <div
+          className={PHASE_MAIN_SCROLL_CLASSNAME}
+          data-testid="plan-main-scroll"
+        >
           {/* Error banner — inline, dismissible */}
           {planError && (
             <div
@@ -995,9 +999,6 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
           ) : (
             /* Card Mode: plan list */
             <>
-              {/* Preserve list spacing without rendering an in-content header */}
-              <div className="mb-4" aria-hidden />
-
               {!selectedPlanNotification && draftPlanNotification && (
                 <div className="mb-4">
                   <OpenQuestionsBlock

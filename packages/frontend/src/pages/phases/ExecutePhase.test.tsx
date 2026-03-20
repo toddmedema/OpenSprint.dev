@@ -24,6 +24,7 @@ import openQuestionsReducer, {
 import websocketReducer, { setConnected } from "../../store/slices/websocketSlice";
 import unreadPhaseReducer, { setPhaseUnread } from "../../store/slices/unreadPhaseSlice";
 import { MOBILE_BREAKPOINT } from "../../lib/constants";
+import { PHASE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 
 function createExecutePhaseQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -2182,6 +2183,29 @@ describe("ExecutePhase Redux integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.setItem("opensprint.executeView", "kanban");
+  });
+
+  it("main scroll column uses the same inset tokens as Plan phase", () => {
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks);
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+    const mainScroll = screen.getByTestId("execute-main-scroll");
+    expect(mainScroll.className).toBe(PHASE_MAIN_SCROLL_CLASSNAME);
   });
 
   it("renders OpenQuestionsBlock in task detail when coder has open questions", async () => {
