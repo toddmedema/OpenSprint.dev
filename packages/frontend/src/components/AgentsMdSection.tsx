@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
-import remarkGfm from "remark-gfm";
 import { api } from "../api/client";
 import { useTheme } from "../contexts/ThemeContext";
 import { AGENT_ROLE_CANONICAL_ORDER, AGENT_ROLE_LABELS } from "@opensprint/shared";
 import type { AgentRole } from "@opensprint/shared";
 
-const MDEditor = lazy(() => import("@uiw/react-md-editor").then((m) => ({ default: m.default })));
+const AgentsMdEditor = lazy(() =>
+  import("./AgentsMdEditor").then((module) => ({ default: module.AgentsMdEditor }))
+);
 const AgentsMdPreview = lazy(() =>
   import("./AgentsMdPreview").then((module) => ({ default: module.AgentsMdPreview }))
 );
@@ -260,44 +261,16 @@ export function AgentsMdSection({ projectId, testMode = false }: AgentsMdSection
                 />
               ) : (
                 <Suspense fallback={<EditorLoadingFallback />}>
-                  <MDEditor
+                  <AgentsMdEditor
                     value={editValue}
-                    onChange={(v) => setEditValue(v ?? "")}
-                    height={280}
-                    visibleDragbar={false}
-                    preview="edit"
-                    textareaProps={{
-                      placeholder:
-                        activeTab === "general"
-                          ? "# Agent Instructions\n\nAdd project-specific overrides for your agents..."
-                          : "Add project-specific overrides that apply only to this agent.",
-                      onBlur: () => void handleSave(),
-                    }}
-                    extraCommands={[
-                      {
-                        name: "save",
-                        keyCommand: "save",
-                        buttonProps: { "aria-label": "Save markdown" },
-                        icon: (
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path d="M4 6h16M4 12h10M4 18h16" />
-                          </svg>
-                        ),
-                        execute: () => {
-                          handleSave();
-                        },
-                      },
-                    ]}
-                    previewOptions={{
-                      remarkPlugins: [remarkGfm],
-                    }}
+                    onChange={setEditValue}
+                    onBlur={() => void handleSave()}
+                    placeholder={
+                      activeTab === "general"
+                        ? "# Agent Instructions\n\nAdd project-specific overrides for your agents..."
+                        : "Add project-specific overrides that apply only to this agent."
+                    }
+                    onSave={() => void handleSave()}
                   />
                 </Suspense>
               )}

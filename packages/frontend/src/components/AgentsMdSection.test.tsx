@@ -9,32 +9,6 @@ const mockUpdateAgentsInstructions = vi.fn();
 const mockGetAgentsInstructionsForRole = vi.fn();
 const mockUpdateAgentsInstructionsForRole = vi.fn();
 
-vi.mock("@uiw/react-md-editor", () => ({
-  default: function MockMDEditor({
-    value,
-    onChange,
-  }: {
-    value: string;
-    onChange: (v: string | undefined) => void;
-  }) {
-    return (
-      <div data-testid="mock-md-editor">
-        <button type="button" aria-label="Bold" onClick={() => onChange(value)}>
-          Bold
-        </button>
-        <button type="button" aria-label="Italic" onClick={() => onChange(value)}>
-          Italic
-        </button>
-        <textarea
-          data-testid="mock-md-editor-textarea"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      </div>
-    );
-  },
-}));
-
 vi.mock("../api/client", () => ({
   api: {
     projects: {
@@ -412,7 +386,7 @@ describe("AgentsMdSection", () => {
     );
   });
 
-  it("shows MDEditor with toolbar when not in test mode (lazy-loaded)", async () => {
+  it("shows markdown editor toolbar when not in test mode (lazy-loaded)", async () => {
     const user = userEvent.setup();
     renderSection();
 
