@@ -253,7 +253,7 @@ export function Navbar({
               ref={projectTriggerRef}
               type="button"
               onClick={() => setDropdownOpen((o) => !o)}
-              className="dropdown-trigger inline-flex items-center gap-1 min-h-[44px] min-w-[44px] text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 px-2 hover:bg-theme-border-subtle max-w-[120px] md:max-w-none"
+              className="dropdown-trigger inline-flex items-center gap-1 min-h-[44px] min-w-[44px] text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 px-2 hover:bg-theme-border-subtle max-w-[64px] md:max-w-[96px] lg:max-w-[120px]"
               aria-expanded={dropdownOpen}
               aria-haspopup="listbox"
               aria-label={`Select project: ${project ? project.name : "All Projects"}`}
@@ -302,7 +302,7 @@ export function Navbar({
                       className={`w-full text-left px-4 py-2 text-sm transition-colors ${
                         p.id === project?.id
                           ? "bg-theme-info-bg text-theme-info-text font-medium"
-                          : "text-theme-muted hover:bg-theme-info-bg"
+                          : "text-theme-text font-medium hover:bg-theme-info-bg"
                       }`}
                     >
                       {p.name}
@@ -315,14 +315,14 @@ export function Navbar({
                     <button
                       type="button"
                       onClick={() => handleCreateOrAddClick("/projects/add-existing")}
-                      className="w-full text-left px-4 py-2 text-sm text-theme-text font-medium hover:bg-theme-info-bg transition-colors"
+                      className="w-full text-left px-4 py-2 text-sm text-theme-muted hover:bg-theme-info-bg hover:text-theme-text transition-colors"
                     >
                       Add Existing Project
                     </button>
                     <button
                       type="button"
                       onClick={() => handleCreateOrAddClick("/projects/create-new")}
-                      className="w-full text-left px-4 py-2 text-sm text-theme-text font-medium hover:bg-theme-info-bg transition-colors"
+                      className="w-full text-left px-4 py-2 text-sm text-theme-muted hover:bg-theme-info-bg hover:text-theme-text transition-colors"
                     >
                       Create New Project
                     </button>

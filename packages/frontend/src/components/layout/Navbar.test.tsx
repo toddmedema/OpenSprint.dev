@@ -229,6 +229,17 @@ const baseTask: Partial<Task> = {
   updatedAt: "2024-01-01T00:00:00Z",
 };
 
+function makeProject(id: string, name: string) {
+  return {
+    id,
+    name,
+    repoPath: `/path/${id}`,
+    currentPhase: "sketch" as const,
+    createdAt: "2025-01-01T00:00:00Z",
+    updatedAt: "2025-01-01T00:00:00Z",
+  };
+}
+
 describe("Navbar", () => {
   it("always shows logo icon in header (visible at all viewport widths)", () => {
     renderNavbar(<Navbar project={null} />);
@@ -498,7 +509,77 @@ describe("Navbar", () => {
     await user.click(trigger);
 
     const nonSelectedOption = screen.getByRole("option", { name: "Project B" });
+    expect(nonSelectedOption).toHaveClass("text-theme-text");
+    expect(nonSelectedOption).toHaveClass("font-medium");
     expect(nonSelectedOption).toHaveClass("hover:bg-theme-info-bg");
+  });
+
+  it("project selector trigger uses reduced width while keeping truncation and tap target", () => {
+    const project = makeProject("proj-1", "Long Project Name For Navbar Truncation");
+    renderNavbar(<Navbar project={project} currentPhase="sketch" onPhaseChange={vi.fn()} />);
+
+    const trigger = screen.getByRole("button", { name: /Select project:/i });
+    expect(trigger).toHaveClass("min-h-[44px]");
+    expect(trigger).toHaveClass("min-w-[44px]");
+    expect(trigger).toHaveClass("max-w-[64px]");
+    expect(trigger).toHaveClass("md:max-w-[96px]");
+    expect(trigger).toHaveClass("lg:max-w-[120px]");
+    expect(trigger.querySelector("span.truncate")).toBeInTheDocument();
+  });
+
+  it("keeps project rows emphasized and add/create rows de-emphasized for short and long names", async () => {
+    const projects = [
+      makeProject("proj-1", "Short"),
+      makeProject("proj-2", "Very Long Project Name For Dropdown Visual Coverage"),
+    ];
+    mockProjectsList.mockResolvedValue(projects);
+    const user = userEvent.setup();
+    renderNavbar(<Navbar project={projects[0]} currentPhase="sketch" onPhaseChange={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /Select project: Short/i }));
+
+    const selectedProjectOption = screen.getByRole("option", { name: "Short" });
+    const nonSelectedProjectOption = screen.getByRole("option", {
+      name: "Very Long Project Name For Dropdown Visual Coverage",
+    });
+    const addExistingButton = screen.getByRole("button", { name: /Add Existing Project/i });
+    const createNewButton = screen.getByRole("button", { name: /Create New Project/i });
+
+    expect(selectedProjectOption).toHaveClass("font-medium");
+    expect(selectedProjectOption).toHaveClass("text-theme-info-text");
+    expect(nonSelectedProjectOption).toHaveClass("font-medium");
+    expect(nonSelectedProjectOption).toHaveClass("text-theme-text");
+    expect(addExistingButton).toHaveClass("text-theme-muted");
+    expect(createNewButton).toHaveClass("text-theme-muted");
+  });
+
+  it("preserves navbar layout and project trigger sizing at common breakpoints", () => {
+    const project = makeProject("proj-1", "Extremely Long Project Name To Validate Truncation");
+    const breakpoints = [
+      { width: 800, height: 700 },
+      { width: 1024, height: 768 },
+      { width: 1280, height: 800 },
+    ];
+
+    for (const viewport of breakpoints) {
+      const restore = mockViewport(viewport.width, viewport.height);
+      try {
+        const { unmount } = renderNavbar(
+          <Navbar project={project} currentPhase="sketch" onPhaseChange={vi.fn()} />
+        );
+        const trigger = screen.getByRole("button", { name: /Select project:/i });
+        const nav = screen.getByRole("navigation");
+        const rightControls = screen.getByTestId("navbar-right-controls");
+
+        expect(trigger).toHaveClass("min-h-[44px]", "min-w-[44px]", "max-w-[64px]");
+        expect(trigger.querySelector("span.truncate")).toBeInTheDocument();
+        expect(nav).toHaveClass("overflow-hidden");
+        expect(rightControls).toBeInTheDocument();
+        unmount();
+      } finally {
+        restore();
+      }
+    }
   });
 
   it("project selector dropdown shows full list when opened (projects + Add/Create buttons)", async () => {
@@ -523,8 +604,12 @@ describe("Navbar", () => {
     expect(dropdown).toBeInTheDocument();
     expect(dropdown).toBeVisible();
     expect(screen.getByRole("option", { name: "Project A" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Add Existing Project/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Create New Project/i })).toBeInTheDocument();
+    const addExistingButton = screen.getByRole("button", { name: /Add Existing Project/i });
+    const createNewButton = screen.getByRole("button", { name: /Create New Project/i });
+    expect(addExistingButton).toBeInTheDocument();
+    expect(createNewButton).toBeInTheDocument();
+    expect(addExistingButton).toHaveClass("text-theme-muted");
+    expect(createNewButton).toHaveClass("text-theme-muted");
   });
 
   it("uses responsive edge spacing (pl/pr-4 on mobile, pl/pr-6 on md+) so logo left matches Settings right", () => {
