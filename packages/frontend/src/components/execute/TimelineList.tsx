@@ -13,7 +13,6 @@ import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
 import { formatUptime, formatTimestamp } from "../../lib/formatting";
 import { PriorityIcon } from "../PriorityIcon";
 import { ComplexityIcon } from "../ComplexityIcon";
-import { TaskStatusBadge } from "../kanban";
 import { AssigneeSelector } from "./AssigneeSelector";
 import type { StatusFilter } from "../../lib/executeTaskFilter";
 
@@ -108,9 +107,6 @@ function TimelineRow({
             >
               Self-improvement
             </span>
-          )}
-          {task.kanbanColumn === "waiting_to_merge" && (
-            <TaskStatusBadge column="waiting_to_merge" size="xs" title="Waiting to Merge" />
           )}
           <span className="hidden md:inline text-xs text-theme-muted shrink-0 truncate max-w-[120px]">
             {epicName}

@@ -148,11 +148,10 @@ describe("TimelineList", () => {
     expect(waitingToMergeIdx).toBeLessThan(inProgressIdx);
 
     const row = screen.getByTestId("timeline-row-w");
-    const waitingBadge = row.querySelector('[title="Waiting to Merge"]');
-    expect(waitingBadge).toBeTruthy();
+    expect(row.querySelector('[title="Waiting to Merge"]')).toBeNull();
   });
 
-  it("waiting_to_merge row uses compact status badge treatment", () => {
+  it("waiting_to_merge row has no inline status dot; merge hints are not shown in the list row", () => {
     const tasks = [
       createMockTask({
         id: "w",
@@ -168,7 +167,7 @@ describe("TimelineList", () => {
     );
 
     const row = screen.getByTestId("timeline-row-w");
-    expect(row.querySelector('[title="Waiting to Merge"]')).toBeTruthy();
+    expect(row.querySelector('[title="Waiting to Merge"]')).toBeNull();
     expect(screen.queryByText("Blocked on Main")).not.toBeInTheDocument();
     expect(screen.queryByText(/Retry eligible/i)).not.toBeInTheDocument();
   });
