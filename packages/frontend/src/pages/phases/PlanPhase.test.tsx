@@ -625,7 +625,7 @@ describe("PlanPhase archive", () => {
 
   it("has main content area with overflow-auto, min-w-0, and min-h-0 for independent scroll", () => {
     const store = createStore();
-    render(
+    const { container } = render(
       <MemoryRouter>
         <Provider store={store}>
           <PlanPhase projectId="proj-1" />
@@ -633,7 +633,7 @@ describe("PlanPhase archive", () => {
       </MemoryRouter>,
       { wrapper: PlanPhaseWrapper }
     );
-    const mainContent = screen.getByText("Feature Plans").closest(".overflow-auto");
+    const mainContent = container.querySelector(".overflow-auto.min-h-0");
     expect(mainContent).toBeInTheDocument();
     expect(mainContent).toHaveClass("min-h-0");
     const mainWrapper = mainContent?.closest(".flex.flex-col");
@@ -1319,7 +1319,7 @@ describe("Generate All Tasks button", () => {
       { wrapper: PlanPhaseWrapper }
     );
     await waitFor(() => {
-      expect(screen.getByText("Feature Plans")).toBeInTheDocument();
+      expect(screen.getByTestId("add-plan-button")).toBeInTheDocument();
     });
     expect(screen.queryByTestId("plan-bulk-actions-button")).not.toBeInTheDocument();
   });
@@ -1536,7 +1536,7 @@ describe("Execute All button", () => {
       { wrapper: PlanPhaseWrapper }
     );
     await waitFor(() => {
-      expect(screen.getByText("Feature Plans")).toBeInTheDocument();
+      expect(screen.getByTestId("add-plan-button")).toBeInTheDocument();
     });
     expect(screen.queryByTestId("plan-bulk-actions-button")).not.toBeInTheDocument();
   });
@@ -2335,8 +2335,9 @@ describe("PlanPhase sendPlanMessage thunk", () => {
     expect(listView).toHaveAttribute("aria-checked", "true");
     expect(graphView).toHaveAttribute("aria-checked", "false");
 
-    // List mode shows Feature Plans
-    expect(screen.getByText("Feature Plans")).toBeInTheDocument();
+    // List mode renders without an in-content header
+    expect(screen.queryByTestId("plan-graph-view")).not.toBeInTheDocument();
+    expect(screen.queryByText("Feature Plans")).not.toBeInTheDocument();
   });
 
   it("switches between List and Graph view modes", async () => {
@@ -2351,8 +2352,9 @@ describe("PlanPhase sendPlanMessage thunk", () => {
       { wrapper: PlanPhaseWrapper }
     );
 
-    // Default: List mode
-    expect(screen.getByText("Feature Plans")).toBeInTheDocument();
+    // Default: List mode has no in-content header
+    expect(screen.getByTestId("view-toggle-card")).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByText("Feature Plans")).not.toBeInTheDocument();
     expect(screen.queryByTestId("plan-graph-view")).not.toBeInTheDocument();
 
     // Switch to Graph mode
@@ -2366,7 +2368,8 @@ describe("PlanPhase sendPlanMessage thunk", () => {
     const listView = screen.getByRole("radio", { name: /list view/i });
     await user.click(listView);
 
-    expect(screen.getByText("Feature Plans")).toBeInTheDocument();
+    expect(screen.getByTestId("view-toggle-card")).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByText("Feature Plans")).not.toBeInTheDocument();
     expect(screen.queryByTestId("plan-graph-view")).not.toBeInTheDocument();
   });
 

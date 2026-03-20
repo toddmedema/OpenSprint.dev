@@ -993,12 +993,10 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
               )}
             </div>
           ) : (
-            /* Card Mode: Feature Plans */
+            /* Card Mode: plan list */
             <>
-              {/* Plan Cards */}
-              <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-                <h2 className="text-lg font-semibold text-theme-text">Feature Plans</h2>
-              </div>
+              {/* Preserve list spacing without rendering an in-content header */}
+              <div className="mb-4" aria-hidden />
 
               {!selectedPlanNotification && draftPlanNotification && (
                 <div className="mb-4">
