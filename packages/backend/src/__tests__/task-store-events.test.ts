@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { getAuthoritativeMergeWsFields, buildTaskUpdatedServerEvent } from "../task-store-events.js";
+import {
+  getAuthoritativeMergeWsFields,
+  buildTaskUpdatedServerEvent,
+} from "../task-store-events.js";
 import type { StoredTask } from "../services/task-store.types.js";
 
 function baseOpenTask(overrides: Partial<StoredTask> = {}): StoredTask {

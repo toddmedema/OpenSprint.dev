@@ -547,14 +547,21 @@ describe("AgentLifecycleManager", () => {
       vi.useFakeTimers();
       const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "agent-lifecycle-recover-"));
       const promptPath = path.join(tmpDir, "prompt.md");
+      const resultPath = path.join(tmpDir, "result.json");
       const handle = { kill: vi.fn(), pid: 9999 };
       const onDone = vi.fn().mockResolvedValue(undefined);
       await fs.writeFile(promptPath, "prompt", "utf-8");
-      await fs.writeFile(
-        path.join(tmpDir, "result.json"),
-        JSON.stringify({ status: "approved" }),
-        "utf-8"
-      );
+      await fs.writeFile(resultPath, JSON.stringify({ status: "approved" }), "utf-8");
+
+      // Mock readFile so the result monitor's poll sees the terminal result when fake timers fire.
+      // Real fs.readFile can resolve after the timer flush, so the .then() that calls handle.kill
+      // would not run before assertions without this.
+      const originalReadFile = fs.readFile.bind(fs);
+      vi.spyOn(fs, "readFile").mockImplementation((pathArg: unknown, ...args: unknown[]) => {
+        if (String(pathArg) === resultPath)
+          return Promise.resolve(JSON.stringify({ status: "approved" }));
+        return originalReadFile(pathArg as Parameters<typeof fs.readFile>[0], ...args);
+      });
 
       await manager.resumeMonitoring(
         handle,

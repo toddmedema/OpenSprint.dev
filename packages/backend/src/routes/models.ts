@@ -201,8 +201,7 @@ async function fetchCursorModels(apiKey: string): Promise<ModelOption[]> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const isTimeout =
-      err instanceof Error &&
-      (err.name === "TimeoutError" || /aborted|timeout/i.test(msg));
+      err instanceof Error && (err.name === "TimeoutError" || /aborted|timeout/i.test(msg));
     throw new AppError(
       502,
       ErrorCodes.CURSOR_API_ERROR,
