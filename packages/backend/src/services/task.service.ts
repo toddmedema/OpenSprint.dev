@@ -397,15 +397,14 @@ export class TaskService {
     const reason = nonEmpty(rec.failedGateReason) ?? (nested ? nonEmpty(nested.reason) : null);
     const outputSnippet =
       nonEmpty(rec.failedGateOutputSnippet) ?? (nested ? nonEmpty(nested.outputSnippet) : null);
-    const worktreePath = nonEmpty(rec.worktreePath) ?? (nested ? nonEmpty(nested.worktreePath) : null);
+    const worktreePath =
+      nonEmpty(rec.worktreePath) ?? (nested ? nonEmpty(nested.worktreePath) : null);
     const firstErrorLineRaw =
       nonEmpty(rec.qualityGateFirstErrorLine) ??
       nonEmpty(rec.firstErrorLine) ??
       (nested ? nonEmpty(nested.firstErrorLine) : null);
     const firstErrorLine =
-      firstErrorLineRaw ??
-      firstNonEmptyLine(outputSnippet) ??
-      firstNonEmptyLine(reason);
+      firstErrorLineRaw ?? firstNonEmptyLine(outputSnippet) ?? firstNonEmptyLine(reason);
 
     if (!command && !reason && !outputSnippet && !worktreePath && !firstErrorLine) {
       return null;

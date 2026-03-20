@@ -640,7 +640,7 @@ export class ChatService {
             },
           });
 
-      const rawContent = "rawContent" in response ? response.rawContent : response.content ?? "";
+      const rawContent = "rawContent" in response ? response.rawContent : (response.content ?? "");
       if ("parsed" in response) {
         draftParsed = response.parsed;
       }

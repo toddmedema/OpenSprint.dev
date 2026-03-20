@@ -177,7 +177,8 @@ prdRouter.get(
     const scopeMetadata =
       notification.scopeChangeMetadata as import("@opensprint/shared").ScopeChangeMetadata;
 
-    const proposedUpdates = (scopeMetadata.scopeChangeProposedUpdates ?? []) as ScopeChangeProposedUpdate[];
+    const proposedUpdates = (scopeMetadata.scopeChangeProposedUpdates ??
+      []) as ScopeChangeProposedUpdate[];
     for (const u of proposedUpdates) {
       const existing = proposedPrd.sections[u.section];
       proposedPrd.sections[u.section] = {

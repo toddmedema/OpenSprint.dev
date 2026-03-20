@@ -2,7 +2,10 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
-import { ProjectService, getNextScheduledSelfImprovementRunAt } from "../services/project.service.js";
+import {
+  ProjectService,
+  getNextScheduledSelfImprovementRunAt,
+} from "../services/project.service.js";
 import { notificationService } from "../services/notification.service.js";
 import { setGlobalSettings } from "../services/global-settings.service.js";
 import {

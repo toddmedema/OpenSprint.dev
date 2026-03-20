@@ -101,7 +101,11 @@ export class SessionManager {
     return readJsonFileWithRaw(this.getResultPath(repoPath, taskId, angle));
   }
 
-  async readRawResult(repoPath: string, taskId: string, angle?: ReviewAngle): Promise<string | null> {
+  async readRawResult(
+    repoPath: string,
+    taskId: string,
+    angle?: ReviewAngle
+  ): Promise<string | null> {
     const { raw } = await this.readResultWithRaw(repoPath, taskId, angle);
     return raw;
   }

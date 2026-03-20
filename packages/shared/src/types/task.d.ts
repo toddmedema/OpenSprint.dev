@@ -1,4 +1,7 @@
-import type { QualityGateDiagnosticDetail, TaskLastExecutionSummary } from "./execute-diagnostics.js";
+import type {
+  QualityGateDiagnosticDetail,
+  TaskLastExecutionSummary,
+} from "./execute-diagnostics.js";
 /** Task issue types */
 export type TaskType = "bug" | "feature" | "task" | "epic" | "chore";
 /** Task status values. Epics: blocked = plan not approved; open = approved; closed = complete. */

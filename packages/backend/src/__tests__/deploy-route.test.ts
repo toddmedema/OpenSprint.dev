@@ -92,10 +92,18 @@ async function waitForHistory(
     minRecords: number;
   }
 ) {
-  let historyRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/deliver/history?limit=${limit}`);
-  for (let i = 0; i < HISTORY_POLL_ATTEMPTS && (historyRes.body.data?.length ?? 0) < minRecords; i++) {
+  let historyRes = await request(app).get(
+    `${API_PREFIX}/projects/${projectId}/deliver/history?limit=${limit}`
+  );
+  for (
+    let i = 0;
+    i < HISTORY_POLL_ATTEMPTS && (historyRes.body.data?.length ?? 0) < minRecords;
+    i++
+  ) {
     await new Promise((r) => setTimeout(r, HISTORY_POLL_INTERVAL_MS));
-    historyRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/deliver/history?limit=${limit}`);
+    historyRes = await request(app).get(
+      `${API_PREFIX}/projects/${projectId}/deliver/history?limit=${limit}`
+    );
   }
   return historyRes;
 }

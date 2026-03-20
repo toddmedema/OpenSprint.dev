@@ -25,11 +25,12 @@ function parseOpenQuestions(
   const questions = value
     .filter(
       (item): item is { id?: unknown; text: string } =>
-        item != null && typeof item === "object" && typeof (item as { text?: unknown }).text === "string"
+        item != null &&
+        typeof item === "object" &&
+        typeof (item as { text?: unknown }).text === "string"
     )
     .map((item, index) => ({
-      id:
-        typeof item.id === "string" && item.id.trim() !== "" ? item.id.trim() : `q${index + 1}`,
+      id: typeof item.id === "string" && item.id.trim() !== "" ? item.id.trim() : `q${index + 1}`,
       text: item.text.trim(),
     }))
     .filter((item) => item.text.length > 0);

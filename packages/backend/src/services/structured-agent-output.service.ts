@@ -32,8 +32,10 @@ export interface StructuredOutputResult<T> {
   invalidReason?: string;
 }
 
-export interface InvokeStructuredPlanningAgentOptions<T>
-  extends Omit<InvokePlanningAgentOptions, "messages"> {
+export interface InvokeStructuredPlanningAgentOptions<T> extends Omit<
+  InvokePlanningAgentOptions,
+  "messages"
+> {
   messages: PlanningMessage[];
   contract: StructuredOutputContract<T>;
 }
@@ -135,7 +137,9 @@ export async function invokeStructuredPlanningAgent<T>(
 
   const repairInvalidReason = contract.invalidReason?.(repairRawContent);
   const invalidReason =
-    repairRawContent.trim().length > 0 ? repairInvalidReason ?? initialInvalidReason : initialInvalidReason;
+    repairRawContent.trim().length > 0
+      ? (repairInvalidReason ?? initialInvalidReason)
+      : initialInvalidReason;
   const fallback = contract.onExhausted?.({
     initialRawContent,
     repairRawContent,

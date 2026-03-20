@@ -108,7 +108,11 @@ export class SelfImprovementService {
       throw new AppError(404, ErrorCodes.NOT_FOUND, "No pending self-improvement candidate");
     }
     if (requestedCandidateId && requestedCandidateId !== pendingCandidateId) {
-      throw new AppError(400, ErrorCodes.INVALID_INPUT, "candidateId does not match pending candidate");
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "candidateId does not match pending candidate"
+      );
     }
 
     const now = new Date().toISOString();
@@ -136,7 +140,10 @@ export class SelfImprovementService {
       };
     });
 
-    await notificationService.resolveSelfImprovementApprovalNotifications(projectId, pendingCandidateId);
+    await notificationService.resolveSelfImprovementApprovalNotifications(
+      projectId,
+      pendingCandidateId
+    );
     const updated = await this.projectService.getSettings(projectId);
     return this.toBehaviorStatus(updated);
   }
@@ -151,7 +158,11 @@ export class SelfImprovementService {
       throw new AppError(404, ErrorCodes.NOT_FOUND, "No pending self-improvement candidate");
     }
     if (requestedCandidateId && requestedCandidateId !== pendingCandidateId) {
-      throw new AppError(400, ErrorCodes.INVALID_INPUT, "candidateId does not match pending candidate");
+      throw new AppError(
+        400,
+        ErrorCodes.INVALID_INPUT,
+        "candidateId does not match pending candidate"
+      );
     }
 
     const now = new Date().toISOString();
@@ -171,7 +182,10 @@ export class SelfImprovementService {
       };
     });
 
-    await notificationService.resolveSelfImprovementApprovalNotifications(projectId, pendingCandidateId);
+    await notificationService.resolveSelfImprovementApprovalNotifications(
+      projectId,
+      pendingCandidateId
+    );
     const updated = await this.projectService.getSettings(projectId);
     return this.toBehaviorStatus(updated);
   }

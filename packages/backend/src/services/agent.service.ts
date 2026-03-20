@@ -729,13 +729,21 @@ ${repairSection}## Your Task
         repairContext?: string;
         trackingIdSuffix?: string;
         trackingLabelSuffix?: string;
-      }): Promise<{ exitedCleanly: boolean; raw: string | null; parsed: ReturnType<typeof parseMergerAgentResult>; verified: boolean }> => {
+      }): Promise<{
+        exitedCleanly: boolean;
+        raw: string | null;
+        parsed: ReturnType<typeof parseMergerAgentResult>;
+        verified: boolean;
+      }> => {
         await this.clearMergerResult(options.cwd);
         const promptPath = path.join(
           os.tmpdir(),
           `opensprint-merger-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.md`
         );
-        await fs.writeFile(promptPath, await this.buildMergerPrompt(options, params?.repairContext));
+        await fs.writeFile(
+          promptPath,
+          await this.buildMergerPrompt(options, params?.repairContext)
+        );
         try {
           const exitedCleanly = await new Promise<boolean>((resolve) => {
             this.invokeMergerAgent(promptPath, options.config, {

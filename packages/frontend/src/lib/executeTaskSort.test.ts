@@ -62,11 +62,7 @@ describe("sortEpicTasksByStatus", () => {
       createTask({ id: "c", kanbanColumn: "waiting_to_merge", priority: 0 }),
     ];
     const sorted = sortEpicTasksByStatus(tasks);
-    expect(sorted.map((t) => t.kanbanColumn)).toEqual([
-      "ready",
-      "waiting_to_merge",
-      "backlog",
-    ]);
+    expect(sorted.map((t) => t.kanbanColumn)).toEqual(["ready", "waiting_to_merge", "backlog"]);
   });
 
   it("places planning and blocked after backlog, before done", () => {

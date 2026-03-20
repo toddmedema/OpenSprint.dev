@@ -139,7 +139,10 @@ export function createProjectsRouter(
       const projectId = getProjectId(req);
       await projectService.getProject(projectId);
       const body = (req.body as { candidateId?: string } | undefined) ?? {};
-      const data = await selfImprovementService.approvePendingCandidate(projectId, body.candidateId);
+      const data = await selfImprovementService.approvePendingCandidate(
+        projectId,
+        body.candidateId
+      );
       res.json({ data });
     })
   );
@@ -167,7 +170,10 @@ export function createProjectsRouter(
       const projectId = getProjectId(req);
       await projectService.getProject(projectId);
       const { behaviorVersionId } = req.body as { behaviorVersionId: string };
-      const data = await selfImprovementService.rollbackToBehaviorVersion(projectId, behaviorVersionId);
+      const data = await selfImprovementService.rollbackToBehaviorVersion(
+        projectId,
+        behaviorVersionId
+      );
       res.json({ data });
     })
   );

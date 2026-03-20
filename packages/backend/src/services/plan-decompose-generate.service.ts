@@ -452,7 +452,8 @@ Field rules: complexity: low, medium, high, or very_high (plan-level).
       throw new AppError(
         400,
         ErrorCodes.DECOMPOSE_PARSE_FAILED,
-        "Planning agent did not return a valid plan. Response: " + response.rawContent.slice(0, 500),
+        "Planning agent did not return a valid plan. Response: " +
+          response.rawContent.slice(0, 500),
         { responsePreview: response.rawContent.slice(0, 500) }
       );
     }

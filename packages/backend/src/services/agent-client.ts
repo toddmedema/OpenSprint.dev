@@ -100,9 +100,10 @@ function getCursorCommandInvocation(args: string[]): { command: string; args: st
   };
 }
 
-function buildCursorSpawnEnv(
-  cursorApiKey?: string
-): { env: NodeJS.ProcessEnv; isolatedConfigDir: string | null } {
+function buildCursorSpawnEnv(cursorApiKey?: string): {
+  env: NodeJS.ProcessEnv;
+  isolatedConfigDir: string | null;
+} {
   if (!cursorApiKey?.trim()) {
     return { env: normalizeSpawnEnvPath({ ...process.env }), isolatedConfigDir: null };
   }
@@ -117,11 +118,9 @@ function buildCursorSpawnEnv(
   let xdgConfigHome = process.env.XDG_CONFIG_HOME;
   if (process.platform === "darwin") {
     const hookPath = path.join(isolatedConfigDir, "opensprint-cursor-force-file-auth.cjs");
-    writeFileSync(
-      hookPath,
-      'const os = require("node:os");\nos.platform = () => "linux";\n',
-      { mode: 0o600 }
-    );
+    writeFileSync(hookPath, 'const os = require("node:os");\nos.platform = () => "linux";\n', {
+      mode: 0o600,
+    });
     nodeOptions = [nodeOptions, `--require ${hookPath}`].filter(Boolean).join(" ");
     xdgConfigHome = isolatedConfigDir;
   }

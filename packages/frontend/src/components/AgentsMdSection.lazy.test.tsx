@@ -72,12 +72,18 @@ describe("AgentsMdSection lazy-loading", () => {
       import("../contexts/ThemeContext"),
       import("./AgentsMdSection"),
     ]);
+    let result: ReturnType<typeof render> | undefined;
 
-    return render(
-      <ThemeProvider>
-        <AgentsMdSection projectId={projectId} />
-      </ThemeProvider>
-    );
+    await act(async () => {
+      result = render(
+        <ThemeProvider>
+          <AgentsMdSection projectId={projectId} />
+        </ThemeProvider>
+      );
+      await Promise.resolve();
+    });
+
+    return result!;
   }
 
   it("shows Loading editor... while the editor chunk is loading", async () => {

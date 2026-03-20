@@ -117,9 +117,7 @@ function TimelineRow({
                   : "Waiting to merge into the default branch"
               }
               aria-label={
-                task.mergeWaitingOnMain
-                  ? "Waiting to merge. Blocked on main."
-                  : "Waiting to merge."
+                task.mergeWaitingOnMain ? "Waiting to merge. Blocked on main." : "Waiting to merge."
               }
               data-testid="task-badge-waiting-to-merge"
             >

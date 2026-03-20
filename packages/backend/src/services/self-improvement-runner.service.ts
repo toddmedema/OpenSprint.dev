@@ -162,7 +162,8 @@ export async function enrichPriorityAndComplexity(
           },
           repairPrompt:
             'Return valid JSON only as an array of objects in this shape: [{"title":"Task title","priority":1,"complexity":5}]',
-          invalidReason: () => "Response did not include any valid priority/complexity assignments.",
+          invalidReason: () =>
+            "Response did not include any valid priority/complexity assignments.",
           onExhausted: (): ParsedPriorityComplexity => ({ byTitle: new Map(), byIndex: [] }),
         },
       });

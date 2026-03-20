@@ -634,7 +634,15 @@ describe("OrchestratorService (slot-based model)", () => {
       }
       const [basePath, taskId, angle] = args as [string, string, string | undefined];
       const resultPath = angle
-        ? path.join(basePath, ".opensprint", "active", taskId, "review-angles", angle, "result.json")
+        ? path.join(
+            basePath,
+            ".opensprint",
+            "active",
+            taskId,
+            "review-angles",
+            angle,
+            "result.json"
+          )
         : path.join(basePath, ".opensprint", "active", taskId, "result.json");
       try {
         return await fs.readFile(resultPath, "utf-8");
@@ -781,13 +789,7 @@ describe("OrchestratorService (slot-based model)", () => {
       expect(mockNotificationCreate).not.toHaveBeenCalled();
       expect(mockTaskStoreComment).not.toHaveBeenCalled();
 
-      const assignmentPath = path.join(
-        wtPath,
-        ".opensprint",
-        "active",
-        task.id,
-        "assignment.json"
-      );
+      const assignmentPath = path.join(wtPath, ".opensprint", "active", task.id, "assignment.json");
       const assignment = JSON.parse(await fs.readFile(assignmentPath, "utf-8")) as {
         retryContext?: { structuredOutputRepairAttempted?: boolean; previousFailure?: string };
       };
@@ -825,13 +827,7 @@ describe("OrchestratorService (slot-based model)", () => {
         expect(mockWriteJsonAtomic).toHaveBeenCalled();
       });
 
-      const assignmentPath = path.join(
-        wtPath,
-        ".opensprint",
-        "active",
-        task.id,
-        "assignment.json"
-      );
+      const assignmentPath = path.join(wtPath, ".opensprint", "active", task.id, "assignment.json");
       const baseAssignment = JSON.parse(await fs.readFile(assignmentPath, "utf-8")) as Record<
         string,
         unknown
@@ -930,13 +926,7 @@ describe("OrchestratorService (slot-based model)", () => {
         expect(mockWriteJsonAtomic).toHaveBeenCalled();
       });
 
-      const assignmentPath = path.join(
-        wtPath,
-        ".opensprint",
-        "active",
-        task.id,
-        "assignment.json"
-      );
+      const assignmentPath = path.join(wtPath, ".opensprint", "active", task.id, "assignment.json");
       const baseAssignment = JSON.parse(await fs.readFile(assignmentPath, "utf-8")) as Record<
         string,
         unknown
@@ -1051,13 +1041,7 @@ describe("OrchestratorService (slot-based model)", () => {
         expect(mockWriteJsonAtomic).toHaveBeenCalled();
       });
 
-      const assignmentPath = path.join(
-        wtPath,
-        ".opensprint",
-        "active",
-        task.id,
-        "assignment.json"
-      );
+      const assignmentPath = path.join(wtPath, ".opensprint", "active", task.id, "assignment.json");
       const baseAssignment = JSON.parse(await fs.readFile(assignmentPath, "utf-8")) as Record<
         string,
         unknown
