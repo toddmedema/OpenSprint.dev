@@ -26,12 +26,33 @@ jobs:
   build-mac:
     needs: create-release
     runs-on: macos-latest
+    env:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: "npm"
+      - name: Verify mac signing secrets
+        run: |
+          required_vars=(CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY_ID APPLE_API_ISSUER APPLE_API_KEY_P8)
+          for var_name in "${required_vars[@]}"; do
+            if [ -z "${!var_name}" ]; then
+              echo "::error::Missing required GitHub secret: ${var_name}"
+              exit 1
+            fi
+          done
+      - name: Write App Store Connect API key
+        run: |
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$key_path"
+          chmod 600 "$key_path"
+          echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
       - name: Set version from tag
         env:
           TAG_VERSION: ${{ github.ref_name }}
@@ -39,6 +60,34 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run build:mac -w packages/electron
+      - name: Verify signed and notarized app
+        run: |
+          app_path="$(find packages/electron/dist -maxdepth 2 -type d -name '*.app' | head -n 1)"
+          if [ -z "$app_path" ]; then
+            echo "::error::Built .app bundle not found in packages/electron/dist"
+            exit 1
+          fi
+
+          codesign_output="$RUNNER_TEMP/codesign.txt"
+          codesign -dv --verbose=4 "$app_path" 2>&1 | tee "$codesign_output"
+
+          if grep -q "Signature=adhoc" "$codesign_output"; then
+            echo "::error::macOS app is ad hoc signed instead of Developer ID signed"
+            exit 1
+          fi
+
+          if ! grep -q "Authority=Developer ID Application" "$codesign_output"; then
+            echo "::error::macOS app is missing a Developer ID Application authority"
+            exit 1
+          fi
+
+          if grep -q "TeamIdentifier=not set" "$codesign_output"; then
+            echo "::error::macOS app is missing a TeamIdentifier"
+            exit 1
+          fi
+
+          spctl -a -vvv -t exec "$app_path"
+          xcrun stapler validate "$app_path"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}

@@ -3,7 +3,7 @@
  * Matches checks in scripts/verify-desktop-artifact-names.js.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,5 +31,20 @@ describe("desktop artifact names (fixed for permalinks)", () => {
     const name = pkg.build?.linux?.artifactName;
     expect(name).toBeDefined();
     expect(name).not.toContain("${version}");
+  });
+
+  it("electron mac build uses explicit entitlements and avoids the ad hoc afterPack hook", () => {
+    const pkg = JSON.parse(readFileSync(electronPkgPath, "utf-8"));
+    expect(pkg.build?.afterPack).toBeUndefined();
+    expect(pkg.build?.mac?.entitlements).toBe("build/entitlements.mac.plist");
+    expect(pkg.build?.mac?.entitlementsInherit).toBe("build/entitlements.mac.inherit.plist");
+    expect(pkg.build?.mac?.hardenedRuntime).toBe(true);
+    expect(pkg.build?.dmg?.sign).toBe(false);
+  });
+
+  it("checks in the mac entitlements files needed for signed Electron releases", () => {
+    const electronRoot = resolve(sharedRoot, "../electron");
+    expect(existsSync(resolve(electronRoot, "build/entitlements.mac.plist"))).toBe(true);
+    expect(existsSync(resolve(electronRoot, "build/entitlements.mac.inherit.plist"))).toBe(true);
   });
 });

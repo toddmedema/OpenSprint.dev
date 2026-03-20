@@ -1,0 +1,90 @@
+# macOS Desktop Release Signing and Notarization
+
+Open Sprint macOS releases are distributed outside the Mac App Store, so Gatekeeper expects the app bundle to be signed with a `Developer ID Application` certificate and notarized by Apple before a new Mac will open it normally.
+
+The GitHub Actions workflow at `.github/workflows/release-desktop.yml` is the supported release path for public macOS builds. It signs the `.app`, notarizes and staples it, validates the result, and then uploads the DMG to the GitHub Release.
+
+## Required Apple Assets
+
+You need all of the following before a tagged macOS release can succeed:
+
+- An active Apple Developer Program membership
+- A `Developer ID Application` certificate installed on a Mac
+- A `.p12` export of that certificate plus its export password
+- An App Store Connect API key with permission to submit notarization requests
+
+## Export the Developer ID Certificate
+
+On a Mac that has the `Developer ID Application` certificate installed:
+
+1. Open Keychain Access.
+2. Select `login` keychain, then `My Certificates`.
+3. Find the `Developer ID Application` certificate for Open Sprint.
+4. Export it as a `.p12` file and choose an export password.
+5. Convert the `.p12` file to a single-line base64 string for GitHub Secrets:
+
+```bash
+base64 -i /path/to/OpenSprintDeveloperID.p12 | tr -d '\n'
+```
+
+Use that base64 output as the `CSC_LINK` GitHub secret. Electron Builder accepts `CSC_LINK` as base64-encoded certificate data.
+
+## Create the App Store Connect API Key
+
+Create the notarization key in App Store Connect:
+
+1. Open `Users and Access`.
+2. Open the `Integrations` tab, then `Keys`.
+3. Create a team API key with `App Manager` access.
+4. Save the `Key ID`, `Issuer ID`, and the downloaded `AuthKey_<KEY_ID>.p8` file.
+
+The `.p8` file can only be downloaded once, so store it securely.
+
+## Required GitHub Secrets
+
+Configure these repository secrets before pushing a release tag:
+
+- `CSC_LINK`: base64-encoded contents of the exported `.p12` certificate
+- `CSC_KEY_PASSWORD`: password used when exporting the `.p12`
+- `APPLE_API_KEY_ID`: App Store Connect API key ID
+- `APPLE_API_ISSUER`: App Store Connect issuer ID
+- `APPLE_API_KEY_P8`: raw contents of `AuthKey_<KEY_ID>.p8`
+
+During the macOS job, the workflow writes `APPLE_API_KEY_P8` to a temporary `.p8` file under `$RUNNER_TEMP` and exports that path as `APPLE_API_KEY` for Electron Builder notarization.
+
+## Release Flow
+
+1. Push a version tag such as `v1.0.0`.
+2. GitHub Actions creates the release shell.
+3. The macOS job verifies that all required signing and notarization secrets are present.
+4. The job writes the temporary App Store Connect key file, builds the macOS app, signs it, notarizes it, and staples the notarization ticket.
+5. The job validates the built `.app` before uploading `packages/electron/dist/*.dmg` to the GitHub Release.
+
+If any required secret is missing, the macOS release job fails before dependency install or packaging work begins.
+
+## Verification Commands
+
+The CI workflow validates the packaged app with these commands before uploading the DMG:
+
+```bash
+codesign -dv --verbose=4 "packages/electron/dist/<...>/Open Sprint.app"
+spctl -a -vvv -t exec "packages/electron/dist/<...>/Open Sprint.app"
+xcrun stapler validate "packages/electron/dist/<...>/Open Sprint.app"
+```
+
+Expected results:
+
+- `codesign` output includes `Authority=Developer ID Application` and a real `TeamIdentifier`, not `Signature=adhoc`
+- `spctl` reports the app as accepted
+- `xcrun stapler validate` succeeds
+
+## Temporary Workaround for Older Unsigned DMGs
+
+Older DMGs that were published before CI signing and notarization are still expected to trigger Gatekeeper warnings on a new Mac.
+
+For those older builds only:
+
+1. Control-click the app and choose `Open`, or
+2. Open `System Settings` -> `Privacy & Security` and choose `Open Anyway`
+
+That workaround should not be needed for releases produced by the updated GitHub Actions pipeline.

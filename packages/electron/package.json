@@ -43,7 +43,6 @@
     "appId": "com.opensprint.app",
     "productName": "Open Sprint",
     "electronVersion": "41.0.2",
-    "afterPack": "./scripts/after-pack-ad-hoc-sign.js",
     "compression": "maximum",
     "directories": {
       "output": "dist"
@@ -65,11 +64,17 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "hardenedRuntime": true,
       "target": [
         "dmg"
       ],
       "artifactName": "Open.Sprint-${arch}.${ext}",
       "icon": "../frontend/public/desktop-icon-mac.png"
+    },
+    "dmg": {
+      "sign": false
     },
     "win": {
       "target": [

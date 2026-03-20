@@ -146,6 +146,8 @@ For AppImage specifically, install FUSE2 (`libfuse2`) or AppImage may fail to la
 
 Pushing a version tag (for example, `v1.0.0`) triggers GitHub Actions to build the Electron app for macOS (DMG), Windows (installer `.exe`), and Linux (AppImage), and to attach those files to the GitHub Release for that tag. The workflow sets the app version from the tag so the built installers show the correct version.
 
+macOS releases are signed with a `Developer ID Application` certificate and notarized in GitHub Actions before the DMG is uploaded. Setup details for the certificate export, App Store Connect API key, required GitHub secrets, CI verification commands, and the temporary workaround for older unsigned DMGs are in [docs/macos-desktop-signing.md](docs/macos-desktop-signing.md).
+
 ## License
 
 [AGPL-3.0](LICENSE). Support or partnership: [contact@opensprint.ai](mailto:contact@opensprint.ai).
