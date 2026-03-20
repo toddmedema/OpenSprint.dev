@@ -179,6 +179,29 @@ describe("sortTasksForTimeline", () => {
     expect(sorted.map((t) => t.id)).toEqual(["b", "c", "a"]);
   });
 
+  it("sorts waiting_to_merge with other queue-tier columns by updatedAt descending", () => {
+    const tasks = [
+      createTask({
+        id: "merge-old",
+        kanbanColumn: "waiting_to_merge",
+        updatedAt: "2024-01-01T12:00:00Z",
+      }),
+      createTask({ id: "ready-new", kanbanColumn: "ready", updatedAt: "2024-01-05T12:00:00Z" }),
+      createTask({
+        id: "merge-mid",
+        kanbanColumn: "waiting_to_merge",
+        updatedAt: "2024-01-03T12:00:00Z",
+      }),
+    ];
+    const sorted = sortTasksForTimeline(tasks);
+    expect(sorted.map((t) => t.id)).toEqual(["ready-new", "merge-mid", "merge-old"]);
+    expect(sorted.map((t) => t.kanbanColumn)).toEqual([
+      "ready",
+      "waiting_to_merge",
+      "waiting_to_merge",
+    ]);
+  });
+
   it("returns empty array for empty input", () => {
     expect(sortTasksForTimeline([])).toEqual([]);
   });

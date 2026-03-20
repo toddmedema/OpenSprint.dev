@@ -453,6 +453,24 @@ describe("executeSlice", () => {
       expect(task.mergeWaitingOnMain).toBe(true);
     });
 
+    it("taskUpdated applies waiting_to_merge and merge fields when only kanbanColumn is provided (no status)", () => {
+      const store = createStore();
+      store.dispatch(setTasks([mockTask]));
+      store.dispatch(
+        taskUpdated({
+          taskId: "task-1",
+          kanbanColumn: "waiting_to_merge",
+          mergePausedUntil: "2025-06-01T08:00:00.000Z",
+          mergeWaitingOnMain: false,
+        })
+      );
+      const task = selectTasks(store.getState())[0];
+      expect(task.status).toBe("open");
+      expect(task.kanbanColumn).toBe("waiting_to_merge");
+      expect(task.mergePausedUntil).toBe("2025-06-01T08:00:00.000Z");
+      expect(task.mergeWaitingOnMain).toBe(false);
+    });
+
     it("taskCreated adds task from WebSocket payload (live-update)", () => {
       const store = createStore();
       store.dispatch(
