@@ -14,7 +14,12 @@ const vitestArgs = ["vitest", "run"];
 if (patternIdx !== -1) {
   const raw = args[patternIdx];
   const value = raw.slice("--testPathPattern=".length);
-  vitestArgs.push(value);
+  // Jest-style alternation: match files across Vitest workspace projects (unit vs flow).
+  const patterns = value
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  vitestArgs.push(...patterns);
   vitestArgs.push(...args.filter((_, i) => i !== patternIdx));
 } else {
   vitestArgs.push(...args);

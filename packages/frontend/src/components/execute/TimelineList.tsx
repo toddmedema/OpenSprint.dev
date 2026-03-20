@@ -10,9 +10,10 @@ import {
 } from "../../lib/executeTaskSort";
 import { isTaskInPlanningPlan, isSelfImprovementTask } from "../../lib/executeTaskFilter";
 import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
-import { formatUptime, formatTimestamp } from "../../lib/formatting";
+import { formatUptime, formatTimestamp, formatUntilTimestamp } from "../../lib/formatting";
 import { PriorityIcon } from "../PriorityIcon";
 import { ComplexityIcon } from "../ComplexityIcon";
+import { TaskStatusBadge } from "../kanban";
 import { AssigneeSelector } from "./AssigneeSelector";
 import type { StatusFilter } from "../../lib/executeTaskFilter";
 
@@ -39,6 +40,35 @@ export interface TimelineListProps {
   teamMembers: Array<{ id: string; name: string }>;
   /** When false, assignee is not editable (show as text only). */
   enableHumanTeammates?: boolean;
+}
+
+/** Tooltip for the waiting-to-merge row badge (aligned with TaskDetailMetadata merge hints). */
+function waitingToMergeBadgeTitle(task: Task): string {
+  const base = "Waiting to Merge";
+  const mergeStateLabel =
+    task.mergeGateState === "blocked_on_baseline"
+      ? "Blocked on main"
+      : task.mergeGateState === "candidate_fix_needed"
+        ? "Candidate fix needed"
+        : task.mergeGateState === "environment_repair_needed"
+          ? "Environment repair needed"
+          : task.mergeGateState === "merging"
+            ? "Merging"
+            : task.mergeGateState === "validating"
+              ? "Validating"
+              : task.mergeWaitingOnMain
+                ? "Blocked on main"
+                : null;
+  const mergeRetrySuffix =
+    task.mergePausedUntil != null && String(task.mergePausedUntil).length > 0
+      ? (() => {
+          const until = formatUntilTimestamp(task.mergePausedUntil);
+          return until === "soon" ? "Retry eligible soon" : `Retry eligible ${until}`;
+        })()
+      : null;
+  const extra = [mergeStateLabel, mergeRetrySuffix].filter(Boolean);
+  if (extra.length === 0) return base;
+  return `${base} · ${extra.join(" · ")}`;
 }
 
 const SECTION_LABELS: Record<string, string> = {
@@ -106,6 +136,15 @@ function TimelineRow({
               data-testid="task-badge-self-improvement"
             >
               Self-improvement
+            </span>
+          )}
+          {task.kanbanColumn === "waiting_to_merge" && (
+            <span className="inline-flex shrink-0" data-testid="timeline-waiting-to-merge-badge">
+              <TaskStatusBadge
+                column="waiting_to_merge"
+                size="xs"
+                title={waitingToMergeBadgeTitle(task)}
+              />
             </span>
           )}
           <span className="hidden md:inline text-xs text-theme-muted shrink-0 truncate max-w-[120px]">

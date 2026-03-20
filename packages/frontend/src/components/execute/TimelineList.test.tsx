@@ -1,15 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TimelineList } from "./TimelineList";
 import { renderWithProviders } from "../../test/test-utils";
 import type { Task } from "@opensprint/shared";
 import type { Plan } from "@opensprint/shared";
 
-vi.mock("../../lib/formatting", () => ({
-  formatUptime: vi.fn((startedAt: string) => `uptime:${startedAt}`),
-  formatTimestamp: vi.fn((ts: string) => `relative:${ts}`),
-}));
+vi.mock("../../lib/formatting", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/formatting")>();
+  return {
+    ...actual,
+    formatUptime: vi.fn((startedAt: string) => `uptime:${startedAt}`),
+    formatTimestamp: vi.fn((ts: string) => `relative:${ts}`),
+  };
+});
 
 const mockUpdateTask = vi.fn();
 vi.mock("../../api/client", () => ({
@@ -77,6 +81,10 @@ const createMockPlan = (epicId: string, title: string, status: Plan["status"] = 
   }) as Plan;
 
 describe("TimelineList", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockUpdateTask.mockImplementation(
@@ -148,10 +156,12 @@ describe("TimelineList", () => {
     expect(waitingToMergeIdx).toBeLessThan(inProgressIdx);
 
     const row = screen.getByTestId("timeline-row-w");
-    expect(row.querySelector('[title="Waiting to Merge"]')).toBeNull();
+    expect(within(row).getByTestId("timeline-waiting-to-merge-badge")).toBeInTheDocument();
+    const waitingBadge = row.querySelector('[title="Waiting to Merge"]');
+    expect(waitingBadge).toBeTruthy();
   });
 
-  it("waiting_to_merge row has no inline status dot; merge hints are not shown in the list row", () => {
+  it("waiting_to_merge row shows badge and tooltip includes Blocked on main when mergeWaitingOnMain", () => {
     const tasks = [
       createMockTask({
         id: "w",
@@ -167,9 +177,40 @@ describe("TimelineList", () => {
     );
 
     const row = screen.getByTestId("timeline-row-w");
-    expect(row.querySelector('[title="Waiting to Merge"]')).toBeNull();
-    expect(screen.queryByText("Blocked on Main")).not.toBeInTheDocument();
+    const wrap = within(row).getByTestId("timeline-waiting-to-merge-badge");
+    expect(wrap).toBeInTheDocument();
+    const titled = wrap.querySelector("[title]");
+    expect(titled).toHaveAttribute(
+      "title",
+      "Waiting to Merge · Blocked on main"
+    );
+    expect(screen.queryByText("Blocked on main")).not.toBeInTheDocument();
     expect(screen.queryByText(/Retry eligible/i)).not.toBeInTheDocument();
+  });
+
+  it("waiting_to_merge row tooltip includes Retry eligible when mergePausedUntil is set", () => {
+    vi.useFakeTimers({ now: new Date("2024-06-01T12:00:00Z").getTime() });
+
+    const tasks = [
+      createMockTask({
+        id: "w",
+        kanbanColumn: "waiting_to_merge",
+        title: "Backoff merge",
+        mergePausedUntil: "2024-06-01T11:00:00Z",
+      }),
+    ];
+    const plans = [createMockPlan("epic-1", "Auth Epic")];
+
+    renderWithProviders(
+      <TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} {...defaultListProps} />
+    );
+
+    const wrap = screen.getByTestId("timeline-waiting-to-merge-badge");
+    const titled = wrap.querySelector("[title]");
+    expect(titled).toHaveAttribute(
+      "title",
+      "Waiting to Merge · Retry eligible soon"
+    );
   });
 
   it("displays Up Next section when backlog/planning tasks exist", () => {
