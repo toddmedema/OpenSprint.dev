@@ -951,6 +951,8 @@ describe("OrchestratorService (slot-based model)", () => {
         ): Promise<void>;
       };
 
+      const codingInvokesBeforeDone = mockInvokeCodingAgent.mock.calls.length;
+
       await invokeHandleCodingDone.handleCodingDone(
         projectId,
         repoPath,
@@ -959,7 +961,7 @@ describe("OrchestratorService (slot-based model)", () => {
         0
       );
 
-      expect(mockInvokeCodingAgent).toHaveBeenCalledTimes(1);
+      expect(mockInvokeCodingAgent.mock.calls.length).toBe(codingInvokesBeforeDone);
       expect(mockNotificationCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           projectId,

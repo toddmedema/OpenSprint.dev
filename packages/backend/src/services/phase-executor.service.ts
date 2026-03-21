@@ -290,6 +290,7 @@ export class PhaseExecutorService {
         previousTestOutput: retryContext?.previousTestOutput ?? null,
         previousTestFailures: retryContext?.previousTestFailures ?? null,
         previousDiff: retryContext?.previousDiff ?? null,
+        failureHistory: retryContext?.failureHistory ?? null,
         qualityGateDetail: retryContext?.qualityGateDetail ?? null,
         useExistingBranch: retryContext?.useExistingBranch ?? false,
         structuredOutputRepairAttempted: retryContext?.structuredOutputRepairAttempted ?? false,

@@ -34,6 +34,13 @@ export interface RetryQualityGateDetail {
   signal?: string | null;
 }
 
+/** Condensed prior failure for multi-attempt prompts (avoids ping-pong regressions). */
+export interface RetryFailureHistoryEntry {
+  attempt: number;
+  failureType: FailureType;
+  summary: string;
+}
+
 export interface RetryContext {
   previousFailure?: string;
   reviewFeedback?: string;
@@ -44,6 +51,8 @@ export interface RetryContext {
   previousDiff?: string;
   qualityGateDetail?: RetryQualityGateDetail;
   failureType?: FailureType;
+  /** Last N failures from earlier attempts on this task (newest appended in handleTaskFailure). */
+  failureHistory?: RetryFailureHistoryEntry[];
 }
 
 /** Slot shape needed by executeCodingPhase; full AgentSlot from orchestrator */

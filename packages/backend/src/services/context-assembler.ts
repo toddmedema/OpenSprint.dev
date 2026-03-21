@@ -540,7 +540,10 @@ export class ContextAssembler {
     prompt += `${config.useExistingBranch ? "4" : "3"}. Write comprehensive tests (unit, and integration where applicable).\n`;
     prompt += `${config.useExistingBranch ? "5" : "4"}. **Commit after each logical unit** — with descriptive messages (e.g., "Add login API endpoint", "Add auth tests"). Do not wait until the end to commit. This protects your work if the process is interrupted.\n`;
     prompt += `${config.useExistingBranch ? "6" : "5"}. Run the smallest relevant non-watch verification for the workspaces you touch while iterating. Prefer scoped tests first, and add scoped build/typecheck and lint commands whenever your changes could affect them (for example TypeScript, exported interfaces, build config, or linted frontend/backend code).\n`;
-    prompt += `   Before writing \`result.json\`, leave the branch in a state where the merge quality gates can pass. If you touched shared packages, exported APIs/types, cross-workspace code, root scripts, or build/lint/test configuration, run the relevant root gate commands yourself (merge quality gates: ${mergeQualityGateList}). The orchestrator will rerun automated validation after you finish. Never use watch mode or leave test processes running in the background.\n`;
+    prompt += `   Before writing \`result.json\`, run the merge quality gates from the repository root so your changes do not break the build: ${mergeQualityGateList}. The orchestrator runs the same commands automatically after you finish — fix any failures before reporting success. Never use watch mode or leave test processes running in the background.\n`;
+    if (config.attempt > 1) {
+      prompt += `   **Retry:** Your previous attempt failed validation. Ensure every merge gate command above passes locally before you write \`result.json\`.\n`;
+    }
     prompt += `   **Dependencies:** If you add or change dependencies, run this repository’s package-manager install (npm, pnpm, yarn, etc.—whatever this project uses) from the **repository root**, update and commit all affected lockfiles together with your code, then run a minimal check (e.g. build or tests for the touched package) so missing installs fail locally before you write \`result.json\`.\n`;
     const resultJsonPath =
       config.repoPath && config.taskId
@@ -564,6 +567,13 @@ export class ContextAssembler {
 
     if (config.previousFailure) {
       prompt += `## Previous Attempt\n\n`;
+      if (config.failureHistory && config.failureHistory.length > 0) {
+        prompt += `### Failure History\n\n`;
+        for (const entry of config.failureHistory) {
+          prompt += `- Attempt ${entry.attempt}: ${entry.failureType} — ${entry.summary}\n`;
+        }
+        prompt += `\nAddress themes from earlier attempts so you do not regress fixes you already made.\n\n`;
+      }
       prompt += `This is attempt ${config.attempt}. The previous attempt failed:\n${config.previousFailure}\n\n`;
 
       if (config.qualityGateDetail) {
@@ -593,6 +603,12 @@ export class ContextAssembler {
         prompt += `### Condensed Test Output\n\n\`\`\`\n${config.previousTestOutput.slice(0, 2000)}\n\`\`\`\n\n`;
         prompt += `The full raw output is omitted by default so you can focus on the first actionable failure.\n\n`;
         prompt += `Focus fixes on the specific failing assertions. Avoid broad refactors unless the failure indicates a design flaw. Fix the failing tests without breaking the passing ones.\n\n`;
+      }
+
+      if (config.previousDiff?.trim()) {
+        prompt += `### Previous Attempt Diff\n\n`;
+        prompt += `Here is the diff from your previous attempt. Use it to understand what you tried before and avoid repeating the same mistakes:\n\n`;
+        prompt += `\`\`\`diff\n${config.previousDiff.trim().slice(0, 4000)}\n\`\`\`\n\n`;
       }
     }
 

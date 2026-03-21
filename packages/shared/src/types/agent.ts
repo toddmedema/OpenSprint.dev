@@ -187,6 +187,8 @@ export interface ActiveTaskConfig {
   previousTestFailures?: string | null;
   /** Git diff from the previous attempt (when branch was preserved) */
   previousDiff?: string | null;
+  /** Prior failures on this task (attempt, type, short summary) for retry prompts */
+  failureHistory?: Array<{ attempt: number; failureType: string; summary: string }> | null;
   /** Structured quality-gate diagnostics from the previous merge attempt, when available */
   qualityGateDetail?: {
     command?: string | null;

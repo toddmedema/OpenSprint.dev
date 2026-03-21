@@ -20,6 +20,7 @@ import type { StoredTask } from "./task-store.service.js";
 import type {
   FailureType,
   RetryContext,
+  RetryFailureHistoryEntry,
   RetryQualityGateDetail,
 } from "./orchestrator-phase-context.js";
 import { agentIdentityService, type AttemptOutcome } from "./agent-identity.service.js";
@@ -51,6 +52,8 @@ const RETRY_CONTEXT_REVIEW_LIMIT = 4000;
 const RETRY_CONTEXT_TEST_OUTPUT_LIMIT = 2500;
 const RETRY_CONTEXT_TEST_FAILURES_LIMIT = 2000;
 const RETRY_CONTEXT_DIFF_LIMIT = 6000;
+const FAILURE_HISTORY_SUMMARY_LIMIT = 200;
+const FAILURE_HISTORY_MAX_ENTRIES = 4;
 const FAILURE_DIAGNOSTIC_OUTPUT_LIMIT = 1800;
 const FAILURE_DIAGNOSTIC_LINE_LIMIT = 300;
 const FAILURE_DIAGNOSTIC_REASON_PATTERNS: RegExp[] = [
@@ -163,6 +166,8 @@ export interface FailureSlot {
     qualityGateDetail?: RetryQualityGateDetail | null;
   };
   agent: { outputLog: string[]; startedAt: string; killedDueToTimeout: boolean };
+  /** Set when slot was created from dispatch (retry context from prior failure). */
+  retryContext?: RetryContext;
 }
 
 export class FailureHandlerService {
@@ -269,6 +274,13 @@ export class FailureHandlerService {
     previousTestFailures?: string;
     previousDiff?: string;
     qualityGateDetail?: RetryQualityGateDetail | null;
+    /** Append this attempt to rolling failure history (from slot.retryContext + new row). */
+    failureHistoryAppend?: {
+      attempt: number;
+      failureType: FailureType;
+      summary: string;
+    };
+    existingFailureHistory?: RetryFailureHistoryEntry[];
   }): RetryContext {
     const context: RetryContext = {
       previousFailure:
@@ -308,6 +320,19 @@ export class FailureHandlerService {
       context.qualityGateDetail = {
         ...params.qualityGateDetail,
       };
+    }
+    if (params.failureHistoryAppend) {
+      const prev = params.existingFailureHistory ?? [];
+      const summary = compactExecutionText(
+        params.failureHistoryAppend.summary,
+        FAILURE_HISTORY_SUMMARY_LIMIT
+      );
+      const nextEntry: RetryFailureHistoryEntry = {
+        attempt: params.failureHistoryAppend.attempt,
+        failureType: params.failureHistoryAppend.failureType,
+        summary: summary || params.failureHistoryAppend.summary.slice(0, FAILURE_HISTORY_SUMMARY_LIMIT),
+      };
+      context.failureHistory = [...prev, nextEntry].slice(-FAILURE_HISTORY_MAX_ENTRIES);
     }
     return context;
   }
@@ -713,7 +738,8 @@ export class FailureHandlerService {
       // Branch may not exist
     }
 
-    const includePreviousTestContext = failureType === "test_failure";
+    const includePreviousTestContext =
+      failureType === "test_failure" || failureType === "merge_quality_gate";
     const previousTestFailures = includePreviousTestContext
       ? buildTestFailureRetrySummary(
           slot.phaseResult.testResults,
@@ -735,7 +761,16 @@ export class FailureHandlerService {
       previousTestOutput,
       previousTestFailures,
       qualityGateDetail: failureDiagnosticDetail ?? slot.phaseResult.qualityGateDetail ?? null,
+      failureHistoryAppend: {
+        attempt: cumulativeAttempts,
+        failureType,
+        summary: effectiveReason,
+      },
+      existingFailureHistory: slot.retryContext?.failureHistory,
     });
+
+    const preserveBranch =
+      failureType === "test_failure" || failureType === "review_rejection";
 
     if (failureType !== "review_rejection") {
       const session = await this.host.sessionManager.createSession(repoPath, {
@@ -923,22 +958,25 @@ export class FailureHandlerService {
         failureType,
       });
 
-      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
-        baseBranch,
-        deleteBranch: true,
-      });
+      if (!preserveBranch) {
+        await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
+          baseBranch,
+          deleteBranch: true,
+        });
+      }
 
       await this.host.persistCounters(projectId, repoPath);
       await this.host.executeCodingPhase(projectId, repoPath, task, slot, {
         previousFailure: effectiveReason,
         reviewFeedback,
-        useExistingBranch: false,
+        useExistingBranch: preserveBranch,
         previousDiff,
         previousTestOutput,
         previousTestFailures,
         qualityGateDetail:
           failureDiagnosticDetail ?? slot.phaseResult.qualityGateDetail ?? undefined,
         failureType,
+        failureHistory: persistedRetryContext.failureHistory,
       });
       return;
     }
@@ -992,25 +1030,34 @@ export class FailureHandlerService {
         nextAction,
         failureDiagnosticDetail,
       });
-      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
-        baseBranch,
-        deleteBranch: true,
-      });
+      if (!preserveBranch) {
+        await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
+          baseBranch,
+          deleteBranch: true,
+        });
+      }
 
       slot.attempt = cumulativeAttempts + 1;
-      log.info(`Retrying ${task.id} (attempt ${slot.attempt}) with clean branch state`);
+      if (!preserveBranch) {
+        log.info(`Retrying ${task.id} (attempt ${slot.attempt}) with clean branch state`);
+      } else {
+        log.info(`Retrying ${task.id} (attempt ${slot.attempt}) preserving branch for targeted fix`, {
+          failureType,
+        });
+      }
 
       await this.host.persistCounters(projectId, repoPath);
       await this.host.executeCodingPhase(projectId, repoPath, task, slot, {
         previousFailure: effectiveReason,
         reviewFeedback,
-        useExistingBranch: false,
+        useExistingBranch: preserveBranch,
         previousDiff,
         previousTestOutput,
         previousTestFailures,
         qualityGateDetail:
           failureDiagnosticDetail ?? slot.phaseResult.qualityGateDetail ?? undefined,
         failureType,
+        failureHistory: persistedRetryContext.failureHistory,
       });
     } else {
       await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {

@@ -433,12 +433,15 @@ describe("FailureHandlerService", () => {
       expect.objectContaining({ id: taskId }),
       expect.objectContaining({ taskId }),
       expect.objectContaining({
-        useExistingBranch: false,
+        useExistingBranch: true,
         previousTestFailures:
           "- src/foo.test.ts > auth > rejects invalid token — AssertionError: expected 401 to be 403 // Object.is equality",
         previousTestOutput: expect.stringContaining(
           "Failed command: node ./node_modules/vitest/vitest.mjs run src/foo.test.ts"
         ),
+        failureHistory: expect.arrayContaining([
+          expect.objectContaining({ attempt: 1, failureType: "test_failure" }),
+        ]),
       })
     );
     expect(mockExecuteCodingPhase).toHaveBeenCalledWith(
@@ -452,7 +455,7 @@ describe("FailureHandlerService", () => {
         ),
       })
     );
-    expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, branchName);
+    expect(mockDeleteBranch).not.toHaveBeenCalled();
   });
 
   it("persists structured execution diagnostics for test-failure requeues", async () => {
@@ -577,12 +580,16 @@ describe("FailureHandlerService", () => {
       expect.objectContaining({ taskId }),
       expect.objectContaining({
         failureType: "merge_quality_gate",
+        useExistingBranch: false,
         qualityGateDetail: expect.objectContaining({
           command: "npm run lint",
           firstErrorLine: "src/foo.ts: error TS2304: Cannot find name 'x'",
         }),
-        previousTestOutput: undefined,
+        previousTestOutput: expect.stringContaining("Failed command: npm run lint"),
         previousTestFailures: undefined,
+        failureHistory: expect.arrayContaining([
+          expect.objectContaining({ attempt: 1, failureType: "merge_quality_gate" }),
+        ]),
       })
     );
     expect(mockHost.taskStore.update).toHaveBeenCalledWith(

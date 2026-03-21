@@ -9,6 +9,7 @@ import { resolveEpicId } from "./task-store.service.js";
 import type {
   FailureType,
   RetryContext,
+  RetryFailureHistoryEntry,
   RetryQualityGateDetail,
 } from "./orchestrator-phase-context.js";
 import { resolveBaseBranch } from "../utils/git-repo-state.js";
@@ -217,10 +218,37 @@ function extractRetryContext(task: StoredTask): RetryContext | undefined {
   ) {
     retryContext.failureType = record.failureType as FailureType;
   }
+  const failureHistory = extractFailureHistory(record.failureHistory);
+  if (failureHistory) {
+    retryContext.failureHistory = failureHistory;
+  }
   if (Object.keys(retryContext).length === 0) return undefined;
   // Re-dispatched tasks should start from a fresh branch/worktree.
   retryContext.useExistingBranch = false;
   return retryContext;
+}
+
+function extractFailureHistory(value: unknown): RetryFailureHistoryEntry[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const out: RetryFailureHistoryEntry[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    const attempt =
+      typeof rec.attempt === "number" && Number.isFinite(rec.attempt) ? rec.attempt : null;
+    const failureType =
+      typeof rec.failureType === "string" && FAILURE_TYPES.includes(rec.failureType as FailureType)
+        ? (rec.failureType as FailureType)
+        : null;
+    const summaryRaw = typeof rec.summary === "string" ? rec.summary.trim() : "";
+    if (attempt == null || !failureType || !summaryRaw) continue;
+    out.push({
+      attempt,
+      failureType,
+      summary: summaryRaw.slice(0, 500),
+    });
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 function extractMergeResumeState(task: StoredTask): { worktreePath: string } | undefined {
