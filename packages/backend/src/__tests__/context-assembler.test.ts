@@ -188,6 +188,8 @@ User authentication.
     expect(prompt).toContain(
       "merge quality gates: `npm run build`, `npm run lint`, `npm run test`"
     );
+    expect(prompt).toContain("**Dependencies:**");
+    expect(prompt).toContain("package-manager install");
     expect(prompt).toContain("Never use watch mode");
     expect(prompt).toContain("Never run destructive cleanup commands");
     // Terminology: use "done" and "finish" instead of "complete" (feedback consistency)

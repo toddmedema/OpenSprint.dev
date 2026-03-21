@@ -214,6 +214,9 @@ describe("ProjectService.scaffoldProject", () => {
     const pkg = JSON.parse(await fs.readFile(pkgPath, "utf-8"));
     expect(pkg.scripts.web).toBe("expo start --web");
     expect(observedCommands).toContain("npm install --include=dev");
+    expect(observedCommands.some((c) => c.includes("npm install") && c.includes("typescript"))).toBe(
+      true
+    );
   });
 
   it("rejects missing name", async () => {

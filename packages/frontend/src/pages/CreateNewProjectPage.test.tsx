@@ -487,9 +487,11 @@ describe("CreateNewProjectPage", () => {
     await user.click(screen.getByTestId("next-button"));
 
     expect(screen.getByText("Building your project...")).toBeInTheDocument();
+    expect(screen.queryByTestId("back-button")).not.toBeInTheDocument();
 
     resolveScaffold!(defaultScaffoldResponse);
     await screen.findByText(/your project is ready/i);
+    expect(screen.queryByTestId("back-button")).not.toBeInTheDocument();
   });
 
   it("shows error when scaffold fails", async () => {
@@ -504,6 +506,7 @@ describe("CreateNewProjectPage", () => {
     const errors = await screen.findAllByText("Folder already exists");
     expect(errors.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByTestId("scaffold-retry-button")).toBeInTheDocument();
+    expect(screen.getByTestId("back-button")).toBeInTheDocument();
   });
 
   it("shows clear actionable error when prerequisites (git/node) are missing", async () => {

@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
+import { MemoryRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Provider } from "react-redux";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
@@ -1282,6 +1282,10 @@ describe("Navbar", () => {
     mockGetGlobalStatus.mockResolvedValue({ hasAnyKey: false, useCustomCli: false });
     const user = userEvent.setup();
     const { OnboardingPage } = await import("../../pages/OnboardingPage");
+    function OnboardingLocationSpy() {
+      const loc = useLocation();
+      return <span data-testid="onboarding-route-location">{`${loc.pathname}${loc.search}`}</span>;
+    }
     render(
       <ThemeProvider>
         <DisplayPreferencesProvider>
@@ -1290,7 +1294,15 @@ describe("Navbar", () => {
               <MemoryRouter initialEntries={["/"]}>
                 <Routes>
                   <Route path="/" element={<Navbar project={null} />} />
-                  <Route path="/onboarding" element={<OnboardingPage />} />
+                  <Route
+                    path="/onboarding"
+                    element={
+                      <>
+                        <OnboardingPage />
+                        <OnboardingLocationSpy />
+                      </>
+                    }
+                  />
                 </Routes>
               </MemoryRouter>
             </QueryClientProvider>
@@ -1306,7 +1318,9 @@ describe("Navbar", () => {
     await user.click(createNewButton);
 
     expect(await screen.findByTestId("onboarding-page")).toBeInTheDocument();
-    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(/\/projects\/create-new/);
+    expect(screen.getByTestId("onboarding-route-location")).toHaveTextContent(
+      "/onboarding?intended=%2Fprojects%2Fcreate-new"
+    );
   });
 
   it("navigates to /onboarding?intended=/projects/add-existing when Add Existing Project clicked and no API keys", async () => {
@@ -1314,6 +1328,10 @@ describe("Navbar", () => {
     mockGetGlobalStatus.mockResolvedValue({ hasAnyKey: false, useCustomCli: false });
     const user = userEvent.setup();
     const { OnboardingPage } = await import("../../pages/OnboardingPage");
+    function OnboardingLocationSpy() {
+      const loc = useLocation();
+      return <span data-testid="onboarding-route-location">{`${loc.pathname}${loc.search}`}</span>;
+    }
     render(
       <ThemeProvider>
         <DisplayPreferencesProvider>
@@ -1322,7 +1340,15 @@ describe("Navbar", () => {
               <MemoryRouter initialEntries={["/"]}>
                 <Routes>
                   <Route path="/" element={<Navbar project={null} />} />
-                  <Route path="/onboarding" element={<OnboardingPage />} />
+                  <Route
+                    path="/onboarding"
+                    element={
+                      <>
+                        <OnboardingPage />
+                        <OnboardingLocationSpy />
+                      </>
+                    }
+                  />
                 </Routes>
               </MemoryRouter>
             </QueryClientProvider>
@@ -1338,7 +1364,9 @@ describe("Navbar", () => {
     await user.click(addExistingButton);
 
     expect(await screen.findByTestId("onboarding-page")).toBeInTheDocument();
-    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(/\/projects\/add-existing/);
+    expect(screen.getByTestId("onboarding-route-location")).toHaveTextContent(
+      "/onboarding?intended=%2Fprojects%2Fadd-existing"
+    );
   });
 
   it("when useCustomCli true, Create New Project navigates to /projects/create-new", async () => {

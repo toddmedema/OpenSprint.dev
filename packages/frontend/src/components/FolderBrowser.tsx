@@ -79,6 +79,9 @@ export function FolderBrowser({ initialPath, onSelect, onCancel }: FolderBrowser
   const containerRef = useRef<HTMLDivElement>(null);
   useModalA11y({ containerRef, onClose: onCancel, isOpen: true });
 
+  const pathEdited =
+    manualPath.trim() !== currentPath.trim();
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
@@ -115,9 +118,11 @@ export function FolderBrowser({ initialPath, onSelect, onCancel }: FolderBrowser
               onChange={(e) => setManualPath(e.target.value)}
               placeholder="/path/to/folder"
             />
-            <button type="submit" className="btn-secondary text-sm px-3 whitespace-nowrap">
-              Go
-            </button>
+            {pathEdited && (
+              <button type="submit" className="btn-secondary text-sm px-3 whitespace-nowrap">
+                Go
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {

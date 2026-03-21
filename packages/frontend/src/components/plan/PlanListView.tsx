@@ -108,7 +108,11 @@ function PlanListRow({
             {formatPlanIdAsTitle(planId)}
           </span>
           <span className="shrink-0 text-xs text-theme-muted">
-            {plan.taskCount > 0 ? `${plan.doneTaskCount}/${plan.taskCount} tasks` : "No tasks"}
+            {plan.taskCount > 0
+              ? `${plan.doneTaskCount}/${plan.taskCount} tasks`
+              : isPlanningTasks
+                ? "Generating tasks..."
+                : "No tasks"}
           </span>
         </button>
         <span
@@ -117,17 +121,6 @@ function PlanListRow({
           onKeyDown={(e) => e.stopPropagation()}
           role="presentation"
         >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect();
-            }}
-            className="shrink-0 text-xs font-medium text-theme-muted hover:bg-theme-border-subtle px-2 py-1 rounded transition-colors"
-            data-testid="plan-list-edit"
-          >
-            Edit
-          </button>
           {showGenerateTasks && (
             <button
               type="button"
@@ -154,13 +147,6 @@ function PlanListRow({
               className="shrink-0 text-xs font-medium text-brand-600 hover:bg-theme-info-bg px-2 py-1 rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               data-testid="plan-list-execute"
             >
-              {(isExecuting || (autoExecutePlans && plan.taskCount === 0 && isPlanningTasks)) && (
-                <span
-                  data-testid="execute-spinner"
-                  aria-hidden
-                  className="inline-block w-3 h-3 animate-spin border-2 border-current border-t-transparent rounded-full"
-                />
-              )}
               {isExecuting || (autoExecutePlans && plan.taskCount === 0 && isPlanningTasks)
                 ? plan.taskCount === 0 && isPlanningTasks
                   ? "Generating tasks…"

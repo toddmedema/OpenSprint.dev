@@ -44,6 +44,7 @@ const ROLE_DEFAULT_INSTRUCTIONS: Record<AgentRole, string> = {
   ].join("\n"),
   coder: [
     "- Prefer the smallest relevant non-watch verification while iterating, then widen coverage only when the touched surface requires it.",
+    "- If you add or change dependencies, run the repo’s package-manager install from the repository root, update lockfiles, and commit those changes with the code that imports the new packages.",
     "- Commit logical units as you go so partial progress is recoverable.",
     "- Follow the required completion payload exactly, and do not push, merge, or perform broad destructive cleanup unless the prompt explicitly directs it.",
   ].join("\n"),

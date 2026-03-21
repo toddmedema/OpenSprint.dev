@@ -400,6 +400,10 @@ export function CreateNewProjectPage() {
     (simpleComplexityAgent.type !== "custom" || simpleComplexityAgent.cliCommand.trim()) &&
     (complexComplexityAgent.type !== "custom" || complexComplexityAgent.cliCommand.trim());
 
+  const showBackButton =
+    currentStepIndex > 0 &&
+    !(step === "scaffold" && (scaffolding || scaffoldedProject !== null));
+
   return (
     <Layout>
       <div className="h-full overflow-y-auto">
@@ -660,7 +664,7 @@ export function CreateNewProjectPage() {
           )}
 
           <div className="flex justify-between mt-6">
-            {currentStepIndex > 0 ? (
+            {showBackButton ? (
               <button
                 onClick={() => {
                   setMetadataError(null);

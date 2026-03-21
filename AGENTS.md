@@ -14,10 +14,11 @@ When Open Sprint spawns an Execute agent:
 
 1. The task branch and worktree are already prepared. Do not create or switch branches unless the task prompt explicitly tells you to recover git state.
 2. Implement the requested change and run the smallest relevant non-watch verification for touched workspaces while iterating. Use scoped tests first, add scoped build/typecheck and lint commands when your changes could affect them, and leave the branch in a state where the merge quality gates (`npm run build`, `npm run lint`, `npm run test`) are expected to pass before you report success.
-3. Commit incremental logical units while working so crash recovery can preserve progress.
-4. Report completion only by writing the exact `result.json` payload requested in the task prompt. Do not call `TaskStoreService.close()` from feature code.
-5. If blocked by ambiguity, return `status: "failed"` with `open_questions` instead of guessing.
-6. Do not push, merge, or close tasks manually. The orchestrator handles validation, task state, merging, and remote publication.
+3. **Package dependencies:** If you add, remove, or upgrade dependencies (npm, pnpm, yarn, etc.), follow this repo’s normal workflow so manifests and lockfiles stay in sync. Run the appropriate install command from the **repository root** (the directory that contains the root `package.json`—your current working copy’s root for this task). Commit `package.json`, any workspace package manifests you changed, and lockfile updates in the same commits as the code that imports those packages. Do not report success while new imports point at packages that were never installed or recorded in the lockfile.
+4. Commit incremental logical units while working so crash recovery can preserve progress.
+5. Report completion only by writing the exact `result.json` payload requested in the task prompt. Do not call `TaskStoreService.close()` from feature code.
+6. If blocked by ambiguity, return `status: "failed"` with `open_questions` instead of guessing.
+7. Do not push, merge, or close tasks manually. The orchestrator handles validation, task state, merging, and remote publication.
 
 ## Orchestrator Recovery (GUPP-style)
 

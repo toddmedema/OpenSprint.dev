@@ -4,8 +4,15 @@ import { Layout } from "../components/layout/Layout";
 import { api, isConnectionError } from "../api/client";
 import { PREREQ_ITEMS, getPrereqInstallUrl } from "../lib/prerequisites";
 import { AGENT_PROVIDER_OPTIONS, type AgentProviderValue } from "../lib/agentProviders";
+import {
+  getOnboardingAgentCliRequirement,
+  isCliInstalledForKind,
+} from "../lib/agentProviderCli";
+import { AgentProviderCliBanner } from "../components/AgentProviderCliBanner";
 
 type PrerequisitesState = { missing: string[]; platform: string } | null;
+
+type EnvKeysResponse = Awaited<ReturnType<typeof api.env.getKeys>>;
 
 const NO_KEY_MESSAGE = "No API key needed — you're good to go.";
 const CONNECTION_ERROR_MESSAGE = "Unable to connect. Please check your network and try again.";
@@ -80,11 +87,16 @@ export function OnboardingPage() {
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cliCheckKeys, setCliCheckKeys] = useState<EnvKeysResponse | null>(null);
+  const [cliCheckLoading, setCliCheckLoading] = useState(false);
   const keyInputRef = useRef<HTMLInputElement>(null);
 
   const providerOption = AGENT_PROVIDER_OPTIONS.find((o) => o.value === provider);
   const needsKeyInput = providerOption?.needsKeyInput ?? true;
   const isConnectionErr = error !== null && error === CONNECTION_ERROR_MESSAGE;
+  const onboardingCli = getOnboardingAgentCliRequirement(provider);
+  const hasKeyContent = keyValue.trim().length > 0;
+  const shouldFetchCliKeys = needsKeyInput && onboardingCli !== null && hasKeyContent;
 
   useEffect(() => {
     api.env
@@ -93,8 +105,58 @@ export function OnboardingPage() {
       .catch(() => setPrerequisites(null));
   }, []);
 
+  useEffect(() => {
+    if (!shouldFetchCliKeys) {
+      setCliCheckKeys(null);
+      setCliCheckLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setCliCheckLoading(true);
+    api.env
+      .getKeys()
+      .then((keys) => {
+        if (!cancelled) setCliCheckKeys(keys);
+      })
+      .catch(() => {
+        if (!cancelled) setCliCheckKeys(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCliCheckLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldFetchCliKeys, provider]);
+
+  const refetchCliKeys = () => {
+    if (!shouldFetchCliKeys) return;
+    setCliCheckLoading(true);
+    api.env
+      .getKeys()
+      .then((keys) => setCliCheckKeys(keys))
+      .catch(() => setCliCheckKeys(null))
+      .finally(() => setCliCheckLoading(false));
+  };
+
+  const cliMissingForContinue =
+    onboardingCli !== null &&
+    onboardingCli.blockContinueWhenMissing &&
+    hasKeyContent &&
+    cliCheckKeys !== null &&
+    !isCliInstalledForKind(cliCheckKeys, onboardingCli.kind);
+
+  const cliCheckPending =
+    onboardingCli !== null &&
+    onboardingCli.blockContinueWhenMissing &&
+    hasKeyContent &&
+    cliCheckLoading;
+
   const handleContinue = async () => {
     setError(null);
+    if (cliMissingForContinue || cliCheckPending) {
+      return;
+    }
     setSaving(true);
     try {
       if (provider === "lmstudio") {
@@ -153,7 +215,10 @@ export function OnboardingPage() {
   const canContinue =
     provider === "custom" ||
     provider === "lmstudio" ||
-    (needsKeyInput && keyValue.trim().length > 0);
+    (needsKeyInput &&
+      keyValue.trim().length > 0 &&
+      !cliMissingForContinue &&
+      !cliCheckPending);
 
   const handleCancel = () => {
     navigate("/");
@@ -250,6 +315,7 @@ export function OnboardingPage() {
                     setProvider(e.target.value as AgentProviderValue);
                     setKeyValue("");
                     setError(null);
+                    setCliCheckKeys(null);
                   }}
                   data-testid="onboarding-provider-select"
                 >
@@ -335,6 +401,22 @@ export function OnboardingPage() {
                         Try again
                       </button>
                     )}
+                    {onboardingCli !== null && hasKeyContent && cliCheckLoading && (
+                      <p className="mt-2 text-sm text-theme-muted" data-testid="onboarding-cli-checking">
+                        Checking CLI…
+                      </p>
+                    )}
+                    {onboardingCli !== null &&
+                      hasKeyContent &&
+                      cliCheckKeys &&
+                      !isCliInstalledForKind(cliCheckKeys, onboardingCli.kind) && (
+                        <div className="mt-3">
+                          <AgentProviderCliBanner
+                            kind={onboardingCli.kind}
+                            onInstallAttemptComplete={refetchCliKeys}
+                          />
+                        </div>
+                      )}
                   </>
                 )}
                 {error && !needsKeyInput && (
@@ -369,12 +451,6 @@ export function OnboardingPage() {
               </button>
             </div>
           </section>
-
-          {intended !== "/" && (
-            <p className="text-theme-muted text-xs" data-testid="onboarding-intended">
-              Intended destination: {intended}
-            </p>
-          )}
         </div>
       </div>
     </Layout>

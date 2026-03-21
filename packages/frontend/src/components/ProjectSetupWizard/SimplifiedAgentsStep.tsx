@@ -1,9 +1,8 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ModelSelect } from "../ModelSelect";
 import type { AgentType } from "@opensprint/shared";
 import type { AgentConfig, EnvKeys } from "./AgentsStep";
-import { api } from "../../api/client";
+import { AgentProviderCliBanner } from "../AgentProviderCliBanner";
 
 const DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234";
 import { hasNoApiKeys } from "../../utils/agentConfigDefaults";
@@ -51,12 +50,6 @@ export function SimplifiedAgentsStep({
   const usesCursor =
     simpleComplexityAgent.type === "cursor" || complexComplexityAgent.type === "cursor";
   const cursorCliMissing = envKeys && !envKeys.cursorCli && usesCursor;
-
-  const [cursorCliInstalling, setCursorCliInstalling] = useState(false);
-  const [cursorCliInstallResult, setCursorCliInstallResult] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
 
   return (
     <div className="space-y-6" data-testid="simplified-agents-step">
@@ -260,64 +253,8 @@ export function SimplifiedAgentsStep({
           </div>
         </>
       )}
-      {cursorCliMissing && (
-        <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
-          <p className="text-sm text-theme-warning-text mb-2">
-            <strong>Cursor CLI not found.</strong> The{" "}
-            <code className="font-mono text-xs">agent</code> command is required for Cursor. Install
-            it, then restart your terminal or Open Sprint.
-          </p>
-          <button
-            type="button"
-            className="btn btn-primary text-sm"
-            disabled={cursorCliInstalling}
-            onClick={async () => {
-              setCursorCliInstallResult(null);
-              setCursorCliInstalling(true);
-              try {
-                const data = await api.env.installCursorCli();
-                setCursorCliInstallResult({
-                  success: data.success,
-                  message: data.message ?? (data.success ? "Install finished." : "Install failed."),
-                });
-              } catch (err) {
-                setCursorCliInstallResult({
-                  success: false,
-                  message: err instanceof Error ? err.message : "Install request failed.",
-                });
-              } finally {
-                setCursorCliInstalling(false);
-              }
-            }}
-            data-testid="install-cursor-cli-btn"
-          >
-            {cursorCliInstalling ? "Installing…" : "Install Cursor CLI"}
-          </button>
-          {cursorCliInstallResult && (
-            <p
-              className={`text-sm mt-2 ${cursorCliInstallResult.success ? "text-theme-success-text" : "text-theme-error-text"}`}
-            >
-              {cursorCliInstallResult.message}
-            </p>
-          )}
-        </div>
-      )}
-      {claudeCliMissing && (
-        <div className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border">
-          <p className="text-sm text-theme-warning-text">
-            <strong>Claude CLI not found.</strong> Install it from{" "}
-            <a
-              href="https://docs.anthropic.com/en/docs/claude-code/getting-started"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:opacity-80"
-            >
-              docs.anthropic.com
-            </a>{" "}
-            and run <code className="font-mono text-xs">claude</code> to complete authentication.
-          </p>
-        </div>
-      )}
+      {cursorCliMissing && <AgentProviderCliBanner kind="cursor" />}
+      {claudeCliMissing && <AgentProviderCliBanner kind="claude" />}
       {usesClaudeCli && !claudeCliMissing && (
         <div className="p-3 rounded-lg bg-theme-info-bg border border-theme-info-border">
           <p className="text-sm text-theme-info-text">

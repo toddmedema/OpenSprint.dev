@@ -9,7 +9,18 @@ import { api } from "../api/client";
 
 const mockGetPrerequisites = vi.fn();
 const mockGetGlobalStatus = vi.fn();
+const mockGetKeys = vi.fn();
 const mockNavigate = vi.fn();
+
+const defaultEnvKeys = {
+  anthropic: false,
+  cursor: false,
+  openai: false,
+  google: false,
+  claudeCli: true,
+  cursorCli: true,
+  useCustomCli: false,
+};
 
 vi.mock("../api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api/client")>();
@@ -19,6 +30,7 @@ vi.mock("../api/client", async (importOriginal) => {
       env: {
         getPrerequisites: (...args: unknown[]) => mockGetPrerequisites(...args),
         getGlobalStatus: (...args: unknown[]) => mockGetGlobalStatus(...args),
+        getKeys: (...args: unknown[]) => mockGetKeys(...args),
         validateKey: vi.fn(),
         saveKey: vi.fn(),
         setGlobalSettings: vi.fn(),
@@ -53,6 +65,8 @@ describe("OnboardingPage", () => {
     mockGetPrerequisites.mockResolvedValue({ missing: [], platform: "darwin" });
     mockGetGlobalStatus.mockReset();
     mockGetGlobalStatus.mockResolvedValue({ hasAnyKey: false, useCustomCli: false });
+    mockGetKeys.mockReset();
+    mockGetKeys.mockResolvedValue(defaultEnvKeys);
     mockNavigate.mockClear();
     vi.mocked(api.env.validateKey).mockReset();
     vi.mocked(api.env.saveKey).mockReset();
@@ -150,26 +164,6 @@ describe("OnboardingPage", () => {
     expect(screen.getByTestId("onboarding-continue-button")).toBeInTheDocument();
   });
 
-  it("supports optional intended query param", async () => {
-    renderOnboarding(["/onboarding?intended=/projects/create-new"]);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("prereq-row-git")).toBeInTheDocument();
-    });
-    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(
-      "Intended destination: /projects/create-new"
-    );
-  });
-
-  it("does not show intended when query param is absent", async () => {
-    renderOnboarding(["/onboarding"]);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("prereq-row-git")).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId("onboarding-intended")).not.toBeInTheDocument();
-  });
-
   it("completion with no intended param navigates to /", async () => {
     const user = userEvent.setup();
     renderOnboarding(["/onboarding"]);
@@ -207,7 +201,6 @@ describe("OnboardingPage", () => {
     await waitFor(() => {
       expect(screen.getByTestId("prereq-row-git")).toBeInTheDocument();
     });
-    expect(screen.queryByTestId("onboarding-intended")).not.toBeInTheDocument();
     await user.selectOptions(screen.getByTestId("onboarding-provider-select"), "LM Studio (local)");
     await user.click(screen.getByTestId("onboarding-continue-button"));
 
@@ -223,7 +216,6 @@ describe("OnboardingPage", () => {
     await waitFor(() => {
       expect(screen.getByTestId("prereq-row-git")).toBeInTheDocument();
     });
-    expect(screen.queryByTestId("onboarding-intended")).not.toBeInTheDocument();
     await user.selectOptions(screen.getByTestId("onboarding-provider-select"), "LM Studio (local)");
     await user.click(screen.getByTestId("onboarding-continue-button"));
 
@@ -239,9 +231,6 @@ describe("OnboardingPage", () => {
     await waitFor(() => {
       expect(screen.getByTestId("prereq-row-git")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(
-      "Intended destination: /projects/abc123/settings"
-    );
     await user.selectOptions(screen.getByTestId("onboarding-provider-select"), "LM Studio (local)");
     await user.click(screen.getByTestId("onboarding-continue-button"));
 
@@ -446,6 +435,88 @@ describe("OnboardingPage", () => {
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith("/projects/create-new");
     });
+  });
+
+  it("Cursor: after entering a key, fetches env keys and blocks Continue when Cursor CLI is missing", async () => {
+    const user = userEvent.setup();
+    mockGetKeys.mockResolvedValue({ ...defaultEnvKeys, cursorCli: false });
+    renderOnboarding();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("prereq-row-git")).toBeInTheDocument();
+    });
+    await user.selectOptions(screen.getByTestId("onboarding-provider-select"), "Cursor");
+    await user.type(screen.getByTestId("onboarding-api-key-input"), "key_test");
+
+    await waitFor(() => {
+      expect(mockGetKeys).toHaveBeenCalled();
+    });
+    expect(screen.getByTestId("agent-provider-cli-banner-cursor")).toBeInTheDocument();
+    expect(screen.getByTestId("install-cursor-cli-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("onboarding-continue-button")).toBeDisabled();
+  });
+
+  it("Cursor: Continue proceeds when Cursor CLI is present", async () => {
+    const user = userEvent.setup();
+    mockGetKeys.mockResolvedValue({ ...defaultEnvKeys, cursorCli: true });
+    vi.mocked(api.env.validateKey).mockResolvedValue({ valid: true });
+    vi.mocked(api.env.saveKey).mockResolvedValue({ saved: true });
+    renderOnboarding(["/onboarding?intended=/"]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("prereq-row-git")).toBeInTheDocument();
+    });
+    await user.selectOptions(screen.getByTestId("onboarding-provider-select"), "Cursor");
+    await user.type(screen.getByTestId("onboarding-api-key-input"), "key_ok");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("onboarding-continue-button")).not.toBeDisabled();
+    });
+    await user.click(screen.getByTestId("onboarding-continue-button"));
+
+    await waitFor(() => {
+      expect(api.env.validateKey).toHaveBeenCalledWith("cursor", "key_ok");
+    });
+    expect(mockNavigate).toHaveBeenCalledWith("/");
+  });
+
+  it("Claude: after entering a key, fetches env keys and shows Claude CLI banner when CLI missing but does not block Continue", async () => {
+    const user = userEvent.setup();
+    mockGetKeys.mockResolvedValue({ ...defaultEnvKeys, claudeCli: false });
+    renderOnboarding();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("prereq-row-git")).toBeInTheDocument();
+    });
+    await user.type(screen.getByTestId("onboarding-api-key-input"), "sk-ant-x");
+
+    await waitFor(() => {
+      expect(mockGetKeys).toHaveBeenCalled();
+    });
+    expect(screen.getByTestId("agent-provider-cli-banner-claude")).toBeInTheDocument();
+    expect(screen.getByTestId("onboarding-continue-button")).not.toBeDisabled();
+  });
+
+  it("Claude: Continue still validates and saves when Claude CLI is missing (API path)", async () => {
+    const user = userEvent.setup();
+    mockGetKeys.mockResolvedValue({ ...defaultEnvKeys, claudeCli: false });
+    vi.mocked(api.env.validateKey).mockResolvedValue({ valid: true });
+    vi.mocked(api.env.saveKey).mockResolvedValue({ saved: true });
+    renderOnboarding(["/onboarding?intended=/projects/create-new"]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("prereq-row-git")).toBeInTheDocument();
+    });
+    await user.type(screen.getByTestId("onboarding-api-key-input"), "sk-ant-ok");
+    await waitFor(() => {
+      expect(screen.getByTestId("agent-provider-cli-banner-claude")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("onboarding-continue-button"));
+
+    await waitFor(() => {
+      expect(api.env.saveKey).toHaveBeenCalledWith("ANTHROPIC_API_KEY", "sk-ant-ok");
+    });
+    expect(mockNavigate).toHaveBeenCalledWith("/projects/create-new");
   });
 
   it("eye toggle switches password visibility", async () => {

@@ -98,8 +98,10 @@ export function usePlanChat(
 export function useDecomposePlans(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: queryKeys.plans.decompose(projectId),
     mutationFn: () => api.plans.decompose(projectId),
-    onSuccess: () => {
+    /** Always refresh list after decompose settles so Plan phase can leave "generating" even on error. */
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
     },
   });

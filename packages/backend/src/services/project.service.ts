@@ -125,6 +125,7 @@ const OPENSPRINT_RUNTIME_CONTRACT_SECTION = [
   "",
   "- Execute agents start in a prepared worktree with the task branch already checked out.",
   "- Run the smallest relevant non-watch verification for touched workspaces while iterating. Use scoped tests first, add scoped build/typecheck and lint commands when your changes could affect them, and leave the branch in a state where the merge quality gates (`npm run build`, `npm run lint`, `npm run test`) are expected to pass before reporting success.",
+  "- If you add, remove, or upgrade package dependencies: run this repo’s install command from the repository root (root `package.json`), update lockfiles as required, and commit manifest and lockfile changes together with the code that uses those packages.",
   "- Report completion or blocking questions by writing the exact `.opensprint/active/<task-id>/result.json` payload requested in the task prompt.",
   "- Commit incremental logical units while working so crash recovery can preserve progress.",
   '- If blocked by ambiguity, return `status: "failed"` with `open_questions` instead of guessing.',
@@ -772,6 +773,23 @@ export class ProjectService {
           `Expo web dependencies could not be installed: ${msg}. Ensure Expo CLI is available and try again.`,
           { repoPath, recovery }
         );
+      }
+
+      // Step 4: ensure TypeScript is installed locally (blank Expo template may omit it; agents/builds expect `tsc` / npx tsc)
+      const tsResult = await this.runWithRecovery(
+        "npm install -D typescript",
+        repoPath,
+        agentConfig,
+        "Failed to install TypeScript"
+      );
+      if (!recovery && tsResult.recovery) {
+        recovery = tsResult.recovery;
+      }
+      if (!tsResult.success) {
+        throw new AppError(500, ErrorCodes.SCAFFOLD_INIT_FAILED, tsResult.errorMessage!, {
+          repoPath,
+          recovery: tsResult.recovery ?? recovery,
+        });
       }
     }
 

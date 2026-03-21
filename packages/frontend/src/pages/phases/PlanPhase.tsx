@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { shallowEqual } from "react-redux";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useIsMutating } from "@tanstack/react-query";
 import type { Plan, PlanStatus } from "@opensprint/shared";
 import { sortPlansByStatus } from "@opensprint/shared";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -223,6 +223,9 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
 
   /* ── TanStack Query for loading state (data synced to Redux by ProjectShell) ── */
   const plansQuery = usePlans(projectId);
+  const decomposeMutationsInFlight = useIsMutating({
+    mutationKey: queryKeys.plans.decompose(projectId),
+  });
   const markPlanCompleteMutation = useMarkPlanComplete(projectId);
   const { data: projectSettings } = useProjectSettings(projectId);
   const autoExecutePlans = projectSettings?.autoExecutePlans === true;
@@ -405,6 +408,53 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   }, [filteredAndSortedPlans, optimisticPlans, statusFilter]);
 
   const plansEmpty = plans.length === 0 && optimisticPlans.length === 0;
+
+  /** After decompose finishes, Redux may lag the plans query refetch — keep full-page generating until list fetch settles. */
+  const [awaitingPlansAfterDecompose, setAwaitingPlansAfterDecompose] = useState(false);
+  const prevDecomposeMutatingRef = useRef(0);
+  const sawPlansFetchAfterAwaitingRef = useRef(false);
+
+  useEffect(() => {
+    const prev = prevDecomposeMutatingRef.current;
+    const now = decomposeMutationsInFlight;
+    if (prev > 0 && now === 0 && plansEmpty) {
+      sawPlansFetchAfterAwaitingRef.current = false;
+      setAwaitingPlansAfterDecompose(true);
+    }
+    prevDecomposeMutatingRef.current = now;
+  }, [decomposeMutationsInFlight, plansEmpty]);
+
+  useEffect(() => {
+    if (!plansEmpty) {
+      setAwaitingPlansAfterDecompose(false);
+      sawPlansFetchAfterAwaitingRef.current = false;
+    }
+  }, [plansEmpty]);
+
+  useEffect(() => {
+    if (!awaitingPlansAfterDecompose) return;
+    if (plansQuery.isFetching) {
+      sawPlansFetchAfterAwaitingRef.current = true;
+      return;
+    }
+    if (sawPlansFetchAfterAwaitingRef.current) {
+      setAwaitingPlansAfterDecompose(false);
+      sawPlansFetchAfterAwaitingRef.current = false;
+    }
+  }, [awaitingPlansAfterDecompose, plansQuery.isFetching]);
+
+  useEffect(() => {
+    if (!awaitingPlansAfterDecompose) return;
+    const t = window.setTimeout(() => {
+      setAwaitingPlansAfterDecompose(false);
+      sawPlansFetchAfterAwaitingRef.current = false;
+    }, 15_000);
+    return () => window.clearTimeout(t);
+  }, [awaitingPlansAfterDecompose]);
+
+  const generatingPlansFromPrd =
+    plansEmpty && (decomposeMutationsInFlight > 0 || awaitingPlansAfterDecompose);
+
   const { showSpinner: showPlansSpinner, showEmptyState: showPlansEmptyState } =
     usePhaseLoadingState(plansQuery.isLoading, plansEmpty);
 
@@ -895,8 +945,12 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     setChatSending(false);
   };
 
-  /* ── RENDER: Centered pulsing logo + status during fetch (no bordered container) ── */
-  if (showPlansSpinner) {
+  /* ── RENDER: Centered pulsing logo + status during fetch or PRD→plans decomposition ── */
+  const showPlansBlockingSpinner = showPlansSpinner || generatingPlansFromPrd;
+  const plansBlockingStatus = generatingPlansFromPrd ? "Generating Plan..." : "Loading plans…";
+  const plansBlockingAriaLabel = generatingPlansFromPrd ? "Generating plan" : "Loading plans";
+
+  if (showPlansBlockingSpinner) {
     return (
       <div
         className="flex flex-1 min-h-0 items-center justify-center"
@@ -904,8 +958,8 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
       >
         <PhaseLoadingSpinner
           data-testid="plan-phase-loading-spinner"
-          aria-label="Loading plans"
-          status="Loading plans…"
+          aria-label={plansBlockingAriaLabel}
+          status={plansBlockingStatus}
         />
       </div>
     );

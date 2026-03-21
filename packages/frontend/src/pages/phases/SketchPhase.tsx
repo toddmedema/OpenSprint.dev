@@ -17,7 +17,6 @@ import {
   useSketchChat,
   usePlanStatus,
   useDecomposePlans,
-  usePlans,
 } from "../../api/hooks";
 import { usePhaseLoadingState } from "../../hooks/usePhaseLoadingState";
 import { queryKeys } from "../../api/queryKeys";
@@ -153,7 +152,6 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
   );
   const { data: planStatus } = usePlanStatus(projectId, { enabled: hasPrdContentFromQuery });
   const decomposeMutation = useDecomposePlans(projectId ?? "");
-  const refetchPlans = usePlans(projectId);
 
   /* ── Sync query data to Redux for components that read from store ── */
   useEffect(() => {
@@ -184,7 +182,6 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
     section: string;
   } | null>(null);
   const [historyExpanded, setHistoryExpanded] = useState(false);
-  const [planningIt, setPlanningIt] = useState(false);
   const [discussCollapsed, setDiscussCollapsedState] = useState(loadSketchChatSidebarCollapsed);
   const [tocCollapsed, setTocCollapsedState] = useState(loadSketchTocSidebarCollapsed);
   const [sketchContext, setSketchContext] = useState<{ hasExistingCode: boolean } | null>(null);
@@ -548,27 +545,22 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
     [projectId, savingSections, dispatch, scheduleRefreshCascade]
   );
 
-  const handlePlanIt = async () => {
-    setPlanningIt(true);
-    try {
-      await decomposeMutation.mutateAsync();
+  const handlePlanIt = () => {
+    void decomposeMutation.mutateAsync().then(() => {
       if (projectId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.plans.status(projectId) });
-        await refetchPlans.refetch();
       }
-      onNavigateToPlan?.();
-    } finally {
-      setPlanningIt(false);
-    }
+    });
+    onNavigateToPlan?.();
   };
 
   const planCtaLabel =
     planStatus?.action === "plan"
-      ? planningIt || decomposing
+      ? decomposing
         ? "Planning..."
         : "Plan it"
       : planStatus?.action === "replan"
-        ? planningIt || decomposing
+        ? decomposing
           ? "Replanning..."
           : "Replan it"
         : null;
@@ -788,7 +780,7 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
                 <button
                   type="button"
                   onClick={handlePlanIt}
-                  disabled={planningIt || decomposing}
+                  disabled={decomposing}
                   className="btn-primary text-sm disabled:opacity-50 min-h-[44px] min-w-[44px] px-4"
                   data-testid="sketch-plan-cta"
                 >

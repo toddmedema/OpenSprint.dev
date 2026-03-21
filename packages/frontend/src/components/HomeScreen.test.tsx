@@ -231,10 +231,22 @@ describe("HomeScreen", () => {
     const user = userEvent.setup();
 
     const { OnboardingPage } = await import("../pages/OnboardingPage");
+    function OnboardingLocationSpy() {
+      const loc = useLocation();
+      return <span data-testid="onboarding-route-location">{`${loc.pathname}${loc.search}`}</span>;
+    }
     renderApp(
       <Routes>
         <Route path="/" element={<HomeScreen />} />
-        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route
+          path="/onboarding"
+          element={
+            <>
+              <OnboardingPage />
+              <OnboardingLocationSpy />
+            </>
+          }
+        />
       </Routes>
     );
 
@@ -242,7 +254,9 @@ describe("HomeScreen", () => {
     await user.click(screen.getByTestId("create-new-button"));
 
     expect(await screen.findByTestId("onboarding-page")).toBeInTheDocument();
-    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(/\/projects\/create-new/);
+    expect(screen.getByTestId("onboarding-route-location")).toHaveTextContent(
+      "/onboarding?intended=%2Fprojects%2Fcreate-new"
+    );
   });
 
   it("navigates to /onboarding?intended=/projects/add-existing when Add Existing clicked and no API keys", async () => {
@@ -255,10 +269,22 @@ describe("HomeScreen", () => {
     const user = userEvent.setup();
 
     const { OnboardingPage } = await import("../pages/OnboardingPage");
+    function OnboardingLocationSpy() {
+      const loc = useLocation();
+      return <span data-testid="onboarding-route-location">{`${loc.pathname}${loc.search}`}</span>;
+    }
     renderApp(
       <Routes>
         <Route path="/" element={<HomeScreen />} />
-        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route
+          path="/onboarding"
+          element={
+            <>
+              <OnboardingPage />
+              <OnboardingLocationSpy />
+            </>
+          }
+        />
       </Routes>
     );
 
@@ -266,7 +292,9 @@ describe("HomeScreen", () => {
     await user.click(screen.getByTestId("add-existing-button"));
 
     expect(await screen.findByTestId("onboarding-page")).toBeInTheDocument();
-    expect(screen.getByTestId("onboarding-intended")).toHaveTextContent(/\/projects\/add-existing/);
+    expect(screen.getByTestId("onboarding-route-location")).toHaveTextContent(
+      "/onboarding?intended=%2Fprojects%2Fadd-existing"
+    );
   });
 
   it("when useCustomCli true, Create New navigates to /projects/create-new", async () => {

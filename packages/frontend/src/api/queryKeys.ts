@@ -19,6 +19,8 @@ export const queryKeys = {
   },
   plans: {
     list: (projectId: string) => ["plans", projectId] as const,
+    /** Mutation key for POST …/plans/decompose (tracked globally for Plan tab loading UI). */
+    decompose: (projectId: string) => ["plans", projectId, "decompose"] as const,
     status: (projectId: string) => ["plans", projectId, "status"] as const,
     detail: (projectId: string, planId: string) => ["plans", projectId, planId] as const,
     versions: (projectId: string, planId: string) =>

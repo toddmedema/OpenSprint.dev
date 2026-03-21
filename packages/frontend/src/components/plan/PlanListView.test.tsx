@@ -63,7 +63,6 @@ describe("PlanListView", () => {
 
     const listView = screen.getByTestId("plan-list-view");
     expect(within(listView).getAllByTestId(/^plan-list-row-/)).toHaveLength(4);
-    expect(within(listView).getAllByTestId("plan-list-edit")).toHaveLength(4);
   });
 
   it("shows Generate tasks for planning plan with zero tasks", () => {
@@ -84,6 +83,27 @@ describe("PlanListView", () => {
       />
     );
     expect(screen.getByTestId("plan-list-generate-tasks")).toBeInTheDocument();
+  });
+
+  it("shows Generating tasks while plan tasks are in flight", () => {
+    const plans = [makePlan("planning-feature", "planning", 0)];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={["planning-feature"]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+    expect(screen.getByText("Generating tasks...")).toBeInTheDocument();
+    expect(screen.queryByTestId("plan-list-generate-tasks")).not.toBeInTheDocument();
   });
 
   it("shows Approve and Review for in_review plan when onMarkComplete and onGoToEvaluate provided", () => {

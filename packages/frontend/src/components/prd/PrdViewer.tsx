@@ -60,7 +60,7 @@ export function PrdViewer({
             <div
               key={sectionKey}
               data-prd-section={sectionKey}
-              className={`group relative ${isAssumptionsSection ? "rounded-xl border border-theme-info-border/50 bg-theme-info-bg/25 dark:bg-theme-info-bg/15 px-4 py-5 sm:px-5" : ""}`}
+              className="group relative"
               {...(questionId && { "data-question-id": questionId })}
             >
               {/* Section header */}

@@ -8,6 +8,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
 import { PlanPhase, getPlanChatMessageDisplay } from "./PlanPhase";
+import { useDecomposePlans } from "../../api/hooks";
 import { PHASE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 import { api } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
@@ -32,6 +33,24 @@ const PlanPhaseWrapper = ({ children }: { children: React.ReactNode }) => {
   const [client] = React.useState(() => createPlanPhaseQueryClient());
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 };
+
+/** Plans query already resolved empty (avoids spinner delay) — for decompose loading tests. */
+function PlanPhaseWrapperEmptyPlansCached({ children }: { children: React.ReactNode }) {
+  const [client] = React.useState(() => {
+    const c = createPlanPhaseQueryClient();
+    c.setQueryData(queryKeys.plans.list("proj-1"), { plans: [], edges: [] });
+    return c;
+  });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
+function StartDecomposeOnMount({ projectId }: { projectId: string }) {
+  const { mutate } = useDecomposePlans(projectId);
+  React.useEffect(() => {
+    mutate();
+  }, [mutate, projectId]);
+  return null;
+}
 
 beforeAll(() => {
   global.ResizeObserver = class {
@@ -152,6 +171,7 @@ const mockMarkPlanComplete = vi.fn().mockResolvedValue({
 });
 const mockPlansListVersions = vi.fn().mockResolvedValue([]);
 const mockPlansAuditorRuns = vi.fn().mockResolvedValue([]);
+const mockPlansDecompose = vi.fn().mockResolvedValue({ created: 0, plans: [] });
 vi.mock("../../api/client", () => ({
   api: {
     plans: {
@@ -172,6 +192,7 @@ vi.mock("../../api/client", () => ({
       planTasks: (...args: unknown[]) => mockPlanTasks(...args),
       markPlanComplete: (...args: unknown[]) => mockMarkPlanComplete(...args),
       auditorRuns: (...args: unknown[]) => mockPlansAuditorRuns(...args),
+      decompose: (...args: unknown[]) => mockPlansDecompose(...args),
     },
     tasks: { list: vi.fn().mockResolvedValue([]) },
     chat: {
@@ -374,6 +395,83 @@ describe("PlanPhase Redux integration", () => {
     );
 
     expect(store.getState().unreadPhase["proj-1"]?.plan).toBeFalsy();
+  });
+
+  it("shows centered pulsing logo and Generating Plan… while decompose runs and list is empty", async () => {
+    mockPlansDecompose.mockImplementation(() => new Promise(() => {}));
+    const store = createStore([], undefined, undefined, { selectedPlanId: null });
+
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <StartDecomposeOnMount projectId="proj-1" />
+          <PlanPhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>,
+      { wrapper: PlanPhaseWrapperEmptyPlansCached }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("plan-phase-loading")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Generating Plan...")).toBeInTheDocument();
+    expect(document.querySelector(".animate-logo-pulse")).toBeTruthy();
+  });
+
+  it("keeps Generating Plan… until plans list refetch completes after decompose", async () => {
+    let resolveList: (value: unknown) => void;
+    mockPlansList.mockImplementation(
+      () =>
+        new Promise((r) => {
+          resolveList = r;
+        })
+    );
+
+    let resolveDecompose: (value: unknown) => void;
+    mockPlansDecompose.mockImplementation(
+      () =>
+        new Promise((r) => {
+          resolveDecompose = r;
+        })
+    );
+
+    function PlanPhaseWrapperDeferredList({ children }: { children: React.ReactNode }) {
+      const [client] = React.useState(() => {
+        const c = createPlanPhaseQueryClient();
+        c.setQueryData(queryKeys.plans.list("proj-1"), { plans: [], edges: [] });
+        return c;
+      });
+      return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    }
+
+    const store = createStore([], undefined, undefined, { selectedPlanId: null });
+
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <StartDecomposeOnMount projectId="proj-1" />
+          <PlanPhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>,
+      { wrapper: PlanPhaseWrapperDeferredList }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Generating Plan...")).toBeInTheDocument();
+    });
+
+    resolveDecompose!({ created: 0, plans: [] });
+
+    await waitFor(() => {
+      expect(mockPlansList).toHaveBeenCalled();
+    });
+    expect(screen.getByText("Generating Plan...")).toBeInTheDocument();
+
+    resolveList!({ plans: [], edges: [] });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Generating Plan...")).not.toBeInTheDocument();
+    });
   });
 
   it("displays error from Redux and allows dismiss", async () => {
@@ -1897,7 +1995,7 @@ describe("PlanPhase Execute loading and double-click prevention", () => {
     });
   });
 
-  it("shows spinner inside Execute button while executing", async () => {
+  it("shows Executing… label on Execute button while executing", async () => {
     let resolveExec: () => void;
     mockGetCrossEpicDependencies.mockResolvedValue({ prerequisitePlanIds: [] });
     mockExecute.mockImplementation(
@@ -1924,7 +2022,6 @@ describe("PlanPhase Execute loading and double-click prevention", () => {
     await user.click(executeBtn);
 
     await waitFor(() => {
-      expect(screen.getByTestId("execute-spinner")).toBeInTheDocument();
       expect(screen.getByText("Executing…")).toBeInTheDocument();
     });
 
