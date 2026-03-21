@@ -2077,55 +2077,30 @@ export class AgentClient {
       const client = new Anthropic({ apiKey: key });
 
       try {
-        if (options.onChunk) {
-          const stream = client.messages.stream({
-            model,
-            max_tokens: 8192,
-            system: anthropicSystem,
-            messages,
-          });
-          let fullContent = "";
-          stream.on("text", (text) => {
-            fullContent += text;
-            options.onChunk!(text);
-          });
-          const finalMessage = await stream.finalMessage();
-          const contentBlocks = finalMessage?.content ?? [];
-          const textBlock = Array.isArray(contentBlocks)
-            ? contentBlocks.find((b: { type?: string }) => b.type === "text")
-            : undefined;
-          const content =
-            textBlock && typeof textBlock === "object" && "text" in textBlock
-              ? String(textBlock.text)
-              : fullContent;
-          const cacheMetrics = extractAnthropicCacheUsage({
-            response: finalMessage,
-            flow: options.promptCacheContext?.flow ?? "task",
-            promptFingerprint,
-          });
-
-          if (projectId && keyId !== ENV_FALLBACK_KEY_ID) {
-            await clearLimitHit(projectId, "ANTHROPIC_API_KEY", keyId, source);
-          }
-          return { content, cacheMetrics };
-        }
-
-        const response = await client.messages.create({
+        const stream = client.messages.stream({
           model,
           max_tokens: 8192,
           system: anthropicSystem,
           messages,
         });
-        const contentBlocks = response?.content ?? [];
+        let fullContent = "";
+        if (options.onChunk) {
+          stream.on("text", (text) => {
+            fullContent += text;
+            options.onChunk!(text);
+          });
+        }
+        const finalMessage = await stream.finalMessage();
+        const contentBlocks = finalMessage?.content ?? [];
         const textBlock = Array.isArray(contentBlocks)
           ? contentBlocks.find((b: { type?: string }) => b.type === "text")
           : undefined;
         const content =
           textBlock && typeof textBlock === "object" && "text" in textBlock
             ? String(textBlock.text)
-            : "";
+            : fullContent;
         const cacheMetrics = extractAnthropicCacheUsage({
-          response,
+          response: finalMessage,
           flow: options.promptCacheContext?.flow ?? "task",
           promptFingerprint,
         });

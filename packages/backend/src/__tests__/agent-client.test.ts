@@ -136,13 +136,24 @@ const { mockAnthropicStream, mockAnthropicCreate } = vi.hoisted(() => ({
 vi.mock("@anthropic-ai/sdk", () => ({
   default: vi.fn().mockImplementation(() => ({
     messages: {
-      stream: (opts: { model: string; max_tokens: number; system: string; messages: unknown[] }) =>
+      stream: (opts: { model: string; max_tokens: number; system?: unknown; messages: unknown[] }) =>
         mockAnthropicStream(opts),
       create: (opts: { model: string; max_tokens: number; system?: string; messages: unknown[] }) =>
         mockAnthropicCreate(opts),
     },
   })),
 }));
+
+/** Anthropic SDK: messages.stream() + finalMessage() (non-streaming create is disallowed for long runs). */
+function createMockAnthropicMessageStream(message: { content: Array<{ type: string; text?: string }> }) {
+  const stream = {
+    on(_ev: string, _fn: (text: string) => void) {
+      return stream;
+    },
+    finalMessage: () => Promise.resolve(message),
+  };
+  return stream;
+}
 
 vi.mock("util", () => ({
   promisify: (
@@ -180,9 +191,9 @@ describe("AgentClient", () => {
   describe("invoke", () => {
     it("should route claude config to Claude API (not CLI)", async () => {
       mockGetNextKey.mockResolvedValue({ key: "sk-ant-api", keyId: "k1", source: "global" });
-      mockAnthropicCreate.mockResolvedValue({
-        content: [{ type: "text", text: "Claude response" }],
-      });
+      mockAnthropicStream.mockReturnValue(
+        createMockAnthropicMessageStream({ content: [{ type: "text", text: "Claude response" }] })
+      );
 
       const result = await client.invoke({
         config: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
@@ -192,7 +203,7 @@ describe("AgentClient", () => {
       });
 
       expect(mockSpawn).not.toHaveBeenCalled();
-      expect(mockAnthropicCreate).toHaveBeenCalledWith(
+      expect(mockAnthropicStream).toHaveBeenCalledWith(
         expect.objectContaining({
           model: "claude-sonnet-4",
           max_tokens: 8192,
@@ -204,9 +215,9 @@ describe("AgentClient", () => {
 
     it("should route claude config without model", async () => {
       mockGetNextKey.mockResolvedValue({ key: "sk-ant-api", keyId: "k1", source: "global" });
-      mockAnthropicCreate.mockResolvedValue({
-        content: [{ type: "text", text: "Claude no-model" }],
-      });
+      mockAnthropicStream.mockReturnValue(
+        createMockAnthropicMessageStream({ content: [{ type: "text", text: "Claude no-model" }] })
+      );
 
       const result = await client.invoke({
         config: { type: "claude", model: null, cliCommand: null },
@@ -215,7 +226,7 @@ describe("AgentClient", () => {
         projectId: "proj-claude",
       });
 
-      expect(mockAnthropicCreate).toHaveBeenCalledWith(
+      expect(mockAnthropicStream).toHaveBeenCalledWith(
         expect.objectContaining({
           model: "claude-sonnet-4-20250514",
           messages: [{ role: "user", content: [{ type: "text", text: "Test" }] }],
@@ -1435,9 +1446,9 @@ describe("AgentClient", () => {
         keyId: "k1",
         source: "global",
       });
-      mockAnthropicCreate.mockResolvedValue({
-        content: [{ type: "text", text: "Claude API output." }],
-      });
+      mockAnthropicStream.mockImplementation(() =>
+        createMockAnthropicMessageStream({ content: [{ type: "text", text: "Claude API output." }] })
+      );
 
       const onOutput = vi.fn();
       const onExit = vi.fn();
@@ -1465,7 +1476,7 @@ describe("AgentClient", () => {
         { timeout: 2000 }
       );
       expect(onOutput).toHaveBeenCalledWith("Claude API output.");
-      expect(mockAnthropicCreate).toHaveBeenCalled();
+      expect(mockAnthropicStream).toHaveBeenCalled();
       expect(mockClearLimitHit).toHaveBeenCalledWith(
         "proj-claude",
         "ANTHROPIC_API_KEY",

@@ -1034,58 +1034,35 @@ ${repairSection}## Your Task
       const client = new Anthropic({ apiKey: key });
 
       try {
-        let content: string;
-        let cacheMetrics: AgentCacheUsageMetrics | undefined;
-        if (onChunk) {
-          const stream = client.messages.stream({
-            model,
-            max_tokens: 8192,
-            system: anthropicSystem,
-            messages: anthropicMessages,
-          });
+        const stream = client.messages.stream({
+          model,
+          max_tokens: 8192,
+          system: anthropicSystem,
+          messages: anthropicMessages,
+        });
 
-          let fullContent = "";
+        let fullContent = "";
+        if (onChunk) {
           stream.on("text", (text) => {
             fullContent += text;
             onChunk(text);
           });
-
-          const finalMessage = await stream.finalMessage();
-          const contentBlocks = finalMessage?.content ?? [];
-          const textBlock = Array.isArray(contentBlocks)
-            ? contentBlocks.find((b: { type?: string }) => b.type === "text")
-            : undefined;
-          content =
-            textBlock && typeof textBlock === "object" && "text" in textBlock
-              ? String(textBlock.text)
-              : fullContent;
-          cacheMetrics = extractAnthropicCacheUsage({
-            response: finalMessage,
-            flow: "plan",
-            promptFingerprint,
-          });
-        } else {
-          const response = await client.messages.create({
-            model,
-            max_tokens: 8192,
-            system: anthropicSystem,
-            messages: anthropicMessages,
-          });
-
-          const contentBlocks = response?.content ?? [];
-          const textBlock = Array.isArray(contentBlocks)
-            ? contentBlocks.find((b: { type?: string }) => b.type === "text")
-            : undefined;
-          content =
-            textBlock && typeof textBlock === "object" && "text" in textBlock
-              ? String(textBlock.text)
-              : "";
-          cacheMetrics = extractAnthropicCacheUsage({
-            response,
-            flow: "plan",
-            promptFingerprint,
-          });
         }
+
+        const finalMessage = await stream.finalMessage();
+        const contentBlocks = finalMessage?.content ?? [];
+        const textBlock = Array.isArray(contentBlocks)
+          ? contentBlocks.find((b: { type?: string }) => b.type === "text")
+          : undefined;
+        const content =
+          textBlock && typeof textBlock === "object" && "text" in textBlock
+            ? String(textBlock.text)
+            : fullContent;
+        const cacheMetrics = extractAnthropicCacheUsage({
+          response: finalMessage,
+          flow: "plan",
+          promptFingerprint,
+        });
 
         await clearLimitHit(projectId, "ANTHROPIC_API_KEY", keyId, source);
         return { content, cacheMetrics };

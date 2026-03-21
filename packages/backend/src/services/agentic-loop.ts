@@ -107,13 +107,15 @@ export class AnthropicAgenticAdapter implements AgenticLoopAdapter {
       });
     }
 
-    const response = await this.client.messages.create({
+    // Anthropic requires streaming for requests that may exceed ~10 minutes; tool loops qualify.
+    const stream = this.client.messages.stream({
       model: this.model,
       max_tokens: 16384,
       system: [toAnthropicTextBlock(this.systemPrompt, true)],
       tools: toAnthropicTools() as Anthropic.Tool[],
       messages,
     });
+    const response = await stream.finalMessage();
 
     const content = response.content ?? [];
     let text = "";

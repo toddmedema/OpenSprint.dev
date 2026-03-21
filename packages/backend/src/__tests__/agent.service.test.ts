@@ -17,8 +17,7 @@ const { mockGetNextKey, mockRecordLimitHit, mockClearLimitHit } = vi.hoisted(() 
   mockClearLimitHit: vi.fn(),
 }));
 
-const { mockMessagesCreate, mockMessagesStream } = vi.hoisted(() => ({
-  mockMessagesCreate: vi.fn(),
+const { mockMessagesStream } = vi.hoisted(() => ({
   mockMessagesStream: vi.fn(),
 }));
 
@@ -80,7 +79,7 @@ vi.mock("../services/api-key-resolver.service.js", () => ({
 vi.mock("@anthropic-ai/sdk", () => ({
   default: vi.fn().mockImplementation(() => ({
     messages: {
-      create: (...args: unknown[]) => mockMessagesCreate(...args),
+      create: vi.fn(),
       stream: (...args: unknown[]) => mockMessagesStream(...args),
     },
   })),
@@ -102,6 +101,16 @@ vi.mock("openai", () => ({
 vi.mock("../utils/shell-exec.js", () => ({
   shellExec: (...args: unknown[]) => mockShellExec(...args),
 }));
+
+function claudePlanningStreamWithText(text: string) {
+  const stream = {
+    on(_ev: string, _fn: (t: string) => void) {
+      return stream;
+    },
+    finalMessage: () => Promise.resolve({ content: [{ type: "text" as const, text }] }),
+  };
+  return stream;
+}
 
 describe("AgentService", () => {
   let service: AgentService;
@@ -171,9 +180,7 @@ describe("AgentService", () => {
   describe("agent_stats recording", () => {
     it("records planning invocations with tracking role into agent_stats", async () => {
       mockGetNextKey.mockResolvedValue({ key: "sk-ant-test", keyId: "k1", source: "global" });
-      mockMessagesCreate.mockResolvedValue({
-        content: [{ type: "text", text: "Plan response" }],
-      });
+      mockMessagesStream.mockReturnValue(claudePlanningStreamWithText("Plan response"));
 
       await service.invokePlanningAgent({
         projectId: "proj-plan-stats",
@@ -208,9 +215,7 @@ describe("AgentService", () => {
 
     it("records planning invocations without tracking into agent_stats when role is provided", async () => {
       mockGetNextKey.mockResolvedValue({ key: "sk-ant-test", keyId: "k1", source: "global" });
-      mockMessagesCreate.mockResolvedValue({
-        content: [{ type: "text", text: "Dreamer response" }],
-      });
+      mockMessagesStream.mockReturnValue(claudePlanningStreamWithText("Dreamer response"));
 
       await service.invokePlanningAgent({
         projectId: "proj-dreamer-no-tracking",
@@ -821,9 +826,7 @@ describe("AgentService", () => {
 
     it("uses getNextKey and clearLimitHit on success", async () => {
       mockGetNextKey.mockResolvedValue({ key: "sk-ant-test", keyId: "k1", source: "global" });
-      mockMessagesCreate.mockResolvedValue({
-        content: [{ type: "text", text: "Hello" }],
-      });
+      mockMessagesStream.mockReturnValue(claudePlanningStreamWithText("Hello"));
 
       const result = await service.invokePlanningAgent({
         projectId,
@@ -847,9 +850,17 @@ describe("AgentService", () => {
       mockGetNextKey
         .mockResolvedValueOnce({ key: "sk-ant-key1", keyId: "k1", source: "project" })
         .mockResolvedValueOnce({ key: "sk-ant-key2", keyId: "k2", source: "project" });
-      mockMessagesCreate
-        .mockRejectedValueOnce(new Error("Rate limit exceeded"))
-        .mockResolvedValueOnce({ content: [{ type: "text", text: "Success" }] });
+      mockMessagesStream
+        .mockImplementationOnce(() => {
+          const stream = {
+            on(_ev: string, _fn: (t: string) => void) {
+              return stream;
+            },
+            finalMessage: () => Promise.reject(new Error("Rate limit exceeded")),
+          };
+          return stream;
+        })
+        .mockImplementationOnce(() => claudePlanningStreamWithText("Success"));
 
       const result = await service.invokePlanningAgent({
         projectId,
@@ -876,7 +887,15 @@ describe("AgentService", () => {
 
     it("on limit error with env fallback: throws without retry", async () => {
       mockGetNextKey.mockResolvedValue({ key: "sk-ant-env", keyId: "__env__", source: "env" });
-      mockMessagesCreate.mockRejectedValue(new Error("Rate limit exceeded"));
+      mockMessagesStream.mockImplementation(() => {
+        const stream = {
+          on(_ev: string, _fn: (t: string) => void) {
+            return stream;
+          },
+          finalMessage: () => Promise.reject(new Error("Rate limit exceeded")),
+        };
+        return stream;
+      });
 
       await expect(
         service.invokePlanningAgent({
