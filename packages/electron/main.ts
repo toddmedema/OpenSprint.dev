@@ -19,9 +19,7 @@ import {
 import { buildWindowOptions } from "./window-options";
 import { renderBootHtml } from "./boot-screen";
 
-// ESM workaround: electron-updater is CJS; destructure after default import.
-import electronUpdater from "electron-updater";
-const { autoUpdater } = electronUpdater;
+import { autoUpdater } from "electron-updater";
 
 const APP_NAME = "Open Sprint";
 const DEFAULT_BACKEND_PORT = 3100;
