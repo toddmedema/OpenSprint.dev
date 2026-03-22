@@ -3,6 +3,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useAutoScroll } from "./useAutoScroll";
 
+function makeMockEl(overrides?: Partial<{ scrollTop: number; scrollHeight: number; clientHeight: number }>) {
+  return {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 200,
+    ...overrides,
+  };
+}
+
+type MockEl = ReturnType<typeof makeMockEl>;
+
+function setRef(result: { current: ReturnType<typeof useAutoScroll> }, el: MockEl) {
+  (result.current.containerRef as React.MutableRefObject<MockEl | null>).current = el;
+}
+
 describe("useAutoScroll", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -18,17 +33,13 @@ describe("useAutoScroll", () => {
   });
 
   it("scrolls to bottom when contentLength increases and auto-scroll is enabled", () => {
-    const mockEl = {
-      scrollTop: 0,
-      scrollHeight: 500,
-      clientHeight: 200,
-    };
+    const mockEl = makeMockEl();
     const { result, rerender } = renderHook(
       ({ contentLength }) => useAutoScroll({ contentLength, resetKey: "task-1" }),
       { initialProps: { contentLength: 0 } }
     );
 
-    (result.current.containerRef as React.MutableRefObject<typeof mockEl | null>).current = mockEl;
+    setRef(result, mockEl);
 
     rerender({ contentLength: 1 });
 
@@ -39,15 +50,28 @@ describe("useAutoScroll", () => {
     expect(mockEl.scrollTop).toBe(300); // scrollHeight - clientHeight
   });
 
+  it("scrolls to bottom on initial open when content arrives", () => {
+    const mockEl = makeMockEl();
+    const { result, rerender } = renderHook(
+      ({ contentLength }) => useAutoScroll({ contentLength, resetKey: "task-1" }),
+      { initialProps: { contentLength: 0 } }
+    );
+
+    setRef(result, mockEl);
+
+    rerender({ contentLength: 500 });
+    act(() => {
+      vi.advanceTimersToNextFrame();
+    });
+
+    expect(mockEl.scrollTop).toBe(300);
+  });
+
   it("sets showJumpToBottom when user scrolls up (away from bottom)", () => {
     const { result } = renderHook(() => useAutoScroll({ contentLength: 0, resetKey: "task-1" }));
 
-    const mockEl = {
-      scrollTop: 0,
-      scrollHeight: 500,
-      clientHeight: 200,
-    };
-    (result.current.containerRef as React.MutableRefObject<typeof mockEl | null>).current = mockEl;
+    const mockEl = makeMockEl();
+    setRef(result, mockEl);
 
     // scrollTop 0 means we're at top - far from bottom (distanceFromBottom = 300)
     act(() => {
@@ -57,15 +81,36 @@ describe("useAutoScroll", () => {
     expect(result.current.showJumpToBottom).toBe(true);
   });
 
+  it("does not auto-scroll when user has scrolled up", () => {
+    const mockEl = makeMockEl();
+    const { result, rerender } = renderHook(
+      ({ contentLength }) => useAutoScroll({ contentLength, resetKey: "task-1" }),
+      { initialProps: { contentLength: 0 } }
+    );
+
+    setRef(result, mockEl);
+
+    rerender({ contentLength: 10 });
+    act(() => { vi.advanceTimersToNextFrame(); });
+    expect(mockEl.scrollTop).toBe(300);
+
+    // User scrolls up
+    mockEl.scrollTop = 0;
+    act(() => { result.current.handleScroll(); });
+    expect(result.current.autoScrollEnabled).toBe(false);
+
+    // New content arrives but should NOT auto-scroll
+    rerender({ contentLength: 50 });
+    act(() => { vi.advanceTimersToNextFrame(); });
+
+    expect(mockEl.scrollTop).toBe(0);
+  });
+
   it("clears showJumpToBottom when user scrolls to bottom (within threshold)", () => {
     const { result } = renderHook(() => useAutoScroll({ contentLength: 0, resetKey: "task-1" }));
 
-    const mockEl = {
-      scrollTop: 0,
-      scrollHeight: 500,
-      clientHeight: 200,
-    };
-    (result.current.containerRef as React.MutableRefObject<typeof mockEl | null>).current = mockEl;
+    const mockEl = makeMockEl();
+    setRef(result, mockEl);
 
     act(() => {
       result.current.handleScroll();
@@ -81,15 +126,41 @@ describe("useAutoScroll", () => {
     expect(result.current.showJumpToBottom).toBe(false);
   });
 
+  it("re-enables auto-scroll when user scrolls back to bottom", () => {
+    const mockEl = makeMockEl();
+    const { result, rerender } = renderHook(
+      ({ contentLength }) => useAutoScroll({ contentLength, resetKey: "task-1" }),
+      { initialProps: { contentLength: 0 } }
+    );
+
+    setRef(result, mockEl);
+
+    rerender({ contentLength: 10 });
+    act(() => { vi.advanceTimersToNextFrame(); });
+
+    // User scrolls up
+    mockEl.scrollTop = 0;
+    act(() => { result.current.handleScroll(); });
+    expect(result.current.autoScrollEnabled).toBe(false);
+
+    // User scrolls back to bottom (within threshold)
+    mockEl.scrollTop = 280;
+    act(() => { result.current.handleScroll(); });
+    expect(result.current.autoScrollEnabled).toBe(true);
+
+    // New content should auto-scroll
+    mockEl.scrollTop = 0;
+    rerender({ contentLength: 80 });
+    act(() => { vi.advanceTimersToNextFrame(); });
+
+    expect(mockEl.scrollTop).toBe(300);
+  });
+
   it("jumpToBottom scrolls to bottom and clears showJumpToBottom", () => {
     const { result } = renderHook(() => useAutoScroll({ contentLength: 0, resetKey: "task-1" }));
 
-    const mockEl = {
-      scrollTop: 0,
-      scrollHeight: 500,
-      clientHeight: 200,
-    };
-    (result.current.containerRef as React.MutableRefObject<typeof mockEl | null>).current = mockEl;
+    const mockEl = makeMockEl();
+    setRef(result, mockEl);
 
     act(() => {
       result.current.handleScroll();
@@ -113,12 +184,8 @@ describe("useAutoScroll", () => {
       { initialProps: { resetKey: "task-1" } }
     );
 
-    const mockEl = {
-      scrollTop: 0,
-      scrollHeight: 500,
-      clientHeight: 200,
-    };
-    (result.current.containerRef as React.MutableRefObject<typeof mockEl | null>).current = mockEl;
+    const mockEl = makeMockEl();
+    setRef(result, mockEl);
 
     act(() => {
       result.current.handleScroll();
@@ -128,5 +195,101 @@ describe("useAutoScroll", () => {
     rerender({ resetKey: "task-2" });
 
     expect(result.current.showJumpToBottom).toBe(false);
+  });
+
+  it("scrolls to bottom when reopened with existing content via task switch", () => {
+    const mockEl = makeMockEl();
+    const { result, rerender } = renderHook(
+      ({ contentLength, resetKey }: { contentLength: number; resetKey: string }) =>
+        useAutoScroll({ contentLength, resetKey }),
+      { initialProps: { contentLength: 0, resetKey: "task-1" } }
+    );
+
+    setRef(result, mockEl);
+
+    // Task 1 gets content
+    rerender({ contentLength: 200, resetKey: "task-1" });
+    act(() => { vi.advanceTimersToNextFrame(); });
+    expect(mockEl.scrollTop).toBe(300);
+
+    // Switch to task 2 with different (shorter) content
+    mockEl.scrollTop = 0;
+    rerender({ contentLength: 50, resetKey: "task-2" });
+    act(() => { vi.advanceTimersToNextFrame(); });
+
+    expect(mockEl.scrollTop).toBe(300);
+    expect(result.current.autoScrollEnabled).toBe(true);
+  });
+
+  it("handles switching from long output to shorter output on task switch", () => {
+    const mockEl = makeMockEl();
+    const { result, rerender } = renderHook(
+      ({ contentLength, resetKey }: { contentLength: number; resetKey: string }) =>
+        useAutoScroll({ contentLength, resetKey }),
+      { initialProps: { contentLength: 0, resetKey: "task-1" } }
+    );
+
+    setRef(result, mockEl);
+
+    rerender({ contentLength: 5000, resetKey: "task-1" });
+    act(() => { vi.advanceTimersToNextFrame(); });
+
+    // Switch to task with much shorter content
+    mockEl.scrollTop = 0;
+    rerender({ contentLength: 100, resetKey: "task-2" });
+    act(() => { vi.advanceTimersToNextFrame(); });
+
+    expect(mockEl.scrollTop).toBe(300);
+  });
+
+  it("continues auto-scrolling new content after reopen", () => {
+    const mockEl = makeMockEl();
+    const { result, rerender } = renderHook(
+      ({ contentLength, resetKey }: { contentLength: number; resetKey: string }) =>
+        useAutoScroll({ contentLength, resetKey }),
+      { initialProps: { contentLength: 0, resetKey: "task-1" } }
+    );
+
+    setRef(result, mockEl);
+
+    // Switch to task-2 with some content
+    rerender({ contentLength: 50, resetKey: "task-2" });
+    act(() => { vi.advanceTimersToNextFrame(); });
+    expect(mockEl.scrollTop).toBe(300);
+
+    // New content streams in on task-2
+    mockEl.scrollTop = 0;
+    rerender({ contentLength: 100, resetKey: "task-2" });
+    act(() => { vi.advanceTimersToNextFrame(); });
+
+    expect(mockEl.scrollTop).toBe(300);
+  });
+
+  it("re-enables auto-scroll on task switch even if user had scrolled up", () => {
+    const mockEl = makeMockEl();
+    const { result, rerender } = renderHook(
+      ({ contentLength, resetKey }: { contentLength: number; resetKey: string }) =>
+        useAutoScroll({ contentLength, resetKey }),
+      { initialProps: { contentLength: 0, resetKey: "task-1" } }
+    );
+
+    setRef(result, mockEl);
+
+    rerender({ contentLength: 100, resetKey: "task-1" });
+    act(() => { vi.advanceTimersToNextFrame(); });
+
+    // User scrolls up, disabling auto-scroll
+    mockEl.scrollTop = 0;
+    act(() => { result.current.handleScroll(); });
+    expect(result.current.autoScrollEnabled).toBe(false);
+    expect(result.current.showJumpToBottom).toBe(true);
+
+    // Switch to task-2: should reset and scroll to bottom
+    rerender({ contentLength: 75, resetKey: "task-2" });
+    act(() => { vi.advanceTimersToNextFrame(); });
+
+    expect(result.current.autoScrollEnabled).toBe(true);
+    expect(result.current.showJumpToBottom).toBe(false);
+    expect(mockEl.scrollTop).toBe(300);
   });
 });

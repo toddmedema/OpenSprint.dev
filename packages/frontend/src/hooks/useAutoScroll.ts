@@ -17,9 +17,14 @@ export interface UseAutoScrollResult {
   handleScroll: () => void;
 }
 
+function scrollToBottom(el: HTMLElement): void {
+  el.scrollTop = el.scrollHeight - el.clientHeight;
+}
+
 /**
  * Manages auto-scroll behavior for a scrollable container:
- * - Default: scrolls to bottom when content grows
+ * - On open/reopen: starts pinned at the latest content
+ * - Scrolls to bottom when content grows while auto-scroll is enabled
  * - Disables when user scrolls up (away from bottom)
  * - Re-enables when user scrolls to bottom (within threshold) or clicks Jump to bottom
  * - Resets when resetKey changes (e.g. switching tasks)
@@ -34,18 +39,26 @@ export function useAutoScroll({
   const prevContentLengthRef = useRef(0);
   const prevResetKeyRef = useRef(resetKey);
 
-  // Reset auto-scroll when switching tasks/sessions
+  // Reset auto-scroll when switching tasks/sessions.
+  // Clearing prevContentLengthRef ensures existing content triggers
+  // a scroll-to-bottom via the content effect below.
   useEffect(() => {
     if (prevResetKeyRef.current !== resetKey) {
       prevResetKeyRef.current = resetKey;
+      prevContentLengthRef.current = 0;
       setAutoScrollEnabled(true);
       setShowJumpToBottom(false);
     }
   }, [resetKey]);
 
-  // Scroll to bottom when new content arrives and auto-scroll is enabled
+  // Scroll to bottom when content grows and auto-scroll is enabled.
+  // On initial mount or after reset, prevContentLengthRef is 0 so any
+  // existing content triggers scroll-to-bottom automatically.
+  // When auto-scroll is disabled we intentionally leave prevContentLengthRef
+  // stale so that re-enabling it still detects "new" content.
   useEffect(() => {
-    if (!autoScrollEnabled || contentLength <= prevContentLengthRef.current) {
+    if (!autoScrollEnabled) return;
+    if (contentLength <= prevContentLengthRef.current) {
       prevContentLengthRef.current = contentLength;
       return;
     }
@@ -55,7 +68,7 @@ export function useAutoScroll({
     if (!el) return;
 
     const rafId = requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight - el.clientHeight;
+      scrollToBottom(el);
     });
     return () => cancelAnimationFrame(rafId);
   }, [contentLength, autoScrollEnabled]);
@@ -81,7 +94,7 @@ export function useAutoScroll({
     if (!el) return;
 
     const rafId = requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight - el.clientHeight;
+      scrollToBottom(el);
       setAutoScrollEnabled(true);
       setShowJumpToBottom(false);
     });
