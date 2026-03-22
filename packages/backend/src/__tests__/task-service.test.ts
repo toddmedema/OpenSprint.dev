@@ -132,6 +132,10 @@ vi.mock("fs/promises", async (importOriginal) => {
   };
 });
 
+vi.mock("../utils/git-repo-state.js", () => ({
+  resolveBaseBranch: vi.fn().mockResolvedValue("main"),
+}));
+
 const mockTriggerDeployForEvent = vi.fn().mockResolvedValue([]);
 vi.mock("../services/deploy-trigger.service.js", () => ({
   triggerDeploy: vi.fn().mockResolvedValue(null),
