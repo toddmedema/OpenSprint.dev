@@ -390,51 +390,21 @@ describe("AgentClient", () => {
         expect(result.content).toContain("Cursor response");
       });
 
-      it("uses a workspace prompt file on Windows when Cursor prompt exceeds cmd.exe length limits", async () => {
+      it("fails fast on Windows when Cursor prompt exceeds cmd.exe length limits", async () => {
         Object.defineProperty(process, "platform", { value: "win32" });
         const originalComSpec = process.env.ComSpec;
         process.env.ComSpec = "C:\\Windows\\System32\\cmd.exe";
-        const fs = await import("fs/promises");
-        const path = await import("path");
-        const os = await import("os");
-        const tmpDir = path.join(os.tmpdir(), `agent-client-cursor-large-${Date.now()}`);
         try {
-          await fs.mkdir(tmpDir, { recursive: true });
-
-          const mockChild = {
-            killed: false,
-            kill: vi.fn(),
-            stdout: {
-              on: vi.fn((_ev: string, fn: (d: Buffer) => void) =>
-                fn(Buffer.from("Cursor response"))
-              ),
-            },
-            stderr: { on: vi.fn() },
-            on: vi.fn((ev: string, fn: (code: number) => void) => {
-              if (ev === "close") setTimeout(() => fn(0), 0);
-              if (ev === "error") return;
-              return { on: vi.fn() };
-            }),
-          };
-          mockSpawn.mockReturnValue(mockChild);
-
-          const result = await client.invoke({
-            config: { type: "cursor", model: "gpt-4", cliCommand: null },
-            prompt: "x".repeat(9000),
-            cwd: tmpDir,
-          });
-
-          const [command, args] = mockSpawn.mock.calls[0] as [string, string[]];
-          expect(command).toBe("C:\\Windows\\System32\\cmd.exe");
-          expect(args).toEqual(expect.arrayContaining(["/d", "/s", "/c", "agent"]));
-          const promptArg = args.at(-1);
-          expect(promptArg).toContain(".opensprint/tmp/cursor-invoke-");
-          expect(promptArg?.length ?? 0).toBeLessThan(400);
-          expect(await fs.readdir(path.join(tmpDir, ".opensprint", "tmp"))).toEqual([]);
-          expect(result.content).toContain("Cursor response");
+          await expect(
+            client.invoke({
+              config: { type: "cursor", model: "gpt-4", cliCommand: null },
+              prompt: "x".repeat(9000),
+              cwd: "/tmp",
+            })
+          ).rejects.toThrow("Cursor request is too large for Windows shell execution");
+          expect(mockSpawn).not.toHaveBeenCalled();
         } finally {
           process.env.ComSpec = originalComSpec;
-          await fs.rm(tmpDir, { recursive: true, force: true });
         }
       });
 
@@ -1230,43 +1200,6 @@ describe("AgentClient", () => {
           ]),
           expect.any(Object)
         );
-      } finally {
-        process.env.ComSpec = originalComSpec;
-        await fs.rm(tmpDir, { recursive: true, force: true });
-      }
-    });
-
-    it("uses a task-file reference prompt for oversized Cursor task-file runs on Windows", async () => {
-      Object.defineProperty(process, "platform", { value: "win32" });
-      const originalComSpec = process.env.ComSpec;
-      process.env.ComSpec = "C:\\Windows\\System32\\cmd.exe";
-      const fs = await import("fs/promises");
-      const path = await import("path");
-      const os = await import("os");
-      const tmpDir = path.join(os.tmpdir(), `agent-client-cursor-win-large-${Date.now()}`);
-      try {
-        await fs.mkdir(path.dirname(path.join(tmpDir, ".opensprint/active/bd-a3f8.1/prompt.md")), {
-          recursive: true,
-        });
-        const taskFilePath = path.join(tmpDir, ".opensprint/active/bd-a3f8.1/prompt.md");
-        await fs.writeFile(taskFilePath, `# Task\n\n${"x".repeat(9000)}`, "utf-8");
-
-        const mockChild = {
-          killed: false,
-          kill: vi.fn(),
-          stdout: { on: vi.fn() },
-          stderr: { on: vi.fn() },
-          on: vi.fn(() => ({ on: vi.fn() })),
-        };
-        mockSpawn.mockReturnValue(mockChild);
-
-        const config: AgentConfig = { type: "cursor", model: "gpt-4", cliCommand: null };
-        client.spawnWithTaskFile(config, taskFilePath, tmpDir, vi.fn(), vi.fn());
-
-        const [, args] = mockSpawn.mock.calls[0] as [string, string[]];
-        const promptArg = args.at(-1);
-        expect(promptArg).toContain(".opensprint/active/bd-a3f8.1/prompt.md");
-        expect(promptArg).not.toContain("x".repeat(200));
       } finally {
         process.env.ComSpec = originalComSpec;
         await fs.rm(tmpDir, { recursive: true, force: true });

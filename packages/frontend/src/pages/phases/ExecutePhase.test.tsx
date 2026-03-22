@@ -24,7 +24,7 @@ import openQuestionsReducer, {
 import websocketReducer, { setConnected } from "../../store/slices/websocketSlice";
 import unreadPhaseReducer, { setPhaseUnread } from "../../store/slices/unreadPhaseSlice";
 import { MOBILE_BREAKPOINT } from "../../lib/constants";
-import { PHASE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
+import { EXECUTE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 
 function createExecutePhaseQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -2262,7 +2262,7 @@ describe("ExecutePhase Redux integration", () => {
       </MemoryRouter>
     );
     const mainScroll = screen.getByTestId("execute-main-scroll");
-    expect(mainScroll.className).toBe(PHASE_MAIN_SCROLL_CLASSNAME);
+    expect(mainScroll.className).toBe(EXECUTE_MAIN_SCROLL_CLASSNAME);
   });
 
   it("renders OpenQuestionsBlock in task detail when coder has open questions", async () => {

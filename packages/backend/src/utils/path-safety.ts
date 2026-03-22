@@ -1,3 +1,5 @@
+import fs from "fs";
+import os from "node:os";
 import path from "path";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 
@@ -61,6 +63,14 @@ export function isTaskWorktreePath(taskId: string, candidatePath: string): boole
   return false;
 }
 
+function realpathSyncSafe(p: string): string {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
 export function assertSafeTaskWorktreePath(
   repoPath: string,
   taskId: string,
@@ -73,10 +83,20 @@ export function assertSafeTaskWorktreePath(
       `Refusing to treat the repository root as a disposable worktree: ${resolvedCandidate}`
     );
   }
-  if (!isTaskWorktreePath(taskId, resolvedCandidate)) {
-    throw new Error(
-      `Refusing to clean up a path outside opensprint worktrees for task ${taskId}: ${resolvedCandidate}`
-    );
+  if (isTaskWorktreePath(taskId, resolvedCandidate)) {
+    return candidatePath;
   }
-  return candidatePath;
+
+  /** Git-registered worktrees may live under the OS temp dir (tests, alternate layouts). Never delete paths inside the main repo. */
+  const tmpRoot = realpathSyncSafe(path.resolve(os.tmpdir()));
+  const normCandidate = realpathSyncSafe(resolvedCandidate);
+  const insideTmp = isPathInside(tmpRoot, normCandidate, { allowEqual: false });
+  const insideRepo = isPathInside(resolvedRepo, normCandidate, { allowEqual: true });
+  if (insideTmp && !insideRepo) {
+    return candidatePath;
+  }
+
+  throw new Error(
+    `Refusing to clean up a path outside opensprint worktrees for task ${taskId}: ${resolvedCandidate}`
+  );
 }

@@ -348,9 +348,11 @@ CREATE TABLE IF NOT EXISTS behavior_versions (
     promoted_at          TEXT,
     created_at           TEXT NOT NULL,
     bundle               TEXT,
+    version_type         TEXT NOT NULL DEFAULT 'promoted',
     PRIMARY KEY (project_id, id)
 );
 CREATE INDEX IF NOT EXISTS idx_behavior_versions_project ON behavior_versions(project_id);
+ALTER TABLE behavior_versions ADD COLUMN IF NOT EXISTS version_type TEXT NOT NULL DEFAULT 'promoted';
 
 CREATE TABLE IF NOT EXISTS project_behavior_state (
     project_id                    TEXT PRIMARY KEY,
@@ -587,9 +589,11 @@ CREATE TABLE IF NOT EXISTS behavior_versions (
     promoted_at          TEXT,
     created_at           TEXT NOT NULL,
     bundle               TEXT,
+    version_type         TEXT NOT NULL DEFAULT 'promoted',
     PRIMARY KEY (project_id, id)
 );
 CREATE INDEX IF NOT EXISTS idx_behavior_versions_project ON behavior_versions(project_id);
+ALTER TABLE behavior_versions ADD COLUMN IF NOT EXISTS version_type TEXT NOT NULL DEFAULT 'promoted';
 
 CREATE TABLE IF NOT EXISTS project_behavior_state (
     project_id                    TEXT PRIMARY KEY,

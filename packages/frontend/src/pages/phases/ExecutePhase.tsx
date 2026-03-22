@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../store";
@@ -46,7 +46,7 @@ import { TimelineList } from "../../components/execute/TimelineList";
 import { clearPhaseUnread } from "../../store/slices/unreadPhaseSlice";
 import { PhaseEmptyState, PhaseEmptyStateLogo } from "../../components/PhaseEmptyState";
 import { getProjectPhasePath } from "../../lib/phaseRouting";
-import { PHASE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
+import { EXECUTE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 import { EMPTY_STATE_COPY } from "../../lib/emptyStateCopy";
 
 interface ExecutePhaseProps {
@@ -321,6 +321,12 @@ export function ExecutePhase({
   const { showSpinner: showTasksSpinner, showEmptyState: showTasksEmptyState } =
     usePhaseLoadingState(tasksQuery.isLoading, tasksEmpty);
 
+  /** Nudge scrollport layout after tasks load so `position:sticky` picks up the correct containing block (first paint / refresh). */
+  useLayoutEffect(() => {
+    if (showTasksSpinner || viewMode !== "timeline" || filteredTasks.length === 0) return;
+    executeScrollRef.current?.getBoundingClientRect();
+  }, [showTasksSpinner, viewMode, filteredTasks.length]);
+
   const useReadyInLineSections = showReadyInLineSections(statusFilter) && implTasks.length > 0;
   const usePlanningSection = showPlanningSection(statusFilter) && implTasks.length > 0;
 
@@ -401,7 +407,7 @@ export function ExecutePhase({
 
         <div
           ref={executeScrollRef}
-          className={PHASE_MAIN_SCROLL_CLASSNAME}
+          className={EXECUTE_MAIN_SCROLL_CLASSNAME}
           data-testid="execute-main-scroll"
         >
           {baselineStatus === "failing" && (

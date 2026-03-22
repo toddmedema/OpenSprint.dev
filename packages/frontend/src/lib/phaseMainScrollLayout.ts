@@ -4,3 +4,6 @@
  */
 export const PHASE_MAIN_SCROLL_CLASSNAME =
   "flex-1 min-h-0 overflow-auto pt-2 sm:pt-3 px-4 sm:px-6 pb-4 sm:pb-6";
+
+/** Execute timeline: compositor hint so `position:sticky` section headers work on first paint. */
+export const EXECUTE_MAIN_SCROLL_CLASSNAME = `${PHASE_MAIN_SCROLL_CLASSNAME} [transform:translateZ(0)]`;

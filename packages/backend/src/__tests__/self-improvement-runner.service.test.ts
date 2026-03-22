@@ -14,6 +14,9 @@ import {
 vi.mock("../services/task-store.service.js", () => ({
   taskStore: {
     create: vi.fn().mockResolvedValue({ id: "os-1", title: "Task" }),
+    getDb: vi.fn().mockResolvedValue({
+      query: vi.fn().mockResolvedValue([]),
+    }),
     insertSelfImprovementRunHistory: vi.fn().mockResolvedValue({
       id: 1,
       projectId: "proj-1",
@@ -76,6 +79,10 @@ vi.mock("../services/settings-store.service.js", () => ({
 
 vi.mock("../services/agent-instructions.service.js", () => ({
   getCombinedInstructions: vi.fn().mockResolvedValue(""),
+  agentInstructionsService: {
+    getGeneralInstructions: vi.fn().mockResolvedValue(""),
+    getRoleInstructions: vi.fn().mockResolvedValue(""),
+  },
 }));
 
 vi.mock("../utils/shell-exec.js", () => ({

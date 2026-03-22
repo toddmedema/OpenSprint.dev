@@ -509,7 +509,7 @@ describe("TimelineList", () => {
     expect(screen.getAllByTestId(/^timeline-row-/)).toHaveLength(2);
   });
 
-  it("falls back to sectioned rendering when virtualization has no scroll element yet", () => {
+  it("renders sticky section headers consistently when scrollRef is provided", () => {
     const tasks = Array.from({ length: 30 }, (_, index) =>
       createMockTask({
         id: `task-${index}`,
@@ -518,7 +518,7 @@ describe("TimelineList", () => {
       })
     );
     const plans = [createMockPlan("epic-1", "Auth")];
-    const scrollRef = { current: null };
+    const scrollRef = { current: document.createElement("div") };
 
     renderWithProviders(
       <TimelineList
@@ -535,6 +535,11 @@ describe("TimelineList", () => {
     expect(screen.getByTestId("timeline-row-task-0")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "In Progress" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Ready" })).toBeInTheDocument();
+
+    const activeSection = screen.getByTestId("timeline-section-active");
+    const readySection = screen.getByTestId("timeline-section-ready");
+    expect(activeSection.querySelector(".sticky")).toBeInTheDocument();
+    expect(readySection.querySelector(".sticky")).toBeInTheDocument();
   });
 
   it("empty tasks array renders nothing", () => {
@@ -570,8 +575,42 @@ describe("TimelineList", () => {
     const completedSection = screen.getByTestId("timeline-section-completed");
     const stickyWrapper = activeSection.querySelector(".sticky");
     expect(stickyWrapper).toBeInTheDocument();
-    expect(stickyWrapper).toHaveClass("top-[-0.5rem]", "sm:top-[-0.75rem]", "z-10");
+    expect(stickyWrapper).toHaveClass("top-0", "z-10");
     expect(completedSection.querySelector(".sticky")).toBeInTheDocument();
+  });
+
+  it("sticky section headers render on first load with many tasks and a scroll container", () => {
+    const tasks = Array.from({ length: 40 }, (_, i) =>
+      createMockTask({
+        id: `task-${i}`,
+        title: `Task ${i}`,
+        kanbanColumn: i < 15 ? "in_progress" : i < 30 ? "ready" : "done",
+      })
+    );
+    const plans = [createMockPlan("epic-1", "Auth")];
+    const scrollRef = { current: document.createElement("div") };
+
+    renderWithProviders(
+      <TimelineList
+        tasks={tasks}
+        plans={plans}
+        onTaskSelect={vi.fn()}
+        scrollRef={scrollRef}
+        statusFilter="all"
+        {...defaultListProps}
+      />
+    );
+
+    const allSections = screen.getAllByTestId(/^timeline-section-/);
+    for (const section of allSections) {
+      const sticky = section.querySelector(".sticky");
+      expect(sticky).toBeInTheDocument();
+      expect(sticky).toHaveClass("z-10");
+    }
+
+    expect(screen.getByRole("heading", { name: "In Progress" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ready" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Completed" })).toBeInTheDocument();
   });
 
   it("renders timeline-row-{taskId} on each row", () => {

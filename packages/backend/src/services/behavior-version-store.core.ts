@@ -25,10 +25,11 @@ export class BehaviorVersionStore {
 
     await client.execute(
       toPgParams(
-        `INSERT INTO behavior_versions (id, project_id, template_version_id, promoted_at, created_at, bundle)
-         VALUES (?, ?, ?, ?, ?, NULL)
+        `INSERT INTO behavior_versions (id, project_id, template_version_id, promoted_at, created_at, bundle, version_type)
+         VALUES (?, ?, ?, ?, ?, NULL, 'promoted')
          ON CONFLICT (project_id, id) DO UPDATE SET
            promoted_at = excluded.promoted_at,
+           version_type = 'promoted',
            template_version_id = COALESCE(excluded.template_version_id, behavior_versions.template_version_id)`
       ),
       [versionId, projectId, template, promotedAt, now]
@@ -96,10 +97,11 @@ export class BehaviorVersionStore {
       const now = new Date().toISOString();
       await client.execute(
         toPgParams(
-          `INSERT INTO behavior_versions (id, project_id, template_version_id, promoted_at, created_at, bundle)
-           VALUES (?, ?, NULL, ?, ?, NULL)
+          `INSERT INTO behavior_versions (id, project_id, template_version_id, promoted_at, created_at, bundle, version_type)
+           VALUES (?, ?, NULL, ?, ?, NULL, 'promoted')
            ON CONFLICT (project_id, id) DO UPDATE SET
-             promoted_at = COALESCE(behavior_versions.promoted_at, excluded.promoted_at)`
+             promoted_at = COALESCE(behavior_versions.promoted_at, excluded.promoted_at),
+             version_type = 'promoted'`
         ),
         [activeId, projectId, promotedAt, now]
       );
@@ -161,5 +163,26 @@ export class BehaviorVersionStore {
       behaviorVersionId: activeRaw,
       ...(templateRaw ? { templateVersionId: templateRaw } : {}),
     };
+  }
+
+  /**
+   * Persist an experiment candidate bundle (not active until promoted). Overwrites same id.
+   */
+  async saveCandidate(projectId: string, versionId: string, bundleJson: string): Promise<void> {
+    const client = this.getClient();
+    const now = new Date().toISOString();
+    await client.execute(
+      toPgParams(
+        `INSERT INTO behavior_versions (id, project_id, template_version_id, promoted_at, created_at, bundle, version_type)
+         VALUES (?, ?, NULL, NULL, ?, ?, 'candidate')
+         ON CONFLICT (project_id, id) DO UPDATE SET
+           bundle = excluded.bundle,
+           version_type = 'candidate',
+           template_version_id = NULL,
+           promoted_at = NULL,
+           created_at = excluded.created_at`
+      ),
+      [versionId, projectId, now, bundleJson]
+    );
   }
 }

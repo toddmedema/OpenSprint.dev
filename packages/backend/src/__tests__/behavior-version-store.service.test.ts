@@ -25,7 +25,7 @@ describe("BehaviorVersionStore", () => {
     await store.promoteToActive("proj-x", "bv-promo-1", promotedAt, "tpl-42");
 
     const row = await client!.queryOne(
-      "SELECT id, project_id, template_version_id, promoted_at FROM behavior_versions WHERE project_id = $1 AND id = $2",
+      "SELECT id, project_id, template_version_id, promoted_at, version_type FROM behavior_versions WHERE project_id = $1 AND id = $2",
       ["proj-x", "bv-promo-1"]
     );
     expect(row).toMatchObject({
@@ -33,6 +33,7 @@ describe("BehaviorVersionStore", () => {
       project_id: "proj-x",
       template_version_id: "tpl-42",
       promoted_at: promotedAt,
+      version_type: "promoted",
     });
 
     const state = await client!.queryOne(

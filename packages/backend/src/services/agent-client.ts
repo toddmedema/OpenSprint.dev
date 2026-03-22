@@ -154,72 +154,23 @@ const WINDOWS_CMD_HEADROOM = 128;
 const CURSOR_WINDOWS_LENGTH_LIMIT_MESSAGE =
   "Cursor request is too large for Windows shell execution. The prompt exceeded cmd.exe command-length limits. Retry with a shorter message or switch to a non-Cursor provider for this request.";
 
-type WindowsCommandLengthInfo = {
-  shellName: string;
-  commandLength: number;
-  exceedsLimit: boolean;
-};
-
 function getWindowsCommandLength(command: string, args: string[]): number {
   return [command, ...args].join(" ").length;
 }
 
-function getWindowsCommandLengthInfo(command: string, args: string[]): WindowsCommandLengthInfo {
-  const shellName = command.split(/[/\\]/).pop()?.toLowerCase() ?? "";
-  const commandLength = getWindowsCommandLength(command, args);
-  return {
-    shellName,
-    commandLength,
-    exceedsLimit: commandLength > WINDOWS_CMD_MAX_LENGTH - WINDOWS_CMD_HEADROOM,
-  };
-}
-
 function assertCursorWindowsCommandLength(command: string, args: string[]): void {
   if (process.platform !== "win32") return;
-  const info = getWindowsCommandLengthInfo(command, args);
-  if (info.shellName !== "cmd" && info.shellName !== "cmd.exe") return;
-  if (!info.exceedsLimit) return;
+  const shellName = command.split(/[/\\]/).pop()?.toLowerCase() ?? "";
+  if (shellName !== "cmd" && shellName !== "cmd.exe") return;
+  const commandLength = getWindowsCommandLength(command, args);
+  if (commandLength <= WINDOWS_CMD_MAX_LENGTH - WINDOWS_CMD_HEADROOM) return;
   throw new AppError(502, ErrorCodes.AGENT_INVOKE_FAILED, CURSOR_WINDOWS_LENGTH_LIMIT_MESSAGE, {
     agentType: "cursor",
     raw: CURSOR_WINDOWS_LENGTH_LIMIT_MESSAGE,
     isWindowsCmdLengthLimit: true,
-    commandLength: info.commandLength,
+    commandLength,
     commandLimit: WINDOWS_CMD_MAX_LENGTH,
   });
-}
-
-function toCursorWorkspaceReference(filePath: string, cwd: string): string {
-  const relative = path.relative(cwd, filePath);
-  const normalizedRelative = relative.split(path.sep).join("/");
-  if (
-    normalizedRelative.length > 0 &&
-    !normalizedRelative.startsWith("../") &&
-    normalizedRelative !== ".."
-  ) {
-    return normalizedRelative;
-  }
-  return path.resolve(filePath).split(path.sep).join("/");
-}
-
-function buildCursorTaskFileReferencePrompt(taskFilePath: string, cwd: string): string {
-  const reference = JSON.stringify(toCursorWorkspaceReference(taskFilePath, cwd));
-  return `Read and execute the complete task instructions in ${reference}. Treat that file as the full user request for this run.`;
-}
-
-function buildCursorTranscriptReferencePrompt(promptFilePath: string, cwd: string): string {
-  const reference = JSON.stringify(toCursorWorkspaceReference(promptFilePath, cwd));
-  return `Open ${reference}. That file contains the full conversation transcript ending with an unfinished Assistant turn. Read it fully, then continue the conversation by answering the final Human message.`;
-}
-
-function createCursorInvokePromptFile(cwd: string, fullPrompt: string): string {
-  const promptDir = path.join(cwd, ".opensprint", "tmp");
-  mkdirSync(promptDir, { recursive: true });
-  const promptFilePath = path.join(
-    promptDir,
-    `cursor-invoke-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.md`
-  );
-  writeFileSync(promptFilePath, fullPrompt, { encoding: "utf-8", mode: 0o600 });
-  return promptFilePath;
 }
 
 /** Build full prompt from system prompt, conversation history, and final user message (Human/Assistant format). */
@@ -1976,20 +1927,8 @@ export class AgentClient {
         ];
         const cursorModel = resolveCursorModel(config.model);
         if (cursorModel !== null) cursorArgs.push("--model", cursorModel);
-        let cursorPrompt = taskContent;
-        let cursorInvocation = getCursorCommandInvocation([...cursorArgs, cursorPrompt]);
-        const windowsLengthInfo = getWindowsCommandLengthInfo(
-          cursorInvocation.command,
-          cursorInvocation.args
-        );
-        if (
-          process.platform === "win32" &&
-          (windowsLengthInfo.shellName === "cmd" || windowsLengthInfo.shellName === "cmd.exe") &&
-          windowsLengthInfo.exceedsLimit
-        ) {
-          cursorPrompt = buildCursorTaskFileReferencePrompt(taskFilePath, cwd);
-          cursorInvocation = getCursorCommandInvocation([...cursorArgs, cursorPrompt]);
-        }
+        cursorArgs.push(taskContent);
+        const cursorInvocation = getCursorCommandInvocation(cursorArgs);
         assertCursorWindowsCommandLength(cursorInvocation.command, cursorInvocation.args);
         command = cursorInvocation.command;
         args = cursorInvocation.args;
@@ -2530,143 +2469,119 @@ export class AgentClient {
     const cursorModel = resolveCursorModel(config.model);
     const args = ["-p", "--force", "--trust", "--mode", "ask", fullPrompt];
     if (cursorModel !== null) args.splice(1, 0, "--model", cursorModel);
-    let promptFilePath: string | null = null;
-    const directInvocation = getCursorCommandInvocation(args);
-    const windowsLengthInfo = getWindowsCommandLengthInfo(
-      directInvocation.command,
-      directInvocation.args
-    );
-    if (
-      process.platform === "win32" &&
-      (windowsLengthInfo.shellName === "cmd" || windowsLengthInfo.shellName === "cmd.exe") &&
-      windowsLengthInfo.exceedsLimit
-    ) {
-      promptFilePath = createCursorInvokePromptFile(cwd, fullPrompt);
-      const fallbackPrompt = buildCursorTranscriptReferencePrompt(promptFilePath, cwd);
-      args.splice(-1, 1, fallbackPrompt);
-    }
 
     const triedKeyIds = new Set<string>();
     let lastError: unknown;
 
-    try {
-      const finalInvocation = getCursorCommandInvocation(args);
-      assertCursorWindowsCommandLength(finalInvocation.command, finalInvocation.args);
-      for (;;) {
-        const resolved = projectId
-          ? await getNextKey(projectId, "CURSOR_API_KEY")
-          : {
-              key: process.env.CURSOR_API_KEY || "",
-              keyId: ENV_FALLBACK_KEY_ID,
-              source: "env" as KeySource,
-            };
+    for (;;) {
+      const resolved = projectId
+        ? await getNextKey(projectId, "CURSOR_API_KEY")
+        : {
+            key: process.env.CURSOR_API_KEY || "",
+            keyId: ENV_FALLBACK_KEY_ID,
+            source: "env" as KeySource,
+          };
 
-        if (!resolved || !resolved.key.trim()) {
-          const msg = lastError ? getErrorMessage(lastError) : "No Cursor API key available";
-          const apiErrorKind = toCursorRotatableApiErrorKind(lastError);
-          throw new AppError(
-            400,
-            ErrorCodes.AGENT_INVOKE_FAILED,
-            apiErrorKind === "rate_limit"
-              ? `All Cursor API keys hit rate limits. ${msg} Add more keys in Settings, or retry after 24h.`
-              : apiErrorKind === "auth"
-                ? `All Cursor API keys were rejected as invalid. ${msg} Update the key in Settings and retry.`
-                : "CURSOR_API_KEY is not set. Add it to your .env file or Settings. Get a key from Cursor → Settings → Integrations → User API Keys.",
-            lastError
-              ? {
-                  agentType: "cursor",
-                  raw: msg,
-                  isLimitError: apiErrorKind === "rate_limit",
-                }
-              : undefined
-          );
-        }
-
-        const { key, keyId, source } = resolved;
-        if (triedKeyIds.has(keyId)) {
-          const msg = getErrorMessage(lastError);
-          const apiErrorKind = toCursorRotatableApiErrorKind(lastError);
-          throw new AppError(
-            502,
-            ErrorCodes.AGENT_INVOKE_FAILED,
-            `Cursor API error: ${msg}. Check Settings (API key, model).`,
-            { agentType: "cursor", raw: msg, isLimitError: apiErrorKind === "rate_limit" }
-          );
-        }
-        triedKeyIds.add(keyId);
-
-        log.info("Cursor CLI starting", {
-          model: cursorModel,
-          promptLen: fullPrompt.length,
-          cwd,
-          CURSOR_API_KEY: key ? "set" : "NOT SET",
-          promptTransport: promptFilePath ? "workspace-file" : "argv",
-        });
-
-        try {
-          const content = await this.runCursorAgentSpawn(args, cwd, key);
-          log.info("Cursor CLI completed", { outputLen: content.length });
-          if (projectId && keyId !== ENV_FALLBACK_KEY_ID) {
-            await clearLimitHit(projectId, "CURSOR_API_KEY", keyId, source);
-          }
-          if (options.onChunk) {
-            options.onChunk(content);
-          }
-          return { content };
-        } catch (error: unknown) {
-          lastError = error;
-          const offlineMessage = await getOfflineFailureMessage(error);
-          if (offlineMessage) {
-            throw new AppError(503, ErrorCodes.AGENT_INVOKE_FAILED, offlineMessage, {
-              agentType: "cursor",
-              raw: getErrorMessage(error),
-              isConnectivityError: true,
-            });
-          }
-          const apiErrorKind = toCursorRotatableApiErrorKind(error);
-          if (projectId && apiErrorKind && keyId !== ENV_FALLBACK_KEY_ID) {
-            if (apiErrorKind === "rate_limit") {
-              await recordLimitHit(projectId, "CURSOR_API_KEY", keyId, source);
-            } else {
-              await recordInvalidKey(projectId, "CURSOR_API_KEY", keyId, source);
-            }
-            continue;
-          }
-          // Non-limit error or env fallback with limit: throw
-          const isAppErr = error instanceof AppError;
-          const appDetails = isAppErr
-            ? (error.details as Record<string, unknown> | undefined)
-            : undefined;
-          const execShape = getExecErrorShape(error);
-          const isTimeout = isAppErr
-            ? Boolean(appDetails?.isTimeout)
-            : Boolean(execShape.killed && execShape.signal === "SIGTERM");
-
-          const raw = isTimeout
-            ? `The Cursor agent timed out after 5 minutes. Try a faster model (e.g. sonnet-4.6-thinking) in Settings, or use Claude instead.`
-            : isAppErr
-              ? error.message
-              : execShape.stderr ||
-                execShape.message ||
-                (error instanceof Error ? error.message : String(error));
-
-          log.error("Cursor CLI failed", { raw, isTimeout });
-          throw new AppError(
-            isTimeout ? 504 : 502,
-            ErrorCodes.AGENT_INVOKE_FAILED,
-            formatAgentError("cursor", raw),
-            {
-              agentType: "cursor",
-              raw,
-              isTimeout,
-              isLimitError: isLimitError(error),
-            }
-          );
-        }
+      if (!resolved || !resolved.key.trim()) {
+        const msg = lastError ? getErrorMessage(lastError) : "No Cursor API key available";
+        const apiErrorKind = toCursorRotatableApiErrorKind(lastError);
+        throw new AppError(
+          400,
+          ErrorCodes.AGENT_INVOKE_FAILED,
+          apiErrorKind === "rate_limit"
+            ? `All Cursor API keys hit rate limits. ${msg} Add more keys in Settings, or retry after 24h.`
+            : apiErrorKind === "auth"
+              ? `All Cursor API keys were rejected as invalid. ${msg} Update the key in Settings and retry.`
+              : "CURSOR_API_KEY is not set. Add it to your .env file or Settings. Get a key from Cursor → Settings → Integrations → User API Keys.",
+          lastError
+            ? {
+                agentType: "cursor",
+                raw: msg,
+                isLimitError: apiErrorKind === "rate_limit",
+              }
+            : undefined
+        );
       }
-    } finally {
-      if (promptFilePath) {
-        await fsRm(promptFilePath, { force: true }).catch(() => {});
+
+      const { key, keyId, source } = resolved;
+      if (triedKeyIds.has(keyId)) {
+        const msg = getErrorMessage(lastError);
+        const apiErrorKind = toCursorRotatableApiErrorKind(lastError);
+        throw new AppError(
+          502,
+          ErrorCodes.AGENT_INVOKE_FAILED,
+          `Cursor API error: ${msg}. Check Settings (API key, model).`,
+          { agentType: "cursor", raw: msg, isLimitError: apiErrorKind === "rate_limit" }
+        );
+      }
+      triedKeyIds.add(keyId);
+
+      log.info("Cursor CLI starting", {
+        model: cursorModel,
+        promptLen: fullPrompt.length,
+        cwd,
+        CURSOR_API_KEY: key ? "set" : "NOT SET",
+      });
+
+      try {
+        const content = await this.runCursorAgentSpawn(args, cwd, key);
+        log.info("Cursor CLI completed", { outputLen: content.length });
+        if (projectId && keyId !== ENV_FALLBACK_KEY_ID) {
+          await clearLimitHit(projectId, "CURSOR_API_KEY", keyId, source);
+        }
+        if (options.onChunk) {
+          options.onChunk(content);
+        }
+        return { content };
+      } catch (error: unknown) {
+        lastError = error;
+        const offlineMessage = await getOfflineFailureMessage(error);
+        if (offlineMessage) {
+          throw new AppError(503, ErrorCodes.AGENT_INVOKE_FAILED, offlineMessage, {
+            agentType: "cursor",
+            raw: getErrorMessage(error),
+            isConnectivityError: true,
+          });
+        }
+        const apiErrorKind = toCursorRotatableApiErrorKind(error);
+        if (projectId && apiErrorKind && keyId !== ENV_FALLBACK_KEY_ID) {
+          if (apiErrorKind === "rate_limit") {
+            await recordLimitHit(projectId, "CURSOR_API_KEY", keyId, source);
+          } else {
+            await recordInvalidKey(projectId, "CURSOR_API_KEY", keyId, source);
+          }
+          continue;
+        }
+        // Non-limit error or env fallback with limit: throw
+        const isAppErr = error instanceof AppError;
+        const appDetails = isAppErr
+          ? (error.details as Record<string, unknown> | undefined)
+          : undefined;
+        const execShape = getExecErrorShape(error);
+        const isTimeout = isAppErr
+          ? Boolean(appDetails?.isTimeout)
+          : Boolean(execShape.killed && execShape.signal === "SIGTERM");
+
+        const raw = isTimeout
+          ? `The Cursor agent timed out after 5 minutes. Try a faster model (e.g. sonnet-4.6-thinking) in Settings, or use Claude instead.`
+          : isAppErr
+            ? error.message
+            : execShape.stderr ||
+              execShape.message ||
+              (error instanceof Error ? error.message : String(error));
+
+        log.error("Cursor CLI failed", { raw, isTimeout });
+        throw new AppError(
+          isTimeout ? 504 : 502,
+          ErrorCodes.AGENT_INVOKE_FAILED,
+          formatAgentError("cursor", raw),
+          {
+            agentType: "cursor",
+            raw,
+            isTimeout,
+            isLimitError: isLimitError(error),
+          }
+        );
       }
     }
   }

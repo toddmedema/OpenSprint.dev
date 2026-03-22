@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Task } from "@opensprint/shared";
 import type { Plan } from "@opensprint/shared";
 import { isAgentAssignee } from "@opensprint/shared";
@@ -16,11 +15,6 @@ import { ComplexityIcon } from "../ComplexityIcon";
 import { AssigneeSelector } from "./AssigneeSelector";
 import type { StatusFilter } from "../../lib/executeTaskFilter";
 
-const ROW_HEIGHT = 44;
-/** Header content + border + gap to first row (pt-6 + 2px padding + 7px margin below border). */
-const HEADER_HEIGHT = 46;
-const VIRTUALIZE_THRESHOLD = 25;
-
 export interface TimelineListProps {
   tasks: Task[];
   plans: Plan[];
@@ -31,7 +25,7 @@ export interface TimelineListProps {
   taskIdToStartedAt?: Record<string, string>;
   /** When "all", a Failures section is shown at top when blocked tasks exist. */
   statusFilter?: StatusFilter;
-  /** Optional scroll container ref for virtualization. When not provided, renders non-virtualized (for tests). */
+  /** Optional scroll container ref used for scroll-to-selected-task behavior. */
   scrollRef?: React.RefObject<HTMLDivElement | null>;
   /** When provided, scrolls the selected task into view. */
   selectedTaskId?: string | null;
@@ -64,7 +58,6 @@ function TimelineRow({
   projectId,
   teamMembers,
   enableHumanTeammates,
-  onAssigneeDropdownOpenChange,
 }: {
   task: Task;
   epicName: string;
@@ -75,18 +68,12 @@ function TimelineRow({
   projectId: string;
   teamMembers: Array<{ id: string; name: string }>;
   enableHumanTeammates?: boolean;
-  onAssigneeDropdownOpenChange?: (taskId: string, open: boolean) => void;
 }) {
   const isBlocked = task.kanbanColumn === "blocked";
   const isUnblocking = Boolean(unblockingTaskId && unblockingTaskId === task.id);
   const isDone = task.kanbanColumn === "done";
   const isInProgress = task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review";
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
-
-  const handleAssigneeOpenChange = (open: boolean) => {
-    setAssigneeDropdownOpen(open);
-    onAssigneeDropdownOpenChange?.(task.id, open);
-  };
 
   return (
     <li
@@ -135,7 +122,7 @@ function TimelineRow({
               readOnly={isDone || isInProgress}
               isAgentAssignee={!!task.assignee && isAgentAssignee(task.assignee)}
               matchTaskNameTypography
-              onOpenChange={handleAssigneeOpenChange}
+              onOpenChange={setAssigneeDropdownOpen}
             />
           ) : (
             <span className="text-xs text-theme-muted">
@@ -170,19 +157,6 @@ function TimelineRow({
     </li>
   );
 }
-
-type TimelineItem =
-  | { type: "header"; key: string; label: string }
-  | {
-      type: "row";
-      task: Task;
-      epicName: string;
-      relativeTime: string;
-      onUnblock?: (taskId: string) => void;
-      projectId: string;
-      teamMembers: Array<{ id: string; name: string }>;
-      enableHumanTeammates?: boolean;
-    };
 
 export function TimelineList({
   tasks,
@@ -273,81 +247,36 @@ export function TimelineList({
     [taskIdToStartedAt]
   );
 
-  const items = useMemo((): TimelineItem[] => {
-    const result: TimelineItem[] = [];
-    for (const { key, tasks: sectionTasks } of sections) {
-      if (sectionTasks.length === 0) continue;
-      result.push({ type: "header", key, label: SECTION_LABELS[key] });
-      for (const task of sectionTasks) {
-        result.push({
-          type: "row",
-          task,
-          epicName: task.epicId ? (epicIdToTitle.get(task.epicId) ?? task.epicId) : "",
-          relativeTime: getRelativeTime(task),
-          onUnblock: task.kanbanColumn === "blocked" ? onUnblock : undefined,
-          projectId,
-          teamMembers,
-          enableHumanTeammates,
-        });
-      }
-    }
-    return result;
-  }, [
-    sections,
-    epicIdToTitle,
-    getRelativeTime,
-    onUnblock,
-    projectId,
-    teamMembers,
-    enableHumanTeammates,
-  ]);
-
-  const taskIdToIndex = useMemo(() => {
-    const m = new Map<string, number>();
-    items.forEach((item, i) => {
-      if (item.type === "row") m.set(item.task.id, i);
-    });
-    return m;
-  }, [items]);
-
-  const [openAssigneeTaskId, setOpenAssigneeTaskId] = useState<string | null>(null);
-  const useVirtualization = Boolean(scrollRef) && items.length > VIRTUALIZE_THRESHOLD;
-  const virtualizer = useVirtualizer({
-    count: items.length,
-    getScrollElement: () => scrollRef?.current ?? null,
-    estimateSize: (i) => (items[i]?.type === "header" ? HEADER_HEIGHT : ROW_HEIGHT),
-    overscan: 5,
-  });
-  const virtualItems = virtualizer.getVirtualItems();
-  const useFallback = useVirtualization && virtualItems.length === 0;
-
-  // Scroll to selected task only once when selection changes (sidebar opens or user picks another task).
-  // Do not re-run on every render — virtualizer/taskIdToIndex can change frequently and would cause
-  // continuous scroll-to-task, making content unscrollable.
   const lastScrolledTaskIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!selectedTaskId || !useVirtualization) {
+    if (!selectedTaskId) {
       lastScrolledTaskIdRef.current = null;
       return;
     }
-    const index = taskIdToIndex.get(selectedTaskId);
-    if (index == null) return;
     if (lastScrolledTaskIdRef.current === selectedTaskId) return;
     lastScrolledTaskIdRef.current = selectedTaskId;
-    virtualizer.scrollToIndex(index, { align: "center", behavior: "smooth" });
-  }, [selectedTaskId, taskIdToIndex, useVirtualization, virtualizer]);
+
+    const container = scrollRef?.current;
+    if (!container) return;
+    const el = container.querySelector(
+      `[data-testid="timeline-row-${selectedTaskId.replace(/[^\w-]/g, "\\$&")}"]`
+    );
+    if (el && typeof el.scrollIntoView === "function") {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [selectedTaskId, scrollRef]);
 
   if (tasks.length === 0) {
     return null;
   }
 
-  const renderSectionedList = () => (
+  return (
     <div data-testid="timeline-list">
       {sections.map(
         ({ key, tasks: sectionTasks }) =>
           sectionTasks.length > 0 && (
             <section key={key} data-testid={`timeline-section-${key}`}>
-              <div className="sticky top-[-0.5rem] sm:top-[-0.75rem] z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-6 pb-[2px] mb-[7px] border-b border-theme-border-subtle bg-theme-bg/95 backdrop-blur-sm">
+              <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 sm:pt-5 pb-[2px] mb-[7px] border-b border-theme-border-subtle bg-theme-bg">
                 <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase">
                   {SECTION_LABELS[key]}
                 </h3>
@@ -365,9 +294,6 @@ export function TimelineList({
                     projectId={projectId}
                     teamMembers={teamMembers}
                     enableHumanTeammates={enableHumanTeammates}
-                    onAssigneeDropdownOpenChange={(taskId, open) =>
-                      setOpenAssigneeTaskId(open ? taskId : null)
-                    }
                   />
                 ))}
               </ul>
@@ -376,80 +302,4 @@ export function TimelineList({
       )}
     </div>
   );
-
-  if (useFallback) {
-    return renderSectionedList();
-  }
-
-  if (useVirtualization) {
-    return (
-      <div
-        data-testid="timeline-list"
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {virtualItems.map((virtualRow) => {
-          const item = items[virtualRow.index];
-          if (!item) return null;
-          if (item.type === "header") {
-            return (
-              <div
-                key={`header-${item.key}`}
-                data-testid={`timeline-section-${item.key}`}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${virtualRow.start - virtualizer.options.scrollMargin}px)`,
-                }}
-              >
-                <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase px-4 pt-6 pb-[2px] mb-[7px] border-b border-theme-border-subtle">
-                  {item.label}
-                </h3>
-              </div>
-            );
-          }
-          return (
-            <div
-              key={item.task.id}
-              data-index={virtualRow.index}
-              ref={virtualizer.measureElement}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${virtualRow.start - virtualizer.options.scrollMargin}px)`,
-                zIndex: openAssigneeTaskId === item.task.id ? 1000 : undefined,
-              }}
-              className="border-b border-theme-border-subtle"
-            >
-              <ul>
-                <TimelineRow
-                  task={item.task}
-                  epicName={item.epicName}
-                  relativeTime={item.relativeTime}
-                  onTaskSelect={onTaskSelect}
-                  onUnblock={item.onUnblock}
-                  unblockingTaskId={unblockingTaskId}
-                  projectId={item.projectId}
-                  teamMembers={item.teamMembers}
-                  enableHumanTeammates={item.enableHumanTeammates}
-                  onAssigneeDropdownOpenChange={(taskId, open) =>
-                    setOpenAssigneeTaskId(open ? taskId : null)
-                  }
-                />
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  return renderSectionedList();
 }

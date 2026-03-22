@@ -18,7 +18,9 @@ import {
   extractJsonFromAgentResponse,
   extractJsonArrayFromAgentResponse,
 } from "../utils/json-extract.js";
-import { getCombinedInstructions } from "./agent-instructions.service.js";
+import { agentInstructionsService, getCombinedInstructions } from "./agent-instructions.service.js";
+import { SelfImprovementExperimentService } from "./self-improvement-experiment.service.js";
+import type { SelfImprovementRunOutcome } from "./self-improvement-run-history.service.js";
 import { createLogger } from "../utils/logger.js";
 import { shellExec } from "../utils/shell-exec.js";
 import { notificationService } from "./notification.service.js";
@@ -875,10 +877,31 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
     }
 
     const experimentsEnabled = settings.runAgentEnhancementExperiments === true;
-    const summary =
+    let summary =
       createdCount > 0
         ? `Created ${createdCount} self-improvement task(s).`
         : "Audit completed; no new improvement tasks.";
+    let outcome: SelfImprovementRunOutcome = createdCount > 0 ? "tasks_created" : "no_changes";
+    let pendingCandidateId: string | null = null;
+
+    if (experimentsEnabled && atLeastOneReviewSucceeded) {
+      try {
+        const experimentService = new SelfImprovementExperimentService(agentInstructionsService);
+        const { versionId, bundle } = await experimentService.generateAndPersistCandidate(
+          projectId,
+          runId
+        );
+        pendingCandidateId = versionId;
+        outcome = "promotion_pending";
+        summary = `${summary} Experiment candidate ${versionId} saved (mined ${bundle.minedSessionIds.length} replay-grade session(s)).`;
+      } catch (err) {
+        log.warn("Self-improvement experiment pipeline failed", {
+          projectId,
+          runId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
     await taskStoreSingleton.insertSelfImprovementRunHistory({
       projectId,
@@ -887,8 +910,9 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
       status: "success",
       tasksCreatedCount: createdCount,
       mode: experimentsEnabled ? "audit_and_experiments" : "audit_only",
-      outcome: createdCount > 0 ? "tasks_created" : "no_changes",
+      outcome,
       summary,
+      pendingCandidateId,
     });
 
     return { tasksCreated: createdCount, runId };
