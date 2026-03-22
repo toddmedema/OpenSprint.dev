@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
+import { randomUUID } from "node:crypto";
 import { OrchestratorService, formatReviewFeedback } from "../services/orchestrator.service.js";
 import { sessionManager as mockSessionManager } from "../services/session-manager.js";
 import {
@@ -302,6 +303,7 @@ vi.mock("../services/branch-manager.js", () => {
       mergeContinue: vi.fn().mockResolvedValue(undefined),
       mergeAbort: vi.fn().mockResolvedValue(undefined),
       commitWip: mockCommitWip,
+      reconcileDependenciesAfterMerge: vi.fn().mockResolvedValue(undefined),
       getWorktreeBasePath: vi.fn().mockReturnValue(path.join(os.tmpdir(), "opensprint-worktrees")),
       getWorktreePath: vi
         .fn()
@@ -508,7 +510,6 @@ describe("OrchestratorService (slot-based model)", () => {
   let orchestrator: OrchestratorService;
   let repoPath: string;
   const projectId = "test-project-1";
-  const qualityGateWorktreePath = path.join(os.tmpdir(), "opensprint-quality-gate-worktree");
 
   const commandLabel = (spec: { command: string; args?: string[] }): string =>
     [spec.command, ...(spec.args ?? [])].join(" ");
@@ -545,26 +546,6 @@ describe("OrchestratorService (slot-based model)", () => {
     mockRunCommand.mock.calls
       .map((call) => commandLabel(call[0] as { command: string; args?: string[] }))
       .filter((label) => label !== "git rev-parse --verify HEAD");
-
-  async function prepareQualityGateWorktree(): Promise<void> {
-    await fs.rm(qualityGateWorktreePath, { recursive: true, force: true });
-    await fs.mkdir(path.join(qualityGateWorktreePath, "node_modules"), { recursive: true });
-    await fs.writeFile(
-      path.join(qualityGateWorktreePath, "package.json"),
-      JSON.stringify(
-        {
-          name: "quality-gate-worktree",
-          version: "1.0.0",
-          scripts: {
-            lint: "eslint .",
-            test: "vitest run",
-          },
-        },
-        null,
-        2
-      )
-    );
-  }
 
   const defaultSettings = {
     testFramework: "vitest",
@@ -732,11 +713,6 @@ describe("OrchestratorService (slot-based model)", () => {
     orchestrator.stopProject(projectId);
     try {
       await fs.rm(repoPath, { recursive: true, force: true });
-    } catch {
-      // ignore
-    }
-    try {
-      await fs.rm(qualityGateWorktreePath, { recursive: true, force: true });
     } catch {
       // ignore
     }
@@ -1355,7 +1331,39 @@ describe("OrchestratorService (slot-based model)", () => {
     const taskId = "task-quality-gate";
     const branchName = "opensprint/task-quality-gate";
     const baseBranch = "main";
-    const worktreePath = qualityGateWorktreePath;
+    let worktreePath: string;
+
+    beforeEach(() => {
+      worktreePath = path.join(os.tmpdir(), `opensprint-quality-gate-${randomUUID()}`);
+    });
+
+    afterEach(async () => {
+      try {
+        await fs.rm(worktreePath, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+    });
+
+    async function prepareQualityGateWorktree(): Promise<void> {
+      await fs.rm(worktreePath, { recursive: true, force: true });
+      await fs.mkdir(path.join(worktreePath, "node_modules"), { recursive: true });
+      await fs.writeFile(
+        path.join(worktreePath, "package.json"),
+        JSON.stringify(
+          {
+            name: "quality-gate-worktree",
+            version: "1.0.0",
+            scripts: {
+              lint: "eslint .",
+              test: "vitest run",
+            },
+          },
+          null,
+          2
+        )
+      );
+    }
 
     const runMergeQualityGates = () =>
       orchestrator.runMergeQualityGates({

@@ -366,6 +366,69 @@ describe("BranchManager", () => {
     });
   });
 
+  describe("reconcileDependenciesAfterMerge", () => {
+    it("runs npm ci when ORIG_HEAD diff shows lockfile changed", async () => {
+      const commands: string[] = [];
+      const shellExecSpy = vi
+        .spyOn(shellExecModule, "shellExec")
+        .mockImplementation(async (command: string) => {
+          commands.push(command);
+          if (command.includes("git diff --name-only ORIG_HEAD")) {
+            return { stdout: "package-lock.json\npackage.json\n", stderr: "" };
+          }
+          if (command === "npm ci") {
+            return { stdout: "installed", stderr: "" };
+          }
+          return { stdout: "", stderr: "" };
+        });
+
+      await branchManager.reconcileDependenciesAfterMerge(repoPath);
+
+      expect(commands).toContain("npm ci");
+      shellExecSpy.mockRestore();
+    });
+
+    it("skips npm ci when no dependency files changed", async () => {
+      const commands: string[] = [];
+      const shellExecSpy = vi
+        .spyOn(shellExecModule, "shellExec")
+        .mockImplementation(async (command: string) => {
+          commands.push(command);
+          if (command.includes("git diff --name-only ORIG_HEAD")) {
+            // pathspec filter means git only returns matching files; empty = no dep files changed
+            return { stdout: "", stderr: "" };
+          }
+          return { stdout: "", stderr: "" };
+        });
+
+      await branchManager.reconcileDependenciesAfterMerge(repoPath);
+
+      expect(commands).not.toContain("npm ci");
+      shellExecSpy.mockRestore();
+    });
+
+    it("falls back to running npm ci when ORIG_HEAD is unavailable", async () => {
+      const commands: string[] = [];
+      const shellExecSpy = vi
+        .spyOn(shellExecModule, "shellExec")
+        .mockImplementation(async (command: string) => {
+          commands.push(command);
+          if (command.includes("git diff --name-only ORIG_HEAD")) {
+            throw new Error("fatal: bad revision 'ORIG_HEAD'");
+          }
+          if (command === "npm ci") {
+            return { stdout: "installed", stderr: "" };
+          }
+          return { stdout: "", stderr: "" };
+        });
+
+      await branchManager.reconcileDependenciesAfterMerge(repoPath);
+
+      expect(commands).toContain("npm ci");
+      shellExecSpy.mockRestore();
+    });
+  });
+
   describe("rebaseContinue", () => {
     it("treats 'no rebase in progress' as already complete", async () => {
       await execAsync("git init", { cwd: repoPath });

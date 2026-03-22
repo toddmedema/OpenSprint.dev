@@ -311,6 +311,7 @@ describe("MergeCoordinatorService", () => {
         mergeContinue: vi.fn().mockResolvedValue(undefined),
         rebaseAbort: vi.fn().mockResolvedValue(undefined),
         rebaseContinue: vi.fn().mockResolvedValue(undefined),
+        reconcileDependenciesAfterMerge: vi.fn().mockResolvedValue(undefined),
       },
       runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
       sessionManager: {
@@ -507,6 +508,49 @@ describe("MergeCoordinatorService", () => {
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
 
     expect(mockGetChangedFiles).toHaveBeenCalledWith(repoPath, branchName, "develop");
+  });
+
+  it("invalidates baseline cache and reconciles dependencies after successful merge", async () => {
+    const mockReconcile = vi.fn().mockResolvedValue(undefined);
+    mockHost.branchManager.reconcileDependenciesAfterMerge = mockReconcile;
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(mockReconcile).toHaveBeenCalledWith(repoPath);
+
+    // Verify the baseline cache was invalidated by confirming a subsequent
+    // baseline check does NOT short-circuit (it actually runs the check).
+    // We do this by calling performMergeAndDone again — it should invoke
+    // the baseline quality gate check (createBaselineWorkspace is the entry
+    // point for a baseline check). Reset state for a second merge.
+    mockGitQueueEnqueueAndWait.mockResolvedValue(undefined);
+    hostState.slots = new Map([[taskId, makeSlot()]]);
+    mockHost.getState = vi.fn().mockImplementation(() => hostState);
+
+    // Enable quality gates so the baseline check runs
+    const mergeCoordInternal = coordinator as unknown as {
+      host: MergeCoordinatorHost & { runMergeQualityGates?: unknown };
+    };
+    mergeCoordInternal.host.runMergeQualityGates = vi.fn().mockResolvedValue(null);
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    // Baseline workspace should have been created (meaning the cache didn't skip the check)
+    expect(mockCreateBaselineWorkspace).toHaveBeenCalled();
+  });
+
+  it("does not block merge when dependency reconciliation fails", async () => {
+    const mockReconcile = vi.fn().mockRejectedValue(new Error("npm ci failed"));
+    mockHost.branchManager.reconcileDependenciesAfterMerge = mockReconcile;
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(mockReconcile).toHaveBeenCalledWith(repoPath);
+    // Merge should still succeed — task should be closed (slot removed via transition)
+    expect(mockHost.transition).toHaveBeenCalledWith(
+      projectId,
+      expect.objectContaining({ to: "complete", taskId })
+    );
   });
 
   it("archives session when merge fails so task detail sidebar can show output", async () => {

@@ -1507,6 +1507,47 @@ export class BranchManager {
   }
 
   /**
+   * After merging a task branch to main, check whether dependency manifests
+   * (package.json / package-lock.json) changed and run `npm ci` if so.
+   * Uses ORIG_HEAD (set by git merge) to detect changes; falls back to
+   * running npm ci unconditionally if the ref is unavailable.
+   */
+  async reconcileDependenciesAfterMerge(repoPath: string): Promise<void> {
+    let needsReconcile = true;
+    try {
+      const { stdout } = await shellExec(
+        'git diff --name-only ORIG_HEAD..HEAD -- "package-lock.json" "package.json" "packages/*/package.json"',
+        { cwd: repoPath, timeout: 10_000 }
+      );
+      const changed = stdout.trim().split("\n").filter(Boolean);
+      if (changed.length === 0) {
+        needsReconcile = false;
+        log.info("No dependency files changed in merge, skipping npm ci", { repoPath });
+      } else {
+        log.info("Dependency files changed in merge, running npm ci", { repoPath, changed });
+      }
+    } catch {
+      log.info(
+        "Could not determine changed files after merge, running npm ci as precaution",
+        { repoPath }
+      );
+    }
+
+    if (!needsReconcile) return;
+
+    const repair = await this.repairDependencies(
+      repoPath,
+      "post-merge dependency reconciliation"
+    );
+    if (!repair.success) {
+      log.warn("Post-merge npm ci failed — subsequent baseline checks may fail", {
+        repoPath,
+        output: repair.output,
+      });
+    }
+  }
+
+  /**
    * Symlink node_modules directories from the main repo into a worktree.
    * Handles both root node_modules and any per-package node_modules
    * (e.g. .vite caches in workspace packages).

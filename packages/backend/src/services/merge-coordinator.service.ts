@@ -175,6 +175,7 @@ export interface MergeCoordinatorHost {
     mergeContinue(repoPath: string): Promise<void>;
     rebaseAbort(repoPath: string): Promise<void>;
     rebaseContinue(repoPath: string): Promise<void>;
+    reconcileDependenciesAfterMerge(repoPath: string): Promise<void>;
   };
   runMergerAgentAndWait(options: {
     projectId: string;
@@ -622,6 +623,23 @@ export class MergeCoordinatorService {
 
   private baselineCacheKey(projectId: string, baseBranch: string): string {
     return `${projectId}:${baseBranch}`;
+  }
+
+  private invalidateBaselineCacheAfterMerge(projectId: string, baseBranch: string): void {
+    const cacheKey = this.baselineCacheKey(projectId, baseBranch);
+    this.baselineQualityGateSuccessCache.delete(cacheKey);
+    log.info("Invalidated baseline quality-gate cache after merge", { projectId, baseBranch });
+  }
+
+  private async reconcileDependenciesAfterMerge(
+    repoPath: string,
+    taskId: string
+  ): Promise<void> {
+    try {
+      await this.host.branchManager.reconcileDependenciesAfterMerge(repoPath);
+    } catch (err) {
+      log.warn("Post-merge dependency reconciliation failed", { repoPath, taskId, err });
+    }
   }
 
   private buildBaselineDispatchPausedReason(baseBranch: string): string {
@@ -1568,6 +1586,8 @@ export class MergeCoordinatorService {
           baseBranch,
         });
         await this.markMergeValidationHealthy(projectId, repoPath);
+        this.invalidateBaselineCacheAfterMerge(projectId, baseBranch);
+        await this.reconcileDependenciesAfterMerge(repoPath, task.id);
       } catch (mergeErr) {
         log.warn("Merge epic to main failed", { taskId: task.id, branchName, mergeErr });
         await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, mergeErr as Error);
@@ -1643,6 +1663,8 @@ export class MergeCoordinatorService {
         baseBranch,
       });
       await this.markMergeValidationHealthy(projectId, repoPath);
+      this.invalidateBaselineCacheAfterMerge(projectId, baseBranch);
+      await this.reconcileDependenciesAfterMerge(repoPath, task.id);
     } catch (mergeErr) {
       log.warn("Merge to main failed", { taskId: task.id, branchName, mergeErr });
       await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, mergeErr as Error);
