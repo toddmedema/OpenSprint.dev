@@ -27,6 +27,14 @@ export interface PrdChatState {
   error: string | null;
 }
 
+export interface SendPrdChatMessageArgs {
+  projectId: string;
+  message: string;
+  prdSectionFocus?: string;
+  images?: string[];
+  requestOptions?: { timeoutMs?: number | null };
+}
+
 /** Backend sends this when the agent returned a known error (e.g. credit balance, rate limit). */
 function isKnownAgentErrorMessage(message: string): boolean {
   if (!message || typeof message !== "string") return false;
@@ -65,7 +73,7 @@ export interface PrdChatSliceResult {
     sendMessage: ReturnType<
       typeof createAsyncThunk<
         ChatResponse,
-        { projectId: string; message: string; prdSectionFocus?: string; images?: string[] }
+        SendPrdChatMessageArgs
       >
     >;
     savePrdSection: ReturnType<
@@ -115,12 +123,19 @@ export function createPrdChatSlice(sliceName: string): PrdChatSliceResult {
       message,
       prdSectionFocus,
       images,
-    }: {
-      projectId: string;
-      message: string;
-      prdSectionFocus?: string;
-      images?: string[];
-    }) => {
+      requestOptions,
+    }: SendPrdChatMessageArgs) => {
+      if (requestOptions) {
+        return api.chat.send(
+          projectId,
+          message,
+          sliceName,
+          prdSectionFocus,
+          images,
+          undefined,
+          requestOptions
+        );
+      }
       return api.chat.send(projectId, message, sliceName, prdSectionFocus, images);
     }
   );

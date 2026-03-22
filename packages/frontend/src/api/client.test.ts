@@ -296,6 +296,26 @@ describe("api client", () => {
       expect(body.images).toEqual(images);
     });
 
+    it("send can disable the client request timeout for long-running sketch generation", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { message: "Hi" } }),
+      } as Response);
+
+      await api.chat.send(
+        "proj-1",
+        "Hello",
+        "sketch",
+        undefined,
+        undefined,
+        undefined,
+        { timeoutMs: null }
+      );
+      const call = vi.mocked(fetch).mock.calls[0];
+      expect(call?.[1]).not.toHaveProperty("signal");
+    });
+
     it("history encodes context in URL for plan chat", async () => {
       vi.mocked(fetch).mockResolvedValue({
         ok: true,

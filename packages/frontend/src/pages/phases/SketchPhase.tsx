@@ -474,7 +474,15 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
       })
     );
 
-    const result = await dispatch(sendSketchMessage({ projectId, message: text, images }));
+    const result = await dispatch(
+      sendSketchMessage({
+        projectId,
+        message: text,
+        images,
+        // Initial PRD generation can legitimately take a while; do not fail client-side first.
+        requestOptions: { timeoutMs: null },
+      })
+    );
     if (sendSketchMessage.fulfilled.match(result)) {
       optimisticInitialSubmitRef.current = false;
       clearSketchInitialPromptDraft(projectId);

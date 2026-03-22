@@ -126,8 +126,16 @@ const BASE_URL = `${(import.meta.env.VITE_API_BASE as string | undefined) ?? ""}
 /** Default upper bound for how long any API `fetch` may stay pending before aborting. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
+interface RequestOptions extends RequestInit {
+  timeoutMs?: number | null;
+}
+
 /** Abort when either the timeout elapses or the caller's signal aborts (whichever comes first). */
-function mergeRequestSignal(timeoutMs: number, userSignal?: AbortSignal | null): AbortSignal {
+function mergeRequestSignal(
+  timeoutMs: number | null | undefined,
+  userSignal?: AbortSignal | null
+): AbortSignal | undefined {
+  if (timeoutMs == null) return userSignal ?? undefined;
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
   if (userSignal == null) return timeoutSignal;
   return AbortSignal.any([timeoutSignal, userSignal]);
@@ -172,16 +180,18 @@ export function isConnectionError(err: unknown): boolean {
 }
 
 /** Generic fetch wrapper with typed responses */
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
+  const { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, ...fetchOptions } = options;
+  const signal = mergeRequestSignal(timeoutMs, fetchOptions.signal);
 
   const response = await fetch(url, {
-    ...options,
+    ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
-      ...options.headers,
+      ...fetchOptions.headers,
     },
-    signal: mergeRequestSignal(DEFAULT_REQUEST_TIMEOUT_MS, options.signal),
+    ...(signal ? { signal } : {}),
   });
 
   if (!response.ok) {
@@ -734,7 +744,8 @@ export const api = {
       context?: string,
       prdSectionFocus?: string,
       images?: string[],
-      taskContext?: ExecuteTaskContext
+      taskContext?: ExecuteTaskContext,
+      requestOptions?: { timeoutMs?: number | null }
     ) =>
       request<ChatResponse>(`/projects/${projectId}/chat`, {
         method: "POST",
@@ -745,6 +756,7 @@ export const api = {
           ...(images?.length ? { images } : {}),
           ...(taskContext ? { taskContext } : {}),
         } satisfies Partial<ChatRequest>),
+        ...(requestOptions ? { timeoutMs: requestOptions.timeoutMs } : {}),
       }),
     history: (projectId: string, context?: string) =>
       request<Conversation>(

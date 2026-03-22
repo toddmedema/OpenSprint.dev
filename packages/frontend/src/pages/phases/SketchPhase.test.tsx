@@ -195,6 +195,7 @@ function renderSketchPhase(store = createStore()) {
 describe("SketchPhase with sketchSlice", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     mockOpenQuestionNotifications = [];
     mockChatSend.mockResolvedValue({ message: "Response" });
     mockChatHistory.mockResolvedValue({ messages: [] });
@@ -386,7 +387,9 @@ describe("SketchPhase with sketchSlice", () => {
           "A todo app",
           "sketch",
           undefined,
-          undefined
+          undefined,
+          undefined,
+          { timeoutMs: null }
         );
       });
     });
@@ -483,7 +486,9 @@ describe("SketchPhase with sketchSlice", () => {
           "A fitness app",
           "sketch",
           undefined,
-          undefined
+          undefined,
+          undefined,
+          { timeoutMs: null }
         );
       });
     });
@@ -578,6 +583,26 @@ describe("SketchPhase with sketchSlice", () => {
       await waitFor(() => {
         const state = store.getState();
         expect(state.sketch.error).toBe("Agent unavailable");
+      });
+    });
+
+    it("disables the client timeout for the initial Sketch PRD generation", async () => {
+      const user = userEvent.setup();
+      renderSketchPhase();
+      const textarea = screen.getByRole("textbox");
+      await user.type(textarea, "A todo app that helps roommates split chores fairly");
+      await user.click(screen.getByTestId("sketch-it-button"));
+
+      await waitFor(() => {
+        expect(mockChatSend).toHaveBeenCalledWith(
+          "proj-1",
+          "A todo app that helps roommates split chores fairly",
+          "sketch",
+          undefined,
+          undefined,
+          undefined,
+          { timeoutMs: null }
+        );
       });
     });
   });

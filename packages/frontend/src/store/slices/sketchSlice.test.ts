@@ -254,6 +254,28 @@ describe("sketchSlice", () => {
       expect(api.chat.send).toHaveBeenCalledWith("proj-1", "hello", "sketch", undefined, undefined);
     });
 
+    it("passes requestOptions through when provided", async () => {
+      vi.mocked(api.chat.send).mockResolvedValue({ message: "Here is my response" } as never);
+      const store = createStore();
+      await store.dispatch(
+        sendSketchMessage({
+          projectId: "proj-1",
+          message: "Build a todo app",
+          requestOptions: { timeoutMs: null },
+        })
+      );
+
+      expect(api.chat.send).toHaveBeenCalledWith(
+        "proj-1",
+        "Build a todo app",
+        "sketch",
+        undefined,
+        undefined,
+        undefined,
+        { timeoutMs: null }
+      );
+    });
+
     it("optimistically applies prdChanges from Dreamer response to prdContent", async () => {
       vi.mocked(api.chat.send).mockResolvedValue({
         message: "I've updated the PRD.",
