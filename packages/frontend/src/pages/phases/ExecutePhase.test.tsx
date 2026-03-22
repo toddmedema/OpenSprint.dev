@@ -161,6 +161,7 @@ function createStore(
     selectedTaskId: string | null;
     awaitingApproval: boolean;
     selfImprovementRunInProgress: boolean;
+    selfImprovementRunMode: "audit" | "experiments" | undefined;
     baselineStatus: "unknown" | "checking" | "healthy" | "failing";
     baselineFailureSummary: string | null;
     dispatchPausedReason: string | null;
@@ -1163,6 +1164,62 @@ describe("ExecutePhase epic merge mode indicator", () => {
     });
     expect(screen.getByTestId("execute-self-improvement-indicator")).toBeInTheDocument();
     expect(screen.getByText("Self-improvement review in progress")).toBeInTheDocument();
+  });
+
+  it("shows audit indicator text when selfImprovementRunMode is audit", async () => {
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, {
+      selfImprovementRunInProgress: true,
+      selfImprovementRunMode: "audit",
+    });
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("execute-self-improvement-indicator")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Self-improvement review in progress")).toBeInTheDocument();
+  });
+
+  it("shows experiment indicator text when selfImprovementRunMode is experiments", async () => {
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks, {
+      selfImprovementRunInProgress: true,
+      selfImprovementRunMode: "experiments",
+    });
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("execute-self-improvement-indicator")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Agent enhancement experiment in progress")).toBeInTheDocument();
   });
 
   it("hides self-improvement indicator when selfImprovementRunInProgress is false", async () => {

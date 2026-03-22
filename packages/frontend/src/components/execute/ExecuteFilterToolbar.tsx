@@ -49,6 +49,8 @@ interface ExecuteFilterToolbarProps {
   awaitingApproval: boolean;
   /** When true, show a small non-blocking indicator that self-improvement review is in progress */
   selfImprovementRunInProgress?: boolean;
+  /** Run mode determines indicator text: "audit" (or undefined) → review, "experiments" → experiment */
+  selfImprovementRunMode?: "audit" | "experiments";
   searchExpanded: boolean;
   searchInputValue: string;
   setSearchInputValue: (v: string) => void;
@@ -78,6 +80,7 @@ export function ExecuteFilterToolbar({
   onViewModeChange,
   mergeStrategy,
   selfImprovementRunInProgress = false,
+  selfImprovementRunMode,
 }: ExecuteFilterToolbarProps) {
   const showEpicMergeIndicator = mergeStrategy === "per_epic";
 
@@ -112,9 +115,15 @@ export function ExecuteFilterToolbar({
         <span
           className="ml-1 text-xs text-theme-muted shrink-0 rounded-full bg-theme-surface-muted px-2 py-1 border border-theme-border-subtle"
           data-testid="execute-self-improvement-indicator"
-          title="New tasks may appear from the self-improvement review"
+          title={
+            selfImprovementRunMode === "experiments"
+              ? "An agent enhancement experiment is running"
+              : "New tasks may appear from the self-improvement review"
+          }
         >
-          Self-improvement review in progress
+          {selfImprovementRunMode === "experiments"
+            ? "Agent enhancement experiment in progress"
+            : "Self-improvement review in progress"}
         </span>
       )}
 
