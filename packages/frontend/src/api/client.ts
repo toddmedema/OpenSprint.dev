@@ -61,11 +61,29 @@ export type SelfImprovementStage =
   | "scoring"
   | "promoting";
 
+export interface CandidateDiffEntry {
+  section: string;
+  before: string;
+  after: string;
+}
+
+export interface SelfImprovementMetrics {
+  taskSuccessRate: number;
+  retryRate?: number;
+  reviewPassRate?: number;
+  avgLatencyMs?: number;
+  avgCostUsd?: number;
+}
+
 export interface SelfImprovementStatusSnapshot {
   status: SelfImprovementStatusValue;
   stage?: SelfImprovementStage;
   pendingCandidateId?: string;
   summary?: string;
+  candidateDiff?: CandidateDiffEntry[];
+  replaySampleSize?: number;
+  baselineMetrics?: SelfImprovementMetrics;
+  candidateMetrics?: SelfImprovementMetrics;
 }
 
 export type SelfImprovementRunMode = "audit_only" | "audit_and_experiments";
@@ -77,6 +95,18 @@ export type SelfImprovementRunOutcome =
   | "promotion_pending"
   | "promoted"
   | "failed";
+
+export interface SelfImprovementBehaviorStatus {
+  pendingCandidateId?: string;
+  activeBehaviorVersionId?: string;
+  behaviorVersions: Array<{ id: string; promotedAt: string }>;
+  history: Array<{
+    timestamp: string;
+    action: "approved" | "rejected" | "rollback";
+    behaviorVersionId?: string;
+    candidateId?: string;
+  }>;
+}
 
 export interface SelfImprovementHistoryEntry {
   timestamp: string;
@@ -303,6 +333,22 @@ export const api = {
     getSelfImprovementHistory: (id: string, limit?: number) =>
       request<SelfImprovementHistoryEntry[]>(
         `/projects/${id}/self-improvement/history${limit != null ? `?limit=${limit}` : ""}`
+      ),
+    approveSelfImprovement: (id: string, candidateId?: string) =>
+      request<SelfImprovementBehaviorStatus>(
+        `/projects/${id}/self-improvement/approve`,
+        {
+          method: "POST",
+          ...(candidateId ? { body: JSON.stringify({ candidateId }) } : {}),
+        }
+      ),
+    rejectSelfImprovement: (id: string, candidateId?: string) =>
+      request<SelfImprovementBehaviorStatus>(
+        `/projects/${id}/self-improvement/reject`,
+        {
+          method: "POST",
+          ...(candidateId ? { body: JSON.stringify({ candidateId }) } : {}),
+        }
       ),
     archive: (id: string) => request<void>(`/projects/${id}/archive`, { method: "POST" }),
     delete: (id: string) =>

@@ -12,6 +12,8 @@ vi.mock("../../api/client", () => ({
       runSelfImprovement: vi.fn(),
       getSelfImprovementStatus: vi.fn(),
       getSelfImprovementHistory: vi.fn(),
+      approveSelfImprovement: vi.fn(),
+      rejectSelfImprovement: vi.fn(),
     },
   },
 }));
@@ -441,6 +443,270 @@ describe("WorkflowSettingsContent", () => {
       expect(badges[1]).toHaveTextContent("Promotion pending");
       expect(badges[2]).toHaveTextContent("Candidate rejected");
       expect(badges[3]).toHaveTextContent("Failed");
+    });
+  });
+
+  describe("approval card", () => {
+    const awaitingApprovalStatus: SelfImprovementStatusSnapshot = {
+      status: "awaiting_approval",
+      pendingCandidateId: "cand-42",
+      summary: "A candidate behavior version is awaiting approval.",
+      candidateDiff: [
+        { section: "General Instructions", before: "Be concise", after: "Be concise and thorough" },
+        { section: "Coder Role", before: "", after: "Always run tests before completing" },
+      ],
+      replaySampleSize: 15,
+      baselineMetrics: { taskSuccessRate: 0.72, retryRate: 0.18, reviewPassRate: 0.85 },
+      candidateMetrics: { taskSuccessRate: 0.88, retryRate: 0.1, reviewPassRate: 0.92 },
+    };
+
+    it("renders approval card when awaiting_approval with pendingCandidateId", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue(awaitingApprovalStatus);
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("self-improvement-approval-card")).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId("approval-promote-btn")).toBeInTheDocument();
+      expect(screen.getByTestId("approval-reject-btn")).toBeInTheDocument();
+      expect(screen.getByTestId("approval-promote-btn")).toHaveTextContent("Promote");
+      expect(screen.getByTestId("approval-reject-btn")).toHaveTextContent("Reject");
+    });
+
+    it("does not render approval card when status is idle", async () => {
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("self-improvement-status-label")).toHaveTextContent("Idle");
+      });
+
+      expect(screen.queryByTestId("self-improvement-approval-card")).not.toBeInTheDocument();
+    });
+
+    it("does not render approval card when awaiting_approval but no pendingCandidateId", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue({
+        status: "awaiting_approval",
+      });
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("self-improvement-status-label")).toHaveTextContent(
+          "Awaiting approval"
+        );
+      });
+
+      expect(screen.queryByTestId("self-improvement-approval-card")).not.toBeInTheDocument();
+    });
+
+    it("displays candidate diff entries", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue(awaitingApprovalStatus);
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-candidate-diff")).toBeInTheDocument();
+      });
+
+      const diffEntries = screen.getAllByTestId("approval-diff-entry");
+      expect(diffEntries).toHaveLength(2);
+      expect(diffEntries[0]).toHaveTextContent("General Instructions");
+      expect(diffEntries[0]).toHaveTextContent("Be concise");
+      expect(diffEntries[0]).toHaveTextContent("Be concise and thorough");
+      expect(diffEntries[1]).toHaveTextContent("Coder Role");
+      expect(diffEntries[1]).toHaveTextContent("(empty)");
+      expect(diffEntries[1]).toHaveTextContent("Always run tests before completing");
+    });
+
+    it("displays replay sample size", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue(awaitingApprovalStatus);
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-replay-sample-size")).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId("approval-replay-sample-size")).toHaveTextContent("15");
+    });
+
+    it("displays baseline vs candidate metrics", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue(awaitingApprovalStatus);
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-metrics")).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId("approval-metrics")).toHaveTextContent("Task success rate");
+      expect(screen.getByTestId("approval-metrics")).toHaveTextContent("72.0%");
+      expect(screen.getByTestId("approval-metrics")).toHaveTextContent("88.0%");
+      expect(screen.getByTestId("approval-metrics")).toHaveTextContent("Retry rate");
+      expect(screen.getByTestId("approval-metrics")).toHaveTextContent("Review pass rate");
+    });
+
+    it("does not render diff section when candidateDiff is absent", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue({
+        status: "awaiting_approval",
+        pendingCandidateId: "cand-minimal",
+      });
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("self-improvement-approval-card")).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId("approval-candidate-diff")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("approval-replay-sample-size")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("approval-metrics")).not.toBeInTheDocument();
+    });
+
+    it("Promote button calls approveSelfImprovement and shows success", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue(awaitingApprovalStatus);
+      vi.mocked(api.projects.approveSelfImprovement).mockResolvedValue({
+        activeBehaviorVersionId: "cand-42",
+        behaviorVersions: [{ id: "cand-42", promotedAt: "2026-03-21T00:00:00Z" }],
+        history: [{ timestamp: "2026-03-21T00:00:00Z", action: "approved", behaviorVersionId: "cand-42", candidateId: "cand-42" }],
+      });
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-promote-btn")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("approval-promote-btn"));
+
+      await waitFor(() => {
+        expect(api.projects.approveSelfImprovement).toHaveBeenCalledWith("proj-1", "cand-42");
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-feedback-message")).toHaveTextContent(
+          "Candidate promoted successfully"
+        );
+      });
+    });
+
+    it("Reject button calls rejectSelfImprovement and shows success", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue(awaitingApprovalStatus);
+      vi.mocked(api.projects.rejectSelfImprovement).mockResolvedValue({
+        behaviorVersions: [],
+        history: [{ timestamp: "2026-03-21T00:00:00Z", action: "rejected", candidateId: "cand-42" }],
+      });
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-reject-btn")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("approval-reject-btn"));
+
+      await waitFor(() => {
+        expect(api.projects.rejectSelfImprovement).toHaveBeenCalledWith("proj-1", "cand-42");
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-feedback-message")).toHaveTextContent(
+          "Candidate rejected"
+        );
+      });
+    });
+
+    it("Promote button shows loading state while pending", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue(awaitingApprovalStatus);
+      let resolveApprove: (v: unknown) => void;
+      const approvePromise = new Promise((r) => { resolveApprove = r; });
+      vi.mocked(api.projects.approveSelfImprovement).mockReturnValue(approvePromise as ReturnType<typeof api.projects.approveSelfImprovement>);
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-promote-btn")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("approval-promote-btn"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-promote-btn")).toHaveTextContent("Promoting…");
+      });
+      expect(screen.getByTestId("approval-reject-btn")).toBeDisabled();
+
+      resolveApprove!({ activeBehaviorVersionId: "cand-42", behaviorVersions: [], history: [] });
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-promote-btn")).toHaveTextContent("Promote");
+      });
+    });
+
+    it("Reject button shows loading state while pending", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue(awaitingApprovalStatus);
+      let resolveReject: (v: unknown) => void;
+      const rejectPromise = new Promise((r) => { resolveReject = r; });
+      vi.mocked(api.projects.rejectSelfImprovement).mockReturnValue(rejectPromise as ReturnType<typeof api.projects.rejectSelfImprovement>);
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-reject-btn")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("approval-reject-btn"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-reject-btn")).toHaveTextContent("Rejecting…");
+      });
+      expect(screen.getByTestId("approval-promote-btn")).toBeDisabled();
+
+      resolveReject!({ behaviorVersions: [], history: [] });
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-reject-btn")).toHaveTextContent("Reject");
+      });
+    });
+
+    it("shows error feedback when Promote fails", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue(awaitingApprovalStatus);
+      vi.mocked(api.projects.approveSelfImprovement).mockRejectedValue(
+        new Error("No pending candidate")
+      );
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-promote-btn")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("approval-promote-btn"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-feedback-message")).toHaveTextContent(
+          "No pending candidate"
+        );
+      });
+    });
+
+    it("shows error feedback when Reject fails", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue(awaitingApprovalStatus);
+      vi.mocked(api.projects.rejectSelfImprovement).mockRejectedValue(
+        new Error("candidateId does not match")
+      );
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-reject-btn")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("approval-reject-btn"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("approval-feedback-message")).toHaveTextContent(
+          "candidateId does not match"
+        );
+      });
+    });
+
+    it("displays pending candidate id in card header", async () => {
+      vi.mocked(api.projects.getSelfImprovementStatus).mockResolvedValue(awaitingApprovalStatus);
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("self-improvement-approval-card")).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId("self-improvement-approval-card")).toHaveTextContent("cand-42");
     });
   });
 });

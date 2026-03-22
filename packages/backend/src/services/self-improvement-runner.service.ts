@@ -499,12 +499,30 @@ export interface SelfImprovementRunState {
   summary?: string;
 }
 
+export interface CandidateDiffEntry {
+  section: string;
+  before: string;
+  after: string;
+}
+
+export interface SelfImprovementMetrics {
+  taskSuccessRate: number;
+  retryRate?: number;
+  reviewPassRate?: number;
+  avgLatencyMs?: number;
+  avgCostUsd?: number;
+}
+
 /** Snapshot returned by the status endpoint. */
 export interface SelfImprovementStatusSnapshot {
   status: SelfImprovementStatusValue;
   stage?: SelfImprovementStage;
   pendingCandidateId?: string;
   summary?: string;
+  candidateDiff?: CandidateDiffEntry[];
+  replaySampleSize?: number;
+  baselineMetrics?: SelfImprovementMetrics;
+  candidateMetrics?: SelfImprovementMetrics;
 }
 
 /** Per-project in-progress state: projectIds → run state while self-improvement is active. */
@@ -539,7 +557,13 @@ export function getSelfImprovementRunState(
  */
 export function getSelfImprovementStatus(
   projectId: string,
-  settings?: { selfImprovementPendingCandidateId?: string }
+  settings?: {
+    selfImprovementPendingCandidateId?: string;
+    selfImprovementPendingCandidateDiff?: CandidateDiffEntry[];
+    selfImprovementPendingReplaySampleSize?: number;
+    selfImprovementPendingBaselineMetrics?: SelfImprovementMetrics;
+    selfImprovementPendingCandidateMetrics?: SelfImprovementMetrics;
+  }
 ): SelfImprovementStatusSnapshot {
   const runState = inProgressProjects.get(projectId);
   if (runState) {
@@ -557,6 +581,18 @@ export function getSelfImprovementStatus(
       status: "awaiting_approval",
       pendingCandidateId: settings.selfImprovementPendingCandidateId,
       summary: "A candidate behavior version is awaiting approval.",
+      ...(settings.selfImprovementPendingCandidateDiff && {
+        candidateDiff: settings.selfImprovementPendingCandidateDiff,
+      }),
+      ...(settings.selfImprovementPendingReplaySampleSize != null && {
+        replaySampleSize: settings.selfImprovementPendingReplaySampleSize,
+      }),
+      ...(settings.selfImprovementPendingBaselineMetrics && {
+        baselineMetrics: settings.selfImprovementPendingBaselineMetrics,
+      }),
+      ...(settings.selfImprovementPendingCandidateMetrics && {
+        candidateMetrics: settings.selfImprovementPendingCandidateMetrics,
+      }),
     };
   }
   return { status: "idle" };

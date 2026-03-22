@@ -673,6 +673,30 @@ export interface ProjectSettings {
   runAgentEnhancementExperiments?: boolean;
   /** Candidate behavior version awaiting human decision (approve/reject). */
   selfImprovementPendingCandidateId?: string;
+  /** Candidate diff entries (general/role/template changes) for pending candidate. */
+  selfImprovementPendingCandidateDiff?: Array<{
+    section: string;
+    before: string;
+    after: string;
+  }>;
+  /** Number of replay sessions used to evaluate the pending candidate. */
+  selfImprovementPendingReplaySampleSize?: number;
+  /** Baseline metrics from replay evaluation. */
+  selfImprovementPendingBaselineMetrics?: {
+    taskSuccessRate: number;
+    retryRate?: number;
+    reviewPassRate?: number;
+    avgLatencyMs?: number;
+    avgCostUsd?: number;
+  };
+  /** Candidate metrics from replay evaluation. */
+  selfImprovementPendingCandidateMetrics?: {
+    taskSuccessRate: number;
+    retryRate?: number;
+    reviewPassRate?: number;
+    avgLatencyMs?: number;
+    avgCostUsd?: number;
+  };
   /** Currently active behavior version id for self-improvement experiments. */
   selfImprovementActiveBehaviorVersionId?: string;
   /** Promoted behavior versions available for rollback. */

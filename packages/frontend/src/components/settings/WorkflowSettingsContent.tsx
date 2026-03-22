@@ -23,6 +23,7 @@ import type {
   SelfImprovementHistoryEntry,
   SelfImprovementRunOutcome,
   SelfImprovementRunMode,
+  CandidateDiffEntry,
 } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
 
@@ -83,6 +84,10 @@ const OUTCOME_COLORS: Record<SelfImprovementRunOutcome, string> = {
   promoted: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
   failed: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
 };
+
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
+}
 
 function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -155,6 +160,55 @@ export function WorkflowSettingsContent({
     },
   });
 
+  const [approvalMessage, setApprovalMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  const approveMutation = useMutation({
+    mutationFn: () =>
+      api.projects.approveSelfImprovement(projectId, siStatus.pendingCandidateId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.selfImprovementStatus(projectId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.selfImprovementHistory(projectId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.settings(projectId),
+      });
+      setApprovalMessage({ type: "success", text: "Candidate promoted successfully" });
+      setTimeout(() => setApprovalMessage(null), 5000);
+    },
+    onError: (err: Error) => {
+      setApprovalMessage({ type: "error", text: err.message || "Failed to promote candidate" });
+      setTimeout(() => setApprovalMessage(null), 5000);
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: () =>
+      api.projects.rejectSelfImprovement(projectId, siStatus.pendingCandidateId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.selfImprovementStatus(projectId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.selfImprovementHistory(projectId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.settings(projectId),
+      });
+      setApprovalMessage({ type: "success", text: "Candidate rejected" });
+      setTimeout(() => setApprovalMessage(null), 5000);
+    },
+    onError: (err: Error) => {
+      setApprovalMessage({ type: "error", text: err.message || "Failed to reject candidate" });
+      setTimeout(() => setApprovalMessage(null), 5000);
+    },
+  });
+
   useEffect(() => {
     setDraftSettings(settings);
   }, [settings]);
@@ -162,6 +216,20 @@ export function WorkflowSettingsContent({
   const applySettingsUpdate = (updater: (current: ProjectSettings) => ProjectSettings) => {
     onSettingsChange?.(updater);
     setDraftSettings((current) => updater(current));
+  };
+
+  const renderMetricRow = (label: string, baseline: number, candidate: number, higherIsBetter: boolean) => {
+    const improved = higherIsBetter ? candidate > baseline : candidate < baseline;
+    const changed = candidate !== baseline;
+    return (
+      <tr key={label} className="border-b border-theme-border last:border-b-0">
+        <td className="py-1 text-theme-text">{label}</td>
+        <td className="py-1 text-right text-theme-muted">{formatPercent(baseline)}</td>
+        <td className={`py-1 text-right font-medium ${changed ? (improved ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400") : "text-theme-text"}`}>
+          {formatPercent(candidate)}
+        </td>
+      </tr>
+    );
   };
 
   const gitWorkingMode = draftSettings.gitWorkingMode ?? "worktree";
@@ -618,6 +686,115 @@ export function WorkflowSettingsContent({
                 </span>
               )}
             </div>
+
+            {siStatus.status === "awaiting_approval" && siStatus.pendingCandidateId && (
+              <div
+                className="mt-2 p-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 space-y-3"
+                data-testid="self-improvement-approval-card"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                    Candidate awaiting approval
+                  </span>
+                  <span className="text-xs text-amber-600 dark:text-amber-400 font-mono">
+                    {siStatus.pendingCandidateId}
+                  </span>
+                </div>
+
+                {siStatus.candidateDiff && siStatus.candidateDiff.length > 0 && (
+                  <div data-testid="approval-candidate-diff">
+                    <h5 className="text-xs font-semibold text-theme-text mb-1">
+                      Proposed changes
+                    </h5>
+                    <div className="space-y-2">
+                      {siStatus.candidateDiff.map((entry: CandidateDiffEntry) => (
+                        <div
+                          key={entry.section}
+                          className="text-xs border border-theme-border rounded p-2 bg-theme-bg"
+                          data-testid="approval-diff-entry"
+                        >
+                          <span className="font-medium text-theme-text">{entry.section}</span>
+                          <div className="mt-1 grid grid-cols-2 gap-2">
+                            <div>
+                              <span className="text-[10px] uppercase text-theme-muted">Before</span>
+                              <pre className="mt-0.5 whitespace-pre-wrap text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded p-1 max-h-24 overflow-y-auto">
+                                {entry.before || "(empty)"}
+                              </pre>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase text-theme-muted">After</span>
+                              <pre className="mt-0.5 whitespace-pre-wrap text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded p-1 max-h-24 overflow-y-auto">
+                                {entry.after || "(empty)"}
+                              </pre>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {siStatus.replaySampleSize != null && (
+                  <p className="text-xs text-theme-muted" data-testid="approval-replay-sample-size">
+                    Replay sample size: <span className="font-medium text-theme-text">{siStatus.replaySampleSize}</span>
+                  </p>
+                )}
+
+                {siStatus.baselineMetrics && siStatus.candidateMetrics && (
+                  <div data-testid="approval-metrics">
+                    <h5 className="text-xs font-semibold text-theme-text mb-1">
+                      Baseline vs Candidate
+                    </h5>
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-theme-border">
+                          <th className="text-left py-1 text-theme-muted font-medium">Metric</th>
+                          <th className="text-right py-1 text-theme-muted font-medium">Baseline</th>
+                          <th className="text-right py-1 text-theme-muted font-medium">Candidate</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {renderMetricRow("Task success rate", siStatus.baselineMetrics.taskSuccessRate, siStatus.candidateMetrics.taskSuccessRate, true)}
+                        {siStatus.baselineMetrics.retryRate != null && siStatus.candidateMetrics.retryRate != null &&
+                          renderMetricRow("Retry rate", siStatus.baselineMetrics.retryRate, siStatus.candidateMetrics.retryRate, false)}
+                        {siStatus.baselineMetrics.reviewPassRate != null && siStatus.candidateMetrics.reviewPassRate != null &&
+                          renderMetricRow("Review pass rate", siStatus.baselineMetrics.reviewPassRate, siStatus.candidateMetrics.reviewPassRate, true)}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    className="btn btn-primary text-xs px-3 py-1"
+                    data-testid="approval-promote-btn"
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                    onClick={() => approveMutation.mutate()}
+                  >
+                    {approveMutation.isPending ? "Promoting…" : "Promote"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-xs px-3 py-1"
+                    data-testid="approval-reject-btn"
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                    onClick={() => rejectMutation.mutate()}
+                  >
+                    {rejectMutation.isPending ? "Rejecting…" : "Reject"}
+                  </button>
+                  {approvalMessage && (
+                    <span
+                      className={`text-xs ${approvalMessage.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+                      data-testid="approval-feedback-message"
+                      role="status"
+                    >
+                      {approvalMessage.text}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {(draftSettings.selfImprovementLastRunAt || draftSettings.nextRunAt) && (
               <p
