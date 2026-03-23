@@ -130,6 +130,19 @@ export interface ExecuteStatusEvent {
     name?: string;
   }>;
   queueDepth: number;
+  baselineStatus?: BaselineRuntimeStatus;
+  baselineCheckedAt?: string | null;
+  baselineFailureSummary?: string | null;
+  /** Current baseline remediation task status (attempts, task state). */
+  baselineRemediationStatus?: {
+    taskId: string;
+    attempts: number;
+    maxAttempts: number;
+    status: string;
+  } | null;
+  mergeValidationStatus?: MergeValidationRuntimeStatus;
+  mergeValidationFailureSummary?: string | null;
+  dispatchPausedReason?: string | null;
   /** True when orchestrator is paused waiting for HIL approval (PRD §6.5) */
   awaitingApproval?: boolean;
   /** Path to active task's git worktree (PRDv2 §5.8) */
@@ -141,6 +154,8 @@ export interface ExecuteStatusEvent {
   }>;
   /** True when a self-improvement run is in progress for this project */
   selfImprovementRunInProgress?: boolean;
+  selfImprovementRunMode?: "audit" | "experiments";
+  gitMergeQueue?: GitMergeQueueSnapshot;
 }
 export interface HilRequestEvent {
   type: "hil.request";

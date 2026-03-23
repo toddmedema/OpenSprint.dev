@@ -447,6 +447,7 @@ export class OrchestratorService {
       baselineStatus: state.status.baselineStatus,
       baselineCheckedAt: state.status.baselineCheckedAt ?? null,
       baselineFailureSummary: state.status.baselineFailureSummary ?? null,
+      baselineRemediationStatus: state.status.baselineRemediationStatus ?? null,
       mergeValidationStatus: state.status.mergeValidationStatus ?? "healthy",
       mergeValidationFailureSummary: state.status.mergeValidationFailureSummary ?? null,
       dispatchPausedReason: state.status.dispatchPausedReason ?? null,
@@ -605,6 +606,7 @@ export class OrchestratorService {
       baselineStatus?: OrchestratorStatus["baselineStatus"];
       baselineCheckedAt?: string | null;
       baselineFailureSummary?: string | null;
+      baselineRemediationStatus?: OrchestratorStatus["baselineRemediationStatus"];
       dispatchPausedReason?: string | null;
     }
   ): Promise<void> {
@@ -630,6 +632,10 @@ export class OrchestratorService {
       state.status.baselineFailureSummary !== updates.baselineFailureSummary
     ) {
       state.status.baselineFailureSummary = updates.baselineFailureSummary;
+      changed = true;
+    }
+    if (updates.baselineRemediationStatus !== undefined) {
+      state.status.baselineRemediationStatus = updates.baselineRemediationStatus;
       changed = true;
     }
     if (

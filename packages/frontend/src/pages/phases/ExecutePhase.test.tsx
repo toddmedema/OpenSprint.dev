@@ -164,6 +164,12 @@ function createStore(
     selfImprovementRunMode: "audit" | "experiments" | undefined;
     baselineStatus: "unknown" | "checking" | "healthy" | "failing";
     baselineFailureSummary: string | null;
+    baselineRemediationStatus: {
+      taskId: string;
+      attempts: number;
+      maxAttempts: number;
+      status: string;
+    } | null;
     dispatchPausedReason: string | null;
     agentOutput: Record<string, string[]>;
     taskDetailError: string | null;
@@ -2920,6 +2926,94 @@ describe("ExecutePhase Redux integration", () => {
       expect(
         screen.getByText("npm run test: src/task-route.test.ts expected 200 to be 500")
       ).toBeInTheDocument();
+    });
+  });
+
+  it("shows repair progress in the baseline banner when remediation status is provided", async () => {
+    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(
+      tasks,
+      {
+        selectedTaskId: "epic-1.1",
+        baselineStatus: "failing",
+        baselineFailureSummary: "npm run test: something failed",
+        baselineRemediationStatus: {
+          taskId: "os-rem-1",
+          attempts: 2,
+          maxAttempts: 3,
+          status: "open",
+        },
+      },
+      { connected: true }
+    );
+
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("execute-baseline-paused-banner")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("execute-baseline-remediation-status")
+      ).toHaveTextContent("Repair in progress (attempt 2 of 3).");
+    });
+  });
+
+  it("shows blocked repair status in the baseline banner", async () => {
+    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Task A",
+        epicId: "epic-1",
+        kanbanColumn: "in_progress",
+        priority: 0,
+        assignee: null,
+      },
+    ];
+    const store = createStore(
+      tasks,
+      {
+        selectedTaskId: "epic-1.1",
+        baselineStatus: "failing",
+        baselineFailureSummary: "npm run test: something failed",
+        baselineRemediationStatus: {
+          taskId: "os-rem-1",
+          attempts: 3,
+          maxAttempts: 3,
+          status: "blocked",
+        },
+      },
+      { connected: true }
+    );
+
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("execute-baseline-paused-banner")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("execute-baseline-remediation-status")
+      ).toHaveTextContent("Repair blocked after 3 attempts.");
     });
   });
 

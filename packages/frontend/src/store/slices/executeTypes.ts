@@ -4,6 +4,7 @@ import type {
   AgentSuspendReason,
   AgentSession,
   BaselineRuntimeStatus,
+  BaselineRemediationStatus,
   GitMergeQueueSnapshot,
   MergeValidationRuntimeStatus,
   Task,
@@ -67,6 +68,7 @@ export interface ExecuteState {
   baselineStatus: BaselineRuntimeStatus;
   baselineCheckedAt: string | null;
   baselineFailureSummary: string | null;
+  baselineRemediationStatus: BaselineRemediationStatus | null;
   mergeValidationStatus: MergeValidationRuntimeStatus;
   mergeValidationFailureSummary: string | null;
   dispatchPausedReason: string | null;
@@ -110,6 +112,7 @@ export const initialExecuteState: ExecuteState = {
   baselineStatus: "unknown",
   baselineCheckedAt: null,
   baselineFailureSummary: null,
+  baselineRemediationStatus: null,
   mergeValidationStatus: "healthy",
   mergeValidationFailureSummary: null,
   dispatchPausedReason: null,

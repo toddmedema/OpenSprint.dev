@@ -154,6 +154,13 @@ export interface ExecuteStatusEvent {
   baselineStatus?: BaselineRuntimeStatus;
   baselineCheckedAt?: string | null;
   baselineFailureSummary?: string | null;
+  /** Current baseline remediation task status (attempts, task state). */
+  baselineRemediationStatus?: {
+    taskId: string;
+    attempts: number;
+    maxAttempts: number;
+    status: string;
+  } | null;
   mergeValidationStatus?: MergeValidationRuntimeStatus;
   mergeValidationFailureSummary?: string | null;
   dispatchPausedReason?: string | null;
