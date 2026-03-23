@@ -58,6 +58,20 @@ jobs:
         env:
           TAG_VERSION: ${{ github.ref_name }}
         run: node scripts/set-version-from-tag.js
+      - name: Select Xcode 26 for Icon Composer
+        run: |
+          xcode_app="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' | sort -V | tail -n 1)"
+          if [ -z "$xcode_app" ]; then
+            echo "::error::Xcode 26 or newer is required to compile the macOS Icon Composer asset."
+            ls -1 /Applications | grep '^Xcode' || true
+            exit 1
+          fi
+
+          developer_dir="$xcode_app/Contents/Developer"
+          sudo xcode-select -s "$developer_dir"
+          echo "Selected Xcode: $xcode_app"
+          xcodebuild -version
+          actool --version
       - run: npm ci
       - run: npm run build
       - run: npm run build:mac -w packages/electron
