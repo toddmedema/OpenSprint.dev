@@ -378,6 +378,37 @@ describe("ChatService - Plan phase agent registry", () => {
   });
 
   describe("sendMessage execute context", () => {
+    it("ignores leaked PRD_UPDATE placeholder scaffolding and applies the real section update", async () => {
+      mockInvokePlanningAgent.mockResolvedValue({
+        content: `Section Key
+
+\`contains only that section's body (no duplicate full PRD).
+
+[PRD_UPDATE:section_key]
+\`contains only that section's body (no duplicate full PRD).
+
+[PRD_UPDATE:executive_summary]
+NeighborTools is a self-hosted web application for neighborhood tool sharing.
+[/PRD_UPDATE]`,
+      });
+
+      const response = await chatService.sendMessage(projectId, {
+        message: "Draft the executive summary",
+        context: "sketch",
+      });
+
+      expect(response.prdChanges).toHaveLength(1);
+      expect(response.prdChanges?.[0]?.section).toBe("executive_summary");
+
+      const specPath = path.join(repoPath, SPEC_MD);
+      const specRaw = await fs.readFile(specPath, "utf-8");
+      const prd = specMarkdownToPrd(specRaw);
+      expect(prd.sections.executive_summary?.content).toContain(
+        "NeighborTools is a self-hosted web application for neighborhood tool sharing"
+      );
+      expect(prd.sections.section_key).toBeUndefined();
+    });
+
     it("records analyst run stats for execute replies without invoking planning agent", async () => {
       const response = await chatService.sendMessage(projectId, {
         message: "Use PostgreSQL for storage",

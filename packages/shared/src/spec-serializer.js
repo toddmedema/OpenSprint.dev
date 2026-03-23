@@ -2,6 +2,7 @@
  * Serialize/deserialize the Sketch phase output (SPEC.md) to/from the Prd type.
  * SPEC.md is a flat markdown file at repo root with standard section headers.
  */
+const PLACEHOLDER_SECTION_KEYS = new Set(["section_key"]);
 /** Map section keys to display headers in SPEC.md */
 const SECTION_HEADERS = {
   executive_summary: "Executive Summary",
@@ -42,6 +43,7 @@ export function prdToSpecMarkdown(prd) {
     return a.localeCompare(b);
   });
   for (const key of orderedKeys) {
+    if (PLACEHOLDER_SECTION_KEYS.has(key)) continue;
     const section = prd.sections[key];
     if (!section) continue;
     const content = (section.content ?? "").trim();
@@ -69,7 +71,8 @@ export function specMarkdownToPrd(markdown, metadata) {
         updatedAt: now,
       };
     }
-    lastKey = headerToSectionKey(match[1]);
+    const nextKey = headerToSectionKey(match[1]);
+    lastKey = PLACEHOLDER_SECTION_KEYS.has(nextKey) ? null : nextKey;
     lastIndex = match.index + match[0].length;
   }
   if (lastKey !== null) {

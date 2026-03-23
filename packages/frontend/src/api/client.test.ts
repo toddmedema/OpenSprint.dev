@@ -296,24 +296,30 @@ describe("api client", () => {
       expect(body.images).toEqual(images);
     });
 
-    it("send can disable the client request timeout for long-running sketch generation", async () => {
+    it("send does not apply the default client timeout to agent-backed chat requests", async () => {
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
         status: 200,
         json: vi.fn().mockResolvedValue({ data: { message: "Hi" } }),
       } as Response);
 
-      await api.chat.send(
-        "proj-1",
-        "Hello",
-        "sketch",
-        undefined,
-        undefined,
-        undefined,
-        { timeoutMs: null }
-      );
+      await api.chat.send("proj-1", "Hello", "sketch");
       const call = vi.mocked(fetch).mock.calls[0];
       expect(call?.[1]).not.toHaveProperty("signal");
+    });
+
+    it("send still allows callers to opt back into a client timeout", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { message: "Hi" } }),
+      } as Response);
+
+      await api.chat.send("proj-1", "Hello", "sketch", undefined, undefined, undefined, {
+        timeoutMs: 5_000,
+      });
+      const call = vi.mocked(fetch).mock.calls[0];
+      expect(call?.[1]).toEqual(expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
 
     it("history encodes context in URL for plan chat", async () => {
@@ -334,6 +340,18 @@ describe("api client", () => {
   });
 
   describe("plans", () => {
+    it("agent-backed planning requests do not apply the default client timeout", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { plans: [] } }),
+      } as Response);
+
+      await api.plans.suggest("proj-1");
+      const call = vi.mocked(fetch).mock.calls[0];
+      expect(call?.[1]).not.toHaveProperty("signal");
+    });
+
     it("list calls GET /projects/:projectId/plans and returns plans with edges", async () => {
       const mockGraph = {
         plans: [
@@ -481,6 +499,33 @@ describe("api client", () => {
       const call = vi.mocked(fetch).mock.calls[0];
       const body = JSON.parse(call[1]?.body as string);
       expect(body).toEqual({});
+    });
+  });
+
+  describe("help", () => {
+    it("chat does not apply the default client timeout", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { message: "Hi" } }),
+      } as Response);
+
+      await api.help.chat({ message: "What is running?" });
+      const call = vi.mocked(fetch).mock.calls[0];
+      expect(call?.[1]).not.toHaveProperty("signal");
+    });
+  });
+
+  describe("prd", () => {
+    it("generateFromCodebase does not apply the default client timeout", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 204,
+      } as Response);
+
+      await api.prd.generateFromCodebase("proj-1");
+      const call = vi.mocked(fetch).mock.calls[0];
+      expect(call?.[1]).not.toHaveProperty("signal");
     });
   });
 

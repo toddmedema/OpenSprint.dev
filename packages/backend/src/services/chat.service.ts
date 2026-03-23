@@ -136,18 +136,14 @@ Your role is to:
 
 **Assumptions vs open questions:** Use \`assumptions_and_constraints\` for beliefs you are proceeding with until disproven (each bullet: what you assumed, why — user stated / inferred / default — and what would change if wrong). Use \`open_questions\` only for items that need an explicit user or stakeholder decision before implementation. Anything that would change scope, data model, APIs, or compliance posture must appear in one of those two sections, not only buried in narrative sections.
 
-When you have enough information about a PRD section, output it as a structured update using this format:
-
-[PRD_UPDATE:section_key]
-<markdown content for the section>
-[/PRD_UPDATE]
-
-Example:
+When you have enough information about a PRD section, output it as one or more PRD_UPDATE blocks. Example:
 [PRD_UPDATE:problem_statement]
 Users struggle to find relevant products due to poor search filters. The current system returns generic results that don't match user intent.
 [/PRD_UPDATE]
 
 Valid section keys: executive_summary, problem_statement, user_personas, goals_and_metrics, assumptions_and_constraints, feature_list, technical_architecture, data_model, api_contracts, non_functional_requirements, open_questions. You may also add new sections using snake_case keys (e.g. competitive_landscape, risks_and_mitigations).
+
+Never output the literal placeholder key \`section_key\`. Every PRD_UPDATE block must use the real destination section key.
 
 Do NOT include a top-level section header (e.g. "## 1. Executive Summary") in the content — the UI already displays the section title. Start with the body content directly (sub-headers like ### 3.1 are fine).
 
@@ -230,6 +226,8 @@ Your role is to:
 The user is replying to an open question the Coder asked about a specific task. Your response will be shown in the task chat. The task will be unblocked and the Coder will resume with the clarified context.`;
 
 export class ChatService {
+  private static readonly PRD_UPDATE_PLACEHOLDER_KEYS = new Set(["section_key"]);
+
   private projectService = new ProjectService();
   private prdService = new PrdService();
   private readonly openAIResponseChains = new Map<string, OpenAIResponseChainState>();
@@ -387,11 +385,14 @@ export class ChatService {
   /** Public: parse PRD_UPDATE blocks from agent content (used by generate-from-codebase). */
   parsePrdUpdatesFromContent(content: string): Array<{ section: string; content: string }> {
     const updates: Array<{ section: string; content: string }> = [];
-    const regex = /\[PRD_UPDATE:(\w+)\]([\s\S]*?)\[\/PRD_UPDATE\]/g;
+    const regex = /\[PRD_UPDATE:(?!section_key\])([a-z][a-z0-9_]*)\]([\s\S]*?)\[\/PRD_UPDATE\]/g;
     let match;
 
     while ((match = regex.exec(content)) !== null) {
       const section = match[1];
+      if (ChatService.PRD_UPDATE_PLACEHOLDER_KEYS.has(section)) {
+        continue;
+      }
       const sectionContent = this.stripSectionHeader(match[2].trim());
       updates.push({ section, content: sectionContent });
     }

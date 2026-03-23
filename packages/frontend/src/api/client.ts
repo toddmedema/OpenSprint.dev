@@ -125,6 +125,7 @@ const BASE_URL = `${(import.meta.env.VITE_API_BASE as string | undefined) ?? ""}
 
 /** Default upper bound for how long any API `fetch` may stay pending before aborting. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const NO_REQUEST_TIMEOUT = { timeoutMs: null } as const;
 
 interface RequestOptions extends RequestInit {
   timeoutMs?: number | null;
@@ -427,6 +428,7 @@ export const api = {
     generateFromCodebase: (projectId: string) =>
       request<void>(`/projects/${projectId}/prd/generate-from-codebase`, {
         method: "POST",
+        ...NO_REQUEST_TIMEOUT,
       }),
   },
 
@@ -436,15 +438,18 @@ export const api = {
     suggest: (projectId: string) =>
       request<SuggestPlansResponse>(`/projects/${projectId}/plans/suggest`, {
         method: "POST",
+        ...NO_REQUEST_TIMEOUT,
       }),
     decompose: (projectId: string) =>
       request<{ created: number; plans: Plan[] }>(`/projects/${projectId}/plans/decompose`, {
         method: "POST",
+        ...NO_REQUEST_TIMEOUT,
       }),
     generate: (projectId: string, data: GeneratePlanRequest) =>
       request<GeneratePlanResult>(`/projects/${projectId}/plans/generate`, {
         method: "POST",
         body: JSON.stringify(data),
+        ...NO_REQUEST_TIMEOUT,
       }),
     get: (projectId: string, planId: string) =>
       request<Plan>(`/projects/${projectId}/plans/${planId}`),
@@ -477,6 +482,7 @@ export const api = {
     planTasks: (projectId: string, planId: string) =>
       request<Plan>(`/projects/${projectId}/plans/${planId}/plan-tasks`, {
         method: "POST",
+        ...NO_REQUEST_TIMEOUT,
       }),
     execute: (
       projectId: string,
@@ -719,6 +725,7 @@ export const api = {
       request<HelpChatResponse>("/help/chat", {
         method: "POST",
         body: JSON.stringify(body),
+        ...NO_REQUEST_TIMEOUT,
       }),
     history: (projectId: string | null) =>
       request<HelpChatHistory>(
@@ -756,7 +763,7 @@ export const api = {
           ...(images?.length ? { images } : {}),
           ...(taskContext ? { taskContext } : {}),
         } satisfies Partial<ChatRequest>),
-        ...(requestOptions ? { timeoutMs: requestOptions.timeoutMs } : {}),
+        ...(requestOptions ?? NO_REQUEST_TIMEOUT),
       }),
     history: (projectId: string, context?: string) =>
       request<Conversation>(

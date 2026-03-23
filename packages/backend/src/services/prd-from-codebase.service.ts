@@ -19,10 +19,10 @@ You will receive:
 1. A file tree of the repository (excluding node_modules, .git, etc.)
 2. Contents of key source files (truncated if large)
 
-Analyze the codebase and output a comprehensive PRD using PRD_UPDATE blocks. Use this format:
+Analyze the codebase and output a comprehensive PRD using PRD_UPDATE blocks. Example:
 
-[PRD_UPDATE:section_key]
-<markdown content for the section>
+[PRD_UPDATE:executive_summary]
+This application helps users ...
 [/PRD_UPDATE]
 
 Valid section keys: executive_summary, problem_statement, user_personas, goals_and_metrics, assumptions_and_constraints, feature_list, technical_architecture, data_model, api_contracts, non_functional_requirements, open_questions
@@ -37,6 +37,7 @@ Guidelines:
 - api_contracts: Main APIs or endpoints if applicable.
 - Do NOT include a top-level section header (e.g. "## 1. Executive Summary") inside the block — start with body content. Sub-headers like ### 3.1 are fine.
 - Do NOT output placeholder content like "TBD". Infer reasonable content from the code or omit the section.
+- Never output the literal placeholder key \`section_key\`; always use the real destination section key.
 - Output multiple PRD_UPDATE blocks so the PRD is populated with as many sections as you can confidently derive.`;
 const PRD_UPDATE_REPAIR_PROMPT = `Return only PRD_UPDATE blocks in this format:
 [PRD_UPDATE:executive_summary]

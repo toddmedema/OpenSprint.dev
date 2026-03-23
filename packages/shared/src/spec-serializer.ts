@@ -5,6 +5,8 @@
 
 import type { Prd, PrdSection, PrdChangeLogEntry } from "./types/prd.js";
 
+const PLACEHOLDER_SECTION_KEYS = new Set(["section_key"]);
+
 /** Map section keys to display headers in SPEC.md */
 const SECTION_HEADERS: Record<string, string> = {
   executive_summary: "Executive Summary",
@@ -48,6 +50,7 @@ export function prdToSpecMarkdown(prd: Prd): string {
     return a.localeCompare(b);
   });
   for (const key of orderedKeys) {
+    if (PLACEHOLDER_SECTION_KEYS.has(key)) continue;
     const section = prd.sections[key];
     if (!section) continue;
     const content = (section.content ?? "").trim();
@@ -83,7 +86,8 @@ export function specMarkdownToPrd(
         updatedAt: now,
       };
     }
-    lastKey = headerToSectionKey(match[1]!);
+    const nextKey = headerToSectionKey(match[1]!);
+    lastKey = PLACEHOLDER_SECTION_KEYS.has(nextKey) ? null : nextKey;
     lastIndex = match.index + match[0].length;
   }
   if (lastKey !== null) {
