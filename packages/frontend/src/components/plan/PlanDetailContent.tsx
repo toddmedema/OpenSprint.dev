@@ -330,6 +330,7 @@ export function PlanDetailContent({
                 }
                 disabled={isReadOnly}
                 lightMode
+                diagrams="mermaid"
               />
             </div>
           </CollapsibleSection>

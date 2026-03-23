@@ -45,6 +45,8 @@ export interface CreateProjectRequest {
   testFramework?: string | null;
   /** Max concurrent coder agents (default 1). Stored in project settings. */
   maxConcurrentCoders?: number;
+  /** Optional cap on all concurrent agents (plan + execute + merger). Stored in project settings. */
+  maxTotalConcurrentAgents?: number;
   /** How to handle tasks with unknown file scope when maxConcurrentCoders > 1. Stored in project settings. */
   unknownScopeStrategy?: "conservative" | "optimistic";
   /** Git working mode: "worktree" or "branches". Stored in project settings. Default: "worktree". */

@@ -84,7 +84,8 @@ Do not include prose outside the JSON.`;
 const PLAN_DRAFT_REPAIR_PROMPT = `Return valid JSON only. Either:
 {"open_questions":[{"id":"q1","text":"Clarification question"}]}
 or
-{"title":"Feature Name","content":"# Feature Name\\n\\n...","complexity":"medium","mockups":[{"title":"Main Screen","content":"ASCII wireframe"}]}
+{"title":"Feature Name","content":"# Feature Name\\n\\n...","complexity":"medium","mockups":[]}
+(mockups may be [] or ASCII wireframes; mermaid diagrams may appear in content as fenced code.)
 Do not include prose outside the JSON.`;
 
 /**
@@ -151,6 +152,8 @@ Do NOT generate placeholder content like "TBD" or "To be defined" — either inf
 
 When refining an existing section, output the full section if rewriting significantly; for small targeted changes you may output only the changed portion.
 
+**Diagrams:** Where flows, architecture, or sequences help (especially in technical_architecture), you may include fenced \`\`\`mermaid blocks inside PRD_UPDATE markdown. Keep diagrams small and valid.
+
 You can include multiple PRD_UPDATE blocks in a single response. Only include updates when you have substantive content to add or modify.`;
 
 const PLAN_REFINEMENT_SYSTEM_PROMPT = `You are an AI planning assistant for Open Sprint. You help users refine individual feature Plans through conversation.
@@ -160,7 +163,7 @@ Your role is to:
 2. Suggest improvements to acceptance criteria, technical approach, or scope
 3. Identify gaps, edge cases, or dependencies
 4. Propose refinements based on the user's feedback
-5. Create or refine UI/UX mockups (ASCII wireframes) when discussing visual aspects
+5. When discussing visuals or structure, add ASCII wireframes in markdown and/or fenced Mermaid (flows, architecture) in the plan body — use whichever fits best
 
 When the user asks you to update the Plan and you have a concrete revision, output it using this format:
 
@@ -168,7 +171,7 @@ When the user asks you to update the Plan and you have a concrete revision, outp
 <full markdown content of the revised Plan>
 [/PLAN_UPDATE]
 
-The Plan must follow the structure: Feature Title, Overview, Assumptions, Acceptance Criteria, Technical Approach, Dependencies, Data Model Changes, API Specification, UI/UX Requirements, Mockups (ASCII wireframes of key screens/components), Edge Cases, Testing Strategy, Estimated Complexity.
+The Plan must follow the structure: Feature Title, Overview, Assumptions, Acceptance Criteria, Technical Approach, Dependencies, Data Model Changes, API Specification, UI/UX Requirements, Edge Cases, Testing Strategy, Estimated Complexity. Include a ## UI/UX Requirements section; add mockups or Mermaid inside the markdown where helpful (no separate mockup format required in PLAN_UPDATE).
 
 **Assumptions (## Assumptions):** List plan-specific beliefs (bullets). Each item should state what you are treating as true, why (inherited from PRD vs inferred for this feature), and what would change if false. If there are no extra assumptions beyond the PRD, write one bullet such as "No plan-specific assumptions beyond the PRD; see PRD assumptions_and_constraints."
 
@@ -191,7 +194,7 @@ Allowed outputs:
   "title": "Feature Name",
   "content": "# Feature Name\\n\\n## Overview\\n...full markdown...",
   "complexity": "medium",
-  "mockups": [{"title": "Main Screen", "content": "ASCII wireframe"}]
+  "mockups": []
 }
 
 2. A clarification JSON object when more input is still required:
@@ -214,7 +217,7 @@ Plan markdown MUST include these sections in order:
 
 **Assumptions:** Same rules as plan refinement — explicit bullets; if none beyond PRD, state that in one bullet.
 
-MOCKUPS: Include at least one mockup in the final plan JSON.`;
+**Visual aids:** Choose per plan — Mermaid (fenced \`\`\`mermaid in content), structured mockups in \`mockups\`, both, or neither if prose is enough. \`mockups\` may be [].`;
 
 const EXECUTE_TASK_CHAT_SYSTEM_PROMPT = `You are the Analyst agent for Open Sprint Execute phase task chat. You process user feedback in response to a Coder's open questions about a task.
 

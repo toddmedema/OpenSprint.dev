@@ -141,6 +141,19 @@ describe("WorkflowSettingsContent", () => {
     expect(persistSettings).toHaveBeenCalledWith(undefined, { maxConcurrentCoders: 4 });
   });
 
+  it("persists max total concurrent agents when cap is enabled then slider changes", () => {
+    const { persistSettings } = renderWorkflowContent({ maxConcurrentCoders: 2 });
+
+    fireEvent.click(screen.getByTestId("max-total-agents-cap-checkbox"));
+    expect(persistSettings).toHaveBeenCalledWith(undefined, { maxTotalConcurrentAgents: 10 });
+
+    persistSettings.mockClear();
+    fireEvent.change(screen.getByTestId("max-total-concurrent-agents-slider"), {
+      target: { value: "5" },
+    });
+    expect(persistSettings).toHaveBeenCalledWith(undefined, { maxTotalConcurrentAgents: 5 });
+  });
+
   it("uses blur-save for test command only", () => {
     const { scheduleSaveOnBlur } = renderWorkflowContent();
 

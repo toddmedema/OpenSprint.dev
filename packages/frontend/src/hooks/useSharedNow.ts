@@ -25,7 +25,7 @@ function getClockStore(intervalMs: number): ClockStore {
 
 function getSnapshot(intervalMs: number): number {
   const store = getClockStore(intervalMs);
-  return store.listeners.size === 0 ? Date.now() : store.snapshot;
+  return store.snapshot;
 }
 
 function subscribe(intervalMs: number, listener: Listener): () => void {

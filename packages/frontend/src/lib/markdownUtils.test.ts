@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { markdownToHtml, htmlToMarkdown } from "./markdownUtils";
+import { markdownToHtml, htmlToMarkdown, OS_MERMAID_CLASS, OS_MERMAID_ATTR } from "./markdownUtils";
 
 describe("markdownUtils", () => {
   describe("markdownToHtml", () => {
@@ -104,6 +104,25 @@ describe("markdownUtils", () => {
       const roundTripped = htmlToMarkdown(html);
       expect(roundTripped).toContain("Bold");
       expect(roundTripped).toContain("italic");
+    });
+
+    it("round-trips fenced mermaid with diagrams mermaid mode", async () => {
+      const original = "Intro\n\n```mermaid\nflowchart LR\n  A-->B\n```\n\nOutro";
+      const html = await markdownToHtml(original, { diagrams: "mermaid" });
+      expect(html).toContain(OS_MERMAID_CLASS);
+      expect(html).toContain(OS_MERMAID_ATTR);
+      const roundTripped = htmlToMarkdown(html, { diagrams: "mermaid" });
+      expect(roundTripped).toContain("```mermaid");
+      expect(roundTripped).toContain("A-->B");
+      expect(roundTripped).toContain("Intro");
+      expect(roundTripped).toContain("Outro");
+    });
+
+    it("treats mermaid as normal code block when diagrams none", async () => {
+      const md = "```mermaid\ngraph TD\n  x-->y\n```";
+      const html = await markdownToHtml(md, { diagrams: "none" });
+      expect(html).not.toContain(OS_MERMAID_CLASS);
+      expect(html.toLowerCase()).toMatch(/mermaid|language-mermaid/);
     });
   });
 });

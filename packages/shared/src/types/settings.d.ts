@@ -324,6 +324,12 @@ export interface ProjectSettings {
   includeGeneralReview?: boolean;
   /** Max concurrent Coder/Reviewer agents per project. 1 = v1 sequential behavior. */
   maxConcurrentCoders?: number;
+  /**
+   * Optional cap on total concurrent agent work per project (planning LLM calls, coder/reviewer
+   * subprocesses, merger). When unset, no global cap beyond maxConcurrentCoders for execute.
+   * `null` is accepted on PUT settings to clear the cap (responses omit or use undefined).
+   */
+  maxTotalConcurrentAgents?: number | null;
   /** How to handle tasks with no file-scope prediction: "conservative" (serialize) or "optimistic" (parallelize, rely on merger) */
   unknownScopeStrategy?: UnknownScopeStrategy;
   /** Git working mode: "worktree" (parallel worktrees) or "branches" (single branch in main repo). Default: "worktree". */

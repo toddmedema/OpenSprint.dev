@@ -404,7 +404,7 @@ export class PhaseExecutorService {
         return;
       }
 
-      this.host.lifecycleManager.run(
+      await this.host.lifecycleManager.run(
         {
           projectId,
           taskId: task.id,
@@ -612,8 +612,8 @@ export class PhaseExecutorService {
         assignment
       );
 
-      const runGeneralAgent = () => {
-        this.host.lifecycleManager.run(
+      const runGeneralAgent = async () => {
+        await this.host.lifecycleManager.run(
           {
             projectId,
             taskId: task.id,
@@ -646,7 +646,7 @@ export class PhaseExecutorService {
 
       if (includeGeneralReview || runOnlyGeneralReview) {
         slot.includeGeneralReview = true;
-        runGeneralAgent();
+        await runGeneralAgent();
       }
 
       if (useAngleSpecificReview) {
@@ -690,7 +690,7 @@ export class PhaseExecutorService {
           );
           const angleHeartbeatSubpath = `review-angles/${angle}`;
 
-          this.host.lifecycleManager.run(
+          await this.host.lifecycleManager.run(
             {
               projectId,
               taskId: task.id,
@@ -776,7 +776,7 @@ export class PhaseExecutorService {
         }
       } else if (!runOnlyGeneralReview) {
         slot.reviewAgents = undefined;
-        this.host.lifecycleManager.run(
+        await this.host.lifecycleManager.run(
           {
             projectId,
             taskId: task.id,

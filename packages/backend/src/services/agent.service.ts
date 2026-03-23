@@ -20,6 +20,7 @@ import {
 } from "../utils/openai-models.js";
 import { isProcessAlive, signalProcessGroup } from "../utils/process-group.js";
 import { shellExec } from "../utils/shell-exec.js";
+import { acquireGlobalAgentSlot } from "./agent-global-concurrency.service.js";
 import { activeAgentsService } from "./active-agents.service.js";
 import {
   getNextKey,
@@ -320,46 +321,51 @@ export class AgentService {
    * Claude: uses @anthropic-ai/sdk API. Cursor/custom: delegates to AgentClient (CLI).
    */
   async invokePlanningAgent(options: InvokePlanningAgentOptions): Promise<PlanningAgentResponse> {
-    const { tracking } = options;
-    const startedAt = new Date().toISOString();
-    let outcome: "success" | "failed" = "failed";
-    let cacheMetrics: AgentCacheUsageMetrics | undefined;
-    if (tracking) {
-      activeAgentsService.register(
-        tracking.id,
-        tracking.projectId,
-        tracking.phase,
-        tracking.role,
-        tracking.label,
-        startedAt,
-        tracking.branchName,
-        tracking.planId,
-        undefined,
-        tracking.feedbackId
-      );
-    }
+    const releaseGlobalSlot = await acquireGlobalAgentSlot(options.projectId);
     try {
-      const result = await this._invokePlanningAgentInner(options);
-      cacheMetrics = result.cacheMetrics;
-      outcome = "success";
-      return result;
+      const { tracking } = options;
+      const startedAt = new Date().toISOString();
+      let outcome: "success" | "failed" = "failed";
+      let cacheMetrics: AgentCacheUsageMetrics | undefined;
+      if (tracking) {
+        activeAgentsService.register(
+          tracking.id,
+          tracking.projectId,
+          tracking.phase,
+          tracking.role,
+          tracking.label,
+          startedAt,
+          tracking.branchName,
+          tracking.planId,
+          undefined,
+          tracking.feedbackId
+        );
+      }
+      try {
+        const result = await this._invokePlanningAgentInner(options);
+        cacheMetrics = result.cacheMetrics;
+        outcome = "success";
+        return result;
+      } finally {
+        const completedAt = new Date().toISOString();
+        await this.recordAgentRunStat({
+          tracking,
+          role: options.role,
+          runId: tracking?.id ?? `planning-${options.projectId}-${startedAt}`,
+          config: options.config,
+          projectId: options.projectId,
+          startedAt,
+          completedAt,
+          outcome,
+          flow: cacheMetrics?.flow,
+          promptFingerprint: cacheMetrics?.promptFingerprint ?? null,
+          cacheReadTokens: cacheMetrics?.cacheReadTokens ?? null,
+          cacheWriteTokens: cacheMetrics?.cacheWriteTokens ?? null,
+        } satisfies AgentRunStatParams);
+        if (tracking) activeAgentsService.unregister(tracking.id);
+      }
     } finally {
-      const completedAt = new Date().toISOString();
-      await this.recordAgentRunStat({
-        tracking,
-        role: options.role,
-        runId: tracking?.id ?? `planning-${options.projectId}-${startedAt}`,
-        config: options.config,
-        projectId: options.projectId,
-        startedAt,
-        completedAt,
-        outcome,
-        flow: cacheMetrics?.flow,
-        promptFingerprint: cacheMetrics?.promptFingerprint ?? null,
-        cacheReadTokens: cacheMetrics?.cacheReadTokens ?? null,
-        cacheWriteTokens: cacheMetrics?.cacheWriteTokens ?? null,
-      } satisfies AgentRunStatParams);
-      if (tracking) activeAgentsService.unregister(tracking.id);
+      releaseGlobalSlot();
     }
   }
 
@@ -820,12 +826,22 @@ ${repairSection}## Your Task
           promptPath,
           await this.buildMergerPrompt(options, params?.repairContext)
         );
+        const releaseGlobalSlot = await acquireGlobalAgentSlot(options.projectId);
+        let slotReleased = false;
+        const releaseMergerSlot = () => {
+          if (slotReleased) return;
+          slotReleased = true;
+          releaseGlobalSlot();
+        };
         try {
           const exitedCleanly = await new Promise<boolean>((resolve) => {
             this.invokeMergerAgent(promptPath, options.config, {
               cwd: options.cwd,
               onOutput: (chunk) => outputChunks.push(chunk),
-              onExit: (code) => resolve(code === 0),
+              onExit: (code) => {
+                releaseMergerSlot();
+                resolve(code === 0);
+              },
               projectId: options.projectId,
               tracking: {
                 id: `${runId}${params?.trackingIdSuffix ?? ""}`,
@@ -844,6 +860,7 @@ ${repairSection}## Your Task
               : false;
           return { exitedCleanly, raw, parsed, verified };
         } finally {
+          releaseMergerSlot();
           await fs.unlink(promptPath).catch(() => {});
         }
       };

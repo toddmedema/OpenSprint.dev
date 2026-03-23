@@ -8,7 +8,7 @@ const PLAN_TEMPLATE_STRUCTURE = PLAN_MARKDOWN_SECTIONS.join(", ");
 
 export const DECOMPOSE_SYSTEM_PROMPT = `You are an AI planning assistant for Open Sprint. You analyze Product Requirements Documents (PRDs) and suggest a breakdown into discrete, implementable features (Plans).
 
-**Output format:** Your response MUST be the plan(s) as JSON in this message. Do NOT write plans to files. Do NOT create, modify, stage, or commit repository files for this task. Do NOT respond with only a summary or "here's what I created" — the system parses your message for JSON only. Produce exactly the JSON output (no preamble, no explanation after the JSON). You may wrap in a \`\`\`json ... \`\`\` code block. Required shape (markdown and mockups only; no tasks):
+**Output format:** Your response MUST be the plan(s) as JSON in this message. Do NOT write plans to files. Do NOT create, modify, stage, or commit repository files for this task. Do NOT respond with only a summary or "here's what I created" — the system parses your message for JSON only. Produce exactly the JSON output (no preamble, no explanation after the JSON). You may wrap in a \`\`\`json ... \`\`\` code block. Required shape (markdown body in \`content\`, optional structured mockups array; no tasks):
 
 {
   "plans": [
@@ -17,26 +17,24 @@ export const DECOMPOSE_SYSTEM_PROMPT = `You are an AI planning assistant for Ope
       "content": "# Feature Name\\n\\n## Overview\\n...\\n\\n## Acceptance Criteria\\n...\\n\\n## Dependencies\\nReferences to other plans (e.g. user-authentication) if this feature depends on them.",
       "complexity": "medium",
       "dependsOnPlans": [],
-      "mockups": [
-        {"title": "Main Screen", "content": "+------------------+\\n| Header           |\\n+------------------+\\n| Content area     |\\n|                  |\\n+------------------+"}
-      ]
+      "mockups": []
     }
   ]
 }
 
-complexity: low, medium, high, or very_high (plan-level). dependsOnPlans: array of slugified plan titles (lowercase, hyphens) that match other plan titles in your output; e.g. if Plan A is "User Authentication", another plan depending on it uses dependsOnPlans: ["user-authentication"]. mockups: array of {title, content} — ASCII wireframes; at least one required per plan.
+complexity: low, medium, high, or very_high (plan-level). dependsOnPlans: array of slugified plan titles (lowercase, hyphens) that match other plan titles in your output; e.g. if Plan A is "User Authentication", another plan depending on it uses dependsOnPlans: ["user-authentication"]. mockups: array of {title, content} for ASCII wireframes — use an empty array [] when you rely on Mermaid in \`content\` only or when prose alone is sufficient.
+
+**Visual aids (you choose per plan):** Include at least one of: (a) fenced \`\`\`mermaid code blocks inside \`content\` for flows, sequence, architecture, or state (prefer ## Technical Approach or ## Overview); (b) one or more ASCII mockups in \`mockups\`; (c) both when helpful; (d) neither only if the written plan is already clear without diagrams. Keep Mermaid diagrams small and valid.
 
 **Task:** Given the full PRD, produce a feature decomposition. For each feature:
 1. Create a Plan with a clear title and full markdown specification
 2. Recommend implementation order at the plan level (foundational/risky first); use dependsOnPlans where one feature depends on another
-3. Create at least one UI/UX mockup per Plan using ASCII wireframes
+3. Add diagrams or mockups as appropriate (Mermaid in markdown and/or structured mockups)
 
 Plan markdown MUST follow this structure (PRD §7.2.3). Each plan's content must include these sections in order:
 ${PLAN_MARKDOWN_SECTIONS.map((s) => `- ## ${s}`).join("\n")}
 
-Template structure: ${PLAN_TEMPLATE_STRUCTURE}
-
-MOCKUPS: Every Plan MUST include at least one mockup. Backend-heavy features: include a mockup of the admin/monitoring UI, API response shape, or data flow diagram — not "N/A". Use box-drawing characters, labels, and annotations.`;
+Template structure: ${PLAN_TEMPLATE_STRUCTURE}`;
 
 export const TASK_GENERATION_SYSTEM_PROMPT = `You are an AI planning assistant for Open Sprint. Given a feature plan specification (and optional PRD context), break it down into granular, atomic implementation tasks that an AI coding agent can complete in a single session.
 

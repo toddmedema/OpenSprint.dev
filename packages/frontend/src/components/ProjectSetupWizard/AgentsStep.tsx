@@ -8,6 +8,8 @@ import {
   AGENT_ROLE_LABELS,
   AGENT_ROLE_PHASES,
   AGENT_ROLE_DESCRIPTIONS,
+  DEFAULT_MAX_TOTAL_CONCURRENT_AGENTS,
+  MAX_TOTAL_CONCURRENT_AGENTS_CAP,
 } from "@opensprint/shared";
 import type { AgentRole } from "@opensprint/shared";
 import { ASSET_BASE } from "../../lib/constants";
@@ -40,6 +42,8 @@ export interface AgentsStepProps {
   modelRefreshTrigger: number;
   maxConcurrentCoders: number;
   onMaxConcurrentCodersChange: (value: number) => void;
+  maxTotalConcurrentAgents?: number;
+  onMaxTotalConcurrentAgentsChange?: (value: number | undefined) => void;
   unknownScopeStrategy: UnknownScopeStrategy;
   onUnknownScopeStrategyChange: (value: UnknownScopeStrategy) => void;
   gitWorkingMode: GitWorkingMode;
@@ -57,6 +61,8 @@ export function AgentsStep({
   modelRefreshTrigger,
   maxConcurrentCoders,
   onMaxConcurrentCodersChange,
+  maxTotalConcurrentAgents,
+  onMaxTotalConcurrentAgentsChange,
   unknownScopeStrategy,
   onUnknownScopeStrategyChange,
   gitWorkingMode,
@@ -537,6 +543,69 @@ export function AgentsStep({
                   <span>10</span>
                 </div>
               </div>
+              {onMaxTotalConcurrentAgentsChange && (
+                <div className="pt-4 border-t border-theme-border space-y-3">
+                  <div className="flex items-start gap-2">
+                    <input
+                      id="wizard-max-total-agents-cap-enabled"
+                      type="checkbox"
+                      className="mt-1 rounded border-theme-border"
+                      checked={maxTotalConcurrentAgents != null}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          onMaxTotalConcurrentAgentsChange(
+                            Math.min(
+                              MAX_TOTAL_CONCURRENT_AGENTS_CAP,
+                              Math.max(DEFAULT_MAX_TOTAL_CONCURRENT_AGENTS, maxConcurrentCoders)
+                            )
+                          );
+                        } else {
+                          onMaxTotalConcurrentAgentsChange(undefined);
+                        }
+                      }}
+                      data-testid="wizard-max-total-agents-cap-checkbox"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <label
+                        htmlFor="wizard-max-total-agents-cap-enabled"
+                        className="text-sm font-medium text-theme-text cursor-pointer"
+                      >
+                        Cap total concurrent agents (all phases)
+                      </label>
+                      <p className="text-xs text-theme-muted mt-1">
+                        Optional limit on planning, coding, review, and merger agents together (e.g.
+                        for API rate limits).
+                      </p>
+                    </div>
+                  </div>
+                  {maxTotalConcurrentAgents != null && (
+                    <div>
+                      <label
+                        htmlFor="wizard-max-total-concurrent-agents-slider"
+                        className="block text-sm font-medium text-theme-text mb-2"
+                      >
+                        Max total concurrent agents:{" "}
+                        <span className="font-bold">{maxTotalConcurrentAgents}</span>
+                      </label>
+                      <input
+                        id="wizard-max-total-concurrent-agents-slider"
+                        type="range"
+                        min={1}
+                        max={MAX_TOTAL_CONCURRENT_AGENTS_CAP}
+                        step={1}
+                        value={maxTotalConcurrentAgents}
+                        onChange={(e) => onMaxTotalConcurrentAgentsChange(Number(e.target.value))}
+                        className="w-full accent-brand-600"
+                        data-testid="wizard-max-total-concurrent-agents-slider"
+                      />
+                      <div className="flex justify-between text-xs text-theme-muted mt-1">
+                        <span>1</span>
+                        <span>{MAX_TOTAL_CONCURRENT_AGENTS_CAP}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {maxConcurrentCoders > 1 && (
                 <div>
                   <label

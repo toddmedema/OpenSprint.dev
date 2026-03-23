@@ -165,6 +165,32 @@ describe("PlanFilterToolbar", () => {
     expect(bulkButton).not.toHaveTextContent("Bulk");
   });
 
+  it("does not disable Generate All Tasks when planTasksPlanIds is non-empty unless bulk is in progress", async () => {
+    const user = userEvent.setup();
+    render(
+      <PlanFilterToolbar
+        statusFilter="all"
+        setStatusFilter={vi.fn()}
+        planCountByStatus={{ all: 2, planning: 2, building: 0, in_review: 0, complete: 0 }}
+        viewMode="card"
+        onViewModeChange={vi.fn()}
+        plansWithNoTasksCount={2}
+        plansReadyToExecuteCount={0}
+        planAllInProgress={false}
+        executeAllInProgress={false}
+        executingPlanId={null}
+        planTasksPlanIds={["plan-a", "plan-b"]}
+        onPlanAllTasks={vi.fn()}
+        onExecuteAll={vi.fn()}
+        onAddPlan={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByTestId("plan-bulk-actions-button"));
+    const generateAll = screen.getByTestId("plan-all-tasks-button");
+    expect(generateAll).not.toBeDisabled();
+  });
+
   it("opens bulk actions menu and exposes secondary action buttons", async () => {
     const user = userEvent.setup();
     render(

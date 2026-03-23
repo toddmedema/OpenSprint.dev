@@ -23,20 +23,20 @@ const EpicTaskRow = memo(function EpicTaskRow({
   startedAt,
   onTaskSelect,
   onUnblock,
-  unblockingTaskId,
+  unblockInflightByTaskId,
 }: {
   taskId: string;
   task?: Task;
   startedAt?: string;
   onTaskSelect: (taskId: string) => void;
   onUnblock?: (taskId: string) => void;
-  unblockingTaskId?: string | null;
+  unblockInflightByTaskId?: Readonly<Record<string, number>>;
 }) {
   const taskFromRedux = useAppSelector((s) => selectTaskById(s, taskId), shallowEqual);
   const task = taskProp ?? taskFromRedux;
   if (!task) return null;
 
-  const isUnblocking = Boolean(unblockingTaskId && unblockingTaskId === task.id);
+  const isUnblocking = (unblockInflightByTaskId?.[task.id] ?? 0) > 0;
   const assignee = task.assignee?.trim() || null;
   const showRightContent = Boolean(assignee || startedAt);
   return (
@@ -132,8 +132,8 @@ export interface BuildEpicCardProps {
   filteringActive?: boolean;
   onTaskSelect: (taskId: string) => void;
   onUnblock?: (taskId: string) => void;
-  /** When set, the Retry control for that task shows a spinner and is disabled. */
-  unblockingTaskId?: string | null;
+  /** Per-task in-flight unblock count; Retry shows a spinner while count is positive. */
+  unblockInflightByTaskId?: Readonly<Record<string, number>>;
   /** Navigate to the plan associated with this epic */
   onViewPlan?: () => void;
   /** Map of task ID to startedAt for active tasks (elapsed time display) */
@@ -152,7 +152,7 @@ export function BuildEpicCard({
   filteringActive = false,
   onTaskSelect,
   onUnblock,
-  unblockingTaskId = null,
+  unblockInflightByTaskId = {},
   onViewPlan,
   taskIdToStartedAt = {},
   selectedTaskId,
@@ -302,7 +302,7 @@ export function BuildEpicCard({
                           startedAt={taskIdToStartedAt[t.id]}
                           onTaskSelect={onTaskSelect}
                           onUnblock={onUnblock}
-                          unblockingTaskId={unblockingTaskId}
+                          unblockInflightByTaskId={unblockInflightByTaskId}
                         />
                       </ul>
                     </div>
@@ -320,7 +320,7 @@ export function BuildEpicCard({
                   startedAt={taskIdToStartedAt[t.id]}
                   onTaskSelect={onTaskSelect}
                   onUnblock={onUnblock}
-                  unblockingTaskId={unblockingTaskId}
+                  unblockInflightByTaskId={unblockInflightByTaskId}
                 />
               ))}
             </ul>

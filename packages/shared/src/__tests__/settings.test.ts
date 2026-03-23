@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { MAX_TOTAL_CONCURRENT_AGENTS_CAP } from "../constants/index.js";
 import {
   DEFAULT_HIL_CONFIG,
   DEFAULT_DATABASE_URL,
@@ -25,14 +26,14 @@ import {
   getProviderForAgentType,
   VALID_SELF_IMPROVEMENT_FREQUENCIES,
   SELF_IMPROVEMENT_FREQUENCY_OPTIONS,
-} from "../types/settings.js";
+} from "../types/settings.ts";
 import type {
   ProjectSettings,
   AgentConfig,
   DeploymentConfig,
   ApiKeys,
   SelfImprovementFrequency,
-} from "../types/settings.js";
+} from "../types/settings.ts";
 
 const defaultAgent: AgentConfig = { type: "claude", model: "claude-sonnet-4", cliCommand: null };
 const highAgent: AgentConfig = { type: "claude", model: "claude-opus-5", cliCommand: null };
@@ -224,6 +225,39 @@ describe("parseSettings", () => {
     expect(parsed.gitWorkingMode).toBe("worktree");
   });
 
+  it("should omit maxTotalConcurrentAgents when missing or invalid", () => {
+    expect(parseSettings({}).maxTotalConcurrentAgents).toBeUndefined();
+    const base = {
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+    };
+    expect(
+      parseSettings({ ...base, maxTotalConcurrentAgents: 0 }).maxTotalConcurrentAgents
+    ).toBeUndefined();
+    expect(
+      parseSettings({ ...base, maxTotalConcurrentAgents: -1 }).maxTotalConcurrentAgents
+    ).toBeUndefined();
+  });
+
+  it("should clamp maxTotalConcurrentAgents to 1..MAX_TOTAL_CONCURRENT_AGENTS_CAP", () => {
+    const base = {
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+    };
+    expect(parseSettings({ ...base, maxTotalConcurrentAgents: 3 }).maxTotalConcurrentAgents).toBe(
+      3
+    );
+    expect(parseSettings({ ...base, maxTotalConcurrentAgents: 99 }).maxTotalConcurrentAgents).toBe(
+      MAX_TOTAL_CONCURRENT_AGENTS_CAP
+    );
+  });
+
   it("should parse and preserve valid reviewAngles", () => {
     const raw = {
       simpleComplexityAgent: lowAgent,
@@ -331,6 +365,37 @@ describe("parseSettings", () => {
     };
     const parsed = parseSettings(raw);
     expect(parsed.teamMembers).toEqual([]);
+  });
+
+  it("parses selfImprovementBehaviorVersions and history with optional ids", () => {
+    const raw = {
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+      testFramework: null,
+      selfImprovementBehaviorVersions: [{ id: "  v1  ", promotedAt: " 2025-01-01T00:00:00Z " }],
+      selfImprovementBehaviorHistory: [
+        {
+          timestamp: " 2025-01-02T00:00:00Z ",
+          action: "approved" as const,
+          behaviorVersionId: "  bv1  ",
+          candidateId: "  c1  ",
+        },
+      ],
+    };
+    const parsed = parseSettings(raw);
+    expect(parsed.selfImprovementBehaviorVersions).toEqual([
+      { id: "v1", promotedAt: "2025-01-01T00:00:00Z" },
+    ]);
+    expect(parsed.selfImprovementBehaviorHistory).toEqual([
+      {
+        timestamp: "2025-01-02T00:00:00Z",
+        action: "approved",
+        behaviorVersionId: "bv1",
+        candidateId: "c1",
+      },
+    ]);
   });
 
   it("should preserve a valid aiAutonomyLevel", () => {
@@ -1200,6 +1265,12 @@ describe("validateApiKeyEntry", () => {
     });
     expect(entry).toMatchObject({ id: "k1", value: "sk-ant-xxx", label: "Production" });
   });
+
+  it("throws when label is present but not a string", () => {
+    expect(() => validateApiKeyEntry({ id: "x", value: "secret", label: 123 })).toThrow(
+      "API key label must be a string"
+    );
+  });
 });
 
 describe("mergeApiKeysWithCurrent", () => {
@@ -1222,6 +1293,58 @@ describe("mergeApiKeysWithCurrent", () => {
     const result = mergeApiKeysWithCurrent(incoming, current);
     expect(result?.ANTHROPIC_API_KEY).toEqual([
       { id: "k1", value: "sk-ant-secret", invalidAt: "2025-02-25T12:00:00Z" },
+    ]);
+  });
+
+  it("preserves limitHitAt when value omitted (masked)", () => {
+    const current: ApiKeys = {
+      ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-secret", limitHitAt: "2025-03-01T00:00:00Z" }],
+    };
+    const incoming = {
+      ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••" }],
+    };
+    const result = mergeApiKeysWithCurrent(incoming, current);
+    expect(result?.ANTHROPIC_API_KEY).toEqual([
+      { id: "k1", value: "sk-ant-secret", limitHitAt: "2025-03-01T00:00:00Z" },
+    ]);
+  });
+
+  it("uses incoming limitHitAt when masked and provided as string", () => {
+    const current: ApiKeys = {
+      ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-secret", limitHitAt: "2025-01-01T00:00:00Z" }],
+    };
+    const incoming = {
+      ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••••••", limitHitAt: "2025-06-01T00:00:00Z" }],
+    };
+    const result = mergeApiKeysWithCurrent(incoming, current);
+    expect(result?.ANTHROPIC_API_KEY).toEqual([
+      { id: "k1", value: "sk-ant-secret", limitHitAt: "2025-06-01T00:00:00Z" },
+    ]);
+  });
+
+  it("preserves invalidAt when value omitted (masked)", () => {
+    const current: ApiKeys = {
+      ANTHROPIC_API_KEY: [{ id: "k1", value: "sk", invalidAt: "2025-04-01T00:00:00Z" }],
+    };
+    const incoming = {
+      ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••" }],
+    };
+    const result = mergeApiKeysWithCurrent(incoming, current);
+    expect(result?.ANTHROPIC_API_KEY).toEqual([
+      { id: "k1", value: "sk", invalidAt: "2025-04-01T00:00:00Z" },
+    ]);
+  });
+
+  it("uses incoming invalidAt when masked and provided as string", () => {
+    const current: ApiKeys = {
+      ANTHROPIC_API_KEY: [{ id: "k1", value: "sk", invalidAt: "2025-01-01T00:00:00Z" }],
+    };
+    const incoming = {
+      ANTHROPIC_API_KEY: [{ id: "k1", masked: "••••", invalidAt: "2025-08-01T00:00:00Z" }],
+    };
+    const result = mergeApiKeysWithCurrent(incoming, current);
+    expect(result?.ANTHROPIC_API_KEY).toEqual([
+      { id: "k1", value: "sk", invalidAt: "2025-08-01T00:00:00Z" },
     ]);
   });
 

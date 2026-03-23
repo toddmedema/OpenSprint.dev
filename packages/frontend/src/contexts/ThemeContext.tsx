@@ -27,6 +27,11 @@ export function useTheme(): ThemeContextValue {
   return ctx;
 }
 
+/** Resolved light/dark for components that may render outside ThemeProvider (e.g. unit tests); defaults to light. */
+export function useOptionalResolvedTheme(): ResolvedTheme {
+  return useContext(ThemeContext)?.resolved ?? "light";
+}
+
 interface ThemeProviderProps {
   children: ReactNode;
 }

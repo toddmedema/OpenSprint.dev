@@ -111,7 +111,7 @@ export function PlanFilterToolbar({
   planAllInProgress,
   executeAllInProgress,
   executingPlanId,
-  planTasksPlanIds,
+  planTasksPlanIds: _planTasksPlanIds,
   onPlanAllTasks,
   onExecuteAll,
   onAddPlan,
@@ -270,7 +270,7 @@ export function PlanFilterToolbar({
                     onPlanAllTasks();
                     setBulkMenuOpen(false);
                   }}
-                  disabled={planAllInProgress || planTasksPlanIds.length > 0}
+                  disabled={planAllInProgress}
                   className="w-full text-left px-3 py-2 text-sm text-theme-text hover:bg-theme-border-subtle disabled:opacity-60 disabled:cursor-not-allowed"
                   data-testid="plan-all-tasks-button"
                 >

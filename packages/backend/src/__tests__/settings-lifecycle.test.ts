@@ -168,6 +168,34 @@ describe("Settings lifecycle — service-level", () => {
     expect(persisted.maxConcurrentCoders).toBe(3);
   });
 
+  it("persists maxTotalConcurrentAgents and clears with null", async () => {
+    const repoPath = path.join(tempDir, "total-agents");
+    const project = await projectService.createProject({
+      name: "Total agents",
+      repoPath,
+      simpleComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+      complexComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    await projectService.updateSettings(project.id, { maxTotalConcurrentAgents: 5 });
+
+    let fetched = await projectService.getSettings(project.id);
+    expect(fetched.maxTotalConcurrentAgents).toBe(5);
+
+    let persisted = await readProjectFromGlobalStore(tempDir, project.id);
+    expect(persisted.maxTotalConcurrentAgents).toBe(5);
+
+    await projectService.updateSettings(project.id, { maxTotalConcurrentAgents: null });
+
+    fetched = await projectService.getSettings(project.id);
+    expect(fetched.maxTotalConcurrentAgents).toBeUndefined();
+
+    persisted = await readProjectFromGlobalStore(tempDir, project.id);
+    expect(persisted.maxTotalConcurrentAgents).toBeUndefined();
+  });
+
   it("preserves maxConcurrentCoders when validation timing samples are recorded (no clobber)", async () => {
     const repoPath = path.join(tempDir, "parallelism-keep");
     const project = await projectService.createProject({

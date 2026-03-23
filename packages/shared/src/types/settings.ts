@@ -1,3 +1,4 @@
+import { MAX_TOTAL_CONCURRENT_AGENTS_CAP } from "../constants/index.js";
 import type { AgentType } from "./agent.js";
 import type { PlanComplexity } from "./plan.js";
 
@@ -647,6 +648,12 @@ export interface ProjectSettings {
   includeGeneralReview?: boolean;
   /** Max concurrent Coder/Reviewer agents per project. 1 = v1 sequential behavior. */
   maxConcurrentCoders?: number;
+  /**
+   * Optional cap on total concurrent agent work per project (planning LLM calls, coder/reviewer
+   * subprocesses, merger). When unset, no global cap beyond maxConcurrentCoders for execute.
+   * `null` is accepted on PUT settings to clear the cap (responses omit or use undefined).
+   */
+  maxTotalConcurrentAgents?: number | null;
   /** How to handle tasks with no file-scope prediction: "conservative" (serialize) or "optimistic" (parallelize, rely on merger) */
   unknownScopeStrategy?: UnknownScopeStrategy;
   /** Git working mode: "worktree" (parallel worktrees) or "branches" (single branch in main repo). Default: "worktree". */
@@ -896,6 +903,14 @@ export function parseSettings(raw: unknown): ProjectSettings {
     r.maxConcurrentCoders >= 1
       ? Math.round(r.maxConcurrentCoders as number)
       : 1;
+  const rawMaxTotal = r?.maxTotalConcurrentAgents;
+  let maxTotalConcurrentAgents: number | undefined;
+  if (typeof rawMaxTotal === "number" && Number.isFinite(rawMaxTotal) && rawMaxTotal >= 1) {
+    maxTotalConcurrentAgents = Math.min(
+      MAX_TOTAL_CONCURRENT_AGENTS_CAP,
+      Math.max(1, Math.round(rawMaxTotal))
+    );
+  }
   const unknownScopeStrategy: UnknownScopeStrategy =
     r?.unknownScopeStrategy === "conservative" || r?.unknownScopeStrategy === "optimistic"
       ? (r.unknownScopeStrategy as UnknownScopeStrategy)
@@ -913,6 +928,7 @@ export function parseSettings(raw: unknown): ProjectSettings {
     validationTimeoutMsOverride: parseValidationTimeoutMsOverride(r?.validationTimeoutMsOverride),
     validationTimingProfile: parseValidationTimingProfile(r?.validationTimingProfile),
     maxConcurrentCoders,
+    ...(maxTotalConcurrentAgents != null && { maxTotalConcurrentAgents }),
     unknownScopeStrategy,
     enableHumanTeammates,
     teamMembers: parseTeamMembers(r?.teamMembers),
@@ -980,7 +996,11 @@ export function parseSettings(raw: unknown): ProjectSettings {
             h.candidateId.trim() && { candidateId: h.candidateId.trim() }),
         }))
     : undefined;
-  const { apiKeys: _omitApiKeys, ...rest } = r as Partial<ProjectSettings> & { apiKeys?: unknown };
+  const {
+    apiKeys: _omitApiKeys,
+    maxTotalConcurrentAgents: _omitMaxTotalRaw,
+    ...rest
+  } = r as Partial<ProjectSettings> & { apiKeys?: unknown };
   if (simpleObj && typeof simpleObj === "object" && complexObj && typeof complexObj === "object") {
     const simple = simpleObj as AgentConfig;
     const complex = complexObj as AgentConfig;

@@ -24,6 +24,7 @@ import {
   MAX_VALIDATION_TIMEOUT_MS,
   getTestCommandForFramework,
   hilConfigFromAiAutonomyLevel,
+  MAX_TOTAL_CONCURRENT_AGENTS_CAP,
   parseSettings,
   parseTeamMembers,
   getProvidersRequiringApiKeys,
@@ -64,7 +65,10 @@ import {
   hasWorkingTreeChanges,
 } from "../utils/git-repo-state.js";
 import { classifyInitError, attemptRecovery } from "./scaffold-recovery.service.js";
-import { ensureExpoReactTypeDevDependencies } from "../utils/scaffold-expo-deps.js";
+import {
+  ensureExpoReactTypeDevDependencies,
+  ensureExpoLintMergeGateTooling,
+} from "../utils/scaffold-expo-deps.js";
 
 const execAsync = promisify(exec);
 const log = createLogger("project");
@@ -297,6 +301,14 @@ function toCanonicalSettings(s: ProjectSettings): ProjectSettings {
     ...(s.reviewAngles && s.reviewAngles.length > 0 && { reviewAngles: s.reviewAngles }),
     ...(s.includeGeneralReview === true && { includeGeneralReview: true }),
     maxConcurrentCoders: s.maxConcurrentCoders ?? 1,
+    ...(typeof s.maxTotalConcurrentAgents === "number" &&
+      Number.isFinite(s.maxTotalConcurrentAgents) &&
+      s.maxTotalConcurrentAgents >= 1 && {
+        maxTotalConcurrentAgents: Math.min(
+          MAX_TOTAL_CONCURRENT_AGENTS_CAP,
+          Math.max(1, Math.round(s.maxTotalConcurrentAgents))
+        ),
+      }),
     unknownScopeStrategy: s.unknownScopeStrategy ?? "optimistic",
     gitWorkingMode: s.gitWorkingMode ?? "worktree",
     mergeStrategy: s.mergeStrategy ?? "per_task",
@@ -651,6 +663,11 @@ export class ProjectService {
     const gitWorkingMode = input.gitWorkingMode === "branches" ? "branches" : "worktree";
     const effectiveMaxConcurrentCoders =
       gitWorkingMode === "branches" ? 1 : (input.maxConcurrentCoders ?? 1);
+    const rawMaxTotal = input.maxTotalConcurrentAgents;
+    const initialMaxTotal =
+      typeof rawMaxTotal === "number" && Number.isFinite(rawMaxTotal) && rawMaxTotal >= 1
+        ? Math.min(MAX_TOTAL_CONCURRENT_AGENTS_CAP, Math.max(1, Math.round(rawMaxTotal)))
+        : undefined;
     const settings: ProjectSettings = {
       simpleComplexityAgent,
       complexComplexityAgent,
@@ -663,6 +680,7 @@ export class ProjectService {
       gitWorkingMode,
       worktreeBaseBranch: baseBranch,
       maxConcurrentCoders: effectiveMaxConcurrentCoders,
+      ...(initialMaxTotal != null && { maxTotalConcurrentAgents: initialMaxTotal }),
       ...(effectiveMaxConcurrentCoders > 1 &&
         input.unknownScopeStrategy && {
           unknownScopeStrategy: input.unknownScopeStrategy,
@@ -881,6 +899,35 @@ export class ProjectService {
         throw new AppError(500, ErrorCodes.SCAFFOLD_INIT_FAILED, msg, {
           repoPath,
           recovery,
+        });
+      }
+
+      try {
+        await ensureExpoLintMergeGateTooling(repoPath);
+      } catch (lintSetupErr) {
+        const msg = getErrorMessage(
+          lintSetupErr,
+          "Could not install ESLint tooling for merge quality gates (eslint / eslint-config-expo)"
+        );
+        throw new AppError(500, ErrorCodes.SCAFFOLD_INIT_FAILED, msg, {
+          repoPath,
+          recovery,
+        });
+      }
+
+      const lintAfterScaffold = await this.runWithRecovery(
+        "npm run lint",
+        repoPath,
+        agentConfig,
+        "npm run lint failed after scaffold (check ESLint config and dependencies)"
+      );
+      if (!recovery && lintAfterScaffold.recovery) {
+        recovery = lintAfterScaffold.recovery;
+      }
+      if (!lintAfterScaffold.success) {
+        throw new AppError(500, ErrorCodes.SCAFFOLD_INIT_FAILED, lintAfterScaffold.errorMessage!, {
+          repoPath,
+          recovery: lintAfterScaffold.recovery ?? recovery,
         });
       }
 
@@ -1213,6 +1260,7 @@ export class ProjectService {
       selfImprovementLastCommitSha: _stripLastSha,
       nextRunAt: _stripNextRunAt,
       validationTimingProfile: _stripValidationTimingProfile,
+      maxTotalConcurrentAgents: maxTotalConcurrentAgentsUpdate,
       ...sanitizedUpdates
     } = updates as Partial<ProjectSettings> & {
       selfImprovementLastRunAt?: unknown;
@@ -1364,6 +1412,29 @@ export class ProjectService {
         : sanitizedUpdates.validationTimeoutMsOverride === null
           ? null
           : clampValidationTimeoutMs(sanitizedUpdates.validationTimeoutMsOverride);
+
+    let maxTotalConcurrentAgents = current.maxTotalConcurrentAgents;
+    if (maxTotalConcurrentAgentsUpdate !== undefined) {
+      if (maxTotalConcurrentAgentsUpdate === null) {
+        maxTotalConcurrentAgents = undefined;
+      } else if (
+        typeof maxTotalConcurrentAgentsUpdate === "number" &&
+        Number.isFinite(maxTotalConcurrentAgentsUpdate) &&
+        maxTotalConcurrentAgentsUpdate >= 1
+      ) {
+        maxTotalConcurrentAgents = Math.min(
+          MAX_TOTAL_CONCURRENT_AGENTS_CAP,
+          Math.max(1, Math.round(maxTotalConcurrentAgentsUpdate))
+        );
+      } else {
+        throw new AppError(
+          400,
+          ErrorCodes.INVALID_INPUT,
+          `maxTotalConcurrentAgents must be a number from 1 to ${MAX_TOTAL_CONCURRENT_AGENTS_CAP}, or null to clear`
+        );
+      }
+    }
+
     const effectiveSettings: ProjectSettings = {
       ...current,
       ...sanitizedUpdates,
@@ -1378,6 +1449,7 @@ export class ProjectService {
       autoExecutePlans,
       runAgentEnhancementExperiments,
       validationTimeoutMsOverride,
+      maxTotalConcurrentAgents,
     };
     const updated: ProjectSettings = {
       ...effectiveSettings,

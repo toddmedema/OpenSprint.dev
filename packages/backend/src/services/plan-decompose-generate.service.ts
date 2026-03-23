@@ -53,7 +53,8 @@ const DECOMPOSE_REPAIR_PROMPT =
 const GENERATE_PLAN_REPAIR_PROMPT = `Return valid JSON only. Either:
 {"open_questions":[{"id":"q1","text":"Clarification question"}]}
 or
-{"title":"Feature Name","content":"# Feature Name\\n\\n...","complexity":"medium","mockups":[{"title":"Main Screen","content":"ASCII wireframe"}]}
+{"title":"Feature Name","content":"# Feature Name\\n\\n...","complexity":"medium","mockups":[]}
+(mockups may be [] or include ASCII wireframes; you may use fenced mermaid in content for diagrams.)
 Do not include prose outside the JSON.`;
 
 export interface PlanDecomposeGenerateDeps {
@@ -301,7 +302,7 @@ export class PlanDecomposeGenerateService {
 
     const prdContext = await this.buildPrdContext(projectId);
 
-    const prompt = `Analyze the PRD below and produce a feature decomposition. Output valid JSON with a "plans" array. Each plan has: title, content (full markdown), complexity (low|medium|high|very_high), dependsOnPlans (array of slugified plan IDs this plan depends on), and mockups (array of {title, content} — ASCII wireframes). Do NOT include a tasks array; plans are created with markdown and mockups only.`;
+    const prompt = `Analyze the PRD below and produce a feature decomposition. Output valid JSON with a "plans" array. Each plan has: title, content (full markdown; you may include fenced mermaid for flows/architecture), complexity (low|medium|high|very_high), dependsOnPlans (array of slugified plan IDs this plan depends on), and mockups (array of {title, content} for ASCII wireframes, or [] if diagrams are only in markdown). Do NOT include a tasks array.`;
 
     const agentId = `plan-decompose-${projectId}-${Date.now()}`;
 
@@ -388,19 +389,21 @@ export class PlanDecomposeGenerateService {
     const settings = await this.deps.projectService.getSettings(projectId);
     const prdContext = await this.buildPrdContext(projectId);
 
-    const systemPrompt = `You are an AI planning assistant for Open Sprint. The user will describe a feature idea in freeform text. Your job is to produce a complete feature plan (markdown and mockups only; no subtasks).
+    const systemPrompt = `You are an AI planning assistant for Open Sprint. The user will describe a feature idea in freeform text. Your job is to produce a complete feature plan (markdown in content; optional structured mockups; no subtasks).
 
 ## Output requirement (mandatory)
 Your entire response MUST be the plan as a single JSON object. Do NOT write the plan to a file. Do NOT create, modify, stage, or commit any files in the repository. Do NOT respond with a summary, description, or "here's what I created" text — the system parses your message for JSON only; any prose instead of JSON will cause failure.
-You may wrap the JSON in a markdown code block (\`\`\`json ... \`\`\`). The JSON must include at minimum: "title", "content", "complexity", "mockups". Do NOT include a tasks array.
+You may wrap the JSON in a markdown code block (\`\`\`json ... \`\`\`). The JSON must include at minimum: "title", "content", "complexity", "mockups" (use [] if none). Do NOT include a tasks array.
 
 Required JSON shape:
 {
   "title": "Feature Name",
   "content": "# Feature Name\\n\\n## Overview\\n...full markdown...",
   "complexity": "medium",
-  "mockups": [{"title": "Main Screen", "content": "ASCII wireframe"}]
+  "mockups": []
 }
+
+Visual aids: You choose per plan — include Mermaid (fenced \`\`\`mermaid in content), ASCII mockups in \`mockups\`, both, or neither if prose is sufficient. Prefer Mermaid for flows/architecture; prefer ASCII mockups for screen layout. Keep diagrams small and valid.
 
 Plan markdown MUST follow this structure (PRD §7.2.3). Each plan's content must include these sections in order:
 ${getPlanMarkdownSections()
@@ -408,8 +411,6 @@ ${getPlanMarkdownSections()
   .join("\n")}
 
 Template structure: ${getPlanTemplateStructure()}
-
-MOCKUPS: Include at least one mockup (ASCII wireframe or text diagram) illustrating key UI for the feature.
 
 Field rules: complexity: low, medium, high, or very_high (plan-level).
 

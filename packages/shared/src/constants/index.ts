@@ -43,6 +43,15 @@ export const BACKOFF_FAILURE_THRESHOLD = 3;
 /** Maximum task priority value; tasks at this level get blocked on next demotion (PRDv2 §9.1) */
 export const MAX_PRIORITY_BEFORE_BLOCK = 4;
 
+/** Upper bound for project `maxTotalConcurrentAgents` (parse, persist, UI sliders). */
+export const MAX_TOTAL_CONCURRENT_AGENTS_CAP = 32;
+
+/**
+ * Default when the user enables a total-agent cap (settings / wizard): at least this many, and at
+ * least `maxConcurrentCoders`. Also used as the bulk “Generate all tasks” fan-out when no project cap is set.
+ */
+export const DEFAULT_MAX_TOTAL_CONCURRENT_AGENTS = 10;
+
 /** Block reasons that indicate technical errors. Tasks with these can be auto-retried. */
 export const TECHNICAL_BLOCK_REASONS = [
   "Merge Failure",

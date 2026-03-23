@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { PrdSectionEditor } from "./PrdSectionEditor";
 
+vi.mock("../../lib/mermaidDiagram", () => ({
+  renderMermaidDiagrams: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock("../../lib/markdownUtils", () => ({
   markdownToHtml: vi.fn((md: string) => Promise.resolve(md ? `<p>${md}</p>` : "<p><br></p>")),
   htmlToMarkdown: vi.fn((html: string) => {

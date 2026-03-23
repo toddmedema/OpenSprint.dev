@@ -11,8 +11,10 @@ import type {
   UnknownScopeStrategy,
 } from "@opensprint/shared";
 import {
+  DEFAULT_MAX_TOTAL_CONCURRENT_AGENTS,
   DEFAULT_REVIEW_MODE,
   GENERAL_REVIEW_OPTION,
+  MAX_TOTAL_CONCURRENT_AGENTS_CAP,
   REVIEW_AGENT_OPTIONS,
   SELF_IMPROVEMENT_FREQUENCY_OPTIONS,
   normalizeWorktreeBaseBranch,
@@ -39,6 +41,7 @@ type WorkflowPersistOverrides = Partial<{
   mergeStrategy: MergeStrategy;
   worktreeBaseBranch: string;
   maxConcurrentCoders: number;
+  maxTotalConcurrentAgents?: number | null;
   unknownScopeStrategy: UnknownScopeStrategy;
 }>;
 
@@ -258,6 +261,7 @@ export function WorkflowSettingsContent({
   const gitWorkingMode = draftSettings.gitWorkingMode ?? "worktree";
   const mergeStrategy = draftSettings.mergeStrategy ?? "per_task";
   const maxConcurrentCoders = draftSettings.maxConcurrentCoders ?? 1;
+  const maxTotalConcurrentAgents = draftSettings.maxTotalConcurrentAgents;
   const gitRemoteModeText =
     draftSettings.gitRemoteMode === "publishable"
       ? "Remote configured"
@@ -409,6 +413,80 @@ export function WorkflowSettingsContent({
                   <span>10</span>
                 </div>
               </div>
+
+              <div className="pt-4 border-t border-theme-border space-y-3">
+                <div className="flex items-start gap-2">
+                  <input
+                    id="max-total-agents-cap-enabled"
+                    type="checkbox"
+                    className="mt-1 rounded border-theme-border"
+                    checked={maxTotalConcurrentAgents != null}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        const n = Math.min(
+                          MAX_TOTAL_CONCURRENT_AGENTS_CAP,
+                          Math.max(DEFAULT_MAX_TOTAL_CONCURRENT_AGENTS, maxConcurrentCoders)
+                        );
+                        applySettingsUpdate((s) => ({ ...s, maxTotalConcurrentAgents: n }));
+                        void persistSettings(undefined, { maxTotalConcurrentAgents: n });
+                      } else {
+                        applySettingsUpdate((s) => {
+                          const next = { ...s };
+                          delete next.maxTotalConcurrentAgents;
+                          return next;
+                        });
+                        void persistSettings(undefined, { maxTotalConcurrentAgents: null });
+                      }
+                    }}
+                    data-testid="max-total-agents-cap-checkbox"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <label
+                      htmlFor="max-total-agents-cap-enabled"
+                      className="text-sm font-medium text-theme-text cursor-pointer"
+                    >
+                      Cap total concurrent agents (all phases)
+                    </label>
+                    <p className="text-xs text-theme-muted mt-1">
+                      When enabled, limits overlapping work across task generation, plan chat,
+                      coders, reviewers, and merger agents so you can stay within provider
+                      concurrency limits. When off, only &quot;Max concurrent coders&quot; applies
+                      to execute parallelism.
+                    </p>
+                  </div>
+                </div>
+                {maxTotalConcurrentAgents != null && (
+                  <div>
+                    <label
+                      htmlFor="max-total-concurrent-agents-slider"
+                      className="block text-sm font-medium text-theme-text mb-2"
+                    >
+                      Max total concurrent agents:{" "}
+                      <span className="font-bold">{maxTotalConcurrentAgents}</span>
+                    </label>
+                    <input
+                      id="max-total-concurrent-agents-slider"
+                      type="range"
+                      min={1}
+                      max={MAX_TOTAL_CONCURRENT_AGENTS_CAP}
+                      step={1}
+                      value={maxTotalConcurrentAgents}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        applySettingsUpdate((s) => ({ ...s, maxTotalConcurrentAgents: n }));
+                        void persistSettings(undefined, { maxTotalConcurrentAgents: n });
+                      }}
+                      className="w-full accent-brand-600"
+                      data-testid="max-total-concurrent-agents-slider"
+                    />
+                    <div className="flex justify-between text-xs text-theme-muted mt-1">
+                      <span>1</span>
+                      <span>{MAX_TOTAL_CONCURRENT_AGENTS_CAP}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {maxConcurrentCoders > 1 && (
                 <div>
                   <label

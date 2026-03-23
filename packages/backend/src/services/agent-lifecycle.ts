@@ -12,6 +12,7 @@ import {
   HEARTBEAT_INTERVAL_MS,
   OPENSPRINT_PATHS,
 } from "@opensprint/shared";
+import { acquireGlobalAgentSlot } from "./agent-global-concurrency.service.js";
 import { agentService } from "./agent.service.js";
 import type { CodingAgentHandle } from "./agent.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
@@ -122,7 +123,7 @@ export class AgentLifecycleManager {
    * The caller's onDone callback is invoked exactly once when the agent
    * finishes (either normally via onExit, or via dead-process detection).
    */
-  run(params: AgentRunParams, runState: AgentRunState, timers: TimerRegistry): void {
+  async run(params: AgentRunParams, runState: AgentRunState, timers: TimerRegistry): Promise<void> {
     const {
       projectId,
       taskId,
@@ -167,45 +168,71 @@ export class AgentLifecycleManager {
         ? agentService.invokeCodingAgent.bind(agentService)
         : agentService.invokeReviewAgent.bind(agentService);
 
-    runState.activeProcess = invoke(promptPath, agentConfig, {
-      cwd: wtPath,
-      agentRole: role === "coder" ? "coder" : "code reviewer",
-      outputLogPath,
-      projectId,
-      onOutput: (chunk: string) => {
-        const toolEvents = updateToolCallState(runState, chunk);
-        this.recordToolActivity(params, toolEvents);
-        const filtered = runState.outputFilter!.filter(chunk);
-        if (filtered) appendOutputLog(runState, filtered);
-        if (filtered) sendAgentOutputToProject(projectId, taskId, filtered);
-        void this.recordOutputActivity(params, runState, Date.now());
-      },
-      onExit: async (code: number | null) => {
-        if (runState.exitHandled) return;
-        runState.exitHandled = true;
-        runState.activeProcess = null;
-        this.cleanupTimers(timers);
-        await heartbeatService.deleteHeartbeat(wtPath, taskId, params.heartbeatSubpath);
-        try {
-          await onDone(code);
-        } catch (err) {
-          log.error("onDone failed", { taskId, exitCode: code, err });
-        }
-      },
-    });
+    const releaseGlobalSlot = await acquireGlobalAgentSlot(projectId);
+    const releaseSlotOnce = (() => {
+      let done = false;
+      return () => {
+        if (done) return;
+        done = true;
+        releaseGlobalSlot();
+      };
+    })();
+    const wrappedOnDone = async (code: number | null) => {
+      releaseSlotOnce();
+      await onDone(code);
+    };
+    try {
+      runState.activeProcess = invoke(promptPath, agentConfig, {
+        cwd: wtPath,
+        agentRole: role === "coder" ? "coder" : "code reviewer",
+        outputLogPath,
+        projectId,
+        onOutput: (chunk: string) => {
+          const toolEvents = updateToolCallState(runState, chunk);
+          this.recordToolActivity(params, toolEvents);
+          const filtered = runState.outputFilter!.filter(chunk);
+          if (filtered) appendOutputLog(runState, filtered);
+          if (filtered) sendAgentOutputToProject(projectId, taskId, filtered);
+          void this.recordOutputActivity(params, runState, Date.now());
+        },
+        onExit: async (code: number | null) => {
+          if (runState.exitHandled) return;
+          runState.exitHandled = true;
+          runState.activeProcess = null;
+          this.cleanupTimers(timers);
+          await heartbeatService.deleteHeartbeat(wtPath, taskId, params.heartbeatSubpath);
+          try {
+            await wrappedOnDone(code);
+          } catch (err) {
+            log.error("onDone failed", { taskId, exitCode: code, err });
+          }
+        },
+      });
 
-    this.startHeartbeat(runState, wtPath, taskId, timers, heartbeatSubpath);
-    this.startResultMonitor(promptPath, runState, wtPath, taskId, timers, onDone, heartbeatSubpath);
-    this.startInactivityMonitor(
-      runState,
-      wtPath,
-      taskId,
-      branchName,
-      timers,
-      onDone,
-      params,
-      heartbeatSubpath
-    );
+      this.startHeartbeat(runState, wtPath, taskId, timers, heartbeatSubpath);
+      this.startResultMonitor(
+        promptPath,
+        runState,
+        wtPath,
+        taskId,
+        timers,
+        wrappedOnDone,
+        heartbeatSubpath
+      );
+      this.startInactivityMonitor(
+        runState,
+        wtPath,
+        taskId,
+        branchName,
+        timers,
+        wrappedOnDone,
+        params,
+        heartbeatSubpath
+      );
+    } catch (err) {
+      releaseSlotOnce();
+      throw err;
+    }
   }
 
   /**

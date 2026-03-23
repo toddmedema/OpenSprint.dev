@@ -61,7 +61,8 @@
       "dist/main.js",
       "dist/preload.js",
       "dist/boot-screen.js",
-      "dist/window-options.js"
+      "dist/window-options.js",
+      "dist/runtime-branding.js"
     ],
     "extraResources": [
       {

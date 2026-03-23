@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ThemeProvider, useTheme } from "./ThemeContext";
+import { ThemeProvider, useTheme, useOptionalResolvedTheme } from "./ThemeContext";
 
 const storage: Record<string, string> = {};
 let matchMediaMatches = false;
@@ -152,5 +152,30 @@ describe("useTheme", () => {
       render(<Bad />);
     }).toThrow("useTheme must be used within ThemeProvider");
     vi.restoreAllMocks();
+  });
+});
+
+describe("useOptionalResolvedTheme", () => {
+  it("returns light when used outside ThemeProvider", () => {
+    function Consumer() {
+      const r = useOptionalResolvedTheme();
+      return <span data-testid="r">{r}</span>;
+    }
+    render(<Consumer />);
+    expect(screen.getByTestId("r")).toHaveTextContent("light");
+  });
+
+  it("returns resolved theme inside ThemeProvider", async () => {
+    function Consumer() {
+      return <span data-testid="r">{useOptionalResolvedTheme()}</span>;
+    }
+    render(
+      <ThemeProvider>
+        <Consumer />
+      </ThemeProvider>
+    );
+    await waitFor(() => {
+      expect(["light", "dark"]).toContain(screen.getByTestId("r").textContent);
+    });
   });
 });

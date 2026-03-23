@@ -140,6 +140,10 @@ vi.mock("child_process", async (importOriginal) => {
       }
       return undefined;
     }
+    if (cmd.includes("npm run lint")) {
+      callback(null, "", "");
+      return undefined;
+    }
 
     (
       actual.exec as (
@@ -209,12 +213,23 @@ describe("ProjectService.scaffoldProject", () => {
     const pkgPath = path.join(repoPath, "package.json");
     const pkg = JSON.parse(await fs.readFile(pkgPath, "utf-8"));
     expect(pkg.scripts.web).toBe("expo start --web");
+    expect(pkg.scripts.lint).toBe("expo lint");
     expect(observedCommands).toContain("npm install --include=dev");
+    expect(observedCommands.some((c) => c.includes("npm run lint"))).toBe(true);
     expect(
       observedCommands.some(
         (c) => c.includes("expo install") && c.includes("typescript") && c.includes("@types/react")
       )
     ).toBe(true);
+    expect(
+      observedCommands.some(
+        (c) =>
+          c.includes("expo install") && c.includes("eslint") && c.includes("eslint-config-expo")
+      )
+    ).toBe(true);
+    const eslintConfigPath = path.join(repoPath, "eslint.config.js");
+    const eslintConfig = await fs.readFile(eslintConfigPath, "utf-8");
+    expect(eslintConfig).toContain("eslint-config-expo/flat");
   });
 
   it("rejects missing name", async () => {

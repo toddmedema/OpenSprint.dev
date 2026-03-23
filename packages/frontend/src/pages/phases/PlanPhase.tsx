@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } fr
 import { shallowEqual } from "react-redux";
 import { useQueryClient, useIsMutating } from "@tanstack/react-query";
 import type { Plan, PlanStatus } from "@opensprint/shared";
-import { sortPlansByStatus } from "@opensprint/shared";
+import { DEFAULT_MAX_TOTAL_CONCURRENT_AGENTS, sortPlansByStatus } from "@opensprint/shared";
 import { useLocation, useNavigate } from "react-router-dom";
 import { store, useAppDispatch, useAppSelector } from "../../store";
 import {
@@ -711,35 +711,51 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     }
   };
 
-  /** Process the shared plan-tasks queue sequentially. */
+  /** When unset, cap in-flight planTasks HTTP calls during bulk generate (backend still enforces maxTotalConcurrentAgents when set). */
+
+  /** Process the shared plan-tasks queue with bounded parallelism (FIFO). */
   const processQueue = useCallback(async () => {
     if (processingQueueRef.current) return;
     processingQueueRef.current = true;
     let completed = 0;
     try {
       while (planQueueRef.current.length > 0) {
-        const planId = planQueueRef.current[0];
-        const result = await dispatch(planTasks({ projectId, planId }));
-        planQueueRef.current = planQueueRef.current.slice(1);
-        dispatch(fetchPlans({ projectId, background: true }));
-        // planTasksListener dispatches fetchTasks on planTasks.fulfilled for live updates
-        const currentSelected = store.getState().plan.selectedPlanId;
-        if (currentSelected === planId) {
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.plans.detail(projectId, planId),
-          });
-        }
-        if (planTasks.fulfilled.match(result)) {
-          completed += 1;
-        } else if (planTasks.rejected.match(result)) {
-          dispatch(
-            addNotification({
-              message: result.error?.message ?? "Failed to generate tasks",
-              severity: "error",
-            })
-          );
-        }
+        const batchConcurrency = Math.max(
+          1,
+          Math.min(
+            planQueueRef.current.length,
+            projectSettings?.maxTotalConcurrentAgents ?? DEFAULT_MAX_TOTAL_CONCURRENT_AGENTS
+          )
+        );
+
+        const runWorker = async () => {
+          for (;;) {
+            const planId = planQueueRef.current.shift();
+            if (!planId) break;
+            const result = await dispatch(planTasks({ projectId, planId }));
+            dispatch(fetchPlans({ projectId, background: true }));
+            const currentSelected = store.getState().plan.selectedPlanId;
+            if (currentSelected === planId) {
+              void queryClient.invalidateQueries({
+                queryKey: queryKeys.plans.detail(projectId, planId),
+              });
+            }
+            if (planTasks.fulfilled.match(result)) {
+              completed += 1;
+            } else if (planTasks.rejected.match(result)) {
+              dispatch(
+                addNotification({
+                  message: result.error?.message ?? "Failed to generate tasks",
+                  severity: "error",
+                })
+              );
+            }
+          }
+        };
+
+        await Promise.all(Array.from({ length: batchConcurrency }, () => runWorker()));
       }
+
       if (completed > 0) {
         dispatch(
           addNotification({
@@ -755,7 +771,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
       processingQueueRef.current = false;
       setPlanAllInProgress(false);
     }
-  }, [dispatch, projectId, queryClient]);
+  }, [dispatch, projectId, queryClient, projectSettings?.maxTotalConcurrentAgents]);
 
   const enqueuePlan = useCallback(
     (planId: string) => {

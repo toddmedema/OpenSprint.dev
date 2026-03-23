@@ -96,6 +96,7 @@ export function PrdViewer({
                   markdown={prdContent[sectionKey] ?? ""}
                   onSave={onSectionChange}
                   disabled={savingSections.includes(sectionKey)}
+                  diagrams="mermaid"
                 />
               )}
 

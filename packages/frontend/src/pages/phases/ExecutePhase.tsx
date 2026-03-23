@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../store";
@@ -171,12 +171,36 @@ export function ExecutePhase({
   const liveOutputData = liveOutputQuery.data;
   const liveOutputRefetch = liveOutputQuery.refetch;
   const markDoneLoading = markDoneMutation.isPending;
-  const unblockingTaskId =
-    unblockMutation.isPending && unblockMutation.variables
-      ? unblockMutation.variables.taskId
-      : null;
+  /** Per-task in-flight unblock count — React Query mutation only tracks one pending `variables` at a time. */
+  const [unblockInflightByTaskId, setUnblockInflightByTaskId] = useState<Record<string, number>>(
+    {}
+  );
+  const requestUnblock = useCallback(
+    (taskId: string, options?: { resetAttempts?: boolean }) => {
+      setUnblockInflightByTaskId((prev) => ({
+        ...prev,
+        [taskId]: (prev[taskId] ?? 0) + 1,
+      }));
+      const vars =
+        options?.resetAttempts !== undefined
+          ? { taskId, resetAttempts: options.resetAttempts }
+          : { taskId };
+      unblockMutation.mutate(vars, {
+          onSettled: () => {
+            setUnblockInflightByTaskId((prev) => {
+              const next = { ...prev };
+              const c = (next[taskId] ?? 1) - 1;
+              if (c <= 0) delete next[taskId];
+              else next[taskId] = c;
+              return next;
+            });
+          },
+        });
+    },
+    [unblockMutation]
+  );
   const unblockLoading = Boolean(
-    effectiveSelectedTask && unblockingTaskId === effectiveSelectedTask
+    effectiveSelectedTask && (unblockInflightByTaskId[effectiveSelectedTask] ?? 0) > 0
   );
   // Merge priority from Redux when both exist so optimistic update shows immediately
   const selectedTaskData = (() => {
@@ -286,7 +310,7 @@ export function ExecutePhase({
 
   const handleUnblock = () => {
     if (!effectiveSelectedTask || !isBlockedTask) return;
-    unblockMutation.mutate({ taskId: effectiveSelectedTask });
+    requestUnblock(effectiveSelectedTask);
   };
 
   const handleDeleteTask = async () => {
@@ -483,7 +507,7 @@ export function ExecutePhase({
                             searchQuery={searchQuery}
                             filteringActive={isSearchActive}
                             onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
-                            onUnblock={(taskId) => unblockMutation.mutate({ taskId })}
+                            onUnblock={requestUnblock}
                             onViewPlan={
                               lane.planId && onNavigateToPlan
                                 ? () => onNavigateToPlan(lane.planId!)
@@ -491,7 +515,7 @@ export function ExecutePhase({
                             }
                             taskIdToStartedAt={taskIdToStartedAt}
                             selectedTaskId={effectiveSelectedTask}
-                            unblockingTaskId={unblockingTaskId}
+                            unblockInflightByTaskId={unblockInflightByTaskId}
                           />
                         ))}
                       </div>
@@ -512,7 +536,7 @@ export function ExecutePhase({
                             searchQuery={searchQuery}
                             filteringActive={isSearchActive}
                             onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
-                            onUnblock={(taskId) => unblockMutation.mutate({ taskId })}
+                            onUnblock={requestUnblock}
                             onViewPlan={
                               lane.planId && onNavigateToPlan
                                 ? () => onNavigateToPlan(lane.planId!)
@@ -520,7 +544,7 @@ export function ExecutePhase({
                             }
                             taskIdToStartedAt={taskIdToStartedAt}
                             selectedTaskId={effectiveSelectedTask}
-                            unblockingTaskId={unblockingTaskId}
+                            unblockInflightByTaskId={unblockInflightByTaskId}
                           />
                         ))}
                       </div>
@@ -541,7 +565,7 @@ export function ExecutePhase({
                             searchQuery={searchQuery}
                             filteringActive={isSearchActive}
                             onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
-                            onUnblock={(taskId) => unblockMutation.mutate({ taskId })}
+                            onUnblock={requestUnblock}
                             onViewPlan={
                               lane.planId && onNavigateToPlan
                                 ? () => onNavigateToPlan(lane.planId!)
@@ -549,7 +573,7 @@ export function ExecutePhase({
                             }
                             taskIdToStartedAt={taskIdToStartedAt}
                             selectedTaskId={effectiveSelectedTask}
-                            unblockingTaskId={unblockingTaskId}
+                            unblockInflightByTaskId={unblockInflightByTaskId}
                           />
                         ))}
                       </div>
@@ -571,7 +595,7 @@ export function ExecutePhase({
                             plans={plans}
                             filteringActive={isSearchActive}
                             onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
-                            onUnblock={(taskId) => unblockMutation.mutate({ taskId })}
+                            onUnblock={requestUnblock}
                             onViewPlan={
                               lane.planId && onNavigateToPlan
                                 ? () => onNavigateToPlan(lane.planId!)
@@ -579,7 +603,7 @@ export function ExecutePhase({
                             }
                             taskIdToStartedAt={taskIdToStartedAt}
                             selectedTaskId={effectiveSelectedTask}
-                            unblockingTaskId={unblockingTaskId}
+                            unblockInflightByTaskId={unblockInflightByTaskId}
                           />
                         ))}
                       </div>
@@ -615,7 +639,7 @@ export function ExecutePhase({
                       searchQuery={searchQuery}
                       filteringActive={isSearchActive}
                       onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
-                      onUnblock={(taskId) => unblockMutation.mutate({ taskId })}
+                      onUnblock={requestUnblock}
                       onViewPlan={
                         lane.planId && onNavigateToPlan
                           ? () => onNavigateToPlan(lane.planId!)
@@ -623,7 +647,7 @@ export function ExecutePhase({
                       }
                       taskIdToStartedAt={taskIdToStartedAt}
                       selectedTaskId={effectiveSelectedTask}
-                      unblockingTaskId={unblockingTaskId}
+                      unblockInflightByTaskId={unblockInflightByTaskId}
                     />
                   ))}
                 </div>
@@ -643,8 +667,8 @@ export function ExecutePhase({
                 tasks={filteredTasks}
                 plans={plans}
                 onTaskSelect={(taskId) => dispatch(setSelectedTaskId(taskId))}
-                onUnblock={(taskId) => unblockMutation.mutate({ taskId })}
-                unblockingTaskId={unblockingTaskId}
+                onUnblock={requestUnblock}
+                unblockInflightByTaskId={unblockInflightByTaskId}
                 taskIdToStartedAt={taskIdToStartedAt}
                 statusFilter={statusFilter}
                 scrollRef={executeScrollRef}

@@ -47,6 +47,11 @@
   "engines": {
     "node": "24.x"
   },
+  "overrides": {
+    "eslint-plugin-jsx-a11y": {
+      "minimatch": "3.1.5"
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "concurrently": "^9.2.1",

@@ -11,6 +11,8 @@ export interface ConfirmStepProps {
   customDeployWebhook?: string;
   testFramework: string;
   maxConcurrentCoders: number;
+  /** When set, summary shows total agent cap */
+  maxTotalConcurrentAgents?: number;
   /** Shown in summary when maxConcurrentCoders > 1 */
   unknownScopeStrategy?: UnknownScopeStrategy;
   /** Shown in summary when Branches selected */
@@ -29,6 +31,7 @@ export function ConfirmStep({
   customDeployWebhook = "",
   testFramework,
   maxConcurrentCoders,
+  maxTotalConcurrentAgents,
   unknownScopeStrategy,
   gitWorkingMode,
   hideDeployment = false,
@@ -118,6 +121,12 @@ export function ConfirmStep({
             {maxConcurrentCoders === 1 ? "1 (sequential)" : maxConcurrentCoders}
           </dd>
         </div>
+        {maxTotalConcurrentAgents != null && (
+          <div className="flex justify-between">
+            <dt className="text-theme-muted">Max total concurrent agents</dt>
+            <dd className="font-medium">{maxTotalConcurrentAgents}</dd>
+          </div>
+        )}
         {gitWorkingMode === "branches" && (
           <div className="flex justify-between">
             <dt className="text-theme-muted">Git working mode</dt>

@@ -106,5 +106,6 @@ When `maxConcurrentCoders > 1`, the **TaskScheduler** selects non-overlapping ta
 
 - **Agent config:** Project Settings → Agent Config. Planning Agent Slot (Dreamer, Planner, etc.) and Coding Agent Slot (Coder, Reviewer) are configured separately.
 - **`maxConcurrentCoders`:** Project setting. Default `1`. When greater than `1`, parallel coders can run if no file overlap blocks them.
+- **`maxTotalConcurrentAgents`:** Optional project setting. When set, caps all overlapping agent work (planning calls, coders, reviewers, merger) for that project so you can respect provider concurrency limits. When unset, there is no global cap beyond `maxConcurrentCoders` for execute. Enabling the cap in settings defaults to `10` (or higher if `maxConcurrentCoders` is larger). Bulk “Generate all tasks” in Plan uses up to `10` parallel requests when this setting is unset.
 - **`gitWorkingMode`:** `"worktree"` (default) or `"branches"`. Branches mode forces `maxConcurrentCoders` to `1`.
 - **`unknownScopeStrategy`:** `"conservative"` or `"optimistic"` for tasks whose file scope is only heuristic.

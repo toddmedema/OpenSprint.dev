@@ -47,6 +47,10 @@ vi.mock("../services/branch-manager.js", () => ({
   })),
 }));
 
+vi.mock("../services/agent-global-concurrency.service.js", () => ({
+  acquireGlobalAgentSlot: vi.fn().mockResolvedValue(() => {}),
+}));
+
 describe("AgentLifecycleManager", () => {
   let manager: AgentLifecycleManager;
   let timers: TimerRegistry;
@@ -108,8 +112,8 @@ describe("AgentLifecycleManager", () => {
   });
 
   describe("run", () => {
-    it("spawns coder agent and initializes run state", () => {
-      manager.run(baseParams, runState, timers);
+    it("spawns coder agent and initializes run state", async () => {
+      await manager.run(baseParams, runState, timers);
 
       expect(mockInvokeCodingAgent).toHaveBeenCalled();
       expect(mockInvokeReviewAgent).not.toHaveBeenCalled();
@@ -129,18 +133,18 @@ describe("AgentLifecycleManager", () => {
       expect(timers.has("inactivity")).toBe(true);
     });
 
-    it("spawns reviewer agent when role is reviewer", () => {
-      manager.run({ ...baseParams, role: "reviewer" }, runState, timers);
+    it("spawns reviewer agent when role is reviewer", async () => {
+      await manager.run({ ...baseParams, role: "reviewer" }, runState, timers);
 
       expect(mockInvokeReviewAgent).toHaveBeenCalled();
       expect(mockInvokeCodingAgent).not.toHaveBeenCalled();
     });
 
-    it("preserves startedAt when already set (e.g. by phase-executor before spawn)", () => {
+    it("preserves startedAt when already set (e.g. by phase-executor before spawn)", async () => {
       const assignmentCreatedAt = "2026-02-16T11:57:00.000Z";
       runState.startedAt = assignmentCreatedAt;
 
-      manager.run(baseParams, runState, timers);
+      await manager.run(baseParams, runState, timers);
 
       expect(runState.startedAt).toBe(assignmentCreatedAt);
       expect(mockBroadcastToProject).toHaveBeenCalledWith(
@@ -161,7 +165,7 @@ describe("AgentLifecycleManager", () => {
         }
       );
 
-      manager.run(baseParams, runState, timers);
+      await manager.run(baseParams, runState, timers);
       expect(baseParams.onDone).not.toHaveBeenCalled();
 
       await capturedOnExit?.(0);
@@ -174,7 +178,7 @@ describe("AgentLifecycleManager", () => {
       expect(timers.has("inactivity")).toBe(false);
     });
 
-    it("appends filtered output chunks to runState.outputLog and sends filtered live output", () => {
+    it("appends filtered output chunks to runState.outputLog and sends filtered live output", async () => {
       let capturedOnOutput: ((chunk: string) => void) | undefined;
       mockInvokeCodingAgent.mockImplementation(
         (_path: string, _config: unknown, options: { onOutput?: (chunk: string) => void }) => {
@@ -183,7 +187,7 @@ describe("AgentLifecycleManager", () => {
         }
       );
 
-      manager.run(baseParams, runState, timers);
+      await manager.run(baseParams, runState, timers);
 
       // Plain text with newlines is passed through; tool_call and code-context are filtered
       capturedOnOutput?.("chunk1\n");
@@ -194,7 +198,7 @@ describe("AgentLifecycleManager", () => {
       expect(mockSendAgentOutputToProject).toHaveBeenCalledWith("proj-1", "task-1", "chunk2\n");
     });
 
-    it("does not append or send tool_call and code-context noise", () => {
+    it("does not append or send tool_call and code-context noise", async () => {
       let capturedOnOutput: ((chunk: string) => void) | undefined;
       mockInvokeCodingAgent.mockImplementation(
         (_path: string, _config: unknown, options: { onOutput?: (chunk: string) => void }) => {
@@ -203,7 +207,7 @@ describe("AgentLifecycleManager", () => {
         }
       );
 
-      manager.run(baseParams, runState, timers);
+      await manager.run(baseParams, runState, timers);
 
       capturedOnOutput?.('{"type":"text","text":"User message"}\n');
       capturedOnOutput?.(
@@ -238,7 +242,7 @@ describe("AgentLifecycleManager", () => {
         }
       );
 
-      manager.run(baseParams, runState, timers);
+      await manager.run(baseParams, runState, timers);
 
       await capturedOnExit?.(0);
       await capturedOnExit?.(1);
@@ -256,7 +260,7 @@ describe("AgentLifecycleManager", () => {
 
       mockInvokeCodingAgent.mockImplementation(() => handle);
 
-      manager.run(
+      await manager.run(
         {
           ...baseParams,
           repoPath: tmpDir,
@@ -303,7 +307,7 @@ describe("AgentLifecycleManager", () => {
         return true;
       });
 
-      manager.run(baseParams, runState, timers);
+      await manager.run(baseParams, runState, timers);
       capturedOnOutput?.(
         '{"type":"tool_call","subtype":"started","call_id":"call-1","tool_call":{"shellToolCall":{"args":{"command":"npm test"}}}}\n'
       );
@@ -340,7 +344,7 @@ describe("AgentLifecycleManager", () => {
         return true;
       });
 
-      manager.run(baseParams, runState, timers);
+      await manager.run(baseParams, runState, timers);
       capturedOnOutput?.(
         '{"type":"tool_call","subtype":"started","call_id":"call-1","tool_call":{"shellToolCall":{"args":{"command":"npm test"}}}}\n'
       );
@@ -379,7 +383,7 @@ describe("AgentLifecycleManager", () => {
         return true;
       });
 
-      manager.run(baseParams, runState, timers);
+      await manager.run(baseParams, runState, timers);
       capturedOnOutput?.(
         '{"type":"tool_call","subtype":"started","call_id":"call-1","tool_call":{"shellToolCall":{"args":{"command":"npm test"}}}}\n'
       );
@@ -413,7 +417,7 @@ describe("AgentLifecycleManager", () => {
         return true;
       });
 
-      manager.run(baseParams, runState, timers);
+      await manager.run(baseParams, runState, timers);
       await vi.advanceTimersByTimeAsync(AGENT_INACTIVITY_TIMEOUT_MS + 30_000);
 
       expect(runState.lifecycleState).toBe("suspended");
@@ -434,7 +438,7 @@ describe("AgentLifecycleManager", () => {
       vi.useRealTimers();
     });
 
-    it("records tool wait activity for diagnostics when a tool call starts and completes", () => {
+    it("records tool wait activity for diagnostics when a tool call starts and completes", async () => {
       let capturedOnOutput: ((chunk: string) => void) | undefined;
       mockInvokeCodingAgent.mockImplementation(
         (_path: string, _config: unknown, options: { onOutput?: (chunk: string) => void }) => {
@@ -443,7 +447,7 @@ describe("AgentLifecycleManager", () => {
         }
       );
 
-      manager.run(baseParams, runState, timers);
+      await manager.run(baseParams, runState, timers);
       capturedOnOutput?.(
         '{"type":"tool_call","subtype":"started","call_id":"call-1","tool_call":{"shellToolCall":{"args":{"command":"npm test -- --runInBand"}}}}\n'
       );

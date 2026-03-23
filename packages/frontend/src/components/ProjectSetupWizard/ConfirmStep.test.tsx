@@ -65,6 +65,12 @@ describe("ConfirmStep", () => {
     expect(screen.getByText("3")).toBeInTheDocument();
   });
 
+  it("shows max total concurrent agents when set", () => {
+    renderConfirmStep({ maxConcurrentCoders: 1, maxTotalConcurrentAgents: 4 });
+    expect(screen.getByText("Max total concurrent agents")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+  });
+
   it("shows custom agent label when cliCommand is set", () => {
     renderConfirmStep({
       simpleComplexityAgent: { type: "custom", model: null, cliCommand: "my-agent --foo" },

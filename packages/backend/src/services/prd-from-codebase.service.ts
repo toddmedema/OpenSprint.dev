@@ -35,6 +35,7 @@ Guidelines:
 - technical_architecture: Stack (frameworks, languages), high-level structure, key directories.
 - data_model: Entities, storage, or schema if evident from the code.
 - api_contracts: Main APIs or endpoints if applicable.
+- You may include fenced \`\`\`mermaid diagrams in markdown (e.g. architecture or data flow) when they clarify structure; keep them small and valid.
 - Do NOT include a top-level section header (e.g. "## 1. Executive Summary") inside the block — start with body content. Sub-headers like ### 3.1 are fine.
 - Do NOT output placeholder content like "TBD". Infer reasonable content from the code or omit the section.
 - Never output the literal placeholder key \`section_key\`; always use the real destination section key.

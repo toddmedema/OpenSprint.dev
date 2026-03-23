@@ -305,6 +305,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
       reviewAngles: ReviewAngle[];
       includeGeneralReview?: boolean;
       maxConcurrentCoders: number;
+      maxTotalConcurrentAgents?: number | null;
       unknownScopeStrategy: UnknownScopeStrategy;
       enableHumanTeammates?: boolean;
       teamMembers: Array<{ id: string; name: string }>;
@@ -399,6 +400,11 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                 effGitMode === "branches"
                   ? 1
                   : (overrides?.maxConcurrentCoders ?? effSettings?.maxConcurrentCoders ?? 1),
+              ...(overrides?.maxTotalConcurrentAgents !== undefined
+                ? { maxTotalConcurrentAgents: overrides.maxTotalConcurrentAgents }
+                : effSettings.maxTotalConcurrentAgents != null
+                  ? { maxTotalConcurrentAgents: effSettings.maxTotalConcurrentAgents }
+                  : {}),
               unknownScopeStrategy:
                 overrides?.unknownScopeStrategy ??
                 effSettings?.unknownScopeStrategy ??

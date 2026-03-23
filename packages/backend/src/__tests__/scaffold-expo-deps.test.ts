@@ -76,3 +76,57 @@ describe("ensureExpoReactTypeDevDependencies", () => {
     expect((call[1] as { cwd: string }).cwd).toBe(tmp);
   });
 });
+
+describe("ensureExpoLintMergeGateTooling", () => {
+  let tmp: string;
+
+  beforeEach(async () => {
+    execMock.mockReset();
+    tmp = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-scaffold-lint-"));
+    execMock.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
+      const callback = (typeof opts === "function" ? opts : cb) as (
+        err: Error | null,
+        stdout?: string,
+        stderr?: string
+      ) => void;
+      if (typeof cmd === "string" && cmd.includes("expo install")) {
+        callback(null, "", "");
+        return undefined;
+      }
+      callback(new Error(`unexpected exec: ${cmd}`));
+      return undefined;
+    });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmp, { recursive: true, force: true });
+  });
+
+  it("installs eslint packages, writes flat eslint.config.js, and adds lint script", async () => {
+    const { ensureExpoLintMergeGateTooling } = await import("../utils/scaffold-expo-deps.js");
+    await fs.writeFile(
+      path.join(tmp, "package.json"),
+      JSON.stringify({ name: "x", version: "1.0.0", scripts: { start: "expo start" } })
+    );
+    await ensureExpoLintMergeGateTooling(tmp);
+    expect(execMock).toHaveBeenCalledTimes(1);
+    expect(execMock.mock.calls[0][0]).toContain("expo install");
+    expect(execMock.mock.calls[0][0]).toContain("eslint-config-expo");
+    const eslintPath = path.join(tmp, "eslint.config.js");
+    const content = await fs.readFile(eslintPath, "utf-8");
+    expect(content).toContain("eslint-config-expo/flat");
+    const pkg = JSON.parse(await fs.readFile(path.join(tmp, "package.json"), "utf-8")) as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts.lint).toBe("expo lint");
+    expect(pkg.scripts.start).toBe("expo start");
+  });
+
+  it("does not overwrite existing eslint.config.js", async () => {
+    const { ensureExpoLintMergeGateTooling } = await import("../utils/scaffold-expo-deps.js");
+    await fs.writeFile(path.join(tmp, "package.json"), JSON.stringify({ name: "x" }));
+    await fs.writeFile(path.join(tmp, "eslint.config.js"), "// custom\n");
+    await ensureExpoLintMergeGateTooling(tmp);
+    expect(await fs.readFile(path.join(tmp, "eslint.config.js"), "utf-8")).toBe("// custom\n");
+  });
+});

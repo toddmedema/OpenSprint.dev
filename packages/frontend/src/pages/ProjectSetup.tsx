@@ -65,6 +65,9 @@ export function ProjectSetup() {
   const [aiAutonomyLevel, setAiAutonomyLevel] =
     useState<AiAutonomyLevel>(DEFAULT_AI_AUTONOMY_LEVEL);
   const [maxConcurrentCoders, setMaxConcurrentCoders] = useState(1);
+  const [maxTotalConcurrentAgents, setMaxTotalConcurrentAgents] = useState<number | undefined>(
+    undefined
+  );
   const [unknownScopeStrategy, setUnknownScopeStrategy] =
     useState<UnknownScopeStrategy>("optimistic");
   const [gitWorkingMode, setGitWorkingMode] = useState<GitWorkingMode>("worktree");
@@ -247,6 +250,7 @@ export function ProjectSetup() {
         aiAutonomyLevel,
         testFramework: testFramework === "none" ? null : testFramework,
         maxConcurrentCoders: gitWorkingMode === "branches" ? 1 : maxConcurrentCoders,
+        ...(maxTotalConcurrentAgents != null ? { maxTotalConcurrentAgents } : {}),
         unknownScopeStrategy,
         gitWorkingMode,
         worktreeBaseBranch: worktreeBaseBranch.trim() || undefined,
@@ -365,6 +369,8 @@ export function ProjectSetup() {
                 modelRefreshTrigger={modelRefreshTrigger}
                 maxConcurrentCoders={maxConcurrentCoders}
                 onMaxConcurrentCodersChange={setMaxConcurrentCoders}
+                maxTotalConcurrentAgents={maxTotalConcurrentAgents}
+                onMaxTotalConcurrentAgentsChange={setMaxTotalConcurrentAgents}
                 unknownScopeStrategy={unknownScopeStrategy}
                 onUnknownScopeStrategyChange={setUnknownScopeStrategy}
                 gitWorkingMode={gitWorkingMode}
@@ -396,6 +402,7 @@ export function ProjectSetup() {
                 complexComplexityAgent={complexComplexityAgent}
                 testFramework={testFramework}
                 maxConcurrentCoders={maxConcurrentCoders}
+                maxTotalConcurrentAgents={maxTotalConcurrentAgents}
                 unknownScopeStrategy={unknownScopeStrategy}
                 gitWorkingMode={gitWorkingMode}
                 hideDeployment

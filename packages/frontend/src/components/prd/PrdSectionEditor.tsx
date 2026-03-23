@@ -1,5 +1,7 @@
-import React, { useRef, useEffect, useCallback } from "react";
-import { markdownToHtml, htmlToMarkdown } from "../../lib/markdownUtils";
+import React, { useRef, useEffect, useCallback, useMemo } from "react";
+import { markdownToHtml, htmlToMarkdown, type DiagramsMode } from "../../lib/markdownUtils";
+import { renderMermaidDiagrams } from "../../lib/mermaidDiagram";
+import { useOptionalResolvedTheme } from "../../contexts/ThemeContext";
 import { registerPrdFlush } from "../../lib/prdFlushRegistry";
 
 const DEBOUNCE_MS = 800;
@@ -11,6 +13,8 @@ export interface PrdSectionEditorProps {
   disabled?: boolean;
   /** When true, use light mode styles only (no dark: variants). Used in plan details. */
   lightMode?: boolean;
+  /** When "mermaid", fenced mermaid blocks render as diagrams (app theme). */
+  diagrams?: DiagramsMode;
   /** Ref for selection toolbar (findParentSection) */
   "data-prd-section"?: string;
 }
@@ -32,9 +36,11 @@ export function PrdSectionEditor({
   onSave,
   disabled = false,
   lightMode = false,
+  diagrams = "none",
   ...rest
 }: PrdSectionEditorProps) {
   const elRef = useRef<HTMLDivElement>(null);
+  const resolved = useOptionalResolvedTheme();
   // Initialize with null sentinel so the sync effect always runs on first mount,
   // even when the component mounts with content already loaded from Redux.
   const lastMarkdownRef = useRef<string | null>(null);
@@ -42,6 +48,11 @@ export function PrdSectionEditor({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pendingHtmlRef = useRef<string | null>(null);
+
+  const mdOpts = useMemo(
+    () => (diagrams === "mermaid" ? ({ diagrams: "mermaid" } as const) : undefined),
+    [diagrams]
+  );
 
   const flushDebounce = useCallback(() => {
     if (debounceRef.current) {
@@ -52,14 +63,14 @@ export function PrdSectionEditor({
     const html = pendingHtmlRef.current;
     pendingHtmlRef.current = null;
     if (html != null && !disabled) {
-      let md = htmlToMarkdown(html);
+      let md = htmlToMarkdown(html, mdOpts);
       if (!md.trim() || md.trim() === "_No content yet_") md = "";
       if (md !== lastMarkdownRef.current) {
         lastMarkdownRef.current = md;
         onSave(sectionKey, md);
       }
     }
-  }, [sectionKey, onSave, disabled]);
+  }, [sectionKey, onSave, disabled, mdOpts]);
 
   const scheduleSave = useCallback(
     (html: string) => {
@@ -72,7 +83,7 @@ export function PrdSectionEditor({
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null;
         pendingHtmlRef.current = null;
-        let md = htmlToMarkdown(html);
+        let md = htmlToMarkdown(html, mdOpts);
         // Normalize empty/placeholder to empty string
         if (!md.trim() || md.trim() === "_No content yet_") md = "";
         if (md !== lastMarkdownRef.current) {
@@ -81,7 +92,7 @@ export function PrdSectionEditor({
         }
       }, DEBOUNCE_MS);
     },
-    [sectionKey, onSave]
+    [sectionKey, onSave, mdOpts]
   );
 
   const handleInput = useCallback(() => {
@@ -95,6 +106,14 @@ export function PrdSectionEditor({
     return registerPrdFlush(flushDebounce);
   }, [flushDebounce]);
 
+  // Re-render Mermaid when app theme changes (mounts already in DOM).
+  useEffect(() => {
+    if (diagrams !== "mermaid") return;
+    const el = elRef.current;
+    if (!el) return;
+    void renderMermaidDiagrams(el, resolved);
+  }, [diagrams, resolved]);
+
   // Sync markdown from props (initial + external updates e.g. after API save).
   // Skip sync when this section has focus — avoids WebSocket prd.updated overwriting in-progress edits.
   // Skip sync when we have pending unsaved changes — avoids overwriting user edits with stale content.
@@ -106,16 +125,19 @@ export function PrdSectionEditor({
     if (pendingHtmlRef.current != null) return;
     lastMarkdownRef.current = markdown;
     const content = markdown.trim() ? markdown.trim() : "_No content yet_";
-    markdownToHtml(content).then((html) => {
+    markdownToHtml(content, mdOpts).then((html) => {
       if (!elRef.current) return;
       if (elRef.current.contains(document.activeElement)) return;
       if (pendingHtmlRef.current != null) return;
       isInternalUpdateRef.current = true;
       elRef.current.innerHTML = html || "<p><br></p>";
       isInternalUpdateRef.current = false;
+      if (diagrams === "mermaid") {
+        void renderMermaidDiagrams(elRef.current, resolved);
+      }
     });
     return flushDebounce;
-  }, [sectionKey, markdown, flushDebounce]);
+  }, [sectionKey, markdown, flushDebounce, mdOpts, diagrams, resolved]);
 
   // Flush pending save when page is about to hide (refresh, navigate away, close tab).
   // Gives a chance to persist edits before unload; request may be aborted but often completes.

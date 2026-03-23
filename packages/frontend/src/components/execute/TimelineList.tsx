@@ -22,8 +22,8 @@ export interface TimelineListProps {
   plans: Plan[];
   onTaskSelect: (taskId: string) => void;
   onUnblock?: (taskId: string) => void;
-  /** When set, the Retry control for that task shows a spinner and is disabled. */
-  unblockingTaskId?: string | null;
+  /** Per-task in-flight unblock count; Retry shows a spinner while count is positive. */
+  unblockInflightByTaskId?: Readonly<Record<string, number>>;
   taskIdToStartedAt?: Record<string, string>;
   /** When "all", a Failures section is shown at top when blocked tasks exist. */
   statusFilter?: StatusFilter;
@@ -55,7 +55,7 @@ function TimelineRow({
   relativeTime,
   onTaskSelect,
   onUnblock,
-  unblockingTaskId,
+  unblockInflightByTaskId,
   projectId,
   teamMembers,
   enableHumanTeammates,
@@ -64,13 +64,13 @@ function TimelineRow({
   relativeTime: ReactNode;
   onTaskSelect: (taskId: string) => void;
   onUnblock?: (taskId: string) => void;
-  unblockingTaskId?: string | null;
+  unblockInflightByTaskId?: Readonly<Record<string, number>>;
   projectId: string;
   teamMembers: Array<{ id: string; name: string }>;
   enableHumanTeammates?: boolean;
 }) {
   const isBlocked = task.kanbanColumn === "blocked";
-  const isUnblocking = Boolean(unblockingTaskId && unblockingTaskId === task.id);
+  const isUnblocking = (unblockInflightByTaskId?.[task.id] ?? 0) > 0;
   const isDone = task.kanbanColumn === "done";
   const isInProgress = task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review";
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
@@ -160,7 +160,7 @@ export function TimelineList({
   plans,
   onTaskSelect,
   onUnblock,
-  unblockingTaskId = null,
+  unblockInflightByTaskId = {},
   taskIdToStartedAt = {},
   statusFilter = "all",
   scrollRef,
@@ -283,7 +283,7 @@ export function TimelineList({
                     }
                     onTaskSelect={onTaskSelect}
                     onUnblock={task.kanbanColumn === "blocked" ? onUnblock : undefined}
-                    unblockingTaskId={unblockingTaskId}
+                    unblockInflightByTaskId={unblockInflightByTaskId}
                     projectId={projectId}
                     teamMembers={teamMembers}
                     enableHumanTeammates={enableHumanTeammates}
