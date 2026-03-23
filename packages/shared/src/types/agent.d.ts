@@ -223,12 +223,27 @@ export interface ActiveTaskEntry {
   /** Display name when multi-angle review (e.g. "Reviewer (Security)"). */
   name?: string;
 }
+export type BaselineRuntimeStatus = "unknown" | "checking" | "healthy" | "failing";
+export type MergeValidationRuntimeStatus = "healthy" | "degraded";
+export interface BaselineRemediationStatus {
+  taskId: string;
+  attempts: number;
+  maxAttempts: number;
+  status: string;
+}
 /** Build orchestrator status (always-on per PRDv2 §5.7, v2 multi-slot model) */
 export interface OrchestratorStatus {
   activeTasks: ActiveTaskEntry[];
   queueDepth: number;
   totalDone: number;
   totalFailed: number;
+  baselineStatus?: BaselineRuntimeStatus;
+  baselineCheckedAt?: string | null;
+  baselineFailureSummary?: string | null;
+  baselineRemediationStatus?: BaselineRemediationStatus | null;
+  mergeValidationStatus?: MergeValidationRuntimeStatus;
+  mergeValidationFailureSummary?: string | null;
+  dispatchPausedReason?: string | null;
   /** True when paused waiting for HIL approval (PRD §6.5) */
   awaitingApproval?: boolean;
   /** Path to active task's git worktree (null when idle) */

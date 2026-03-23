@@ -972,6 +972,53 @@ describe("MergeCoordinatorService", () => {
     }
   });
 
+  it("closes the baseline remediation task when baseline quality gates recover", async () => {
+    let nowMs = 1_000_000;
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+    try {
+      const remediationTask = makeTask({
+        id: "os-rem-1",
+        title: "Restore baseline quality gates on main",
+        status: "open",
+        source: "self-improvement",
+        selfImprovementKind: "baseline-quality-gate",
+        baselineQualityGateSource: "merge-quality-gate-baseline",
+        baselineBaseBranch: "main",
+      } as Partial<StoredTask>);
+
+      mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
+        if (!isBaselineValidation(options)) return null;
+        return {
+          command: "npm run test",
+          reason: "Command failed: npm run test",
+          output: "stderr | baseline failure",
+          firstErrorLine: "stderr | baseline failure",
+          category: "quality_gate",
+        };
+      });
+
+      await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+      // Advance past cache TTL, set baseline to passing, add the remediation task to listAll
+      nowMs += 61_000;
+      hostState.slots.set(taskId, makeSlot());
+      mockHost.runMergeQualityGates = vi.fn().mockResolvedValue(null);
+      (mockHost.taskStore.listAll as ReturnType<typeof vi.fn>).mockResolvedValue([
+        remediationTask,
+      ]);
+
+      await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+      expect(mockHost.taskStore.close).toHaveBeenCalledWith(
+        projectId,
+        "os-rem-1",
+        "Baseline restored"
+      );
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it("blocks immediately for environment-setup quality-gate failures with remediation guidance", async () => {
     mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
       if (isBaselineValidation(options)) return null;

@@ -2,6 +2,7 @@ import type { PayloadAction } from "@reduxjs/toolkit";
 import type { ActionReducerMapBuilder } from "@reduxjs/toolkit";
 import type {
   BaselineRuntimeStatus,
+  BaselineRemediationStatus,
   GitMergeQueueSnapshot,
   MergeValidationRuntimeStatus,
 } from "@opensprint/shared";
@@ -58,6 +59,7 @@ export const statusReducers = {
       baselineStatus?: BaselineRuntimeStatus;
       baselineCheckedAt?: string | null;
       baselineFailureSummary?: string | null;
+      baselineRemediationStatus?: BaselineRemediationStatus | null;
       mergeValidationStatus?: MergeValidationRuntimeStatus;
       mergeValidationFailureSummary?: string | null;
       dispatchPausedReason?: string | null;
@@ -82,6 +84,9 @@ export const statusReducers = {
     }
     if (p.baselineFailureSummary !== undefined) {
       state.baselineFailureSummary = p.baselineFailureSummary;
+    }
+    if (p.baselineRemediationStatus !== undefined) {
+      state.baselineRemediationStatus = p.baselineRemediationStatus;
     }
     if (p.mergeValidationStatus !== undefined) {
       state.mergeValidationStatus = p.mergeValidationStatus;
@@ -122,6 +127,7 @@ export function addStatusExtraReducers(builder: ActionReducerMapBuilder<ExecuteS
         baselineStatus?: BaselineRuntimeStatus;
         baselineCheckedAt?: string | null;
         baselineFailureSummary?: string | null;
+        baselineRemediationStatus?: BaselineRemediationStatus | null;
         mergeValidationStatus?: MergeValidationRuntimeStatus;
         mergeValidationFailureSummary?: string | null;
         dispatchPausedReason?: string | null;
@@ -144,6 +150,9 @@ export function addStatusExtraReducers(builder: ActionReducerMapBuilder<ExecuteS
       }
       if (payload.baselineFailureSummary !== undefined) {
         state.baselineFailureSummary = payload.baselineFailureSummary;
+      }
+      if (payload.baselineRemediationStatus !== undefined) {
+        state.baselineRemediationStatus = payload.baselineRemediationStatus;
       }
       if (payload.mergeValidationStatus !== undefined) {
         state.mergeValidationStatus = payload.mergeValidationStatus;

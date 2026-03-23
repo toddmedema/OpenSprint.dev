@@ -56,6 +56,7 @@ const MERGE_VALIDATION_HEALTH_NOTIFICATION_SOURCE_ID = "merge-validation-health"
 const MERGE_VALIDATION_DEGRADED_THRESHOLD = 3;
 const MERGE_VALIDATION_FAILURE_WINDOW_MS = 10 * 60_000;
 const MERGE_VALIDATION_CANARY_INTERVAL_MS = 5 * 60_000;
+const MAX_BASELINE_REMEDIATION_ATTEMPTS = 3;
 
 /** One-sentence explanation for merge failures shown to users (conflicts with main in same files). */
 const HUMAN_MERGE_FAILURE_MESSAGE =
@@ -199,6 +200,7 @@ export interface MergeCoordinatorHost {
       baselineStatus?: BaselineRuntimeStatus;
       baselineCheckedAt?: string | null;
       baselineFailureSummary?: string | null;
+      baselineRemediationStatus?: import("@opensprint/shared").BaselineRemediationStatus | null;
       dispatchPausedReason?: string | null;
     }
   ): Promise<void>;
@@ -744,11 +746,13 @@ export class MergeCoordinatorService {
           this.baselineQualityGateSuccessCache.set(cacheKey, { checkedAtMs: now });
           this.baselineQualityGateNotified.delete(cacheKey);
           await this.resolveBaselineQualityGateNotifications(projectId, baseBranch);
+          await this.closeBaselineRemediationTask(projectId, baseBranch);
           await this.markMergeValidationHealthy(projectId, repoPath);
           await this.host.setBaselineRuntimeState(projectId, repoPath, {
             baselineStatus: "healthy",
             baselineCheckedAt: checkedAt,
             baselineFailureSummary: null,
+            baselineRemediationStatus: null,
             dispatchPausedReason: null,
           });
           return null;
@@ -762,10 +766,12 @@ export class MergeCoordinatorService {
           await this.markMergeValidationHealthy(projectId, repoPath);
         }
         this.baselineQualityGateSuccessCache.delete(cacheKey);
+        const remediationStatus = await this.getBaselineRemediationStatus(projectId, baseBranch);
         await this.host.setBaselineRuntimeState(projectId, repoPath, {
           baselineStatus: "failing",
           baselineCheckedAt: checkedAt,
           baselineFailureSummary: this.buildBaselineFailureSummary(baseBranch, normalizedFailure),
+          baselineRemediationStatus: remediationStatus,
           dispatchPausedReason: this.buildBaselineDispatchPausedReason(baseBranch),
         });
         return normalizedFailure;
@@ -778,10 +784,12 @@ export class MergeCoordinatorService {
           await this.markMergeValidationHealthy(projectId, repoPath);
         }
         this.baselineQualityGateSuccessCache.delete(cacheKey);
+        const remediationStatus = await this.getBaselineRemediationStatus(projectId, baseBranch);
         await this.host.setBaselineRuntimeState(projectId, repoPath, {
           baselineStatus: "failing",
           baselineCheckedAt: checkedAt,
           baselineFailureSummary: this.buildBaselineFailureSummary(baseBranch, failure),
+          baselineRemediationStatus: remediationStatus,
           dispatchPausedReason: this.buildBaselineDispatchPausedReason(baseBranch),
         });
         return failure;
@@ -867,6 +875,67 @@ export class MergeCoordinatorService {
       }
     } catch (err) {
       log.warn("Failed to resolve baseline quality-gate notifications", {
+        projectId,
+        baseBranch,
+        err,
+      });
+    }
+  }
+
+  private async getBaselineRemediationStatus(
+    projectId: string,
+    baseBranch: string
+  ): Promise<import("@opensprint/shared").BaselineRemediationStatus | null> {
+    try {
+      const allTasks = await this.host.taskStore.listAll(projectId);
+      const task = allTasks.find(
+        (t) =>
+          (t.status as string) !== "closed" &&
+          this.isBaselineQualityGateRemediationTask(t, baseBranch)
+      );
+      if (!task) return null;
+      return {
+        taskId: task.id,
+        attempts: this.host.taskStore.getCumulativeAttemptsFromIssue(task),
+        maxAttempts: MAX_BASELINE_REMEDIATION_ATTEMPTS,
+        status: (task.status as string) ?? "open",
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Close the open baseline remediation task when baseline is restored to healthy.
+   * Each "episode" of main being broken gets its own task; closing it on recovery
+   * ensures the next failure episode starts with a fresh task and clean attempt history.
+   */
+  private async closeBaselineRemediationTask(
+    projectId: string,
+    baseBranch: string
+  ): Promise<void> {
+    try {
+      const allTasks = await this.host.taskStore.listAll(projectId);
+      const remediationTask = allTasks.find(
+        (task) =>
+          (task.status as string) !== "closed" &&
+          this.isBaselineQualityGateRemediationTask(task, baseBranch)
+      );
+      if (remediationTask) {
+        await this.host.taskStore.close(
+          projectId,
+          remediationTask.id,
+          "Baseline restored"
+        );
+        await broadcastAuthoritativeTaskUpdated(broadcastToProject, projectId, remediationTask.id);
+        log.info("Closed baseline remediation task after baseline restored", {
+          projectId,
+          taskId: remediationTask.id,
+          baseBranch,
+        });
+      }
+    } catch (err) {
+      log.warn("Failed to close baseline remediation task on restore", {
         projectId,
         baseBranch,
         err,

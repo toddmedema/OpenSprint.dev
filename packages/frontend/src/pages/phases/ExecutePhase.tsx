@@ -120,6 +120,9 @@ export function ExecutePhase({
   const awaitingApproval = useAppSelector((s) => s.execute.awaitingApproval);
   const baselineStatus = useAppSelector((s) => s.execute.baselineStatus);
   const baselineFailureSummary = useAppSelector((s) => s.execute.baselineFailureSummary);
+  const baselineRemediationStatus = useAppSelector(
+    (s) => s.execute.baselineRemediationStatus
+  );
   const mergeValidationStatus = useAppSelector((s) => s.execute.mergeValidationStatus);
   const mergeValidationFailureSummary = useAppSelector(
     (s) => s.execute.mergeValidationFailureSummary
@@ -421,6 +424,16 @@ export function ExecutePhase({
               </p>
               {baselineFailureSummary && (
                 <p className="mt-1 text-xs opacity-90">{baselineFailureSummary}</p>
+              )}
+              {baselineRemediationStatus && (
+                <p
+                  className="mt-1 text-xs opacity-90"
+                  data-testid="execute-baseline-remediation-status"
+                >
+                  {baselineRemediationStatus.status === "blocked"
+                    ? `Repair blocked after ${baselineRemediationStatus.attempts} attempt${baselineRemediationStatus.attempts !== 1 ? "s" : ""}.`
+                    : `Repair in progress (attempt ${baselineRemediationStatus.attempts} of ${baselineRemediationStatus.maxAttempts}).`}
+                </p>
               )}
             </div>
           )}

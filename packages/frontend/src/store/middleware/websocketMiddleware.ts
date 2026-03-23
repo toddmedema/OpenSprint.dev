@@ -516,6 +516,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
             baselineStatus: statusEv.baselineStatus,
             baselineCheckedAt: statusEv.baselineCheckedAt,
             baselineFailureSummary: statusEv.baselineFailureSummary,
+            baselineRemediationStatus: statusEv.baselineRemediationStatus,
             mergeValidationStatus: statusEv.mergeValidationStatus,
             mergeValidationFailureSummary: statusEv.mergeValidationFailureSummary,
             dispatchPausedReason: statusEv.dispatchPausedReason,

@@ -342,6 +342,13 @@ export interface ActiveTaskEntry {
 export type BaselineRuntimeStatus = "unknown" | "checking" | "healthy" | "failing";
 export type MergeValidationRuntimeStatus = "healthy" | "degraded";
 
+export interface BaselineRemediationStatus {
+  taskId: string;
+  attempts: number;
+  maxAttempts: number;
+  status: string;
+}
+
 /** Serialized git worktree_merge queue for a repo (FIFO). */
 export interface GitMergeQueueSnapshot {
   /** Task currently running worktree_merge, if any. */
@@ -362,6 +369,8 @@ export interface OrchestratorStatus {
   baselineCheckedAt?: string | null;
   /** Short summary for the current baseline failure, if any. */
   baselineFailureSummary?: string | null;
+  /** Current baseline remediation task status (attempts, task state). Null when no remediation task is active. */
+  baselineRemediationStatus?: BaselineRemediationStatus | null;
   /** Project-wide merge-validation health (separate from baseline health). */
   mergeValidationStatus?: MergeValidationRuntimeStatus;
   /** Short summary for the current merge-validation health issue, if any. */
