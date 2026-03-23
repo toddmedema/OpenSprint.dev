@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../client";
 import { queryKeys } from "../queryKeys";
 import { useAppDispatch } from "../../store";
-import { setDecomposeGeneratedCount } from "../../store/slices/planSlice";
+import { setDecomposeProgress } from "../../store/slices/planSlice";
 
 /** Normalize API messages to { role, content, timestamp }. */
 function normalizeMessages(
@@ -104,10 +104,11 @@ export function useDecomposePlans(projectId: string) {
     mutationKey: queryKeys.plans.decompose(projectId),
     mutationFn: () => api.plans.decompose(projectId),
     onMutate: () => {
-      dispatch(setDecomposeGeneratedCount(0));
+      dispatch(setDecomposeProgress({ createdCount: 0, totalCount: null }));
     },
     onSuccess: (result) => {
-      dispatch(setDecomposeGeneratedCount(result.created ?? 0));
+      const createdCount = Math.max(0, result.created ?? 0);
+      dispatch(setDecomposeProgress({ createdCount, totalCount: createdCount }));
     },
     /** Always refresh list after decompose settles so Plan phase can leave "generating" even on error. */
     onSettled: () => {

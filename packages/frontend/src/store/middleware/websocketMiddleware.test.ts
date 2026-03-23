@@ -380,10 +380,15 @@ describe("websocketMiddleware", () => {
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
-      wsInstance!.simulateMessage({ type: "plan.decompose.progress", createdCount: 2 });
+      wsInstance!.simulateMessage({
+        type: "plan.decompose.progress",
+        createdCount: 2,
+        totalCount: 5,
+      });
 
       await vi.waitFor(() => {
         expect(store.getState().plan.decomposeGeneratedCount).toBe(2);
+        expect(store.getState().plan.decomposeTotalCount).toBe(5);
       });
     });
 

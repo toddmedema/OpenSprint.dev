@@ -251,7 +251,7 @@ describe.skipIf(!planDecomposePostgresOk)("Plan decompose with auto-review", () 
     expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
 
-  it("broadcasts decompose progress after each created plan", { timeout: 15000 }, async () => {
+  it("broadcasts decompose progress with totals before and during creation", { timeout: 15000 }, async () => {
     mockInvoke.mockResolvedValueOnce({
       content: JSON.stringify({
         plans: [
@@ -276,11 +276,18 @@ describe.skipIf(!planDecomposePostgresOk)("Plan decompose with auto-review", () 
     expect(result.created).toBe(2);
     expect(vi.mocked(broadcastToProject)).toHaveBeenCalledWith(projectId, {
       type: "plan.decompose.progress",
+      createdCount: 0,
+      totalCount: 2,
+    });
+    expect(vi.mocked(broadcastToProject)).toHaveBeenCalledWith(projectId, {
+      type: "plan.decompose.progress",
       createdCount: 1,
+      totalCount: 2,
     });
     expect(vi.mocked(broadcastToProject)).toHaveBeenCalledWith(projectId, {
       type: "plan.decompose.progress",
       createdCount: 2,
+      totalCount: 2,
     });
   });
 

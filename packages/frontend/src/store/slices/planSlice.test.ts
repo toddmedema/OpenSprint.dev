@@ -19,7 +19,7 @@ import planReducer, {
   setExecutingPlanId,
   clearExecuteError,
   clearPlanBackgroundError,
-  setDecomposeGeneratedCount,
+  setDecomposeProgress,
   setPlansAndGraph,
   resetPlan,
   type PlanState,
@@ -104,6 +104,7 @@ describe("planSlice", () => {
       expect(state.loading).toBe(false);
       expect(state.decomposing).toBe(false);
       expect(state.decomposeGeneratedCount).toBe(0);
+      expect(state.decomposeTotalCount).toBeNull();
       expect(state.planStatus).toBeNull();
       expect(state.error).toBeNull();
       expect(state.backgroundError).toBeNull();
@@ -166,10 +167,11 @@ describe("planSlice", () => {
       expect(store.getState().plan.dependencyGraph).toEqual(mockGraph);
     });
 
-    it("setDecomposeGeneratedCount stores live decompose progress", () => {
+    it("setDecomposeProgress stores live decompose progress", () => {
       const store = createStore();
-      store.dispatch(setDecomposeGeneratedCount(2));
+      store.dispatch(setDecomposeProgress({ createdCount: 2, totalCount: 4 }));
       expect(store.getState().plan.decomposeGeneratedCount).toBe(2);
+      expect(store.getState().plan.decomposeTotalCount).toBe(4);
     });
 
     it("resetPlan resets state to initial values", () => {
@@ -177,7 +179,7 @@ describe("planSlice", () => {
       store.dispatch(addPlanLocally(mockPlan));
       store.dispatch(setSelectedPlanId("plan-1"));
       store.dispatch(setPlanError("error"));
-      store.dispatch(setDecomposeGeneratedCount(3));
+      store.dispatch(setDecomposeProgress({ createdCount: 3, totalCount: 5 }));
 
       store.dispatch(resetPlan());
       const state = store.getState().plan as PlanState;
@@ -188,6 +190,7 @@ describe("planSlice", () => {
       expect(state.loading).toBe(false);
       expect(state.decomposing).toBe(false);
       expect(state.decomposeGeneratedCount).toBe(0);
+      expect(state.decomposeTotalCount).toBeNull();
       expect(state.error).toBeNull();
       expect(state.backgroundError).toBeNull();
       expect(state.executeError).toBeNull();
@@ -337,6 +340,7 @@ describe("planSlice", () => {
 
       expect(store.getState().plan.decomposing).toBe(true);
       expect(store.getState().plan.decomposeGeneratedCount).toBe(0);
+      expect(store.getState().plan.decomposeTotalCount).toBeNull();
       expect(store.getState().plan.error).toBeNull();
 
       resolveApi!({ created: 0, plans: [] });
@@ -350,6 +354,7 @@ describe("planSlice", () => {
 
       expect(store.getState().plan.decomposing).toBe(false);
       expect(store.getState().plan.decomposeGeneratedCount).toBe(2);
+      expect(store.getState().plan.decomposeTotalCount).toBe(2);
       expect(api.plans.decompose).toHaveBeenCalledWith("proj-1");
     });
 

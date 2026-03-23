@@ -40,7 +40,7 @@ import { appendDeliverOutput, deliverStarted, deliverCompleted } from "../slices
 import {
   appendAuditorOutput,
   setAuditorOutputBackfill,
-  setDecomposeGeneratedCount,
+  setDecomposeProgress,
 } from "../slices/planSlice";
 import { setPhaseUnread } from "../slices/unreadPhaseSlice";
 import type { QueryClient } from "@tanstack/react-query";
@@ -339,7 +339,12 @@ export const websocketMiddleware: Middleware = (storeApi) => {
       }
 
       case "plan.decompose.progress": {
-        d(setDecomposeGeneratedCount(event.createdCount));
+        d(
+          setDecomposeProgress({
+            createdCount: event.createdCount,
+            totalCount: event.totalCount,
+          })
+        );
         break;
       }
 

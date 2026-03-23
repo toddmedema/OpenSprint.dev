@@ -270,6 +270,7 @@ export interface PlanGeneratedEvent {
 export interface PlanDecomposeProgressEvent {
   type: "plan.decompose.progress";
   createdCount: number;
+  totalCount: number;
 }
 
 /** Streaming output from plan-scoped agents (e.g. Auditor during Re-execute). */

@@ -30,6 +30,8 @@ export interface PlanState {
   decomposing: boolean;
   /** Number of plans created so far during PRD decomposition. */
   decomposeGeneratedCount: number;
+  /** Total number of plans expected for the current PRD decomposition, once known. */
+  decomposeTotalCount: number | null;
   /** Whether a plan is currently being generated from a feature description */
   generating: boolean;
   /** Plan status for Dream CTA (plan/replan/none) */
@@ -64,6 +66,7 @@ const initialState: PlanState = {
   [PLANS_IN_FLIGHT_KEY]: 0,
   decomposing: false,
   decomposeGeneratedCount: 0,
+  decomposeTotalCount: null,
   generating: false,
   planStatus: null,
   executingPlanId: null,
@@ -293,8 +296,13 @@ const planSlice = createSlice({
     clearPlanBackgroundError(state) {
       state.backgroundError = null;
     },
-    setDecomposeGeneratedCount(state, action: PayloadAction<number>) {
-      state.decomposeGeneratedCount = Math.max(0, action.payload);
+    setDecomposeProgress(
+      state,
+      action: PayloadAction<{ createdCount: number; totalCount: number | null }>
+    ) {
+      state.decomposeGeneratedCount = Math.max(0, action.payload.createdCount);
+      state.decomposeTotalCount =
+        action.payload.totalCount == null ? null : Math.max(0, action.payload.totalCount);
     },
     setPlansAndGraph(
       state,
@@ -395,11 +403,13 @@ const planSlice = createSlice({
       .addCase(decomposePlans.pending, (state) => {
         state.decomposing = true;
         state.decomposeGeneratedCount = 0;
+        state.decomposeTotalCount = null;
         state.error = null;
       })
       .addCase(decomposePlans.fulfilled, (state, action) => {
         state.decomposing = false;
         state.decomposeGeneratedCount = Math.max(0, action.payload.created ?? 0);
+        state.decomposeTotalCount = Math.max(0, action.payload.created ?? 0);
       })
       .addCase(decomposePlans.rejected, (state, action) => {
         state.decomposing = false;
@@ -627,7 +637,7 @@ export const {
   setExecutingPlanId,
   clearExecuteError,
   clearPlanBackgroundError,
-  setDecomposeGeneratedCount,
+  setDecomposeProgress,
   setPlansAndGraph,
   enqueuePlanTasksId,
   addOptimisticPlan,

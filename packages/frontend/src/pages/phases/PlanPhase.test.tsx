@@ -14,7 +14,7 @@ import { api } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
 import projectReducer from "../../store/slices/projectSlice";
 import planReducer, {
-  setDecomposeGeneratedCount,
+  setDecomposeProgress,
   setPlansAndGraph,
   setSelectedPlanId,
 } from "../../store/slices/planSlice";
@@ -267,6 +267,7 @@ function createStore(
     chatMessages?: Record<string, unknown[]>;
     planTasksPlanIds?: string[];
     decomposeGeneratedCount?: number;
+    decomposeTotalCount?: number | null;
   }
 ) {
   const plans = plansOverride ?? [basePlan];
@@ -291,6 +292,7 @@ function createStore(
         loading: false,
         decomposing: false,
         decomposeGeneratedCount: planOverrides?.decomposeGeneratedCount ?? 0,
+        decomposeTotalCount: planOverrides?.decomposeTotalCount ?? null,
         generating: false,
         planStatus: null,
         executingPlanId: null,
@@ -424,7 +426,7 @@ describe("PlanPhase Redux integration", () => {
     expect(document.querySelector(".animate-logo-pulse")).toBeTruthy();
   });
 
-  it("shows the next generated plan number while decompose progress events arrive", async () => {
+  it("shows the current generated plan number out of the total while decompose progress arrives", async () => {
     mockPlansDecompose.mockImplementation(() => new Promise(() => {}));
     const store = createStore([], undefined, undefined, { selectedPlanId: null });
 
@@ -443,11 +445,19 @@ describe("PlanPhase Redux integration", () => {
     });
 
     await act(async () => {
-      store.dispatch(setDecomposeGeneratedCount(1));
+      store.dispatch(setDecomposeProgress({ createdCount: 0, totalCount: 3 }));
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Generating Plan #2...")).toBeInTheDocument();
+      expect(screen.getByText("Generating Plan #1/3...")).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      store.dispatch(setDecomposeProgress({ createdCount: 1, totalCount: 3 }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Generating Plan #2/3...")).toBeInTheDocument();
     });
   });
 
@@ -507,7 +517,7 @@ describe("PlanPhase Redux integration", () => {
     });
   });
 
-  it("shows how many plans were generated while waiting for the post-decompose refetch", async () => {
+  it("shows finalizing progress before switching to the post-decompose refetch message", async () => {
     let resolveList: (value: unknown) => void;
     mockPlansList.mockImplementation(
       () =>
@@ -550,7 +560,14 @@ describe("PlanPhase Redux integration", () => {
     });
 
     await act(async () => {
-      store.dispatch(setDecomposeGeneratedCount(2));
+      store.dispatch(setDecomposeProgress({ createdCount: 2, totalCount: 2 }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Finalizing 2 generated plans...")).toBeInTheDocument();
+    });
+
+    await act(async () => {
       resolveDecompose!({ created: 2, plans: [] });
     });
 

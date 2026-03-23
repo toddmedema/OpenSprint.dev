@@ -339,6 +339,13 @@ export class PlanDecomposeGenerateService {
     });
 
     const planSpecs = response.parsed ?? parseDecomposeResponse(response.rawContent);
+    const totalCount = planSpecs.length;
+
+    broadcastToProject(projectId, {
+      type: "plan.decompose.progress",
+      createdCount: 0,
+      totalCount,
+    });
 
     const created: Plan[] = [];
     for (const spec of planSpecs) {
@@ -360,6 +367,7 @@ export class PlanDecomposeGenerateService {
       broadcastToProject(projectId, {
         type: "plan.decompose.progress",
         createdCount: created.length,
+        totalCount,
       });
     }
 
