@@ -11,6 +11,8 @@ import {
   getTargetsForDeployEvent,
   getTargetsForNightlyDeploy,
   getDeploymentTargetsForUi,
+  mergeDeploymentConfigPatch,
+  deploymentConfigForApiResponse,
   API_KEY_PROVIDERS,
   validateApiKeyEntry,
   getDatabaseDialect,
@@ -1101,6 +1103,37 @@ describe("getDeploymentTargetsForUi", () => {
       { name: "staging", autoDeployTrigger: "none" },
       { name: "production", autoDeployTrigger: "none" },
     ]);
+  });
+});
+
+describe("mergeDeploymentConfigPatch / deploymentConfigForApiResponse", () => {
+  it("preserves expoToken when patch omits it", () => {
+    const current: DeploymentConfig = { mode: "expo", expoToken: "secret" };
+    const merged = mergeDeploymentConfigPatch(current, { expoConfig: { channel: "preview" } });
+    expect(merged.expoToken).toBe("secret");
+    expect(merged.expoConfig).toEqual({ channel: "preview" });
+  });
+
+  it("clears expoToken when patch sets empty string", () => {
+    const current: DeploymentConfig = { mode: "expo", expoToken: "secret" };
+    const merged = mergeDeploymentConfigPatch(current, { expoToken: "" });
+    expect(merged.expoToken).toBeUndefined();
+  });
+
+  it("drops expoToken when mode becomes custom", () => {
+    const current: DeploymentConfig = { mode: "expo", expoToken: "secret" };
+    const merged = mergeDeploymentConfigPatch(current, { mode: "custom" });
+    expect(merged.mode).toBe("custom");
+    expect(merged.expoToken).toBeUndefined();
+  });
+
+  it("redacts expoToken in API response", () => {
+    const api = deploymentConfigForApiResponse({
+      mode: "expo",
+      expoToken: "tok",
+    });
+    expect(api.expoToken).toBeUndefined();
+    expect(api.expoTokenConfigured).toBe(true);
   });
 });
 

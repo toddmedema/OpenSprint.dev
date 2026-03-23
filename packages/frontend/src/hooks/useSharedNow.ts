@@ -1,4 +1,5 @@
 import { useMemo, useSyncExternalStore } from "react";
+import { unstable_batchedUpdates } from "react-dom";
 
 type Listener = () => void;
 
@@ -36,9 +37,14 @@ function subscribe(intervalMs: number, listener: Listener): () => void {
     store.snapshot = Date.now();
     store.intervalId = window.setInterval(() => {
       store!.snapshot = Date.now();
-      for (const currentListener of store!.listeners) {
-        currentListener();
-      }
+      // Many rows (TimelineList) each subscribe; notifying them in one tight loop can exceed
+      // React's nested-update limit. Batch so useSyncExternalStore updates flush together.
+      // Copy listeners so a notify callback cannot break iteration if it unsubscribes others.
+      unstable_batchedUpdates(() => {
+        for (const currentListener of [...store!.listeners]) {
+          currentListener();
+        }
+      });
     }, intervalMs);
   }
 

@@ -186,16 +186,16 @@ export function ExecutePhase({
           ? { taskId, resetAttempts: options.resetAttempts }
           : { taskId };
       unblockMutation.mutate(vars, {
-          onSettled: () => {
-            setUnblockInflightByTaskId((prev) => {
-              const next = { ...prev };
-              const c = (next[taskId] ?? 1) - 1;
-              if (c <= 0) delete next[taskId];
-              else next[taskId] = c;
-              return next;
-            });
-          },
-        });
+        onSettled: () => {
+          setUnblockInflightByTaskId((prev) => {
+            const next = { ...prev };
+            const c = (next[taskId] ?? 1) - 1;
+            if (c <= 0) delete next[taskId];
+            else next[taskId] = c;
+            return next;
+          });
+        },
+      });
     },
     [unblockMutation]
   );

@@ -22,6 +22,7 @@ import {
   resolveTestCommand,
   getDefaultDeploymentTarget,
   getDeploymentTargetConfig,
+  mergeDeploymentConfigPatch,
 } from "@opensprint/shared";
 import { deploymentService } from "../services/deployment-service.js";
 import { deployStorageService } from "../services/deploy-storage.service.js";
@@ -236,15 +237,12 @@ export function createDeliverRouter(projectService: ProjectService): Router {
       const settings = await projectService.getSettings(projectId);
 
       const updatedSettings: Partial<ProjectSettings> = {
-        deployment: {
-          ...settings.deployment,
-          ...deployment,
-        },
+        deployment: mergeDeploymentConfigPatch(settings.deployment, deployment),
       };
 
       await projectService.updateSettings(projectId, updatedSettings);
       await orchestratorService.refreshMaxSlotsAndNudge(projectId);
-      const updated = await projectService.getSettings(projectId);
+      const updated = await projectService.getSettingsWithRuntimeState(projectId);
 
       const body: ApiResponse<ProjectSettings> = { data: updated };
       res.json(body);
@@ -321,7 +319,9 @@ export function createDeliverRouter(projectService: ProjectService): Router {
         }
 
         // Pre-deploy: identify required but missing Expo auth before starting
-        const authCheck = await checkExpoAuth(project.repoPath);
+        const authCheck = await checkExpoAuth(project.repoPath, {
+          projectExpoToken: settings.deployment.expoToken,
+        });
         if (!authCheck.ok) {
           res.status(400).json({
             error: {
@@ -424,7 +424,7 @@ export function createDeliverRouter(projectService: ProjectService): Router {
         const [expoInstalled, configStatus, authCheck, easProjectLinked] = await Promise.all([
           isExpoInstalled(repoPath),
           getExpoConfigStatus(repoPath),
-          checkExpoAuth(repoPath),
+          checkExpoAuth(repoPath, { projectExpoToken: settings.deployment.expoToken }),
           isEasProjectLinked(repoPath),
         ]);
 
@@ -653,7 +653,9 @@ type DeployHandlerContext = {
 
 const deployHandlers: Record<string, (ctx: DeployHandlerContext) => Promise<void>> = {
   expo: async (ctx) => {
-    const authCheck = await checkExpoAuth(ctx.repoPath);
+    const authCheck = await checkExpoAuth(ctx.repoPath, {
+      projectExpoToken: ctx.settings.deployment.expoToken,
+    });
     if (!authCheck.ok) {
       ctx.emit(`${authCheck.prompt}\n`);
       await completeDeployFn(ctx.projectId, ctx.deployId, {

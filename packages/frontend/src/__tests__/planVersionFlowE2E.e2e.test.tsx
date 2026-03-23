@@ -169,7 +169,7 @@ function createStore() {
         selectedTaskId: null,
       },
       eval: {},
-      websocket: { connected: true, deliverToast: null },
+      websocket: { connected: true },
       openQuestions: {
         byProject: {},
         global: [],

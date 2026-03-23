@@ -4,7 +4,7 @@ import { getErrorCodeHint } from "@opensprint/shared";
 import { DEDUP_SKIP } from "../dedup";
 import { addNotification, dismissNotification } from "../slices/notificationSlice";
 import { setConnectionError, dbStatusRestored } from "../slices/connectionSlice";
-import { clearDeliverToast } from "../slices/websocketSlice";
+import { clearAllNotifications } from "../slices/notificationSlice";
 import { isConnectionError } from "../../api/client";
 import { getQueryClient } from "../../queryClient";
 import { DB_STATUS_QUERY_KEY } from "../../api/hooks/db-status";
@@ -117,7 +117,7 @@ notificationListener.startListening({
       const RECOVERED_DEBOUNCE_MS = 2000;
       if (lastRecovered != null && Date.now() - lastRecovered < RECOVERED_DEBOUNCE_MS) return;
       listenerApi.dispatch(setConnectionError(true));
-      listenerApi.dispatch(clearDeliverToast());
+      listenerApi.dispatch(clearAllNotifications());
       return;
     }
 

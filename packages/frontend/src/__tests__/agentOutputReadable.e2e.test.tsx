@@ -167,7 +167,6 @@ function createStoreWithFilterMiddleware(preloadedState: {
     preloadedState: {
       websocket: {
         connected: preloadedState.wsConnected ?? true,
-        deliverToast: null,
       },
       plan: {
         plans: [basePlan],

@@ -30,6 +30,8 @@ import {
   getProvidersRequiringApiKeys,
   VALID_MERGE_STRATEGIES,
   VALID_SELF_IMPROVEMENT_FREQUENCIES,
+  mergeDeploymentConfigPatch,
+  deploymentConfigForApiResponse,
 } from "@opensprint/shared";
 import type { SelfImprovementFrequency } from "@opensprint/shared";
 import type { ApiKeyProvider } from "@opensprint/shared";
@@ -132,6 +134,7 @@ const OPENSPRINT_RUNTIME_CONTRACT_SECTION = [
   "- Execute agents start in a prepared worktree with the task branch already checked out.",
   "- Run the smallest relevant non-watch verification for touched workspaces while iterating. Use scoped tests first, add scoped build/typecheck and lint commands when your changes could affect them, and leave the branch in a state where the merge quality gates (`npm run build`, `npm run lint`, `npm run test`) are expected to pass before reporting success.",
   "- If you add, remove, or upgrade package dependencies: run this repo’s install command from the repository root (root `package.json`), update lockfiles as required, and commit manifest and lockfile changes together with the code that uses those packages.",
+  "- If you add or change TypeScript tests that use Jest/Vitest/Mocha globals (`describe`, `it`, `expect`, etc.), ensure `npm run build` still passes: add matching dev typings (e.g. `@types/jest`) or exclude those tests from the build TypeScript project. `TS2582: Cannot find name 'describe'` means the build typechecks tests without test-runner types.",
   "- Report completion or blocking questions by writing the exact `.opensprint/active/<task-id>/result.json` payload requested in the task prompt.",
   "- Commit incremental logical units while working so crash recovery can preserve progress.",
   '- If blocked by ambiguity, return `status: "failed"` with `open_questions` instead of guessing.',
@@ -1178,6 +1181,7 @@ export class ProjectService {
         : undefined;
     return {
       ...settings,
+      deployment: deploymentConfigForApiResponse(settings.deployment),
       worktreeBaseBranch: runtime.worktreeBaseBranch,
       gitRemoteMode: runtime.gitRemoteMode,
       gitRuntimeStatus: runtime.gitRuntimeStatus,
@@ -1435,9 +1439,15 @@ export class ProjectService {
       }
     }
 
+    const { deployment: deploymentPatch, ...sanitizedWithoutDeployment } = sanitizedUpdates;
+    const mergedDeployment =
+      deploymentPatch !== undefined
+        ? mergeDeploymentConfigPatch(current.deployment, deploymentPatch)
+        : current.deployment;
+
     const effectiveSettings: ProjectSettings = {
       ...current,
-      ...sanitizedUpdates,
+      ...sanitizedWithoutDeployment,
       simpleComplexityAgent,
       complexComplexityAgent,
       aiAutonomyLevel,
@@ -1450,6 +1460,7 @@ export class ProjectService {
       runAgentEnhancementExperiments,
       validationTimeoutMsOverride,
       maxTotalConcurrentAgents,
+      deployment: mergedDeployment,
     };
     const updated: ProjectSettings = {
       ...effectiveSettings,

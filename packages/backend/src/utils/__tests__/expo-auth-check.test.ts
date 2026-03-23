@@ -43,7 +43,22 @@ describe("expo-auth-check", () => {
     expect(execMock).not.toHaveBeenCalled();
   });
 
-  it("returns ok when expoToken is in global settings", async () => {
+  it("returns ok when projectExpoToken is provided", async () => {
+    delete process.env.EXPO_TOKEN;
+    vi.mocked(globalSettings.getGlobalSettings).mockResolvedValue({});
+    const result = await checkExpoAuth(tempDir, { projectExpoToken: "project-token-789" });
+    expect(result.ok).toBe(true);
+    expect(result).toMatchObject({ expoToken: "project-token-789" });
+    expect(globalSettings.getGlobalSettings).not.toHaveBeenCalled();
+  });
+
+  it("prefers EXPO_TOKEN env over projectExpoToken", async () => {
+    process.env.EXPO_TOKEN = "env-wins";
+    const result = await checkExpoAuth(tempDir, { projectExpoToken: "project-loses" });
+    expect(result).toMatchObject({ expoToken: "env-wins" });
+  });
+
+  it("returns ok when expoToken is in global settings (legacy)", async () => {
     delete process.env.EXPO_TOKEN;
     vi.mocked(globalSettings.getGlobalSettings).mockResolvedValue({
       expoToken: "settings-token-456",

@@ -28,7 +28,7 @@ import { normalizeTaskListResponse } from "../../api/taskList";
 import { DEDUP_SKIP } from "../dedup";
 import { setPlansAndGraph } from "./planSlice";
 import { isApiError, isConnectionError } from "../../api/client";
-import { setDeliverToast } from "./websocketSlice";
+import { addNotification } from "./notificationSlice";
 import { type ExecuteState, TASKS_IN_FLIGHT_KEY, EXECUTE_ASYNC_KEYS } from "./executeTypes";
 import { createInitialAsyncStates } from "../asyncHelpers";
 
@@ -142,7 +142,14 @@ export const updateTaskPriority = createAsyncThunk(
       return { task, taskId };
     } catch (err) {
       if (!isConnectionError(err)) {
-        dispatch(setDeliverToast({ message: "Failed to update priority", variant: "failed" }));
+        dispatch(
+          addNotification({
+            message: "Failed to update priority",
+            severity: "error",
+            position: "bottom-right",
+            variant: "muted",
+          })
+        );
       }
       return rejectWithValue({ previousPriority });
     }
@@ -163,7 +170,14 @@ export const updateTaskAssignee = createAsyncThunk(
         return rejectWithValue({ message: err.message, code: err.code });
       }
       if (!isConnectionError(err)) {
-        dispatch(setDeliverToast({ message: "Failed to update assignee", variant: "failed" }));
+        dispatch(
+          addNotification({
+            message: "Failed to update assignee",
+            severity: "error",
+            position: "bottom-right",
+            variant: "muted",
+          })
+        );
       }
       return rejectWithValue(err instanceof Error ? err.message : "Failed to update assignee");
     }

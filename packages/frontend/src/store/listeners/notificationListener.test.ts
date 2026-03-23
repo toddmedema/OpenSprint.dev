@@ -3,7 +3,7 @@ import { configureStore } from "@reduxjs/toolkit";
 import { waitFor } from "@testing-library/react";
 import notificationReducer, { addNotification } from "../slices/notificationSlice";
 import connectionReducer, { setConnectionError, dbStatusRestored } from "../slices/connectionSlice";
-import websocketReducer, { setDeliverToast } from "../slices/websocketSlice";
+import websocketReducer from "../slices/websocketSlice";
 import openQuestionsReducer from "../slices/openQuestionsSlice";
 import {
   notificationListener,
@@ -72,9 +72,9 @@ describe("notificationListener", () => {
     expect(store.getState().notification.items).toHaveLength(0);
   });
 
-  it("turns connection errors into the global banner and clears deliver toast", async () => {
+  it("turns connection errors into the global banner and clears notifications", async () => {
     const store = createStore();
-    store.dispatch(setDeliverToast({ message: "Delivering", variant: "started" }));
+    store.dispatch(addNotification({ message: "Some toast", severity: "info" }));
     mockIsConnectionError.mockReturnValue(true);
 
     store.dispatch({
@@ -85,7 +85,6 @@ describe("notificationListener", () => {
 
     await waitFor(() => {
       expect(store.getState().connection.connectionError).toBe(true);
-      expect(store.getState().websocket.deliverToast).toBeNull();
       expect(store.getState().notification.items).toHaveLength(0);
     });
   });

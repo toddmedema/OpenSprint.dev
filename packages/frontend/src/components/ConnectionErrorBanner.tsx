@@ -6,6 +6,7 @@ import { setConnectionError, dbStatusRestored } from "../store/slices/connection
 import { dismissNotification } from "../store/slices/notificationSlice";
 import { api } from "../api/client";
 import { DB_STATUS_QUERY_KEY } from "../api/hooks/db-status";
+import { Banner } from "./notifications";
 
 const MESSAGE = "Failed to connect to Open Sprint server - try restarting it";
 
@@ -41,7 +42,6 @@ export function ConnectionErrorBanner() {
       });
   }, [dispatch, queryClient]);
 
-  // Deduplicate: when this banner is shown, dismiss any connection-in-progress toasts so only one instance is visible.
   useEffect(() => {
     if (!connectionError) return;
     const items = notificationItems ?? [];
@@ -65,7 +65,6 @@ export function ConnectionErrorBanner() {
     };
   }, [connectionError, poll]);
 
-  // Update countdown every second so users see "Checking again in Xs"
   useEffect(() => {
     if (!connectionError) return;
 
@@ -88,21 +87,23 @@ export function ConnectionErrorBanner() {
   if (!connectionError) return null;
 
   return (
-    <div
-      className="flex items-center justify-center gap-4 bg-theme-error-bg px-4 py-3 text-theme-error-text border-b border-theme-error-border shrink-0"
-      data-testid="connection-error-banner"
-      role="alert"
-    >
-      <p className="text-sm font-medium">{MESSAGE}</p>
-      <span className="text-sm opacity-90">Checking again in {secondsUntilNextCheck}s</span>
-      <button
-        type="button"
-        onClick={handleCheckAgain}
-        className="rounded px-3 py-1.5 text-sm font-medium bg-theme-error-text/15 hover:bg-theme-error-text/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-error-text/50"
-        data-testid="connection-error-check-again"
-      >
-        Check again
-      </button>
-    </div>
+    <Banner
+      severity="error"
+      message={MESSAGE}
+      testId="connection-error-banner"
+      actions={
+        <>
+          <span className="text-sm opacity-90">Checking again in {secondsUntilNextCheck}s</span>
+          <button
+            type="button"
+            onClick={handleCheckAgain}
+            className="rounded px-3 py-1.5 text-sm font-medium bg-theme-error-text/15 hover:bg-theme-error-text/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-error-text/50"
+            data-testid="connection-error-check-again"
+          >
+            Check again
+          </button>
+        </>
+      }
+    />
   );
 }

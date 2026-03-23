@@ -11,14 +11,16 @@ import { ProjectShell } from "./ProjectShell";
 import { api } from "../api/client";
 import { queryKeys } from "../api/queryKeys";
 import projectReducer from "../store/slices/projectSlice";
-import websocketReducer, { setDeliverToast } from "../store/slices/websocketSlice";
+import websocketReducer from "../store/slices/websocketSlice";
 import connectionReducer, { setConnectionError } from "../store/slices/connectionSlice";
 import sketchReducer from "../store/slices/sketchSlice";
 import planReducer, { fetchPlans } from "../store/slices/planSlice";
 import executeReducer from "../store/slices/executeSlice";
 import evalReducer from "../store/slices/evalSlice";
 import deliverReducer from "../store/slices/deliverSlice";
-import notificationReducer from "../store/slices/notificationSlice";
+import notificationReducer, {
+  addNotification as addToastNotification,
+} from "../store/slices/notificationSlice";
 import openQuestionsReducer from "../store/slices/openQuestionsSlice";
 
 // Mock websocket middleware to prevent connection attempts
@@ -1003,29 +1005,29 @@ describe("ProjectView URL deep linking for Plan and Build detail panes", () => {
   });
 });
 
-describe("ProjectView global deliver toast", () => {
+describe("ProjectView global deliver notifications", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("shows DeliverToast when deliverToast is in state (global, regardless of active tab)", async () => {
+  it("shows delivery success in NotificationBar (global, regardless of active tab)", async () => {
     const store = createStore();
-    store.dispatch(setDeliverToast({ message: "Delivery succeeded", variant: "succeeded" }));
+    store.dispatch(addToastNotification({ message: "Delivery succeeded", severity: "success" }));
     renderWithRouter("/projects/proj-1/sketch", store);
 
     await waitFor(() => {
-      expect(screen.getByTestId("deliver-toast")).toBeInTheDocument();
+      expect(screen.getByTestId("notification-success")).toBeInTheDocument();
       expect(screen.getByText("Delivery succeeded")).toBeInTheDocument();
     });
   });
 
-  it("shows deliver toast on deliver phase as well (confirms global visibility)", async () => {
+  it("shows delivery failure in NotificationBar on deliver phase (confirms global visibility)", async () => {
     const store = createStore();
-    store.dispatch(setDeliverToast({ message: "Delivery failed", variant: "failed" }));
+    store.dispatch(addToastNotification({ message: "Delivery failed", severity: "error" }));
     renderWithRouter("/projects/proj-1/deliver", store);
 
     await waitFor(() => {
-      expect(screen.getByTestId("deliver-toast")).toBeInTheDocument();
+      expect(screen.getByTestId("notification-error")).toBeInTheDocument();
       expect(screen.getByText("Delivery failed")).toBeInTheDocument();
     });
   });
@@ -1064,20 +1066,16 @@ describe("ProjectView plan refresh toast", () => {
     cleanup();
   });
 
-  it("shows PlanRefreshToast when background refresh fails (non-connection error)", async () => {
+  it("stores background plan error in state when background refresh fails (non-connection error)", async () => {
     const { api } = await import("../api/client");
     vi.mocked(api.plans.list).mockRejectedValue(new Error("Server error 500"));
     const store = createStore();
     await store.dispatch(fetchPlans({ projectId: "proj-1", background: true }));
-    renderWithRouter("/projects/proj-1/sketch", store);
 
-    await waitFor(() => {
-      expect(screen.getByTestId("plan-refresh-toast")).toBeInTheDocument();
-      expect(screen.getByText("Server error 500")).toBeInTheDocument();
-    });
+    expect(store.getState().plan.backgroundError).toBe("Server error 500");
   });
 
-  it("shows connection banner instead of PlanRefreshToast when connectionError is true", async () => {
+  it("shows connection banner when connectionError is true", async () => {
     const store = createStore();
     store.dispatch(setConnectionError(true));
     renderWithRouter("/projects/proj-1/sketch", store);
@@ -1088,7 +1086,5 @@ describe("ProjectView plan refresh toast", () => {
         screen.getByText("Failed to connect to Open Sprint server - try restarting it")
       ).toBeInTheDocument();
     });
-
-    expect(screen.queryByTestId("plan-refresh-toast")).not.toBeInTheDocument();
   });
 });

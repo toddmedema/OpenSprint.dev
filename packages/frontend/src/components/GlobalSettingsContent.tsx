@@ -87,10 +87,6 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
 
   const [apiKeys, setApiKeys] = useState<ApiKeys | MaskedApiKeys | undefined>(undefined);
   const [apiKeysError, setApiKeysError] = useState<string | null>(null);
-  const [expoToken, setExpoToken] = useState<string>("");
-  const [expoTokenConfigured, setExpoTokenConfigured] = useState(false);
-  const [expoTokenSaving, setExpoTokenSaving] = useState(false);
-  const [expoTokenError, setExpoTokenError] = useState<string | null>(null);
   const [databaseUrl, setDatabaseUrl] = useState<string>("");
   const databaseUrlRef = useRef(databaseUrl);
   databaseUrlRef.current = databaseUrl;
@@ -163,8 +159,6 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
         lastSyncedDatabaseUrlRef.current = fetchedDatabaseUrl.trim();
         setDatabaseDialect(res.databaseDialect);
         setApiKeys(res.apiKeys);
-        setExpoTokenConfigured(res.expoTokenConfigured ?? false);
-        setExpoToken(res.expoTokenConfigured ? "••••••••" : "");
         setShowNotificationDotInMenuBar(res.showNotificationDotInMenuBar !== false);
         setShowRunningAgentCountInMenuBar(res.showRunningAgentCountInMenuBar !== false);
       })
@@ -380,79 +374,6 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
         {apiKeysError && (
           <p className="text-sm text-theme-error-text mt-2" role="alert">
             {apiKeysError}
-          </p>
-        )}
-      </div>
-      <div data-testid="expo-token-section">
-        <h3 className="text-sm font-semibold text-theme-text">Expo API Token</h3>
-        <p className="text-xs text-theme-muted mb-3">
-          Required for Expo/EAS deployment. Create a Personal Access Token at{" "}
-          <a
-            href="https://expo.dev/settings/access-tokens"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-brand-600 hover:underline"
-          >
-            expo.dev/settings/access-tokens
-          </a>
-          . Alternatively, run{" "}
-          <code className="text-xs bg-theme-bg-elevated px-1 rounded">npx eas login</code> in your
-          project.
-        </p>
-        <div className="flex gap-2 items-end">
-          <div className="flex-1">
-            <input
-              type="password"
-              className="input font-mono text-sm w-full"
-              placeholder={
-                expoTokenConfigured ? "•••••••• (configured)" : "Paste your Expo access token"
-              }
-              value={expoToken}
-              onChange={(e) => {
-                setExpoToken(e.target.value);
-                setExpoTokenError(null);
-              }}
-              disabled={expoTokenSaving}
-              autoComplete="off"
-              data-testid="expo-token-input"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={async () => {
-              if (expoToken === "••••••••" && expoTokenConfigured) return;
-              setExpoTokenSaving(true);
-              setExpoTokenError(null);
-              const startTime = Date.now();
-              try {
-                const res = await api.globalSettings.put({
-                  expoToken: expoToken === "••••••••" ? undefined : (expoToken.trim() ?? ""),
-                });
-                setExpoTokenConfigured(res.expoTokenConfigured ?? false);
-                setExpoToken(res.expoTokenConfigured ? "••••••••" : "");
-                scheduleSaveComplete(startTime);
-              } catch (err) {
-                setExpoTokenError(
-                  isConnectionError(err)
-                    ? "Unable to connect."
-                    : err instanceof Error
-                      ? err.message
-                      : "Failed to save"
-                );
-              } finally {
-                setExpoTokenSaving(false);
-              }
-            }}
-            disabled={expoTokenSaving || (expoToken === "••••••••" && expoTokenConfigured)}
-            className="btn-secondary"
-            data-testid="expo-token-save"
-          >
-            {expoTokenSaving ? "Saving…" : "Save"}
-          </button>
-        </div>
-        {expoTokenError && (
-          <p className="text-sm text-theme-error-text mt-2" role="alert">
-            {expoTokenError}
           </p>
         )}
       </div>

@@ -194,7 +194,6 @@ function getPreloadedState(selectedTaskData?: Task) {
     },
     websocket: {
       connected: false,
-      deliverToast: null,
     },
     plan: {
       plans: [basePlan],
@@ -1927,10 +1926,14 @@ describe("TaskDetailSidebar", () => {
       await vi.waitFor(() => {
         expect(screen.getByTestId("priority-dropdown-trigger")).toHaveTextContent("High");
       });
-      expect(store.getState().websocket.deliverToast).toEqual({
-        message: "Failed to update priority",
-        variant: "failed",
-      });
+      expect(store.getState().notification.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: "Failed to update priority",
+            severity: "error",
+          }),
+        ])
+      );
     });
   });
 

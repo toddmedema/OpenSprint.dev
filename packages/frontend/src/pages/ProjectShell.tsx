@@ -3,9 +3,9 @@ import { useParams, useLocation, useNavigate, Outlet } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppDispatch, useAppSelector } from "../store";
 import { resetProject } from "../store/slices/projectSlice";
-import { resetWebsocket, clearDeliverToast } from "../store/slices/websocketSlice";
+import { resetWebsocket } from "../store/slices/websocketSlice";
 import { resetSketch } from "../store/slices/sketchSlice";
-import { resetPlan, clearPlanBackgroundError } from "../store/slices/planSlice";
+import { resetPlan } from "../store/slices/planSlice";
 import { resetExecute } from "../store/slices/executeSlice";
 import { resetEval } from "../store/slices/evalSlice";
 import { resetDeliver } from "../store/slices/deliverSlice";
@@ -48,7 +48,6 @@ import { VALID_PHASE_SLUGS } from "../lib/phaseRouting";
 import { schedulePhasePreload } from "../lib/phasePreload";
 import type { ProjectPhase } from "@opensprint/shared";
 import { ACTIVE_AGENTS_POLL_INTERVAL_MS } from "../lib/constants";
-import { TOAST_SAFE_STYLE } from "../lib/dropdownViewport";
 import { fetchProjectNotifications } from "../store/slices/openQuestionsSlice";
 import { setRoute } from "../store/slices/routeSlice";
 
@@ -337,15 +336,9 @@ export function ProjectShell() {
     }
   };
 
-  const deliverToast = useAppSelector((s) => s.websocket.deliverToast);
-  const planBackgroundError = useAppSelector((s) => s.plan.backgroundError);
-  const connectionError = useAppSelector((s) => s.connection?.connectionError ?? false);
   const dbUnavailableMessage =
     dbStatus.data?.message ??
     "The database is not available; check Settings to fix the connection.";
-
-  const handleDismissDeliverToast = () => dispatch(clearDeliverToast());
-  const handleDismissPlanBackgroundError = () => dispatch(clearPlanBackgroundError());
 
   function renderShellContent(content: ReactNode) {
     return (
@@ -358,13 +351,6 @@ export function ProjectShell() {
         >
           {content}
         </Layout>
-        <DeliverToast toast={deliverToast} onDismiss={handleDismissDeliverToast} />
-        {!connectionError && (
-          <PlanRefreshToast
-            error={planBackgroundError}
-            onDismiss={handleDismissPlanBackgroundError}
-          />
-        )}
       </>
     );
   }
@@ -407,83 +393,6 @@ export function ProjectShell() {
     <Outlet
       context={{ projectId, project: resolvedProject, currentPhase } satisfies ProjectShellContext}
     />
-  );
-}
-
-function PlanRefreshToast({ error, onDismiss }: { error: string | null; onDismiss: () => void }) {
-  if (!error) return null;
-  return (
-    <div
-      className="fixed z-40 max-w-md max-h-[90vh] overflow-y-auto rounded-lg border border-theme-error-border bg-theme-error-bg p-4 shadow-lg text-theme-error-text"
-      style={TOAST_SAFE_STYLE}
-      data-testid="plan-refresh-toast"
-      role="alert"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium">{error}</p>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="shrink-0 rounded p-1 text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text"
-          aria-label="Dismiss"
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function DeliverToast({
-  toast,
-  onDismiss,
-}: {
-  toast: import("../store/slices/websocketSlice").DeliverToast | null;
-  onDismiss: () => void;
-}) {
-  if (!toast) return null;
-  const variantStyles: Record<string, string> = {
-    started: "border-theme-info-border bg-theme-info-bg text-theme-info-text",
-    succeeded: "border-theme-success-border bg-theme-success-bg text-theme-success-text",
-    failed: "border-theme-error-border bg-theme-error-bg text-theme-error-text",
-  };
-  const style =
-    variantStyles[toast.variant] ?? "border-theme-border bg-theme-surface text-theme-text";
-  return (
-    <div
-      className={`fixed z-40 max-w-md max-h-[90vh] overflow-y-auto rounded-lg border p-4 shadow-lg ${style}`}
-      style={TOAST_SAFE_STYLE}
-      data-testid="deliver-toast"
-      role="status"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium">{toast.message}</p>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="shrink-0 rounded p-1 text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text"
-          aria-label="Dismiss"
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-    </div>
   );
 }
 

@@ -31,18 +31,31 @@ export interface ExpoAuthCheckFailure {
 
 export type ExpoAuthCheck = ExpoAuthCheckResult | ExpoAuthCheckFailure;
 
+export type CheckExpoAuthOptions = {
+  /** Expo access token from this project's delivery settings (after EXPO_TOKEN env). */
+  projectExpoToken?: string;
+};
+
 /** URL for creating Expo access tokens */
 export const EXPO_ACCESS_TOKEN_URL = "https://expo.dev/settings/access-tokens";
 
 /**
  * Check if Expo deployment can proceed (auth present).
- * Checks: EXPO_TOKEN env, expoToken in global settings, or eas whoami (interactive login).
+ * Checks: EXPO_TOKEN env, project delivery expoToken, legacy global-settings expoToken, or eas whoami.
  * Returns explicit prompts when something is missing.
  */
-export async function checkExpoAuth(repoPath: string): Promise<ExpoAuthCheck> {
+export async function checkExpoAuth(
+  repoPath: string,
+  options?: CheckExpoAuthOptions
+): Promise<ExpoAuthCheck> {
   const fromEnv = process.env.EXPO_TOKEN;
   if (fromEnv && typeof fromEnv === "string" && fromEnv.trim().length > 0) {
     return { ok: true, expoToken: fromEnv.trim() };
+  }
+
+  const fromProject = options?.projectExpoToken;
+  if (fromProject && typeof fromProject === "string" && fromProject.trim().length > 0) {
+    return { ok: true, expoToken: fromProject.trim() };
   }
 
   const settings = await getGlobalSettings();
@@ -81,7 +94,7 @@ export async function checkExpoAuth(repoPath: string): Promise<ExpoAuthCheck> {
       "  3. Create a new Personal Access Token",
       "",
       "How to provide:",
-      "  • Add the token in Settings → Expo API Token (recommended), or",
+      "  • Add the token in Project settings → Delivery → Expo access token (Expo delivery mode), or",
       "  • Set the EXPO_TOKEN environment variable when running Open Sprint",
       "",
       "Alternatively, run `npx eas login` in your project directory to authenticate interactively (session stored locally).",

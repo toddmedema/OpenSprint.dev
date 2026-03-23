@@ -78,6 +78,14 @@ export function Navbar({
     project?.id ? selectPhaseUnread(s, project.id) : EMPTY_PHASE_UNREAD
   );
 
+  const showProjectSelect = Boolean(project) || projects.length > 0;
+
+  useEffect(() => {
+    if (!showProjectSelect) {
+      setDropdownOpen(false);
+    }
+  }, [showProjectSelect]);
+
   const phaseTabs = useMemo(
     () =>
       (["sketch", "plan", "execute", "eval", "deliver"] as const).map((key) => {
@@ -239,98 +247,100 @@ export function Navbar({
             </svg>
           </Link>
 
-          <div
-            data-testid="navbar-project-select"
-            className="relative hidden min-[800px]:flex flex-1 items-center min-w-0 max-w-full"
-            ref={dropdownRef}
-            style={
-              isElectronWin || isElectronMac
-                ? ({ WebkitAppRegion: "no-drag" } as CSSProperties)
-                : undefined
-            }
-          >
-            <button
-              ref={projectTriggerRef}
-              type="button"
-              onClick={() => setDropdownOpen((o) => !o)}
-              className="dropdown-trigger inline-flex max-w-full items-center gap-1 min-h-[44px] min-w-[44px] text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 px-2 hover:bg-theme-border-subtle"
-              aria-expanded={dropdownOpen}
-              aria-haspopup="listbox"
-              aria-label={`Select project: ${project ? project.name : "All Projects"}`}
+          {showProjectSelect ? (
+            <div
+              data-testid="navbar-project-select"
+              className="relative hidden min-[800px]:flex flex-1 items-center min-w-0 max-w-full"
+              ref={dropdownRef}
+              style={
+                isElectronWin || isElectronMac
+                  ? ({ WebkitAppRegion: "no-drag" } as CSSProperties)
+                  : undefined
+              }
             >
-              <span className="min-w-0 truncate">{project ? project.name : "All Projects"}</span>
-              <span className="shrink-0 pr-2">
-                <svg
-                  className={`w-4 h-4 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </span>
-            </button>
-            {dropdownOpen &&
-              projectDropdownRect &&
-              typeof document !== "undefined" &&
-              createPortal(
-                <div
-                  ref={projectDropdownMenuRef}
-                  data-testid="navbar-project-dropdown"
-                  style={getDropdownPositionViewportAware(projectDropdownRect, {
-                    minWidth: 0,
-                    estimatedHeight: 280,
-                  })}
-                  className="fixed z-[9999] w-max min-w-0 max-w-[min(280px,calc(100vw-2rem))] bg-theme-surface border border-theme-border rounded-lg shadow-lg py-1"
-                  role="listbox"
-                >
-                  {projects.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      role="option"
-                      aria-selected={p.id === project?.id}
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        navigate(getProjectPhasePath(p.id, currentPhase ?? "sketch"));
-                      }}
-                      className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                        p.id === project?.id
-                          ? "bg-theme-info-bg text-theme-info-text font-medium"
-                          : "text-theme-text font-medium hover:bg-theme-info-bg"
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                  {projects.length === 0 && (
-                    <div className="px-4 py-3 text-sm text-theme-muted">No projects</div>
-                  )}
-                  <div className="border-t border-theme-border-subtle mt-1 pt-1 space-y-0.5">
-                    <button
-                      type="button"
-                      onClick={() => handleCreateOrAddClick("/projects/add-existing")}
-                      className="w-full text-left px-4 py-2 text-sm text-theme-muted hover:bg-theme-info-bg hover:text-theme-text transition-colors"
-                    >
-                      Add Existing Project
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleCreateOrAddClick("/projects/create-new")}
-                      className="w-full text-left px-4 py-2 text-sm text-theme-muted hover:bg-theme-info-bg hover:text-theme-text transition-colors"
-                    >
-                      Create New Project
-                    </button>
-                  </div>
-                </div>,
-                document.body
-              )}
-          </div>
+              <button
+                ref={projectTriggerRef}
+                type="button"
+                onClick={() => setDropdownOpen((o) => !o)}
+                className="dropdown-trigger inline-flex max-w-full items-center gap-1 min-h-[44px] min-w-[44px] text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 px-2 hover:bg-theme-border-subtle"
+                aria-expanded={dropdownOpen}
+                aria-haspopup="listbox"
+                aria-label={`Select project: ${project ? project.name : "All Projects"}`}
+              >
+                <span className="min-w-0 truncate">{project ? project.name : "All Projects"}</span>
+                <span className="shrink-0 pr-2">
+                  <svg
+                    className={`w-4 h-4 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </span>
+              </button>
+              {dropdownOpen &&
+                projectDropdownRect &&
+                typeof document !== "undefined" &&
+                createPortal(
+                  <div
+                    ref={projectDropdownMenuRef}
+                    data-testid="navbar-project-dropdown"
+                    style={getDropdownPositionViewportAware(projectDropdownRect, {
+                      minWidth: 0,
+                      estimatedHeight: 280,
+                    })}
+                    className="fixed z-[9999] w-max min-w-0 max-w-[min(280px,calc(100vw-2rem))] bg-theme-surface border border-theme-border rounded-lg shadow-lg py-1"
+                    role="listbox"
+                  >
+                    {projects.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        role="option"
+                        aria-selected={p.id === project?.id}
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          navigate(getProjectPhasePath(p.id, currentPhase ?? "sketch"));
+                        }}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                          p.id === project?.id
+                            ? "bg-theme-info-bg text-theme-info-text font-medium"
+                            : "text-theme-text font-medium hover:bg-theme-info-bg"
+                        }`}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                    {projects.length === 0 && (
+                      <div className="px-4 py-3 text-sm text-theme-muted">No projects</div>
+                    )}
+                    <div className="border-t border-theme-border-subtle mt-1 pt-1 space-y-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handleCreateOrAddClick("/projects/add-existing")}
+                        className="w-full text-left px-4 py-2 text-sm text-theme-muted hover:bg-theme-info-bg hover:text-theme-text transition-colors"
+                      >
+                        Add Existing Project
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCreateOrAddClick("/projects/create-new")}
+                        className="w-full text-left px-4 py-2 text-sm text-theme-muted hover:bg-theme-info-bg hover:text-theme-text transition-colors"
+                      >
+                        Create New Project
+                      </button>
+                    </div>
+                  </div>,
+                  document.body
+                )}
+            </div>
+          ) : null}
         </div>
 
         {/* Center: Phase Tabs — viewport-centered via grid; horizontally scrollable on mobile. On Windows, no-drag so tabs are clickable. */}

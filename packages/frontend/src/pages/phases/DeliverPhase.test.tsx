@@ -287,7 +287,7 @@ describe("DeliverPhase", () => {
     renderWithRouter(store, "proj-1", onOpenSettings);
     const banner = await screen.findByTestId("expo-readiness-auth-banner");
     expect(banner).toHaveTextContent(
-      "Expo deployment requires an access token. Add it in Settings → Expo API Token."
+      "Expo deployment requires an access token. Add it under Project settings → Delivery (Expo access token)."
     );
     const openSettingsBtn = screen.getByTestId("expo-readiness-open-settings");
     expect(openSettingsBtn).toHaveTextContent("Open Settings");

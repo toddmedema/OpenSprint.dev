@@ -192,7 +192,6 @@ function createStore(
     preloadedState: {
       websocket: {
         connected: false,
-        deliverToast: null,
         ...websocketOverrides,
       },
       plan: {

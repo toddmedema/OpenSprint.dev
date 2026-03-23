@@ -34,6 +34,7 @@ import executeReducer, {
 import type { ExecuteState } from "./executeTypes";
 import planReducer from "./planSlice";
 import websocketReducer from "./websocketSlice";
+import notificationReducer from "./notificationSlice";
 import type { Plan, PlanDependencyGraph, AgentSession, Task } from "@opensprint/shared";
 
 vi.mock("../../api/client", async (importOriginal) => {
@@ -122,7 +123,12 @@ describe("executeSlice", () => {
 
   function createStore() {
     return configureStore({
-      reducer: { execute: executeReducer, plan: planReducer, websocket: websocketReducer },
+      reducer: {
+        execute: executeReducer,
+        plan: planReducer,
+        websocket: websocketReducer,
+        notification: notificationReducer,
+      },
       middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware().concat(agentOutputFilterMiddleware),
     });
@@ -1075,10 +1081,12 @@ describe("executeSlice", () => {
         })
       );
       expect(selectTasks(store.getState())[0].priority).toBe(1);
-      expect(store.getState().websocket.deliverToast).toEqual({
-        message: "Failed to update priority",
-        variant: "failed",
-      });
+      const items = store.getState().notification.items;
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ message: "Failed to update priority", severity: "error" }),
+        ])
+      );
     });
   });
 
@@ -1124,10 +1132,12 @@ describe("executeSlice", () => {
         updateTaskAssignee({ projectId: "proj-1", taskId: "task-1", assignee: "Bob" })
       );
 
-      expect(store.getState().websocket.deliverToast).toEqual({
-        message: "Failed to update assignee",
-        variant: "failed",
-      });
+      const items = store.getState().notification.items;
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ message: "Failed to update assignee", severity: "error" }),
+        ])
+      );
     });
 
     it("rejects with message and code when API returns ASSIGNEE_LOCKED (no generic toast)", async () => {
@@ -1146,7 +1156,13 @@ describe("executeSlice", () => {
         message: "Cannot change assignee while task is in progress",
         code: "ASSIGNEE_LOCKED",
       });
-      expect(store.getState().websocket.deliverToast).toBeNull();
+      expect(
+        store
+          .getState()
+          .notification.items.filter((n: { message: string }) =>
+            n.message.includes("Failed to update assignee")
+          )
+      ).toHaveLength(0);
     });
   });
 });

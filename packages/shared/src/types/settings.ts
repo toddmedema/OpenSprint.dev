@@ -73,6 +73,13 @@ export interface DeploymentConfig {
   rollbackCommand?: string;
   /** Time for nightly deploys in local timezone (HH:mm, e.g. "02:00"). Default: "02:00". */
   nightlyDeployTime?: string;
+  /**
+   * Expo access token (EXPO_TOKEN) when mode is "expo". Stored in project settings; never returned
+   * from GET APIs (see expoTokenConfigured).
+   */
+  expoToken?: string;
+  /** Set on API responses when expoToken is stored; the token value is never sent. */
+  expoTokenConfigured?: boolean;
 }
 
 export type DeploymentConfigInput = DeploymentConfig;
@@ -116,6 +123,40 @@ export function getTargetsForNightlyDeploy(config: DeploymentConfig): string[] {
   const targets = config.targets;
   if (!targets || targets.length === 0) return [];
   return targets.filter((t) => (t.autoDeployTrigger ?? "none") === "nightly").map((t) => t.name);
+}
+
+/**
+ * Merge a partial deployment update into current settings. Preserves expoToken when the patch
+ * omits it; clears stored token when patch sets expoToken to "". Removes expoToken when mode is not "expo".
+ */
+export function mergeDeploymentConfigPatch(
+  current: DeploymentConfig,
+  patch: Partial<DeploymentConfig>
+): DeploymentConfig {
+  const { expoToken: patchExpo, expoTokenConfigured: _ignoreConfigured, ...patchRest } = patch;
+  const merged: DeploymentConfig = { ...current, ...patchRest };
+
+  if (Object.prototype.hasOwnProperty.call(patch, "expoToken")) {
+    merged.expoToken =
+      typeof patchExpo === "string" && patchExpo.trim().length > 0 ? patchExpo.trim() : undefined;
+  }
+
+  if (merged.mode !== "expo") {
+    merged.expoToken = undefined;
+  }
+
+  delete (merged as { expoTokenConfigured?: boolean }).expoTokenConfigured;
+  return merged;
+}
+
+/** Strip secret token from deployment for API responses; expose expoTokenConfigured only. */
+export function deploymentConfigForApiResponse(d: DeploymentConfig): DeploymentConfig {
+  const { expoToken, expoTokenConfigured: _drop, ...rest } = d;
+  const configured = Boolean(expoToken && expoToken.trim());
+  return {
+    ...rest,
+    ...(configured ? { expoTokenConfigured: true as const } : {}),
+  };
 }
 
 /** Auto-deploy trigger options for UI dropdown */
@@ -179,6 +220,11 @@ function migrateDeploymentConfig(raw: unknown): DeploymentConfig {
     webhookUrl: input.webhookUrl,
     rollbackCommand: input.rollbackCommand,
     nightlyDeployTime: input.nightlyDeployTime,
+    ...(mode === "expo" &&
+      typeof input.expoToken === "string" &&
+      input.expoToken.trim() && {
+        expoToken: input.expoToken.trim(),
+      }),
   };
 
   // Migrate top-level envVars to per-target: merge into default target, or create staging/production for Expo
@@ -414,7 +460,7 @@ export interface GlobalSettings {
   useCustomCli?: boolean;
   /** PostgreSQL or SQLite connection URL or path. Never stored in the database; only in this JSON file. */
   databaseUrl?: string;
-  /** Expo access token (EXPO_TOKEN) for EAS deploy. Stored only in this JSON file. */
+  /** @deprecated Legacy Expo token; use project delivery settings. Still read as fallback for auth. */
   expoToken?: string;
   /** When true (default), show a notification dot on the desktop tray/menu bar icon when human notifications are pending. Desktop only. */
   showNotificationDotInMenuBar?: boolean;
@@ -422,14 +468,12 @@ export interface GlobalSettings {
   showRunningAgentCountInMenuBar?: boolean;
 }
 
-/** Response shape for GET /global-settings (apiKeys masked, expoToken masked) */
+/** Response shape for GET /global-settings (apiKeys masked) */
 export interface GlobalSettingsResponse {
   databaseUrl: string;
   /** Current database dialect so UI can show "Using SQLite" / "Upgrade to PostgreSQL" */
   databaseDialect?: "sqlite" | "postgres";
   apiKeys?: MaskedApiKeys;
-  /** Whether expoToken is configured (value never exposed) */
-  expoTokenConfigured?: boolean;
   /** When true (default), show notification dot in menu bar when notifications pending. Desktop only. */
   showNotificationDotInMenuBar?: boolean;
   /** When true (default), show running agent count in menu bar on macOS. Desktop only. */
@@ -440,8 +484,6 @@ export interface GlobalSettingsResponse {
 export interface GlobalSettingsPutRequest {
   databaseUrl?: string;
   apiKeys?: ApiKeysUpdate;
-  /** Expo access token (EXPO_TOKEN). Set to empty string to remove. */
-  expoToken?: string;
   /** When false, do not show notification dot in menu bar. Default true. */
   showNotificationDotInMenuBar?: boolean;
   /** When false, do not show running agent count in menu bar. Default true. */

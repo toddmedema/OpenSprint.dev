@@ -26,6 +26,7 @@ import openQuestionsReducer, {
   addNotification,
   updateNotification,
 } from "../slices/openQuestionsSlice";
+import notificationReducer from "../slices/notificationSlice";
 
 /** Mock WebSocket that allows controlling open/close/message events */
 class MockWebSocket {
@@ -152,6 +153,7 @@ describe("websocketMiddleware", () => {
         route: routeReducer,
         unreadPhase: unreadPhaseReducer,
         openQuestions: openQuestionsReducer,
+        notification: notificationReducer,
       },
       middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({
@@ -1567,7 +1569,7 @@ describe("websocketMiddleware", () => {
       });
     });
 
-    it("dispatches setDeliverToast on deliver.started", async () => {
+    it("dispatches notification on deliver.started", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
       wsInstance!.simulateOpen();
@@ -1576,14 +1578,15 @@ describe("websocketMiddleware", () => {
       wsInstance!.simulateMessage({ type: "deliver.started", deployId: "deploy-123" });
 
       await vi.waitFor(() => {
-        expect(store.getState().websocket.deliverToast).toEqual({
-          message: "Delivery started",
-          variant: "started",
-        });
+        expect(store.getState().notification.items).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ message: "Delivery started", severity: "info" }),
+          ])
+        );
       });
     });
 
-    it("dispatches setDeliverToast with succeeded on deliver.completed success", async () => {
+    it("dispatches success notification on deliver.completed success", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
       wsInstance!.simulateOpen();
@@ -1596,14 +1599,15 @@ describe("websocketMiddleware", () => {
       });
 
       await vi.waitFor(() => {
-        expect(store.getState().websocket.deliverToast).toEqual({
-          message: "Delivery succeeded",
-          variant: "succeeded",
-        });
+        expect(store.getState().notification.items).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ message: "Delivery succeeded", severity: "success" }),
+          ])
+        );
       });
     });
 
-    it("dispatches setDeliverToast with failed on deliver.completed failure", async () => {
+    it("dispatches error notification on deliver.completed failure", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
       wsInstance!.simulateOpen();
@@ -1616,10 +1620,11 @@ describe("websocketMiddleware", () => {
       });
 
       await vi.waitFor(() => {
-        expect(store.getState().websocket.deliverToast).toEqual({
-          message: "Delivery failed",
-          variant: "failed",
-        });
+        expect(store.getState().notification.items).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ message: "Delivery failed", severity: "error" }),
+          ])
+        );
       });
     });
   });

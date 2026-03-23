@@ -115,7 +115,7 @@ function createStore(preloadedTasks: (typeof readyTask)[] = [readyTask]) {
       websocket: websocketReducer,
     },
     preloadedState: {
-      websocket: { connected: true, deliverToast: null },
+      websocket: { connected: true },
       plan: {
         plans: [basePlan],
         dependencyGraph: null,

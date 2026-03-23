@@ -19,6 +19,7 @@ Task tracking is handled internally by `TaskStoreService` backed by **SQLite (de
 - Execute agents start in a prepared worktree with the task branch already checked out.
 - They run the smallest relevant non-watch verification for touched workspaces while iterating, using scoped tests first and scoped build/typecheck and lint commands when the change could affect them, and they leave the branch in a state where the merge quality gates (`npm run build`, `npm run lint`, `npm run test`) are expected to pass before reporting success.
 - If they add or change package dependencies, they run the project’s install from the repository root, update lockfiles, and commit manifest and lockfile changes with the code that uses those packages.
+- If they add or change TypeScript tests that use Jest/Vitest/Mocha globals, they ensure `npm run build` still passes (add typings such as `@types/jest` or exclude tests from the build tsconfig). A `TS2582` / `describe` error means the build typechecks tests without test-runner types.
 - They report completion or blocking questions by writing the exact `result.json` payload requested in the task prompt.
 - They should commit incremental logical units while working so crash recovery can preserve progress.
 - They must not push, merge, or close tasks manually; the orchestrator handles validation, task state, merging, and remote publication.

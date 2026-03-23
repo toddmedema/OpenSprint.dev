@@ -13,7 +13,8 @@ import type {
   TaskPriority,
   Notification,
 } from "@opensprint/shared";
-import { setConnected, setDeliverToast } from "../slices/websocketSlice";
+import { setConnected } from "../slices/websocketSlice";
+import { addNotification as addToast } from "../slices/notificationSlice";
 import {
   addNotification,
   removeNotification,
@@ -580,7 +581,14 @@ export const websocketMiddleware: Middleware = (storeApi) => {
 
       case "deliver.started":
         d(deliverStarted({ deployId: event.deployId }));
-        d(setDeliverToast({ message: "Delivery started", variant: "started" }));
+        d(
+          addToast({
+            message: "Delivery started",
+            severity: "info",
+            position: "bottom-right",
+            variant: "muted",
+          })
+        );
         break;
 
       case "deliver.output":
@@ -596,9 +604,11 @@ export const websocketMiddleware: Middleware = (storeApi) => {
           })
         );
         d(
-          setDeliverToast({
+          addToast({
             message: event.success ? "Delivery succeeded" : "Delivery failed",
-            variant: event.success ? "succeeded" : "failed",
+            severity: event.success ? "success" : "error",
+            position: "bottom-right",
+            variant: "muted",
           })
         );
         void qc.invalidateQueries({ queryKey: queryKeys.deliver.status(projectId) });

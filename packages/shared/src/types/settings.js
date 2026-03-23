@@ -29,6 +29,32 @@ export function getTargetsForNightlyDeploy(config) {
   if (!targets || targets.length === 0) return [];
   return targets.filter((t) => (t.autoDeployTrigger ?? "none") === "nightly").map((t) => t.name);
 }
+/**
+ * Merge a partial deployment update into current settings. Preserves expoToken when the patch
+ * omits it; clears stored token when patch sets expoToken to "". Removes expoToken when mode is not "expo".
+ */
+export function mergeDeploymentConfigPatch(current, patch) {
+  const { expoToken: patchExpo, expoTokenConfigured: _ignoreConfigured, ...patchRest } = patch;
+  const merged = { ...current, ...patchRest };
+  if (Object.prototype.hasOwnProperty.call(patch, "expoToken")) {
+    merged.expoToken =
+      typeof patchExpo === "string" && patchExpo.trim().length > 0 ? patchExpo.trim() : undefined;
+  }
+  if (merged.mode !== "expo") {
+    merged.expoToken = undefined;
+  }
+  delete merged.expoTokenConfigured;
+  return merged;
+}
+/** Strip secret token from deployment for API responses; expose expoTokenConfigured only. */
+export function deploymentConfigForApiResponse(d) {
+  const { expoToken, expoTokenConfigured: _drop, ...rest } = d;
+  const configured = Boolean(expoToken && expoToken.trim());
+  return {
+    ...rest,
+    ...(configured ? { expoTokenConfigured: true } : {}),
+  };
+}
 /** Auto-deploy trigger options for UI dropdown */
 export const AUTO_DEPLOY_TRIGGER_OPTIONS = [
   { value: "each_task", label: "Each task" },
@@ -81,6 +107,11 @@ function migrateDeploymentConfig(raw) {
     webhookUrl: input.webhookUrl,
     rollbackCommand: input.rollbackCommand,
     nightlyDeployTime: input.nightlyDeployTime,
+    ...(mode === "expo" &&
+      typeof input.expoToken === "string" &&
+      input.expoToken.trim() && {
+        expoToken: input.expoToken.trim(),
+      }),
   };
   // Migrate top-level envVars to per-target: merge into default target, or create staging/production for Expo
   if (input.envVars && Object.keys(input.envVars).length > 0) {

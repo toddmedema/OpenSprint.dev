@@ -40,8 +40,6 @@ function formatTarget(target: DeploymentRecord["target"]): string {
 interface DeliverPhaseProps {
   projectId: string;
   onOpenSettings?: () => void;
-  /** Opens global settings (Expo API Token). Defaults to onOpenSettings if not provided. */
-  onOpenGlobalSettings?: () => void;
 }
 
 function formatDate(iso: string): string {
@@ -103,11 +101,7 @@ function FilterIcon({ className }: { className?: string }) {
   );
 }
 
-export function DeliverPhase({
-  projectId,
-  onOpenSettings,
-  onOpenGlobalSettings,
-}: DeliverPhaseProps) {
+export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -284,12 +278,13 @@ export function DeliverPhase({
             className="mx-4 sm:mx-6 mt-2 mb-0 p-4 bg-theme-error-bg border border-theme-error-border rounded-lg text-sm text-theme-error-text shrink-0"
             data-testid="expo-readiness-auth-banner"
           >
-            Expo deployment requires an access token. Add it in Settings → Expo API Token.
-            {(onOpenGlobalSettings ?? onOpenSettings) && (
+            Expo deployment requires an access token. Add it under Project settings → Delivery (Expo
+            access token).
+            {onOpenSettings && (
               <div className="mt-3">
                 <button
                   type="button"
-                  onClick={onOpenGlobalSettings ?? onOpenSettings}
+                  onClick={onOpenSettings}
                   className="text-brand-600 hover:text-brand-700 font-medium underline"
                   data-testid="expo-readiness-open-settings"
                 >
@@ -773,15 +768,15 @@ export function DeliverPhase({
                     data-testid="expo-deploy-auth-error"
                   >
                     {expoDeployError}
-                    {(onOpenGlobalSettings ?? onOpenSettings) && (
+                    {onOpenSettings && (
                       <div className="mt-3">
                         <button
                           type="button"
-                          onClick={onOpenGlobalSettings ?? onOpenSettings}
+                          onClick={onOpenSettings}
                           className="text-brand-600 hover:text-brand-700 font-medium underline"
                           data-testid="expo-auth-settings-link"
                         >
-                          Open Settings to add Expo API Token →
+                          Open Settings → Delivery → Expo access token
                         </button>
                       </div>
                     )}
@@ -878,15 +873,15 @@ export function DeliverPhase({
                         data-testid="expo-deploy-auth-error"
                       >
                         {expoDeployError}
-                        {(onOpenGlobalSettings ?? onOpenSettings) && (
+                        {onOpenSettings && (
                           <div className="mt-3">
                             <button
                               type="button"
-                              onClick={onOpenGlobalSettings ?? onOpenSettings}
+                              onClick={onOpenSettings}
                               className="text-brand-600 hover:text-brand-700 font-medium underline"
                               data-testid="expo-auth-settings-link"
                             >
-                              Open Settings to add Expo API Token →
+                              Open Settings → Delivery → Expo access token
                             </button>
                           </div>
                         )}

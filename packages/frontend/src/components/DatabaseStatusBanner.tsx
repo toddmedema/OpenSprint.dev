@@ -5,6 +5,7 @@ import { useAppSelector, useAppDispatch } from "../store";
 import { CONNECTION_TOAST_MESSAGE_PATTERN } from "../lib/connectionNotificationConstants";
 import { dbStatusRestored } from "../store/slices/connectionSlice";
 import { dismissNotification } from "../store/slices/notificationSlice";
+import { Banner } from "./notifications";
 
 export function DatabaseStatusBanner() {
   const dispatch = useAppDispatch();
@@ -16,7 +17,6 @@ export function DatabaseStatusBanner() {
 
   const isVisible = !connectionError && data && !data.ok;
 
-  // Deduplicate: when this banner is shown, dismiss any connection-in-progress toasts so only one instance is visible.
   useEffect(() => {
     if (!isVisible) return;
     const items = notificationItems ?? [];
@@ -27,7 +27,6 @@ export function DatabaseStatusBanner() {
     }
   }, [isVisible, notificationItems, dispatch]);
 
-  // When db-status health check returns ok, signal so connection/Postgres toasts auto-dismiss.
   useEffect(() => {
     const ok = data?.ok === true;
     if (ok && prevOkRef.current === false) {
@@ -49,18 +48,18 @@ export function DatabaseStatusBanner() {
       : (data.message ?? "The database is not available; check Settings to fix the connection.");
 
   return (
-    <div
-      className="flex items-center justify-center gap-3 border-b border-theme-error-border bg-theme-error-bg px-4 py-3 text-theme-error-text shrink-0"
-      data-testid="database-status-banner"
-      role="alert"
-    >
-      <p className="text-sm font-medium">{message}</p>
-      <Link
-        to={settingsHref}
-        className="text-sm font-semibold underline underline-offset-2 hover:opacity-80"
-      >
-        Open Settings
-      </Link>
-    </div>
+    <Banner
+      severity="error"
+      message={message}
+      testId="database-status-banner"
+      actions={
+        <Link
+          to={settingsHref}
+          className="text-sm font-semibold underline underline-offset-2 hover:opacity-80"
+        >
+          Open Settings
+        </Link>
+      }
+    />
   );
 }

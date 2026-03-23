@@ -10,7 +10,7 @@ function createStore(connected: boolean) {
   return configureStore({
     reducer: { websocket: websocketReducer },
     preloadedState: {
-      websocket: { connected, deliverToast: null },
+      websocket: { connected },
     },
   });
 }

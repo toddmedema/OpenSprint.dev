@@ -166,7 +166,7 @@ function createStore() {
         activeAgentsLoadedOnce: false,
         selectedTaskId: null,
       },
-      websocket: { connected: false, deliverToast: null },
+      websocket: { connected: false },
     },
   });
 }

@@ -1583,12 +1583,16 @@ export class BranchManager {
    * (package.json / package-lock.json) changed and run `npm ci` if so.
    * Uses ORIG_HEAD (set by git merge) to detect changes; falls back to
    * running npm ci unconditionally if the ref is unavailable.
+   *
+   * Pathspecs use git glob pathspecs so nested workspace manifests under
+   * packages/ and apps/ are detected, not only a single directory segment
+   * under packages/.
    */
   async reconcileDependenciesAfterMerge(repoPath: string): Promise<void> {
     let needsReconcile = true;
     try {
       const { stdout } = await shellExec(
-        'git diff --name-only ORIG_HEAD..HEAD -- "package-lock.json" "package.json" "packages/*/package.json"',
+        'git diff --name-only ORIG_HEAD..HEAD -- package.json package-lock.json ":(glob)packages/**/package.json" ":(glob)apps/**/package.json"',
         { cwd: repoPath, timeout: 10_000 }
       );
       const changed = stdout.trim().split("\n").filter(Boolean);

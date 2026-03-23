@@ -19,12 +19,13 @@ import { SaveIndicator } from "./SaveIndicator";
 import { SettingsTopBar } from "./settings/SettingsTopBar";
 import { SettingsSubTabsBar, type SettingsSubTab } from "./settings/SettingsSubTabsBar";
 import { WorkflowSettingsContent } from "./settings/WorkflowSettingsContent";
-import { api } from "../api/client";
+import { api, isConnectionError } from "../api/client";
 import type {
   Project,
   ProjectSettings,
   AgentType,
   AiAutonomyLevel,
+  DeploymentConfig,
   DeploymentMode,
   GitWorkingMode,
   MergeStrategy,
@@ -81,6 +82,8 @@ export interface ProjectSettingsModalRef {
 const TAB_PARAM = "tab";
 const LOCAL_PROVIDER_MODEL_REQUIRED_MESSAGE =
   "Select a model before saving LM Studio or Ollama settings.";
+
+const EXPO_ACCESS_TOKEN_MASK = "••••••••";
 
 function parseTabFromSearch(search: string): SettingsSubTab | null {
   const params = new URLSearchParams(search);
@@ -287,6 +290,21 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
       () => settings?.deployment ?? { mode: "custom" as DeploymentMode },
       [settings?.deployment]
     );
+    const expoTokenConfigured = deployment.expoTokenConfigured === true;
+    const [expoAccessTokenInput, setExpoAccessTokenInput] = useState("");
+    const [expoTokenSaving, setExpoTokenSaving] = useState(false);
+    const [expoTokenError, setExpoTokenError] = useState<string | null>(null);
+
+    useEffect(() => {
+      if (deployment.mode !== "expo") {
+        setExpoAccessTokenInput("");
+        setExpoTokenError(null);
+        return;
+      }
+      setExpoAccessTokenInput(expoTokenConfigured ? EXPO_ACCESS_TOKEN_MASK : "");
+      setExpoTokenError(null);
+    }, [project.id, deployment.mode, expoTokenConfigured]);
+
     const aiAutonomyLevel = settings?.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL;
     const gitWorkingMode = settings?.gitWorkingMode ?? "worktree";
     const mergeStrategy = settings?.mergeStrategy ?? "per_task";
@@ -563,6 +581,38 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
       setSettings((s) => (s ? { ...s, deployment: next } : null));
       if (options?.immediate !== false) {
         void persistSettings(undefined, { deployment: next });
+      }
+    };
+
+    const handleSaveExpoAccessToken = async () => {
+      if (expoAccessTokenInput === EXPO_ACCESS_TOKEN_MASK && expoTokenConfigured) {
+        return;
+      }
+      setExpoTokenSaving(true);
+      setExpoTokenError(null);
+      try {
+        const deploymentPatch: Partial<DeploymentConfig> =
+          expoAccessTokenInput === EXPO_ACCESS_TOKEN_MASK
+            ? {}
+            : { expoToken: expoAccessTokenInput.trim() || "" };
+        const updated = await api.projects.updateSettings(project.id, {
+          deployment: deploymentPatch,
+        } as Partial<ProjectSettings>);
+        setSettings(updated);
+        setExpoAccessTokenInput(
+          updated.deployment.expoTokenConfigured === true ? EXPO_ACCESS_TOKEN_MASK : ""
+        );
+        void queryClient.invalidateQueries({ queryKey: queryKeys.projects.settings(project.id) });
+      } catch (err) {
+        setExpoTokenError(
+          isConnectionError(err)
+            ? "Unable to connect."
+            : err instanceof Error
+              ? err.message
+              : "Failed to save"
+        );
+      } finally {
+        setExpoTokenSaving(false);
       }
     };
 
@@ -1569,6 +1619,70 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             Link to an existing Expo project. Leave blank to create one on first
                             deploy.
                           </p>
+                        </div>
+                        <div data-testid="expo-access-token-section">
+                          <label
+                            htmlFor="expo-access-token"
+                            className="block text-sm font-medium text-theme-text mb-1"
+                          >
+                            Expo access token
+                          </label>
+                          <p className="text-xs text-theme-muted mb-2">
+                            Required for EAS deploy unless you use{" "}
+                            <code className="text-xs bg-theme-bg-elevated px-1 rounded">
+                              npx eas login
+                            </code>{" "}
+                            in the repo. Create a token at{" "}
+                            <a
+                              href="https://expo.dev/settings/access-tokens"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-brand-600 hover:underline"
+                            >
+                              expo.dev/settings/access-tokens
+                            </a>
+                            .
+                          </p>
+                          <div className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              <input
+                                id="expo-access-token"
+                                type="password"
+                                className="input font-mono text-sm w-full"
+                                placeholder={
+                                  expoTokenConfigured
+                                    ? "•••••••• (configured)"
+                                    : "Paste your Expo access token"
+                                }
+                                value={expoAccessTokenInput}
+                                onChange={(e) => {
+                                  setExpoAccessTokenInput(e.target.value);
+                                  setExpoTokenError(null);
+                                }}
+                                disabled={expoTokenSaving}
+                                autoComplete="off"
+                                data-testid="expo-access-token-input"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void handleSaveExpoAccessToken()}
+                              disabled={
+                                expoTokenSaving ||
+                                (expoAccessTokenInput === EXPO_ACCESS_TOKEN_MASK &&
+                                  expoTokenConfigured)
+                              }
+                              className="btn-secondary"
+                              data-testid="expo-access-token-save"
+                            >
+                              {expoTokenSaving ? "Saving…" : "Save"}
+                            </button>
+                          </div>
+                          {expoTokenError && (
+                            <p className="text-sm text-theme-error-text mt-2" role="alert">
+                              {expoTokenError}
+                            </p>
+                          )}
                         </div>
                         <h4 className="text-sm font-medium text-theme-text">
                           Environment variables per target

@@ -41,7 +41,6 @@ function buildResponse(settings: GlobalSettings) {
     databaseUrl: maskDatabaseUrl(effectiveUrl),
     databaseDialect: getDatabaseDialect(effectiveUrl),
     ...(settings.apiKeys && { apiKeys: maskApiKeysForResponse(settings.apiKeys) }),
-    expoTokenConfigured: Boolean(settings.expoToken && settings.expoToken.trim()),
     showNotificationDotInMenuBar: settings.showNotificationDotInMenuBar !== false,
     showRunningAgentCountInMenuBar: settings.showRunningAgentCountInMenuBar !== false,
   };
@@ -165,7 +164,7 @@ globalSettingsRouter.get(
   })
 );
 
-// PUT /global-settings — Accepts databaseUrl, apiKeys, expoToken, showNotificationDotInMenuBar. Validates and sanitizes. Merge apiKeys with existing (preserve value when id exists and value omitted).
+// PUT /global-settings — Accepts databaseUrl, apiKeys, showNotificationDotInMenuBar. Validates and sanitizes. Merge apiKeys with existing (preserve value when id exists and value omitted).
 globalSettingsRouter.put(
   "/",
   validateBody(globalSettingsPutBodySchema),
@@ -173,14 +172,12 @@ globalSettingsRouter.put(
     const body = req.body as {
       databaseUrl?: string;
       apiKeys?: unknown;
-      expoToken?: string;
       showNotificationDotInMenuBar?: boolean;
       showRunningAgentCountInMenuBar?: boolean;
     };
     const updates: {
       databaseUrl?: string;
       apiKeys?: unknown;
-      expoToken?: string;
       showNotificationDotInMenuBar?: boolean;
       showRunningAgentCountInMenuBar?: boolean;
     } = {};
@@ -204,10 +201,6 @@ globalSettingsRouter.put(
 
     if (body.apiKeys !== undefined) {
       updates.apiKeys = body.apiKeys;
-    }
-
-    if (body.expoToken !== undefined) {
-      updates.expoToken = typeof body.expoToken === "string" ? body.expoToken : "";
     }
 
     if (body.showNotificationDotInMenuBar !== undefined) {

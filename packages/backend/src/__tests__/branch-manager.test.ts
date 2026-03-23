@@ -429,6 +429,27 @@ describe("BranchManager", () => {
       shellExecSpy.mockRestore();
     });
 
+    it("runs npm ci when a nested workspace package.json changed", async () => {
+      const commands: string[] = [];
+      const shellExecSpy = vi
+        .spyOn(shellExecModule, "shellExec")
+        .mockImplementation(async (command: string) => {
+          commands.push(command);
+          if (command.includes("git diff --name-only ORIG_HEAD")) {
+            return { stdout: "packages/nested/pkg/package.json\n", stderr: "" };
+          }
+          if (command === "npm ci") {
+            return { stdout: "installed", stderr: "" };
+          }
+          return { stdout: "", stderr: "" };
+        });
+
+      await branchManager.reconcileDependenciesAfterMerge(repoPath);
+
+      expect(commands).toContain("npm ci");
+      shellExecSpy.mockRestore();
+    });
+
     it("falls back to running npm ci when ORIG_HEAD is unavailable", async () => {
       const commands: string[] = [];
       const shellExecSpy = vi

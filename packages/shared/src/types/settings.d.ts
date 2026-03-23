@@ -61,6 +61,13 @@ export interface DeploymentConfig {
   rollbackCommand?: string;
   /** Time for nightly deploys in local timezone (HH:mm, e.g. "02:00"). Default: "02:00". */
   nightlyDeployTime?: string;
+  /**
+   * Expo access token (EXPO_TOKEN) when mode is "expo". Stored in project settings; never returned
+   * from GET APIs (see expoTokenConfigured).
+   */
+  expoToken?: string;
+  /** Set on API responses when expoToken is stored; the token value is never sent. */
+  expoTokenConfigured?: boolean;
 }
 export type DeploymentConfigInput = DeploymentConfig;
 /** Resolve the default target name from targets array (first isDefault, or first entry, or config.target). */
@@ -85,6 +92,11 @@ export declare function getTargetsForDeployEvent(
  * Returns targets whose autoDeployTrigger is "nightly".
  */
 export declare function getTargetsForNightlyDeploy(config: DeploymentConfig): string[];
+export declare function mergeDeploymentConfigPatch(
+  current: DeploymentConfig,
+  patch: Partial<DeploymentConfig>
+): DeploymentConfig;
+export declare function deploymentConfigForApiResponse(d: DeploymentConfig): DeploymentConfig;
 /** Auto-deploy trigger options for UI dropdown */
 export declare const AUTO_DEPLOY_TRIGGER_OPTIONS: {
   value: AutoDeployTrigger;
@@ -215,21 +227,19 @@ export interface GlobalSettings {
   useCustomCli?: boolean;
   /** PostgreSQL or SQLite connection URL or path. Never stored in the database; only in this JSON file. */
   databaseUrl?: string;
-  /** Expo access token (EXPO_TOKEN) for EAS deploy. Stored only in this JSON file. */
+  /** @deprecated Legacy Expo token; use project delivery settings. Still read as fallback for auth. */
   expoToken?: string;
   /** When true (default), show a notification dot on the desktop tray/menu bar icon when human notifications are pending. Desktop only. */
   showNotificationDotInMenuBar?: boolean;
   /** When true (default), show the running agent count to the right of the menu bar icon on macOS. Desktop only. */
   showRunningAgentCountInMenuBar?: boolean;
 }
-/** Response shape for GET /global-settings (apiKeys masked, expoToken masked) */
+/** Response shape for GET /global-settings (apiKeys masked) */
 export interface GlobalSettingsResponse {
   databaseUrl: string;
   /** Current database dialect so UI can show "Using SQLite" / "Upgrade to PostgreSQL" */
   databaseDialect?: "sqlite" | "postgres";
   apiKeys?: MaskedApiKeys;
-  /** Whether expoToken is configured (value never exposed) */
-  expoTokenConfigured?: boolean;
   /** When true (default), show notification dot in menu bar when notifications pending. Desktop only. */
   showNotificationDotInMenuBar?: boolean;
   /** When true (default), show running agent count in menu bar on macOS. Desktop only. */
@@ -239,8 +249,6 @@ export interface GlobalSettingsResponse {
 export interface GlobalSettingsPutRequest {
   databaseUrl?: string;
   apiKeys?: ApiKeysUpdate;
-  /** Expo access token (EXPO_TOKEN). Set to empty string to remove. */
-  expoToken?: string;
   /** When false, do not show notification dot in menu bar. Default true. */
   showNotificationDotInMenuBar?: boolean;
   /** When false, do not show running agent count in menu bar. Default true. */

@@ -83,7 +83,14 @@ describe("prepare-desktop-resources", () => {
 
   it("keeps the rasterized artwork optically shifted toward center", async () => {
     const sharp = require("sharp");
-    const lightIconPath = path.join(__dirname, "..", "build", "OpenSprint.icon", "Assets", "light.png");
+    const lightIconPath = path.join(
+      __dirname,
+      "..",
+      "build",
+      "OpenSprint.icon",
+      "Assets",
+      "light.png"
+    );
     const { data, info } = await sharp(lightIconPath)
       .ensureAlpha()
       .raw()
