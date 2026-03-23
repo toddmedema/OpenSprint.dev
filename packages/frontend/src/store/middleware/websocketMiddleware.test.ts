@@ -20,7 +20,6 @@ import planReducer from "../slices/planSlice";
 import executeReducer, { selectTasks } from "../slices/executeSlice";
 import evalReducer, { setFeedback } from "../slices/evalSlice";
 import deliverReducer from "../slices/deliverSlice";
-import routeReducer, { setRoute } from "../slices/routeSlice";
 import unreadPhaseReducer from "../slices/unreadPhaseSlice";
 import openQuestionsReducer, {
   addNotification,
@@ -110,6 +109,38 @@ describe("websocketMiddleware", () => {
   let MockWS: typeof MockWebSocket;
   let wsInstance: MockWebSocket | null = null;
 
+  function setCurrentPath(pathname: string) {
+    vi.stubGlobal("window", {
+      ...globalThis.window,
+      location: {
+        ...(globalThis.window as { location?: Record<string, unknown> } | undefined)?.location,
+        protocol:
+          (globalThis.window as { location?: { protocol?: string } } | undefined)?.location
+            ?.protocol ?? "http:",
+        host:
+          (globalThis.window as { location?: { host?: string } } | undefined)?.location?.host ??
+          "localhost:3100",
+        pathname,
+      },
+      history: {
+        replaceState: vi.fn(),
+      },
+      addEventListener:
+        (globalThis.window as { addEventListener?: ((event: string, handler: () => void) => void) } | undefined)
+          ?.addEventListener ??
+        ((event: string, handler: () => void) => {
+          if (event === "focus") focusListeners.push(handler);
+        }),
+      dispatchEvent:
+        (globalThis.window as { dispatchEvent?: ((event: Event) => boolean) } | undefined)
+          ?.dispatchEvent ??
+        ((event: Event) => {
+          if (event.type === "focus") focusListeners.forEach((h) => h());
+          return true;
+        }),
+    });
+  }
+
   const focusListeners: Array<() => void> = [];
   beforeEach(() => {
     wsInstance = null;
@@ -133,7 +164,11 @@ describe("websocketMiddleware", () => {
         if (event.type === "focus") focusListeners.forEach((h) => h());
         return true;
       },
+      history: {
+        replaceState: vi.fn(),
+      },
     });
+    setCurrentPath("/");
   });
 
   afterEach(() => {
@@ -150,7 +185,6 @@ describe("websocketMiddleware", () => {
         execute: executeReducer,
         eval: evalReducer,
         deliver: deliverReducer,
-        route: routeReducer,
         unreadPhase: unreadPhaseReducer,
         openQuestions: openQuestionsReducer,
         notification: notificationReducer,
@@ -412,7 +446,7 @@ describe("websocketMiddleware", () => {
     describe("plan phase unread (plan.generated / plan.updated)", () => {
       it("dispatches setPhaseUnread(plan) when route project differs from event project", async () => {
         const store = createStore();
-        store.dispatch(setRoute({ projectId: "proj-2", phase: "sketch" }));
+        setCurrentPath("/projects/proj-2/sketch");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
@@ -426,7 +460,7 @@ describe("websocketMiddleware", () => {
 
       it("dispatches setPhaseUnread(plan) when same project but currentPhase !== plan", async () => {
         const store = createStore();
-        store.dispatch(setRoute({ projectId: "proj-1", phase: "sketch" }));
+        setCurrentPath("/projects/proj-1/sketch");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
@@ -440,7 +474,7 @@ describe("websocketMiddleware", () => {
 
       it("does not dispatch setPhaseUnread(plan) when same project and currentPhase is plan", async () => {
         const store = createStore();
-        store.dispatch(setRoute({ projectId: "proj-1", phase: "plan" }));
+        setCurrentPath("/projects/proj-1/plan");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
@@ -457,7 +491,7 @@ describe("websocketMiddleware", () => {
 
       it("plan.generated: dispatches setPhaseUnread(plan) when different project", async () => {
         const store = createStore();
-        store.dispatch(setRoute({ projectId: "proj-2", phase: "plan" }));
+        setCurrentPath("/projects/proj-2/plan");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
@@ -471,7 +505,7 @@ describe("websocketMiddleware", () => {
 
       it("plan.generated: does not dispatch setPhaseUnread when same project and phase plan", async () => {
         const store = createStore();
-        store.dispatch(setRoute({ projectId: "proj-1", phase: "plan" }));
+        setCurrentPath("/projects/proj-1/plan");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
@@ -490,7 +524,7 @@ describe("websocketMiddleware", () => {
     describe("sketch phase unread (prd.updated)", () => {
       it("dispatches setPhaseUnread(sketch) when route project differs from event project", async () => {
         const store = createStore();
-        store.dispatch(setRoute({ projectId: "proj-2", phase: "sketch" }));
+        setCurrentPath("/projects/proj-2/sketch");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
@@ -504,7 +538,7 @@ describe("websocketMiddleware", () => {
 
       it("dispatches setPhaseUnread(sketch) when same project but currentPhase !== sketch", async () => {
         const store = createStore();
-        store.dispatch(setRoute({ projectId: "proj-1", phase: "plan" }));
+        setCurrentPath("/projects/proj-1/plan");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
@@ -518,7 +552,7 @@ describe("websocketMiddleware", () => {
 
       it("does not dispatch setPhaseUnread(sketch) when same project and currentPhase is sketch", async () => {
         const store = createStore();
-        store.dispatch(setRoute({ projectId: "proj-1", phase: "sketch" }));
+        setCurrentPath("/projects/proj-1/sketch");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);

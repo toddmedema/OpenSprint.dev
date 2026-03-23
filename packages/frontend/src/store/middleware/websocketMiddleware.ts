@@ -47,6 +47,7 @@ import { setPhaseUnread } from "../slices/unreadPhaseSlice";
 import type { QueryClient } from "@tanstack/react-query";
 import { getQueryClient } from "../../queryClient";
 import { queryKeys } from "../../api/queryKeys";
+import { isViewingProjectPhase } from "../../lib/currentProjectRoute";
 
 type StoreDispatch = ThunkDispatch<unknown, unknown, UnknownAction>;
 
@@ -313,9 +314,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
     const qc = getQueryClient();
     switch (event.type) {
       case "prd.updated": {
-        const route = (getState() as { route?: { projectId: string | null; phase: string | null } })
-          ?.route;
-        if (route?.projectId !== projectId || route?.phase !== "sketch") {
+        if (!isViewingProjectPhase(projectId, "sketch")) {
           d(setPhaseUnread({ projectId, phase: "sketch" }));
         }
         void qc.invalidateQueries({ queryKey: queryKeys.prd.detail(projectId) });
@@ -326,10 +325,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
       }
 
       case "plan.generated": {
-        const planGenRoute = (
-          getState() as { route?: { projectId: string | null; phase: string | null } }
-        )?.route;
-        if (planGenRoute?.projectId !== projectId || planGenRoute?.phase !== "plan") {
+        if (!isViewingProjectPhase(projectId, "plan")) {
           d(setPhaseUnread({ projectId, phase: "plan" }));
         }
         void qc.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
@@ -350,10 +346,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
       }
 
       case "plan.updated": {
-        const planUpdRoute = (
-          getState() as { route?: { projectId: string | null; phase: string | null } }
-        )?.route;
-        if (planUpdRoute?.projectId !== projectId || planUpdRoute?.phase !== "plan") {
+        if (!isViewingProjectPhase(projectId, "plan")) {
           d(setPhaseUnread({ projectId, phase: "plan" }));
         }
         void qc.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });

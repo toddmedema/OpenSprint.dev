@@ -46,7 +46,6 @@ import { schedulePhasePreload } from "../lib/phasePreload";
 import type { ProjectPhase } from "@opensprint/shared";
 import { ACTIVE_AGENTS_POLL_INTERVAL_MS } from "../lib/constants";
 import { fetchProjectNotifications } from "../store/slices/openQuestionsSlice";
-import { setRoute } from "../store/slices/routeSlice";
 
 /** Derives current view from pathname: "help" | "settings" | phase slug. */
 function getViewFromPathname(pathname: string): "help" | "settings" | string {
@@ -84,7 +83,6 @@ export function ProjectShell() {
   const view = getViewFromPathname(location.pathname);
   const phaseRoute = isPhaseRoute(view);
   const currentPhase: ProjectPhase = isPhaseRoute(view) ? view : "sketch";
-  const routePhase: ProjectPhase | null = phaseRoute ? view : null;
   const isSketch = currentPhase === "sketch";
   const isPlan = currentPhase === "plan";
   const isExecute = currentPhase === "execute";
@@ -119,13 +117,6 @@ export function ProjectShell() {
   });
   const wsConnected = useAppSelector((s) => s.websocket.connected);
   const prevWsConnectedRef = useRef<boolean | null>(null);
-
-  // Sync current project and phase to Redux so WebSocket middleware and Execute-unread logic can read them.
-  useEffect(() => {
-    if (projectId) {
-      dispatch(setRoute({ projectId, phase: routePhase }));
-    }
-  }, [projectId, routePhase, dispatch]);
 
   // Project lifecycle: reset slices before query-to-Redux syncs run, then connect WS when DB is ready.
   // When projectId changes (switch or fresh mount from home), clear sync state and invalidate queries

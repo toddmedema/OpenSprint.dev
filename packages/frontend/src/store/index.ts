@@ -11,7 +11,6 @@ import evalReducer from "./slices/evalSlice";
 import deliverReducer from "./slices/deliverSlice";
 import notificationReducer from "./slices/notificationSlice";
 import openQuestionsReducer from "./slices/openQuestionsSlice";
-import routeReducer from "./slices/routeSlice";
 import unreadPhaseReducer from "./slices/unreadPhaseSlice";
 import { websocketMiddleware } from "./middleware/websocketMiddleware";
 import { agentOutputFilterMiddleware } from "./middleware/agentOutputFilterMiddleware";
@@ -33,7 +32,6 @@ export const store = configureStore({
     deliver: deliverReducer,
     notification: notificationReducer,
     openQuestions: openQuestionsReducer,
-    route: routeReducer,
     unreadPhase: unreadPhaseReducer,
   },
   middleware: (getDefaultMiddleware) =>

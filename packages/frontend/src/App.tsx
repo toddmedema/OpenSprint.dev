@@ -1,5 +1,5 @@
-import { Suspense, lazy, useEffect, type ReactNode } from "react";
-import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
+import { Suspense, lazy, type ReactNode } from "react";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { Home } from "./pages/Home";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { ProjectSetup } from "./pages/ProjectSetup";
@@ -9,8 +9,6 @@ import { ProjectView } from "./pages/ProjectView";
 import { GlobalKeyboardShortcuts } from "./components/GlobalKeyboardShortcuts";
 import { FindBar } from "./components/FindBar";
 import { RouteFallback } from "./components/RouteFallback";
-import { useAppDispatch } from "./store";
-import { setRoute } from "./store/slices/routeSlice";
 
 const SettingsPage = lazy(() =>
   import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage }))
@@ -42,24 +40,9 @@ function HelpShortcutsRedirect() {
   return <Navigate to="/help?tab=shortcuts" replace />;
 }
 
-/** Clears route state when not viewing a project (home, settings, help, or project create/setup). */
-function RouteSync() {
-  const location = useLocation();
-  const dispatch = useAppDispatch();
-  useEffect(() => {
-    const pathname = location.pathname;
-    const isProjectView = /^\/projects\/(?!create-new|add-existing)([^/]+)/.test(pathname);
-    if (!isProjectView) {
-      dispatch(setRoute({ projectId: null, phase: null }));
-    }
-  }, [location.pathname, dispatch]);
-  return null;
-}
-
 export function App() {
   return (
     <>
-      <RouteSync />
       <FindBar />
       <GlobalKeyboardShortcuts />
       <Routes>

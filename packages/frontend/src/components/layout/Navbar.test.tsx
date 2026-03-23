@@ -24,7 +24,6 @@ import sketchReducer from "../../store/slices/sketchSlice";
 import evalReducer from "../../store/slices/evalSlice";
 import deliverReducer from "../../store/slices/deliverSlice";
 import unreadPhaseReducer from "../../store/slices/unreadPhaseSlice";
-import routeReducer from "../../store/slices/routeSlice";
 
 const mockGetSettings = vi.fn();
 const mockProjectsList = vi.fn();
@@ -174,7 +173,6 @@ function createStore(
       openQuestions: openQuestionsReducer,
       notification: notificationReducer,
       unreadPhase: unreadPhaseReducer,
-      route: routeReducer,
     },
     preloadedState: {
       execute: {
