@@ -947,11 +947,16 @@ Updated description for task two.`;
         expect(markRes.status).toBe(200);
 
         // Re-execute: Auditor creates delta tasks (no gate); epic set back to blocked
+        mockBroadcastToProject.mockClear();
         const reshipRes = await request(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
         );
         expect(reshipRes.status).toBe(200);
         expect(reshipRes.body.data).toBeDefined();
+        expect(mockBroadcastToProject).toHaveBeenCalledWith(projectId, {
+          type: "plan.updated",
+          planId,
+        });
 
         // Epic blocked after re-execute (delta tasks added); second Execute! would unblock
         const epicAfterReship = await taskStore.show(projectId, epicId);
@@ -2156,10 +2161,15 @@ Feature that depends on auth.
       const versionsBefore = await taskStore.listPlanVersions(projectId, planId);
       expect(versionsBefore).toHaveLength(0);
 
+      mockBroadcastToProject.mockClear();
       const executeRes = await request(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
       );
       expect(executeRes.status).toBe(200);
+      expect(mockBroadcastToProject).toHaveBeenCalledWith(projectId, {
+        type: "plan.updated",
+        planId,
+      });
 
       const planRow = await taskStore.planGet(projectId, planId);
       expect(planRow?.last_executed_version_number).toBe(1);

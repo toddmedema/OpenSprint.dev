@@ -13,6 +13,7 @@ import {
 import type { PlanService } from "../services/plan.service.js";
 import { orchestratorService } from "../services/orchestrator.service.js";
 import { taskStore } from "../services/task-store.service.js";
+import { broadcastToProject } from "../websocket/index.js";
 import type {
   ApiResponse,
   Plan,
@@ -263,6 +264,12 @@ export function createPlansRouter(planService: PlanService): Router {
                 options
               )
             : await planService.shipPlan(req.params.projectId, req.params.planId, options);
+        for (const updatedPlanId of new Set([req.params.planId, ...prerequisitePlanIds])) {
+          broadcastToProject(req.params.projectId, {
+            type: "plan.updated",
+            planId: updatedPlanId,
+          });
+        }
         // Nudge orchestrator to pick up newly-available tasks (PRDv2 §5.7 event-driven dispatch)
         orchestratorService.nudge(req.params.projectId);
         const body: ApiResponse<Plan> = { data: plan };
@@ -281,6 +288,10 @@ export function createPlansRouter(planService: PlanService): Router {
       const version_number = req.body.version_number;
       const options = version_number != null ? { version_number } : undefined;
       const plan = await planService.reshipPlan(req.params.projectId, req.params.planId, options);
+      broadcastToProject(req.params.projectId, {
+        type: "plan.updated",
+        planId: req.params.planId,
+      });
       // Nudge orchestrator to pick up newly-available tasks (PRDv2 §5.7 event-driven dispatch)
       orchestratorService.nudge(req.params.projectId);
       const body: ApiResponse<Plan> = { data: plan };
