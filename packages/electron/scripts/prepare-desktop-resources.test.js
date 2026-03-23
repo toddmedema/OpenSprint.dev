@@ -70,12 +70,14 @@ describe("prepare-desktop-resources", () => {
   it("includes light, dark, and tinted Icon Composer variants for macOS builds", () => {
     const iconJsonPath = path.join(__dirname, "..", "build", "OpenSprint.icon", "icon.json");
     const iconJson = JSON.parse(fs.readFileSync(iconJsonPath, "utf8"));
-    const specializations = iconJson.groups[0].layers[0]["image-name-specializations"];
+    const layer = iconJson.groups[0].layers[0];
+    const specializations = layer["image-name-specializations"];
 
     expect(specializations).toEqual([
       { value: "light.png" },
       { appearance: "dark", value: "dark.png" },
       { appearance: "tinted", value: "tinted.png" },
     ]);
+    expect(layer.position["translation-in-points"]).toEqual([3, 0]);
   });
 });
