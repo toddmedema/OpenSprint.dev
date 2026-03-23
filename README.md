@@ -134,7 +134,7 @@ See **[CONTRIBUTING.md](CONTRIBUTING.md)** for setup, quality checks, submitting
 
 You can run Open Sprint as a desktop app (Electron) or build installable artifacts.
 
-**Prerequisites:** Same as Quick Start (Node.js 24.x). The desktop app uses SQLite by default; config and data live in `~/.opensprint` (see [Database](#database) and [PostgreSQL Setup FAQ](#postgresql-setup-faq)).
+**Prerequisites:** Same as Quick Start (Node.js 24.x). The desktop app uses SQLite by default; config and data live in `~/.opensprint` (see [Database](#database) and [PostgreSQL Setup FAQ](#postgresql-setup-faq)). For macOS installer builds, Apple's appearance-aware app icon pipeline now goes through `actool`, so use full Xcode 26 or newer instead of Command Line Tools alone.
 
 **Linux runtime prerequisites (Electron):** Install common desktop libs before running `npm run start:desktop` or launching the Linux AppImage (for example on Ubuntu/Debian: `sudo apt-get install -y libgtk-3-0 libnss3 libasound2 libxss1 libxtst6 libatspi2.0-0 libsecret-1-0 libnotify4 libcups2 libgbm1`).  
 For AppImage specifically, install FUSE2 (`libfuse2`) or AppImage may fail to launch.

@@ -4,6 +4,8 @@ Open Sprint macOS releases are distributed outside the Mac App Store, so Gatekee
 
 The GitHub Actions workflow at `.github/workflows/release-desktop.yml` is the supported release path for public macOS builds. It signs the `.app`, runs the repository `afterSign` notarization hook, staples the app before DMG packaging, validates the result, and then uploads the DMG to the GitHub Release.
 
+Open Sprint's macOS app icon now uses Apple's Icon Composer format so Finder and the Dock can auto-style the icon for light, dark, and tinted appearances. Electron Builder compiles that asset with `actool`, which requires full Xcode 26 or newer; Command Line Tools alone are not enough for macOS packaging.
+
 ## Required Apple Assets
 
 You need all of the following before a tagged macOS release can succeed:

@@ -17,6 +17,7 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 import { buildWindowOptions } from "./window-options";
+import { shouldApplyRuntimeDockIcon } from "./runtime-branding";
 import { renderBootHtml } from "./boot-screen";
 
 import { autoUpdater } from "electron-updater";
@@ -134,7 +135,7 @@ function applyRuntimeBranding(): string | null {
   if (!iconPath) return null;
   const iconImage = nativeImage.createFromPath(iconPath);
   if (iconImage.isEmpty()) return null;
-  if (process.platform === "darwin" && app.dock) {
+  if (shouldApplyRuntimeDockIcon(process.platform, app.isPackaged) && app.dock) {
     app.dock.setIcon(iconImage);
   }
   return iconPath;

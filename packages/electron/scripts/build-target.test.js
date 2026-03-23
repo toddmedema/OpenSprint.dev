@@ -73,4 +73,10 @@ describe("build-target", () => {
     expect(electronPackageJson.scripts.build).toBe("node scripts/build-target.js");
     expect(electronPackageJson.scripts["build:dir"]).toBe("node scripts/build-target.js --dir");
   });
+
+  it("packages the macOS app with an Icon Composer asset", () => {
+    const electronPackageJsonPath = path.join(__dirname, "..", "package.json");
+    const electronPackageJson = JSON.parse(fs.readFileSync(electronPackageJsonPath, "utf8"));
+    expect(electronPackageJson.build.mac.icon).toBe("build/OpenSprint.icon");
+  });
 });

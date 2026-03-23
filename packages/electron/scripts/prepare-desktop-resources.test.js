@@ -1,5 +1,8 @@
 import { createRequire } from "module";
+import fs from "fs";
+import path from "path";
 import { describe, expect, it } from "vitest";
+import { fileURLToPath } from "url";
 
 const require = createRequire(import.meta.url);
 const {
@@ -9,6 +12,8 @@ const {
   resolveElectronVersion,
   resolveInstalledElectronVersion,
 } = require("./prepare-desktop-resources.js");
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe("prepare-desktop-resources", () => {
   it("normalizes semver prefixes", () => {
@@ -59,6 +64,18 @@ describe("prepare-desktop-resources", () => {
       "arm64",
       "--force",
       "--build-from-source",
+    ]);
+  });
+
+  it("includes light, dark, and tinted Icon Composer variants for macOS builds", () => {
+    const iconJsonPath = path.join(__dirname, "..", "build", "OpenSprint.icon", "icon.json");
+    const iconJson = JSON.parse(fs.readFileSync(iconJsonPath, "utf8"));
+    const specializations = iconJson.groups[0].layers[0]["image-name-specializations"];
+
+    expect(specializations).toEqual([
+      { value: "light.svg" },
+      { appearance: "dark", value: "dark.svg" },
+      { appearance: "tinted", value: "tinted.svg" },
     ]);
   });
 });
