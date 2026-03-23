@@ -159,6 +159,7 @@ export function HomeScreen() {
   const modalTriggerRef = useRef<HTMLElement | null>(null);
   const missingPrereqCount = prerequisites?.missing.length ?? 0;
   const hasMissingPrerequisites = missingPrereqCount > 0;
+  const showProjectsEmptyState = !hasMissingPrerequisites && !loading && projects.length === 0;
 
   const handleCreateOrAddClick = async (
     route: "/projects/create-new" | "/projects/add-existing"
@@ -326,7 +327,9 @@ export function HomeScreen() {
   return (
     <Layout>
       <div
-        className={`${HOMEPAGE_CONTAINER_CLASS} py-6 sm:py-10 flex-1 min-h-0 overflow-y-auto`}
+        className={`${HOMEPAGE_CONTAINER_CLASS} ${
+          showProjectsEmptyState ? "py-4 sm:py-6 flex flex-col justify-center" : "py-6 sm:py-10"
+        } flex-1 min-h-0 overflow-y-auto`}
         data-testid="project-list-container"
       >
         {hasMissingPrerequisites && prerequisites && (
@@ -401,7 +404,7 @@ export function HomeScreen() {
               <div className="text-center py-20 text-theme-muted">Loading projects...</div>
             ) : projects.length === 0 ? (
               <section
-                className="relative isolate overflow-hidden card min-h-[clamp(32rem,72vh,52rem)] px-6 py-10 sm:px-10 lg:px-14"
+                className="relative isolate overflow-hidden card w-full min-h-[clamp(30rem,68vh,48rem)] px-6 py-10 sm:px-10 lg:px-14"
                 data-testid="projects-empty-state"
               >
                 <div
@@ -413,7 +416,7 @@ export function HomeScreen() {
                   aria-hidden
                 />
                 <div
-                  className="pointer-events-none absolute bottom-[-5rem] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-amber-400/10 blur-3xl"
+                  className="pointer-events-none absolute bottom-8 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-amber-400/10 blur-3xl"
                   aria-hidden
                 />
 
