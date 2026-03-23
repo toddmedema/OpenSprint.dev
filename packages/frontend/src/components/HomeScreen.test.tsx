@@ -81,14 +81,22 @@ describe("HomeScreen", () => {
     expect(screen.getByText("Loading projects...")).toBeInTheDocument();
   });
 
-  it("shows projects grid when no projects", async () => {
+  it("shows a full-screen empty state when no projects", async () => {
     mockProjectsList.mockResolvedValue([]);
 
     renderHomeScreen();
 
-    await screen.findByTestId("projects-grid");
+    await screen.findByTestId("projects-empty-state");
+    expect(screen.queryByRole("heading", { name: /^Projects$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Start your first sprint/i })).toBeInTheDocument();
     expect(screen.getByTestId("create-new-button")).toHaveTextContent("Create New");
     expect(screen.getByTestId("add-existing-button")).toHaveTextContent("Add Existing");
+    expect(
+      screen.getByText(/Generate a brand new project from a starter template/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Connect a repo you already have and organize tasks/i)
+    ).toBeInTheDocument();
   });
 
   it("shows installation checklist when Git or Node.js are missing", async () => {
@@ -134,7 +142,7 @@ describe("HomeScreen", () => {
     mockProjectsList.mockResolvedValue([]);
     mockGetPrerequisites.mockResolvedValue({ missing: [], platform: "darwin" });
     renderHomeScreen();
-    await screen.findByTestId("projects-grid");
+    await screen.findByTestId("projects-empty-state");
 
     expect(screen.queryByTestId("installation-checklist")).not.toBeInTheDocument();
   });
@@ -142,7 +150,7 @@ describe("HomeScreen", () => {
   it("renders faint GitHub link at bottom linking to Open Sprint repo", async () => {
     mockProjectsList.mockResolvedValue([]);
     renderHomeScreen();
-    await screen.findByTestId("projects-grid");
+    await screen.findByTestId("projects-empty-state");
 
     const link = screen.getByTestId("github-link");
     expect(link).toBeInTheDocument();
@@ -159,6 +167,7 @@ describe("HomeScreen", () => {
     renderHomeScreen();
 
     await screen.findByText("My Project");
+    expect(screen.getByRole("heading", { name: /^Projects$/i })).toBeInTheDocument();
     expect(screen.getByTestId("project-card-proj-1")).toBeInTheDocument();
     expect(screen.getByText("/path/to/repo")).toBeInTheDocument();
   });
@@ -557,7 +566,7 @@ describe("HomeScreen", () => {
     await user.click(screen.getByRole("menuitem", { name: /archive/i }));
     await user.click(screen.getByRole("button", { name: /proceed/i }));
 
-    await screen.findByTestId("projects-grid");
+    await screen.findByTestId("projects-empty-state");
     expect(screen.queryByText("My Project")).not.toBeInTheDocument();
     expect(screen.queryByTestId("project-card-proj-1")).not.toBeInTheDocument();
   });
@@ -574,7 +583,7 @@ describe("HomeScreen", () => {
     await user.click(screen.getByRole("menuitem", { name: /delete/i }));
     await user.click(screen.getByRole("button", { name: /proceed/i }));
 
-    await screen.findByTestId("projects-grid");
+    await screen.findByTestId("projects-empty-state");
     expect(screen.queryByText("My Project")).not.toBeInTheDocument();
     expect(screen.queryByTestId("project-card-proj-1")).not.toBeInTheDocument();
   });
@@ -620,19 +629,19 @@ describe("HomeScreen", () => {
 
     renderHomeScreen();
 
-    await screen.findByTestId("projects-grid");
+    await screen.findByTestId("projects-empty-state");
     const container = screen.getByTestId("project-list-container");
     for (const cls of HOMEPAGE_CONTAINER_CLASS.split(" ")) {
       expect(container).toHaveClass(cls);
     }
   });
 
-  it("projects grid uses w-full to fill container", async () => {
+  it("empty-state action grid uses w-full to fill the hero container", async () => {
     mockProjectsList.mockResolvedValue([]);
 
     renderHomeScreen();
 
-    const grid = await screen.findByTestId("projects-grid");
+    const grid = await screen.findByTestId("empty-state-actions");
     expect(grid).toHaveClass("w-full");
   });
 

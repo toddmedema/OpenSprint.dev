@@ -7,6 +7,7 @@ import { getProjectPhasePath } from "../lib/phaseRouting";
 import { useAppDispatch } from "../store";
 import { addNotification } from "../store/slices/notificationSlice";
 import { CloseButton } from "./CloseButton";
+import { SparklesIcon, UploadIcon } from "./icons/PrdIcons";
 import { GITHUB_REPO_URL, HOMEPAGE_CONTAINER_CLASS } from "../lib/constants";
 import { getDropdownPositionLeftAligned } from "../lib/dropdownViewport";
 import { PREREQ_ITEMS, getPrereqInstallUrl } from "../lib/prerequisites";
@@ -31,6 +32,46 @@ function KebabIcon({ className }: { className?: string }) {
         d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z"
       />
     </svg>
+  );
+}
+
+interface EmptyStateActionCardProps {
+  title: string;
+  description: string;
+  ctaLabel: string;
+  icon: React.ReactNode;
+  iconToneClassName: string;
+  onClick: () => void;
+  dataTestId: string;
+}
+
+function EmptyStateActionCard({
+  title,
+  description,
+  ctaLabel,
+  icon,
+  iconToneClassName,
+  onClick,
+  dataTestId,
+}: EmptyStateActionCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group relative flex min-h-[15rem] h-full flex-col overflow-hidden rounded-[1.75rem] border border-theme-border bg-theme-bg p-6 text-left shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-brand-600 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 sm:p-8"
+      data-testid={dataTestId}
+    >
+      <div className="absolute inset-x-6 top-0 h-1 rounded-full bg-theme-border-subtle group-hover:bg-brand-600 sm:inset-x-8" />
+      <span
+        className={`inline-flex h-14 w-14 items-center justify-center rounded-2xl ${iconToneClassName}`}
+        aria-hidden
+      >
+        {icon}
+      </span>
+      <span className="mt-6 text-2xl font-semibold tracking-tight text-theme-text">{title}</span>
+      <span className="mt-3 text-sm leading-6 text-theme-muted">{description}</span>
+      <span className="mt-auto pt-8 text-sm font-semibold text-theme-text">{ctaLabel}</span>
+    </button>
   );
 }
 
@@ -119,6 +160,7 @@ export function HomeScreen() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const modalTriggerRef = useRef<HTMLElement | null>(null);
   const missingPrereqCount = prerequisites?.missing.length ?? 0;
+  const hasMissingPrerequisites = missingPrereqCount > 0;
 
   const handleCreateOrAddClick = async (
     route: "/projects/create-new" | "/projects/add-existing"
@@ -289,7 +331,7 @@ export function HomeScreen() {
         className={`${HOMEPAGE_CONTAINER_CLASS} py-6 sm:py-10 flex-1 min-h-0 overflow-y-auto`}
         data-testid="project-list-container"
       >
-        {prerequisites && prerequisites.missing.length > 0 && (
+        {hasMissingPrerequisites && prerequisites && (
           <div
             className="mb-8 p-4 rounded-xl border border-theme-border bg-theme-surface-muted/50"
             data-testid="installation-checklist"
@@ -355,143 +397,205 @@ export function HomeScreen() {
           </div>
         )}
 
-        {!(prerequisites && prerequisites.missing.length > 0) && (
+        {!hasMissingPrerequisites && (
           <>
-            {/* Header: stack buttons on narrow screens */}
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 sm:gap-6 mb-10">
-              <h1 className="text-2xl sm:text-3xl font-bold text-theme-text shrink-0">Projects</h1>
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 shrink-0 w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => handleCreateOrAddClick("/projects/add-existing")}
-                  className="btn-secondary hover:bg-theme-info-bg min-h-[44px] sm:min-h-0"
-                  data-testid="add-existing-button"
-                >
-                  Add Existing
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleCreateOrAddClick("/projects/create-new")}
-                  className="btn-primary min-h-[44px] sm:min-h-0"
-                  data-testid="create-new-button"
-                >
-                  Create New
-                </button>
-              </div>
-            </div>
-
             {loading ? (
               <div className="text-center py-20 text-theme-muted">Loading projects...</div>
-            ) : (
-              <div className="grid gap-4 w-full" data-testid="projects-grid">
-                {projects.map((project) => (
+            ) : projects.length === 0 ? (
+              <section
+                className="relative isolate overflow-hidden card min-h-[clamp(32rem,72vh,52rem)] px-6 py-10 sm:px-10 lg:px-14"
+                data-testid="projects-empty-state"
+              >
+                <div
+                  className="pointer-events-none absolute -left-16 top-8 h-48 w-48 rounded-full bg-sky-500/15 blur-3xl"
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute right-0 top-0 h-56 w-56 rounded-full bg-brand-500/15 blur-3xl"
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute bottom-[-5rem] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-amber-400/10 blur-3xl"
+                  aria-hidden
+                />
+
+                <div className="relative z-10 flex h-full flex-col items-center justify-center text-center">
+                  <span className="inline-flex items-center rounded-full bg-theme-info-bg px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-theme-info-text">
+                    Open Sprint
+                  </span>
+                  <h1 className="mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-theme-text sm:text-5xl lg:text-6xl">
+                    Start your first sprint
+                  </h1>
+                  <p className="mt-4 max-w-2xl text-base leading-7 text-theme-muted sm:text-lg">
+                    Bring an existing codebase into Open Sprint or spin up a fresh repo and let the
+                    agents carry it from sketch to delivery.
+                  </p>
+
                   <div
-                    key={project.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openProject(project)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        openProject(project);
-                      }
-                    }}
-                    className="card p-4 group cursor-pointer transition-colors hover:bg-theme-info-bg min-w-0"
-                    data-testid={`project-card-${project.id}`}
+                    className="mt-10 grid w-full max-w-4xl gap-4 md:grid-cols-2"
+                    data-testid="empty-state-actions"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-theme-text font-medium truncate" title={project.name}>
-                          {project.name}
+                    <EmptyStateActionCard
+                      title="Add Existing"
+                      description="Connect a repo you already have and organize tasks, plans, and feedback in one place."
+                      ctaLabel="Use your current codebase"
+                      icon={<UploadIcon className="h-7 w-7" />}
+                      iconToneClassName="bg-theme-info-bg text-theme-info-text"
+                      onClick={() => handleCreateOrAddClick("/projects/add-existing")}
+                      dataTestId="add-existing-button"
+                    />
+                    <EmptyStateActionCard
+                      title="Create New"
+                      description="Generate a brand new project from a starter template and jump straight into the SPEED workflow."
+                      ctaLabel="Scaffold a fresh project"
+                      icon={<SparklesIcon className="h-7 w-7" />}
+                      iconToneClassName="bg-theme-success-bg text-theme-success-text"
+                      onClick={() => handleCreateOrAddClick("/projects/create-new")}
+                      dataTestId="create-new-button"
+                    />
+                  </div>
+                </div>
+              </section>
+            ) : (
+              <>
+                {/* Header: stack buttons on narrow screens */}
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 sm:gap-6 mb-10">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-theme-text shrink-0">
+                    Projects
+                  </h1>
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 shrink-0 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => handleCreateOrAddClick("/projects/add-existing")}
+                      className="btn-secondary hover:bg-theme-info-bg min-h-[44px] sm:min-h-0"
+                      data-testid="add-existing-button"
+                    >
+                      Add Existing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCreateOrAddClick("/projects/create-new")}
+                      className="btn-primary min-h-[44px] sm:min-h-0"
+                      data-testid="create-new-button"
+                    >
+                      Create New
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 w-full" data-testid="projects-grid">
+                  {projects.map((project) => (
+                    <div
+                      key={project.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openProject(project)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openProject(project);
+                        }
+                      }}
+                      className="card p-4 group cursor-pointer transition-colors hover:bg-theme-info-bg min-w-0"
+                      data-testid={`project-card-${project.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div
+                            className="text-theme-text font-medium truncate"
+                            title={project.name}
+                          >
+                            {project.name}
+                          </div>
+                          <div
+                            className="text-sm text-theme-muted truncate mt-0.5"
+                            title={project.repoPath}
+                          >
+                            {project.repoPath}
+                          </div>
                         </div>
                         <div
-                          className="text-sm text-theme-muted truncate mt-0.5"
-                          title={project.repoPath}
+                          className="relative flex items-center flex-shrink-0"
+                          ref={menuOpenId === project.id ? menuRef : undefined}
+                          role="button"
+                          tabIndex={-1}
+                          aria-label="Project card menu wrapper"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Escape") e.stopPropagation();
+                          }}
                         >
-                          {project.repoPath}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const button = e.currentTarget;
+                              if (menuOpenId === project.id) {
+                                setMenuOpenId(null);
+                                setMenuAnchorRect(null);
+                              } else {
+                                setMenuAnchorRect(button.getBoundingClientRect());
+                                setMenuOpenId(project.id);
+                              }
+                            }}
+                            className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
+                            aria-label="Project actions"
+                            aria-expanded={menuOpenId === project.id}
+                            aria-haspopup="menu"
+                            data-testid={`project-card-menu-${project.id}`}
+                          >
+                            <KebabIcon className="w-5 h-5" />
+                          </button>
+                          {menuOpenId === project.id &&
+                            menuAnchorRect &&
+                            createPortal(
+                              <div
+                                ref={dropdownRef}
+                                className="py-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg"
+                                role="menu"
+                                data-testid={`project-card-dropdown-${project.id}`}
+                                style={getDropdownPositionLeftAligned(menuAnchorRect, {
+                                  minWidth: DROPDOWN_MIN_WIDTH,
+                                  estimatedHeight: 100,
+                                })}
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    modalTriggerRef.current =
+                                      menuRef.current?.querySelector("button") ?? null;
+                                    setArchiveModal(project);
+                                    setMenuOpenId(null);
+                                    setMenuAnchorRect(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg"
+                                >
+                                  Archive
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    modalTriggerRef.current =
+                                      menuRef.current?.querySelector("button") ?? null;
+                                    setDeleteModal(project);
+                                    setMenuOpenId(null);
+                                    setMenuAnchorRect(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg"
+                                >
+                                  Delete
+                                </button>
+                              </div>,
+                              document.body
+                            )}
                         </div>
                       </div>
-                      <div
-                        className="relative flex items-center flex-shrink-0"
-                        ref={menuOpenId === project.id ? menuRef : undefined}
-                        role="button"
-                        tabIndex={-1}
-                        aria-label="Project card menu wrapper"
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => {
-                          if (e.key !== "Escape") e.stopPropagation();
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const button = e.currentTarget;
-                            if (menuOpenId === project.id) {
-                              setMenuOpenId(null);
-                              setMenuAnchorRect(null);
-                            } else {
-                              setMenuAnchorRect(button.getBoundingClientRect());
-                              setMenuOpenId(project.id);
-                            }
-                          }}
-                          className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors"
-                          aria-label="Project actions"
-                          aria-expanded={menuOpenId === project.id}
-                          aria-haspopup="menu"
-                          data-testid={`project-card-menu-${project.id}`}
-                        >
-                          <KebabIcon className="w-5 h-5" />
-                        </button>
-                        {menuOpenId === project.id &&
-                          menuAnchorRect &&
-                          createPortal(
-                            <div
-                              ref={dropdownRef}
-                              className="py-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg"
-                              role="menu"
-                              data-testid={`project-card-dropdown-${project.id}`}
-                              style={getDropdownPositionLeftAligned(menuAnchorRect, {
-                                minWidth: DROPDOWN_MIN_WIDTH,
-                                estimatedHeight: 100,
-                              })}
-                            >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  modalTriggerRef.current =
-                                    menuRef.current?.querySelector("button") ?? null;
-                                  setArchiveModal(project);
-                                  setMenuOpenId(null);
-                                  setMenuAnchorRect(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg"
-                              >
-                                Archive
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  modalTriggerRef.current =
-                                    menuRef.current?.querySelector("button") ?? null;
-                                  setDeleteModal(project);
-                                  setMenuOpenId(null);
-                                  setMenuAnchorRect(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-theme-text hover:bg-theme-info-bg"
-                              >
-                                Delete
-                              </button>
-                            </div>,
-                            document.body
-                          )}
-                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
           </>
         )}
