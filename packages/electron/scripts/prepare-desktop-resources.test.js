@@ -73,9 +73,9 @@ describe("prepare-desktop-resources", () => {
     const specializations = iconJson.groups[0].layers[0]["image-name-specializations"];
 
     expect(specializations).toEqual([
-      { value: "light.svg" },
-      { appearance: "dark", value: "dark.svg" },
-      { appearance: "tinted", value: "tinted.svg" },
+      { value: "light.png" },
+      { appearance: "dark", value: "dark.png" },
+      { appearance: "tinted", value: "tinted.png" },
     ]);
   });
 });

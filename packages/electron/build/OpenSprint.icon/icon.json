@@ -15,15 +15,15 @@
           "hidden" : false,
           "image-name-specializations" : [
             {
-              "value" : "light.svg"
+              "value" : "light.png"
             },
             {
               "appearance" : "dark",
-              "value" : "dark.svg"
+              "value" : "dark.png"
             },
             {
               "appearance" : "tinted",
-              "value" : "tinted.svg"
+              "value" : "tinted.png"
             }
           ],
           "name" : "triangles",
