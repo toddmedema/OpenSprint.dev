@@ -207,6 +207,21 @@ CREATE TABLE IF NOT EXISTS plan_versions (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_versions_project_plan_version
   ON plan_versions(project_id, plan_id, version_number);
 
+-- Execute-all batch queue (survives UI refresh, one running batch per project)
+CREATE TABLE IF NOT EXISTS plan_execute_batches (
+    id              TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL,
+    items_json      TEXT NOT NULL,
+    current_index   INTEGER NOT NULL DEFAULT 0,
+    status          TEXT NOT NULL,
+    error_plan_id   TEXT,
+    error_message   TEXT,
+    updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_plan_execute_batches_project_id ON plan_execute_batches(project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_execute_batches_project_running
+  ON plan_execute_batches(project_id) WHERE status = 'running';
+
 -- Add version columns for existing plans tables (no-op if columns exist)
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS current_version_number INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS last_executed_version_number INTEGER;
@@ -547,6 +562,20 @@ CREATE TABLE IF NOT EXISTS plan_versions (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_versions_project_plan_version
   ON plan_versions(project_id, plan_id, version_number);
+
+CREATE TABLE IF NOT EXISTS plan_execute_batches (
+    id              TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL,
+    items_json      TEXT NOT NULL,
+    current_index   INTEGER NOT NULL DEFAULT 0,
+    status          TEXT NOT NULL,
+    error_plan_id   TEXT,
+    error_message   TEXT,
+    updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_plan_execute_batches_project_id ON plan_execute_batches(project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_execute_batches_project_running
+  ON plan_execute_batches(project_id) WHERE status = 'running';
 
 CREATE TABLE IF NOT EXISTS auditor_runs (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,

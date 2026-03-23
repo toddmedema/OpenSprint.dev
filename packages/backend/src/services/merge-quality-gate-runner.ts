@@ -18,6 +18,10 @@ const QUALITY_GATE_FAILURE_OUTPUT_LIMIT = 4000;
 const QUALITY_GATE_FAILURE_REASON_LIMIT = 500;
 const QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS = 20 * 60 * 1000;
 const QUALITY_GATE_PRECHECK_TIMEOUT_MS = 30_000;
+const NPM_INCLUDE_DEV_ENV = {
+  NPM_CONFIG_INCLUDE: "dev",
+  npm_config_include: "dev",
+} as const;
 const QUALITY_GATE_ENV_FINGERPRINTS: RegExp[] = [
   /\bmodule_not_found\b/i,
   /\bcannot find module\b/i,
@@ -68,7 +72,7 @@ export interface MergeQualityGateFailure {
 interface MergeQualityGateRunnerDeps {
   runCommand?: (
     spec: CommandSpec,
-    options: { cwd: string; timeout?: number }
+    options: { cwd: string; timeout?: number; env?: NodeJS.ProcessEnv }
   ) => Promise<CommandRunResult>;
   symlinkNodeModules?: (repoPath: string, wtPath: string) => Promise<void>;
   commands?: string[];
@@ -98,6 +102,59 @@ interface AutoRepairResult {
   commands: string[];
   output: string;
   worktreePath: string;
+}
+
+function hasWorkspaceConfig(workspaces: unknown): boolean {
+  if (Array.isArray(workspaces)) return workspaces.length > 0;
+  if (workspaces && typeof workspaces === "object") {
+    const packages = (workspaces as { packages?: unknown }).packages;
+    return Array.isArray(packages) && packages.length > 0;
+  }
+  return false;
+}
+
+async function resolveDependencyHealthCheckArgs(workspacePath: string): Promise<string[]> {
+  const packageJsonPath = path.join(workspacePath, "package.json");
+  try {
+    const raw = await fs.readFile(packageJsonPath, "utf-8");
+    const parsed = JSON.parse(raw) as { workspaces?: unknown } | null;
+    return hasWorkspaceConfig(parsed?.workspaces)
+      ? ["ls", "--depth=0", "--workspaces"]
+      : ["ls", "--depth=0"];
+  } catch {
+    return ["ls", "--depth=0"];
+  }
+}
+
+async function runDependencyHealthCheck(
+  workspacePath: string,
+  runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>
+): Promise<{ healthy: boolean; command: string; output: string }> {
+  const args = await resolveDependencyHealthCheckArgs(workspacePath);
+  const command = `npm ${args.join(" ")}`;
+  try {
+    const result = await runCommand(
+      {
+        command: "npm",
+        args,
+      },
+      {
+        cwd: workspacePath,
+        timeout: QUALITY_GATE_PRECHECK_TIMEOUT_MS,
+        env: NPM_INCLUDE_DEV_ENV,
+      }
+    );
+    const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+    return { healthy: true, command, output };
+  } catch (err) {
+    const failure = extractCommandFailure(command, err, {
+      worktreePath: workspacePath,
+      validationWorkspace: "task_worktree",
+      category: "environment_setup",
+    });
+    const output = [failure.reason, failure.output].filter(Boolean).join("\n").trim();
+    return { healthy: false, command, output };
+  }
 }
 
 function parseCommandSpec(command: string): CommandSpec {
@@ -440,6 +497,23 @@ async function prepareGateCommand(
   );
   if (nodeModulesFailure) return { failure: nodeModulesFailure };
 
+  if (validationWorkspace === "merged_candidate") {
+    const dependencyHealth = await runDependencyHealthCheck(cwd, runCommand);
+    if (!dependencyHealth.healthy) {
+      return {
+        failure: buildFailure({
+          command,
+          reason: `Validation workspace dependency health check failed (${dependencyHealth.command})`,
+          output: dependencyHealth.output,
+          worktreePath: cwd,
+          validationWorkspace,
+          category: "environment_setup",
+          cwd,
+        }),
+      };
+    }
+  }
+
   const gitExecutable = resolveCommandExecutable("git");
   if (!gitExecutable) {
     return {
@@ -603,6 +677,7 @@ async function repairQualityGateEnvironment(
   }
 
   let npmCiSucceeded = false;
+  const installCwd = options.worktreePath;
   commands.push("npm ci");
   try {
     const result = await deps.runCommand(
@@ -611,13 +686,14 @@ async function repairQualityGateEnvironment(
         args: ["ci"],
       },
       {
-        cwd: options.repoPath,
+        cwd: installCwd,
         timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
+        env: NPM_INCLUDE_DEV_ENV,
       }
     );
     npmCiSucceeded = true;
     const npmCiOutput = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-    if (npmCiOutput) outputParts.push(`[npm ci] ${npmCiOutput}`);
+    if (npmCiOutput) outputParts.push(`[npm ci @ ${installCwd}] ${npmCiOutput}`);
   } catch (err) {
     const npmCiFailure = extractCommandFailure("npm ci", err, {
       worktreePath,
@@ -628,7 +704,7 @@ async function repairQualityGateEnvironment(
       .filter(Boolean)
       .join("\n")
       .trim();
-    if (npmCiOutput) outputParts.push(`[npm ci] ${npmCiOutput}`);
+    if (npmCiOutput) outputParts.push(`[npm ci @ ${installCwd}] ${npmCiOutput}`);
   }
 
   commands.push("symlinkNodeModules");
@@ -656,6 +732,16 @@ async function repairQualityGateEnvironment(
       succeeded = false;
       outputParts.push(
         `[post-repair verification] Critical files still missing after repair: ${missing.join(", ")}`
+      );
+    }
+  }
+
+  if (succeeded) {
+    const dependencyHealth = await runDependencyHealthCheck(worktreePath, deps.runCommand);
+    if (!dependencyHealth.healthy) {
+      succeeded = false;
+      outputParts.push(
+        `[post-repair verification] Dependency health check failed (${dependencyHealth.command})\n${dependencyHealth.output}`
       );
     }
   }

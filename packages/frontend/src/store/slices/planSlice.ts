@@ -3,6 +3,7 @@ import type {
   GeneratePlanResult,
   Plan,
   PlanDependencyGraph,
+  PlanExecuteBatchItem,
   PlanStatusResponse,
 } from "@opensprint/shared";
 import { api } from "../../api/client";
@@ -144,6 +145,13 @@ export const executePlan = createAsyncThunk(
         ? { prerequisitePlanIds, version_number }
         : undefined;
     await api.plans.execute(projectId, planId, options);
+  }
+);
+
+export const executePlanBatch = createAsyncThunk(
+  "plan/executeBatch",
+  async ({ projectId, items }: { projectId: string; items: PlanExecuteBatchItem[] }) => {
+    return api.plans.executeBatch(projectId, { items });
   }
 );
 

@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from "react";
 import { shallowEqual } from "react-redux";
 import { useQueryClient, useIsMutating } from "@tanstack/react-query";
-import type { Plan, PlanStatus } from "@opensprint/shared";
+import type { Plan, PlanExecuteBatchItem, PlanExecuteBatchStatus, PlanStatus } from "@opensprint/shared";
 import { DEFAULT_MAX_TOTAL_CONCURRENT_AGENTS, sortPlansByStatus } from "@opensprint/shared";
 import { useLocation, useNavigate } from "react-router-dom";
 import { store, useAppDispatch, useAppSelector } from "../../store";
 import {
   executePlan,
+  executePlanBatch,
   reExecutePlan,
   planTasks,
   fetchPlans,
@@ -68,6 +69,17 @@ import { matchesPlanSearchQuery } from "../../lib/planSearchFilter";
 import { parseDetailParams, getProjectPhasePath } from "../../lib/phaseRouting";
 import { shouldRightAlignDropdown } from "../../lib/dropdownViewport";
 import { PHASE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
+
+async function pollPlanExecuteBatchUntilDone(
+  projectId: string,
+  batchId: string
+): Promise<PlanExecuteBatchStatus> {
+  for (;;) {
+    const s = await api.plans.getExecuteBatchStatus(projectId, batchId);
+    if (s.status !== "running") return s;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
 
 /** Display text for plan chat: show "Plan updated" when agent response contains [PLAN_UPDATE] */
 export function getPlanChatMessageDisplay(content: string): string {
@@ -309,6 +321,32 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
   const [savingPlanContentId, setSavingPlanContentId] = useState<string | null>(null);
   const [planAllInProgress, setPlanAllInProgress] = useState(false);
   const [executeAllInProgress, setExecuteAllInProgress] = useState(false);
+  /** If the user refreshes while a server-side execute-all batch is running, reattach and poll to completion. */
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const active = await api.plans.getActiveExecuteBatch(projectId);
+        if (cancelled || !active || active.status !== "running") return;
+        setExecuteAllInProgress(true);
+        try {
+          const final = await pollPlanExecuteBatchUntilDone(projectId, active.batchId);
+          if (cancelled) return;
+          void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+          if (final.status === "failed" && final.errorMessage) {
+            dispatch(addNotification({ message: final.errorMessage, severity: "error" }));
+          }
+        } finally {
+          if (!cancelled) setExecuteAllInProgress(false);
+        }
+      } catch {
+        // Older server or transient errors — ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, dispatch, queryClient]);
   const [selectedVersionNumber, setSelectedVersionNumber] = useState<number | null>(null);
   const [planActionsMenuOpen, setPlanActionsMenuOpen] = useState(false);
   const planActionsMenuRef = useRef<HTMLDivElement>(null);
@@ -787,13 +825,21 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     enqueuePlan(planId);
   };
 
-  /** Queue all plans with no tasks to be planned one-by-one in dependency order (foundational first). */
+  /**
+   * Queue all plans with no tasks (dependency order: foundational first in the shared queue).
+   * Append every id before calling `processQueue` once so the worker pool sees the full queue and
+   * `batchConcurrency` is not stuck at 1 (calling `enqueuePlan` in a loop used to start processing
+   * after only the first id was appended).
+   */
   const handlePlanAllTasks = () => {
     if (plansWithNoTasksOrderedIds.length === 0 || planAllInProgress) return;
     setPlanAllInProgress(true);
     for (const planId of plansWithNoTasksOrderedIds) {
-      enqueuePlan(planId);
+      if (planQueueRef.current.includes(planId)) continue;
+      dispatch(enqueuePlanTasksId(planId));
+      planQueueRef.current = [...planQueueRef.current, planId];
     }
+    void processQueue();
   };
 
   /** Execute all plans ready to execute, in dependency order. Stops and opens cross-epic modal if a plan has deps outside the batch. */
@@ -803,26 +849,37 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
     setExecuteAllInProgress(true);
     const batchSet = new Set(plansReadyToExecuteOrderedIds);
     try {
+      const items: PlanExecuteBatchItem[] = [];
       for (const planId of plansReadyToExecuteOrderedIds) {
         const deps = await api.plans.getCrossEpicDependencies(projectId, planId);
         const outsideBatch = deps.prerequisitePlanIds.filter((id) => !batchSet.has(id));
         if (outsideBatch.length > 0) {
           setCrossEpicModal({ planId, prerequisitePlanIds: deps.prerequisitePlanIds });
-          break;
+          return;
         }
         const plan = plansReadyToExecute.find((p) => p.metadata.planId === planId);
         const versionNumber = plan?.lastExecutedVersionNumber;
-        const result = await dispatch(
-          executePlan({
-            projectId,
-            planId,
-            prerequisitePlanIds:
-              deps.prerequisitePlanIds.length > 0 ? deps.prerequisitePlanIds : undefined,
-            version_number: versionNumber,
+        const item: PlanExecuteBatchItem = { planId };
+        if (deps.prerequisitePlanIds.length > 0) item.prerequisitePlanIds = deps.prerequisitePlanIds;
+        if (versionNumber != null) item.version_number = versionNumber;
+        items.push(item);
+      }
+      const result = await dispatch(executePlanBatch({ projectId, items }));
+      void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+      if (executePlanBatch.rejected.match(result)) {
+        dispatch(
+          addNotification({
+            message: result.error?.message ?? "Execute all failed to start",
+            severity: "error",
           })
         );
-        void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
-        if (executePlan.rejected.match(result)) break;
+        return;
+      }
+      const { batchId } = result.payload;
+      const final = await pollPlanExecuteBatchUntilDone(projectId, batchId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+      if (final.status === "failed" && final.errorMessage) {
+        dispatch(addNotification({ message: final.errorMessage, severity: "error" }));
       }
     } finally {
       setExecuteAllInProgress(false);
@@ -852,29 +909,55 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                 severity: "error",
               })
             );
-            break;
+            return;
           }
           void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+        }
+      }
+      const graph = await queryClient.fetchQuery({
+        queryKey: queryKeys.plans.list(projectId),
+        queryFn: () => api.plans.list(projectId),
+      });
+      const freshPlans = graph.plans;
+      const items: PlanExecuteBatchItem[] = [];
+      for (const planId of plansEligibleForExecuteAllOrderedIds) {
+        const p = freshPlans.find((x) => x.metadata.planId === planId);
+        if (!p || p.taskCount === 0) {
+          dispatch(
+            addNotification({
+              message: "A plan still has no tasks after generation; cannot execute all.",
+              severity: "error",
+            })
+          );
+          return;
         }
         const deps = await api.plans.getCrossEpicDependencies(projectId, planId);
         const outsideBatch = deps.prerequisitePlanIds.filter((id) => !batchSet.has(id));
         if (outsideBatch.length > 0) {
           setCrossEpicModal({ planId, prerequisitePlanIds: deps.prerequisitePlanIds });
-          break;
+          return;
         }
-        const currentPlan = plans.find((p) => p.metadata.planId === planId);
-        const versionNumber = currentPlan?.lastExecutedVersionNumber;
-        const result = await dispatch(
-          executePlan({
-            projectId,
-            planId,
-            prerequisitePlanIds:
-              deps.prerequisitePlanIds.length > 0 ? deps.prerequisitePlanIds : undefined,
-            version_number: versionNumber,
+        const item: PlanExecuteBatchItem = { planId };
+        if (deps.prerequisitePlanIds.length > 0) item.prerequisitePlanIds = deps.prerequisitePlanIds;
+        if (p.lastExecutedVersionNumber != null) item.version_number = p.lastExecutedVersionNumber;
+        items.push(item);
+      }
+      const result = await dispatch(executePlanBatch({ projectId, items }));
+      void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+      if (executePlanBatch.rejected.match(result)) {
+        dispatch(
+          addNotification({
+            message: result.error?.message ?? "Execute all failed to start",
+            severity: "error",
           })
         );
-        void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
-        if (executePlan.rejected.match(result)) break;
+        return;
+      }
+      const { batchId } = result.payload;
+      const final = await pollPlanExecuteBatchUntilDone(projectId, batchId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+      if (final.status === "failed" && final.errorMessage) {
+        dispatch(addNotification({ message: final.errorMessage, severity: "error" }));
       }
     } finally {
       setExecuteAllInProgress(false);

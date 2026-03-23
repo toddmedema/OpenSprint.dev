@@ -20,6 +20,7 @@ const TABLES = [
   "orchestrator_counters",
   "deployments",
   "plans",
+  "plan_execute_batches",
   "auditor_runs",
   "self_improvement_runs",
   "behavior_versions",

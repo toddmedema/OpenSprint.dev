@@ -1017,7 +1017,7 @@ describe("MergeCoordinatorService", () => {
     }
   });
 
-  it("blocks immediately for environment-setup quality-gate failures with remediation guidance", async () => {
+  it("requeues environment-setup quality-gate failures before the retry budget is exhausted", async () => {
     mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
       if (isBaselineValidation(options)) return null;
       return {
@@ -1038,8 +1038,8 @@ describe("MergeCoordinatorService", () => {
       projectId,
       taskId,
       expect.objectContaining({
-        status: "blocked",
-        block_reason: "Quality Gate Failure",
+        status: "open",
+        assignee: "",
         extra: expect.objectContaining({
           next_retry_context: expect.objectContaining({
             failureType: "environment_setup",
@@ -1053,16 +1053,19 @@ describe("MergeCoordinatorService", () => {
     expect(mockHost.taskStore.comment).toHaveBeenCalledWith(
       projectId,
       taskId,
-      expect.stringContaining("Remediation: Run npm ci")
+      expect.stringContaining("Task requeued")
     );
     expect(mockHost.taskStore.update).not.toHaveBeenCalledWith(
       projectId,
       taskId,
-      expect.objectContaining({ status: "open" })
+      expect.objectContaining({ status: "blocked" })
     );
   });
 
-  it("stores remediation nextAction in blocked merge/task events for environment setup failures", async () => {
+  it("stores remediation nextAction in blocked merge/task events after environment setup retries are exhausted", async () => {
+    (
+      mockHost.taskStore.getCumulativeAttemptsFromIssue as unknown as ReturnType<typeof vi.fn>
+    ).mockReturnValue(2);
     mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
       if (isBaselineValidation(options)) return null;
       return {

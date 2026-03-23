@@ -71,6 +71,7 @@ import {
   ensureExpoReactTypeDevDependencies,
   ensureExpoLintMergeGateTooling,
 } from "../utils/scaffold-expo-deps.js";
+import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 
 const execAsync = promisify(exec);
 const log = createLogger("project");
@@ -187,6 +188,11 @@ function resolveAiAutonomyAndHil(input: {
 /** Normalize path for comparison: trim and remove trailing slashes. */
 function normalizeRepoPath(p: string): string {
   return p.trim().replace(/\/+$/, "") || "";
+}
+
+function extractNpmRunScriptName(command: string): string | null {
+  const match = command.trim().match(/^npm\s+run\s+([^\s]+)/i);
+  return match?.[1] ?? null;
 }
 
 function clampValidationTimeoutMs(raw: number): number {
@@ -957,6 +963,43 @@ export class ProjectService {
           throw accessErr;
         }
         // No tsconfig yet — skip tsc; typings are still in package.json for when TS is enabled.
+      }
+
+      // Step 6: validate scaffold with the same canonical merge-gate commands used later.
+      let packageScripts = new Set<string>();
+      try {
+        const packageJsonRaw = await fs.readFile(path.join(repoPath, "package.json"), "utf-8");
+        const packageJson = JSON.parse(packageJsonRaw) as { scripts?: Record<string, unknown> } | null;
+        if (packageJson?.scripts && typeof packageJson.scripts === "object") {
+          packageScripts = new Set(Object.keys(packageJson.scripts));
+        }
+      } catch {
+        // If package.json cannot be read here, gate command execution below will fail with context.
+      }
+      for (const gateCommand of getMergeQualityGateCommands()) {
+        const scriptName = extractNpmRunScriptName(gateCommand);
+        if (scriptName && !packageScripts.has(scriptName)) {
+          log.info("Skipping scaffold merge-gate command; npm script is not defined", {
+            repoPath,
+            command: gateCommand,
+          });
+          continue;
+        }
+        const gateResult = await this.runWithRecovery(
+          gateCommand,
+          repoPath,
+          agentConfig,
+          `Scaffold merge quality gate failed (${gateCommand})`
+        );
+        if (!recovery && gateResult.recovery) {
+          recovery = gateResult.recovery;
+        }
+        if (!gateResult.success) {
+          throw new AppError(500, ErrorCodes.SCAFFOLD_INIT_FAILED, gateResult.errorMessage!, {
+            repoPath,
+            recovery: gateResult.recovery ?? recovery,
+          });
+        }
       }
     }
 

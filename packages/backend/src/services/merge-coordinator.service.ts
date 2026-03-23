@@ -57,6 +57,7 @@ const MERGE_VALIDATION_DEGRADED_THRESHOLD = 3;
 const MERGE_VALIDATION_FAILURE_WINDOW_MS = 10 * 60_000;
 const MERGE_VALIDATION_CANARY_INTERVAL_MS = 5 * 60_000;
 const MAX_BASELINE_REMEDIATION_ATTEMPTS = 3;
+const MAX_ENVIRONMENT_SETUP_QUALITY_GATE_ATTEMPTS = 3;
 
 /** One-sentence explanation for merge failures shown to users (conflicts with main in same files). */
 const HUMAN_MERGE_FAILURE_MESSAGE =
@@ -1900,7 +1901,10 @@ export class MergeCoordinatorService {
       }
 
       const maxMergeFailures = BACKOFF_FAILURE_THRESHOLD * 2;
-      if (isEnvironmentSetupQualityGateFailure || cumulativeAttempts >= maxMergeFailures) {
+      const reachedEnvironmentSetupFailureLimit =
+        isEnvironmentSetupQualityGateFailure &&
+        cumulativeAttempts >= MAX_ENVIRONMENT_SETUP_QUALITY_GATE_ATTEMPTS;
+      if (reachedEnvironmentSetupFailureLimit || cumulativeAttempts >= maxMergeFailures) {
         const blockedNextAction = environmentSetupRemediation ?? "Blocked pending investigation";
         log.info(`Blocking ${task.id} after ${cumulativeAttempts} ${stageLabel} failures`);
         const blockedSummary = buildTaskLastExecutionSummary({
@@ -1942,7 +1946,7 @@ export class MergeCoordinatorService {
           task.id,
           isQualityGateFailure
             ? isEnvironmentSetupQualityGateFailure
-              ? `Blocked after deterministic environment setup quality-gate failure. ${humanFailureMessage}${qualityGateCommentDetail} Remediation: ${environmentSetupRemediation}`
+              ? `Blocked after ${cumulativeAttempts} consecutive environment-setup quality-gate failures. ${humanFailureMessage}${qualityGateCommentDetail} Remediation: ${environmentSetupRemediation}`
               : `Blocked after ${cumulativeAttempts} consecutive quality-gate failures. ${humanFailureMessage}${qualityGateCommentDetail}`
             : `Blocked after ${cumulativeAttempts} consecutive merge failures. ${humanFailureMessage}`
         );
@@ -1951,7 +1955,7 @@ export class MergeCoordinatorService {
           taskId: task.id,
           reason: isQualityGateFailure
             ? isEnvironmentSetupQualityGateFailure
-              ? "Blocked due deterministic environment setup quality-gate failure"
+              ? `Blocked after ${cumulativeAttempts} environment-setup quality-gate failures`
               : `Blocked after ${cumulativeAttempts} quality-gate failures`
             : `Blocked after ${cumulativeAttempts} merge failures`,
           cumulativeAttempts,

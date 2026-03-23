@@ -91,6 +91,10 @@ const DEPENDENCY_HEALTH_CHECK_COMMAND = "npm ls --depth=0";
 const DEPENDENCY_HEALTH_CHECK_WORKSPACES_COMMAND = "npm ls --depth=0 --workspaces";
 const DEPENDENCY_REPAIR_COMMAND = "npm ci";
 const DEPENDENCY_REPAIR_COMMANDS = [DEPENDENCY_REPAIR_COMMAND] as const;
+const NPM_INCLUDE_DEV_ENV = {
+  NPM_CONFIG_INCLUDE: "dev",
+  npm_config_include: "dev",
+} as const;
 
 export interface DependencyHealthResult {
   healthy: boolean;
@@ -1548,9 +1552,14 @@ export class BranchManager {
     for (const command of DEPENDENCY_REPAIR_COMMANDS) {
       attempts.push(command);
       try {
+        const env =
+          command.startsWith("npm ")
+            ? { ...process.env, ...NPM_INCLUDE_DEV_ENV }
+            : undefined;
         const { stdout, stderr } = await shellExec(command, {
           cwd: repoPath,
           timeout: NPM_REPAIR_TIMEOUT_MS,
+          ...(env ? { env } : {}),
         });
         const output = [stdout, stderr].filter(Boolean).join("\n").trim();
         if (output) outputs.push(`[${command}] ${output}`);

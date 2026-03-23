@@ -21,6 +21,8 @@ import type {
   GeneratePlanRequest,
   GeneratePlanResult,
   CrossEpicDependenciesResponse,
+  PlanExecuteBatchItem,
+  PlanExecuteBatchStatus,
   AuditorRun,
   Task,
   AgentSession,
@@ -492,6 +494,17 @@ export const api = {
         body: JSON.stringify(body),
       });
     },
+    executeBatch: (projectId: string, body: { items: PlanExecuteBatchItem[] }) =>
+      request<{ batchId: string }>(`/projects/${projectId}/plans/execute-batch`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    getActiveExecuteBatch: (projectId: string) =>
+      request<PlanExecuteBatchStatus | null>(`/projects/${projectId}/plans/execute-batch/active`),
+    getExecuteBatchStatus: (projectId: string, batchId: string) =>
+      request<PlanExecuteBatchStatus>(
+        `/projects/${projectId}/plans/execute-batch/${batchId}`
+      ),
     reExecute: (projectId: string, planId: string, options?: { version_number?: number }) => {
       const body: { version_number?: number } = {};
       if (options?.version_number != null) body.version_number = options.version_number;

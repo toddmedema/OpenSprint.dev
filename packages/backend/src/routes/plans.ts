@@ -9,7 +9,14 @@ import {
   createPlanBodySchema,
   planExecuteBodySchema,
   planReexecuteBodySchema,
+  planExecuteBatchBodySchema,
+  planExecuteBatchParamsSchema,
 } from "../schemas/request-plans.js";
+import {
+  enqueuePlanExecuteBatch,
+  getActivePlanExecuteBatch,
+  getPlanExecuteBatchStatus,
+} from "../services/plan-execute-batch.service.js";
 import type { PlanService } from "../services/plan.service.js";
 import { orchestratorService } from "../services/orchestrator.service.js";
 import { taskStore } from "../services/task-store.service.js";
@@ -21,6 +28,8 @@ import type {
   SuggestPlansResponse,
   CrossEpicDependenciesResponse,
   GeneratePlanResult,
+  PlanExecuteBatchItem,
+  PlanExecuteBatchStatus,
 } from "@opensprint/shared";
 
 export function createPlansRouter(planService: PlanService): Router {
@@ -97,6 +106,58 @@ export function createPlansRouter(planService: PlanService): Router {
     wrapAsync(async (req: Request<ProjectParams>, res) => {
       const graph = await planService.getDependencyGraph(req.params.projectId);
       const body: ApiResponse<PlanDependencyGraph> = { data: graph };
+      res.json(body);
+    })
+  );
+
+  // POST /projects/:projectId/plans/execute-batch — Queue Execute-all (persists; survives UI refresh)
+  router.post(
+    "/execute-batch",
+    validateParams(projectIdParamSchema),
+    validateBody(planExecuteBatchBodySchema),
+    wrapAsync(
+      async (
+        req: Request<ProjectParams, unknown, { items: PlanExecuteBatchItem[] }>,
+        res
+      ) => {
+        const result = await enqueuePlanExecuteBatch(
+          planService,
+          req.params.projectId,
+          req.body.items
+        );
+        const body: ApiResponse<{ batchId: string }> = { data: result };
+        res.status(202).json(body);
+      }
+    )
+  );
+
+  // GET /projects/:projectId/plans/execute-batch/active — Running batch for this project, if any
+  router.get(
+    "/execute-batch/active",
+    validateParams(projectIdParamSchema),
+    wrapAsync(async (req: Request<ProjectParams>, res) => {
+      const active = await getActivePlanExecuteBatch(req.params.projectId);
+      const body: ApiResponse<PlanExecuteBatchStatus | null> = { data: active };
+      res.json(body);
+    })
+  );
+
+  // GET /projects/:projectId/plans/execute-batch/:batchId — Poll batch status
+  router.get(
+    "/execute-batch/:batchId",
+    validateParams(planExecuteBatchParamsSchema),
+    wrapAsync(async (req: Request<ProjectParams & { batchId: string }>, res) => {
+      const status = await getPlanExecuteBatchStatus(req.params.projectId, req.params.batchId);
+      if (!status) {
+        res.status(404).json({
+          error: {
+            code: "NOT_FOUND",
+            message: "Execute batch not found",
+          },
+        });
+        return;
+      }
+      const body: ApiResponse<PlanExecuteBatchStatus> = { data: status };
       res.json(body);
     })
   );

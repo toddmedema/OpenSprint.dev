@@ -23,6 +23,8 @@ import {
 import { initAppDb } from "./db/app-db.js";
 import type { AppDb } from "./db/app-db.js";
 import { databaseRuntime } from "./services/database-runtime.service.js";
+import { PlanService } from "./services/plan.service.js";
+import { resumePlanExecuteBatchesOnStartup } from "./services/plan-execute-batch.service.js";
 
 const logOrchestrator = createLogger("orchestrator");
 const logShutdown = createLogger("shutdown");
@@ -201,6 +203,9 @@ export async function startDatabaseFeatures(
       startNightlyDeployScheduler();
       startSelfImprovementScheduler();
       await initAlwaysOnOrchestrator(projectService);
+      await resumePlanExecuteBatchesOnStartup(
+        new PlanService(projectService ?? new ProjectService())
+      );
     } catch (err) {
       if (nextAppDb) {
         await nextAppDb.close().catch(() => {});

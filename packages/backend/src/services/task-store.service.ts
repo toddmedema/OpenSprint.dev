@@ -1180,6 +1180,9 @@ export class TaskStoreService {
         toPgParams("DELETE FROM help_chat_histories WHERE scope_key = ? OR scope_key = ?"),
         [`project:${projectId}`, projectId]
       );
+      await client.execute(toPgParams("DELETE FROM plan_execute_batches WHERE project_id = ?"), [
+        projectId,
+      ]);
       await this.planAuditorSIFacade.planDeleteAllForProject(projectId);
       await client.execute(toPgParams("DELETE FROM open_questions WHERE project_id = ?"), [
         projectId,

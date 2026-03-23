@@ -79,6 +79,15 @@ describe("getPlanChatMessageDisplay", () => {
 
 const mockArchive = vi.fn().mockResolvedValue(undefined);
 const mockExecute = vi.fn().mockResolvedValue(undefined);
+const mockExecuteBatch = vi.fn().mockResolvedValue({ batchId: "batch-1" });
+const mockGetActiveExecuteBatch = vi.fn().mockResolvedValue(null);
+const mockGetExecuteBatchStatus = vi.fn().mockResolvedValue({
+  batchId: "batch-1",
+  projectId: "proj-1",
+  status: "completed" as const,
+  currentIndex: 2,
+  total: 2,
+});
 const mockReExecute = vi.fn().mockResolvedValue(undefined);
 const mockGetCrossEpicDependencies = vi.fn().mockResolvedValue({ prerequisitePlanIds: [] });
 const mockPlansUpdate = vi.fn().mockResolvedValue({
@@ -191,6 +200,9 @@ vi.mock("../../api/client", () => ({
       delete: vi.fn().mockResolvedValue(undefined),
       getCrossEpicDependencies: (...args: unknown[]) => mockGetCrossEpicDependencies(...args),
       execute: (...args: unknown[]) => mockExecute(...args),
+      executeBatch: (...args: unknown[]) => mockExecuteBatch(...args),
+      getActiveExecuteBatch: (...args: unknown[]) => mockGetActiveExecuteBatch(...args),
+      getExecuteBatchStatus: (...args: unknown[]) => mockGetExecuteBatchStatus(...args),
       reExecute: (...args: unknown[]) => mockReExecute(...args),
       generate: (...args: unknown[]) => mockGenerate(...args),
       planTasks: (...args: unknown[]) => mockPlanTasks(...args),
@@ -1548,7 +1560,7 @@ describe("Generate All Tasks button", () => {
     expect(screen.queryByTestId("plan-bulk-actions-button")).not.toBeInTheDocument();
   });
 
-  it("queues all plans with no tasks sequentially when Generate All Tasks is clicked", async () => {
+  it("queues all plans with no tasks when Generate All Tasks is clicked", async () => {
     const planA = {
       ...basePlan,
       metadata: {
@@ -1593,6 +1605,58 @@ describe("Generate All Tasks button", () => {
       expect(mockPlanTasks).toHaveBeenCalledWith("proj-1", "plan-b");
     });
     expect(mockPlanTasks).toHaveBeenCalledTimes(2);
+  });
+
+  it("overlaps planTasks HTTP work when Generate All Tasks is clicked (bounded pool sees full queue)", async () => {
+    const planA = {
+      ...basePlan,
+      metadata: {
+        ...basePlan.metadata,
+        planId: "plan-a",
+        epicId: "epic-a",
+      },
+      status: "planning" as const,
+      taskCount: 0,
+      doneTaskCount: 0,
+    };
+    const planB = {
+      ...basePlan,
+      metadata: {
+        ...basePlan.metadata,
+        planId: "plan-b",
+        epicId: "epic-b",
+      },
+      status: "planning" as const,
+      taskCount: 0,
+      doneTaskCount: 0,
+    };
+    mockPlansList.mockResolvedValue({ plans: [planA, planB], edges: [] });
+    let inFlight = 0;
+    let maxConcurrent = 0;
+    mockPlanTasks.mockImplementation(async () => {
+      inFlight += 1;
+      maxConcurrent = Math.max(maxConcurrent, inFlight);
+      await new Promise((r) => setTimeout(r, 40));
+      inFlight -= 1;
+      return { ...planA, taskCount: 2 };
+    });
+    const store = createStore([planA, planB], undefined, []);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <PlanPhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>,
+      { wrapper: PlanPhaseWrapper }
+    );
+    await user.click(await screen.findByTestId("plan-bulk-actions-button"));
+    const planAllBtn = await screen.findByTestId("plan-all-tasks-button");
+    await user.click(planAllBtn);
+    await waitFor(() => {
+      expect(mockPlanTasks).toHaveBeenCalledTimes(2);
+    });
+    expect(maxConcurrent).toBeGreaterThanOrEqual(2);
   });
 
   it("calls planTasks in dependency order (foundational first) when graph has edges", async () => {
@@ -1821,14 +1885,11 @@ describe("Execute All button", () => {
     const executeAllBtn = await screen.findByTestId("execute-all-button");
     await user.click(executeAllBtn);
     await waitFor(() => {
-      expect(mockExecute).toHaveBeenCalledWith("proj-1", "plan-a", undefined);
+      expect(mockExecuteBatch).toHaveBeenCalledWith("proj-1", {
+        items: [{ planId: "plan-a" }, { planId: "plan-b" }],
+      });
     });
-    await waitFor(() => {
-      expect(mockExecute).toHaveBeenCalledWith("proj-1", "plan-b", undefined);
-    });
-    expect(mockExecute).toHaveBeenCalledTimes(2);
-    const callOrder = mockExecute.mock.calls.map((c) => c[1]);
-    expect(callOrder).toEqual(["plan-a", "plan-b"]);
+    expect(mockExecuteBatch).toHaveBeenCalledTimes(1);
   });
 });
 

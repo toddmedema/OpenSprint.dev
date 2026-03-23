@@ -120,7 +120,9 @@ vi.mock("../websocket/index.js", () => ({
   broadcastToProject: (...args: unknown[]) => mockBroadcast(...args),
 }));
 
-describe("ChatService - Plan phase agent registry", () => {
+const describeIfDb = testClientRef.current ? describe : describe.skip;
+
+describeIfDb("ChatService - Plan phase agent registry", () => {
   let chatService: ChatService;
   let projectService: ProjectService;
   let tempDir: string;

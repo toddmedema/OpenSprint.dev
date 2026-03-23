@@ -1512,6 +1512,7 @@ describe("OrchestratorService (slot-based model)", () => {
         expect(getExecutedCommands()).toEqual([
           "npm run lint",
           "npm ci",
+          "npm ls --depth=0",
           "npm run lint",
           "npm run test",
         ]);
@@ -1552,7 +1553,12 @@ describe("OrchestratorService (slot-based model)", () => {
           autoRepairAttempted: true,
           autoRepairSucceeded: true,
         });
-        expect(getExecutedCommands()).toEqual(["npm run lint", "npm ci", "npm run lint"]);
+        expect(getExecutedCommands()).toEqual([
+          "npm run lint",
+          "npm ci",
+          "npm ls --depth=0",
+          "npm run lint",
+        ]);
       } finally {
         process.env.NODE_ENV = previousNodeEnv;
       }
@@ -1588,7 +1594,12 @@ describe("OrchestratorService (slot-based model)", () => {
           autoRepairAttempted: true,
           autoRepairSucceeded: true,
         });
-        expect(getExecutedCommands()).toEqual(["npm run lint", "npm ci", "npm run lint"]);
+        expect(getExecutedCommands()).toEqual([
+          "npm run lint",
+          "npm ci",
+          "npm ls --depth=0",
+          "npm run lint",
+        ]);
       } finally {
         process.env.NODE_ENV = previousNodeEnv;
       }
@@ -1629,7 +1640,11 @@ describe("OrchestratorService (slot-based model)", () => {
           autoRepairAttempted: true,
           autoRepairSucceeded: false,
         });
-        expect(getExecutedCommands()).toEqual(["npm run lint", "npm ci", "npm run lint"]);
+        expect(getExecutedCommands()).toEqual([
+          "npm run lint",
+          "npm ci",
+          "npm run lint",
+        ]);
         expect(mockSymlinkNodeModules).toHaveBeenCalledTimes(1);
       } finally {
         process.env.NODE_ENV = previousNodeEnv;
@@ -1674,9 +1689,13 @@ describe("OrchestratorService (slot-based model)", () => {
           autoRepairSucceeded: false,
           autoRepairCommands: ["npm ci", "symlinkNodeModules"],
         });
-        expect(failure?.autoRepairOutput).toContain("[npm ci] added 1 package");
+        expect(failure?.autoRepairOutput).toContain("added 1 package");
         expect(failure?.autoRepairOutput).toContain("[symlinkNodeModules] EPERM: symlink failed");
-        expect(getExecutedCommands()).toEqual(["npm run lint", "npm ci", "npm run lint"]);
+        expect(getExecutedCommands()).toEqual([
+          "npm run lint",
+          "npm ci",
+          "npm run lint",
+        ]);
         expect(mockSymlinkNodeModules).toHaveBeenCalledTimes(1);
       } finally {
         process.env.NODE_ENV = previousNodeEnv;

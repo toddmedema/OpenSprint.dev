@@ -83,6 +83,7 @@ describe("Agents API", () => {
     process.env.HOME = originalHome;
     await fs.rm(tempDir, { recursive: true, force: true });
   });
+  const describeIfDb = testClientRef.current ? describe : describe.skip;
 
   describe("GET /projects/:projectId/agents/active", () => {
     it("should return empty array when no agent is running", async () => {
@@ -201,7 +202,7 @@ describe("Agents API", () => {
     });
   });
 
-  describe("GET /projects/:projectId/agents/instructions/:role", () => {
+  describeIfDb("GET /projects/:projectId/agents/instructions/:role", () => {
     it("should return content when role instructions exist in DB", async () => {
       const db = testClientRef.current!;
       await db.execute(
@@ -263,7 +264,7 @@ describe("Agents API", () => {
     });
   });
 
-  describe("PUT /projects/:projectId/agents/instructions/:role", () => {
+  describeIfDb("PUT /projects/:projectId/agents/instructions/:role", () => {
     it("should write role instructions to DB", async () => {
       const res = await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/agents/instructions/coder`)

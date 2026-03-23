@@ -35,3 +35,20 @@ export const planReexecuteBodySchema = z
   })
   .optional()
   .default({});
+
+export const planExecuteBatchBodySchema = z.object({
+  items: z
+    .array(
+      z.object({
+        planId: z.string().min(1),
+        prerequisitePlanIds: z.array(z.string()).optional(),
+        version_number: z.number().int().positive().optional(),
+      })
+    )
+    .min(1),
+});
+
+export const planExecuteBatchParamsSchema = z.object({
+  projectId: z.string().min(1),
+  batchId: z.string().min(1),
+});

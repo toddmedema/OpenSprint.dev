@@ -342,7 +342,7 @@ describe("Cross-service quality-gate regression integration", () => {
       projectId,
       taskId,
       expect.objectContaining({
-        status: "blocked",
+        status: "open",
         extra: expect.objectContaining({
           failedGateCommand: "npm run lint",
           failedGateReason: "Command failed: npm run lint",
@@ -361,7 +361,7 @@ describe("Cross-service quality-gate regression integration", () => {
 
     const loggedEvents = mockEventAppend.mock.calls.map(([, event]) => event);
     const mergeFailedEvent = loggedEvents.find((event) => event.event === "merge.failed");
-    const taskBlockedEvent = loggedEvents.find((event) => event.event === "task.blocked");
+    const taskBlockedEvent = loggedEvents.find((event) => event.event === "task.requeued");
     expect(mergeFailedEvent?.data).toEqual(
       expect.objectContaining({
         qualityGateCategory: "environment_setup",
@@ -375,7 +375,7 @@ describe("Cross-service quality-gate regression integration", () => {
     expect(taskBlockedEvent?.data).toEqual(
       expect.objectContaining({
         failedGateCommand: "npm run lint",
-        nextAction: expect.stringContaining("re-link worktree node_modules"),
+        nextAction: "Requeued for retry",
         qualityGateDetail: expect.objectContaining({
           command: "npm run lint",
           firstErrorLine: "Cannot find module 'eslint'",
@@ -383,14 +383,13 @@ describe("Cross-service quality-gate regression integration", () => {
       })
     );
 
-    const blockedUpdate = updates.find((fields) => fields.status === "blocked");
+    const blockedUpdate = updates.find((fields) => fields.status === "open");
     expect(blockedUpdate).toBeDefined();
     const blockedExtra = (blockedUpdate?.extra as Record<string, unknown>) ?? {};
     const diagnosticsTask = {
       ...task,
-      status: "blocked",
+      status: "open",
       labels: ["attempts:1", "merge_stage:quality_gate"],
-      block_reason: "Quality Gate Failure",
       ...blockedExtra,
     };
 
@@ -421,7 +420,7 @@ describe("Cross-service quality-gate regression integration", () => {
       item.summary.includes("repair:")
     );
     expect(mergeFailedTimelineEntry?.summary).toContain(
-      "repair: npm ci -> symlinkNodeModules (succeeded; retry still failed)"
+      "repair: npm ci -> symlinkNodeModules (failed)"
     );
     expect(mergeFailedTimelineEntry?.summary).toContain("category: environment_setup");
     expect(diagnostics.latestQualityGateDetail).toEqual(
@@ -434,7 +433,7 @@ describe("Cross-service quality-gate regression integration", () => {
         category: "environment_setup",
         validationWorkspace: "task_worktree",
         repairAttempted: true,
-        repairSucceeded: true,
+        repairSucceeded: false,
       })
     );
   });

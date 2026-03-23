@@ -18,6 +18,9 @@ describe("schema", () => {
     );
     expect(statements.some((s) => s.includes("plan_versions"))).toBe(true);
     expect(statements.some((s) => s.includes("current_version_number"))).toBe(true);
+    expect(
+      statements.every((s) => /^(CREATE|ALTER)\b/i.test(s.trim()))
+    ).toBe(true);
   });
 
   it("runSchema succeeds for SQLite (mock client)", async () => {
@@ -69,6 +72,14 @@ describe("schema", () => {
     expect(SCHEMA_SQL_SQLITE).toContain("plan_versions");
     expect(SCHEMA_SQL_SQLITE).toContain("current_version_number");
     expect(SCHEMA_SQL_SQLITE).toContain("last_executed_version_number");
+  });
+
+  it("Postgres and SQLite schemas include plan_execute_batches table", () => {
+    for (const dialect of ["postgres", "sqlite"] as const) {
+      const sql = getSchemaSql(dialect);
+      expect(sql).toContain("CREATE TABLE IF NOT EXISTS plan_execute_batches");
+      expect(sql).toContain("idx_plan_execute_batches_project_running");
+    }
   });
 
   it("Postgres and SQLite schemas include prd_snapshots table", () => {

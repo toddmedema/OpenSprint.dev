@@ -174,6 +174,26 @@ export interface CrossEpicDependenciesResponse {
   prerequisitePlanIds: string[];
 }
 
+/** One entry in POST /projects/:id/plans/execute-batch — same semantics as single-plan execute */
+export interface PlanExecuteBatchItem {
+  planId: string;
+  prerequisitePlanIds?: string[];
+  version_number?: number;
+}
+
+export type PlanExecuteBatchRunStatus = "running" | "completed" | "failed";
+
+/** Status of a persisted execute-all batch (GET by id or active) */
+export interface PlanExecuteBatchStatus {
+  batchId: string;
+  projectId: string;
+  status: PlanExecuteBatchRunStatus;
+  currentIndex: number;
+  total: number;
+  errorPlanId?: string;
+  errorMessage?: string;
+}
+
 /** Auditor run record (final review Auditor execution; enables plan-centric lookup and deep-linking) */
 export interface AuditorRun {
   id: number;
