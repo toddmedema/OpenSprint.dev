@@ -38,7 +38,6 @@ function KebabIcon({ className }: { className?: string }) {
 interface EmptyStateActionCardProps {
   title: string;
   description: string;
-  ctaLabel: string;
   icon: React.ReactNode;
   iconToneClassName: string;
   onClick: () => void;
@@ -48,7 +47,6 @@ interface EmptyStateActionCardProps {
 function EmptyStateActionCard({
   title,
   description,
-  ctaLabel,
   icon,
   iconToneClassName,
   onClick,
@@ -71,7 +69,6 @@ function EmptyStateActionCard({
         <span className="text-2xl font-semibold tracking-tight text-theme-text">{title}</span>
       </div>
       <span className="mt-3 text-sm leading-6 text-theme-muted">{description}</span>
-      <span className="mt-auto pt-8 text-sm font-semibold text-theme-text">{ctaLabel}</span>
     </button>
   );
 }
@@ -436,7 +433,6 @@ export function HomeScreen() {
                     <EmptyStateActionCard
                       title="Add Existing"
                       description="Connect a repo you already have and organize tasks, plans, and feedback in one place."
-                      ctaLabel="Use your current codebase"
                       icon={<UploadIcon className="h-7 w-7" />}
                       iconToneClassName="bg-theme-info-bg text-theme-info-text"
                       onClick={() => handleCreateOrAddClick("/projects/add-existing")}
@@ -445,7 +441,6 @@ export function HomeScreen() {
                     <EmptyStateActionCard
                       title="Create New"
                       description="Generate a brand new project from a starter template and jump straight into the SPEED workflow."
-                      ctaLabel="Scaffold a fresh project"
                       icon={<SparklesIcon className="h-7 w-7" />}
                       iconToneClassName="bg-theme-success-bg text-theme-success-text"
                       onClick={() => handleCreateOrAddClick("/projects/create-new")}
