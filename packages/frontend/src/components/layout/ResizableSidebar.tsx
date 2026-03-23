@@ -44,6 +44,8 @@ export interface ResizableSidebarProps {
   resizeHandleLabel?: string;
   /** When true, no border is rendered (e.g. for minimal Sketch TOC) */
   noBorder?: boolean;
+  /** When true, sidebar content can overflow (e.g. dropdowns over main pane). */
+  contentOverflowVisible?: boolean;
 }
 
 function loadPersistedWidth(
@@ -147,6 +149,7 @@ export function ResizableSidebar({
   onClose,
   resizeHandleLabel = "Resize sidebar",
   noBorder = false,
+  contentOverflowVisible = false,
 }: ResizableSidebarProps) {
   const viewportWidth = useViewportWidth();
   const maxWidth = maxWidthProp ?? Math.max(minWidth, Math.round(viewportWidth * maxWidthPercent));
@@ -285,7 +288,11 @@ export function ResizableSidebar({
               />
             </div>
           )}
-          <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">{children}</div>
+          <div
+            className={`flex flex-col flex-1 min-h-0 min-w-0 ${contentOverflowVisible ? "overflow-visible" : "overflow-hidden"}`}
+          >
+            {children}
+          </div>
         </div>
       </div>
     );
@@ -317,7 +324,11 @@ export function ResizableSidebar({
           <div className="h-full w-1 rounded-full bg-theme-border opacity-60 group-hover:bg-brand-500/60 group-hover:opacity-100 transition-[background-color,opacity]" />
         </div>
       )}
-      <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">{children}</div>
+      <div
+        className={`flex flex-col flex-1 min-h-0 min-w-0 ${contentOverflowVisible ? "overflow-visible" : "overflow-hidden"}`}
+      >
+        {children}
+      </div>
     </div>
   );
 }

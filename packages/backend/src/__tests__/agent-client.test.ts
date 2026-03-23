@@ -1064,16 +1064,20 @@ describe("AgentClient", () => {
   describe("spawnWithTaskFile", () => {
     const createDetachedChild = (pid: number) => {
       const listeners: Record<string, Array<(code?: number) => void>> = {};
+      const emitClose = (code?: number) => {
+        for (const fn of listeners.close ?? []) {
+          fn(code);
+        }
+      };
       const child = {
         killed: false,
         kill: vi.fn(() => {
           child.killed = true;
-          for (const fn of listeners.close ?? []) {
-            fn(0);
-          }
+          emitClose(0);
           return true;
         }),
         pid,
+        emitClose,
         stdout: { on: vi.fn(), removeAllListeners: vi.fn() },
         stderr: { on: vi.fn(), removeAllListeners: vi.fn() },
         on: vi.fn((event: string, fn: (code?: number) => void) => {
@@ -2074,18 +2078,7 @@ describe("AgentClient", () => {
 
       mockGetNextKey.mockResolvedValue({ key: "cursor-key", keyId: "k1", source: "global" });
 
-      const mockChild = {
-        killed: false,
-        kill: vi.fn(),
-        pid: 10001,
-        stdout: { on: vi.fn(), removeAllListeners: vi.fn() },
-        stderr: { on: vi.fn(), removeAllListeners: vi.fn() },
-        on: vi.fn((ev: string, fn: (code?: number) => void) => {
-          if (ev === "close") setTimeout(() => fn(1), 20);
-          return { on: vi.fn(), removeAllListeners: vi.fn() };
-        }),
-        removeAllListeners: vi.fn(),
-      };
+      const mockChild = createDetachedChild(10001);
       mockSpawn.mockReturnValue(mockChild);
 
       const onOutput = vi.fn();
@@ -2108,6 +2101,7 @@ describe("AgentClient", () => {
         '{"type":"text","text":"We should handle rate limits gracefully in this feature."}\n',
         "utf-8"
       );
+      mockChild.emitClose(1);
 
       await vi.waitFor(
         () => {
@@ -2135,18 +2129,7 @@ describe("AgentClient", () => {
 
       mockGetNextKey.mockResolvedValue({ key: "cursor-key", keyId: "k1", source: "global" });
 
-      const mockChild = {
-        killed: false,
-        kill: vi.fn(),
-        pid: 10002,
-        stdout: { on: vi.fn(), removeAllListeners: vi.fn() },
-        stderr: { on: vi.fn(), removeAllListeners: vi.fn() },
-        on: vi.fn((ev: string, fn: (code?: number) => void) => {
-          if (ev === "close") setTimeout(() => fn(1), 20);
-          return { on: vi.fn(), removeAllListeners: vi.fn() };
-        }),
-        removeAllListeners: vi.fn(),
-      };
+      const mockChild = createDetachedChild(10002);
       mockSpawn.mockReturnValue(mockChild);
 
       const onOutput = vi.fn();
@@ -2169,6 +2152,7 @@ describe("AgentClient", () => {
         "S: We should handle API rate limits gracefully and add retry headers.\n",
         "utf-8"
       );
+      mockChild.emitClose(1);
 
       await vi.waitFor(
         () => {
@@ -2196,18 +2180,7 @@ describe("AgentClient", () => {
 
       mockGetNextKey.mockResolvedValue({ key: "cursor-key", keyId: "k1", source: "global" });
 
-      const mockChild = {
-        killed: false,
-        kill: vi.fn(),
-        pid: 10003,
-        stdout: { on: vi.fn(), removeAllListeners: vi.fn() },
-        stderr: { on: vi.fn(), removeAllListeners: vi.fn() },
-        on: vi.fn((ev: string, fn: (code?: number) => void) => {
-          if (ev === "close") setTimeout(() => fn(1), 20);
-          return { on: vi.fn(), removeAllListeners: vi.fn() };
-        }),
-        removeAllListeners: vi.fn(),
-      };
+      const mockChild = createDetachedChild(10003);
       mockSpawn.mockReturnValue(mockChild);
 
       const onOutput = vi.fn();
@@ -2226,6 +2199,7 @@ describe("AgentClient", () => {
       );
 
       await fs.writeFile(outputLogPath, "Error: Invalid API key\n", "utf-8");
+      mockChild.emitClose(1);
 
       await vi.waitFor(
         () => {
@@ -2256,18 +2230,7 @@ describe("AgentClient", () => {
 
       mockGetNextKey.mockResolvedValue({ key: "cursor-key", keyId: "k1", source: "global" });
 
-      const mockChild = {
-        killed: false,
-        kill: vi.fn(),
-        pid: 10004,
-        stdout: { on: vi.fn(), removeAllListeners: vi.fn() },
-        stderr: { on: vi.fn(), removeAllListeners: vi.fn() },
-        on: vi.fn((ev: string, fn: (code?: number) => void) => {
-          if (ev === "close") setTimeout(() => fn(1), 20);
-          return { on: vi.fn(), removeAllListeners: vi.fn() };
-        }),
-        removeAllListeners: vi.fn(),
-      };
+      const mockChild = createDetachedChild(10004);
       mockSpawn.mockReturnValue(mockChild);
 
       const onOutput = vi.fn();
@@ -2290,6 +2253,7 @@ describe("AgentClient", () => {
         "Error: Password not found for account 'cursor-user' and service 'cursor-access-token'\n",
         "utf-8"
       );
+      mockChild.emitClose(1);
 
       await vi.waitFor(
         () => {
@@ -2321,18 +2285,7 @@ describe("AgentClient", () => {
         target: "8.8.8.8:53",
       });
 
-      const mockChild = {
-        killed: false,
-        kill: vi.fn(),
-        pid: 10005,
-        stdout: { on: vi.fn(), removeAllListeners: vi.fn() },
-        stderr: { on: vi.fn(), removeAllListeners: vi.fn() },
-        on: vi.fn((ev: string, fn: (code?: number) => void) => {
-          if (ev === "close") setTimeout(() => fn(1), 20);
-          return { on: vi.fn(), removeAllListeners: vi.fn() };
-        }),
-        removeAllListeners: vi.fn(),
-      };
+      const mockChild = createDetachedChild(10005);
       mockSpawn.mockReturnValue(mockChild);
 
       const onOutput = vi.fn();
@@ -2351,6 +2304,7 @@ describe("AgentClient", () => {
       );
 
       await fs.writeFile(outputLogPath, "S: Unauthorized: invalid api key\n", "utf-8");
+      mockChild.emitClose(1);
 
       await vi.waitFor(
         () => {

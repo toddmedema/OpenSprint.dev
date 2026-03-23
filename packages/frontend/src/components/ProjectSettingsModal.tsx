@@ -588,6 +588,9 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
       if (expoAccessTokenInput === EXPO_ACCESS_TOKEN_MASK && expoTokenConfigured) {
         return;
       }
+      if (!expoTokenConfigured && !expoAccessTokenInput.trim()) {
+        return;
+      }
       setExpoTokenSaving(true);
       setExpoTokenError(null);
       try {
@@ -1659,25 +1662,16 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                                   setExpoAccessTokenInput(e.target.value);
                                   setExpoTokenError(null);
                                 }}
+                                onBlur={() => void handleSaveExpoAccessToken()}
                                 disabled={expoTokenSaving}
                                 autoComplete="off"
                                 data-testid="expo-access-token-input"
                               />
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => void handleSaveExpoAccessToken()}
-                              disabled={
-                                expoTokenSaving ||
-                                (expoAccessTokenInput === EXPO_ACCESS_TOKEN_MASK &&
-                                  expoTokenConfigured)
-                              }
-                              className="btn-secondary"
-                              data-testid="expo-access-token-save"
-                            >
-                              {expoTokenSaving ? "Saving…" : "Save"}
-                            </button>
                           </div>
+                          {expoTokenSaving && (
+                            <p className="text-xs text-theme-muted mt-2">Saving token...</p>
+                          )}
                           {expoTokenError && (
                             <p className="text-sm text-theme-error-text mt-2" role="alert">
                               {expoTokenError}

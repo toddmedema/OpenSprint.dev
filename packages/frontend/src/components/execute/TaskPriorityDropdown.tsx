@@ -104,7 +104,7 @@ export function TaskPriorityDropdown({
       {priorityDropdownOpen && (
         <ul
           role="listbox"
-          className={`absolute top-full mt-1 z-50 min-w-[140px] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1 ${alignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
+          className={`dropdown-menu-elevated dropdown-menu-surface absolute top-full mt-1 min-w-[140px] ${alignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
           data-testid="priority-dropdown"
         >
           {([0, 1, 2, 3, 4] as const).map((p) => (

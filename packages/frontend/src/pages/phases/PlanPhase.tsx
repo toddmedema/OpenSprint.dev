@@ -1383,7 +1383,7 @@ export function PlanPhase({ projectId, onNavigateToBuildTask }: PlanPhaseProps) 
                     {planActionsMenuOpen && (
                       <ul
                         role="menu"
-                        className={`absolute top-full mt-1 z-50 min-w-[140px] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1 ${planActionsMenuAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
+                        className={`dropdown-menu-elevated dropdown-menu-surface absolute top-full mt-1 min-w-[140px] ${planActionsMenuAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
                         data-testid="plan-sidebar-actions-menu"
                       >
                         <li role="none">

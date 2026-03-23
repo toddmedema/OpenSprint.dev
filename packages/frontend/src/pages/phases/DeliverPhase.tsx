@@ -482,7 +482,7 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
                     {filterDropdownOpen && (
                       <div
                         role="listbox"
-                        className={`absolute top-full mt-1 z-10 min-w-[10rem] max-h-[90vh] overflow-y-auto py-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg ${filterDropdownAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
+                        className={`dropdown-menu-elevated dropdown-menu-surface absolute top-full mt-1 min-w-[10rem] max-h-[90vh] overflow-y-auto ${filterDropdownAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
                         data-testid="delivery-history-filter-dropdown"
                       >
                         <button
@@ -604,6 +604,7 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
               side="left"
               resizeHandleLabel="Resize delivery history sidebar"
               responsive
+              contentOverflowVisible
             >
               <div className="h-full flex flex-col border-r border-theme-border bg-theme-bg">
                 <div className="px-3 py-2 flex items-center justify-between gap-2 border-b border-theme-border">
@@ -625,7 +626,7 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
                       {filterDropdownOpen && (
                         <div
                           role="listbox"
-                          className={`absolute top-full mt-1 z-10 min-w-[10rem] py-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg ${filterDropdownAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
+                          className={`dropdown-menu-elevated dropdown-menu-surface absolute top-full mt-1 min-w-[10rem] ${filterDropdownAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
                           data-testid="delivery-history-filter-dropdown"
                         >
                           <button

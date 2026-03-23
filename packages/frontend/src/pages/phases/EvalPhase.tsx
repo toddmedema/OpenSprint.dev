@@ -1089,7 +1089,7 @@ const FeedbackCard = memo(
                 {replyPriorityDropdownOpen && (
                   <ul
                     role="listbox"
-                    className={`absolute top-full mt-1 z-50 min-w-[10rem] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1 ${replyPriorityAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
+                    className={`dropdown-menu-elevated dropdown-menu-surface absolute top-full mt-1 min-w-[10rem] ${replyPriorityAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
                     data-testid="reply-priority-dropdown"
                   >
                     <li role="option" aria-selected={replyPriority == null}>
@@ -1461,7 +1461,7 @@ function PlanReplyComposer({
           {replyPriorityDropdownOpen && (
             <ul
               role="listbox"
-              className={`absolute top-full mt-1 z-50 min-w-[10rem] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1 ${replyPriorityAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
+              className={`dropdown-menu-elevated dropdown-menu-surface absolute top-full mt-1 min-w-[10rem] ${replyPriorityAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
               data-testid="plan-inline-reply-priority-dropdown"
             >
               <li role="option" aria-selected={replyPriority == null}>
@@ -2230,7 +2230,7 @@ export function EvalPhase({
                 {feedbackPriorityDropdownOpen && (
                   <ul
                     role="listbox"
-                    className={`absolute top-full mt-1 z-50 min-w-[10rem] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1 ${feedbackPriorityAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
+                    className={`dropdown-menu-elevated dropdown-menu-surface absolute top-full mt-1 min-w-[10rem] ${feedbackPriorityAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
                     data-testid="feedback-priority-dropdown"
                   >
                     <li role="option" aria-selected={priority == null}>

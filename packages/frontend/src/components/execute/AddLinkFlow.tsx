@@ -147,7 +147,7 @@ export function AddLinkFlow({
             <ul
               id="add-link-listbox"
               role="listbox"
-              className="absolute left-0 right-0 top-full mt-0.5 z-50 max-h-32 overflow-y-auto rounded border border-theme-border bg-theme-surface shadow-lg py-1"
+              className="dropdown-menu-elevated dropdown-menu-surface absolute left-0 right-0 top-full mt-0.5 max-h-32 overflow-y-auto"
               data-testid="add-link-suggestions"
             >
               {displayedSuggestions.map((t, i) => (

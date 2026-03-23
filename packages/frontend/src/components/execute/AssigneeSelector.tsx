@@ -145,7 +145,7 @@ export function AssigneeSelector({
     <ul
       ref={menuRef}
       role="listbox"
-      className="fixed z-[9999] min-w-[160px] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1"
+      className="dropdown-menu-surface fixed z-[9999] min-w-[160px]"
       style={dropdownStyle}
       data-testid="assignee-dropdown"
     >

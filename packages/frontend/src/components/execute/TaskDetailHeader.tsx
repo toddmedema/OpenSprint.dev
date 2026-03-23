@@ -110,7 +110,7 @@ export function TaskDetailHeader({
             {actionsMenuOpen && (
               <ul
                 role="menu"
-                className={`absolute top-full mt-1 z-50 min-w-[140px] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1 ${actionsMenuAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
+                className={`dropdown-menu-elevated dropdown-menu-surface absolute top-full mt-1 min-w-[140px] ${actionsMenuAlignRight ? "right-0 left-auto" : "left-0 right-auto"}`}
                 data-testid="sidebar-actions-menu"
               >
                 {isBlockedTask && (

@@ -1051,6 +1051,37 @@ describe("ProjectSettingsModal", () => {
     );
   });
 
+  it("Expo access token auto-saves on blur and has no Save button", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      deployment: { mode: "expo" as const },
+    });
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const deploymentTab = screen.getByRole("button", { name: "Deliver" });
+    await userEvent.click(deploymentTab);
+    mockUpdateSettings.mockClear();
+    mockUpdateSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      deployment: { mode: "expo" as const, expoTokenConfigured: true },
+    });
+
+    const tokenInput = screen.getByTestId("expo-access-token-input");
+    fireEvent.change(tokenInput, { target: { value: "expo_token_123" } });
+    fireEvent.blur(tokenInput);
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          deployment: expect.objectContaining({ expoToken: "expo_token_123" }),
+        })
+      )
+    );
+    expect(screen.queryByTestId("expo-access-token-save")).not.toBeInTheDocument();
+  });
+
   it("adds env var via inline inputs in Deploy settings (no prompt)", async () => {
     const promptSpy = vi.spyOn(window, "prompt").mockImplementation(() => null);
     mockGetSettings.mockResolvedValueOnce({

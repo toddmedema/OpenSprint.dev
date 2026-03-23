@@ -259,7 +259,7 @@ export function PlanFilterToolbar({
           {bulkMenuOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full mt-1 min-w-[13rem] rounded-lg border border-theme-border bg-theme-surface shadow-lg py-1 z-20"
+              className="dropdown-menu-elevated dropdown-menu-surface absolute right-0 top-full mt-1 min-w-[13rem]"
               data-testid="plan-bulk-actions-menu"
             >
               {showPlanAllButton && (
