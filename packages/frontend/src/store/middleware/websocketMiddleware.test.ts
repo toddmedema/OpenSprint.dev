@@ -3,6 +3,7 @@ import { configureStore } from "@reduxjs/toolkit";
 import { QueryClient } from "@tanstack/react-query";
 import { websocketMiddleware, wsConnect, wsDisconnect, wsSend } from "./websocketMiddleware";
 import { queryKeys } from "../../api/queryKeys";
+import { resetMergeGateExecuteStatusSnapshots } from "../../lib/executeStatusMergeGateTasksBump";
 import projectReducer from "../slices/projectSlice";
 
 const mockInvalidateQueries = vi.fn().mockResolvedValue(undefined);
@@ -143,6 +144,7 @@ describe("websocketMiddleware", () => {
 
   const focusListeners: Array<() => void> = [];
   beforeEach(() => {
+    resetMergeGateExecuteStatusSnapshots();
     wsInstance = null;
     focusListeners.length = 0;
     mockInvalidateQueries.mockClear();
@@ -1013,6 +1015,47 @@ describe("websocketMiddleware", () => {
         expect(store.getState().execute.dispatchPausedReason).toBe(
           "Only the baseline-remediation task will be assigned until the baseline passes."
         );
+      });
+    });
+
+    it("invalidates tasks list when execute.status merge-related fields change (deduped)", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      wsInstance!.simulateMessage({
+        type: "execute.status",
+        activeTasks: [],
+        queueDepth: 0,
+        gitMergeQueue: { activeTaskId: null, pendingTaskIds: [] },
+      });
+      await vi.waitFor(() => {
+        expect(mockInvalidateQueries).toHaveBeenCalledWith(
+          expect.objectContaining({ queryKey: queryKeys.tasks.list("proj-1") })
+        );
+      });
+      const countAfterFirst = mockInvalidateQueries.mock.calls.length;
+
+      wsInstance!.simulateMessage({
+        type: "execute.status",
+        activeTasks: [],
+        queueDepth: 2,
+        gitMergeQueue: { activeTaskId: null, pendingTaskIds: [] },
+      });
+      await vi.waitFor(() => {
+        expect(mockInvalidateQueries.mock.calls.length).toBe(countAfterFirst);
+      });
+
+      wsInstance!.simulateMessage({
+        type: "execute.status",
+        activeTasks: [],
+        queueDepth: 2,
+        mergeValidationStatus: "degraded",
+        gitMergeQueue: { activeTaskId: null, pendingTaskIds: [] },
+      });
+      await vi.waitFor(() => {
+        expect(mockInvalidateQueries.mock.calls.length).toBeGreaterThan(countAfterFirst);
       });
     });
 

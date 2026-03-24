@@ -48,6 +48,10 @@ import type { QueryClient } from "@tanstack/react-query";
 import { getQueryClient } from "../../queryClient";
 import { queryKeys } from "../../api/queryKeys";
 import { isViewingProjectPhase } from "../../lib/currentProjectRoute";
+import {
+  shouldBumpTasksListForMergeGateStatus,
+  snapshotExecuteStatusMergeGateFields,
+} from "../../lib/executeStatusMergeGateTasksBump";
 
 type StoreDispatch = ThunkDispatch<unknown, unknown, UnknownAction>;
 
@@ -533,6 +537,12 @@ export const websocketMiddleware: Middleware = (storeApi) => {
             gitMergeQueue: statusEv.gitMergeQueue ?? null,
           })
         );
+        {
+          const snap = snapshotExecuteStatusMergeGateFields(statusEv);
+          if (shouldBumpTasksListForMergeGateStatus(projectId, snap)) {
+            void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+          }
+        }
         break;
       }
 

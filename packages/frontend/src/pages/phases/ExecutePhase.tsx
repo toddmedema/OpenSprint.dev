@@ -51,6 +51,7 @@ import { getProjectPhasePath } from "../../lib/phaseRouting";
 import { EXECUTE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 import { EMPTY_STATE_COPY } from "../../lib/emptyStateCopy";
 import type { StatusFilter } from "../../lib/executeTaskFilter";
+import { mergeExecuteSelectedTaskData } from "../../lib/mergeExecuteSelectedTask";
 
 interface ExecutePhaseProps {
   projectId: string;
@@ -212,18 +213,10 @@ export function ExecutePhase({
   const unblockLoading = Boolean(
     effectiveSelectedTask && (unblockInflightByTaskId[effectiveSelectedTask] ?? 0) > 0
   );
-  // Merge priority from Redux when both exist so optimistic update shows immediately
-  const selectedTaskData = (() => {
-    if (!effectiveSelectedTask) return null;
-    const fromDetail = taskDetailData ?? null;
-    const fromStore = selectedTaskFromStore ?? null;
-    const base = fromDetail ?? fromStore ?? null;
-    if (!base) return null;
-    if (fromStore && fromDetail?.id === fromStore.id) {
-      return { ...base, priority: fromStore.priority };
-    }
-    return base;
-  })();
+  const selectedTaskData = mergeExecuteSelectedTaskData(
+    taskDetailData ?? null,
+    selectedTaskFromStore ?? null
+  );
   const isDoneTask = selectedTaskData?.kanbanColumn === "done";
   const isBlockedTask = selectedTaskData?.kanbanColumn === "blocked";
   const isInProgressTask =
