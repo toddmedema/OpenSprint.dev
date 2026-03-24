@@ -586,6 +586,10 @@ export const api = {
       request<void>(`/projects/${projectId}/tasks/${taskId}/dependencies/${parentTaskId}`, {
         method: "DELETE",
       }),
+    forceRetry: (projectId: string, taskId: string) =>
+      request<Task>(`/projects/${projectId}/tasks/${taskId}/force-retry`, {
+        method: "POST",
+      }),
   },
 
   // ─── Execute ───

@@ -140,6 +140,22 @@ export function useDeleteTask(projectId: string) {
   });
 }
 
+export function useForceRetryTask(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) => api.tasks.forceRetry(projectId, taskId),
+    onSuccess: (_, taskId) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.tasks.detail(projectId, taskId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.tasks.sessions(projectId, taskId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.execute.status(projectId) });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.execute.diagnostics(projectId, taskId),
+      });
+    },
+  });
+}
+
 export function useAddTaskDependency(projectId: string) {
   const qc = useQueryClient();
   return useMutation({

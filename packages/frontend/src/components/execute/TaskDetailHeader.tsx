@@ -10,10 +10,12 @@ export interface TaskDetailHeaderProps {
   markDoneLoading: boolean;
   unblockLoading: boolean;
   deleteLoading: boolean;
+  forceRetryLoading: boolean;
   onClose: () => void;
   onMarkDone: () => void;
   onUnblock: () => void;
   onDeleteTask: () => void | Promise<void>;
+  onForceRetry: () => void | Promise<void>;
   deleteConfirmOpen: boolean;
   setDeleteConfirmOpen: React.Dispatch<React.SetStateAction<boolean>>;
   deleteLinkConfirm: {
@@ -40,10 +42,12 @@ export function TaskDetailHeader({
   markDoneLoading,
   unblockLoading,
   deleteLoading,
+  forceRetryLoading,
   onClose,
   onMarkDone,
   onUnblock,
   onDeleteTask,
+  onForceRetry,
   deleteConfirmOpen,
   setDeleteConfirmOpen,
   deleteLinkConfirm,
@@ -53,6 +57,7 @@ export function TaskDetailHeader({
 }: TaskDetailHeaderProps) {
   const [actionsMenuOpen, setActionsMenuOpen] = React.useState(false);
   const [actionsMenuAlignRight, setActionsMenuAlignRight] = React.useState(false);
+  const [forceRetryConfirmOpen, setForceRetryConfirmOpen] = React.useState(false);
   const actionsMenuRef = React.useRef<HTMLDivElement>(null);
   const actionsMenuTriggerRef = React.useRef<HTMLButtonElement>(null);
 
@@ -78,6 +83,11 @@ export function TaskDetailHeader({
   const handleConfirmDeleteTask = async () => {
     await onDeleteTask();
     setDeleteConfirmOpen(false);
+  };
+
+  const handleConfirmForceRetry = async () => {
+    await onForceRetry();
+    setForceRetryConfirmOpen(false);
   };
 
   return (
@@ -156,6 +166,23 @@ export function TaskDetailHeader({
                     </button>
                   </li>
                 )}
+                {!isDoneTask && (
+                  <li role="none">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setForceRetryConfirmOpen(true);
+                        setActionsMenuOpen(false);
+                      }}
+                      disabled={forceRetryLoading}
+                      className="dropdown-item w-full flex items-center gap-2 text-left text-xs text-theme-warning-text hover:bg-theme-warning-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      data-testid="sidebar-force-retry-btn"
+                    >
+                      {forceRetryLoading ? "Retrying..." : "Force Retry"}
+                    </button>
+                  </li>
+                )}
                 <li role="none">
                   <button
                     type="button"
@@ -229,6 +256,71 @@ export function TaskDetailHeader({
                 disabled={deleteLoading}
               >
                 {deleteLoading ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {forceRetryConfirmOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Close force retry confirmation"
+            onClick={() => setForceRetryConfirmOpen(false)}
+            className="absolute inset-0 bg-theme-overlay backdrop-blur-sm"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="force-retry-confirm-title"
+            className="relative bg-theme-surface rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto flex flex-col"
+            data-testid="sidebar-force-retry-dialog"
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border shrink-0">
+              <h2 id="force-retry-confirm-title" className="text-lg font-semibold text-theme-text">
+                Force retry task
+              </h2>
+              <CloseButton
+                onClick={() => setForceRetryConfirmOpen(false)}
+                ariaLabel="Close force retry confirmation"
+              />
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-theme-text">
+                This will destroy all in-progress work and worktrees for this task and restart it from scratch. This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-theme-border bg-theme-bg rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => setForceRetryConfirmOpen(false)}
+                className="btn-secondary"
+                data-testid="sidebar-force-retry-cancel-btn"
+                disabled={forceRetryLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleConfirmForceRetry();
+                }}
+                className="btn-primary bg-theme-warning-text hover:bg-theme-warning-text/90 disabled:opacity-50"
+                data-testid="sidebar-force-retry-confirm-btn"
+                disabled={forceRetryLoading}
+              >
+                {forceRetryLoading ? (
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0"
+                      aria-hidden
+                    />
+                    Retrying...
+                  </span>
+                ) : (
+                  "Force Retry"
+                )}
               </button>
             </div>
           </div>

@@ -21,6 +21,7 @@ import {
   useMarkTaskDone,
   useUnblockTask,
   useDeleteTask,
+  useForceRetryTask,
   useTasks,
   useProjectSettings,
   getExecuteTasksRefetchInterval,
@@ -39,6 +40,7 @@ import {
 import { useScrollToQuestion } from "../../hooks/useScrollToQuestion";
 import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotifications";
 import { updateNotification, removeNotification } from "../../store/slices/openQuestionsSlice";
+import { addNotification } from "../../store/slices/notificationSlice";
 import type { Notification } from "@opensprint/shared";
 import { ExecuteFilterToolbar } from "../../components/execute/ExecuteFilterToolbar";
 import { TaskDetailSidebar } from "../../components/execute/TaskDetailSidebar";
@@ -159,6 +161,7 @@ export function ExecutePhase({
   const markDoneMutation = useMarkTaskDone(projectId);
   const unblockMutation = useUnblockTask(projectId);
   const deleteTaskMutation = useDeleteTask(projectId);
+  const forceRetryMutation = useForceRetryTask(projectId);
   const projectSettingsQuery = useProjectSettings(projectId);
 
   const taskDetailData = taskDetailQuery.data;
@@ -328,6 +331,23 @@ export function ExecutePhase({
     if (!effectiveSelectedTask) return;
     await deleteTaskMutation.mutateAsync(effectiveSelectedTask);
     handleClose();
+  };
+
+  const handleForceRetry = async () => {
+    if (!effectiveSelectedTask) return;
+    try {
+      await forceRetryMutation.mutateAsync(effectiveSelectedTask);
+      dispatch(
+        addNotification({ message: "Task reset and queued for retry", severity: "success" })
+      );
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status;
+      const message =
+        status === 409
+          ? "Cannot force-retry a completed task"
+          : "Failed to force-retry task";
+      dispatch(addNotification({ message, severity: "error" }));
+    }
   };
 
   const handleSelectTask = useCallback(
@@ -731,6 +751,7 @@ export function ExecutePhase({
             markDoneLoading={markDoneLoading}
             unblockLoading={unblockLoading}
             deleteLoading={deleteTaskMutation.isPending}
+            forceRetryLoading={forceRetryMutation.isPending}
             taskIdToStartedAt={taskIdToStartedAt}
             planByEpicId={planByEpicId}
             taskById={taskById}
@@ -756,6 +777,7 @@ export function ExecutePhase({
               onMarkDone: handleMarkDone,
               onUnblock: handleUnblock,
               onDeleteTask: handleDeleteTask,
+              onForceRetry: handleForceRetry,
               onSelectTask: handleSelectTask,
               onNavigateToPlan,
               onOpenQuestionResolved: (

@@ -58,6 +58,7 @@ export interface TaskDetailCallbacks {
   onMarkDone: () => void;
   onUnblock: () => void;
   onDeleteTask: () => void | Promise<void>;
+  onForceRetry: () => void | Promise<void>;
   onSelectTask: (taskId: string) => void;
   onNavigateToPlan?: (planId: string) => void;
   onOpenQuestionResolved?: (resolved?: Notification, notificationIdToRemove?: string) => void;
@@ -80,6 +81,7 @@ export interface TaskDetailSidebarProps {
   markDoneLoading: boolean;
   unblockLoading: boolean;
   deleteLoading: boolean;
+  forceRetryLoading: boolean;
   taskIdToStartedAt: Record<string, string>;
   planByEpicId: Record<string, Plan>;
   taskById: Record<string, Task>;
@@ -128,6 +130,7 @@ function areTaskDetailSidebarPropsEqual(
     prev.markDoneLoading !== next.markDoneLoading ||
     prev.unblockLoading !== next.unblockLoading ||
     prev.deleteLoading !== next.deleteLoading ||
+    prev.forceRetryLoading !== next.forceRetryLoading ||
     prev.taskIdToStartedAt !== next.taskIdToStartedAt ||
     prev.planByEpicId !== next.planByEpicId ||
     prev.taskById !== next.taskById ||
@@ -155,6 +158,7 @@ function areTaskDetailSidebarPropsEqual(
     cb(prev).onMarkDone !== cb(next).onMarkDone ||
     cb(prev).onUnblock !== cb(next).onUnblock ||
     cb(prev).onDeleteTask !== cb(next).onDeleteTask ||
+    cb(prev).onForceRetry !== cb(next).onForceRetry ||
     cb(prev).onSelectTask !== cb(next).onSelectTask
   ) {
     return false;
@@ -178,6 +182,7 @@ function TaskDetailSidebarInner({
   markDoneLoading,
   unblockLoading,
   deleteLoading,
+  forceRetryLoading,
   taskIdToStartedAt,
   planByEpicId,
   taskById,
@@ -210,6 +215,7 @@ function TaskDetailSidebarInner({
     onMarkDone,
     onUnblock,
     onDeleteTask,
+    onForceRetry,
     onSelectTask,
   } = callbacks;
   const dispatch = useAppDispatch();
@@ -308,10 +314,12 @@ function TaskDetailSidebarInner({
         markDoneLoading={markDoneLoading}
         unblockLoading={unblockLoading}
         deleteLoading={deleteLoading}
+        forceRetryLoading={forceRetryLoading}
         onClose={onClose}
         onMarkDone={onMarkDone}
         onUnblock={onUnblock}
         onDeleteTask={onDeleteTask}
+        onForceRetry={onForceRetry}
         deleteConfirmOpen={deleteConfirmOpen}
         setDeleteConfirmOpen={setDeleteConfirmOpen}
         deleteLinkConfirm={deleteLinkConfirm}
