@@ -253,7 +253,7 @@ describe("TimelineList", () => {
     expect(planningIdx).toBeLessThan(completedIdx);
   });
 
-  it("rows display priority icon and title (no row status icon; section header shows status)", () => {
+  it("rows display priority icon, title, and epic name (no row status icon; section header shows status)", () => {
     const tasks = [
       createMockTask({
         id: "task-1",
@@ -272,9 +272,10 @@ describe("TimelineList", () => {
     expect(screen.getByText("Implement login")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "In Progress" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /critical/i })).toBeInTheDocument();
+    expect(screen.getByText("Authentication")).toBeInTheDocument();
   });
 
-  it("does not display epic name in timeline rows", () => {
+  it("displays epic name in timeline rows when task has an associated plan", () => {
     const tasks = [
       createMockTask({
         id: "task-1",
@@ -290,7 +291,47 @@ describe("TimelineList", () => {
     );
 
     expect(screen.getByText("Task with epic")).toBeInTheDocument();
-    expect(screen.queryByText("Auth Epic")).not.toBeInTheDocument();
+    expect(screen.getByText("Auth Epic")).toBeInTheDocument();
+    expect(screen.getByTestId("task-row-epic-name")).toHaveTextContent("Auth Epic");
+  });
+
+  it("does not render epic name element when task has no epicId", () => {
+    const tasks = [
+      createMockTask({
+        id: "task-1",
+        title: "Task without epic",
+        kanbanColumn: "ready",
+        epicId: null,
+      }),
+    ];
+    const plans: Plan[] = [];
+
+    renderWithProviders(
+      <TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} {...defaultListProps} />
+    );
+
+    expect(screen.getByText("Task without epic")).toBeInTheDocument();
+    expect(screen.queryByTestId("task-row-epic-name")).not.toBeInTheDocument();
+  });
+
+  it("epic name has truncation class and wider max on >=1000px viewports", () => {
+    const tasks = [
+      createMockTask({
+        id: "task-1",
+        title: "Task with epic",
+        kanbanColumn: "ready",
+        epicId: "epic-1",
+      }),
+    ];
+    const plans = [createMockPlan("epic-1", "Auth Epic")];
+
+    renderWithProviders(
+      <TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} {...defaultListProps} />
+    );
+
+    const epicNameEl = screen.getByTestId("task-row-epic-name");
+    expect(epicNameEl).toHaveClass("truncate", "max-w-[120px]");
+    expect(epicNameEl.className).toContain("min-[1000px]:max-w-[240px]");
   });
 
   it("displays complexity icon when task has complexity", () => {
@@ -334,7 +375,7 @@ describe("TimelineList", () => {
     expect(screen.getByText("Improve tests")).toBeInTheDocument();
   });
 
-  it("hides Self-improvement badge on small screens", () => {
+  it("hides Self-improvement badge on small screens (epic name remains visible)", () => {
     const tasks = [
       createMockTask({
         id: "task-1",

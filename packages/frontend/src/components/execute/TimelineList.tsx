@@ -8,6 +8,7 @@ import {
   TIMELINE_SECTION,
 } from "../../lib/executeTaskSort";
 import { isTaskInPlanningPlan, isSelfImprovementTask } from "../../lib/executeTaskFilter";
+import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
 import { PriorityIcon } from "../PriorityIcon";
 import { ComplexityIcon } from "../ComplexityIcon";
 import { AssigneeSelector } from "./AssigneeSelector";
@@ -52,6 +53,7 @@ const SECTION_LABELS: Record<string, string> = {
 
 function TimelineRow({
   task,
+  epicName,
   relativeTime,
   onTaskSelect,
   onUnblock,
@@ -61,6 +63,7 @@ function TimelineRow({
   enableHumanTeammates,
 }: {
   task: Task;
+  epicName: string;
   relativeTime: ReactNode;
   onTaskSelect: (taskId: string) => void;
   onUnblock?: (taskId: string) => void;
@@ -98,6 +101,15 @@ function TimelineRow({
               data-testid="task-badge-self-improvement"
             >
               Self-improvement
+            </span>
+          )}
+          {epicName && (
+            <span
+              className="shrink-0 text-xs text-theme-muted truncate max-w-[120px] min-[1000px]:max-w-[240px]"
+              title={epicName}
+              data-testid="task-row-epic-name"
+            >
+              {epicName}
             </span>
           )}
           <span className="text-xs text-theme-muted shrink-0 tabular-nums">{relativeTime}</span>
@@ -169,6 +181,12 @@ export function TimelineList({
   teamMembers,
   enableHumanTeammates = false,
 }: TimelineListProps) {
+  const epicIdToTitle = useMemo(() => {
+    const m = new Map<string, string>();
+    plans.forEach((p) => m.set(p.metadata.epicId, getEpicTitleFromPlan(p)));
+    return m;
+  }, [plans]);
+
   const sorted = useMemo(() => sortTasksForTimeline(tasks), [tasks]);
   const blockedTasks = useMemo(
     () =>
@@ -266,6 +284,7 @@ export function TimelineList({
                   <TimelineRow
                     key={task.id}
                     task={task}
+                    epicName={task.epicId ? (epicIdToTitle.get(task.epicId) ?? task.epicId) : ""}
                     relativeTime={
                       (task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review") &&
                       taskIdToStartedAt[task.id] ? (
