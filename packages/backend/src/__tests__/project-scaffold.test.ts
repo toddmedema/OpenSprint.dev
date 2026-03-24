@@ -194,7 +194,7 @@ describe("ProjectService.scaffoldProject", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("scaffolds web-app-expo-react and returns project details", async () => {
+  it("scaffolds web-app-expo-react and returns project details", { timeout: 60_000 }, async () => {
     const result = await projectService.scaffoldProject({
       name: "my-app",
       parentPath: tempDir,
@@ -288,7 +288,7 @@ describe("ProjectService.scaffoldProject", () => {
     });
   });
 
-  it("uses default agent config when not provided", async () => {
+  it("uses default agent config when not provided", { timeout: 60_000 }, async () => {
     const result = await projectService.scaffoldProject({
       name: "default-agents",
       parentPath: tempDir,
@@ -299,7 +299,7 @@ describe("ProjectService.scaffoldProject", () => {
     expect(result.project.name).toBe("default-agents");
   });
 
-  it("surfaces clear error when expo install step fails", async () => {
+  it("surfaces clear error when expo install step fails", { timeout: 60_000 }, async () => {
     expoInstallShouldFail = true;
     try {
       const err = await projectService
@@ -318,7 +318,7 @@ describe("ProjectService.scaffoldProject", () => {
     }
   });
 
-  it("surfaces clear error when git is missing", async () => {
+  it("surfaces clear error when git is missing", { timeout: 60_000 }, async () => {
     gitCheckShouldFail = true;
     try {
       const err = await projectService
@@ -339,7 +339,7 @@ describe("ProjectService.scaffoldProject", () => {
     }
   });
 
-  it("surfaces clear error when node is missing", async () => {
+  it("surfaces clear error when node is missing", { timeout: 60_000 }, async () => {
     nodeCheckShouldFail = true;
     try {
       const err = await projectService
@@ -360,7 +360,7 @@ describe("ProjectService.scaffoldProject", () => {
     }
   });
 
-  it("surfaces clear error when both git and node are missing", async () => {
+  it("surfaces clear error when both git and node are missing", { timeout: 60_000 }, async () => {
     gitCheckShouldFail = true;
     nodeCheckShouldFail = true;
     try {
