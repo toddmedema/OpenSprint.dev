@@ -101,6 +101,11 @@ export class TaskStoreService {
   private initPromise: Promise<void> | null = null;
   /** Optional callback to emit WebSocket events on task create/update/close. */
   private onTaskChange: TaskChangeCallback | null = null;
+  /**
+   * Sequential close() timestamps bump by at least 1ms when wall clock would repeat,
+   * so listRecentlyCompletedTasks ordering matches close order under fast back-to-back closes.
+   */
+  private lastCompletedAtOrderingMs = 0;
 
   private planStore = new PlanStore(
     () => this.ensureClient(),
@@ -469,8 +474,8 @@ export class TaskStoreService {
     const client = this.ensureClient();
     const sql =
       projectId != null
-        ? "SELECT id, created_at, started_at, completed_at, complexity FROM tasks WHERE project_id = ? AND status = 'closed' AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT ?"
-        : "SELECT id, created_at, started_at, completed_at, complexity FROM tasks WHERE status = 'closed' AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT ?";
+        ? "SELECT id, created_at, started_at, completed_at, complexity FROM tasks WHERE project_id = ? AND status = 'closed' AND completed_at IS NOT NULL ORDER BY completed_at DESC, id DESC LIMIT ?"
+        : "SELECT id, created_at, started_at, completed_at, complexity FROM tasks WHERE status = 'closed' AND completed_at IS NOT NULL ORDER BY completed_at DESC, id DESC LIMIT ?";
     const params = projectId != null ? [projectId, limit] : [limit];
     const rows = await client.query(toPgParams(sql), params);
     return rows.map((r) => ({
@@ -954,7 +959,10 @@ export class TaskStoreService {
     return this.withWriteLock(async () => {
       await this.ensureInitialized();
       const client = this.ensureClient();
-      const now = new Date().toISOString();
+      const wall = Date.now();
+      const ms = Math.max(wall, this.lastCompletedAtOrderingMs + 1);
+      this.lastCompletedAtOrderingMs = ms;
+      const now = new Date(ms).toISOString();
       const modified = await client.execute(
         toPgParams(
           "UPDATE tasks SET status = 'closed', close_reason = ?, completed_at = ?, updated_at = ? WHERE id = ? AND project_id = ?"

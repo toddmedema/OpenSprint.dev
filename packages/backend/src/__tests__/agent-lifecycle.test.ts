@@ -526,25 +526,30 @@ describe("AgentLifecycleManager", () => {
 
     it("wrapped onDone stops tail and then calls original onDone", async () => {
       vi.useFakeTimers();
-      const handle = { kill: vi.fn(), pid: 9999 };
-      const onDone = vi.fn().mockResolvedValue(undefined);
-      const params = { ...baseParams, onDone };
+      const killSpy = vi.spyOn(process, "kill");
+      try {
+        const handle = { kill: vi.fn(), pid: 9999 };
+        const onDone = vi.fn().mockResolvedValue(undefined);
+        const params = { ...baseParams, onDone };
 
-      await manager.resumeMonitoring(handle, params, runState, timers);
-      expect(timers.has("outputTail")).toBe(true);
+        await manager.resumeMonitoring(handle, params, runState, timers);
+        expect(timers.has("outputTail")).toBe(true);
 
-      // Simulate process-dead path: inactivity monitor will call the wrapped onDone
-      vi.spyOn(process, "kill").mockImplementation((pid: number, sig?: number) => {
-        if (sig === 0 && pid === 9999) throw new Error("dead");
-        return true;
-      });
-      vi.advanceTimersByTime(30_000);
+        // Simulate process-dead path: inactivity monitor will call the wrapped onDone
+        killSpy.mockImplementation((pid: number, sig?: number) => {
+          if (sig === 0 && pid === 9999) throw new Error("dead");
+          return true;
+        });
+        vi.advanceTimersByTime(30_000);
 
-      await vi.runAllTimersAsync();
+        await vi.runAllTimersAsync();
 
-      expect(timers.has("outputTail")).toBe(false);
-      expect(onDone).toHaveBeenCalledWith(null);
-      vi.useRealTimers();
+        expect(timers.has("outputTail")).toBe(false);
+        expect(onDone).toHaveBeenCalledWith(null);
+      } finally {
+        killSpy.mockRestore();
+        vi.useRealTimers();
+      }
     });
 
     it("finalizes recovered runs from terminal result.json even if the process stays alive", async () => {

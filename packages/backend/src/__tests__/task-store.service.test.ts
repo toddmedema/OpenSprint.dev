@@ -1434,23 +1434,25 @@ suite("TaskStoreService", () => {
       const keepTask = await store.create(otherPid, "Keep Me", { type: "task" });
 
       const db = await store.getDb();
+      const fbPid = `fb-${pid}`;
+      const fbOther = `fb-${otherPid}`;
       await db.execute(
         toPgParams(
           `INSERT INTO feedback (id, project_id, text, category, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`
         ),
-        ["fb-1", pid, "Fix bug", "bug", "open", now]
+        [fbPid, pid, "Fix bug", "bug", "open", now]
       );
       await db.execute(
         toPgParams(
           `INSERT INTO feedback (id, project_id, text, category, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`
         ),
-        ["fb-2", otherPid, "Other bug", "bug", "open", now]
+        [fbOther, otherPid, "Other bug", "bug", "open", now]
       );
       await db.execute(
         toPgParams(
           `INSERT INTO feedback_inbox (project_id, feedback_id, enqueued_at) VALUES (?, ?, ?)`
         ),
-        [pid, "fb-1", now]
+        [pid, fbPid, now]
       );
       await db.execute(
         toPgParams(
@@ -1480,17 +1482,17 @@ suite("TaskStoreService", () => {
         toPgParams(
           `INSERT INTO deployments (id, project_id, status, started_at) VALUES (?, ?, ?, ?)`
         ),
-        ["dep-1", pid, "completed", now]
+        [`dep-${pid}`, pid, "completed", now]
       );
       await db.execute(
         toPgParams(`INSERT INTO open_questions (id, project_id, source, source_id, questions, status, created_at, kind)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
-        ["oq-1", pid, "execute", "task-1", "[]", "open", now, "open_question"]
+        [`oq-${pid}`, pid, "execute", "task-1", "[]", "open", now, "open_question"]
       );
       await db.execute(
         toPgParams(`INSERT INTO open_questions (id, project_id, source, source_id, questions, status, created_at, kind)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
-        ["oq-other", otherPid, "execute", "task-2", "[]", "open", now, "open_question"]
+        [`oq-${otherPid}`, otherPid, "execute", "task-2", "[]", "open", now, "open_question"]
       );
       await store.planInsert(pid, "plan-1", {
         epic_id: "ep-1",
