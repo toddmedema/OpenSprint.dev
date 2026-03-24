@@ -348,6 +348,42 @@ describe("global-settings.service", () => {
     });
   });
 
+  describe("global agent defaults", () => {
+    it("persists and reloads simpleComplexityAgent and complexComplexityAgent", async () => {
+      const simple = { type: "cursor" as const, model: "fast-global", cliCommand: null as null };
+      const complex = { type: "cursor" as const, model: "smart-global", cliCommand: null as null };
+      await updateGlobalSettings({ simpleComplexityAgent: simple, complexComplexityAgent: complex });
+      const loaded = await getGlobalSettings();
+      expect(loaded.simpleComplexityAgent).toEqual(simple);
+      expect(loaded.complexComplexityAgent).toEqual(complex);
+    });
+
+    it("clears agent defaults when update passes null", async () => {
+      await updateGlobalSettings({
+        simpleComplexityAgent: { type: "cursor", model: "a", cliCommand: null },
+        complexComplexityAgent: { type: "cursor", model: "b", cliCommand: null },
+      });
+      await updateGlobalSettings({ simpleComplexityAgent: null, complexComplexityAgent: null });
+      const loaded = await getGlobalSettings();
+      expect(loaded.simpleComplexityAgent).toBeUndefined();
+      expect(loaded.complexComplexityAgent).toBeUndefined();
+    });
+
+    it("ignores invalid agent objects on disk", async () => {
+      const dir = path.join(tempDir, ".opensprint");
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(
+        getFilePath(),
+        JSON.stringify({
+          simpleComplexityAgent: { type: "not-a-real-type", model: null, cliCommand: null },
+        }),
+        "utf-8"
+      );
+      const loaded = await getGlobalSettings();
+      expect(loaded.simpleComplexityAgent).toBeUndefined();
+    });
+  });
+
   describe("round-trip", () => {
     it("full round-trip: set → get → update → get", async () => {
       const initial = {

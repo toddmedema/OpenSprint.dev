@@ -28,6 +28,9 @@ import {
   parseSettings,
   parseTeamMembers,
   getProvidersRequiringApiKeys,
+  DEFAULT_AGENT_CONFIG,
+  projectStoredDefinesSimpleAgent,
+  projectStoredDefinesComplexAgent,
   VALID_MERGE_STRATEGIES,
   VALID_SELF_IMPROVEMENT_FREQUENCIES,
   mergeDeploymentConfigPatch,
@@ -234,13 +237,6 @@ function isPreferredRepoPathEntry(
 
   return candidate.createdAt > current.createdAt;
 }
-
-/** Default agent config used when creating or repairing settings (e.g. adopt path). */
-const DEFAULT_AGENT_CONFIG = {
-  type: "cursor" as const,
-  model: null as string | null,
-  cliCommand: null as string | null,
-};
 
 /** Build default ProjectSettings for a repo (no user input). Used when adopting or repairing. */
 function buildDefaultSettings(): ProjectSettings {
@@ -1217,17 +1213,27 @@ export class ProjectService {
     const repoPath = await this.getRepoPath(projectId);
     const defaults = buildDefaultSettings();
     const stored = await getSettingsFromStore(projectId, defaults);
+    const gs = await getGlobalSettings();
     if (stored === defaults) {
       const detected = await detectTestFramework(repoPath);
       const enriched: ProjectSettings = {
         ...defaults,
+        simpleComplexityAgent: gs.simpleComplexityAgent ?? defaults.simpleComplexityAgent,
+        complexComplexityAgent: gs.complexComplexityAgent ?? defaults.complexComplexityAgent,
         testFramework: detected?.framework ?? null,
         testCommand: detected?.testCommand ?? (getTestCommandForFramework(null) || null),
       };
       await setSettingsInStore(projectId, enriched);
       return toCanonicalSettings(enriched);
     }
-    const normalized = { ...stored };
+    const storedRecord = stored as unknown as Record<string, unknown>;
+    const normalized: Record<string, unknown> = { ...storedRecord };
+    if (!projectStoredDefinesSimpleAgent(normalized) && gs.simpleComplexityAgent) {
+      normalized.simpleComplexityAgent = gs.simpleComplexityAgent;
+    }
+    if (!projectStoredDefinesComplexAgent(normalized) && gs.complexComplexityAgent) {
+      normalized.complexComplexityAgent = gs.complexComplexityAgent;
+    }
     const parsed = toCanonicalSettings(parseSettings(normalized));
     return parsed;
   }

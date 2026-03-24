@@ -8,6 +8,8 @@ This document provides context for the Help Chat agent to answer questions about
 
 Task tracking is handled internally by `TaskStoreService` backed by **SQLite (default)** or **PostgreSQL**. The connection URL is resolved in order: `DATABASE_URL`, then `databaseUrl` in `~/.opensprint/global-settings.json`, then the default SQLite path (`~/.opensprint/data/opensprint.sqlite`). There is no external CLI for task management.
 
+**Global agent defaults:** `~/.opensprint/global-settings.json` may include `simpleComplexityAgent` and `complexComplexityAgent` (same shape as project settings: `type`, `model`, `cliCommand`, optional `baseUrl` for local providers). They are read and written via `GET`/`PUT /api/v1/global-settings`. When a project’s entry in `~/.opensprint/settings.json` does not define those tiers (neither the current nor legacy key names), effective project settings use the global defaults for that tier. New projects seeded on first `getSettings` also inherit global defaults when set. Defaults match `DEFAULT_AGENT_CONFIG` in `@opensprint/shared` (`cursor`, `model: null`, `cliCommand: null`) when neither global nor project defines a tier.
+
 **Project Overview:** Open Sprint is a web application that guides users through the full software development lifecycle using AI agents. It has five phases — SPEED: Sketch, Plan, Execute, Evaluate, and Deliver.
 
 **Tech stack:** Node.js + TypeScript (backend), React + TypeScript (frontend).

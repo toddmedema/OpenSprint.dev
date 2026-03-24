@@ -540,6 +540,50 @@ describe("ProjectService", () => {
     expect(settings.complexComplexityAgent.type).toBe("cursor");
   });
 
+  it("should resolve agent config from global when project JSON omits agent keys", async () => {
+    await setGlobalSettings({
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "test-ant", value: "sk-ant-test" }],
+        CURSOR_API_KEY: [{ id: "test-cur", value: "cursor-test" }],
+      },
+      simpleComplexityAgent: { type: "cursor", model: "from-global-simple", cliCommand: null },
+      complexComplexityAgent: { type: "cursor", model: "from-global-complex", cliCommand: null },
+    });
+
+    const repoPath = path.join(tempDir, "global-agent-fallback");
+    await fs.mkdir(repoPath, { recursive: true });
+    const project = await projectService.createProject({
+      name: "Global Fallback",
+      repoPath,
+      simpleComplexityAgent: { type: "claude", model: "sonnet", cliCommand: null },
+      complexComplexityAgent: { type: "claude", model: "opus", cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    const storePath = path.join(tempDir, ".opensprint", "settings.json");
+    const raw = JSON.parse(await fs.readFile(storePath, "utf-8")) as Record<
+      string,
+      { settings?: Record<string, unknown>; updatedAt?: string }
+    >;
+    const entry = raw[project.id];
+    expect(entry).toBeDefined();
+    const prevSettings = {
+      ...(typeof entry.settings === "object" && entry.settings ? entry.settings : {}),
+    };
+    delete prevSettings.simpleComplexityAgent;
+    delete prevSettings.complexComplexityAgent;
+    raw[project.id] = {
+      settings: prevSettings,
+      updatedAt: entry.updatedAt ?? new Date().toISOString(),
+    };
+    await fs.writeFile(storePath, JSON.stringify(raw));
+
+    const settings = await projectService.getSettings(project.id);
+    expect(settings.simpleComplexityAgent.model).toBe("from-global-simple");
+    expect(settings.complexComplexityAgent.model).toBe("from-global-complex");
+  });
+
   it("should accept custom agent with cliCommand", async () => {
     const repoPath = path.join(tempDir, "custom-agent");
 

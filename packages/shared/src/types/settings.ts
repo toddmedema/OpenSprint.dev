@@ -454,6 +454,16 @@ export const DEFAULT_DATABASE_PATH_RELATIVE = "data/opensprint.sqlite";
 /** @deprecated Use backend getDefaultDatabaseUrl() for default. Kept for tests that need a fixed string. */
 export const DEFAULT_DATABASE_URL = "postgresql://opensprint:opensprint@localhost:5432/opensprint";
 
+/**
+ * Default agent config used when neither project nor global settings define an agent for a tier.
+ * Matches project bootstrap defaults (`ProjectService` / `parseSettings` fallback).
+ */
+export const DEFAULT_AGENT_CONFIG: AgentConfig = {
+  type: "cursor",
+  model: null,
+  cliCommand: null,
+};
+
 /** Global settings stored at ~/.opensprint/global-settings.json */
 export interface GlobalSettings {
   apiKeys?: ApiKeys;
@@ -466,6 +476,15 @@ export interface GlobalSettings {
   showNotificationDotInMenuBar?: boolean;
   /** When true (default), show the running agent count to the right of the menu bar icon on macOS. Desktop only. */
   showRunningAgentCountInMenuBar?: boolean;
+  /**
+   * Default simple-tier agent for projects that omit `simpleComplexityAgent` (and legacy `lowComplexityAgent`)
+   * in `~/.opensprint/settings.json`. Same shape as `ProjectSettings.simpleComplexityAgent`.
+   */
+  simpleComplexityAgent?: AgentConfig;
+  /**
+   * Default complex-tier agent for projects that omit `complexComplexityAgent` (and legacy `highComplexityAgent`).
+   */
+  complexComplexityAgent?: AgentConfig;
 }
 
 /** Response shape for GET /global-settings (apiKeys masked) */
@@ -478,6 +497,10 @@ export interface GlobalSettingsResponse {
   showNotificationDotInMenuBar?: boolean;
   /** When true (default), show running agent count in menu bar on macOS. Desktop only. */
   showRunningAgentCountInMenuBar?: boolean;
+  /** Global default simple-tier agent when absent at project level; omitted if unset. */
+  simpleComplexityAgent?: AgentConfig;
+  /** Global default complex-tier agent when absent at project level; omitted if unset. */
+  complexComplexityAgent?: AgentConfig;
 }
 
 /** Request body for PUT /global-settings */
@@ -488,6 +511,10 @@ export interface GlobalSettingsPutRequest {
   showNotificationDotInMenuBar?: boolean;
   /** When false, do not show running agent count in menu bar. Default true. */
   showRunningAgentCountInMenuBar?: boolean;
+  /** Set global default simple-tier agent; pass `null` to clear stored default. */
+  simpleComplexityAgent?: AgentConfig | null;
+  /** Set global default complex-tier agent; pass `null` to clear stored default. */
+  complexComplexityAgent?: AgentConfig | null;
 }
 
 /** Read-only runtime cache/probe status for Git fields returned by project settings APIs. */
@@ -805,9 +832,6 @@ export function getAgentForComplexity(
   return settings.simpleComplexityAgent;
 }
 
-/** Default agent config when settings are missing */
-const DEFAULT_AGENT: AgentConfig = { type: "cursor", model: null, cliCommand: null };
-
 const VALID_AI_AUTONOMY_LEVELS: AiAutonomyLevel[] = ["confirm_all", "major_only", "full"];
 
 /** Valid branch name: alphanumeric, slash, underscore, hyphen, dot */
@@ -894,6 +918,27 @@ export function parseTeamMembers(raw: unknown): Array<{ id: string; name: string
     }
   }
   return result.length > 0 ? result : undefined;
+}
+
+/**
+ * True when raw project settings JSON explicitly includes simple-tier agent keys (project-level override).
+ * Used to decide whether to apply `GlobalSettings.simpleComplexityAgent` as a fallback.
+ */
+export function projectStoredDefinesSimpleAgent(raw: Record<string, unknown>): boolean {
+  return (
+    Object.prototype.hasOwnProperty.call(raw, "simpleComplexityAgent") ||
+    Object.prototype.hasOwnProperty.call(raw, "lowComplexityAgent")
+  );
+}
+
+/**
+ * True when raw project settings JSON explicitly includes complex-tier agent keys.
+ */
+export function projectStoredDefinesComplexAgent(raw: Record<string, unknown>): boolean {
+  return (
+    Object.prototype.hasOwnProperty.call(raw, "complexComplexityAgent") ||
+    Object.prototype.hasOwnProperty.call(raw, "highComplexityAgent")
+  );
 }
 
 /**
@@ -1060,10 +1105,10 @@ export function parseSettings(raw: unknown): ProjectSettings {
   }
   const simple =
     (simpleObj && typeof simpleObj === "object" ? (simpleObj as AgentConfig) : null) ??
-    DEFAULT_AGENT;
+    DEFAULT_AGENT_CONFIG;
   const complex =
     (complexObj && typeof complexObj === "object" ? (complexObj as AgentConfig) : null) ??
-    DEFAULT_AGENT;
+    DEFAULT_AGENT_CONFIG;
   return {
     ...rest,
     simpleComplexityAgent: simple,

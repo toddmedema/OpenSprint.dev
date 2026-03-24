@@ -1,15 +1,20 @@
 /**
  * Global settings store at ~/.opensprint/global-settings.json.
- * Schema: { apiKeys?: ApiKeys, useCustomCli?: boolean, databaseUrl?: string }
+ * Schema (see shared `GlobalSettings`):
+ * - apiKeys?, useCustomCli?, databaseUrl?, expoToken?
+ * - showNotificationDotInMenuBar?, showRunningAgentCountInMenuBar?
+ * - simpleComplexityAgent?, complexComplexityAgent? — same shape as project agent config
+ *   (`type`, `model`, `cliCommand`, optional `baseUrl` for lmstudio/ollama). Invalid objects on disk are ignored.
  * Uses same ApiKeyEntry structure for apiKeys. Atomic writes via writeJsonAtomic.
  * databaseUrl is stored only in this JSON file; never in the database.
  */
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
-import type { GlobalSettings } from "@opensprint/shared";
+import type { AgentConfig, ApiKeysUpdate, GlobalSettings } from "@opensprint/shared";
 import { sanitizeApiKeys, mergeApiKeysWithCurrent, validateDatabaseUrl } from "@opensprint/shared";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { agentConfigSchema } from "../schemas/agent-config.js";
 
 let globalSettingsPathForTesting: string | null = null;
 
@@ -33,6 +38,11 @@ export function setGlobalSettingsPathForTesting(testPath: string | null): void {
 
 /** Default empty settings */
 const DEFAULT: GlobalSettings = {};
+
+function parseAgentConfigFromFile(raw: unknown): AgentConfig | undefined {
+  const r = agentConfigSchema.safeParse(raw);
+  return r.success ? (r.data as AgentConfig) : undefined;
+}
 
 function parseDatabaseUrl(raw: unknown): string | undefined {
   if (raw == null || typeof raw !== "string" || !raw.trim()) return undefined;
@@ -70,6 +80,8 @@ async function load(): Promise<GlobalSettings> {
           : obj.showRunningAgentCountInMenuBar === true
             ? true
             : undefined;
+      const simpleComplexityAgent = parseAgentConfigFromFile(obj.simpleComplexityAgent);
+      const complexComplexityAgent = parseAgentConfigFromFile(obj.complexComplexityAgent);
       return {
         ...(apiKeys && { apiKeys }),
         ...(useCustomCli !== undefined && { useCustomCli }),
@@ -77,6 +89,8 @@ async function load(): Promise<GlobalSettings> {
         ...(expoToken && { expoToken }),
         ...(showNotificationDotInMenuBar !== undefined && { showNotificationDotInMenuBar }),
         ...(showRunningAgentCountInMenuBar !== undefined && { showRunningAgentCountInMenuBar }),
+        ...(simpleComplexityAgent && { simpleComplexityAgent }),
+        ...(complexComplexityAgent && { complexComplexityAgent }),
       };
     }
   } catch {
@@ -162,14 +176,31 @@ export async function setGlobalSettings(settings: GlobalSettings): Promise<void>
   if (settings.showRunningAgentCountInMenuBar !== undefined) {
     sanitized.showRunningAgentCountInMenuBar = settings.showRunningAgentCountInMenuBar;
   }
+  if (settings.simpleComplexityAgent !== undefined) {
+    const p = agentConfigSchema.safeParse(settings.simpleComplexityAgent);
+    if (p.success) sanitized.simpleComplexityAgent = p.data as AgentConfig;
+  }
+  if (settings.complexComplexityAgent !== undefined) {
+    const p = agentConfigSchema.safeParse(settings.complexComplexityAgent);
+    if (p.success) sanitized.complexComplexityAgent = p.data as AgentConfig;
+  }
   await save(sanitized);
 }
+
+/** Partial merge input; `null` for agent fields clears the stored global default. */
+export type GlobalSettingsPartialUpdate = Partial<
+  Omit<GlobalSettings, "apiKeys" | "simpleComplexityAgent" | "complexComplexityAgent">
+> & {
+  apiKeys?: ApiKeysUpdate;
+  simpleComplexityAgent?: AgentConfig | null;
+  complexComplexityAgent?: AgentConfig | null;
+};
 
 /**
  * Update global settings with partial merge. Merges into existing settings.
  */
 export async function updateGlobalSettings(
-  updates: Partial<GlobalSettings>
+  updates: GlobalSettingsPartialUpdate
 ): Promise<GlobalSettings> {
   const current = await load();
   const merged: GlobalSettings = { ...current };
@@ -193,6 +224,21 @@ export async function updateGlobalSettings(
   }
   if (updates.showRunningAgentCountInMenuBar !== undefined) {
     merged.showRunningAgentCountInMenuBar = updates.showRunningAgentCountInMenuBar;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(updates, "simpleComplexityAgent")) {
+    if (updates.simpleComplexityAgent === null) {
+      delete merged.simpleComplexityAgent;
+    } else if (updates.simpleComplexityAgent !== undefined) {
+      merged.simpleComplexityAgent = updates.simpleComplexityAgent;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, "complexComplexityAgent")) {
+    if (updates.complexComplexityAgent === null) {
+      delete merged.complexComplexityAgent;
+    } else if (updates.complexComplexityAgent !== undefined) {
+      merged.complexComplexityAgent = updates.complexComplexityAgent;
+    }
   }
 
   await save(merged);

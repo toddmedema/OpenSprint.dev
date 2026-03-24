@@ -28,6 +28,8 @@ import {
   getProviderForAgentType,
   VALID_SELF_IMPROVEMENT_FREQUENCIES,
   SELF_IMPROVEMENT_FREQUENCY_OPTIONS,
+  projectStoredDefinesSimpleAgent,
+  projectStoredDefinesComplexAgent,
 } from "../types/settings.ts";
 import type {
   ProjectSettings,
@@ -40,6 +42,36 @@ import type {
 const defaultAgent: AgentConfig = { type: "claude", model: "claude-sonnet-4", cliCommand: null };
 const highAgent: AgentConfig = { type: "claude", model: "claude-opus-5", cliCommand: null };
 const lowAgent: AgentConfig = { type: "cursor", model: "fast-model", cliCommand: null };
+
+describe("projectStoredDefinesSimpleAgent / projectStoredDefinesComplexAgent", () => {
+  it("detects new and legacy simple-tier keys", () => {
+    expect(
+      projectStoredDefinesSimpleAgent({
+        simpleComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+      })
+    ).toBe(true);
+    expect(
+      projectStoredDefinesSimpleAgent({
+        lowComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+      })
+    ).toBe(true);
+    expect(projectStoredDefinesSimpleAgent({ deployment: { mode: "custom" } })).toBe(false);
+  });
+
+  it("detects new and legacy complex-tier keys", () => {
+    expect(
+      projectStoredDefinesComplexAgent({
+        complexComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+      })
+    ).toBe(true);
+    expect(
+      projectStoredDefinesComplexAgent({
+        highComplexityAgent: { type: "cursor", model: null, cliCommand: null },
+      })
+    ).toBe(true);
+    expect(projectStoredDefinesComplexAgent({})).toBe(false);
+  });
+});
 
 function makeSettings(overrides?: Partial<ProjectSettings>): ProjectSettings {
   return {

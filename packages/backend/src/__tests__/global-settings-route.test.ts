@@ -216,6 +216,51 @@ describe("Global Settings API", () => {
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("INVALID_INPUT");
     });
+
+    it("round-trips global agent defaults on PUT and GET", async () => {
+      const simple = { type: "cursor", model: "global-simple", cliCommand: null };
+      const complex = { type: "cursor", model: "global-complex", cliCommand: null };
+      const putRes = await request(app).put(`${API_PREFIX}/global-settings`).send({
+        simpleComplexityAgent: simple,
+        complexComplexityAgent: complex,
+      });
+      expect(putRes.status).toBe(200);
+      expect(putRes.body.data.simpleComplexityAgent).toEqual(simple);
+      expect(putRes.body.data.complexComplexityAgent).toEqual(complex);
+
+      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.data.simpleComplexityAgent).toEqual(simple);
+      expect(getRes.body.data.complexComplexityAgent).toEqual(complex);
+
+      const disk = await getGlobalSettings();
+      expect(disk.simpleComplexityAgent).toEqual(simple);
+      expect(disk.complexComplexityAgent).toEqual(complex);
+    });
+
+    it("clears global agent defaults when PUT sends null", async () => {
+      await setGlobalSettings({
+        simpleComplexityAgent: { type: "cursor", model: "x", cliCommand: null },
+        complexComplexityAgent: { type: "cursor", model: "y", cliCommand: null },
+      });
+      const putRes = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({ simpleComplexityAgent: null, complexComplexityAgent: null });
+      expect(putRes.status).toBe(200);
+      expect(putRes.body.data.simpleComplexityAgent).toBeUndefined();
+      expect(putRes.body.data.complexComplexityAgent).toBeUndefined();
+    });
+
+    it("returns 400 for invalid global agent config", async () => {
+      const res = await request(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          simpleComplexityAgent: { type: "cursor", model: "ok", cliCommand: null },
+          complexComplexityAgent: { type: "invalid-type", model: null, cliCommand: null },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_AGENT_CONFIG");
+    });
   });
 
   describe("GET /global-settings with apiKeys", () => {

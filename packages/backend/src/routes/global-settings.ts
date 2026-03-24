@@ -18,12 +18,13 @@ import {
 } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
-import type { GlobalSettings } from "@opensprint/shared";
+import type { ApiKeysUpdate, GlobalSettings } from "@opensprint/shared";
 import {
   getGlobalSettings,
   updateGlobalSettings,
   getEffectiveDatabaseConfig,
   getDefaultDatabaseUrl,
+  type GlobalSettingsPartialUpdate,
 } from "../services/global-settings.service.js";
 import { migrateSqliteToPostgres } from "../services/migrate-to-postgres.service.js";
 import { clearLimitHit } from "../services/api-key-resolver.service.js";
@@ -32,6 +33,7 @@ import { orchestratorService } from "../services/orchestrator.service.js";
 import { getProjects } from "../services/project-index.js";
 import { initAppDb } from "../db/app-db.js";
 import { databaseRuntime } from "../services/database-runtime.service.js";
+import { parseAgentConfig } from "../schemas/agent-config.js";
 
 export const globalSettingsRouter = Router();
 
@@ -43,6 +45,8 @@ function buildResponse(settings: GlobalSettings) {
     ...(settings.apiKeys && { apiKeys: maskApiKeysForResponse(settings.apiKeys) }),
     showNotificationDotInMenuBar: settings.showNotificationDotInMenuBar !== false,
     showRunningAgentCountInMenuBar: settings.showRunningAgentCountInMenuBar !== false,
+    ...(settings.simpleComplexityAgent && { simpleComplexityAgent: settings.simpleComplexityAgent }),
+    ...(settings.complexComplexityAgent && { complexComplexityAgent: settings.complexComplexityAgent }),
   };
 }
 
@@ -164,7 +168,7 @@ globalSettingsRouter.get(
   })
 );
 
-// PUT /global-settings — Accepts databaseUrl, apiKeys, showNotificationDotInMenuBar. Validates and sanitizes. Merge apiKeys with existing (preserve value when id exists and value omitted).
+// PUT /global-settings — Accepts databaseUrl, apiKeys, menu bar toggles, simpleComplexityAgent / complexComplexityAgent (or null to clear). Validates and sanitizes. Merge apiKeys with existing (preserve value when id exists and value omitted).
 globalSettingsRouter.put(
   "/",
   validateBody(globalSettingsPutBodySchema),
@@ -174,13 +178,10 @@ globalSettingsRouter.put(
       apiKeys?: unknown;
       showNotificationDotInMenuBar?: boolean;
       showRunningAgentCountInMenuBar?: boolean;
+      simpleComplexityAgent?: unknown;
+      complexComplexityAgent?: unknown;
     };
-    const updates: {
-      databaseUrl?: string;
-      apiKeys?: unknown;
-      showNotificationDotInMenuBar?: boolean;
-      showRunningAgentCountInMenuBar?: boolean;
-    } = {};
+    const updates: GlobalSettingsPartialUpdate = {};
     const previous = await getGlobalSettings();
 
     if (body.databaseUrl !== undefined) {
@@ -200,7 +201,7 @@ globalSettingsRouter.put(
     }
 
     if (body.apiKeys !== undefined) {
-      updates.apiKeys = body.apiKeys;
+      updates.apiKeys = body.apiKeys as ApiKeysUpdate;
     }
 
     if (body.showNotificationDotInMenuBar !== undefined) {
@@ -211,6 +212,27 @@ globalSettingsRouter.put(
       updates.showRunningAgentCountInMenuBar = Boolean(body.showRunningAgentCountInMenuBar);
     }
 
+    if (Object.prototype.hasOwnProperty.call(body, "simpleComplexityAgent")) {
+      if (body.simpleComplexityAgent === null) {
+        updates.simpleComplexityAgent = null;
+      } else if (body.simpleComplexityAgent !== undefined) {
+        updates.simpleComplexityAgent = parseAgentConfig(
+          body.simpleComplexityAgent,
+          "simpleComplexityAgent"
+        );
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "complexComplexityAgent")) {
+      if (body.complexComplexityAgent === null) {
+        updates.complexComplexityAgent = null;
+      } else if (body.complexComplexityAgent !== undefined) {
+        updates.complexComplexityAgent = parseAgentConfig(
+          body.complexComplexityAgent,
+          "complexComplexityAgent"
+        );
+      }
+    }
+
     if (Object.keys(updates).length === 0) {
       const current = await getGlobalSettings();
       return res.json({
@@ -218,7 +240,7 @@ globalSettingsRouter.put(
       } as ApiResponse<GlobalSettingsResponse>);
     }
 
-    const updated = await updateGlobalSettings(updates as Partial<GlobalSettings>);
+    const updated = await updateGlobalSettings(updates);
     if (updates.databaseUrl !== undefined && updates.databaseUrl !== previous.databaseUrl) {
       databaseRuntime.requestReconnect("settings-updated");
     }
