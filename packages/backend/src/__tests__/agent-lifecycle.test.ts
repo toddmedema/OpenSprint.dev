@@ -579,6 +579,8 @@ describe("AgentLifecycleManager", () => {
       );
 
       await vi.advanceTimersByTimeAsync(1_200);
+      // Flush interval callback + fs.readFile microtasks (same pattern as wrapped onDone test below).
+      await vi.runAllTimersAsync();
 
       expect(handle.kill).toHaveBeenCalledTimes(1);
       expect(onDone).toHaveBeenCalledWith(0);

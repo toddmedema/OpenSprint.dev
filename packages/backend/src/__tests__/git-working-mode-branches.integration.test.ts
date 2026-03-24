@@ -117,6 +117,7 @@ describe("Git working mode Branches — full Execute flow integration", () => {
   // Full merge + git worktrees + async post-completion can exceed the default 30s on slow/loaded CI runners.
   it(
     "full Execute flow in Branches mode: creates a local merge and skips worktree cleanup",
+    { timeout: 60_000 },
     async () => {
     // 1. Pre-agent: create/checkout branch (simulates PhaseExecutor in branches mode)
     await branchManager.createOrCheckoutBranch(repoPath, branchName);
@@ -200,7 +201,6 @@ describe("Git working mode Branches — full Execute flow integration", () => {
       cwd: repoPath,
     });
     expect(mergedContent.trim()).toBe("export const x = 1;");
-    },
-    60_000
+    }
   );
 });
