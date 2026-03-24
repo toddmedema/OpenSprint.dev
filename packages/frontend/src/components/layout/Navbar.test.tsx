@@ -538,6 +538,22 @@ describe("Navbar", () => {
     expect(trigger.querySelector("span.min-w-0.truncate")).toBeInTheDocument();
   });
 
+  it("project dropdown menu has no min-width or fixed width so it sizes to content", async () => {
+    const projects = [makeProject("proj-1", "Short")];
+    mockProjectsList.mockResolvedValue(projects);
+    const user = userEvent.setup();
+    renderNavbar(<Navbar project={projects[0]} currentPhase="sketch" onPhaseChange={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /Select project: Short/i }));
+
+    const dropdown = screen.getByTestId("navbar-project-dropdown");
+    expect(dropdown).toHaveClass("w-max");
+    expect(dropdown).toHaveClass("min-w-0");
+    expect(dropdown.className).not.toContain("max-w-[");
+    expect(dropdown.style.minWidth).toBeFalsy();
+    expect(dropdown.style.width).toBeFalsy();
+  });
+
   it("keeps project rows emphasized and add/create rows de-emphasized for short and long names", async () => {
     const projects = [
       makeProject("proj-1", "Short"),

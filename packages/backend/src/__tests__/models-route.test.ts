@@ -698,12 +698,8 @@ describe("Models API", () => {
 
     it("coalesces concurrent Claude requests to avoid rate limits", async () => {
       process.env.ANTHROPIC_API_KEY = "sk-ant-test";
-      let resolveGen: () => void;
-      const genReady = new Promise<void>((r) => {
-        resolveGen = r;
-      });
       async function* gen() {
-        await genReady;
+        await new Promise((r) => setTimeout(r, 20));
         yield { id: "claude-sonnet-4", display_name: "Claude Sonnet 4" };
       }
       mockModelsList.mockReturnValue(gen());
@@ -713,7 +709,6 @@ describe("Models API", () => {
         request(app).get(`${API_PREFIX}/models?provider=claude`),
       ];
 
-      resolveGen!();
       const results = await Promise.all(requests);
       results.forEach((res) => {
         expect(res.status).toBe(200);

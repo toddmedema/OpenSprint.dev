@@ -295,7 +295,7 @@ export function Navbar({
                       minWidth: 0,
                       estimatedHeight: 280,
                     })}
-                    className="fixed z-[9999] w-max min-w-0 max-w-[min(280px,calc(100vw-2rem))] bg-theme-surface border border-theme-border rounded-lg shadow-lg py-1"
+                    className="fixed z-[9999] w-max min-w-0 bg-theme-surface border border-theme-border rounded-lg shadow-lg py-1"
                     role="listbox"
                   >
                     {projects.map((p) => (
