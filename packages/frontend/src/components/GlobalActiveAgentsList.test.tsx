@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { configureStore } from "@reduxjs/toolkit";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DisplayPreferencesProvider } from "../contexts/DisplayPreferencesContext";
 import { GlobalActiveAgentsList } from "./GlobalActiveAgentsList";
 import globalReducer from "../store/slices/globalSlice";
@@ -31,15 +32,27 @@ function createStore() {
   });
 }
 
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+}
+
 function renderGlobalActiveAgentsList() {
   return render(
-    <Provider store={createStore()}>
-      <DisplayPreferencesProvider>
-        <MemoryRouter>
-          <GlobalActiveAgentsList />
-        </MemoryRouter>
-      </DisplayPreferencesProvider>
-    </Provider>
+    <QueryClientProvider client={createQueryClient()}>
+      <Provider store={createStore()}>
+        <DisplayPreferencesProvider>
+          <MemoryRouter>
+            <GlobalActiveAgentsList />
+          </MemoryRouter>
+        </DisplayPreferencesProvider>
+      </Provider>
+    </QueryClientProvider>
   );
 }
 
@@ -240,14 +253,16 @@ describe("GlobalActiveAgentsList", () => {
     }
 
     render(
-      <Provider store={createStore()}>
-        <DisplayPreferencesProvider>
-          <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
-            <GlobalActiveAgentsList />
-            <LocationDisplay />
-          </MemoryRouter>
-        </DisplayPreferencesProvider>
-      </Provider>
+      <QueryClientProvider client={createQueryClient()}>
+        <Provider store={createStore()}>
+          <DisplayPreferencesProvider>
+            <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
+              <GlobalActiveAgentsList />
+              <LocationDisplay />
+            </MemoryRouter>
+          </DisplayPreferencesProvider>
+        </Provider>
+      </QueryClientProvider>
     );
 
     await waitFor(() => {
@@ -280,14 +295,16 @@ describe("GlobalActiveAgentsList", () => {
     }
 
     render(
-      <Provider store={createStore()}>
-        <DisplayPreferencesProvider>
-          <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
-            <GlobalActiveAgentsList />
-            <LocationDisplay />
-          </MemoryRouter>
-        </DisplayPreferencesProvider>
-      </Provider>
+      <QueryClientProvider client={createQueryClient()}>
+        <Provider store={createStore()}>
+          <DisplayPreferencesProvider>
+            <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
+              <GlobalActiveAgentsList />
+              <LocationDisplay />
+            </MemoryRouter>
+          </DisplayPreferencesProvider>
+        </Provider>
+      </QueryClientProvider>
     );
 
     await waitFor(() => {

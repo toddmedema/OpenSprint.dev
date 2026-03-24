@@ -133,28 +133,65 @@ describe("DatabaseRuntimeService", () => {
   });
 
   it("reports test database config as disconnected instead of throwing", async () => {
-    const runtime = new DatabaseRuntimeService({
-      resolveConfig: async () => ({
-        databaseUrl: "postgresql://opensprint:opensprint@localhost:5432/opensprint_test",
-        source: "env",
-      }),
-      probe: async () => undefined,
-      initialSnapshot: {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const runtime = new DatabaseRuntimeService({
+        resolveConfig: async () => ({
+          databaseUrl: "postgresql://opensprint:opensprint@localhost:5432/opensprint_test",
+          source: "env",
+        }),
+        probe: async () => undefined,
+        initialSnapshot: {
+          ok: false,
+          state: "disconnected",
+          message: null,
+          lastCheckedAt: null,
+          lastSuccessAt: null,
+        },
+      });
+
+      runtime.start();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(await runtime.getStatus()).toMatchObject({
         ok: false,
         state: "disconnected",
-        message: null,
-        lastCheckedAt: null,
-        lastSuccessAt: null,
-      },
-    });
+      });
+      expect((await runtime.getStatus()).message).toContain("opensprint_test");
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
 
-    runtime.start();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+  it("allows the test database when NODE_ENV is test", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "test";
+    try {
+      const runtime = new DatabaseRuntimeService({
+        resolveConfig: async () => ({
+          databaseUrl: "postgresql://opensprint:opensprint@localhost:5432/opensprint_test",
+          source: "env",
+        }),
+        probe: async () => undefined,
+        initialSnapshot: {
+          ok: false,
+          state: "disconnected",
+          message: null,
+          lastCheckedAt: null,
+          lastSuccessAt: null,
+        },
+      });
 
-    expect(await runtime.getStatus()).toMatchObject({
-      ok: false,
-      state: "disconnected",
-    });
-    expect((await runtime.getStatus()).message).toContain("opensprint_test");
+      runtime.start();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(await runtime.getStatus()).toMatchObject({
+        ok: true,
+        state: "connected",
+      });
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
   });
 });

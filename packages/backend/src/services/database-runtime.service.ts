@@ -82,6 +82,10 @@ function getDatabaseName(databaseUrl: string): string | null {
   }
 }
 
+function canUseTestDatabase(): boolean {
+  return process.env.NODE_ENV === "test";
+}
+
 export class DatabaseRuntimeService {
   private readonly deps: DatabaseRuntimeDependencies;
   private readonly retryCooldownMs: number;
@@ -231,7 +235,7 @@ export class DatabaseRuntimeService {
     const dialect = getDatabaseDialect(config.databaseUrl);
 
     const databaseName = getDatabaseName(config.databaseUrl);
-    if (databaseName === TEST_DB_NAME) {
+    if (databaseName === TEST_DB_NAME && !canUseTestDatabase()) {
       await this.transitionToDisconnected({
         ...config,
         reason,

@@ -23,6 +23,7 @@ import {
   enqueuePlanTasksId,
   addOptimisticPlan,
   setSinglePlan,
+  setSelectedPlanId,
 } from "../../store/slices/planSlice";
 import { addNotification } from "../../store/slices/notificationSlice";
 import { addNotification as addOpenQuestionNotification } from "../../store/slices/openQuestionsSlice";
@@ -228,7 +229,7 @@ interface PlanPhaseProps {
 
 export function PlanPhase({
   projectId,
-  selectedPlanId,
+  selectedPlanId: propSelectedPlanId,
   onSelectPlanId,
   onNavigateToBuildTask,
 }: PlanPhaseProps) {
@@ -236,10 +237,17 @@ export function PlanPhase({
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
+  const selectedPlanIdFromStore = useAppSelector((s) => s.plan.selectedPlanId);
+  const selectedPlanId = propSelectedPlanId ?? selectedPlanIdFromStore ?? null;
 
   useEffect(() => {
     dispatch(clearPhaseUnread({ projectId, phase: "plan" }));
   }, [dispatch, projectId, queryClient]);
+
+  useEffect(() => {
+    if (propSelectedPlanId === undefined || selectedPlanIdFromStore === propSelectedPlanId) return;
+    dispatch(setSelectedPlanId(propSelectedPlanId ?? null));
+  }, [dispatch, propSelectedPlanId, selectedPlanIdFromStore]);
 
   /* ── TanStack Query for loading state (data synced to Redux by ProjectShell) ── */
   const plansQuery = usePlans(projectId);
@@ -995,6 +1003,7 @@ export function PlanPhase({
     const result = await dispatch(deletePlan({ projectId, planId: deleteConfirmPlanId }));
     if (deletePlan.fulfilled.match(result)) {
       setDeleteConfirmPlanId(null);
+      dispatch(setSelectedPlanId(null));
       onSelectPlanId?.(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
@@ -1030,14 +1039,16 @@ export function PlanPhase({
 
   const handleSelectPlan = useCallback(
     (plan: Plan) => {
+      dispatch(setSelectedPlanId(plan.metadata.planId));
       onSelectPlanId?.(plan.metadata.planId);
     },
-    [onSelectPlanId]
+    [dispatch, onSelectPlanId]
   );
 
   const handleClosePlan = useCallback(() => {
+    dispatch(setSelectedPlanId(null));
     onSelectPlanId?.(null);
-  }, [onSelectPlanId]);
+  }, [dispatch, onSelectPlanId]);
 
   const handlePlanContentSave = useCallback(
     async (content: string) => {
@@ -1230,6 +1241,7 @@ export function PlanPhase({
                       }
                       if (result.payload.response.planGenerated?.planId) {
                         const planId = result.payload.response.planGenerated.planId;
+                        dispatch(setSelectedPlanId(planId));
                         onSelectPlanId?.(planId);
                         void queryClient.invalidateQueries({
                           queryKey: queryKeys.plans.list(projectId),

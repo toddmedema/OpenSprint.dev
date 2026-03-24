@@ -9,6 +9,7 @@ import { DeliverPhase } from "./DeliverPhase";
 import deliverReducer from "../../store/slices/deliverSlice";
 import projectReducer from "../../store/slices/projectSlice";
 import { MOBILE_BREAKPOINT } from "../../lib/constants";
+import { queryKeys } from "../../api/queryKeys";
 
 const {
   mockGetSettings,
@@ -57,6 +58,38 @@ vi.mock("../../api/client", () => ({
 }));
 
 function createStore(initialDeployState = {}) {
+  const selectedDeployId =
+    initialDeployState &&
+    typeof initialDeployState === "object" &&
+    "selectedDeployId" in initialDeployState &&
+    typeof initialDeployState.selectedDeployId === "string"
+      ? initialDeployState.selectedDeployId
+      : null;
+  const activeDeployId =
+    initialDeployState &&
+    typeof initialDeployState === "object" &&
+    "activeDeployId" in initialDeployState &&
+    typeof initialDeployState.activeDeployId === "string"
+      ? initialDeployState.activeDeployId
+      : null;
+  const liveLog =
+    initialDeployState &&
+    typeof initialDeployState === "object" &&
+    "liveLog" in initialDeployState &&
+    Array.isArray(initialDeployState.liveLog)
+      ? initialDeployState.liveLog
+      : [];
+  const liveLogsByDeployId =
+    initialDeployState &&
+    typeof initialDeployState === "object" &&
+    "liveLogsByDeployId" in initialDeployState &&
+    initialDeployState.liveLogsByDeployId &&
+    typeof initialDeployState.liveLogsByDeployId === "object"
+      ? initialDeployState.liveLogsByDeployId
+      : selectedDeployId || activeDeployId
+        ? { [selectedDeployId ?? activeDeployId!]: liveLog }
+        : {};
+
   return configureStore({
     reducer: {
       deliver: deliverReducer,
@@ -69,6 +102,7 @@ function createStore(initialDeployState = {}) {
         activeDeployId: null,
         selectedDeployId: null,
         liveLog: [],
+        liveLogsByDeployId,
         statusInFlightCount: 0,
         historyInFlightCount: 0,
         async: {
@@ -86,13 +120,28 @@ function createStore(initialDeployState = {}) {
   });
 }
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function createQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
 
 function renderWithRouter(
   store: ReturnType<typeof createStore>,
   projectId = "proj-1",
   onOpenSettings?: () => void
 ) {
+  const queryClient = createQueryClient();
+  const deliverState = store.getState().deliver;
+  queryClient.setQueryData(queryKeys.deliver.history(projectId), deliverState.history ?? []);
+  queryClient.setQueryData(queryKeys.deliver.status(projectId), {
+    activeDeployId: deliverState.activeDeployId ?? null,
+    currentDeploy: deliverState.currentDeploy ?? null,
+  });
+  mockDeliverHistory.mockResolvedValue(deliverState.history ?? []);
+  mockDeliverStatus.mockResolvedValue({
+    activeDeployId: deliverState.activeDeployId ?? null,
+    currentDeploy: deliverState.currentDeploy ?? null,
+  });
+
   return render(
     <QueryClientProvider client={queryClient}>
       <Provider store={store}>
@@ -267,7 +316,7 @@ describe("DeliverPhase", () => {
     });
     const store = createStore();
     renderWithRouter(store, "proj-1", () => {});
-    await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
+    await screen.findByTestId("deploy-beta-button");
     expect(screen.queryByTestId("deliver-configure-targets-link")).not.toBeInTheDocument();
   });
 
@@ -296,7 +345,6 @@ describe("DeliverPhase", () => {
   });
 
   it("does not show Expo auth banner when mode is expo but readiness.authOk is true", async () => {
-    queryClient.clear();
     mockGetSettings.mockResolvedValueOnce({
       deployment: { mode: "expo" },
     });
@@ -655,8 +703,7 @@ describe("DeliverPhase", () => {
       ],
     });
     renderWithRouter(store);
-    await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
-    expect(screen.getByTestId("deploy-beta-button")).toBeInTheDocument();
+    expect(await screen.findByTestId("deploy-beta-button")).toBeInTheDocument();
     expect(screen.getByTestId("deploy-prod-button")).toBeInTheDocument();
     expect(screen.queryByTestId("deploy-spinner")).not.toBeInTheDocument();
   });
@@ -975,7 +1022,7 @@ describe("DeliverPhase", () => {
         expect(
           screen.queryByRole("slider", { name: "Resize delivery history sidebar" })
         ).not.toBeInTheDocument();
-        const deploy1Row = screen.getByText("Staging").closest("button");
+        const deploy1Row = (await screen.findByText("Staging")).closest("button");
         expect(deploy1Row).toBeInTheDocument();
         fireEvent.click(deploy1Row!);
         await waitFor(() => {

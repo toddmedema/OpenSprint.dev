@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation, Navigate } from "react-router-dom";
 import type { ProjectPhase } from "@opensprint/shared";
 import {
@@ -8,6 +8,7 @@ import {
   parseDetailParams,
 } from "../lib/phaseRouting";
 import { PhaseLoadingFallback } from "../components/PhaseLoadingFallback";
+import { useAppSelector } from "../store";
 
 const LazySketchPhase = lazy(() =>
   import("./phases/SketchPhase").then((m) => ({ default: m.SketchPhase }))
@@ -38,9 +39,47 @@ export function ProjectView() {
 
   const currentPhase = phaseFromSlug(phaseSlug);
   const detailParams = parseDetailParams(location.search);
-  const selectedPlanId = currentPhase === "plan" ? detailParams.plan : null;
-  const selectedTaskId = currentPhase === "execute" ? detailParams.task : null;
+  const selectedPlanIdFromStore = useAppSelector((state) => state.plan.selectedPlanId);
+  const selectedTaskIdFromStore = useAppSelector((state) => state.execute.selectedTaskId);
+  const previousPhaseRef = useRef<ProjectPhase | null>(null);
+  const enteringExecutePhase =
+    currentPhase === "execute" && previousPhaseRef.current !== "execute";
+  const selectedPlanId = detailParams.plan ?? selectedPlanIdFromStore ?? null;
+  const selectedTaskId =
+    detailParams.task ??
+    (currentPhase !== "execute" || enteringExecutePhase ? (selectedTaskIdFromStore ?? null) : null);
   const selectedFeedbackId = currentPhase === "eval" ? detailParams.feedback : null;
+
+  useEffect(() => {
+    if (!projectId || redirectTo) return;
+    const previousPhase = previousPhaseRef.current;
+    previousPhaseRef.current = currentPhase;
+
+    if (currentPhase === "plan" && selectedPlanId && detailParams.plan !== selectedPlanId) {
+      navigate(getProjectPhasePath(projectId, "plan", { plan: selectedPlanId }), { replace: true });
+      return;
+    }
+
+    if (
+      currentPhase === "execute" &&
+      previousPhase !== "execute" &&
+      selectedTaskId &&
+      detailParams.task !== selectedTaskId
+    ) {
+      navigate(getProjectPhasePath(projectId, "execute", { task: selectedTaskId }), {
+        replace: true,
+      });
+    }
+  }, [
+    currentPhase,
+    detailParams.plan,
+    detailParams.task,
+    navigate,
+    projectId,
+    selectedPlanId,
+    selectedTaskId,
+    redirectTo,
+  ]);
 
   if (!projectId) return null;
   if (redirectTo) return <Navigate to={redirectTo} replace />;

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NotificationBell } from "./NotificationBell";
 import executeReducer from "../store/slices/executeSlice";
 import planReducer from "../store/slices/planSlice";
@@ -33,6 +34,16 @@ function LocationCapture() {
       {loc.search}
     </div>
   );
+}
+
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
 }
 
 function renderNotificationBell(
@@ -68,12 +79,14 @@ function renderNotificationBell(
     },
   });
   return render(
-    <Provider store={store}>
-      <MemoryRouter>
-        <LocationCapture />
-        <NotificationBell projectId="proj-1" />
-      </MemoryRouter>
-    </Provider>
+    <QueryClientProvider client={createQueryClient()}>
+      <Provider store={store}>
+        <MemoryRouter>
+          <LocationCapture />
+          <NotificationBell projectId="proj-1" />
+        </MemoryRouter>
+      </Provider>
+    </QueryClientProvider>
   );
 }
 

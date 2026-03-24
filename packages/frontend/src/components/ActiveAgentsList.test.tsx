@@ -5,6 +5,7 @@ import { Provider } from "react-redux";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { configureStore } from "@reduxjs/toolkit";
 import { useEffect } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DisplayPreferencesProvider } from "../contexts/DisplayPreferencesContext";
 import { ActiveAgentsList } from "./ActiveAgentsList";
 import executeReducer, { setActiveAgentsPayload } from "../store/slices/executeSlice";
@@ -26,6 +27,10 @@ function createStore() {
   return configureStore({
     reducer: { execute: executeReducer, plan: planReducer },
   });
+}
+
+function createQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 }
 
 function renderActiveAgentsList() {
@@ -73,12 +78,14 @@ function renderActiveAgentsList() {
 
   return render(
     <Provider store={store}>
-      <DisplayPreferencesProvider>
-        <MemoryRouter>
-          <ActiveAgentsFetcher />
-          <ActiveAgentsList projectId="proj-1" />
-        </MemoryRouter>
-      </DisplayPreferencesProvider>
+      <QueryClientProvider client={createQueryClient()}>
+        <DisplayPreferencesProvider>
+          <MemoryRouter>
+            <ActiveAgentsFetcher />
+            <ActiveAgentsList projectId="proj-1" />
+          </MemoryRouter>
+        </DisplayPreferencesProvider>
+      </QueryClientProvider>
     </Provider>
   );
 }
@@ -597,13 +604,15 @@ describe("ActiveAgentsList", () => {
 
     render(
       <Provider store={store}>
-        <DisplayPreferencesProvider>
-          <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
-            <ActiveAgentsFetcher />
-            <ActiveAgentsList projectId="proj-1" />
-            <LocationDisplay />
-          </MemoryRouter>
-        </DisplayPreferencesProvider>
+        <QueryClientProvider client={createQueryClient()}>
+          <DisplayPreferencesProvider>
+            <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
+              <ActiveAgentsFetcher />
+              <ActiveAgentsList projectId="proj-1" />
+              <LocationDisplay />
+            </MemoryRouter>
+          </DisplayPreferencesProvider>
+        </QueryClientProvider>
       </Provider>
     );
 
@@ -650,13 +659,15 @@ describe("ActiveAgentsList", () => {
 
     render(
       <Provider store={store}>
-        <DisplayPreferencesProvider>
-          <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
-            <ActiveAgentsFetcher />
-            <ActiveAgentsList projectId="proj-1" />
-            <LocationDisplay />
-          </MemoryRouter>
-        </DisplayPreferencesProvider>
+        <QueryClientProvider client={createQueryClient()}>
+          <DisplayPreferencesProvider>
+            <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
+              <ActiveAgentsFetcher />
+              <ActiveAgentsList projectId="proj-1" />
+              <LocationDisplay />
+            </MemoryRouter>
+          </DisplayPreferencesProvider>
+        </QueryClientProvider>
       </Provider>
     );
 
@@ -701,13 +712,15 @@ describe("ActiveAgentsList", () => {
 
     render(
       <Provider store={store}>
-        <DisplayPreferencesProvider>
-          <MemoryRouter initialEntries={["/projects/proj-1/sketch"]}>
-            <ActiveAgentsFetcher />
-            <ActiveAgentsList projectId="proj-1" />
-            <LocationDisplay />
-          </MemoryRouter>
-        </DisplayPreferencesProvider>
+        <QueryClientProvider client={createQueryClient()}>
+          <DisplayPreferencesProvider>
+            <MemoryRouter initialEntries={["/projects/proj-1/sketch"]}>
+              <ActiveAgentsFetcher />
+              <ActiveAgentsList projectId="proj-1" />
+              <LocationDisplay />
+            </MemoryRouter>
+          </DisplayPreferencesProvider>
+        </QueryClientProvider>
       </Provider>
     );
 
@@ -753,13 +766,15 @@ describe("ActiveAgentsList", () => {
 
     render(
       <Provider store={store}>
-        <DisplayPreferencesProvider>
-          <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
-            <ActiveAgentsFetcher />
-            <ActiveAgentsList projectId="proj-1" />
-            <LocationDisplay />
-          </MemoryRouter>
-        </DisplayPreferencesProvider>
+        <QueryClientProvider client={createQueryClient()}>
+          <DisplayPreferencesProvider>
+            <MemoryRouter initialEntries={["/projects/proj-1/execute"]}>
+              <ActiveAgentsFetcher />
+              <ActiveAgentsList projectId="proj-1" />
+              <LocationDisplay />
+            </MemoryRouter>
+          </DisplayPreferencesProvider>
+        </QueryClientProvider>
       </Provider>
     );
 

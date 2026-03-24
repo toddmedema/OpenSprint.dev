@@ -6,6 +6,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
+export NODE_ENV="${NODE_ENV:-test}"
+
 BACKEND_HEALTH_URL="${BACKEND_HEALTH_URL:-http://localhost:3100/health}"
 FRONTEND_HEALTH_URL="${FRONTEND_HEALTH_URL:-http://localhost:5173/}"
 BACKEND_WAIT_SECS="${BACKEND_WAIT_SECS:-45}"

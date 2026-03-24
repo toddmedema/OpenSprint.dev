@@ -43,6 +43,10 @@ interface DeliverPhaseProps {
   onOpenSettings?: () => void;
 }
 
+const EMPTY_DELIVER_HISTORY: DeploymentRecord[] = [];
+const EMPTY_LIVE_LOGS_BY_DEPLOY_ID = Object.freeze({}) as Record<string, string[]>;
+const EMPTY_DELIVER_LOG: string[] = [];
+
 function formatDate(iso: string): string {
   try {
     const d = new Date(iso);
@@ -113,10 +117,21 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
   const [envFilter, setEnvFilter] = useState<string>("all");
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [filterDropdownAlignRight, setFilterDropdownAlignRight] = useState(false);
-  const [selectedDeployId, setSelectedDeployId] = useState<string | null>(null);
+  const storeHistory = useAppSelector((s) => s.deliver.history ?? EMPTY_DELIVER_HISTORY);
+  const storeCurrentDeploy = useAppSelector((s) => s.deliver.currentDeploy ?? null);
+  const storeActiveDeployId = useAppSelector((s) => s.deliver.activeDeployId ?? null);
+  const storeSelectedDeployId = useAppSelector((s) => s.deliver.selectedDeployId ?? null);
+  const storeLiveLog = useAppSelector((s) => s.deliver.liveLog ?? EMPTY_DELIVER_LOG);
+  const [selectedDeployId, setSelectedDeployId] = useState<string | null>(
+    () => storeSelectedDeployId
+  );
   const filterDropdownRef = useRef<HTMLDivElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
-  const liveLogsByDeployId = useAppSelector((s) => s.deliver.liveLogsByDeployId ?? {});
+  const didInitProjectRef = useRef(false);
+  const didHydrateSelectedDeployRef = useRef(false);
+  const liveLogsByDeployId = useAppSelector(
+    (s) => s.deliver.liveLogsByDeployId ?? EMPTY_LIVE_LOGS_BY_DEPLOY_ID
+  );
   const prePollStatusQuery = useDeliverStatus(projectId);
   const prePollActiveDeployId = prePollStatusQuery.data?.activeDeployId ?? null;
   const polling = Boolean(prePollActiveDeployId && projectId);
@@ -131,9 +146,9 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
   const triggerDeliverMutation = useTriggerDeliver(projectId);
   const expoDeployMutation = useExpoDeploy(projectId);
   const rollbackDeliverMutation = useRollbackDeliver(projectId);
-  const history = deliverHistoryQuery.data ?? [];
-  const activeDeployId = deliverStatusQuery.data?.activeDeployId ?? null;
-  const currentDeploy = deliverStatusQuery.data?.currentDeploy ?? null;
+  const history = deliverHistoryQuery.data ?? storeHistory;
+  const activeDeployId = deliverStatusQuery.data?.activeDeployId ?? storeActiveDeployId;
+  const currentDeploy = deliverStatusQuery.data?.currentDeploy ?? storeCurrentDeploy;
 
   const envCounts = useMemo(() => {
     const counts: Record<string, number> = { all: history.length };
@@ -175,8 +190,19 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
   });
 
   useEffect(() => {
+    if (!didInitProjectRef.current) {
+      didInitProjectRef.current = true;
+      return;
+    }
+    didHydrateSelectedDeployRef.current = false;
     setSelectedDeployId(null);
   }, [projectId]);
+
+  useEffect(() => {
+    if (didHydrateSelectedDeployRef.current || !storeSelectedDeployId) return;
+    didHydrateSelectedDeployRef.current = true;
+    setSelectedDeployId(storeSelectedDeployId);
+  }, [storeSelectedDeployId]);
 
   useEffect(() => {
     if (!selectedDeployId) return;
@@ -187,7 +213,13 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
   const selectedRecord = selectedDeployId
     ? (history.find((r) => r.id === selectedDeployId) ?? null)
     : (currentDeploy ?? filteredHistory[0] ?? history[0] ?? null);
-  const liveLog = selectedRecord ? (liveLogsByDeployId[selectedRecord.id] ?? []) : [];
+  const liveLog = selectedRecord
+    ? (liveLogsByDeployId[selectedRecord.id] ??
+      ((selectedRecord.id === activeDeployId || selectedRecord.id === storeSelectedDeployId) &&
+      storeLiveLog.length > 0
+        ? storeLiveLog
+        : EMPTY_DELIVER_LOG))
+    : EMPTY_DELIVER_LOG;
   const deliverLoading = triggerDeliverMutation.isPending;
   const expoDeployLoading = expoDeployMutation.isPending;
   const expoDeployError =

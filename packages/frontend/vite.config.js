@@ -77,6 +77,9 @@ export default defineConfig({
         alias: {
             "@": path.resolve(__dirname, "./src"),
             "@opensprint/shared": path.resolve(__dirname, "../shared/src/index.ts"),
+            "@opensprint/shared/types": path.resolve(__dirname, "../shared/src/types/index.ts"),
+            "@opensprint/shared/constants": path.resolve(__dirname, "../shared/src/constants/index.ts"),
+            "@opensprint/shared/runtime": path.resolve(__dirname, "../shared/src/runtime/index.ts"),
         },
     },
     server: {

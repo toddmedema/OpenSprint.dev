@@ -25,6 +25,8 @@ interface ActiveAgentsListProps {
   projectId: string;
 }
 
+const EMPTY_ACTIVE_AGENTS: ActiveAgent[] = [];
+
 /** Resolve agent to role for description lookup (role or phase-derived). */
 function getAgentRoleForDescription(agent: ActiveAgent): AgentRole | null {
   if (agent.role && agent.role in AGENT_ROLE_DESCRIPTIONS) return agent.role as AgentRole;
@@ -165,7 +167,7 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
   const activeAgentsQuery = useActiveAgents(projectId, {
     refetchInterval: ACTIVE_AGENTS_POLL_INTERVAL_MS,
   });
-  const agents = activeAgentsQuery.data?.agents ?? [];
+  const agents = activeAgentsQuery.data?.agents ?? EMPTY_ACTIVE_AGENTS;
   const showLoading = activeAgentsQuery.isLoading && !activeAgentsQuery.data;
   const showLoadingInDropdown = showLoading;
   const [open, setOpen] = useState(false);

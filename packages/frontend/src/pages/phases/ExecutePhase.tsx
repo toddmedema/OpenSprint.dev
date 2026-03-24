@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from "../../store";
 import {
   setAgentOutputBackfill,
   setArchivedSessions,
+  setSelectedTaskId,
   selectTasks,
   selectTaskById,
   selectSelectedTaskOutput,
@@ -51,6 +52,7 @@ import { EMPTY_STATE_COPY } from "../../lib/emptyStateCopy";
 interface ExecutePhaseProps {
   projectId: string;
   selectedTaskId?: string;
+  initialTaskIdFromUrl?: string;
   onSelectTaskId?: (taskId: string | null) => void;
   onNavigateToPlan?: (planId: string) => void;
   /** Called when user closes the sidebar. When provided (e.g. from ProjectView), clears URL param. */
@@ -69,7 +71,8 @@ const BASELINE_MERGE_PAUSE_SWEEP_MS = 8000;
 
 export function ExecutePhase({
   projectId,
-  selectedTaskId,
+  selectedTaskId: propSelectedTaskId,
+  initialTaskIdFromUrl,
   onSelectTaskId,
   onNavigateToPlan,
   onClose: onCloseProp,
@@ -117,6 +120,7 @@ export function ExecutePhase({
   const queryClient = useQueryClient();
   const tasks = useAppSelector(selectTasks);
   const plans = useAppSelector((s) => s.plan.plans);
+  const selectedTaskIdFromStore = useAppSelector((s) => s.execute.selectedTaskId);
   const awaitingApproval = useAppSelector((s) => s.execute.awaitingApproval);
   const baselineStatus = useAppSelector((s) => s.execute.baselineStatus);
   const baselineFailureSummary = useAppSelector((s) => s.execute.baselineFailureSummary);
@@ -129,7 +133,8 @@ export function ExecutePhase({
     (s) => s.execute.selfImprovementRunInProgress ?? false
   );
   const selfImprovementRunMode = useAppSelector((s) => s.execute.selfImprovementRunMode);
-  const effectiveSelectedTask = selectedTaskId ?? null;
+  const effectiveSelectedTask =
+    propSelectedTaskId ?? initialTaskIdFromUrl ?? selectedTaskIdFromStore ?? null;
   const loading = useAppSelector((s) => s.execute?.async?.tasks?.loading ?? false);
   const activeTasks = useAppSelector((s) => s.execute?.activeTasks ?? EMPTY_ACTIVE_TASKS);
   const taskIdToStartedAt = useAppSelector(
@@ -227,6 +232,14 @@ export function ExecutePhase({
   );
   const prevWsConnectedRef = useRef(wsConnected);
   const emptyArchivedRefetchTaskIdRef = useRef<string | null>(null);
+  const previousPropSelectedTaskIdRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (propSelectedTaskId === previousPropSelectedTaskIdRef.current) return;
+    previousPropSelectedTaskIdRef.current = propSelectedTaskId;
+    if (propSelectedTaskId === undefined || selectedTaskIdFromStore === propSelectedTaskId) return;
+    dispatch(setSelectedTaskId(propSelectedTaskId ?? null));
+  }, [dispatch, propSelectedTaskId, selectedTaskIdFromStore]);
 
   // Merge task detail into list cache so Redux sync gets it
   useEffect(() => {
@@ -319,12 +332,14 @@ export function ExecutePhase({
 
   const handleSelectTask = useCallback(
     (taskId: string) => {
+      dispatch(setSelectedTaskId(taskId));
       onSelectTaskId?.(taskId);
     },
-    [onSelectTaskId]
+    [dispatch, onSelectTaskId]
   );
 
   const handleClose = () => {
+    dispatch(setSelectedTaskId(null));
     if (onCloseProp) {
       onCloseProp();
     }
