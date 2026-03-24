@@ -185,12 +185,6 @@ export function useExecuteSwimlanes(
   }, [filteredTasks, plans, statusFilter]);
 
   const totalTasks = implTasks.length;
-  const planningCount = implTasks.filter((t) => isTaskInPlanningPlan(t, plans)).length;
-  const inLineCount = implTasks.filter(
-    (t) =>
-      (t.kanbanColumn === "backlog" || t.kanbanColumn === "planning") &&
-      !isTaskInPlanningPlan(t, plans)
-  ).length;
   const readyCount = implTasks.filter((t) => t.kanbanColumn === "ready").length;
   const blockedOnHumanCount = implTasks.filter((t) => t.kanbanColumn === "blocked").length;
   const inProgressCount = implTasks.filter((t) => t.kanbanColumn === "in_progress").length;
@@ -199,31 +193,17 @@ export function useExecuteSwimlanes(
   const waitingToMergeCount = implTasks.filter((t) => t.kanbanColumn === "waiting_to_merge").length;
 
   const selfImprovementCount = implTasks.filter((t) => isSelfImprovementTask(t)).length;
+  /**
+   * Toolbar order: All → In Progress → Blocked → Waiting → Ready → Done → Self-improvement.
+   * Blocked and Waiting stay in this slot order like Ready/Done; ExecuteFilterToolbar hides chips with count 0.
+   */
   const chipConfig: { label: string; filter: StatusFilter; count: number }[] = [
     { label: "All", filter: "all", count: totalTasks },
-    { label: "Planning", filter: "planning", count: planningCount },
-    { label: "Up Next", filter: "in_line", count: inLineCount },
-    { label: "Ready", filter: "ready", count: readyCount },
-    ...(waitingToMergeCount > 0
-      ? [
-          {
-            label: "Waiting to Merge",
-            filter: "waiting_to_merge" as StatusFilter,
-            count: waitingToMergeCount,
-          },
-        ]
-      : []),
     { label: "In Progress", filter: "in_progress", count: inProgressCount + inReviewCount },
+    { label: "Blocked", filter: "blocked", count: blockedOnHumanCount },
+    { label: "Waiting", filter: "waiting_to_merge", count: waitingToMergeCount },
+    { label: "Ready", filter: "ready", count: readyCount },
     { label: "Done", filter: "done", count: doneCount },
-    ...(blockedOnHumanCount > 0
-      ? [
-          {
-            label: "⚠️ Failures",
-            filter: "blocked" as StatusFilter,
-            count: blockedOnHumanCount,
-          },
-        ]
-      : []),
     ...(selfImprovementCount > 0
       ? [
           {

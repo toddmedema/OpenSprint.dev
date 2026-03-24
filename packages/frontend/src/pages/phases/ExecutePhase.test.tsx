@@ -606,7 +606,7 @@ describe("ExecutePhase top bar", () => {
     expect(topBar?.querySelector('[role="progressbar"]')).not.toBeInTheDocument();
   });
 
-  it("shows status filter chips with task counts (All, Up Next, Ready, In Progress, In Review, Done; Failures only when count > 0)", () => {
+  it("shows status filter chips with task counts (All, Ready, Done; Blocked only when count > 0; no Planning or Up Next chips)", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -686,7 +686,7 @@ describe("ExecutePhase top bar", () => {
     expect(screen.getByTestId("filter-chip-done")).toHaveTextContent("1");
   });
 
-  it("shows Failures chip only when kanbanColumn blocked count > 0", () => {
+  it("shows Blocked chip only when kanbanColumn blocked count > 0", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -715,11 +715,11 @@ describe("ExecutePhase top bar", () => {
     );
 
     expect(screen.getByTestId("filter-chip-ready")).toHaveTextContent("1");
-    expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("⚠️ Failures");
+    expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("Blocked");
     expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("1");
   });
 
-  it("counts only kanbanColumn blocked for Failures chip", () => {
+  it("counts only kanbanColumn blocked for Blocked chip", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -755,18 +755,17 @@ describe("ExecutePhase top bar", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("⚠️ Failures");
+    expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("Blocked");
     expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("1");
   });
 
-  it("filters to Up Next tasks (backlog, planning) when Up Next chip is clicked; excludes blocked", async () => {
-    const user = userEvent.setup();
+  it("shows Waiting chip (not Waiting to Merge) when waiting_to_merge tasks exist, ordered In Progress → Blocked → Waiting → Ready", () => {
     const tasks = [
       {
         id: "epic-1.1",
-        title: "Backlog task",
+        title: "Active task",
         epicId: "epic-1",
-        kanbanColumn: "backlog",
+        kanbanColumn: "in_progress",
         priority: 0,
         assignee: null,
       },
@@ -780,9 +779,9 @@ describe("ExecutePhase top bar", () => {
       },
       {
         id: "epic-1.3",
-        title: "Planning task",
+        title: "Merge task",
         epicId: "epic-1",
-        kanbanColumn: "planning",
+        kanbanColumn: "waiting_to_merge",
         priority: 2,
         assignee: null,
       },
@@ -796,6 +795,48 @@ describe("ExecutePhase top bar", () => {
       },
     ];
     const store = createStore(tasks);
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ExecutePhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+
+    const segmented = screen.getByTestId("execute-filter-segmented");
+    const radios = segmented.querySelectorAll('[role="radio"]');
+    const filtersInDomOrder = [...radios].map((el) => el.getAttribute("data-testid"));
+    const inProgressIdx = filtersInDomOrder.indexOf("filter-chip-in_progress");
+    const blockedIdx = filtersInDomOrder.indexOf("filter-chip-blocked");
+    const waitingIdx = filtersInDomOrder.indexOf("filter-chip-waiting_to_merge");
+    const readyIdx = filtersInDomOrder.indexOf("filter-chip-ready");
+    expect(screen.getByTestId("filter-chip-waiting_to_merge")).toHaveTextContent("Waiting");
+    expect(inProgressIdx).toBeLessThan(blockedIdx);
+    expect(blockedIdx).toBeLessThan(waitingIdx);
+    expect(waitingIdx).toBeLessThan(readyIdx);
+  });
+
+  it("preserves persisted Up Next (in_line) filter on load (no toolbar chip)", async () => {
+    localStorage.setItem("opensprint.executeStatusFilter", "in_line");
+    const tasks = [
+      {
+        id: "epic-1.1",
+        title: "Backlog task",
+        epicId: "epic-1",
+        kanbanColumn: "backlog",
+        priority: 0,
+        assignee: null,
+      },
+      {
+        id: "epic-1.2",
+        title: "Ready task",
+        epicId: "epic-1",
+        kanbanColumn: "ready",
+        priority: 1,
+        assignee: null,
+      },
+    ];
+    const store = createStore(tasks);
     const { container } = render(
       <MemoryRouter>
         <Provider store={store}>
@@ -804,15 +845,12 @@ describe("ExecutePhase top bar", () => {
       </MemoryRouter>
     );
 
-    await user.click(screen.getByTestId("filter-chip-in_line"));
-    const epicCard = container.querySelector('[data-testid="epic-card-epic-1"]');
-    expect(epicCard).toBeInTheDocument();
-    const listItems = epicCard!.querySelectorAll("ul li");
-    expect(listItems).toHaveLength(2);
-    expect(epicCard!.textContent).toContain("Backlog task");
-    expect(epicCard!.textContent).toContain("Planning task");
-    expect(epicCard!.textContent).not.toContain("Blocked task");
-    expect(epicCard!.textContent).not.toContain("Ready task");
+    await waitFor(() => {
+      expect(container).toHaveTextContent("Backlog task");
+    });
+    expect(container).not.toHaveTextContent("Ready task");
+    expect(localStorage.getItem("opensprint.executeStatusFilter")).toBe("in_line");
+    expect(screen.getByTestId("filter-chip-all")).toHaveAttribute("aria-checked", "false");
   });
 
   it("filters task list when chip is clicked", async () => {
@@ -987,7 +1025,7 @@ describe("ExecutePhase top bar", () => {
     expect(localStorage.getItem("opensprint.executeStatusFilter")).toBe("all");
   });
 
-  it("defaults to All when persisted filter is Failures but no blocked tasks exist", async () => {
+  it("defaults to All when persisted filter is Blocked but no blocked tasks exist", async () => {
     localStorage.setItem("opensprint.executeStatusFilter", "blocked");
     const tasks = [
       {

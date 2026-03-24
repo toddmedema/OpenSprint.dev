@@ -107,6 +107,20 @@ describe("useTaskFilter", () => {
     expect(localStorage.getItem(EXECUTE_STATUS_FILTER_KEY)).toBe("in_line");
   });
 
+  it("restores persisted in_line from localStorage on mount", () => {
+    localStorage.setItem(EXECUTE_STATUS_FILTER_KEY, "in_line");
+    const { result } = renderHook(() => useTaskFilter());
+    expect(result.current.statusFilter).toBe("in_line");
+    expect(localStorage.getItem(EXECUTE_STATUS_FILTER_KEY)).toBe("in_line");
+  });
+
+  it("restores persisted planning from localStorage on mount", () => {
+    localStorage.setItem(EXECUTE_STATUS_FILTER_KEY, "planning");
+    const { result } = renderHook(() => useTaskFilter());
+    expect(result.current.statusFilter).toBe("planning");
+    expect(localStorage.getItem(EXECUTE_STATUS_FILTER_KEY)).toBe("planning");
+  });
+
   it("restores status filter from localStorage on mount", () => {
     localStorage.setItem(EXECUTE_STATUS_FILTER_KEY, "ready");
     const { result } = renderHook(() => useTaskFilter());

@@ -86,7 +86,7 @@ describe("useExecuteSwimlanes", () => {
     expect(laneA!.epicTitle).toBe("Epic A");
   });
 
-  it("returns chipConfig with counts", () => {
+  it("returns chipConfig with counts (no Planning or Up Next chips)", () => {
     const tasks: Task[] = [
       task({ id: "epic-a.1", kanbanColumn: "ready" }),
       task({ id: "epic-a.2", kanbanColumn: "done" }),
@@ -95,11 +95,26 @@ describe("useExecuteSwimlanes", () => {
     const { result } = renderHook(() => useExecuteSwimlanes(tasks, plans, "all", ""));
     expect(result.current.chipConfig).toBeDefined();
     expect(result.current.chipConfig.some((c) => c.filter === "all" && c.count === 2)).toBe(true);
-    expect(result.current.chipConfig.some((c) => c.filter === "in_line" && c.count === 0)).toBe(
-      true
-    );
+    expect(result.current.chipConfig.some((c) => c.filter === "planning")).toBe(false);
+    expect(result.current.chipConfig.some((c) => c.filter === "in_line")).toBe(false);
     expect(result.current.chipConfig.some((c) => c.filter === "ready" && c.count === 1)).toBe(true);
     expect(result.current.chipConfig.some((c) => c.filter === "done" && c.count === 1)).toBe(true);
+    expect(result.current.chipConfig.find((c) => c.filter === "blocked")).toMatchObject({
+      label: "Blocked",
+      count: 0,
+    });
+    expect(result.current.chipConfig.find((c) => c.filter === "waiting_to_merge")).toMatchObject({
+      label: "Waiting",
+      count: 0,
+    });
+    expect(result.current.chipConfig.map((c) => c.filter)).toEqual([
+      "all",
+      "in_progress",
+      "blocked",
+      "waiting_to_merge",
+      "ready",
+      "done",
+    ]);
   });
 
   it("chipConfig includes Self-improvement chip with count when tasks have source self-improvement", () => {
@@ -146,23 +161,30 @@ describe("useExecuteSwimlanes", () => {
     expect(result.current.filteredTasks.map((t) => t.id)).toEqual(["epic-a.1", "epic-a.2"]);
   });
 
-  it("Up Next chip is between All and Ready and counts backlog, planning (excludes blocked and planning-plan tasks)", () => {
+  it("chipConfig follows All → In Progress → Blocked → Waiting → Ready → Done → Self-improvement order when all are present", () => {
     const tasks: Task[] = [
-      task({ id: "epic-a.1", kanbanColumn: "backlog" }),
+      task({ id: "epic-a.1", kanbanColumn: "in_progress" }),
       task({ id: "epic-a.2", kanbanColumn: "blocked" }),
-      task({ id: "epic-a.3", kanbanColumn: "planning" }),
+      task({ id: "epic-a.3", kanbanColumn: "waiting_to_merge" }),
       task({ id: "epic-a.4", kanbanColumn: "ready" }),
+      task({ id: "epic-a.5", kanbanColumn: "done" }),
+      task({ id: "epic-a.6", kanbanColumn: "backlog", source: "self-improvement" }),
     ];
     const plans: Plan[] = [plan()];
     const { result } = renderHook(() => useExecuteSwimlanes(tasks, plans, "all", ""));
-    const chips = result.current.chipConfig;
-    const allIdx = chips.findIndex((c) => c.filter === "all");
-    const inLineIdx = chips.findIndex((c) => c.filter === "in_line");
-    const readyIdx = chips.findIndex((c) => c.filter === "ready");
-    expect(allIdx).toBeLessThan(inLineIdx);
-    expect(inLineIdx).toBeLessThan(readyIdx);
-    expect(chips[inLineIdx].label).toBe("Up Next");
-    expect(chips[inLineIdx].count).toBe(2);
+    expect(result.current.chipConfig.map((c) => c.filter)).toEqual([
+      "all",
+      "in_progress",
+      "blocked",
+      "waiting_to_merge",
+      "ready",
+      "done",
+      "self_improvement",
+    ]);
+    expect(result.current.chipConfig.find((c) => c.filter === "waiting_to_merge")!.label).toBe(
+      "Waiting"
+    );
+    expect(result.current.chipConfig.find((c) => c.filter === "blocked")!.label).toBe("Blocked");
   });
 
   it("Up Next excludes tasks in plans still in planning", () => {
@@ -182,7 +204,6 @@ describe("useExecuteSwimlanes", () => {
       }),
     ];
     const { result } = renderHook(() => useExecuteSwimlanes(tasks, plans, "all", ""));
-    expect(result.current.chipConfig.find((c) => c.filter === "in_line")!.count).toBe(1);
     expect(result.current.inLineSwimlanes).toHaveLength(1);
     expect(result.current.inLineSwimlanes[0].tasks).toHaveLength(1);
     expect(result.current.inLineSwimlanes[0].tasks[0].id).toBe("epic-b.1");
@@ -339,22 +360,5 @@ describe("useExecuteSwimlanes", () => {
       expect(result.current.planningSwimlanes[0].tasks[0].id).toBe("epic-a.1");
     });
 
-    it("Planning chip appears immediately left of Up Next", () => {
-      const tasks: Task[] = [task({ id: "epic-a.1", epicId: "epic-a", kanbanColumn: "ready" })];
-      const plans: Plan[] = [
-        plan({
-          metadata: { planId: "p1", epicId: "epic-a", shippedAt: null, complexity: "medium" },
-          status: "planning",
-        }),
-      ];
-      const { result } = renderHook(() => useExecuteSwimlanes(tasks, plans, "all", ""));
-      const chips = result.current.chipConfig;
-      const allIdx = chips.findIndex((c) => c.filter === "all");
-      const planningIdx = chips.findIndex((c) => c.filter === "planning");
-      const inLineIdx = chips.findIndex((c) => c.filter === "in_line");
-      expect(allIdx).toBeLessThan(planningIdx);
-      expect(planningIdx).toBeLessThan(inLineIdx);
-      expect(chips[planningIdx].label).toBe("Planning");
-    });
   });
 });

@@ -50,6 +50,7 @@ import { PhaseEmptyState, PhaseEmptyStateLogo } from "../../components/PhaseEmpt
 import { getProjectPhasePath } from "../../lib/phaseRouting";
 import { EXECUTE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 import { EMPTY_STATE_COPY } from "../../lib/emptyStateCopy";
+import type { StatusFilter } from "../../lib/executeTaskFilter";
 
 interface ExecutePhaseProps {
   projectId: string;
@@ -70,6 +71,9 @@ const EMPTY_TASK_STARTED_AT = Object.freeze({}) as Record<string, string>;
 
 /** Clears stale baseline-merge pause UI when server derives expiry without a DB write. */
 const BASELINE_MERGE_PAUSE_SWEEP_MS = 8000;
+
+/** Status filters that still apply to the task list but have no chip on the current Execute toolbar. */
+const EXECUTE_FILTERS_WITHOUT_CHIPS: StatusFilter[] = ["planning", "in_line"];
 
 export function ExecutePhase({
   projectId,
@@ -410,10 +414,11 @@ export function ExecutePhase({
     [tasks]
   );
 
-  // Default to "All" when selected filter has no visible tasks (e.g. user navigated with "Failures" selected but no blocked tasks)
+  // Default to "All" when selected filter has no visible tasks (e.g. Blocked selected but no blocked tasks)
   useEffect(() => {
     if (loading || implTasks.length === 0) return;
     if (statusFilter === "all") return;
+    if (EXECUTE_FILTERS_WITHOUT_CHIPS.includes(statusFilter)) return;
     const chip = chipConfig.find((c) => c.filter === statusFilter);
     if (!chip || chip.count === 0) {
       setStatusFilter("all");
