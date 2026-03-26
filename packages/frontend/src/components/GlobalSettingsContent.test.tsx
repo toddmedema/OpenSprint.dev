@@ -38,6 +38,7 @@ const mockClearLimitHit = vi.fn();
 const mockSetupTables = vi.fn();
 
 const mockEnvGetKeys = vi.fn();
+const mockInstallCursorCli = vi.fn();
 const mockModelsList = vi.fn();
 
 vi.mock("../api/client", () => ({
@@ -52,6 +53,7 @@ vi.mock("../api/client", () => ({
     },
     env: {
       getKeys: () => mockEnvGetKeys(),
+      installCursorCli: () => mockInstallCursorCli(),
     },
     models: {
       list: (...args: unknown[]) => mockModelsList(...args),
@@ -68,6 +70,7 @@ describe("GlobalSettingsContent", () => {
       cursorCli: true,
       ollamaCli: true,
     });
+    mockInstallCursorCli.mockResolvedValue({ success: true, message: "Install finished." });
     mockModelsList.mockResolvedValue([{ id: "gpt-4", label: "GPT-4" }]);
     mockGlobalSettingsGet.mockResolvedValue({
       databaseUrl: "postgresql://user:***@localhost:5432/opensprint",
@@ -679,5 +682,55 @@ describe("GlobalSettingsContent", () => {
       "data-active",
       "true"
     );
+  });
+
+  it("refreshes Cursor CLI prerequisite state after install succeeds", async () => {
+    mockGlobalSettingsGet.mockResolvedValue({
+      databaseUrl: "postgresql://user:***@localhost:5432/opensprint",
+      apiKeys: {
+        CURSOR_API_KEY: [{ id: "cursor-1", masked: "••••••••" }],
+      },
+    });
+    mockEnvGetKeys
+      .mockResolvedValueOnce({
+        claudeCli: true,
+        cursorCli: false,
+        ollamaCli: true,
+      })
+      .mockResolvedValueOnce({
+        claudeCli: true,
+        cursorCli: true,
+        ollamaCli: true,
+      });
+
+    renderGlobalSettingsContent();
+    await screen.findByTestId("api-keys-section-wrapper");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("global-settings-tab-agents"));
+    });
+    await screen.findByTestId("global-agent-config-section");
+
+    const simpleProvider = document.getElementById(
+      "global-simple-provider-select"
+    ) as HTMLSelectElement;
+    await act(async () => {
+      fireEvent.change(simpleProvider, { target: { value: "cursor" } });
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("install-cursor-cli-btn")).toHaveLength(2);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByTestId("install-cursor-cli-btn")[0]!);
+    });
+
+    await waitFor(() => {
+      expect(mockInstallCursorCli).toHaveBeenCalledTimes(1);
+      expect(mockEnvGetKeys).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(screen.queryAllByTestId("install-cursor-cli-btn")).toHaveLength(0);
+    });
   });
 });

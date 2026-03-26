@@ -672,6 +672,84 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
     expect(settings.selfImprovementFrequency).toBe("daily");
   });
 
+  it("keeps per-project settings isolated under concurrent cross-project PUT storms", async () => {
+    const projectIds = [projectId];
+    for (let i = 0; i < 3; i += 1) {
+      const repoPath = path.join(tempDir, `concurrent-${i}`);
+      await fs.mkdir(repoPath, { recursive: true });
+      const project = await projectService.createProject({
+        name: `Concurrent ${i}`,
+        repoPath,
+        simpleComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+        complexComplexityAgent: { type: "cursor", model: "composer-1.5", cliCommand: null },
+        deployment: { mode: "custom" },
+        hilConfig: DEFAULT_HIL_CONFIG,
+      });
+      projectIds.push(project.id);
+    }
+
+    const finalByProject = new Map<
+      string,
+      {
+        mergeStrategy: "per_task" | "per_epic";
+        selfImprovementFrequency: "never" | "daily" | "weekly";
+        maxConcurrentCoders: number;
+        unknownScopeStrategy: "optimistic" | "conservative";
+      }
+    >();
+
+    await Promise.all(
+      projectIds.flatMap((id, idx) => [
+        request(app)
+          .put(`${API_PREFIX}/projects/${id}/settings`)
+          .send({
+            maxConcurrentCoders: 2 + idx,
+            mergeStrategy: idx % 2 === 0 ? "per_epic" : "per_task",
+          })
+          .expect(200),
+        request(app)
+          .put(`${API_PREFIX}/projects/${id}/settings`)
+          .send({
+            selfImprovementFrequency: idx % 2 === 0 ? "daily" : "weekly",
+            unknownScopeStrategy: idx % 2 === 0 ? "conservative" : "optimistic",
+          })
+          .expect(200),
+      ])
+    );
+
+    await Promise.all(
+      projectIds.map((id, idx) => {
+        const finalExpected = {
+          mergeStrategy: idx % 2 === 0 ? "per_task" : "per_epic",
+          selfImprovementFrequency: idx % 2 === 0 ? "weekly" : "daily",
+          maxConcurrentCoders: 5 + idx,
+          unknownScopeStrategy: idx % 2 === 0 ? "optimistic" : "conservative",
+        } as const;
+        finalByProject.set(id, finalExpected);
+        return request(app)
+          .put(`${API_PREFIX}/projects/${id}/settings`)
+          .send(finalExpected)
+          .expect(200);
+      })
+    );
+
+    for (const id of projectIds) {
+      const expected = finalByProject.get(id)!;
+      const getRes = await request(app).get(`${API_PREFIX}/projects/${id}/settings`);
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.data.mergeStrategy).toBe(expected.mergeStrategy);
+      expect(getRes.body.data.selfImprovementFrequency).toBe(expected.selfImprovementFrequency);
+      expect(getRes.body.data.maxConcurrentCoders).toBe(expected.maxConcurrentCoders);
+      expect(getRes.body.data.unknownScopeStrategy).toBe(expected.unknownScopeStrategy);
+
+      const persisted = await readProjectFromGlobalStore(tempDir, id);
+      expect(persisted.mergeStrategy).toBe(expected.mergeStrategy);
+      expect(persisted.selfImprovementFrequency).toBe(expected.selfImprovementFrequency);
+      expect(persisted.maxConcurrentCoders).toBe(expected.maxConcurrentCoders);
+      expect(persisted.unknownScopeStrategy).toBe(expected.unknownScopeStrategy);
+    }
+  });
+
   it("PUT /api/v1/projects/:id/settings ignores selfImprovementLastRunAt and selfImprovementLastCommitSha from client", async () => {
     const putRes = await request(app).put(`${API_PREFIX}/projects/${projectId}/settings`).send({
       selfImprovementFrequency: "weekly",

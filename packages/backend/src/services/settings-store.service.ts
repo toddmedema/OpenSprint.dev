@@ -10,6 +10,8 @@ import path from "path";
 import type { ProjectSettings } from "@opensprint/shared";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 
+let settingsStorePathForTesting: string | null = null;
+
 /** Strip apiKeys from settings (project-level keys deprecated; use global store only). */
 function stripApiKeys<T extends Record<string, unknown>>(obj: T): Omit<T, "apiKeys"> {
   const { apiKeys: _omit, ...rest } = obj;
@@ -17,8 +19,13 @@ function stripApiKeys<T extends Record<string, unknown>>(obj: T): Omit<T, "apiKe
 }
 
 function getSettingsStorePath(): string {
+  if (settingsStorePathForTesting) return settingsStorePathForTesting;
   const home = process.env.HOME ?? process.env.USERPROFILE ?? os.homedir();
   return path.join(home, ".opensprint", "settings.json");
+}
+
+export function setSettingsStorePathForTesting(testPath: string | null): void {
+  settingsStorePathForTesting = testPath;
 }
 
 export interface SettingsEntry {

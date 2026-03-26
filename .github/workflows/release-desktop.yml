@@ -195,7 +195,7 @@ jobs:
         env:
           POSTGRES_USER: opensprint
           POSTGRES_PASSWORD: opensprint
-          POSTGRES_DB: opensprint
+          POSTGRES_DB: opensprint_test
         ports:
           - 5432:5432
         options: >-
@@ -219,5 +219,6 @@ jobs:
         run: npm run build
       - name: Run perf check (start backend + frontend, then perf:ci)
         env:
-          DATABASE_URL: postgres://opensprint:opensprint@localhost:5432/opensprint
+          DATABASE_URL: postgres://opensprint:opensprint@localhost:5432/opensprint_test
+          NODE_ENV: test
         run: bash scripts/ci/run-perf-stack.sh

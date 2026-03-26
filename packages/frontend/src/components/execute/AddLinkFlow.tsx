@@ -220,3 +220,5 @@ export function AddLinkFlow({
     </div>
   );
 }
+
+export default AddLinkFlow;

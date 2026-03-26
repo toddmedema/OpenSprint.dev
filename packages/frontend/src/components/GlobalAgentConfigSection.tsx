@@ -24,6 +24,8 @@ export interface GlobalAgentConfigSectionProps {
   envKeys: GlobalAgentEnvKeys | null;
   /** Switch to the General tab (API keys live there). */
   onOpenGeneralTab: () => void;
+  /** Refresh env/API prerequisite state after install actions succeed. */
+  onRefreshEnvKeys: () => Promise<void>;
   modelRefreshTrigger: number;
 }
 
@@ -35,6 +37,7 @@ export function GlobalAgentConfigSection({
   scheduleSaveOnBlur,
   envKeys,
   onOpenGeneralTab,
+  onRefreshEnvKeys,
   modelRefreshTrigger,
 }: GlobalAgentConfigSectionProps) {
   const [cursorCliInstalling, setCursorCliInstalling] = useState(false);
@@ -108,6 +111,9 @@ export function GlobalAgentConfigSection({
               setCursorCliInstalling(true);
               try {
                 const data = await api.env.installCursorCli();
+                if (data.success) {
+                  await onRefreshEnvKeys();
+                }
                 setCursorCliInstallResult({
                   success: data.success,
                   message: data.message ?? (data.success ? "Install finished." : "Install failed."),

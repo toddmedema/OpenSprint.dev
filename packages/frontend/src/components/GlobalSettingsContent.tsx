@@ -158,6 +158,20 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
   const [agentConfigError, setAgentConfigError] = useState<string | null>(null);
   const agentSaveOnBlurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const refreshAgentEnvKeys = useCallback(async () => {
+    const [global, env] = await Promise.all([api.globalSettings.get(), api.env.getKeys()]);
+    const keys = global.apiKeys;
+    setAgentEnvKeys({
+      anthropic: (keys?.ANTHROPIC_API_KEY?.length ?? 0) > 0,
+      cursor: (keys?.CURSOR_API_KEY?.length ?? 0) > 0,
+      openai: (keys?.OPENAI_API_KEY?.length ?? 0) > 0,
+      google: (keys?.GOOGLE_API_KEY?.length ?? 0) > 0,
+      claudeCli: env.claudeCli,
+      cursorCli: env.cursorCli,
+      ollamaCli: env.ollamaCli,
+    });
+  }, []);
+
   const notifySaveState = useCallback(
     (status: SaveStatus) => {
       onSaveStateChange?.(status);
@@ -281,21 +295,8 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
 
   useEffect(() => {
     if (panelTab !== "agents") return;
-    Promise.all([api.globalSettings.get(), api.env.getKeys()])
-      .then(([global, env]) => {
-        const keys = global.apiKeys;
-        setAgentEnvKeys({
-          anthropic: (keys?.ANTHROPIC_API_KEY?.length ?? 0) > 0,
-          cursor: (keys?.CURSOR_API_KEY?.length ?? 0) > 0,
-          openai: (keys?.OPENAI_API_KEY?.length ?? 0) > 0,
-          google: (keys?.GOOGLE_API_KEY?.length ?? 0) > 0,
-          claudeCli: env.claudeCli,
-          cursorCli: env.cursorCli,
-          ollamaCli: env.ollamaCli,
-        });
-      })
-      .catch(() => setAgentEnvKeys(null));
-  }, [panelTab]);
+    refreshAgentEnvKeys().catch(() => setAgentEnvKeys(null));
+  }, [panelTab, refreshAgentEnvKeys]);
 
   useEffect(() => {
     setDatabaseUrlLoading(true);
@@ -910,6 +911,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
           scheduleSaveOnBlur={scheduleAgentSaveOnBlur}
           envKeys={agentEnvKeys}
           onOpenGeneralTab={() => setPanelTab("general")}
+          onRefreshEnvKeys={refreshAgentEnvKeys}
           modelRefreshTrigger={modelRefreshTrigger}
         />
       )}

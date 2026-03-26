@@ -12,6 +12,9 @@
  */
 import { vi } from "vitest";
 import events from "events";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 // Integration tests create many concurrent supertest HTTP connections,
 // each adding listeners (unpipe, error, close, finish) to internal Sockets.
@@ -24,6 +27,27 @@ process.env.GIT_AUTHOR_EMAIL = process.env.GIT_AUTHOR_EMAIL || "test@opensprint.
 process.env.GIT_COMMITTER_NAME = process.env.GIT_COMMITTER_NAME || process.env.GIT_AUTHOR_NAME;
 process.env.GIT_COMMITTER_EMAIL = process.env.GIT_COMMITTER_EMAIL || process.env.GIT_AUTHOR_EMAIL;
 process.env.OPENSPRINT_RESULT_POLL_MS = process.env.OPENSPRINT_RESULT_POLL_MS || "100";
+
+/**
+ * Protect local developer state from accidental test writes.
+ * Many services default to ~/.opensprint when no test override is provided.
+ * We pin HOME/USERPROFILE to a per-worker temp directory so tests never touch
+ * real settings or project index files on the host machine.
+ */
+const setupGlobal = globalThis as typeof globalThis & {
+  __opensprintTestHomeDir?: string;
+};
+if (!setupGlobal.__opensprintTestHomeDir) {
+  const testHomeDir = path.join(
+    os.tmpdir(),
+    "opensprint-vitest-home",
+    `${process.pid}-${Date.now().toString(36)}`
+  );
+  fs.mkdirSync(testHomeDir, { recursive: true });
+  setupGlobal.__opensprintTestHomeDir = testHomeDir;
+}
+process.env.HOME = setupGlobal.__opensprintTestHomeDir;
+process.env.USERPROFILE = setupGlobal.__opensprintTestHomeDir;
 
 vi.mock("@google/genai", () => ({
   GoogleGenAI: vi.fn().mockImplementation(() => ({

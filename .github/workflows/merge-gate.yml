@@ -145,4 +145,5 @@ jobs:
       - name: Run perf check (start backend + frontend, then perf:ci)
         env:
           DATABASE_URL: postgres://opensprint:opensprint@localhost:5432/opensprint_test
+          NODE_ENV: test
         run: bash scripts/ci/run-perf-stack.sh

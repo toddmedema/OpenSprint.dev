@@ -5,12 +5,17 @@ import path from "path";
 import os from "os";
 import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
-import { setGlobalSettings } from "../services/global-settings.service.js";
+import {
+  setGlobalSettings,
+  setGlobalSettingsPathForTesting,
+} from "../services/global-settings.service.js";
 import { API_PREFIX, DEFAULT_HIL_CONFIG, OPENSPRINT_DIR } from "@opensprint/shared";
 import { setBackendRuntimeInfoForTesting } from "../utils/runtime-info.js";
 import { cleanupTestProject } from "./test-project-cleanup.js";
 import { notificationService } from "../services/notification.service.js";
 import { setSelfImprovementRunInProgressForTest } from "../services/self-improvement-runner.service.js";
+import { setProjectIndexPathForTesting } from "../services/project-index.js";
+import { setSettingsStorePathForTesting } from "../services/settings-store.service.js";
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
@@ -66,14 +71,14 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
   let projectService: ProjectService;
   let tempDir: string;
   let projectId: string;
-  let originalHome: string | undefined;
 
   beforeEach(async () => {
     app = createApp();
     projectService = new ProjectService();
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-projects-route-test-"));
-    originalHome = process.env.HOME;
-    process.env.HOME = tempDir;
+    setGlobalSettingsPathForTesting(path.join(tempDir, ".opensprint", "global-settings.json"));
+    setProjectIndexPathForTesting(path.join(tempDir, ".opensprint", "projects.json"));
+    setSettingsStorePathForTesting(path.join(tempDir, ".opensprint", "settings.json"));
 
     await setGlobalSettings({
       apiKeys: {
@@ -97,8 +102,11 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
 
   afterEach(async () => {
     await cleanupTestProject({ projectService, projectId });
+    projectService.clearListCacheForTesting();
+    setGlobalSettingsPathForTesting(null);
+    setProjectIndexPathForTesting(null);
+    setSettingsStorePathForTesting(null);
     setBackendRuntimeInfoForTesting(null);
-    process.env.HOME = originalHome;
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
@@ -369,9 +377,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
       const listBefore = await request(app).get(`${API_PREFIX}/projects`);
       expect(listBefore.body.data).toHaveLength(1);
 
-      const archiveRes = await request(app)
-        .post(`${API_PREFIX}/projects/${projectId}/archive`)
-        .timeout({ response: 60_000, deadline: 90_000 });
+      const archiveRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/archive`);
       expect(archiveRes.status).toBe(204);
 
       const listAfter = await request(app).get(`${API_PREFIX}/projects`);
@@ -379,8 +385,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
 
       const stat = await fs.stat(opensprintPath);
       expect(stat.isDirectory()).toBe(true);
-    },
-    { retry: 2 }
+    }
   );
 
   it("DELETE /projects/:id removes project from list and deletes .opensprint", async () => {
@@ -402,14 +407,14 @@ describe("Projects REST API — create and settings", () => {
   let projectService: ProjectService;
   let tempDir: string;
   let projectId: string;
-  let originalHome: string | undefined;
 
   beforeEach(async () => {
     app = createApp();
     projectService = new ProjectService();
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-projects-create-test-"));
-    originalHome = process.env.HOME;
-    process.env.HOME = tempDir;
+    setGlobalSettingsPathForTesting(path.join(tempDir, ".opensprint", "global-settings.json"));
+    setProjectIndexPathForTesting(path.join(tempDir, ".opensprint", "projects.json"));
+    setSettingsStorePathForTesting(path.join(tempDir, ".opensprint", "settings.json"));
 
     await setGlobalSettings({
       apiKeys: {
@@ -433,7 +438,10 @@ describe("Projects REST API — create and settings", () => {
 
   afterEach(async () => {
     setBackendRuntimeInfoForTesting(null);
-    process.env.HOME = originalHome;
+    projectService.clearListCacheForTesting();
+    setGlobalSettingsPathForTesting(null);
+    setProjectIndexPathForTesting(null);
+    setSettingsStorePathForTesting(null);
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 

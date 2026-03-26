@@ -239,6 +239,7 @@ export function PlanPhase({
   const navigate = useNavigate();
   const selectedPlanIdFromStore = useAppSelector((s) => s.plan.selectedPlanId);
   const selectedPlanId = propSelectedPlanId ?? selectedPlanIdFromStore ?? null;
+  const [selectedDraftPlanId, setSelectedDraftPlanId] = useState<string | null>(null);
 
   useEffect(() => {
     dispatch(clearPhaseUnread({ projectId, phase: "plan" }));
@@ -246,6 +247,9 @@ export function PlanPhase({
 
   useEffect(() => {
     if (propSelectedPlanId === undefined || selectedPlanIdFromStore === propSelectedPlanId) return;
+    if (propSelectedPlanId) {
+      setSelectedDraftPlanId(null);
+    }
     dispatch(setSelectedPlanId(propSelectedPlanId ?? null));
   }, [dispatch, propSelectedPlanId, selectedPlanIdFromStore]);
 
@@ -261,7 +265,11 @@ export function PlanPhase({
   /* ── Redux state (needed for hook args) ── */
   const planChatQuery = usePlanChat(
     projectId,
-    selectedPlanId ? `plan:${selectedPlanId}` : undefined
+    selectedPlanId
+      ? `plan:${selectedPlanId}`
+      : selectedDraftPlanId
+        ? `plan-draft:${selectedDraftPlanId}`
+        : undefined
   );
   const singlePlanQuery = useSinglePlan(projectId, selectedPlanId ?? undefined);
   const selectedPlanIdRef = useRef<string | null>(selectedPlanId ?? null);
@@ -431,8 +439,27 @@ export function PlanPhase({
     }
     return draftPlanNotifications[0] ?? null;
   }, [activeQuestionId, draftPlanNotifications]);
+  const fallbackDraftPlanId =
+    !selectedPlanId && draftPlanNotification?.sourceId?.startsWith("draft:")
+      ? draftPlanNotification.sourceId.replace(/^draft:/, "")
+      : null;
+  const activeDraftPlanId = selectedDraftPlanId ?? fallbackDraftPlanId;
+  const selectedDraftNotification =
+    (activeDraftPlanId &&
+      openQuestionNotifications.find(
+        (n) => n.source === "plan" && n.sourceId === `draft:${activeDraftPlanId}`
+      )) ??
+    null;
+  const sidebarOpenQuestionNotification =
+    draftPlanNotification ?? (selectedPlanNotification ?? selectedDraftNotification);
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
   const prevChatMessageCountRef = useRef(0);
+
+  useEffect(() => {
+    if (!selectedDraftPlanId && fallbackDraftPlanId) {
+      setSelectedDraftPlanId(fallbackDraftPlanId);
+    }
+  }, [fallbackDraftPlanId, selectedDraftPlanId]);
 
   const planQueueRef = useRef<string[]>([]);
   const processingQueueRef = useRef(false);
@@ -530,10 +557,15 @@ export function PlanPhase({
         generateQueueRef.current = generateQueueRef.current.slice(1);
         const result = await dispatch(generatePlan({ projectId, description, tempId }));
         if (generatePlan.fulfilled.match(result)) {
-          resolve?.(true);
           if (result.payload.status === "created") {
+            resolve?.(true);
             void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
           } else {
+            // Clarification flow continues in the sidebar (plan-draft context), not the modal.
+            resolve?.(true);
+            setSelectedDraftPlanId(result.payload.draftId);
+            dispatch(setSelectedPlanId(null));
+            onSelectPlanId?.(null);
             dispatch(addOpenQuestionNotification(result.payload.notification));
             dispatch(
               addNotification({
@@ -558,7 +590,7 @@ export function PlanPhase({
     } finally {
       processingGenerateRef.current = false;
     }
-  }, [dispatch, projectId, queryClient, refetchNotifications]);
+  }, [dispatch, onSelectPlanId, projectId, queryClient, refetchNotifications]);
 
   const planCountByStatus = useMemo(() => {
     const counts = { all: plans.length, planning: 0, building: 0, in_review: 0, complete: 0 };
@@ -644,10 +676,21 @@ export function PlanPhase({
   }, [viewMode]);
 
   // Use selectedPlanId when available so chat can display even before plans load (e.g. deep link)
-  const planContext = selectedPlanId ? `plan:${selectedPlanId}` : null;
+  const planContext =
+    selectedPlanId && !sidebarOpenQuestionNotification?.sourceId?.startsWith("draft:")
+      ? `plan:${selectedPlanId}`
+      : null;
+  const notificationDraftPlanId =
+    !selectedPlanId &&
+    sidebarOpenQuestionNotification?.sourceId?.startsWith("draft:")
+      ? sidebarOpenQuestionNotification.sourceId.replace(/^draft:/, "")
+      : null;
+  const effectiveDraftPlanId = activeDraftPlanId ?? notificationDraftPlanId;
+  const draftPlanContext = effectiveDraftPlanId ? `plan-draft:${effectiveDraftPlanId}` : null;
+  const activePlanContext = planContext ?? draftPlanContext;
   const planChatDraftKey = useMemo(
-    () => (planContext ? chatDraftStorageKey(projectId, planContext) : undefined),
-    [projectId, planContext]
+    () => (activePlanContext ? chatDraftStorageKey(projectId, activePlanContext) : undefined),
+    [projectId, activePlanContext]
   );
   const { beginSend, onSuccess, onFailure } = useOptimisticTextDraft(
     planChatDraftKey,
@@ -655,30 +698,30 @@ export function PlanPhase({
     setChatInput
   );
   const currentChatMessages = useMemo(
-    () => (planContext ? (chatMessages[planContext] ?? []) : []),
-    [planContext, chatMessages]
+    () => (activePlanContext ? (chatMessages[activePlanContext] ?? []) : []),
+    [activePlanContext, chatMessages]
   );
 
   // Plan chat and single plan are loaded via usePlanChat / useSinglePlan and synced to Redux above.
 
   // When sidebar opens: scroll to top of plan content, no animation
   useEffect(() => {
-    if (planContext) {
+    if (activePlanContext) {
       prevChatMessageCountRef.current = 0;
       const el = sidebarScrollRef.current;
       if (el) {
         el.scrollTop = 0;
       }
     }
-  }, [planContext]);
+  }, [activePlanContext]);
 
   useLayoutEffect(() => {
-    if (!planContext) {
+    if (!activePlanContext) {
       setChatInput("");
       return;
     }
-    setChatInput(loadTextDraft(chatDraftStorageKey(projectId, planContext)));
-  }, [projectId, planContext]);
+    setChatInput(loadTextDraft(chatDraftStorageKey(projectId, activePlanContext)));
+  }, [projectId, activePlanContext]);
 
   // Auto-scroll chat to bottom only when new messages arrive (not on initial open)
   useEffect(() => {
@@ -1039,6 +1082,7 @@ export function PlanPhase({
 
   const handleSelectPlan = useCallback(
     (plan: Plan) => {
+      setSelectedDraftPlanId(null);
       dispatch(setSelectedPlanId(plan.metadata.planId));
       onSelectPlanId?.(plan.metadata.planId);
     },
@@ -1046,6 +1090,7 @@ export function PlanPhase({
   );
 
   const handleClosePlan = useCallback(() => {
+    setSelectedDraftPlanId(null);
     dispatch(setSelectedPlanId(null));
     onSelectPlanId?.(null);
   }, [dispatch, onSelectPlanId]);
@@ -1064,19 +1109,29 @@ export function PlanPhase({
   );
 
   const handleSendChat = async () => {
-    if (!chatInput.trim() || !planContext || chatSending) return;
+    if (!chatInput.trim() || !activePlanContext || chatSending) return;
 
     const text = chatInput.trim();
     setChatSending(true);
     beginSend(text);
 
     const result = await dispatch(
-      sendPlanMessage({ projectId, message: text, context: planContext })
+      sendPlanMessage({ projectId, message: text, context: activePlanContext })
     );
 
     if (sendPlanMessage.fulfilled.match(result)) {
       onSuccess();
       const response = result.payload?.response;
+      if (response?.planGenerated?.planId) {
+        const generatedPlanId = response.planGenerated.planId;
+        setSelectedDraftPlanId(null);
+        dispatch(setSelectedPlanId(generatedPlanId));
+        onSelectPlanId?.(generatedPlanId);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.plans.detail(projectId, generatedPlanId),
+        });
+      }
       if (response?.planUpdate && selectedPlanId) {
         await dispatch(
           updatePlan({ projectId, planId: selectedPlanId, content: response.planUpdate })
@@ -1219,42 +1274,6 @@ export function PlanPhase({
           ) : (
             /* Card Mode: plan list */
             <>
-              {!selectedPlanNotification && draftPlanNotification && (
-                <div className="mb-4">
-                  <OpenQuestionsBlock
-                    notification={draftPlanNotification}
-                    projectId={projectId}
-                    source="plan"
-                    sourceId={draftPlanNotification.sourceId}
-                    onResolved={refetchNotifications}
-                    onAnswerSent={async (message) => {
-                      const draftId = draftPlanNotification.sourceId.replace(/^draft:/, "");
-                      const result = await dispatch(
-                        sendPlanMessage({
-                          projectId,
-                          message,
-                          context: `plan-draft:${draftId}`,
-                        })
-                      );
-                      if (!sendPlanMessage.fulfilled.match(result)) {
-                        throw new Error(result.error?.message ?? "Failed to send");
-                      }
-                      if (result.payload.response.planGenerated?.planId) {
-                        const planId = result.payload.response.planGenerated.planId;
-                        dispatch(setSelectedPlanId(planId));
-                        onSelectPlanId?.(planId);
-                        void queryClient.invalidateQueries({
-                          queryKey: queryKeys.plans.list(projectId),
-                        });
-                        void queryClient.invalidateQueries({
-                          queryKey: queryKeys.plans.detail(projectId, planId),
-                        });
-                      }
-                    }}
-                  />
-                </div>
-              )}
-
               {showPlansEmptyState ? (
                 <PhaseEmptyState
                   title={EMPTY_STATE_COPY.plan.title}
@@ -1366,8 +1385,8 @@ export function PlanPhase({
         </div>
       )}
 
-      {/* Sidebar: Plan Detail + Chat — show when planContext set so chat persists across reloads (e.g. deep link) */}
-      {planContext && (
+      {/* Sidebar: Plan Detail + Chat — show for plan or draft-plan chat contexts. */}
+      {activePlanContext && (
         <ResizableSidebar
           storageKey="plan"
           defaultWidth={420}
@@ -1602,19 +1621,19 @@ export function PlanPhase({
                     })()}
 
                     {/* Open questions block — when planner needs clarification */}
-                    {selectedPlanNotification && (
+                    {sidebarOpenQuestionNotification && (
                       <OpenQuestionsBlock
-                        notification={selectedPlanNotification}
+                        notification={sidebarOpenQuestionNotification}
                         projectId={projectId}
                         source="plan"
-                        sourceId={selectedPlan.metadata.planId}
+                        sourceId={sidebarOpenQuestionNotification.sourceId}
                         onResolved={refetchNotifications}
                         onAnswerSent={async (message) => {
                           const result = await dispatch(
                             sendPlanMessage({
                               projectId,
                               message,
-                              context: planContext!,
+                              context: activePlanContext,
                             })
                           );
                           if (sendPlanMessage.fulfilled.match(result)) {
@@ -1625,6 +1644,12 @@ export function PlanPhase({
                               void queryClient.invalidateQueries({
                                 queryKey: queryKeys.plans.detail(projectId, selectedPlanId!),
                               });
+                            }
+                            if (result.payload.response.planGenerated?.planId) {
+                              const generatedPlanId = result.payload.response.planGenerated.planId;
+                              setSelectedDraftPlanId(null);
+                              dispatch(setSelectedPlanId(generatedPlanId));
+                              onSelectPlanId?.(generatedPlanId);
                             }
                             void planChatQuery.refetch();
                           } else {
@@ -1648,8 +1673,8 @@ export function PlanPhase({
                       <div
                         className="space-y-3"
                         data-testid="plan-chat-messages"
-                        {...(selectedPlanNotification && {
-                          "data-question-id": selectedPlanNotification.id,
+                        {...(sidebarOpenQuestionNotification && {
+                          "data-question-id": sidebarOpenQuestionNotification.id,
                         })}
                       >
                         {currentChatMessages.length === 0 && (
@@ -1695,12 +1720,50 @@ export function PlanPhase({
             <>
               <div className="shrink-0 bg-theme-bg p-4 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-theme-text truncate">
-                  {selectedPlanId ? formatPlanIdAsTitle(selectedPlanId) : "Plan"}
+                  {selectedPlanId
+                    ? formatPlanIdAsTitle(selectedPlanId)
+                    : effectiveDraftPlanId
+                      ? "Draft Plan"
+                      : "Plan"}
                 </h3>
                 <CloseButton onClick={handleClosePlan} ariaLabel="Close plan panel" />
               </div>
               <div ref={sidebarScrollRef} className="flex-1 overflow-y-auto min-h-0 flex flex-col">
                 <div className="p-4 text-sm text-theme-muted">Loading plan...</div>
+                {sidebarOpenQuestionNotification && (
+                  <OpenQuestionsBlock
+                    notification={sidebarOpenQuestionNotification}
+                    projectId={projectId}
+                    source="plan"
+                    sourceId={sidebarOpenQuestionNotification.sourceId}
+                    onResolved={refetchNotifications}
+                    onAnswerSent={async (message) => {
+                      const result = await dispatch(
+                        sendPlanMessage({
+                          projectId,
+                          message,
+                          context: activePlanContext,
+                        })
+                      );
+                      if (!sendPlanMessage.fulfilled.match(result)) {
+                        throw new Error(result.error?.message ?? "Failed to send");
+                      }
+                      if (result.payload.response.planGenerated?.planId) {
+                        const planId = result.payload.response.planGenerated.planId;
+                        setSelectedDraftPlanId(null);
+                        dispatch(setSelectedPlanId(planId));
+                        onSelectPlanId?.(planId);
+                        void queryClient.invalidateQueries({
+                          queryKey: queryKeys.plans.list(projectId),
+                        });
+                        void queryClient.invalidateQueries({
+                          queryKey: queryKeys.plans.detail(projectId, planId),
+                        });
+                      }
+                      void planChatQuery.refetch();
+                    }}
+                  />
+                )}
                 <CollapsibleSection
                   title="Refine with AI"
                   expanded={refineSectionExpanded}
@@ -1714,8 +1777,8 @@ export function PlanPhase({
                   <div
                     className="space-y-3"
                     data-testid="plan-chat-messages"
-                    {...(selectedPlanNotification && {
-                      "data-question-id": selectedPlanNotification.id,
+                    {...(sidebarOpenQuestionNotification && {
+                      "data-question-id": sidebarOpenQuestionNotification.id,
                     })}
                   >
                     {currentChatMessages.length === 0 && (

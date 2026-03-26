@@ -28,4 +28,13 @@ describe("desktop release workflow", () => {
     expect(workflow).toContain("spctl -a -vvv -t exec");
     expect(workflow).toContain("xcrun stapler validate");
   });
+
+  it("runs perf against the isolated test database with explicit test NODE_ENV", () => {
+    const workflow = readFileSync(workflowPath, "utf-8");
+    expect(workflow).toContain("POSTGRES_DB: opensprint_test");
+    expect(workflow).toContain(
+      "DATABASE_URL: postgres://opensprint:opensprint@localhost:5432/opensprint_test"
+    );
+    expect(workflow).toContain("NODE_ENV: test");
+  });
 });

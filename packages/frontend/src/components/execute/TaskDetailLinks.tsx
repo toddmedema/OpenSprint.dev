@@ -2,7 +2,7 @@ import React from "react";
 import type { Plan, Task } from "@opensprint/shared";
 import { TaskStatusBadge, COLUMN_LABELS } from "../kanban";
 import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
-import { AddLinkFlow } from "./AddLinkFlow";
+import AddLinkFlow from "./AddLinkFlow";
 
 const TYPE_ORDER: Record<string, number> = {
   blocks: 0,

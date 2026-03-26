@@ -7,7 +7,11 @@ import os from "os";
 import { globalSettingsRouter } from "../routes/global-settings.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { errorHandler } from "../middleware/error-handler.js";
-import { setGlobalSettings, getGlobalSettings } from "../services/global-settings.service.js";
+import {
+  setGlobalSettings,
+  getGlobalSettings,
+  setGlobalSettingsPathForTesting,
+} from "../services/global-settings.service.js";
 
 vi.mock("../db/app-db.js", () => ({
   initAppDb: vi.fn().mockResolvedValue({
@@ -57,31 +61,9 @@ function createGlobalSettingsApp() {
   return app;
 }
 
-async function requestWithRetry(
-  app: ReturnType<typeof createGlobalSettingsApp>,
-  method: "get" | "put" | "post",
-  route: string,
-  body?: unknown,
-  retries = 2
-) {
-  let attempt = 0;
-  while (true) {
-    try {
-      const req = request(app)[method](route);
-      if (body !== undefined) req.send(body);
-      return await req;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (!msg.includes("Parse Error") || attempt >= retries) throw err;
-      attempt += 1;
-    }
-  }
-}
-
 describe("Global Settings API", () => {
   let app: ReturnType<typeof createGlobalSettingsApp>;
   let tmpDir: string;
-  let originalHome: string | undefined;
 
   beforeEach(() => {
     app = createGlobalSettingsApp();
@@ -90,14 +72,13 @@ describe("Global Settings API", () => {
       `global-settings-route-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
     );
     fs.mkdirSync(tmpDir, { recursive: true });
-    originalHome = process.env.HOME;
-    process.env.HOME = tmpDir;
+    setGlobalSettingsPathForTesting(path.join(tmpDir, ".opensprint", "global-settings.json"));
     mockNudge.mockClear();
     mockGetProjects.mockResolvedValue([]);
   });
 
   afterEach(() => {
-    process.env.HOME = originalHome;
+    setGlobalSettingsPathForTesting(null);
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch {
@@ -382,14 +363,14 @@ describe("Global Settings API", () => {
         { id: "k1", value: "sk-ant-1" },
         { id: "k2", value: "sk-ant-2" },
       ];
-      const putRes = await requestWithRetry(app, "put", `${API_PREFIX}/global-settings`, {
+      const putRes = await request(app).put(`${API_PREFIX}/global-settings`).send({
         apiKeys: { ANTHROPIC_API_KEY: reordered },
       });
       expect(putRes.status).toBe(200);
       const putIds = putRes.body.data.apiKeys.ANTHROPIC_API_KEY.map((e: { id: string }) => e.id);
       expect(putIds).toEqual(["k3", "k1", "k2"]);
 
-      const getRes = await requestWithRetry(app, "get", `${API_PREFIX}/global-settings`);
+      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.status).toBe(200);
       const getIds = getRes.body.data.apiKeys.ANTHROPIC_API_KEY.map((e: { id: string }) => e.id);
       expect(getIds).toEqual(["k3", "k1", "k2"]);

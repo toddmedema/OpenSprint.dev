@@ -12,10 +12,22 @@ import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("project-index");
 
+let projectIndexPathForTesting: string | null = null;
+
 function getProjectIndexPaths(): { dir: string; file: string } {
+  if (projectIndexPathForTesting) {
+    return {
+      dir: path.dirname(projectIndexPathForTesting),
+      file: projectIndexPathForTesting,
+    };
+  }
   const home = process.env.HOME ?? process.env.USERPROFILE ?? os.homedir();
   const dir = path.join(home, ".opensprint");
   return { dir, file: path.join(dir, "projects.json") };
+}
+
+export function setProjectIndexPathForTesting(testPath: string | null): void {
+  projectIndexPathForTesting = testPath;
 }
 
 /** Validate that a project entry has the minimum required fields. */

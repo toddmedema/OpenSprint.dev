@@ -93,6 +93,33 @@ describe("settings-store.service", () => {
     expect(loaded.testFramework).toBeNull();
   });
 
+  it("serializes concurrent writes across different projects", async () => {
+    await Promise.all([
+      setSettingsInStore("proj-a", makeSettings({ testFramework: "vitest" })),
+      setSettingsInStore("proj-b", makeSettings({ testFramework: "jest" })),
+    ]);
+
+    await Promise.all([
+      updateSettingsInStore("proj-a", makeSettings(), (current) => ({
+        ...current,
+        mergeStrategy: "per_epic",
+      })),
+      updateSettingsInStore("proj-b", makeSettings(), (current) => ({
+        ...current,
+        unknownScopeStrategy: "conservative",
+      })),
+    ]);
+
+    const [a, b] = await Promise.all([
+      getSettingsFromStore("proj-a", makeSettings()),
+      getSettingsFromStore("proj-b", makeSettings()),
+    ]);
+    expect(a.mergeStrategy).toBe("per_epic");
+    expect(a.testFramework).toBe("vitest");
+    expect(b.unknownScopeStrategy).toBe("conservative");
+    expect(b.testFramework).toBe("jest");
+  });
+
   it("deletes stored settings for a project", async () => {
     await setSettingsInStore("proj-1", makeSettings());
     await deleteSettingsFromStore("proj-1");
