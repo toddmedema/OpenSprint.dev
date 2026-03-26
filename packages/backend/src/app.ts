@@ -1,6 +1,6 @@
 import path from "path";
 import express from "express";
-import cors from "cors";
+import { localhostCors } from "./middleware/cors.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { apiErrorNotificationMiddleware } from "./middleware/api-error-notification.js";
 import { createProjectsRouter } from "./routes/projects.js";
@@ -44,7 +44,7 @@ export function createApp(services?: AppServices) {
     sessionManager,
   } = svc;
 
-  app.use(cors());
+  app.use(localhostCors);
   app.use(express.json({ limit: "10mb" }));
   app.use(requestIdMiddleware);
 
