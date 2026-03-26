@@ -53,7 +53,7 @@ function isFocusInModal(e: KeyboardEvent): boolean {
 /**
  * Registers global keyboard shortcuts (web and Electron):
  * - 1/2/3/4/5: switch to Sketch/Plan/Execute/Evaluate/Deliver (when on a project)
- * - Ctrl+Tab / Ctrl+Shift+Tab: next/previous phase tab with wrap (when on a project; skipped in editable fields)
+ * - Ctrl+Tab / Ctrl+Shift+Tab: next/previous phase tab with wrap (when on a project; works even in editable fields)
  * - ~ (Backquote): go to home
  * - Escape: close modal if one is open; otherwise open settings (project if in a project, else global)
  * - ?: open help (project help if in a project, else global; same navigation as Settings)
@@ -84,12 +84,9 @@ export function GlobalKeyboardShortcuts() {
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (isEditableElement(e.target)) return;
-
       const key = e.key;
-      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
 
-      // Ctrl+Tab / Ctrl+Shift+Tab: cycle phase tabs (wrap); Control only so we don't steal Cmd+Tab (macOS app switcher)
+      // Ctrl+Tab / Ctrl+Shift+Tab: cycle phase tabs (wrap) — works even when focus is in an input/textarea
       if (
         key === "Tab" &&
         e.ctrlKey &&
@@ -105,6 +102,10 @@ export function GlobalKeyboardShortcuts() {
         navigate(getProjectPhasePath(projectId, VALID_PHASES[nextIdx]!));
         return;
       }
+
+      if (isEditableElement(e.target)) return;
+
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
 
       // 1–5: phase tabs (only when we're under a project; no modifiers so we don't steal Cmd+1 etc.)
       if (!hasModifier) {

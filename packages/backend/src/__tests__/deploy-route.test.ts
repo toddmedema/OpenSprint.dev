@@ -15,6 +15,12 @@ import { getExpoConfigStatus } from "../utils/expo-config.js";
 import { checkExpoAuth } from "../utils/expo-auth-check.js";
 import { isEasProjectLinked } from "../utils/eas-project-link.js";
 import { cleanupTestProject } from "./test-project-cleanup.js";
+import { setProjectIndexPathForTesting } from "../services/project-index.js";
+import { setSettingsStorePathForTesting } from "../services/settings-store.service.js";
+import {
+  setGlobalSettingsPathForTesting,
+  setGlobalSettings,
+} from "../services/global-settings.service.js";
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
@@ -157,6 +163,18 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     originalHome = process.env.HOME;
     process.env.HOME = tempDir;
 
+    // Pin store paths to temp dir so parallel test workers don't race on process.env.HOME
+    setGlobalSettingsPathForTesting(path.join(tempDir, ".opensprint", "global-settings.json"));
+    setProjectIndexPathForTesting(path.join(tempDir, ".opensprint", "projects.json"));
+    setSettingsStorePathForTesting(path.join(tempDir, ".opensprint", "settings.json"));
+
+    await setGlobalSettings({
+      apiKeys: {
+        ANTHROPIC_API_KEY: [{ id: "test-ant", value: "sk-ant-test" }],
+        CURSOR_API_KEY: [{ id: "test-cur", value: "cursor-test" }],
+      },
+    });
+
     const services = createAppServices();
     app = createApp(services);
     projectService = services.projectService;
@@ -191,6 +209,9 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
   afterEach(async () => {
     await cleanupTestProject({ projectService, projectId });
     refreshMaxSlotsSpy?.mockRestore();
+    setGlobalSettingsPathForTesting(null);
+    setProjectIndexPathForTesting(null);
+    setSettingsStorePathForTesting(null);
     process.env.HOME = originalHome;
     try {
       await fs.rm(tempDir, { recursive: true, force: true });
@@ -444,6 +465,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       expect(res.body.data.deployment.easProjectId).toBe("abc123-eas-project-id");
 
       const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      expect(getRes.status).toBe(200);
       expect(getRes.body.data.deployment.easProjectId).toBe("abc123-eas-project-id");
     });
   });

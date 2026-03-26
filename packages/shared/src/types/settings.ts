@@ -375,6 +375,38 @@ export const REVIEW_AGENT_OPTIONS: {
   label: string;
 }[] = [{ value: GENERAL_REVIEW_OPTION, label: "General" }, ...REVIEW_ANGLE_OPTIONS];
 
+/**
+ * Resolve the effective review mode for self-improvement.
+ * Returns selfImprovementReviewMode when explicitly set; otherwise falls back to reviewMode.
+ */
+export function getSelfImprovementReviewMode(settings: ProjectSettings): ReviewMode {
+  return settings.selfImprovementReviewMode ?? settings.reviewMode ?? DEFAULT_REVIEW_MODE;
+}
+
+/**
+ * Resolve the effective review angles for self-improvement.
+ * Returns selfImprovementReviewAngles when explicitly set; otherwise falls back to reviewAngles.
+ */
+export function getSelfImprovementReviewAngles(
+  settings: ProjectSettings
+): ReviewAngle[] | undefined {
+  if (settings.selfImprovementReviewAngles !== undefined) {
+    return settings.selfImprovementReviewAngles;
+  }
+  return settings.reviewAngles;
+}
+
+/**
+ * Resolve the effective includeGeneralReview for self-improvement.
+ * Returns selfImprovementIncludeGeneralReview when explicitly set; otherwise falls back to includeGeneralReview.
+ */
+export function getSelfImprovementIncludeGeneralReview(settings: ProjectSettings): boolean {
+  if (settings.selfImprovementIncludeGeneralReview !== undefined) {
+    return settings.selfImprovementIncludeGeneralReview;
+  }
+  return settings.includeGeneralReview ?? false;
+}
+
 /** Strategy when file scope is unknown for parallel scheduling */
 export type UnknownScopeStrategy = "conservative" | "optimistic";
 
@@ -765,6 +797,12 @@ export interface ProjectSettings {
   autoExecutePlans?: boolean;
   /** When true, self-improvement runs execute the experiment/promote pipeline; when false, runs are audit-only. Default: false. */
   runAgentEnhancementExperiments?: boolean;
+  /** Review mode for self-improvement reviewer. When unset, falls back to reviewMode. */
+  selfImprovementReviewMode?: ReviewMode;
+  /** Review angles for self-improvement reviewer. When unset, falls back to reviewAngles. */
+  selfImprovementReviewAngles?: ReviewAngle[];
+  /** When true with selfImprovementReviewAngles non-empty, run one general review plus one per angle for self-improvement. When unset, falls back to includeGeneralReview. */
+  selfImprovementIncludeGeneralReview?: boolean;
   /** Candidate behavior version awaiting human decision (approve/reject). */
   selfImprovementPendingCandidateId?: string;
   /** Candidate diff entries (general/role/template changes) for pending candidate. */
@@ -1098,6 +1136,15 @@ export function parseSettings(raw: unknown): ProjectSettings {
         ? (r.selfImprovementLastCommitSha as string).trim()
         : undefined,
     autoExecutePlans: r?.autoExecutePlans === true,
+    selfImprovementReviewMode:
+      r?.selfImprovementReviewMode === "always" ||
+      r?.selfImprovementReviewMode === "never" ||
+      r?.selfImprovementReviewMode === "on-failure-only"
+        ? (r.selfImprovementReviewMode as ReviewMode)
+        : undefined,
+    selfImprovementReviewAngles: parseReviewAngles(r?.selfImprovementReviewAngles),
+    selfImprovementIncludeGeneralReview:
+      r?.selfImprovementIncludeGeneralReview === true ? true : undefined,
   };
 
   const runAgentEnhancementExperiments = r?.runAgentEnhancementExperiments === true;

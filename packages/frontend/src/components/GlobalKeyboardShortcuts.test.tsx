@@ -143,7 +143,7 @@ describe("GlobalKeyboardShortcuts", () => {
     });
   });
 
-  it("Ctrl+Tab does not navigate when focus is in an input", async () => {
+  it("Ctrl+Tab still navigates when focus is in an input", async () => {
     render(
       <MemoryRouter initialEntries={["/projects/p1/sketch"]}>
         <GlobalKeyboardShortcuts />
@@ -168,8 +168,9 @@ describe("GlobalKeyboardShortcuts", () => {
         })
       );
     });
-    await waitFor(() => {}, { timeout: 50 });
-    expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/sketch");
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/projects/p1/plan");
+    });
   });
 
   it("Ctrl+Tab does nothing when not in a project", async () => {

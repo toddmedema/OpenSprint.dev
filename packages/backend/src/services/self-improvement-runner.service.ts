@@ -7,7 +7,7 @@
 
 import type { ReviewAngle } from "@opensprint/shared";
 import { REVIEW_ANGLE_OPTIONS, clampTaskComplexity } from "@opensprint/shared";
-import { getAgentForPlanningRole } from "@opensprint/shared";
+import { getAgentForPlanningRole, getSelfImprovementReviewAngles } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
 import { PlanService } from "./plan.service.js";
@@ -723,7 +723,8 @@ export class SelfImprovementRunnerService {
     const repoPath = project.repoPath;
     const settings = await this.projectService.getSettings(projectId);
 
-    const angles = [...new Set((settings.reviewAngles ?? []).filter(Boolean))] as ReviewAngle[];
+    const resolvedAngles = getSelfImprovementReviewAngles(settings);
+    const angles = [...new Set((resolvedAngles ?? []).filter(Boolean))] as ReviewAngle[];
     const lenses = angles.length > 0 ? angles : (["general"] as const);
 
     const { fileTree, keyFilesContent } = await this.planService.getCodebaseContext(projectId);

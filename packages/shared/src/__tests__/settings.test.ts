@@ -32,6 +32,10 @@ import {
   projectStoredDefinesComplexAgent,
   applyGlobalAgentDefaultsToRawRecord,
   omitInheritedAgentTiersForStore,
+  getSelfImprovementReviewMode,
+  getSelfImprovementReviewAngles,
+  getSelfImprovementIncludeGeneralReview,
+  DEFAULT_REVIEW_MODE,
 } from "../types/settings.ts";
 import type {
   ProjectSettings,
@@ -39,6 +43,7 @@ import type {
   DeploymentConfig,
   ApiKeys,
   SelfImprovementFrequency,
+  ReviewAngle,
 } from "../types/settings.ts";
 
 const defaultAgent: AgentConfig = { type: "claude", model: "claude-sonnet-4", cliCommand: null };
@@ -2105,5 +2110,195 @@ describe("getProvidersRequiringApiKeys", () => {
       },
     ];
     expect(getProvidersRequiringApiKeys(agents)).toEqual([]);
+  });
+});
+
+describe("self-improvement reviewer agent settings", () => {
+  describe("parseSettings — selfImprovementReviewMode", () => {
+    it("should be undefined when missing", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+      });
+      expect(parsed.selfImprovementReviewMode).toBeUndefined();
+    });
+
+    it("should preserve valid selfImprovementReviewMode values", () => {
+      for (const mode of ["always", "never", "on-failure-only"] as const) {
+        const parsed = parseSettings({
+          simpleComplexityAgent: lowAgent,
+          complexComplexityAgent: highAgent,
+          selfImprovementReviewMode: mode,
+        });
+        expect(parsed.selfImprovementReviewMode).toBe(mode);
+      }
+    });
+
+    it("should ignore invalid selfImprovementReviewMode values", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        selfImprovementReviewMode: "invalid",
+      });
+      expect(parsed.selfImprovementReviewMode).toBeUndefined();
+    });
+  });
+
+  describe("parseSettings — selfImprovementReviewAngles", () => {
+    it("should be undefined when missing", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+      });
+      expect(parsed.selfImprovementReviewAngles).toBeUndefined();
+    });
+
+    it("should parse valid selfImprovementReviewAngles", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        selfImprovementReviewAngles: ["security", "performance"],
+      });
+      expect(parsed.selfImprovementReviewAngles).toEqual(["security", "performance"]);
+    });
+
+    it("should filter invalid selfImprovementReviewAngles", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        selfImprovementReviewAngles: ["security", "bogus", "test_coverage"],
+      });
+      expect(parsed.selfImprovementReviewAngles).toEqual(["security", "test_coverage"]);
+    });
+
+    it("should be undefined when selfImprovementReviewAngles is empty array (same as reviewAngles)", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        selfImprovementReviewAngles: [],
+      });
+      expect(parsed.selfImprovementReviewAngles).toBeUndefined();
+    });
+  });
+
+  describe("parseSettings — selfImprovementIncludeGeneralReview", () => {
+    it("should be undefined when missing", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+      });
+      expect(parsed.selfImprovementIncludeGeneralReview).toBeUndefined();
+    });
+
+    it("should preserve true", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        selfImprovementIncludeGeneralReview: true,
+      });
+      expect(parsed.selfImprovementIncludeGeneralReview).toBe(true);
+    });
+
+    it("should normalize false to undefined", () => {
+      const parsed = parseSettings({
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        selfImprovementIncludeGeneralReview: false,
+      });
+      expect(parsed.selfImprovementIncludeGeneralReview).toBeUndefined();
+    });
+  });
+
+  describe("parseSettings — round-trip", () => {
+    it("should round-trip self-improvement reviewer settings through parseSettings", () => {
+      const raw = {
+        simpleComplexityAgent: lowAgent,
+        complexComplexityAgent: highAgent,
+        selfImprovementReviewMode: "never" as const,
+        selfImprovementReviewAngles: ["security", "code_quality"] as ReviewAngle[],
+        selfImprovementIncludeGeneralReview: true,
+      };
+      const parsed = parseSettings(raw);
+      expect(parsed.selfImprovementReviewMode).toBe("never");
+      expect(parsed.selfImprovementReviewAngles).toEqual(["security", "code_quality"]);
+      expect(parsed.selfImprovementIncludeGeneralReview).toBe(true);
+
+      const roundTripped = parseSettings(parsed);
+      expect(roundTripped.selfImprovementReviewMode).toBe("never");
+      expect(roundTripped.selfImprovementReviewAngles).toEqual(["security", "code_quality"]);
+      expect(roundTripped.selfImprovementIncludeGeneralReview).toBe(true);
+    });
+  });
+
+  describe("getSelfImprovementReviewMode", () => {
+    it("returns selfImprovementReviewMode when set", () => {
+      const settings = makeSettings({ selfImprovementReviewMode: "never" });
+      expect(getSelfImprovementReviewMode(settings)).toBe("never");
+    });
+
+    it("falls back to reviewMode when selfImprovementReviewMode is unset", () => {
+      const settings = makeSettings({ reviewMode: "on-failure-only" });
+      expect(getSelfImprovementReviewMode(settings)).toBe("on-failure-only");
+    });
+
+    it("falls back to DEFAULT_REVIEW_MODE when both are unset", () => {
+      const settings = makeSettings({});
+      expect(getSelfImprovementReviewMode(settings)).toBe(DEFAULT_REVIEW_MODE);
+    });
+
+    it("prefers selfImprovementReviewMode over reviewMode", () => {
+      const settings = makeSettings({
+        reviewMode: "always",
+        selfImprovementReviewMode: "never",
+      });
+      expect(getSelfImprovementReviewMode(settings)).toBe("never");
+    });
+  });
+
+  describe("getSelfImprovementReviewAngles", () => {
+    it("returns selfImprovementReviewAngles when set", () => {
+      const settings = makeSettings({
+        reviewAngles: ["security"],
+        selfImprovementReviewAngles: ["performance", "test_coverage"],
+      });
+      expect(getSelfImprovementReviewAngles(settings)).toEqual(["performance", "test_coverage"]);
+    });
+
+    it("falls back to reviewAngles when selfImprovementReviewAngles is unset", () => {
+      const settings = makeSettings({ reviewAngles: ["security", "code_quality"] });
+      expect(getSelfImprovementReviewAngles(settings)).toEqual(["security", "code_quality"]);
+    });
+
+    it("returns undefined when both are unset", () => {
+      const settings = makeSettings({});
+      expect(getSelfImprovementReviewAngles(settings)).toBeUndefined();
+    });
+
+    it("falls back to reviewAngles when selfImprovementReviewAngles is undefined (parseSettings normalizes empty to undefined)", () => {
+      const settings = makeSettings({
+        reviewAngles: ["security"],
+      });
+      expect(getSelfImprovementReviewAngles(settings)).toEqual(["security"]);
+    });
+  });
+
+  describe("getSelfImprovementIncludeGeneralReview", () => {
+    it("returns selfImprovementIncludeGeneralReview when set", () => {
+      const settings = makeSettings({
+        includeGeneralReview: false,
+        selfImprovementIncludeGeneralReview: true,
+      });
+      expect(getSelfImprovementIncludeGeneralReview(settings)).toBe(true);
+    });
+
+    it("falls back to includeGeneralReview when selfImprovementIncludeGeneralReview is unset", () => {
+      const settings = makeSettings({ includeGeneralReview: true });
+      expect(getSelfImprovementIncludeGeneralReview(settings)).toBe(true);
+    });
+
+    it("returns false when both are unset", () => {
+      const settings = makeSettings({});
+      expect(getSelfImprovementIncludeGeneralReview(settings)).toBe(false);
+    });
   });
 });
