@@ -3132,7 +3132,7 @@ describe("PlanPhase Generate Plan", () => {
     const button = screen.getByTestId("generate-plan-button");
     await user.click(button);
 
-    expect(screen.getByTestId("add-plan-modal")).toBeInTheDocument();
+    expect(screen.queryByTestId("add-plan-modal")).not.toBeInTheDocument();
     const { optimisticPlans } = store.getState().plan;
     expect(optimisticPlans).toHaveLength(1);
     expect(optimisticPlans[0].title).toBe("Add dark mode support");
@@ -3456,13 +3456,13 @@ describe("PlanPhase Generate Plan", () => {
     expect(store.getState().plan.optimisticPlans).toHaveLength(1);
     expect(store.getState().plan.optimisticPlans[0].title).toBe("First feature idea");
 
-    const backdrop = document.querySelector(".bg-theme-overlay");
-    expect(backdrop).toBeTruthy();
-    await user.click(backdrop!);
+    expect(screen.queryByTestId("add-plan-modal")).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId("add-plan-button"));
-    await user.type(screen.getByTestId("feature-description-input"), "Second feature idea");
-    await user.click(screen.getByTestId("generate-plan-button"));
+    fireEvent.change(screen.getByTestId("feature-description-input"), {
+      target: { value: "Second feature idea" },
+    });
+    fireEvent.click(screen.getByTestId("generate-plan-button"));
 
     await waitFor(() => {
       expect(store.getState().plan.optimisticPlans).toHaveLength(2);

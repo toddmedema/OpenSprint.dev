@@ -385,10 +385,13 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
     const container = prdContainerRef.current;
     if (!container) return;
 
+    let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+
     const handleMouseUp = () => {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || !sel.rangeCount) {
-        setTimeout(() => {
+        dismissTimer = setTimeout(() => {
+          if (typeof document === "undefined") return;
           const activeEl = document.activeElement;
           if (!activeEl || !activeEl.closest("[data-selection-toolbar]")) {
             setSelection(null);
@@ -415,7 +418,10 @@ export function SketchPhase({ projectId, onNavigateToPlan }: SketchPhaseProps) {
     };
 
     container.addEventListener("mouseup", handleMouseUp);
-    return () => container.removeEventListener("mouseup", handleMouseUp);
+    return () => {
+      container.removeEventListener("mouseup", handleMouseUp);
+      if (dismissTimer !== null) clearTimeout(dismissTimer);
+    };
   }, [hasPrdContent]);
 
   /* ── Dismiss Discuss popover on click/touch outside popover and selection ── */

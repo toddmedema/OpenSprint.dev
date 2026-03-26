@@ -14,12 +14,11 @@ export interface AddPlanModalProps {
 export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalProps) {
   const draftKey = planIdeaDraftStorageKey(projectId);
   const [featureDescription, setFeatureDescription] = useState(() => loadTextDraft(draftKey));
-  const { beginSend, onSuccess, onFailure } = useOptimisticTextDraft(
+  const { beginSend, onSuccess } = useOptimisticTextDraft(
     draftKey,
     featureDescription,
     setFeatureDescription
   );
-  const [busy, setBusy] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const featureInputRef = useRef<HTMLTextAreaElement>(null);
   useModalA11y({ containerRef, onClose, isOpen: true, initialFocusRef: featureInputRef });
@@ -28,27 +27,18 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
     setFeatureDescription(loadTextDraft(draftKey));
   }, [draftKey]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     const description = featureDescription.trim();
-    if (!description || busy) return;
-    setBusy(true);
+    if (!description) return;
     beginSend(description);
-    try {
-      const ok = await onGenerate(description);
-      if (ok) {
-        onSuccess();
-        onClose();
-      } else {
-        onFailure();
-      }
-    } finally {
-      setBusy(false);
-    }
+    onSuccess();
+    onClose();
+    void onGenerate(description);
   };
 
   const onKeyDown = useSubmitShortcut(handleGenerate, {
     multiline: true,
-    disabled: !featureDescription.trim() || busy,
+    disabled: !featureDescription.trim(),
   });
 
   return (
@@ -87,11 +77,10 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
             onKeyDown={onKeyDown}
             placeholder="Describe your feature idea…"
             data-testid="feature-description-input"
-            disabled={busy}
           />
         </div>
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-theme-border bg-theme-bg rounded-b-xl">
-          <button type="button" onClick={onClose} className="btn-secondary" disabled={busy}>
+          <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>
           <button
@@ -99,11 +88,11 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
             onClick={() => {
               void handleGenerate();
             }}
-            disabled={!featureDescription.trim() || busy}
+            disabled={!featureDescription.trim()}
             className="btn-primary text-sm disabled:opacity-50"
             data-testid="generate-plan-button"
           >
-            {busy ? "Generating…" : "Generate Plan"}
+            Generate Plan
           </button>
         </div>
       </div>
