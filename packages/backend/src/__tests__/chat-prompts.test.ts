@@ -82,8 +82,39 @@ describe("PLAN_REFINEMENT_SYSTEM_PROMPT — scale/speed/cost item", () => {
     expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toMatch(/5\.\s+When discussing visuals/);
   });
 
+  it("item 6 appears after item 5 in the prompt text", () => {
+    const item5Idx = PLAN_REFINEMENT_SYSTEM_PROMPT.indexOf("5. When discussing visuals");
+    const item6Idx = PLAN_REFINEMENT_SYSTEM_PROMPT.indexOf("6. When suggesting changes");
+    expect(item5Idx).toBeGreaterThan(-1);
+    expect(item6Idx).toBeGreaterThan(item5Idx);
+  });
+
+  it("item 6 appears within the 'Your role is to:' numbered list", () => {
+    const roleIdx = PLAN_REFINEMENT_SYSTEM_PROMPT.indexOf("Your role is to:");
+    const item6Idx = PLAN_REFINEMENT_SYSTEM_PROMPT.indexOf("6. When suggesting changes");
+    const planUpdateIdx = PLAN_REFINEMENT_SYSTEM_PROMPT.indexOf("[PLAN_UPDATE]");
+    expect(roleIdx).toBeGreaterThan(-1);
+    expect(item6Idx).toBeGreaterThan(roleIdx);
+    expect(item6Idx).toBeLessThan(planUpdateIdx);
+  });
+
+  it("does not introduce a 7th numbered item", () => {
+    expect(PLAN_REFINEMENT_SYSTEM_PROMPT).not.toMatch(/^7\./m);
+  });
+
   it("does not alter PLAN_UPDATE format", () => {
     expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toContain("[PLAN_UPDATE]");
     expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toContain("[/PLAN_UPDATE]");
+  });
+
+  it("preserves required plan section structure", () => {
+    expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toContain("Feature Title");
+    expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toContain("Acceptance Criteria");
+    expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toContain("Technical Approach");
+    expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toContain("Estimated Complexity");
+  });
+
+  it("preserves Assumptions section instruction", () => {
+    expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toContain("**Assumptions (## Assumptions):**");
   });
 });
