@@ -289,6 +289,7 @@ export async function resetProjectScopedTestData(
   await client.execute("DELETE FROM project_behavior_state WHERE project_id = $1", [projectId]);
   await client.execute("DELETE FROM behavior_versions WHERE project_id = $1", [projectId]);
   await client.execute("DELETE FROM open_questions WHERE project_id = $1", [projectId]);
+  await client.execute("DELETE FROM prd_snapshots WHERE project_id = $1", [projectId]);
   await client.execute("DELETE FROM prd_metadata WHERE project_id = $1", [projectId]);
   await client.execute("DELETE FROM project_conversations WHERE project_id = $1", [projectId]);
   await client.execute("DELETE FROM planning_runs WHERE project_id = $1", [projectId]);

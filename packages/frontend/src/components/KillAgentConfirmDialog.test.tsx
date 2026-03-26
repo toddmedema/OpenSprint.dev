@@ -81,4 +81,12 @@ describe("KillAgentConfirmDialog", () => {
 
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
+
+  it("calls onCancel when Escape is pressed", () => {
+    render(<KillAgentConfirmDialog onConfirm={onConfirm} onCancel={onCancel} />);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
 });

@@ -42,6 +42,7 @@ import {
   getBlockersFromIssue,
   getParentId as getParentIdHelper,
   hydrateTask,
+  coerceOptionalSqlInt,
   validateAssigneeChange as validateAssigneeChangeHelper,
   mergeExtraForUpdate as mergeExtraForUpdateHelper,
   buildTaskUpdateSets as buildTaskUpdateSetsHelper,
@@ -413,6 +414,7 @@ export class TaskStoreService {
       throw new AppError(404, ErrorCodes.ISSUE_NOT_FOUND, `Task ${id} not found`, { issueId: id });
     }
     const { z } = await import("zod");
+    const asSqlInt = (v: unknown) => coerceOptionalSqlInt(v);
     const schema = z.object({
       id: z.string(),
       project_id: z.string(),
@@ -420,7 +422,7 @@ export class TaskStoreService {
       description: z.string().nullable().optional(),
       issue_type: z.string(),
       status: z.string(),
-      priority: z.number(),
+      priority: z.preprocess(asSqlInt, z.number()),
       assignee: z.string().nullable().optional(),
       owner: z.string().nullable().optional(),
       labels: z.string().optional(),
@@ -430,7 +432,7 @@ export class TaskStoreService {
       close_reason: z.string().nullable().optional(),
       started_at: z.string().nullable().optional(),
       completed_at: z.string().nullable().optional(),
-      complexity: z.number().nullable().optional(),
+      complexity: z.preprocess(asSqlInt, z.number().nullable().optional()),
       extra: z.string().nullable().optional(),
     });
     const parsed = schema.safeParse(row);
@@ -1535,6 +1537,49 @@ export class TaskStoreService {
           await client.execute(vacuumSql);
         } catch (err) {
           log.warn("VACUUM after agent_sessions prune failed (non-critical)", {
+            err: String(err),
+          });
+        }
+      }
+      return pruned;
+    });
+  }
+
+  /**
+   * Retention policy: keep only the 100 most recent orchestrator_events (by id), prune older rows,
+   * then VACUUM to reclaim disk space. Mirrors pruneAgentSessions (100-row cap).
+   * Uses withWriteLock directly because VACUUM cannot run inside a transaction.
+   * @returns Number of rows pruned
+   */
+  async pruneOrchestratorEvents(): Promise<number> {
+    return this.withWriteLock(async () => {
+      await this.ensureInitialized();
+      const client = this.ensureClient();
+      const countRow = await client.queryOne("SELECT COUNT(*)::int as cnt FROM orchestrator_events");
+      const total = (countRow?.cnt as number) ?? 0;
+      if (total <= 100) return 0;
+
+      const cutoffRow = await client.queryOne(
+        "SELECT id FROM orchestrator_events ORDER BY id DESC LIMIT 1 OFFSET 99"
+      );
+      const cutoffId = cutoffRow?.id as number | undefined;
+      if (cutoffId == null) return 0;
+
+      const pruned = await client.execute(toPgParams("DELETE FROM orchestrator_events WHERE id < ?"), [
+        cutoffId,
+      ]);
+
+      if (pruned > 0) {
+        log.info("Pruned orchestrator_events", { pruned, retained: 100 });
+      }
+      if (!process.env.VITEST) {
+        try {
+          const url = await getDatabaseUrl().catch(() => "");
+          const dialect = url ? getDatabaseDialect(url) : "postgres";
+          const vacuumSql = dialect === "sqlite" ? "VACUUM" : "VACUUM orchestrator_events";
+          await client.execute(vacuumSql);
+        } catch (err) {
+          log.warn("VACUUM after orchestrator_events prune failed (non-critical)", {
             err: String(err),
           });
         }

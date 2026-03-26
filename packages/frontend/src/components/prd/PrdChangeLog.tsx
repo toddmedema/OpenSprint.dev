@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatSectionKey, formatTimestamp } from "../../lib/formatting";
 import { getPrdSourceColor, PRD_SOURCE_LABELS } from "../../lib/constants";
 import { api, isApiError } from "../../api/client";
 import { ServerDiffView } from "./ServerDiffView";
 import type { ServerDiffResult } from "./ServerDiffView";
+import { useModalA11y } from "../../hooks/useModalA11y";
 
 export interface PrdHistoryEntry {
   section: string;
@@ -38,6 +39,13 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
     setDiffResult(null);
   }, []);
 
+  const diffModalContainerRef = useRef<HTMLDivElement>(null);
+  useModalA11y({
+    containerRef: diffModalContainerRef,
+    onClose: closeDiffModal,
+    isOpen: diffModalFromVersion != null,
+  });
+
   useEffect(() => {
     if (diffModalFromVersion == null) return;
     setDiffLoading(true);
@@ -65,14 +73,6 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
         setDiffLoading(false);
       });
   }, [projectId, diffModalFromVersion]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && diffModalFromVersion != null) closeDiffModal();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [diffModalFromVersion, closeDiffModal]);
 
   return (
     <div className="mt-10 pt-6 border-t border-theme-border">
@@ -135,6 +135,7 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
 
       {diffModalFromVersion != null && (
         <div
+          ref={diffModalContainerRef}
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PrdChangeLog, type PrdHistoryEntry } from "./PrdChangeLog";
 
@@ -181,6 +181,30 @@ describe("PrdChangeLog", () => {
 
     await user.click(screen.getByTestId("compare-to-current"));
     await user.click(screen.getByTestId("version-diff-modal-backdrop"));
+    expect(screen.queryByTestId("version-diff-modal-content")).not.toBeInTheDocument();
+  });
+
+  it("closes modal when Escape is pressed", async () => {
+    const user = userEvent.setup();
+    mockGetVersionDiff.mockResolvedValue({
+      fromVersion: "3",
+      toVersion: "current",
+      diff: { lines: [] },
+    });
+
+    render(
+      <PrdChangeLog
+        projectId="proj-1"
+        entries={[entryWithDocVersion]}
+        expanded={true}
+        onToggle={() => {}}
+      />
+    );
+
+    await user.click(screen.getByTestId("compare-to-current"));
+    expect(screen.getByTestId("version-diff-modal-content")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByTestId("version-diff-modal-content")).not.toBeInTheDocument();
   });
 

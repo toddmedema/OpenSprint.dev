@@ -1660,4 +1660,78 @@ suite("TaskStoreService", () => {
       expect(row?.cnt).toBe(100);
     });
   });
+
+  describe("pruneOrchestratorEvents", () => {
+    beforeEach(async () => {
+      await store.runWrite(async (db) => {
+        await db.execute("DELETE FROM orchestrator_events");
+        await db.execute("ALTER SEQUENCE orchestrator_events_id_seq RESTART WITH 1");
+      });
+    });
+
+    it("returns 0 when <= 100 events", async () => {
+      const projectId = createTestProjectId("prune-events");
+      const now = new Date().toISOString();
+      await store.runWrite(async (client) => {
+        await client.execute(
+          `INSERT INTO orchestrator_events (project_id, task_id, timestamp, event)
+           SELECT $1, 'task-' || g, $2, 'dispatch'
+           FROM generate_series(0, 49) AS g`,
+          [projectId, now]
+        );
+      });
+      const pruned = await store.pruneOrchestratorEvents();
+      expect(pruned).toBe(0);
+
+      const db = await store.getDb();
+      const row = await db.queryOne("SELECT COUNT(*)::int as cnt FROM orchestrator_events");
+      expect(row?.cnt).toBe(50);
+    });
+
+    it("keeps 100 most recent and prunes older", async () => {
+      const projectId = createTestProjectId("prune-events");
+      const now = new Date().toISOString();
+      await store.runWrite(async (client) => {
+        await client.execute(
+          `INSERT INTO orchestrator_events (project_id, task_id, timestamp, event)
+           SELECT $1, 'task-' || g, $2, 'dispatch'
+           FROM generate_series(0, 149) AS g`,
+          [projectId, now]
+        );
+      });
+
+      const pruned = await store.pruneOrchestratorEvents();
+      expect(pruned).toBe(50);
+
+      const db = await store.getDb();
+      const row = await db.queryOne("SELECT COUNT(*)::int as cnt FROM orchestrator_events");
+      expect(row?.cnt).toBe(100);
+
+      const idsRows = await db.query("SELECT id FROM orchestrator_events ORDER BY id ASC");
+      const ids = idsRows.map((r) => r.id as number);
+      expect(ids).toHaveLength(100);
+      expect(Math.min(...ids)).toBe(51);
+      expect(Math.max(...ids)).toBe(150);
+    });
+
+    it("prunes and returns count even when VACUUM is best-effort", async () => {
+      const projectId = createTestProjectId("prune-events");
+      const now = new Date().toISOString();
+      await store.runWrite(async (client) => {
+        await client.execute(
+          `INSERT INTO orchestrator_events (project_id, task_id, timestamp, event)
+           SELECT $1, 'task-' || g, $2, 'defer'
+           FROM generate_series(0, 119) AS g`,
+          [projectId, now]
+        );
+      });
+
+      const pruned = await store.pruneOrchestratorEvents();
+      expect(pruned).toBe(20);
+
+      const db = await store.getDb();
+      const row = await db.queryOne("SELECT COUNT(*)::int as cnt FROM orchestrator_events");
+      expect(row?.cnt).toBe(100);
+    });
+  });
 });

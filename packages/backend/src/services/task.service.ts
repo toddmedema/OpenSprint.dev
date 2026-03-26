@@ -27,7 +27,11 @@ import { BranchManager } from "./branch-manager.js";
 import { FeedbackService } from "./feedback.service.js";
 import type { StoredTask } from "./task-store.service.js";
 import { resolveEpicId } from "./task-store.service.js";
-import { getMergeStageFromIssue, validateAssigneeChange } from "./task-store-helpers.js";
+import {
+  getMergeStageFromIssue,
+  validateAssigneeChange,
+  coerceOptionalSqlInt,
+} from "./task-store-helpers.js";
 import { createLogger } from "../utils/logger.js";
 import { parseTaskLastExecutionSummary } from "./task-execution-summary.js";
 import { resolveBaseBranch } from "../utils/git-repo-state.js";
@@ -306,7 +310,9 @@ export class TaskService {
       if (derived.length > 0) sourceFeedbackIds = derived;
     }
 
-    const taskComplexity = clampTaskComplexity((issue as { complexity?: number }).complexity);
+    const taskComplexity = clampTaskComplexity(
+      coerceOptionalSqlInt((issue as { complexity?: unknown }).complexity)
+    );
 
     const blockReason = (issue as { block_reason?: string | null }).block_reason ?? null;
     const lastExecution = parseTaskLastExecutionSummary(

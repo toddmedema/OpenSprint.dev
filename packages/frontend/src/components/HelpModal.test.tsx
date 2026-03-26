@@ -103,8 +103,7 @@ describe("HelpModal", () => {
     const onClose = vi.fn();
     renderHelpModal({ onClose });
 
-    const dialog = screen.getByRole("dialog", { name: /help/i });
-    fireEvent.keyDown(dialog, { key: "Escape" });
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

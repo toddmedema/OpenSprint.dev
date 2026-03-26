@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { CloseButton } from "./CloseButton";
+import { useModalA11y } from "../hooks/useModalA11y";
 import { api, isConnectionError } from "../api/client";
 import { AGENT_PROVIDER_OPTIONS, type AgentProviderValue } from "../lib/agentProviders";
 
@@ -130,15 +131,8 @@ export function ApiKeySetupModal({
     provider === "ollama" ||
     (needsKeyInput && keyValue.trim().length > 0);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onCancel]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useModalA11y({ containerRef, onClose: onCancel, isOpen: true });
 
   return (
     <div
@@ -153,6 +147,7 @@ export function ApiKeySetupModal({
         data-testid="api-key-setup-modal-overlay"
       />
       <div
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="api-key-modal-title"

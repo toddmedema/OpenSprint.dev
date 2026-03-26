@@ -1,6 +1,7 @@
 import React from "react";
 import { CloseButton } from "../CloseButton";
 import { shouldRightAlignDropdown } from "../../lib/dropdownViewport";
+import { useModalA11y } from "../../hooks/useModalA11y";
 
 export interface TaskDetailHeaderProps {
   title: string;
@@ -60,6 +61,38 @@ export function TaskDetailHeader({
   const [forceRetryConfirmOpen, setForceRetryConfirmOpen] = React.useState(false);
   const actionsMenuRef = React.useRef<HTMLDivElement>(null);
   const actionsMenuTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const deleteConfirmDialogRef = React.useRef<HTMLDivElement>(null);
+  const forceRetryDialogRef = React.useRef<HTMLDivElement>(null);
+  const deleteLinkDialogRef = React.useRef<HTMLDivElement>(null);
+
+  const closeDeleteConfirm = React.useCallback(
+    () => setDeleteConfirmOpen(false),
+    [setDeleteConfirmOpen]
+  );
+  const closeForceRetryConfirm = React.useCallback(
+    () => setForceRetryConfirmOpen(false),
+    [setForceRetryConfirmOpen]
+  );
+  const closeDeleteLinkConfirm = React.useCallback(
+    () => setDeleteLinkConfirm(null),
+    [setDeleteLinkConfirm]
+  );
+
+  useModalA11y({
+    containerRef: deleteConfirmDialogRef,
+    onClose: closeDeleteConfirm,
+    isOpen: deleteConfirmOpen,
+  });
+  useModalA11y({
+    containerRef: forceRetryDialogRef,
+    onClose: closeForceRetryConfirm,
+    isOpen: forceRetryConfirmOpen,
+  });
+  useModalA11y({
+    containerRef: deleteLinkDialogRef,
+    onClose: closeDeleteLinkConfirm,
+    isOpen: deleteLinkConfirm != null,
+  });
 
   React.useEffect(() => {
     if (!actionsMenuOpen) return;
@@ -212,10 +245,11 @@ export function TaskDetailHeader({
           <button
             type="button"
             aria-label="Close delete task confirmation"
-            onClick={() => setDeleteConfirmOpen(false)}
+            onClick={closeDeleteConfirm}
             className="absolute inset-0 bg-theme-overlay backdrop-blur-sm"
           />
           <div
+            ref={deleteConfirmDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-task-confirm-title"
@@ -227,7 +261,7 @@ export function TaskDetailHeader({
                 Delete task
               </h2>
               <CloseButton
-                onClick={() => setDeleteConfirmOpen(false)}
+                onClick={closeDeleteConfirm}
                 ariaLabel="Close delete task confirmation"
               />
             </div>
@@ -239,7 +273,7 @@ export function TaskDetailHeader({
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-theme-border bg-theme-bg rounded-b-xl">
               <button
                 type="button"
-                onClick={() => setDeleteConfirmOpen(false)}
+                onClick={closeDeleteConfirm}
                 className="btn-secondary"
                 data-testid="sidebar-delete-task-cancel-btn"
                 disabled={deleteLoading}
@@ -267,10 +301,11 @@ export function TaskDetailHeader({
           <button
             type="button"
             aria-label="Close force retry confirmation"
-            onClick={() => setForceRetryConfirmOpen(false)}
+            onClick={closeForceRetryConfirm}
             className="absolute inset-0 bg-theme-overlay backdrop-blur-sm"
           />
           <div
+            ref={forceRetryDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="force-retry-confirm-title"
@@ -282,7 +317,7 @@ export function TaskDetailHeader({
                 Force retry task
               </h2>
               <CloseButton
-                onClick={() => setForceRetryConfirmOpen(false)}
+                onClick={closeForceRetryConfirm}
                 ariaLabel="Close force retry confirmation"
               />
             </div>
@@ -294,7 +329,7 @@ export function TaskDetailHeader({
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-theme-border bg-theme-bg rounded-b-xl">
               <button
                 type="button"
-                onClick={() => setForceRetryConfirmOpen(false)}
+                onClick={closeForceRetryConfirm}
                 className="btn-secondary"
                 data-testid="sidebar-force-retry-cancel-btn"
                 disabled={forceRetryLoading}
@@ -332,10 +367,11 @@ export function TaskDetailHeader({
           <button
             type="button"
             aria-label="Close delete link confirmation"
-            onClick={() => setDeleteLinkConfirm(null)}
+            onClick={closeDeleteLinkConfirm}
             className="absolute inset-0 bg-theme-overlay backdrop-blur-sm"
           />
           <div
+            ref={deleteLinkDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-link-confirm-title"
@@ -347,7 +383,7 @@ export function TaskDetailHeader({
                 Remove link
               </h2>
               <CloseButton
-                onClick={() => setDeleteLinkConfirm(null)}
+                onClick={closeDeleteLinkConfirm}
                 ariaLabel="Close delete link confirmation"
               />
             </div>
@@ -365,7 +401,7 @@ export function TaskDetailHeader({
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-theme-border bg-theme-bg rounded-b-xl">
               <button
                 type="button"
-                onClick={() => setDeleteLinkConfirm(null)}
+                onClick={closeDeleteLinkConfirm}
                 className="btn-secondary"
                 data-testid="sidebar-delete-link-cancel-btn"
                 disabled={removeLinkRemovingId !== null}

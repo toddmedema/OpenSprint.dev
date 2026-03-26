@@ -91,8 +91,7 @@ describe("AgentReferenceModal", () => {
     const onClose = vi.fn();
     render(<AgentReferenceModal onClose={onClose} />);
 
-    const dialog = screen.getByRole("dialog", { name: /meet the agent team/i });
-    fireEvent.keyDown(dialog, { key: "Escape" });
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

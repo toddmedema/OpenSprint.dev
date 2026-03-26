@@ -7,6 +7,21 @@ import type { StoredTask } from "./task-store.types.js";
 // ──── Hydration ────
 
 /**
+ * INTEGER columns sometimes arrive as string (driver/config). Coerce so validation and
+ * clampTaskComplexity see real numbers.
+ */
+export function coerceOptionalSqlInt(value: unknown): unknown {
+  if (value == null) return value;
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return value;
+}
+
+/**
  * Build a StoredTask from a DB row and optional dependency maps.
  * Used by the task store when hydrating single or batch task results.
  */
@@ -31,9 +46,12 @@ export function hydrateTask(
 
   const blockReason = (extra.block_reason as string) ?? null;
   const lastAutoRetryAt = (extra.last_auto_retry_at as string) ?? null;
-  const complexity = clampTaskComplexity(row.complexity);
+  const { complexity: extraComplexity, ...extraRest } = extra;
+  const fromColumn = clampTaskComplexity(coerceOptionalSqlInt(row.complexity));
+  const complexity =
+    fromColumn ?? clampTaskComplexity(coerceOptionalSqlInt(extraComplexity));
   return {
-    ...extra,
+    ...extraRest,
     ...(complexity != null && { complexity }),
     block_reason: blockReason,
     last_auto_retry_at: lastAutoRetryAt,

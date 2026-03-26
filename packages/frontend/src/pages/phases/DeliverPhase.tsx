@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import type { DeploymentRecord } from "@opensprint/shared";
@@ -28,6 +28,7 @@ import { CloseButton } from "../../components/CloseButton";
 import { PhaseEmptyState, PhaseEmptyStateLogo } from "../../components/PhaseEmptyState";
 import { EMPTY_STATE_COPY } from "../../lib/emptyStateCopy";
 import { createPortal } from "react-dom";
+import { useModalA11y } from "../../hooks/useModalA11y";
 
 /** Normalize target for display (staging → Staging, production → Production, custom as-is) */
 function formatTarget(target: DeploymentRecord["target"]): string {
@@ -264,9 +265,15 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
     setSelectedDeployId(id);
   };
 
-  const handleCloseDetailOverlay = () => {
+  const deployDetailOverlayRef = useRef<HTMLDivElement>(null);
+  const handleCloseDetailOverlay = useCallback(() => {
     setSelectedDeployId(null);
-  };
+  }, []);
+  useModalA11y({
+    containerRef: deployDetailOverlayRef,
+    onClose: handleCloseDetailOverlay,
+    isOpen: Boolean(isMobile && selectedDeployId && selectedRecord),
+  });
 
   const handleResetDeliver = async () => {
     if (resetLoading) return;
@@ -872,6 +879,7 @@ export function DeliverPhase({ projectId, onOpenSettings }: DeliverPhaseProps) {
           <>
             {createPortal(
               <div
+                ref={deployDetailOverlayRef}
                 className="fixed inset-0 z-40"
                 aria-modal="true"
                 role="dialog"

@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useRef } from "react";
 import { HelpContent } from "./HelpContent";
+import { useModalA11y } from "../hooks/useModalA11y";
 
 export interface HelpModalProps {
   onClose: () => void;
@@ -13,15 +14,9 @@ export interface HelpModalProps {
  * No standalone title or back arrow; tabs appear as second title bar with close in bar.
  */
 export function HelpModal({ onClose, project }: HelpModalProps) {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const initialFocusRef = useRef<HTMLElement | null>(null);
+  useModalA11y({ containerRef, onClose, isOpen: true, initialFocusRef });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -33,6 +28,7 @@ export function HelpModal({ onClose, project }: HelpModalProps) {
         data-testid="help-modal-backdrop"
       />
       <div
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-label="Help"
@@ -40,7 +36,7 @@ export function HelpModal({ onClose, project }: HelpModalProps) {
         data-testid="help-modal-content"
       >
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-          <HelpContent project={project} onClose={onClose} />
+          <HelpContent project={project} onClose={onClose} modalInitialFocusRef={initialFocusRef} />
         </div>
       </div>
     </div>

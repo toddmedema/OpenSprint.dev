@@ -1,6 +1,6 @@
 /**
- * Hourly cleanup job for agent_sessions retention.
- * Keeps only the 100 most recent entries; prunes older entries and runs VACUUM.
+ * Hourly cleanup job for agent_sessions and orchestrator_events retention.
+ * Keeps only the 100 most recent rows in each table; prunes older entries and runs VACUUM.
  * Active/in-progress sessions are not in agent_sessions until archived, so no impact.
  */
 
@@ -33,6 +33,7 @@ export class SessionRetentionService {
   }
 
   private async runCleanup(): Promise<void> {
+    let firstError: unknown;
     try {
       const pruned = await taskStore.pruneAgentSessions();
       if (pruned > 0) {
@@ -40,8 +41,18 @@ export class SessionRetentionService {
       }
     } catch (err) {
       log.warn("Session retention error", { err });
-      throw err;
+      firstError = err;
     }
+    try {
+      const prunedEvents = await taskStore.pruneOrchestratorEvents();
+      if (prunedEvents > 0) {
+        log.info("Orchestrator event retention completed", { pruned: prunedEvents });
+      }
+    } catch (err) {
+      log.warn("Orchestrator event retention error", { err });
+      firstError = firstError ?? err;
+    }
+    if (firstError) throw firstError;
   }
 }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   hydrateTask,
+  coerceOptionalSqlInt,
   validateAssigneeChange,
   mergeExtraForUpdate,
   buildTaskUpdateSets,
@@ -33,6 +34,20 @@ function stored(overrides: Partial<StoredTask> = {}): StoredTask {
 }
 
 describe("task-store-helpers", () => {
+  describe("coerceOptionalSqlInt", () => {
+    it("passes through null and integers", () => {
+      expect(coerceOptionalSqlInt(null)).toBeNull();
+      expect(coerceOptionalSqlInt(undefined)).toBeUndefined();
+      expect(coerceOptionalSqlInt(7)).toBe(7);
+    });
+
+    it("coerces numeric strings and bigint", () => {
+      expect(coerceOptionalSqlInt("5")).toBe(5);
+      expect(coerceOptionalSqlInt(" 3 ")).toBe(3);
+      expect(coerceOptionalSqlInt(BigInt(4))).toBe(4);
+    });
+  });
+
   describe("hydrateTask", () => {
     it("builds StoredTask from row with optional dep maps", () => {
       const now = new Date().toISOString();
@@ -62,6 +77,58 @@ describe("task-store-helpers", () => {
       expect(task.id).toBe("os-1a");
       expect(task.dependencies).toEqual([{ depends_on_id: "os-2b", type: "blocks" }]);
       expect(task.dependent_count).toBe(1);
+    });
+
+    it("accepts complexity as string from DB driver and clamps", () => {
+      const now = new Date().toISOString();
+      const row = {
+        id: "os-1a",
+        project_id: "proj",
+        title: "T",
+        description: "D",
+        issue_type: "task",
+        status: "open",
+        priority: 1,
+        assignee: null,
+        owner: null,
+        labels: "[]",
+        created_at: now,
+        updated_at: now,
+        created_by: null,
+        close_reason: null,
+        started_at: null,
+        completed_at: null,
+        complexity: "5",
+        extra: "{}",
+      };
+      const task = hydrateTask(row);
+      expect(task.complexity).toBe(5);
+    });
+
+    it("coerces complexity from extra JSON when DB column is null", () => {
+      const now = new Date().toISOString();
+      const row = {
+        id: "os-1a",
+        project_id: "proj",
+        title: "T",
+        description: "D",
+        issue_type: "task",
+        status: "open",
+        priority: 1,
+        assignee: null,
+        owner: null,
+        labels: "[]",
+        created_at: now,
+        updated_at: now,
+        created_by: null,
+        close_reason: null,
+        started_at: null,
+        completed_at: null,
+        complexity: null,
+        extra: JSON.stringify({ complexity: "7" }),
+      };
+      const task = hydrateTask(row);
+      expect(task.complexity).toBe(7);
     });
 
     it("uses empty deps when maps not provided", () => {

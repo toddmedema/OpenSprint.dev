@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import type { AgentRole } from "@opensprint/shared";
 import {
   AGENT_ROLE_CANONICAL_ORDER,
@@ -8,6 +8,7 @@ import {
 } from "@opensprint/shared";
 import { CloseButton } from "./CloseButton";
 import { ASSET_BASE } from "../lib/constants";
+import { useModalA11y } from "../hooks/useModalA11y";
 
 export interface AgentReferenceModalProps {
   onClose: () => void;
@@ -18,15 +19,8 @@ export interface AgentReferenceModalProps {
  * Accessible: keyboard-navigable, screen-reader friendly.
  */
 export function AgentReferenceModal({ onClose }: AgentReferenceModalProps) {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useModalA11y({ containerRef, onClose, isOpen: true });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -38,6 +32,7 @@ export function AgentReferenceModal({ onClose }: AgentReferenceModalProps) {
         data-testid="agent-reference-backdrop"
       />
       <div
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="agent-reference-title"

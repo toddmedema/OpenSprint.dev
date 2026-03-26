@@ -43,6 +43,7 @@ import { HilApprovalBlock } from "../../components/HilApprovalBlock";
 import { OpenQuestionsBlock } from "../../components/OpenQuestionsBlock";
 import { useViewportWidth } from "../../hooks/useViewportWidth";
 import { CloseButton } from "../../components/CloseButton";
+import { useModalA11y } from "../../hooks/useModalA11y";
 import { PhaseEmptyState, PhaseEmptyStateLogo } from "../../components/PhaseEmptyState";
 
 /** Reply icon (message turn / corner up-right) */
@@ -505,6 +506,13 @@ const FeedbackCard = memo(
     const replyInputRef = useRef<HTMLTextAreaElement>(null);
     const [answerText, setAnswerText] = useState("");
     const [imageModalSrc, setImageModalSrc] = useState<string | null>(null);
+    const imageLightboxRef = useRef<HTMLDivElement>(null);
+    const closeImageLightbox = useCallback(() => setImageModalSrc(null), []);
+    useModalA11y({
+      containerRef: imageLightboxRef,
+      onClose: closeImageLightbox,
+      isOpen: !!imageModalSrc,
+    });
     const [feedbackTextExpanded, setFeedbackTextExpanded] = useState(false);
     const replyImages = useImageAttachment();
     const isReplying = replyingToId === item.id;
@@ -590,15 +598,6 @@ const FeedbackCard = memo(
         document.removeEventListener("keydown", handleKeyDown);
       };
     }, [replyPriorityDropdownOpen]);
-
-    useEffect(() => {
-      if (!imageModalSrc) return;
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "Escape") setImageModalSrc(null);
-      };
-      document.addEventListener("keydown", handleKeyDown);
-      return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [imageModalSrc]);
 
     useEffect(() => {
       if (replyPriorityDropdownOpen && replyPriorityTriggerRef.current) {
@@ -799,6 +798,7 @@ const FeedbackCard = memo(
             {/* Full-size image modal (lightbox) */}
             {imageModalSrc && (
               <div
+                ref={imageLightboxRef}
                 className="fixed inset-0 z-[100] flex items-center justify-center p-4"
                 role="dialog"
                 aria-modal="true"
@@ -808,7 +808,7 @@ const FeedbackCard = memo(
                 <button
                   type="button"
                   className="absolute inset-0 w-full h-full bg-black/70 border-0 cursor-default"
-                  onClick={() => setImageModalSrc(null)}
+                  onClick={closeImageLightbox}
                   aria-label="Close (backdrop)"
                   data-testid="feedback-image-modal-backdrop"
                 />
@@ -823,7 +823,7 @@ const FeedbackCard = memo(
                   />
                 </div>
                 <CloseButton
-                  onClick={() => setImageModalSrc(null)}
+                  onClick={closeImageLightbox}
                   ariaLabel="Close image"
                   className="fixed top-4 right-4 z-20 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full bg-theme-bg border border-theme-border text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text shadow transition-colors"
                   size="w-5 h-5"
@@ -1750,6 +1750,13 @@ export function EvalPhase({
   const [selectedFeedbackIdForOverlay, setSelectedFeedbackIdForOverlay] = useState<string | null>(
     null
   );
+  const closeFeedbackDetailOverlay = useCallback(() => setSelectedFeedbackIdForOverlay(null), []);
+  const feedbackDetailOverlayRef = useRef<HTMLDivElement>(null);
+  useModalA11y({
+    containerRef: feedbackDetailOverlayRef,
+    onClose: closeFeedbackDetailOverlay,
+    isOpen: Boolean(isMobile && selectedFeedbackIdForOverlay),
+  });
   /** Feedback items submitted/requeued here that still need reconciliation if a WS event is missed. */
   const [reconcilingFeedbackIds, setReconcilingFeedbackIds] = useState<Set<string>>(new Set());
   const [replyingToPlanId, setReplyingToPlanId] = useState<string | null>(null);
@@ -2550,6 +2557,7 @@ export function EvalPhase({
           if (!node) return null;
           return (
             <div
+              ref={feedbackDetailOverlayRef}
               className="fixed inset-0 z-50 flex flex-col bg-theme-bg"
               data-testid="feedback-detail-overlay"
               role="dialog"
@@ -2559,7 +2567,7 @@ export function EvalPhase({
               <div className="flex flex-none items-center justify-between px-4 py-3 border-b border-theme-border shrink-0">
                 <h3 className="text-sm font-semibold text-theme-text">Feedback</h3>
                 <CloseButton
-                  onClick={() => setSelectedFeedbackIdForOverlay(null)}
+                  onClick={closeFeedbackDetailOverlay}
                   ariaLabel="Close"
                   className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-theme-muted hover:bg-theme-border-subtle hover:text-theme-text transition-colors"
                   size="w-5 h-5"

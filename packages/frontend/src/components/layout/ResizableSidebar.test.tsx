@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ResizableSidebar } from "./ResizableSidebar";
 import { MOBILE_BREAKPOINT } from "../../lib/constants";
@@ -305,6 +305,18 @@ describe("ResizableSidebar", () => {
 
       const closeBtn = screen.getByRole("button", { name: "Close sidebar" });
       await user.click(closeBtn);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("calls onClose when Escape is pressed", () => {
+      const onClose = vi.fn();
+      render(
+        <ResizableSidebar storageKey={STORAGE_KEY} responsive onClose={onClose}>
+          <span>Content</span>
+        </ResizableSidebar>
+      );
+
+      fireEvent.keyDown(document, { key: "Escape" });
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 

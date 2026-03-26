@@ -578,7 +578,8 @@ Let me know if you'd like to expand any section.`;
     const problemRes = await request(app).get(
       `${API_PREFIX}/projects/${projectId}/prd/problem_statement`
     );
-    expect(problemRes.body.data.content).toContain("keep track of tasks");
+    expect(problemRes.status).toBe(200);
+    expect(problemRes.body.data?.content).toContain("keep track of tasks");
   });
 
   it("POST /chat should handle multiple PRD_UPDATE blocks in one response", async () => {

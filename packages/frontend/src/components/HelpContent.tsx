@@ -1,4 +1,13 @@
-import { useState, useRef, useLayoutEffect, useCallback, useEffect, useMemo } from "react";
+import {
+  useState,
+  useRef,
+  useLayoutEffect,
+  useCallback,
+  useEffect,
+  useMemo,
+  type MutableRefObject,
+  type RefObject,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import type { AgentRole, TaskAnalytics, AgentLogEntry } from "@opensprint/shared";
 import {
@@ -13,6 +22,7 @@ import { ChatInput } from "./ChatInput";
 import { NavButton } from "./layout/NavButton";
 import { HelpAnalyticsChart } from "./HelpAnalyticsChart";
 import { api } from "../api/client";
+import { useModalA11y } from "../hooks/useModalA11y";
 import { ASSET_BASE, NAVBAR_HEIGHT } from "../lib/constants";
 import { getKeyboardShortcuts } from "../lib/keybindings";
 import { helpAskDraftStorageKey, loadTextDraft } from "../lib/agentInputDraftStorage";
@@ -23,6 +33,8 @@ export interface HelpContentProps {
   project?: { id: string; name: string } | null;
   /** Optional close button for modal context (no standalone title/back) */
   onClose?: () => void;
+  /** When set (e.g. HelpModal + useModalA11y), initial focus targets the Ask tab chat field */
+  modalInitialFocusRef?: RefObject<HTMLElement | null>;
 }
 
 type TabId = "ask" | "meet" | "analytics" | "agentLog" | "shortcuts";
@@ -33,7 +45,7 @@ const VALID_TAB_IDS: TabId[] = ["ask", "meet", "analytics", "agentLog", "shortcu
  * Shared Help content with five tabs: Ask a Question, Meet your Team, Analytics, Agent log, and Keyboard Shortcuts.
  * Used by HelpModal (legacy) and HelpPage (full-screen).
  */
-export function HelpContent({ project, onClose }: HelpContentProps) {
+export function HelpContent({ project, onClose, modalInitialFocusRef }: HelpContentProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const initialTab: TabId =
@@ -159,7 +171,11 @@ export function HelpContent({ project, onClose }: HelpContentProps) {
               aria-labelledby="help-tab-ask"
               className="flex-1 min-h-0 flex flex-col overflow-hidden"
             >
-              <AskQuestionContent project={project} isActive={true} />
+              <AskQuestionContent
+                project={project}
+                isActive={true}
+                modalInitialFocusRef={modalInitialFocusRef}
+              />
             </div>
           )}
           {activeTab === "meet" && (
@@ -239,9 +255,11 @@ function HelpChatBubble({ msg }: { msg: HelpChatMessage }) {
 function AskQuestionContent({
   project,
   isActive,
+  modalInitialFocusRef,
 }: {
   project?: { id: string; name: string } | null;
   isActive: boolean;
+  modalInitialFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const draftKey = useMemo(() => helpAskDraftStorageKey(project?.id ?? null), [project?.id]);
   const [messages, setMessages] = useState<HelpChatMessage[]>([]);
@@ -253,6 +271,11 @@ function AskQuestionContent({
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    if (!modalInitialFocusRef) return;
+    (modalInitialFocusRef as MutableRefObject<HTMLElement | null>).current = chatInputRef.current;
+  });
 
   useLayoutEffect(() => {
     setInput(loadTextDraft(draftKey));
@@ -460,6 +483,8 @@ function SessionLogModal({ sessionId, onClose }: { sessionId: number; onClose: (
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useModalA11y({ containerRef, onClose, isOpen: true });
 
   useEffect(() => {
     let cancelled = false;
@@ -483,6 +508,7 @@ function SessionLogModal({ sessionId, onClose }: { sessionId: number; onClose: (
 
   return (
     <div
+      ref={containerRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       role="dialog"
       aria-modal="true"

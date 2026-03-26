@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CloseButton } from "./CloseButton";
+import { useModalA11y } from "../hooks/useModalA11y";
 import { setKillAgentConfirmDisabled } from "../lib/killAgentConfirmStorage";
 
 export interface KillAgentConfirmDialogProps {
@@ -14,6 +15,8 @@ export function KillAgentConfirmDialog({
   confirming = false,
 }: KillAgentConfirmDialogProps) {
   const [dontShowAgain, setDontShowAgain] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useModalA11y({ containerRef, onClose: onCancel, isOpen: true });
 
   const handleConfirm = () => {
     setKillAgentConfirmDisabled(dontShowAgain);
@@ -32,6 +35,7 @@ export function KillAgentConfirmDialog({
 
       {/* Modal */}
       <div
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="kill-agent-confirm-title"

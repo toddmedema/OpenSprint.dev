@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { MOBILE_BREAKPOINT } from "../../lib/constants";
 import { useViewportWidth } from "../../hooks/useViewportWidth";
 import { CloseButton } from "../CloseButton";
+import { useModalA11y } from "../../hooks/useModalA11y";
 
 const STORAGE_PREFIX = "opensprint-sidebar-width-";
 
@@ -160,6 +161,12 @@ export function ResizableSidebar({
 
   const isMobileOverlay = responsive && overlayOnMobile && viewportWidth < MOBILE_BREAKPOINT;
   const swipe = useSwipeToClose(side, onClose ?? (() => {}), isMobileOverlay && !!onClose);
+  const mobileOverlayDialogRef = useRef<HTMLDivElement>(null);
+  useModalA11y({
+    containerRef: mobileOverlayDialogRef,
+    onClose: onClose ?? (() => {}),
+    isOpen: isMobileOverlay && visible,
+  });
 
   // Re-clamp width when viewport changes (e.g. window resize)
   useEffect(() => {
@@ -244,6 +251,7 @@ export function ResizableSidebar({
   if (isMobileOverlay && visible) {
     const overlay = (
       <div
+        ref={mobileOverlayDialogRef}
         className="fixed inset-0 z-[var(--sidebar-overlay-z)]"
         style={{ "--sidebar-overlay-z": SIDEBAR_OVERLAY_Z } as React.CSSProperties}
         aria-modal="true"
