@@ -42,11 +42,49 @@ function isReasoningOnlyAgentTurn(
   });
 }
 
+/**
+ * Bounded queue for injecting user messages into the agentic loop between turns.
+ *
+ * Push from any async context (e.g. WebSocket handler); the loop drains between
+ * turns after tool execution completes.  On agent completion, any undrained
+ * messages remain in the queue — the caller is responsible for handling them.
+ */
+export class PendingMessageQueue {
+  private readonly items: Array<{ message: string; timestamp: Date }> = [];
+  readonly capacity: number;
+
+  constructor(capacity = 10) {
+    this.capacity = capacity;
+  }
+
+  /** Push a message. Returns true if accepted, false if the queue is at capacity. */
+  push(message: string, timestamp?: Date): boolean {
+    if (this.items.length >= this.capacity) return false;
+    this.items.push({ message, timestamp: timestamp ?? new Date() });
+    return true;
+  }
+
+  /** Drain all pending messages, returning them in insertion order. */
+  drain(): Array<{ message: string; timestamp: Date }> {
+    return this.items.splice(0);
+  }
+
+  get size(): number {
+    return this.items.length;
+  }
+}
+
 export interface AgenticLoopOptions {
   cwd: string;
   maxTurns?: number;
   onChunk?: (text: string) => void;
   abortSignal?: { aborted: boolean };
+  /**
+   * Optional bounded queue for live user messages injected between turns.
+   * When present, the loop drains pending messages after tool execution
+   * and uses them as the next user turn instead of `"Continue."`.
+   */
+  pendingMessages?: PendingMessageQueue;
 }
 
 export interface AgenticLoopResult {
@@ -115,7 +153,7 @@ export class AnthropicAgenticAdapter implements AgenticLoopAdapter {
             tool_use_id: r.id,
             content: r.content,
           })),
-          { type: "text" as const, text: "Continue." },
+          { type: "text" as const, text: userMessage },
         ],
       });
     }
@@ -351,6 +389,21 @@ export class GeminiAgenticAdapter implements AgenticLoopAdapter {
 }
 
 /**
+ * Drain the pending-messages queue and build the next user-turn string.
+ * Single message → used as-is. Multiple → concatenated with ISO timestamps and delimiters.
+ * Empty / no queue → falls back to `"Continue."`.
+ */
+function drainPendingMessages(queue?: PendingMessageQueue): string {
+  if (!queue) return "Continue.";
+  const pending = queue.drain();
+  if (pending.length === 0) return "Continue.";
+  if (pending.length === 1) return pending[0].message;
+  return pending
+    .map((p) => `[${p.timestamp.toISOString()}] ${p.message}`)
+    .join("\n---\n");
+}
+
+/**
  * Run the agentic loop: send the task, then repeatedly handle tool calls until the model returns only text or max turns.
  */
 export async function runAgenticLoop(
@@ -384,7 +437,8 @@ export async function runAgenticLoop(
       const content = await executeTool(tc.name, tc.args, context);
       toolResults.push({ id: tc.id, content });
     }
-    userMessage = "Continue.";
+
+    userMessage = drainPendingMessages(options.pendingMessages);
   }
 
   return { content: fullText, turnCount, cacheMetrics };

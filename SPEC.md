@@ -4,6 +4,8 @@
 
 During **Execute**, users can **open the task worktree in VS Code or Cursor** for live file and diff inspection, and—when using **in-process API agent backends**—**chat with the running agent** between turns for mid-flight guidance. **CLI-based agent backends** do not support reliable mid-flight messaging; the product surfaces a clear disabled state and directs users to API mode. A **browser-only** fallback exposes the worktree path and copyable shell commands when the desktop app cannot launch an editor.
 
+When proposed **PRD/SPEC** changes require **human-in-the-loop** approval, the product shows a **rendered markdown diff** of current vs proposed SPEC.md (block-level changes with **word-level** highlights inside modified blocks) and a **[Rendered | Raw]** toggle to a traditional line-based diff. On **Sketch**, the **PRD version history** list includes **View Diff** on each entry to compare that saved snapshot to the **current** SPEC.md.
+
 ## Problem Statement
 
 Building software with AI today is fragmented and unstructured. Developers use AI coding assistants for individual tasks, but there is no cohesive system that manages the full journey from idea to deployed product. This leads to several persistent problems:
@@ -53,9 +55,17 @@ A small team that builds software for clients. They need to move quickly from cl
 
 ## Assumptions and Constraints
 
-_No content yet_
+- **SPEC.md markdown:** PRD content is standard markdown suitable for **remark**/**unified** parsing; non-standard extensions may force **raw** diff fallback for affected regions.
+- **PRD size:** Full `fromContent` / `toContent` in diff API responses is acceptable for typical SPEC sizes; extremely large PRDs may later need chunking, pagination, or virtualization.
+- **Frontend dependencies:** A rendered diff pipeline may add **remark**, **unified**, a markdown renderer (e.g. **react-markdown**), and **diff** or **diff-match-patch** for word-level highlighting within the existing frontend budget.
+- **HIL transport:** PRD approval **WebSocket** payloads do **not** carry full diffs; clients fetch diff data via **GET** when the user opens the approval UI.
 
 ## Feature List
+
+Add under **Sketch** and **human-in-the-loop**:
+
+- **PRD/SPEC approval diff:** For PRD/SPEC approval requests, the UI shows a **rendered markdown** diff by default (headings, lists, tables, code blocks) with **green** emphasis for additions, **red** strikethrough for deletions, and **word-level** highlights inside modified blocks. A **[Rendered | Raw]** toggle switches to a monospace line diff with line numbers and `+` / `-` markers. **Approve** and **Reject** (or equivalent) remain on the same surface; if markdown parsing fails, the UI **falls back to raw diff** with a short notice.
+- **Sketch version history diff:** The version list at the bottom of **Sketch** includes **View Diff** on **each** history entry; it opens the same diff experience comparing that **fromVersion** snapshot to the **current** SPEC.md (optional explicit `toVersion`; default **current**).
 
 Add under **Execute** phase:
 
@@ -72,6 +82,13 @@ Add under **Execute** phase:
 - **Real-time:** WebSocket types **`agent.chat.send`** (client→server), **`agent.chat.received`**, **`agent.chat.response`**, **`agent.chat.unsupported`** (defensive for CLI). Execute **status/active task** payloads should reliably include **`worktreePath`** where applicable.
 - **Frontend:** **Open in Editor** on `TaskDetailHeader` and kanban task cards (`BuildEpicCard`); Execute sidebar **Output | Chat** tabs reusing **`PrdChatPanel`** patterns (draft persistence, Enter / Shift+Enter, delivery indicator).
 
+**PRD diff (HIL + Sketch history)**
+
+- **Server-side diff:** Compute a **line-level** diff between two full SPEC.md strings and return **`fromContent`**, **`toContent`**, and **`diff.lines`** (`add` | `remove` | `context`, optional old/new line numbers, optional summary counts). Prefer server-side generation for consistency and to keep the HIL WebSocket payload free of large diff blobs.
+- **Rendered pipeline (client):** Reusable **DiffView** — **block-level** comparison on markdown ASTs (**remark**/**unified**), then **word-level** diff inside blocks that changed (**diff** or **diff-match-patch**). Entirely new or removed blocks use block-level green/red styling; incompatible structural changes are treated as remove + add. **Raw** mode renders `diff.lines` only.
+- **Integration:** **DiffView** is used for (1) PRD/SPEC **HIL** approvals when the request type indicates SPEC changes, and (2) **Sketch** version history **View Diff**. Sticky or floating actions keep **Approve**/**Reject** usable on long diffs.
+- **Edge behavior:** Identical or empty sides show a **No changes** state; stale bases (SPEC changed after proposal) warrant a warning and refresh path; invalid `requestId` or missing snapshots return **404** with dismissible UI errors.
+
 ## Data Model
 
 **Global settings:** Extend `GlobalSettings` with optional **`preferredEditor`**: `'vscode' | 'cursor' | 'auto'` (default/auto behavior as implemented).
@@ -82,24 +99,35 @@ Add under **Execute** phase:
 
 **Execute telemetry:** Active task / execute status events include **`worktreePath`** consistently when a worktree exists, supporting editor open and diagnostics.
 
+**SPEC version snapshots:** On each SPEC.md save, persist **full file text** keyed by the **version identifier** returned from PRD history (e.g. `GET .../prd/history`) so `GET .../prd/diff` can reconstruct `fromContent` for any prior version. Add snapshot-on-write if not already present; initial scope does **not** require changing the public history list response schema.
+
+**Pending PRD HIL proposals:** Store or reference enough state (e.g. **`requestId`**, proposal content handle) for **`GET .../prd/proposed-diff`** to resolve **proposed** text vs **current** repo SPEC; avoid embedding full diff objects in **`hil.request`** payloads.
+
 ## API Contracts
 
-The statement that **no new REST endpoints are required for quality-gate diagnostics** remains true for merge/gate failures; **additional REST and WebSocket contracts** apply to Execute inspect/chat:
+The statement that **no new REST endpoints are required for quality-gate diagnostics** remains true for merge/gate failures; **additional REST and WebSocket contracts** apply to Execute inspect/chat and PRD diff:
 
 - **`GET` / `PUT /api/global-settings`:** Include **`preferredEditor`** (`vscode` | `cursor` | `auto`); validate on write.
 - **`POST /api/projects/:projectId/tasks/:taskId/open-editor`:** Returns `{ worktreePath, editor, opened }` when the task is actively executing and the path exists; **404** if task/worktree missing, **409** if not in an executable in-progress state. *(Exact path prefix must match the product's `/api` routing convention.)*
 - **`GET .../tasks/:taskId/chat-history`:** Query `attempt` (optional); response `{ messages[], attempt, chatSupported }`.
 - **`GET .../tasks/:taskId/chat-support`:** Response `{ supported, backend, reason | null }` for gating the Chat tab.
-- **WebSocket:** Client **`agent.chat.send`** `{ taskId, message }`; server **`agent.chat.received`**, **`agent.chat.response`**, **`agent.chat.unsupported`** with task and message identifiers as specified in the implementation plan. Consumers **ignore unknown fields** for forward compatibility.
+- **`GET /api/projects/:projectId/prd/proposed-diff?requestId=<hilRequestId>`:** Returns **`200`** with `{ requestId, fromContent, toContent, diff: { lines[], summary? } }` for PRD/SPEC approval UI; **`fromContent`** is current SPEC, **`toContent`** is proposed. **`404`** if the request is unknown or not a PRD-approval type.
+- **`GET /api/projects/:projectId/prd/diff?fromVersion=<versionId>&toVersion=<versionId|'current'>`:** Omit or set **`toVersion`** to **`current`** to compare a historical snapshot to the live SPEC. **`200`** body mirrors the proposed-diff shape plus `fromVersion` / `toVersion`. **`404`** if a version or stored snapshot is missing.
+- **WebSocket:** Client **`agent.chat.send`** `{ taskId, message }`; server **`agent.chat.received`**, **`agent.chat.response`**, **`agent.chat.unsupported`** with task and message identifiers as specified in the implementation plan. **`hil.request` / `hil.respond`** behavior stays the same for approve/reject; consumers **ignore unknown fields** for forward compatibility.
 
 ## Non-Functional Requirements
 
 | Category | Requirement |
 | -------- | ----------- |
 | Usability | Execute **Output** and **Chat** share familiar Sketch/Plan chat patterns (bubbles, keyboard shortcuts, draft persistence, clear disabled states for non-running tasks and CLI backends). |
+| Usability | PRD diff UIs reuse one **DiffView**: **Rendered** default, **Raw** toggle, keyboard-accessible controls, and non-color-only cues (strikethrough, labels/ARIA) for additions and deletions. |
 | Reliability | User chat messages are **queued at turn boundaries**; **bounded** pending queue prevents unbounded memory; if the agent finishes before delivery, persisted history reflects **undelivered** user messages per product rules. |
+| Reliability | PRD diff responses remain consistent if the client toggles modes; large SPEC files may use pagination, caps, or virtualization to protect responsiveness. |
 | Compatibility | **Open in Editor** degrades gracefully: missing CLI → install guidance + **copy path**; **branches** mode warns about **shared checkout**; multiple browser tabs deduplicate by **message id**. |
+| Compatibility | PRD **rendered** diff falls back to **raw** when markdown parsing fails; structural markdown changes may appear as block remove+add rather than cross-type word diff. |
 | Security / privacy | Chat content is stored **locally** under `.opensprint/active/<taskId>/` (JSONL) alongside assignment artifacts—treat as sensitive project data in backups and retention policies. |
+| Security / privacy | SPEC snapshots and proposal text used for diffs are **project-local** data; apply the same backup and access controls as SPEC.md and `.opensprint` metadata. |
+| Theming / accessibility | Diff highlight colors respect **light/dark/system** themes with sufficient contrast; screen readers should be able to perceive added vs removed text. |
 
 ## Open Questions
 
