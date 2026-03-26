@@ -2,7 +2,7 @@
  * Global settings store at ~/.opensprint/global-settings.json.
  * Schema (see shared `GlobalSettings`):
  * - apiKeys?, useCustomCli?, databaseUrl?, expoToken?
- * - showNotificationDotInMenuBar?, showRunningAgentCountInMenuBar?
+ * - showNotificationDotInMenuBar?, showRunningAgentCountInMenuBar?, preferredEditor?
  * - simpleComplexityAgent?, complexComplexityAgent? — same shape as project agent config
  *   (`type`, `model`, `cliCommand`, optional `baseUrl` for lmstudio/ollama). Invalid objects on disk are ignored.
  * Uses same ApiKeyEntry structure for apiKeys. Atomic writes via writeJsonAtomic.
@@ -11,8 +11,13 @@
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
-import type { AgentConfig, ApiKeysUpdate, GlobalSettings } from "@opensprint/shared";
-import { sanitizeApiKeys, mergeApiKeysWithCurrent, validateDatabaseUrl } from "@opensprint/shared";
+import type { AgentConfig, ApiKeysUpdate, GlobalSettings, PreferredEditor } from "@opensprint/shared";
+import {
+  sanitizeApiKeys,
+  mergeApiKeysWithCurrent,
+  validateDatabaseUrl,
+  parsePreferredEditor,
+} from "@opensprint/shared";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { agentConfigSchema } from "../schemas/agent-config.js";
 
@@ -82,6 +87,7 @@ async function load(): Promise<GlobalSettings> {
             : undefined;
       const simpleComplexityAgent = parseAgentConfigFromFile(obj.simpleComplexityAgent);
       const complexComplexityAgent = parseAgentConfigFromFile(obj.complexComplexityAgent);
+      const preferredEditor = parsePreferredEditor(obj.preferredEditor);
       return {
         ...(apiKeys && { apiKeys }),
         ...(useCustomCli !== undefined && { useCustomCli }),
@@ -91,6 +97,7 @@ async function load(): Promise<GlobalSettings> {
         ...(showRunningAgentCountInMenuBar !== undefined && { showRunningAgentCountInMenuBar }),
         ...(simpleComplexityAgent && { simpleComplexityAgent }),
         ...(complexComplexityAgent && { complexComplexityAgent }),
+        ...(preferredEditor && { preferredEditor }),
       };
     }
   } catch {
@@ -184,16 +191,21 @@ export async function setGlobalSettings(settings: GlobalSettings): Promise<void>
     const p = agentConfigSchema.safeParse(settings.complexComplexityAgent);
     if (p.success) sanitized.complexComplexityAgent = p.data as AgentConfig;
   }
+  if (settings.preferredEditor !== undefined) {
+    const p = parsePreferredEditor(settings.preferredEditor);
+    if (p) sanitized.preferredEditor = p;
+  }
   await save(sanitized);
 }
 
 /** Partial merge input; `null` for agent fields clears the stored global default. */
 export type GlobalSettingsPartialUpdate = Partial<
-  Omit<GlobalSettings, "apiKeys" | "simpleComplexityAgent" | "complexComplexityAgent">
+  Omit<GlobalSettings, "apiKeys" | "simpleComplexityAgent" | "complexComplexityAgent" | "preferredEditor">
 > & {
   apiKeys?: ApiKeysUpdate;
   simpleComplexityAgent?: AgentConfig | null;
   complexComplexityAgent?: AgentConfig | null;
+  preferredEditor?: PreferredEditor | null;
 };
 
 /**
@@ -238,6 +250,14 @@ export async function updateGlobalSettings(
       delete merged.complexComplexityAgent;
     } else if (updates.complexComplexityAgent !== undefined) {
       merged.complexComplexityAgent = updates.complexComplexityAgent;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(updates, "preferredEditor")) {
+    if (updates.preferredEditor === null) {
+      delete merged.preferredEditor;
+    } else if (updates.preferredEditor !== undefined) {
+      merged.preferredEditor = updates.preferredEditor;
     }
   }
 

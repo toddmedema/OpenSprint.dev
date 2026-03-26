@@ -540,6 +540,23 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
 /** UI label when a project tier uses global agent defaults (no project-level override stored). */
 export const GLOBAL_DEFAULT_AGENT_UI_LABEL = "(global default)";
 
+/**
+ * Preferred external editor for "Open in editor" flows (VS Code, Cursor, or automatic detection).
+ */
+export type PreferredEditor = "vscode" | "cursor" | "auto";
+
+/** Valid `preferredEditor` values for parsing and validation. */
+export const VALID_PREFERRED_EDITORS: PreferredEditor[] = ["vscode", "cursor", "auto"];
+
+/**
+ * Parse a stored or API `preferredEditor` value. Returns `undefined` when absent or invalid
+ * so callers can treat unset as inherit/default.
+ */
+export function parsePreferredEditor(raw: unknown): PreferredEditor | undefined {
+  if (raw === "vscode" || raw === "cursor" || raw === "auto") return raw;
+  return undefined;
+}
+
 /** Global settings stored at ~/.opensprint/global-settings.json */
 export interface GlobalSettings {
   apiKeys?: ApiKeys;
@@ -561,6 +578,11 @@ export interface GlobalSettings {
    * Default complex-tier agent for projects that omit `complexComplexityAgent` (and legacy `highComplexityAgent`).
    */
   complexComplexityAgent?: AgentConfig;
+  /**
+   * Which desktop editor opens task worktrees from the UI (`vscode`, `cursor`, or `auto`).
+   * Omitted when unset; clients may default to `auto`.
+   */
+  preferredEditor?: PreferredEditor;
 }
 
 /** Response shape for GET /global-settings (apiKeys masked) */
@@ -577,6 +599,8 @@ export interface GlobalSettingsResponse {
   simpleComplexityAgent?: AgentConfig;
   /** Global default complex-tier agent when absent at project level; omitted if unset. */
   complexComplexityAgent?: AgentConfig;
+  /** Editor preference for opening worktrees in a desktop app; omitted when unset. */
+  preferredEditor?: PreferredEditor;
 }
 
 /** Request body for PUT /global-settings */
@@ -591,6 +615,8 @@ export interface GlobalSettingsPutRequest {
   simpleComplexityAgent?: AgentConfig | null;
   /** Set global default complex-tier agent; pass `null` to clear stored default. */
   complexComplexityAgent?: AgentConfig | null;
+  /** Set preferred external editor for open-in-editor; pass `null` to clear stored preference. */
+  preferredEditor?: PreferredEditor | null;
 }
 
 /** Read-only runtime cache/probe status for Git fields returned by project settings APIs. */

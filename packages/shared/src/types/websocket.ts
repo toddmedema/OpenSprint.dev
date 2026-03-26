@@ -1,7 +1,6 @@
 import type {
+  ActiveTaskEntry,
   AgentPhase,
-  AgentRuntimeState,
-  AgentSuspendReason,
   BaselineRuntimeStatus,
   GitMergeQueueSnapshot,
   MergeValidationRuntimeStatus,
@@ -137,19 +136,7 @@ export interface PrdUpdatedEvent {
 
 export interface ExecuteStatusEvent {
   type: "execute.status";
-  activeTasks: Array<{
-    taskId: string;
-    phase: AgentPhase;
-    startedAt: string;
-    state: AgentRuntimeState;
-    lastOutputAt?: string;
-    suspendedAt?: string;
-    suspendReason?: AgentSuspendReason;
-    /** Per-agent ID when multi-angle review (e.g. taskId--review--security). */
-    id?: string;
-    /** Display name when multi-angle review (e.g. "Reviewer (Security)"). */
-    name?: string;
-  }>;
+  activeTasks: ActiveTaskEntry[];
   queueDepth: number;
   baselineStatus?: BaselineRuntimeStatus;
   baselineCheckedAt?: string | null;
@@ -166,8 +153,6 @@ export interface ExecuteStatusEvent {
   dispatchPausedReason?: string | null;
   /** True when orchestrator is paused waiting for HIL approval (PRD §6.5) */
   awaitingApproval?: boolean;
-  /** Path to active task's git worktree (PRDv2 §5.8) */
-  worktreePath?: string | null;
   /** Feedback items awaiting categorization */
   pendingFeedbackCategorizations?: Array<{ feedbackId: string; category?: string }>;
   /** True when a self-improvement run is in progress for this project */
@@ -176,6 +161,36 @@ export interface ExecuteStatusEvent {
   selfImprovementRunMode?: "audit" | "experiments";
   /** Serialized git worktree_merge queue for this project's repo (FIFO). */
   gitMergeQueue?: GitMergeQueueSnapshot;
+}
+
+/** Client → server: user message injected into the active Execute agent loop (API backends only). */
+export interface AgentChatSendEvent {
+  type: "agent.chat.send";
+  taskId: string;
+  message: string;
+}
+
+/** Server → client: message persisted and queued for the agent loop. */
+export interface AgentChatReceivedEvent {
+  type: "agent.chat.received";
+  taskId: string;
+  messageId: string;
+  timestamp: string;
+}
+
+/** Server → client: assistant reply for a user chat turn. */
+export interface AgentChatResponseEvent {
+  type: "agent.chat.response";
+  taskId: string;
+  messageId: string;
+  content: string;
+}
+
+/** Server → client: chat not available for this task's backend (e.g. CLI agents). */
+export interface AgentChatUnsupportedEvent {
+  type: "agent.chat.unsupported";
+  taskId: string;
+  reason: string;
 }
 
 export interface HilRequestEvent {
@@ -394,7 +409,10 @@ export type ServerEvent =
   | PlanGeneratedEvent
   | PlanDecomposeProgressEvent
   | PlanAgentOutputEvent
-  | PlanAgentOutputBackfillEvent;
+  | PlanAgentOutputBackfillEvent
+  | AgentChatReceivedEvent
+  | AgentChatResponseEvent
+  | AgentChatUnsupportedEvent;
 
 // ─── Client → Server Events ───
 
@@ -431,4 +449,8 @@ export type ClientEvent =
   | AgentUnsubscribeEvent
   | PlanAgentSubscribeEvent
   | PlanAgentUnsubscribeEvent
-  | HilRespondEvent;
+  | HilRespondEvent
+  | AgentChatSendEvent;
+
+/** Discriminant union of all WebSocket frame `type` strings (client and server). */
+export type WebSocketEventType = ServerEvent["type"] | ClientEvent["type"];

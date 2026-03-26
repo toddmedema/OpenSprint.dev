@@ -227,6 +227,37 @@ describe("Global Settings API", () => {
       expect(disk.complexComplexityAgent).toEqual(complex);
     });
 
+    it("round-trips preferredEditor on PUT and GET", async () => {
+      const putRes = await withLocalSessionAuth(request(app).put(`${API_PREFIX}/global-settings`)).send({
+        preferredEditor: "cursor",
+      });
+      expect(putRes.status).toBe(200);
+      expect(putRes.body.data.preferredEditor).toBe("cursor");
+      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
+      expect(getRes.body.data.preferredEditor).toBe("cursor");
+    });
+
+    it("returns 400 for invalid preferredEditor", async () => {
+      const res = await withLocalSessionAuth(request(app).put(`${API_PREFIX}/global-settings`)).send({
+        preferredEditor: "vim",
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+    });
+
+    it("clears preferredEditor when null", async () => {
+      await withLocalSessionAuth(request(app).put(`${API_PREFIX}/global-settings`)).send({
+        preferredEditor: "vscode",
+      });
+      const clear = await withLocalSessionAuth(request(app).put(`${API_PREFIX}/global-settings`)).send({
+        preferredEditor: null,
+      });
+      expect(clear.status).toBe(200);
+      expect(clear.body.data.preferredEditor).toBeUndefined();
+      const disk = await getGlobalSettings();
+      expect(disk.preferredEditor).toBeUndefined();
+    });
+
     it("clears global agent defaults when PUT sends null", async () => {
       await setGlobalSettings({
         simpleComplexityAgent: { type: "cursor", model: "x", cliCommand: null },

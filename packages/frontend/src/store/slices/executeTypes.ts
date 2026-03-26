@@ -30,6 +30,8 @@ export interface ActiveTaskInfo {
   id?: string;
   /** Display name when multi-angle review (e.g. "Reviewer (Security)"). */
   name?: string;
+  /** Task worktree path when known; `null` when not applicable or unknown. */
+  worktreePath: string | null;
 }
 
 export const TASKS_IN_FLIGHT_KEY = "tasksInFlightCount" as const;

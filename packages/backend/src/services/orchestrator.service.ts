@@ -1593,8 +1593,6 @@ export class OrchestratorService {
     return {
       ...state.status,
       activeTasks: this.buildActiveTasks(state),
-      worktreePath:
-        state.slots.size === 1 ? ([...state.slots.values()][0]?.worktreePath ?? null) : null,
       pendingFeedbackCategorizations,
       selfImprovementRunInProgress: isSelfImprovementRunInProgress(projectId),
       selfImprovementRunMode: getSelfImprovementRunMode(projectId),

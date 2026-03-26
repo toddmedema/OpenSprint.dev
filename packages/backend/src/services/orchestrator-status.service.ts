@@ -37,6 +37,8 @@ export function buildReviewAgentId(taskId: string, angle: string): string {
 export interface SlotForStatus {
   taskId: string;
   taskTitle: string | null;
+  /** Task worktree path when known; same for all review sub-agents under this slot. */
+  worktreePath?: string | null;
   phase: "coding" | "review";
   agent: {
     startedAt: string;
@@ -118,6 +120,7 @@ export class OrchestratorStatusService {
   buildActiveTasks(state: StateForStatus): OrchestratorStatus["activeTasks"] {
     const tasks: OrchestratorStatus["activeTasks"] = [];
     for (const slot of state.slots.values()) {
+      const wtPath = slot.worktreePath ?? null;
       if (slot.phase === "review" && slot.reviewAgents && slot.reviewAgents.size > 0) {
         for (const reviewAgent of slot.reviewAgents.values()) {
           const angleLabel =
@@ -131,6 +134,7 @@ export class OrchestratorStatusService {
             state: reviewAgent.agent.lifecycleState as AgentRuntimeState,
             id: buildReviewAgentId(slot.taskId, reviewAgent.angle),
             name: `Reviewer (${angleLabel})`,
+            worktreePath: wtPath,
             ...(reviewAgent.agent.lastOutputAtIso
               ? { lastOutputAt: reviewAgent.agent.lastOutputAtIso }
               : {}),
@@ -149,6 +153,7 @@ export class OrchestratorStatusService {
         phase: slot.phase,
         startedAt: slot.agent.startedAt || new Date().toISOString(),
         state: slot.agent.lifecycleState as AgentRuntimeState,
+        worktreePath: wtPath,
         ...(slot.agent.lastOutputAtIso ? { lastOutputAt: slot.agent.lastOutputAtIso } : {}),
         ...(slot.agent.suspendedAtIso ? { suspendedAt: slot.agent.suspendedAtIso } : {}),
         ...(slot.agent.suspendReason

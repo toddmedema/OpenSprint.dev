@@ -337,6 +337,11 @@ export interface ActiveTaskEntry {
   id?: string;
   /** Display name when multi-angle review (e.g. "Reviewer (Security)"). */
   name?: string;
+  /**
+   * Absolute path to this task's git worktree when known; `null` when not applicable or not yet resolved
+   * (e.g. branches mode uses repo root; path unknown during early slot setup).
+   */
+  worktreePath: string | null;
 }
 
 export type BaselineRuntimeStatus = "unknown" | "checking" | "healthy" | "failing";
@@ -379,8 +384,6 @@ export interface OrchestratorStatus {
   dispatchPausedReason?: string | null;
   /** True when paused waiting for HIL approval (PRD §6.5) */
   awaitingApproval?: boolean;
-  /** Path to active task's git worktree (null when idle) */
-  worktreePath?: string | null;
   /** Feedback items awaiting categorization */
   pendingFeedbackCategorizations?: PendingFeedbackCategorization[];
   /** True when a self-improvement run is in progress for this project */

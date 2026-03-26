@@ -52,7 +52,31 @@ describe("OrchestratorStatusService", () => {
         taskId: "task-1",
         phase: "coding",
         state: "running",
+        worktreePath: null,
       });
+    });
+
+    it("includes worktreePath on each active task entry when slot has a path", () => {
+      const state: StateForStatus = {
+        slots: new Map([
+          [
+            "task-1",
+            {
+              taskId: "task-1",
+              taskTitle: "Task one",
+              worktreePath: "/tmp/wt/os-1",
+              phase: "coding",
+              agent: {
+                startedAt: "2025-01-01T00:00:00Z",
+                lifecycleState: "running",
+              },
+            } as SlotForStatus,
+          ],
+        ]),
+        status: { queueDepth: 0, totalDone: 0, totalFailed: 0 },
+      };
+      const tasks = statusService.buildActiveTasks(state);
+      expect(tasks[0]?.worktreePath).toBe("/tmp/wt/os-1");
     });
 
     it("returns one entry per review sub-agent when multi-angle", () => {
@@ -89,6 +113,7 @@ describe("OrchestratorStatusService", () => {
         phase: "review",
         id: "task-1--review--security",
         name: "Reviewer (Security)",
+        worktreePath: null,
       });
     });
   });

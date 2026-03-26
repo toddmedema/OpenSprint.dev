@@ -37,6 +37,8 @@ import {
   getSelfImprovementReviewAngles,
   getSelfImprovementIncludeGeneralReview,
   DEFAULT_REVIEW_MODE,
+  parsePreferredEditor,
+  VALID_PREFERRED_EDITORS,
 } from "../types/settings.ts";
 import type {
   ProjectSettings,
@@ -2331,6 +2333,20 @@ describe("self-improvement reviewer agent settings", () => {
     it("returns false when both are unset", () => {
       const settings = makeSettings({});
       expect(getSelfImprovementIncludeGeneralReview(settings)).toBe(false);
+    });
+  });
+
+  describe("parsePreferredEditor", () => {
+    it("accepts valid literals", () => {
+      for (const v of VALID_PREFERRED_EDITORS) {
+        expect(parsePreferredEditor(v)).toBe(v);
+      }
+    });
+
+    it("returns undefined for invalid or absent values", () => {
+      expect(parsePreferredEditor(undefined)).toBeUndefined();
+      expect(parsePreferredEditor("vim")).toBeUndefined();
+      expect(parsePreferredEditor(1)).toBeUndefined();
     });
   });
 });

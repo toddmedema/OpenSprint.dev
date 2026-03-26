@@ -14,6 +14,7 @@ import {
   maskApiKeysForResponse,
   validateDatabaseUrl,
   getDatabaseDialect,
+  parsePreferredEditor,
   type GlobalSettingsResponse,
   type ApiKeyProvider,
 } from "@opensprint/shared";
@@ -48,6 +49,7 @@ function buildResponse(settings: GlobalSettings) {
     showRunningAgentCountInMenuBar: settings.showRunningAgentCountInMenuBar !== false,
     ...(settings.simpleComplexityAgent && { simpleComplexityAgent: settings.simpleComplexityAgent }),
     ...(settings.complexComplexityAgent && { complexComplexityAgent: settings.complexComplexityAgent }),
+    ...(settings.preferredEditor && { preferredEditor: settings.preferredEditor }),
   };
 }
 
@@ -186,6 +188,7 @@ globalSettingsRouter.put(
       showRunningAgentCountInMenuBar?: boolean;
       simpleComplexityAgent?: unknown;
       complexComplexityAgent?: unknown;
+      preferredEditor?: unknown;
     };
     const updates: GlobalSettingsPartialUpdate = {};
     const previous = await getGlobalSettings();
@@ -236,6 +239,22 @@ globalSettingsRouter.put(
           body.complexComplexityAgent,
           "complexComplexityAgent"
         );
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "preferredEditor")) {
+      if (body.preferredEditor === null) {
+        updates.preferredEditor = null;
+      } else if (body.preferredEditor !== undefined) {
+        const pe = parsePreferredEditor(body.preferredEditor);
+        if (!pe) {
+          throw new AppError(
+            400,
+            ErrorCodes.INVALID_INPUT,
+            'preferredEditor must be "vscode", "cursor", or "auto"'
+          );
+        }
+        updates.preferredEditor = pe;
       }
     }
 
