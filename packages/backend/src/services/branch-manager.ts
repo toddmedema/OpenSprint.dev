@@ -5,7 +5,8 @@ import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { createLogger } from "../utils/logger.js";
 import { waitForGitReady as waitForGitReadyUtil } from "../utils/git-lock.js";
 import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
-import { shellExec } from "../utils/shell-exec.js";
+import { runCommand, CommandRunError } from "../utils/command-runner.js";
+import { runGit, gitNoHooksConfigPrefix } from "../utils/git-command.js";
 import {
   ensureRepoHasInitialCommit,
   getOriginUrl,
@@ -32,6 +33,15 @@ const RUNTIME_EXCLUDE_FOR_WIP = [
 const DEPENDENCY_EXCLUDE_PATHS_FOR_WIP = [":(glob)**/node_modules"];
 const WIP_EXCLUDE_PATHS = [...RUNTIME_EXCLUDE_FOR_WIP, ...DEPENDENCY_EXCLUDE_PATHS_FOR_WIP];
 const log = createLogger("branch-manager");
+const DIFF_MAX_BUFFER_BYTES = 10 * 1024 * 1024;
+
+function npmShellCommandToArgv(shellStyleCommand: string): string[] {
+  const tokens = shellStyleCommand.trim().split(/\s+/);
+  if (tokens[0] !== "npm") {
+    throw new Error(`Expected npm command, got: ${shellStyleCommand}`);
+  }
+  return tokens.slice(1);
+}
 
 /** Thrown when `pushMain` rebase encounters conflicts. Repo is left in rebase state. */
 export class RebaseConflictError extends Error {
@@ -105,16 +115,11 @@ export interface DependencyHealthResult {
   repairOutput: string;
 }
 
-/** Cross-platform shell quoting: cmd.exe double-quote on Windows, bash single-quote elsewhere. */
-function shellQuote(value: string): string {
-  if (process.platform === "win32") {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 function getErrorText(err: unknown): string {
   if (typeof err === "string") return err;
+  if (err instanceof CommandRunError) {
+    return [err.message, err.stdout, err.stderr].filter(Boolean).join("\n");
+  }
   if (err instanceof Error) return err.message;
   if (err && typeof err === "object") {
     const obj = err as Record<string, unknown>;
@@ -198,6 +203,19 @@ export class BranchManager {
   private taskStore = taskStoreSingleton;
   private projectService = new ProjectService();
 
+  private async gitExec(
+    repoPath: string,
+    args: string[],
+    opts?: { timeout?: number; maxStdoutBytes?: number; maxStderrBytes?: number }
+  ): Promise<{ stdout: string; stderr: string }> {
+    return runGit(args, {
+      cwd: repoPath,
+      timeout: opts?.timeout ?? 30_000,
+      maxStdoutBytes: opts?.maxStdoutBytes,
+      maxStderrBytes: opts?.maxStderrBytes,
+    });
+  }
+
   private async validateDisposableWorktreePath(
     repoPath: string,
     taskId: string,
@@ -220,10 +238,7 @@ export class BranchManager {
   }
 
   private async getStatusPorcelain(repoPath: string): Promise<string> {
-    const { stdout } = await shellExec("git status --porcelain", {
-      cwd: repoPath,
-      timeout: 10_000,
-    });
+    const { stdout } = await this.gitExec(repoPath, ["status", "--porcelain"], { timeout: 10_000 });
     return stdout.trim();
   }
 
@@ -232,11 +247,11 @@ export class BranchManager {
     if (!status) return null;
 
     const message = `opensprint-auto-stash:${reason}:${Date.now()}`;
-    const quotedMessage = message.replace(/"/g, '\\"');
-    await shellExec(`git stash push --include-untracked --message "${quotedMessage}"`, {
-      cwd: repoPath,
-      timeout: 30_000,
-    }).catch((err) => {
+    await this.gitExec(
+      repoPath,
+      ["stash", "push", "--include-untracked", "--message", message],
+      { timeout: 30_000 }
+    ).catch((err) => {
       log.warn("Failed to create auto-stash for repo-root operation", {
         repoPath,
         reason,
@@ -245,10 +260,11 @@ export class BranchManager {
       throw err;
     });
 
-    const { stdout } = await shellExec("git stash list --format='%gd %s' -n 1", {
-      cwd: repoPath,
-      timeout: 10_000,
-    }).catch(() => ({ stdout: "" }));
+    const { stdout } = await this.gitExec(
+      repoPath,
+      ["stash", "list", "--format=%gd %s", "-n", "1"],
+      { timeout: 10_000 }
+    ).catch(() => ({ stdout: "" }));
     const latest = stdout.trim();
     if (!latest.includes(message)) {
       return null;
@@ -274,10 +290,7 @@ export class BranchManager {
 
     if (stashRef) {
       try {
-        await shellExec(`git stash pop --index ${stashRef}`, {
-          cwd: repoPath,
-          timeout: 30_000,
-        });
+        await this.gitExec(repoPath, ["stash", "pop", "--index", stashRef], { timeout: 30_000 });
       } catch (restoreErr) {
         throw new RepoRootDirtyRestoreError(
           `Open Sprint temporarily stashed repo-root changes for "${reason}" but could not restore them cleanly. Resolve the working tree manually and retry.`,
@@ -300,8 +313,8 @@ export class BranchManager {
     branchName: string,
     baseBranch: string
   ): Promise<void> {
-    await this.git(repoPath, `checkout ${baseBranch}`);
-    await this.git(repoPath, `checkout -b ${branchName}`);
+    await this.gitExec(repoPath, ["checkout", baseBranch]);
+    await this.gitExec(repoPath, ["checkout", "-b", branchName]);
   }
 
   private async ensureOnMainInternal(repoPath: string, baseBranch: string): Promise<void> {
@@ -314,27 +327,32 @@ export class BranchManager {
     if (currentBranch !== baseBranch) {
       log.warn("Expected %s but on different branch, switching", { baseBranch, currentBranch });
       try {
-        await this.git(repoPath, "reset --hard HEAD");
-        await this.git(repoPath, `checkout ${baseBranch}`);
+        await this.gitExec(repoPath, ["reset", "--hard", "HEAD"]);
+        await this.gitExec(repoPath, ["checkout", baseBranch]);
       } catch {
-        await this.git(repoPath, `checkout -f ${baseBranch}`);
+        await this.gitExec(repoPath, ["checkout", "-f", baseBranch]);
       }
     }
 
     try {
       if (process.platform === "win32") {
-        await shellExec("git checkout -f HEAD -- .opensprint/", {
-          cwd: repoPath,
-          timeout: 10000,
+        await this.gitExec(repoPath, ["checkout", "-f", "HEAD", "--", ".opensprint/"], {
+          timeout: 10_000,
         });
       } else {
-        await shellExec(
-          [
-            'git ls-files .opensprint/ 2>/dev/null | while IFS= read -r f; do git update-index --no-assume-unchanged "$f" --no-skip-worktree "$f" 2>/dev/null; done',
-            "git checkout -f HEAD -- .opensprint/ 2>/dev/null || true",
-          ].join("; "),
-          { cwd: repoPath, timeout: 10000 }
-        );
+        const { stdout: lsOut } = await this.gitExec(repoPath, ["ls-files", ".opensprint/"], {
+          timeout: 10_000,
+        }).catch(() => ({ stdout: "" }));
+        for (const file of lsOut.split("\n").map((l) => l.trim()).filter(Boolean)) {
+          await this.gitExec(
+            repoPath,
+            ["update-index", "--no-assume-unchanged", "--no-skip-worktree", "--", file],
+            { timeout: 10_000 }
+          ).catch(() => {});
+        }
+        await this.gitExec(repoPath, ["checkout", "-f", "HEAD", "--", ".opensprint/"], {
+          timeout: 10_000,
+        }).catch(() => {});
       }
     } catch {
       // Best-effort cleanup; merge may still succeed without it
@@ -367,7 +385,7 @@ export class BranchManager {
         err: rmErr instanceof Error ? rmErr.message : String(rmErr),
       });
     }
-    await this.git(repoPath, "worktree prune").catch(() => {});
+    await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
     try {
       await fs.access(safePath);
       return false;
@@ -405,7 +423,7 @@ export class BranchManager {
     await ensureRepoHasInitialCommit(repoPath, baseBranch);
     await this.withRepoRootAutoStash(repoPath, `checkout branch ${branchName}`, async () => {
       try {
-        await shellExec(`git rev-parse --verify ${branchName}`, { cwd: repoPath });
+        await this.gitExec(repoPath, ["rev-parse", "--verify", branchName]);
         await this.checkout(repoPath, branchName);
       } catch {
         await this.createBranchInternal(repoPath, branchName, baseBranch);
@@ -425,9 +443,9 @@ export class BranchManager {
   ): Promise<void> {
     await this.waitForGitReady(repoPath);
     try {
-      await shellExec(`git rev-parse --verify ${branchName}`, { cwd: repoPath });
+      await this.gitExec(repoPath, ["rev-parse", "--verify", branchName]);
     } catch {
-      await this.git(repoPath, `branch ${branchName} ${baseBranch}`);
+      await this.gitExec(repoPath, ["branch", branchName, baseBranch]);
     }
   }
 
@@ -435,14 +453,14 @@ export class BranchManager {
    * Switch to a branch.
    */
   async checkout(repoPath: string, branchName: string): Promise<void> {
-    await this.git(repoPath, `checkout ${branchName}`);
+    await this.gitExec(repoPath, ["checkout", branchName]);
   }
 
   /**
    * Get the current branch name.
    */
   async getCurrentBranch(repoPath: string): Promise<string> {
-    const { stdout } = await shellExec("git rev-parse --abbrev-ref HEAD", { cwd: repoPath });
+    const { stdout } = await this.gitExec(repoPath, ["rev-parse", "--abbrev-ref", "HEAD"]);
     return stdout.trim();
   }
 
@@ -479,7 +497,7 @@ export class BranchManager {
   ): Promise<void> {
     const deleteTaskBranch = async (): Promise<void> => {
       try {
-        await this.git(repoPath, `branch -D ${branchName}`);
+        await this.gitExec(repoPath, ["branch", "-D", branchName]);
       } catch (deleteErr: unknown) {
         if (isBranchNotFoundError(deleteErr)) {
           return; // Branch already gone (e.g. unblock before prepare)
@@ -492,9 +510,9 @@ export class BranchManager {
       const currentBranch = await this.getCurrentBranch(repoPath).catch(() => "");
       if (currentBranch === branchName) {
         // We're on the task branch: reset, switch to base, then delete
-        await this.git(repoPath, "reset --hard HEAD");
-        await this.git(repoPath, "clean -fd");
-        await this.git(repoPath, `checkout ${baseBranch}`);
+        await this.gitExec(repoPath, ["reset", "--hard", "HEAD"]);
+        await this.gitExec(repoPath, ["clean", "-fd"]);
+        await this.gitExec(repoPath, ["checkout", baseBranch]);
         await deleteTaskBranch();
       } else {
         // Not on task branch (e.g. unblock before any prepare): just delete if it exists
@@ -507,7 +525,7 @@ export class BranchManager {
       }
       log.error("Failed to revert branch", { branchName, error });
       try {
-        await this.git(repoPath, `checkout -f ${baseBranch}`);
+        await this.gitExec(repoPath, ["checkout", "-f", baseBranch]);
       } catch {
         // Last resort
       }
@@ -524,7 +542,7 @@ export class BranchManager {
     baseBranch: string = "main"
   ): Promise<boolean> {
     try {
-      const { stdout } = await shellExec(`git branch --merged ${baseBranch}`, { cwd: repoPath });
+      const { stdout } = await this.gitExec(repoPath, ["branch", "--merged", baseBranch]);
       return stdout.includes(branchName);
     } catch {
       return false;
@@ -536,7 +554,7 @@ export class BranchManager {
    */
   async deleteBranch(repoPath: string, branchName: string): Promise<void> {
     try {
-      await this.git(repoPath, `branch -d ${branchName}`);
+      await this.gitExec(repoPath, ["branch", "-d", branchName]);
     } catch {
       // Branch might already be deleted
     }
@@ -551,10 +569,11 @@ export class BranchManager {
     branchName: string,
     baseBranch: string = "main"
   ): Promise<string> {
-    const { stdout } = await shellExec(`git diff ${baseBranch}...${branchName}`, {
-      cwd: repoPath,
-      maxBuffer: 10 * 1024 * 1024,
-    });
+    const { stdout } = await this.gitExec(
+      repoPath,
+      ["diff", `${baseBranch}...${branchName}`],
+      { maxStdoutBytes: DIFF_MAX_BUFFER_BYTES }
+    );
     return stdout;
   }
 
@@ -563,7 +582,7 @@ export class BranchManager {
    */
   async pushBranch(repoPath: string, branchName: string): Promise<void> {
     try {
-      await this.git(repoPath, `push -u origin ${branchName}`);
+      await this.gitExec(repoPath, ["push", "-u", "origin", branchName]);
     } catch (error) {
       log.warn("pushBranch failed", { branchName, error });
       throw error;
@@ -585,7 +604,7 @@ export class BranchManager {
       return;
     }
     try {
-      await this.git(repoPath, `fetch origin ${baseBranch}`);
+      await this.gitExec(repoPath, ["fetch", "origin", baseBranch]);
     } catch (error) {
       log.warn("prepareMainForPush: fetch failed, pushing anyway", { error });
     }
@@ -599,10 +618,11 @@ export class BranchManager {
 
       try {
         const noHooks = getGitNoHooksPath();
-        await shellExec(`git -c core.hooksPath="${noHooks}" rebase --empty=drop ${originRef}`, {
-          cwd: repoPath,
-          timeout: 120000,
-        });
+        await this.gitExec(
+          repoPath,
+          [...gitNoHooksConfigPrefix(noHooks), "rebase", "--empty=drop", originRef],
+          { timeout: 120_000 }
+        );
       } catch (rebaseErr) {
         const rebaseActive = await this.isRebaseInProgress(repoPath);
         if (!rebaseActive) {
@@ -639,18 +659,18 @@ export class BranchManager {
    */
   private async squashLocalCommits(repoPath: string, base: string): Promise<void> {
     try {
-      const { stdout: countStr } = await shellExec(`git rev-list --count ${base}..HEAD`, {
-        cwd: repoPath,
+      const { stdout: countStr } = await this.gitExec(repoPath, ["rev-list", "--count", `${base}..HEAD`], {
         timeout: 5000,
       });
       const localCount = parseInt(countStr.trim(), 10);
       if (localCount <= 1) return;
 
       let commitMessage = `squash ${localCount} local commits for rebase`;
-      const { stdout: logOut } = await shellExec(`git log --format=%s ${base}..HEAD`, {
-        cwd: repoPath,
-        timeout: 5000,
-      });
+      const { stdout: logOut } = await this.gitExec(
+        repoPath,
+        ["log", "--format=%s", `${base}..HEAD`],
+        { timeout: 5000 }
+      );
       const subjects = logOut.trim().split("\n");
       for (const s of subjects) {
         const parsed = parseClosedCommitMessage(s);
@@ -667,13 +687,13 @@ export class BranchManager {
       }
 
       log.info(`Squashing ${localCount} local commits before rebase`, { repoPath, localCount });
-      await shellExec(`git reset --soft ${base}`, { cwd: repoPath, timeout: 10000 });
-      const escaped = commitMessage.replace(/"/g, '\\"');
+      await this.gitExec(repoPath, ["reset", "--soft", base], { timeout: 10_000 });
       const noHooksSquash = getGitNoHooksPath();
-      await shellExec(`git -c core.hooksPath="${noHooksSquash}" commit -m "${escaped}"`, {
-        cwd: repoPath,
-        timeout: 30000,
-      });
+      await this.gitExec(
+        repoPath,
+        [...gitNoHooksConfigPrefix(noHooksSquash), "commit", "-m", commitMessage],
+        { timeout: 30_000 }
+      );
     } catch (err) {
       log.warn("squashLocalCommits failed, proceeding with rebase anyway", { repoPath, err });
     }
@@ -688,18 +708,20 @@ export class BranchManager {
     base: string
   ): Promise<{ taskId: string; title: string } | null> {
     try {
-      const { stdout: mergeParents } = await shellExec(
-        `git log ${base}..HEAD --merges -1 --format=%P`,
-        { cwd: repoPath, timeout: 5000 }
+      const { stdout: mergeParents } = await this.gitExec(
+        repoPath,
+        ["log", `${base}..HEAD`, "--merges", "-1", "--format=%P"],
+        { timeout: 5000 }
       );
       const parents = mergeParents.trim().split(/\s+/).filter(Boolean);
       if (parents.length < 2) return null;
 
       const branchTip = parents[1];
-      const { stdout: refNames } = await shellExec(`git branch -a --contains ${branchTip}`, {
-        cwd: repoPath,
-        timeout: 5000,
-      });
+      const { stdout: refNames } = await this.gitExec(
+        repoPath,
+        ["branch", "-a", "--contains", branchTip],
+        { timeout: 5000 }
+      );
       const branches = refNames
         .trim()
         .split("\n")
@@ -732,7 +754,7 @@ export class BranchManager {
    */
   private async hasRemoteBranch(repoPath: string, ref: string): Promise<boolean> {
     try {
-      await shellExec(`git rev-parse --verify ${ref}`, { cwd: repoPath });
+      await this.gitExec(repoPath, ["rev-parse", "--verify", ref]);
       return true;
     } catch {
       return false;
@@ -750,7 +772,10 @@ export class BranchManager {
       return;
     }
     const noHooksPush = getGitNoHooksPath();
-    await this.git(repoPath, `-c core.hooksPath="${noHooksPush}" push origin ${baseBranch}`);
+    await this.gitExec(
+      repoPath,
+      [...gitNoHooksConfigPrefix(noHooksPush), "push", "origin", baseBranch]
+    );
   }
 
   /**
@@ -758,9 +783,7 @@ export class BranchManager {
    */
   async getConflictedFiles(repoPath: string): Promise<string[]> {
     try {
-      const { stdout } = await shellExec("git diff --name-only --diff-filter=U", {
-        cwd: repoPath,
-      });
+      const { stdout } = await this.gitExec(repoPath, ["diff", "--name-only", "--diff-filter=U"]);
       return stdout.trim().split("\n").filter(Boolean);
     } catch {
       return [];
@@ -772,9 +795,8 @@ export class BranchManager {
    */
   async getConflictDiff(repoPath: string): Promise<string> {
     try {
-      const { stdout } = await shellExec("git diff", {
-        cwd: repoPath,
-        maxBuffer: 10 * 1024 * 1024,
+      const { stdout } = await this.gitExec(repoPath, ["diff"], {
+        maxStdoutBytes: DIFF_MAX_BUFFER_BYTES,
       });
       return stdout;
     } catch {
@@ -786,13 +808,14 @@ export class BranchManager {
    * Stage all resolved files and continue an in-progress rebase.
    */
   async rebaseContinue(repoPath: string): Promise<void> {
-    await this.git(repoPath, "add -A");
+    await this.gitExec(repoPath, ["add", "-A"]);
     const noHooks = getGitNoHooksPath();
     try {
-      await shellExec(`git -c core.editor=true -c core.hooksPath="${noHooks}" rebase --continue`, {
-        cwd: repoPath,
-        timeout: 30000,
-      });
+      await this.gitExec(
+        repoPath,
+        ["-c", "core.editor=true", "-c", `core.hooksPath=${noHooks}`, "rebase", "--continue"],
+        { timeout: 30_000 }
+      );
     } catch (err) {
       const rebaseActive = await this.isRebaseInProgress(repoPath);
       if (!rebaseActive) {
@@ -811,10 +834,11 @@ export class BranchManager {
       // In that case, continue with --skip instead of failing the entire merge flow.
       if (shouldAttemptRebaseSkip(err)) {
         try {
-          await shellExec(`git -c core.editor=true -c core.hooksPath="${noHooks}" rebase --skip`, {
-            cwd: repoPath,
-            timeout: 30000,
-          });
+          await this.gitExec(
+            repoPath,
+            ["-c", "core.editor=true", "-c", `core.hooksPath=${noHooks}`, "rebase", "--skip"],
+            { timeout: 30_000 }
+          );
           return;
         } catch (skipErr) {
           const stillActive = await this.isRebaseInProgress(repoPath);
@@ -838,7 +862,7 @@ export class BranchManager {
    * Abort an in-progress rebase, restoring the repo to its pre-rebase state.
    */
   async rebaseAbort(repoPath: string): Promise<void> {
-    await this.git(repoPath, "rebase --abort").catch(() => {});
+    await this.gitExec(repoPath, ["rebase", "--abort"]).catch(() => {});
   }
 
   /**
@@ -858,10 +882,9 @@ export class BranchManager {
    * Stage resolved files and complete an in-progress merge.
    */
   async mergeContinue(repoPath: string): Promise<void> {
-    await this.git(repoPath, "add -A");
-    await shellExec("git -c core.editor=true commit --no-edit", {
-      cwd: repoPath,
-      timeout: 30000,
+    await this.gitExec(repoPath, ["add", "-A"]);
+    await this.gitExec(repoPath, ["-c", "core.editor=true", "commit", "--no-edit"], {
+      timeout: 30_000,
     });
   }
 
@@ -869,7 +892,7 @@ export class BranchManager {
    * Abort an in-progress merge.
    */
   async mergeAbort(repoPath: string): Promise<void> {
-    await this.git(repoPath, "merge --abort").catch(() => {});
+    await this.gitExec(repoPath, ["merge", "--abort"]).catch(() => {});
   }
 
   /**
@@ -896,32 +919,27 @@ export class BranchManager {
    */
   async commitWip(repoPath: string, taskId: string): Promise<boolean> {
     try {
-      const { stdout } = await shellExec("git status --porcelain", {
-        cwd: repoPath,
-        timeout: 5000,
-      });
+      const { stdout } = await this.gitExec(repoPath, ["status", "--porcelain"], { timeout: 5000 });
       if (!stdout.trim()) return false;
 
-      await this.git(repoPath, "add -A");
+      await this.gitExec(repoPath, ["add", "-A"]);
       await this.resetExcludedWipPaths(repoPath);
       // After excluding runtime paths, the working tree may still show untracked files
       // (e.g. `.opensprint/active/`) while nothing remains staged — do not run `git commit`
       // in that case or git exits with "nothing added to commit but untracked files present".
       try {
-        await shellExec("git diff --cached --quiet", {
-          cwd: repoPath,
-          timeout: 5000,
-        });
+        await this.gitExec(repoPath, ["diff", "--cached", "--quiet"], { timeout: 5000 });
         return false;
       } catch {
         // diff --cached exits 1 when there is something staged — proceed to commit.
       }
 
       const noHooksWip = getGitNoHooksPath();
-      await shellExec(`git -c core.hooksPath="${noHooksWip}" commit -m "WIP: ${taskId}"`, {
-        cwd: repoPath,
-        timeout: 30000,
-      });
+      await this.gitExec(
+        repoPath,
+        [...gitNoHooksConfigPrefix(noHooksWip), "commit", "-m", `WIP: ${taskId}`],
+        { timeout: 30_000 }
+      );
       return true;
     } catch (error) {
       log.warn("commitWip failed", { taskId, error });
@@ -938,9 +956,11 @@ export class BranchManager {
     branchName: string,
     baseBranch: string = "main"
   ): Promise<string[]> {
-    const { stdout } = await shellExec(`git diff --name-only ${baseBranch}...${branchName}`, {
-      cwd: repoPath,
-    });
+    const { stdout } = await this.gitExec(repoPath, [
+      "diff",
+      "--name-only",
+      `${baseBranch}...${branchName}`,
+    ]);
     return stdout.trim().split("\n").filter(Boolean);
   }
 
@@ -968,7 +988,7 @@ export class BranchManager {
       return "no_remote";
     }
     try {
-      await this.git(repoPath, `fetch origin ${baseBranch}`);
+      await this.gitExec(repoPath, ["fetch", "origin", baseBranch]);
     } catch (error) {
       log.warn("syncMainWithOrigin: fetch failed", { error });
       return "remote_error";
@@ -980,12 +1000,10 @@ export class BranchManager {
       return "up_to_date";
     }
     const currentBranch = await this.getCurrentBranch(repoPath).catch(() => "");
-    const { stdout } = await shellExec(
-      `git rev-list --left-right --count ${baseBranch}...${originRef}`,
-      {
-        cwd: repoPath,
-        timeout: 5000,
-      }
+    const { stdout } = await this.gitExec(
+      repoPath,
+      ["rev-list", "--left-right", "--count", `${baseBranch}...${originRef}`],
+      { timeout: 5000 }
     );
     const [localAheadRaw = "0", localBehindRaw = "0"] = stdout.trim().split(/\s+/);
     const localAhead = parseInt(localAheadRaw, 10) || 0;
@@ -1003,9 +1021,9 @@ export class BranchManager {
     if (localBehind > 0) {
       await this.withRepoRootAutoStash(repoPath, `sync ${baseBranch} with origin`, async () => {
         if (currentBranch !== baseBranch) {
-          await this.git(repoPath, `checkout ${baseBranch}`);
+          await this.gitExec(repoPath, ["checkout", baseBranch]);
         }
-        await this.git(repoPath, `merge --ff-only ${originRef}`);
+        await this.gitExec(repoPath, ["merge", "--ff-only", originRef]);
       });
       log.info("syncMainWithOrigin: fast-forwarded branch to origin", { baseBranch });
       return "fast_forwarded";
@@ -1044,10 +1062,11 @@ export class BranchManager {
     baseBranch: string = "main"
   ): Promise<string> {
     try {
-      const { stdout } = await shellExec(`git diff ${baseBranch}...${branchName}`, {
-        cwd: repoPath,
-        maxBuffer: 10 * 1024 * 1024,
-      });
+      const { stdout } = await this.gitExec(
+        repoPath,
+        ["diff", `${baseBranch}...${branchName}`],
+        { maxStdoutBytes: DIFF_MAX_BUFFER_BYTES }
+      );
       return stdout;
     } catch {
       return "";
@@ -1062,16 +1081,15 @@ export class BranchManager {
    */
   async captureUncommittedDiff(gitPath: string): Promise<string> {
     try {
-      await shellExec("git add -A", { cwd: gitPath });
+      await this.gitExec(gitPath, ["add", "-A"]);
       await this.resetExcludedWipPaths(gitPath);
       try {
-        const { stdout } = await shellExec("git diff --cached HEAD", {
-          cwd: gitPath,
-          maxBuffer: 10 * 1024 * 1024,
+        const { stdout } = await this.gitExec(gitPath, ["diff", "--cached", "HEAD"], {
+          maxStdoutBytes: DIFF_MAX_BUFFER_BYTES,
         });
         return stdout;
       } finally {
-        await shellExec("git reset HEAD", { cwd: gitPath }).catch(() => {});
+        await this.gitExec(gitPath, ["reset", "HEAD"]).catch(() => {});
       }
     } catch {
       return "";
@@ -1080,8 +1098,7 @@ export class BranchManager {
 
   /** Unstage paths that must never be included in automated WIP commits or diff snapshots. */
   private async resetExcludedWipPaths(repoPath: string): Promise<void> {
-    const paths = WIP_EXCLUDE_PATHS.map((p) => shellQuote(p)).join(" ");
-    await this.git(repoPath, `reset HEAD -- ${paths}`).catch(() => {
+    await this.gitExec(repoPath, ["reset", "HEAD", "--", ...WIP_EXCLUDE_PATHS]).catch(() => {
       /* paths may not be staged */
     });
   }
@@ -1111,7 +1128,7 @@ export class BranchManager {
     branchName: string,
     ourPath: string
   ): Promise<void> {
-    const { stdout } = await shellExec("git worktree list --porcelain", { cwd: repoPath });
+    const { stdout } = await this.gitExec(repoPath, ["worktree", "list", "--porcelain"]);
     const ourPathResolved = path.resolve(ourPath);
     const branchRef = `refs/heads/${branchName}`;
     let worktreePath: string | null = null;
@@ -1152,7 +1169,7 @@ export class BranchManager {
           ourPath,
         });
         try {
-          await this.git(repoPath, `worktree remove ${shellQuote(safeOtherPath)} --force`);
+          await this.gitExec(repoPath, ["worktree", "remove", safeOtherPath, "--force"]);
         } catch {
           await this.removeWorktreeDirectorySafely(
             repoPath,
@@ -1205,9 +1222,9 @@ export class BranchManager {
     } else {
       // Per-task: create branch if it doesn't exist.
       try {
-        await shellExec(`git rev-parse --verify ${branchName}`, { cwd: repoPath });
+        await this.gitExec(repoPath, ["rev-parse", "--verify", branchName]);
       } catch {
-        await this.git(repoPath, `branch ${branchName} ${baseBranch}`);
+        await this.gitExec(repoPath, ["branch", branchName, baseBranch]);
       }
     }
 
@@ -1237,12 +1254,10 @@ export class BranchManager {
     // (e.g. leftover dir from crash, or path not fully removed by removeTaskWorktree).
     await this.ensureWorktreePathClear(repoPath, worktreeKey, wtPath);
     const noHooksWorktree = getGitNoHooksPath();
-    await shellExec(
-      `git -c core.hooksPath="${noHooksWorktree}" worktree add ${shellQuote(wtPath)} ${shellQuote(branchName)}`,
-      {
-        cwd: repoPath,
-        timeout: 30000,
-      }
+    await this.gitExec(
+      repoPath,
+      [...gitNoHooksConfigPrefix(noHooksWorktree), "worktree", "add", wtPath, branchName],
+      { timeout: 30_000 }
     );
 
     // Symlink node_modules from main repo so dependencies are available in the worktree.
@@ -1274,7 +1289,7 @@ export class BranchManager {
 
     // 1. git worktree remove --force (handles both git metadata and directory)
     try {
-      await this.git(repoPath, `worktree remove ${shellQuote(wtPath)} --force`);
+      await this.gitExec(repoPath, ["worktree", "remove", wtPath, "--force"]);
     } catch {
       /* may not be a registered worktree */
     }
@@ -1295,7 +1310,9 @@ export class BranchManager {
       wtPath,
     });
     try {
-      await shellExec(`rm -rf ${shellQuote(wtPath)}`, { cwd: repoPath, timeout: 15000 });
+      if (process.platform !== "win32") {
+        await runCommand({ command: "rm", args: ["-rf", wtPath] }, { cwd: repoPath, timeout: 15_000 });
+      }
     } catch (rmErr) {
       log.warn("Shell rm -rf failed", {
         worktreeKey,
@@ -1303,7 +1320,7 @@ export class BranchManager {
         err: rmErr instanceof Error ? rmErr.message : String(rmErr),
       });
     }
-    await this.git(repoPath, "worktree prune").catch(() => {});
+    await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
     if (await pathGone()) return;
 
     // 4. Last resort: rename the directory out of the way so the target path is clear.
@@ -1316,11 +1333,12 @@ export class BranchManager {
     });
     try {
       await fs.rename(wtPath, stalePath);
-      await this.git(repoPath, "worktree prune").catch(() => {});
+      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
       // Fire-and-forget cleanup of the renamed directory
-      shellExec(`rm -rf ${shellQuote(stalePath)}`, { cwd: repoPath, timeout: 30000 }).catch(() =>
-        fs.rm(stalePath, { recursive: true, force: true }).catch(() => {})
-      );
+      (process.platform !== "win32"
+        ? runCommand({ command: "rm", args: ["-rf", stalePath] }, { cwd: repoPath, timeout: 30_000 })
+        : Promise.resolve()
+      ).catch(() => fs.rm(stalePath, { recursive: true, force: true }).catch(() => {}));
     } catch (renameErr) {
       log.error("Failed to rename stale worktree path aside", {
         worktreeKey,
@@ -1344,7 +1362,7 @@ export class BranchManager {
     branchName: string
   ): Promise<string | null> {
     const branchRef = `refs/heads/${branchName}`;
-    const { stdout } = await shellExec("git worktree list --porcelain", { cwd: repoPath });
+    const { stdout } = await this.gitExec(repoPath, ["worktree", "list", "--porcelain"]);
     let worktreePath: string | null = null;
     for (const line of stdout.split("\n")) {
       if (line.startsWith("worktree ")) {
@@ -1531,11 +1549,11 @@ export class BranchManager {
     command: string
   ): Promise<{ healthy: boolean; output: string }> {
     try {
-      const { stdout, stderr } = await shellExec(command, {
-        cwd: repoPath,
-        timeout: NPM_HEALTH_CHECK_TIMEOUT_MS,
-      });
-      const output = [stdout, stderr].filter(Boolean).join("\n").trim().slice(0, 4000);
+      const result = await runCommand(
+        { command: "npm", args: npmShellCommandToArgv(command) },
+        { cwd: repoPath, timeout: NPM_HEALTH_CHECK_TIMEOUT_MS }
+      );
+      const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim().slice(0, 4000);
       return { healthy: true, output };
     } catch (err) {
       const output = getErrorText(err).trim().slice(0, 4000);
@@ -1556,12 +1574,11 @@ export class BranchManager {
           command.startsWith("npm ")
             ? { ...process.env, ...NPM_INCLUDE_DEV_ENV }
             : undefined;
-        const { stdout, stderr } = await shellExec(command, {
-          cwd: repoPath,
-          timeout: NPM_REPAIR_TIMEOUT_MS,
-          ...(env ? { env } : {}),
-        });
-        const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+        const result = await runCommand(
+          { command: "npm", args: npmShellCommandToArgv(command) },
+          { cwd: repoPath, timeout: NPM_REPAIR_TIMEOUT_MS, ...(env ? { env } : {}) }
+        );
+        const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
         if (output) outputs.push(`[${command}] ${output}`);
         return {
           success: true,
@@ -1600,9 +1617,19 @@ export class BranchManager {
   async reconcileDependenciesAfterMerge(repoPath: string): Promise<void> {
     let needsReconcile = true;
     try {
-      const { stdout } = await shellExec(
-        'git diff --name-only ORIG_HEAD..HEAD -- package.json package-lock.json ":(glob)packages/**/package.json" ":(glob)apps/**/package.json"',
-        { cwd: repoPath, timeout: 10_000 }
+      const { stdout } = await this.gitExec(
+        repoPath,
+        [
+          "diff",
+          "--name-only",
+          "ORIG_HEAD..HEAD",
+          "--",
+          "package.json",
+          "package-lock.json",
+          ":(glob)packages/**/package.json",
+          ":(glob)apps/**/package.json",
+        ],
+        { timeout: 10_000 }
       );
       const changed = stdout.trim().split("\n").filter(Boolean);
       if (changed.length === 0) {
@@ -1788,7 +1815,7 @@ export class BranchManager {
     }
 
     try {
-      await this.git(repoPath, `worktree remove ${shellQuote(safeRegisteredPath)} --force`);
+      await this.gitExec(repoPath, ["worktree", "remove", safeRegisteredPath, "--force"]);
     } catch (err) {
       log.warn("worktree remove failed, attempting manual cleanup", {
         worktreeKey,
@@ -1847,7 +1874,7 @@ export class BranchManager {
   ): Promise<Array<{ taskId: string; worktreePath: string }>> {
     const result: Array<{ taskId: string; worktreePath: string }> = [];
     try {
-      const { stdout } = await shellExec("git worktree list --porcelain", { cwd: repoPath });
+      const { stdout } = await this.gitExec(repoPath, ["worktree", "list", "--porcelain"]);
       for (const line of stdout.split("\n")) {
         if (!line.startsWith("worktree ")) continue;
         const worktreePath = line.slice(9).trim();
@@ -1909,9 +1936,11 @@ export class BranchManager {
     baseBranch: string = "main"
   ): Promise<number> {
     try {
-      const { stdout } = await shellExec(`git rev-list --count ${baseBranch}..${branchName}`, {
-        cwd: repoPath,
-      });
+      const { stdout } = await this.gitExec(repoPath, [
+        "rev-list",
+        "--count",
+        `${baseBranch}..${branchName}`,
+      ]);
       return parseInt(stdout.trim(), 10) || 0;
     } catch {
       return 0;
@@ -1936,10 +1965,9 @@ export class BranchManager {
       async () => {
         await this.ensureOnMainInternal(repoPath, baseBranch);
         if (message) {
-          const escaped = message.replace(/"/g, '\\"');
-          await this.git(repoPath, `merge -m "${escaped}" ${branchName}`);
+          await this.gitExec(repoPath, ["merge", "-m", message, branchName]);
         } else {
-          await this.git(repoPath, `merge ${branchName}`);
+          await this.gitExec(repoPath, ["merge", branchName]);
         }
       }
     );
@@ -1951,10 +1979,9 @@ export class BranchManager {
   ): Promise<MergeToMainResult> {
     let autoResolvedFiles: string[] = [];
     try {
-      await this.git(repoPath, `merge --no-commit --no-ff ${branchName}`);
+      await this.gitExec(repoPath, ["merge", "--no-commit", "--no-ff", branchName]);
     } catch (mergeErr) {
-      const { stdout } = await shellExec("git diff --name-only --diff-filter=U", {
-        cwd: repoPath,
+      const { stdout } = await this.gitExec(repoPath, ["diff", "--name-only", "--diff-filter=U"], {
         timeout: 5000,
       }).catch(() => ({ stdout: "" }));
       const conflictFiles = stdout.trim().split("\n").filter(Boolean);
@@ -1974,12 +2001,9 @@ export class BranchManager {
 
       for (const file of infraFiles) {
         try {
-          await shellExec(`git rm -f ${shellQuote(file)}`, { cwd: repoPath, timeout: 5000 });
+          await this.gitExec(repoPath, ["rm", "-f", file], { timeout: 5000 });
         } catch {
-          await shellExec(`git add ${shellQuote(file)}`, {
-            cwd: repoPath,
-            timeout: 5000,
-          }).catch(() => {});
+          await this.gitExec(repoPath, ["add", file], { timeout: 5000 }).catch(() => {});
         }
       }
       autoResolvedFiles = infraFiles;
@@ -2026,9 +2050,18 @@ export class BranchManager {
    * Remove runtime-only .opensprint paths from a staged merge result before the merge commit is created.
    */
   async stripRuntimePathsFromMergeResult(repoPath: string): Promise<void> {
-    await shellExec(
-      "git rm -r --cached --ignore-unmatch .opensprint/pending-commits.json .opensprint/sessions .opensprint/active",
-      { cwd: repoPath, timeout: 10000 }
+    await this.gitExec(
+      repoPath,
+      [
+        "rm",
+        "-r",
+        "--cached",
+        "--ignore-unmatch",
+        ".opensprint/pending-commits.json",
+        ".opensprint/sessions",
+        ".opensprint/active",
+      ],
+      { timeout: 10_000 }
     ).catch(() => {});
     const runtimePaths = [
       path.join(repoPath, ".opensprint", "pending-commits.json"),
@@ -2055,23 +2088,14 @@ export class BranchManager {
   async rebaseOntoMain(wtPath: string, baseBranch: string = "main"): Promise<void> {
     try {
       const noHooks = getGitNoHooksPath();
-      await shellExec(`git -c core.hooksPath="${noHooks}" rebase --empty=drop ${baseBranch}`, {
-        cwd: wtPath,
-        timeout: 120000,
-      });
+      await this.gitExec(
+        wtPath,
+        [...gitNoHooksConfigPrefix(noHooks), "rebase", "--empty=drop", baseBranch],
+        { timeout: 120_000 }
+      );
     } catch (_err) {
       const conflicted = await this.getConflictedFiles(wtPath);
       throw new RebaseConflictError(conflicted);
     }
-  }
-
-  private async git(
-    repoPath: string,
-    command: string
-  ): Promise<{ stdout: string; stderr: string }> {
-    return shellExec(`git ${command}`, {
-      cwd: repoPath,
-      timeout: 30000,
-    });
   }
 }

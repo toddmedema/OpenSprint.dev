@@ -12,7 +12,12 @@ import {
 import { heartbeatService } from "../services/heartbeat.service.js";
 import { RepoPreflightError } from "../utils/git-repo-state.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
-import * as shellExecModule from "../utils/shell-exec.js";
+import * as commandRunnerModule from "../utils/command-runner.js";
+import type { CommandSpec } from "../utils/command-runner.js";
+
+function commandRunnerKey(spec: CommandSpec): string {
+  return [spec.command, ...(spec.args ?? [])].join(" ");
+}
 
 vi.mock("../services/task-store.service.js", () => ({
   taskStore: {
@@ -34,6 +39,15 @@ vi.mock("../services/task-store.service.js", () => ({
 }));
 
 const execAsync = promisify(exec);
+
+const mockRunSuccess = {
+  stdout: "",
+  stderr: "",
+  executable: "x",
+  cwd: "",
+  exitCode: 0 as const,
+  signal: null as null,
+};
 
 describe("BranchManager", () => {
   let branchManager: BranchManager;
@@ -182,12 +196,12 @@ describe("BranchManager", () => {
 
   describe("checkDependencyIntegrity", () => {
     it("skips dependency checks when root package.json is missing", async () => {
-      const shellExecSpy = vi.spyOn(shellExecModule, "shellExec");
+      const runSpy = vi.spyOn(commandRunnerModule, "runCommand");
 
       await branchManager.checkDependencyIntegrity(repoPath);
 
-      expect(shellExecSpy).not.toHaveBeenCalled();
-      shellExecSpy.mockRestore();
+      expect(runSpy).not.toHaveBeenCalled();
+      runSpy.mockRestore();
     });
 
     it("uses workspace npm ls and does not repair healthy dependencies", async () => {
@@ -196,67 +210,68 @@ describe("BranchManager", () => {
         JSON.stringify({ name: "repo", private: true, workspaces: ["packages/*"] })
       );
       const commands: string[] = [];
-      const shellExecSpy = vi
-        .spyOn(shellExecModule, "shellExec")
-        .mockImplementation(async (command: string) => {
-          commands.push(command);
-          if (command === "npm ls --depth=0 --workspaces") {
-            return { stdout: "ok", stderr: "" };
+      const runSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec) => {
+          commands.push(commandRunnerKey(spec));
+          if (commandRunnerKey(spec) === "npm ls --depth=0 --workspaces") {
+            return { ...mockRunSuccess, stdout: "ok" };
           }
-          throw new Error(`Unexpected command: ${command}`);
+          throw new Error(`Unexpected command: ${commandRunnerKey(spec)}`);
         });
 
       await branchManager.checkDependencyIntegrity(repoPath);
 
       expect(commands).toEqual(["npm ls --depth=0 --workspaces"]);
-      shellExecSpy.mockRestore();
+      runSpy.mockRestore();
     });
 
     it("uses non-workspace npm ls for single-package repos", async () => {
       await fs.writeFile(path.join(repoPath, "package.json"), JSON.stringify({ name: "repo" }));
       const commands: string[] = [];
-      const shellExecSpy = vi
-        .spyOn(shellExecModule, "shellExec")
-        .mockImplementation(async (command: string) => {
-          commands.push(command);
-          if (command === "npm ls --depth=0") {
-            return { stdout: "ok", stderr: "" };
+      const runSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec) => {
+          commands.push(commandRunnerKey(spec));
+          if (commandRunnerKey(spec) === "npm ls --depth=0") {
+            return { ...mockRunSuccess, stdout: "ok" };
           }
-          throw new Error(`Unexpected command: ${command}`);
+          throw new Error(`Unexpected command: ${commandRunnerKey(spec)}`);
         });
 
       await branchManager.checkDependencyIntegrity(repoPath);
 
       expect(commands).toEqual(["npm ls --depth=0"]);
-      shellExecSpy.mockRestore();
+      runSpy.mockRestore();
     });
 
     it("attempts one npm ci repair when initial health check fails", async () => {
       await fs.writeFile(path.join(repoPath, "package.json"), JSON.stringify({ name: "repo" }));
       const commands: string[] = [];
       let healthCheckCalls = 0;
-      const shellExecSpy = vi
-        .spyOn(shellExecModule, "shellExec")
-        .mockImplementation(async (command: string) => {
-          commands.push(command);
-          if (command === "npm ls --depth=0") {
+      const runSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec) => {
+          const key = commandRunnerKey(spec);
+          commands.push(key);
+          if (key === "npm ls --depth=0") {
             healthCheckCalls += 1;
             if (healthCheckCalls === 1) {
               throw new Error("invalid dependencies");
             }
-            return { stdout: "ok", stderr: "" };
+            return { ...mockRunSuccess, stdout: "ok" };
           }
-          if (command === "npm ci") {
-            return { stdout: "installed", stderr: "" };
+          if (key === "npm ci") {
+            return { ...mockRunSuccess, stdout: "installed" };
           }
-          throw new Error(`Unexpected command: ${command}`);
+          throw new Error(`Unexpected command: ${key}`);
         });
 
       await branchManager.checkDependencyIntegrity(repoPath);
 
       expect(commands).toEqual(["npm ls --depth=0", "npm ci", "npm ls --depth=0"]);
       expect(commands.filter((command) => command === "npm ci")).toHaveLength(1);
-      shellExecSpy.mockRestore();
+      runSpy.mockRestore();
     });
 
     it("re-links worktree node_modules after successful repair before passing", async () => {
@@ -264,21 +279,22 @@ describe("BranchManager", () => {
       const wtPath = path.join(repoPath, ".wt-task");
       const commands: string[] = [];
       let healthCheckCalls = 0;
-      const shellExecSpy = vi
-        .spyOn(shellExecModule, "shellExec")
-        .mockImplementation(async (command: string) => {
-          commands.push(command);
-          if (command === "npm ls --depth=0") {
+      const runSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec) => {
+          const key = commandRunnerKey(spec);
+          commands.push(key);
+          if (key === "npm ls --depth=0") {
             healthCheckCalls += 1;
             if (healthCheckCalls === 1) {
               throw new Error("missing module before repair");
             }
-            return { stdout: "ok", stderr: "" };
+            return { ...mockRunSuccess, stdout: "ok" };
           }
-          if (command === "npm ci") {
-            return { stdout: "installed", stderr: "" };
+          if (key === "npm ci") {
+            return { ...mockRunSuccess, stdout: "installed" };
           }
-          throw new Error(`Unexpected command: ${command}`);
+          throw new Error(`Unexpected command: ${key}`);
         });
       const symlinkSpy = vi.spyOn(branchManager, "symlinkNodeModules").mockResolvedValue(undefined);
 
@@ -288,24 +304,25 @@ describe("BranchManager", () => {
       expect(commands.filter((command) => command === "npm ci")).toHaveLength(1);
       expect(symlinkSpy).toHaveBeenCalledTimes(1);
       expect(symlinkSpy).toHaveBeenCalledWith(repoPath, wtPath);
-      shellExecSpy.mockRestore();
+      runSpy.mockRestore();
       symlinkSpy.mockRestore();
     });
 
     it("throws RepoPreflightError with remediation when health stays invalid", async () => {
       await fs.writeFile(path.join(repoPath, "package.json"), JSON.stringify({ name: "repo" }));
       const commands: string[] = [];
-      const shellExecSpy = vi
-        .spyOn(shellExecModule, "shellExec")
-        .mockImplementation(async (command: string) => {
-          commands.push(command);
-          if (command === "npm ls --depth=0") {
+      const runSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec) => {
+          const key = commandRunnerKey(spec);
+          commands.push(key);
+          if (key === "npm ls --depth=0") {
             throw new Error("MODULE_NOT_FOUND");
           }
-          if (command === "npm ci") {
+          if (key === "npm ci") {
             throw new Error("npm ci failed");
           }
-          throw new Error(`Unexpected command: ${command}`);
+          throw new Error(`Unexpected command: ${key}`);
         });
 
       try {
@@ -321,27 +338,28 @@ describe("BranchManager", () => {
 
       expect(commands).toEqual(["npm ls --depth=0", "npm ci", "npm ls --depth=0"]);
       expect(commands.filter((command) => command === "npm ci")).toHaveLength(1);
-      shellExecSpy.mockRestore();
+      runSpy.mockRestore();
     });
 
     it("does not loop repair when npm ci succeeds but deps stay unhealthy", async () => {
       await fs.writeFile(path.join(repoPath, "package.json"), JSON.stringify({ name: "repo" }));
       const commands: string[] = [];
       let healthCheckCalls = 0;
-      const shellExecSpy = vi
-        .spyOn(shellExecModule, "shellExec")
-        .mockImplementation(async (command: string) => {
-          commands.push(command);
-          if (command === "npm ls --depth=0") {
+      const runSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec) => {
+          const key = commandRunnerKey(spec);
+          commands.push(key);
+          if (key === "npm ls --depth=0") {
             healthCheckCalls += 1;
             throw new Error(
               healthCheckCalls === 1 ? "missing module before repair" : "still missing after repair"
             );
           }
-          if (command === "npm ci") {
-            return { stdout: "installed", stderr: "" };
+          if (key === "npm ci") {
+            return { ...mockRunSuccess, stdout: "installed" };
           }
-          throw new Error(`Unexpected command: ${command}`);
+          throw new Error(`Unexpected command: ${key}`);
         });
 
       await expect(branchManager.checkDependencyIntegrity(repoPath)).rejects.toMatchObject({
@@ -350,7 +368,7 @@ describe("BranchManager", () => {
       });
       expect(commands).toEqual(["npm ls --depth=0", "npm ci", "npm ls --depth=0"]);
       expect(commands.filter((command) => command === "npm ci")).toHaveLength(1);
-      shellExecSpy.mockRestore();
+      runSpy.mockRestore();
     });
 
     it("re-links worktree once and still fails when deps remain unhealthy after repair", async () => {
@@ -358,20 +376,21 @@ describe("BranchManager", () => {
       const wtPath = path.join(repoPath, ".wt-task");
       const commands: string[] = [];
       let healthCheckCalls = 0;
-      const shellExecSpy = vi
-        .spyOn(shellExecModule, "shellExec")
-        .mockImplementation(async (command: string) => {
-          commands.push(command);
-          if (command === "npm ls --depth=0") {
+      const runSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec) => {
+          const key = commandRunnerKey(spec);
+          commands.push(key);
+          if (key === "npm ls --depth=0") {
             healthCheckCalls += 1;
             throw new Error(
               healthCheckCalls === 1 ? "missing module before repair" : "still missing after repair"
             );
           }
-          if (command === "npm ci") {
-            return { stdout: "installed", stderr: "" };
+          if (key === "npm ci") {
+            return { ...mockRunSuccess, stdout: "installed" };
           }
-          throw new Error(`Unexpected command: ${command}`);
+          throw new Error(`Unexpected command: ${key}`);
         });
       const symlinkSpy = vi.spyOn(branchManager, "symlinkNodeModules").mockResolvedValue(undefined);
 
@@ -383,7 +402,7 @@ describe("BranchManager", () => {
       expect(commands.filter((command) => command === "npm ci")).toHaveLength(1);
       expect(symlinkSpy).toHaveBeenCalledTimes(1);
       expect(symlinkSpy).toHaveBeenCalledWith(repoPath, wtPath);
-      shellExecSpy.mockRestore();
+      runSpy.mockRestore();
       symlinkSpy.mockRestore();
     });
   });
@@ -391,84 +410,88 @@ describe("BranchManager", () => {
   describe("reconcileDependenciesAfterMerge", () => {
     it("runs npm ci when ORIG_HEAD diff shows lockfile changed", async () => {
       const commands: string[] = [];
-      const shellExecSpy = vi
-        .spyOn(shellExecModule, "shellExec")
-        .mockImplementation(async (command: string) => {
-          commands.push(command);
-          if (command.includes("git diff --name-only ORIG_HEAD")) {
-            return { stdout: "package-lock.json\npackage.json\n", stderr: "" };
+      const runSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec) => {
+          const key = commandRunnerKey(spec);
+          commands.push(key);
+          if (key.includes("ORIG_HEAD..HEAD")) {
+            return { ...mockRunSuccess, stdout: "package-lock.json\npackage.json\n" };
           }
-          if (command === "npm ci") {
-            return { stdout: "installed", stderr: "" };
+          if (key === "npm ci") {
+            return { ...mockRunSuccess, stdout: "installed" };
           }
-          return { stdout: "", stderr: "" };
+          return mockRunSuccess;
         });
 
       await branchManager.reconcileDependenciesAfterMerge(repoPath);
 
       expect(commands).toContain("npm ci");
-      shellExecSpy.mockRestore();
+      runSpy.mockRestore();
     });
 
     it("skips npm ci when no dependency files changed", async () => {
       const commands: string[] = [];
-      const shellExecSpy = vi
-        .spyOn(shellExecModule, "shellExec")
-        .mockImplementation(async (command: string) => {
-          commands.push(command);
-          if (command.includes("git diff --name-only ORIG_HEAD")) {
+      const runSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec) => {
+          const key = commandRunnerKey(spec);
+          commands.push(key);
+          if (key.includes("ORIG_HEAD..HEAD")) {
             // pathspec filter means git only returns matching files; empty = no dep files changed
-            return { stdout: "", stderr: "" };
+            return { ...mockRunSuccess, stdout: "" };
           }
-          return { stdout: "", stderr: "" };
+          return mockRunSuccess;
         });
 
       await branchManager.reconcileDependenciesAfterMerge(repoPath);
 
       expect(commands).not.toContain("npm ci");
-      shellExecSpy.mockRestore();
+      runSpy.mockRestore();
     });
 
     it("runs npm ci when a nested workspace package.json changed", async () => {
       const commands: string[] = [];
-      const shellExecSpy = vi
-        .spyOn(shellExecModule, "shellExec")
-        .mockImplementation(async (command: string) => {
-          commands.push(command);
-          if (command.includes("git diff --name-only ORIG_HEAD")) {
-            return { stdout: "packages/nested/pkg/package.json\n", stderr: "" };
+      const runSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec) => {
+          const key = commandRunnerKey(spec);
+          commands.push(key);
+          if (key.includes("ORIG_HEAD..HEAD")) {
+            return { ...mockRunSuccess, stdout: "packages/nested/pkg/package.json\n" };
           }
-          if (command === "npm ci") {
-            return { stdout: "installed", stderr: "" };
+          if (key === "npm ci") {
+            return { ...mockRunSuccess, stdout: "installed" };
           }
-          return { stdout: "", stderr: "" };
+          return mockRunSuccess;
         });
 
       await branchManager.reconcileDependenciesAfterMerge(repoPath);
 
       expect(commands).toContain("npm ci");
-      shellExecSpy.mockRestore();
+      runSpy.mockRestore();
     });
 
     it("falls back to running npm ci when ORIG_HEAD is unavailable", async () => {
       const commands: string[] = [];
-      const shellExecSpy = vi
-        .spyOn(shellExecModule, "shellExec")
-        .mockImplementation(async (command: string) => {
-          commands.push(command);
-          if (command.includes("git diff --name-only ORIG_HEAD")) {
+      const runSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec) => {
+          const key = commandRunnerKey(spec);
+          commands.push(key);
+          if (key.includes("ORIG_HEAD..HEAD")) {
             throw new Error("fatal: bad revision 'ORIG_HEAD'");
           }
-          if (command === "npm ci") {
-            return { stdout: "installed", stderr: "" };
+          if (key === "npm ci") {
+            return { ...mockRunSuccess, stdout: "installed" };
           }
-          return { stdout: "", stderr: "" };
+          return mockRunSuccess;
         });
 
       await branchManager.reconcileDependenciesAfterMerge(repoPath);
 
       expect(commands).toContain("npm ci");
-      shellExecSpy.mockRestore();
+      runSpy.mockRestore();
     });
   });
 

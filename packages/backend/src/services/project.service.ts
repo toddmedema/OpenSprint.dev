@@ -65,7 +65,7 @@ import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
 import { assertSupportedRepoPath } from "../utils/repo-path-policy.js";
 import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
-import { shellExec } from "../utils/shell-exec.js";
+import { runGit, gitNoHooksConfigPrefix } from "../utils/git-command.js";
 import {
   ensureGitIdentityConfigured,
   ensureBaseBranchExists,
@@ -415,13 +415,12 @@ export class ProjectService {
     }
     if (existingPaths.length === 0) return false;
 
-    const quoted = existingPaths.map((entry) => `"${entry.replace(/"/g, '\\"')}"`).join(" ");
-    await shellExec(`git add -A -- ${quoted}`, { cwd: repoPath });
-    const staged = await shellExec("git diff --cached --name-only", { cwd: repoPath });
+    await runGit(["add", "-A", "--", ...existingPaths], { cwd: repoPath });
+    const staged = await runGit(["diff", "--cached", "--name-only"], { cwd: repoPath });
     if (!staged.stdout.trim()) return false;
     const noHooks = getGitNoHooksPath();
-    await shellExec(
-      `git -c core.hooksPath="${noHooks}" commit -m "${ProjectService.BOOTSTRAP_COMMIT_MESSAGE}"`,
+    await runGit(
+      [...gitNoHooksConfigPrefix(noHooks), "commit", "-m", ProjectService.BOOTSTRAP_COMMIT_MESSAGE],
       { cwd: repoPath, timeout: 30_000 }
     );
     return true;
@@ -434,10 +433,15 @@ export class ProjectService {
     if (options.includeWholeRepo) {
       const hasChanges = await hasWorkingTreeChanges(repoPath);
       if (!hasChanges) return false;
-      await shellExec("git add -A", { cwd: repoPath });
+      await runGit(["add", "-A"], { cwd: repoPath });
       const noHooksBootstrap = getGitNoHooksPath();
-      await shellExec(
-        `git -c core.hooksPath="${noHooksBootstrap}" commit -m "${ProjectService.BOOTSTRAP_COMMIT_MESSAGE}"`,
+      await runGit(
+        [
+          ...gitNoHooksConfigPrefix(noHooksBootstrap),
+          "commit",
+          "-m",
+          ProjectService.BOOTSTRAP_COMMIT_MESSAGE,
+        ],
         { cwd: repoPath, timeout: 30_000 }
       );
       return true;
@@ -610,9 +614,9 @@ export class ProjectService {
 
     // Initialize git if not already a repo
     try {
-      await execAsync("git rev-parse --is-inside-work-tree", { cwd: repoPath });
+      await runGit(["rev-parse", "--is-inside-work-tree"], { cwd: repoPath });
     } catch {
-      await execAsync("git init", { cwd: repoPath });
+      await runGit(["init"], { cwd: repoPath });
       await ensureRepoHasInitialCommit(repoPath, input.worktreeBaseBranch);
     }
 

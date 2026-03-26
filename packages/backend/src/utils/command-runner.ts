@@ -15,6 +15,10 @@ export interface CommandRunOptions {
   cwd: string;
   timeout?: number;
   env?: NodeJS.ProcessEnv;
+  /** When set, kill the process and reject if accumulated stdout exceeds this byte size (UTF-8). */
+  maxStdoutBytes?: number;
+  /** When set, kill the process and reject if accumulated stderr exceeds this byte size (UTF-8). */
+  maxStderrBytes?: number;
 }
 
 export interface CommandRunResult {
@@ -137,7 +141,36 @@ export async function runCommand(
     let stderr = "";
     let settled = false;
     let timedOut = false;
+    let outputLimitExceeded = false;
     let killTimer: NodeJS.Timeout | null = null;
+
+    const maxStdoutBytes = options.maxStdoutBytes;
+    const maxStderrBytes = options.maxStderrBytes;
+
+    const checkOutputLimit = () => {
+      if (outputLimitExceeded || settled) return;
+      if (
+        maxStdoutBytes != null &&
+        Buffer.byteLength(stdout, "utf8") > maxStdoutBytes
+      ) {
+        outputLimitExceeded = true;
+        child.kill("SIGTERM");
+        killTimer = setTimeout(() => {
+          child.kill("SIGKILL");
+        }, KILL_GRACE_MS);
+        return;
+      }
+      if (
+        maxStderrBytes != null &&
+        Buffer.byteLength(stderr, "utf8") > maxStderrBytes
+      ) {
+        outputLimitExceeded = true;
+        child.kill("SIGTERM");
+        killTimer = setTimeout(() => {
+          child.kill("SIGKILL");
+        }, KILL_GRACE_MS);
+      }
+    };
 
     const child = spawn(executable, spec.args ?? [], {
       cwd,
@@ -167,9 +200,11 @@ export async function runCommand(
     child.stderr?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => {
       stdout += chunk;
+      checkOutputLimit();
     });
     child.stderr?.on("data", (chunk: string) => {
       stderr += chunk;
+      checkOutputLimit();
     });
 
     child.on("error", (err) => {
@@ -190,7 +225,7 @@ export async function runCommand(
     child.on("close", (exitCode, signal) => {
       finalize(() => {
         const normalizedSignal = signal ?? null;
-        if (!timedOut && exitCode === 0) {
+        if (!timedOut && !outputLimitExceeded && exitCode === 0) {
           resolve({
             stdout,
             stderr,
@@ -203,9 +238,11 @@ export async function runCommand(
         }
 
         const commandText = commandSpecToString(spec);
-        const message = timedOut
-          ? `Command timed out: ${commandText}`
-          : `Command failed: ${commandText}`;
+        const message = outputLimitExceeded
+          ? `Command output exceeded limit: ${commandText}`
+          : timedOut
+            ? `Command timed out: ${commandText}`
+            : `Command failed: ${commandText}`;
         reject(
           new CommandRunError(message, {
             stdout,
