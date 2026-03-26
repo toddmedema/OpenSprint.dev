@@ -31,6 +31,11 @@ vi.mock("../api/client", () => ({
       getAgentsInstructions: (...args: unknown[]) => mockGetAgentsInstructions(...args),
       updateAgentsInstructions: (...args: unknown[]) => mockUpdateAgentsInstructions(...args),
       runSelfImprovement: vi.fn().mockResolvedValue({ tasksCreated: 0, skipped: "no_changes" }),
+      getSelfImprovementStatus: vi.fn().mockResolvedValue({ status: "idle" }),
+      getSelfImprovementHistory: vi.fn().mockResolvedValue([]),
+      approveSelfImprovement: vi.fn(),
+      rejectSelfImprovement: vi.fn(),
+      rollbackSelfImprovement: vi.fn(),
     },
     env: {
       getKeys: (...args: unknown[]) => mockGetKeys(...args),
@@ -1518,5 +1523,66 @@ describe("ProjectSettingsModal", () => {
 
     const select = screen.getByTestId("merge-strategy-select");
     expect(select).toHaveValue("per_epic");
+  });
+
+  it("saves runAgentEnhancementExperiments when checkbox is toggled on Workflow tab", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, runAgentEnhancementExperiments: false });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
+    await waitForModalReady();
+
+    const workflowTab = screen.getByRole("button", { name: "Workflow" });
+    await userEvent.click(workflowTab);
+
+    const checkbox = await screen.findByTestId("run-agent-enhancement-experiments-checkbox");
+    expect(checkbox).not.toBeChecked();
+
+    await userEvent.click(checkbox);
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          runAgentEnhancementExperiments: true,
+        })
+      )
+    );
+  });
+
+  it("loads and reflects persisted runAgentEnhancementExperiments: true", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, runAgentEnhancementExperiments: true });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const workflowTab = screen.getByRole("button", { name: "Workflow" });
+    await userEvent.click(workflowTab);
+
+    const checkbox = await screen.findByTestId("run-agent-enhancement-experiments-checkbox");
+    expect(checkbox).toBeChecked();
+  });
+
+  it("round-trips runAgentEnhancementExperiments false through save", async () => {
+    mockGetSettings.mockResolvedValue({ ...mockSettings, runAgentEnhancementExperiments: true });
+
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
+    await waitForModalReady();
+
+    const workflowTab = screen.getByRole("button", { name: "Workflow" });
+    await userEvent.click(workflowTab);
+
+    const checkbox = await screen.findByTestId("run-agent-enhancement-experiments-checkbox");
+    expect(checkbox).toBeChecked();
+
+    await userEvent.click(checkbox);
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          runAgentEnhancementExperiments: false,
+        })
+      )
+    );
   });
 });
