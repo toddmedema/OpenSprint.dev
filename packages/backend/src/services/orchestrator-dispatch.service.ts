@@ -323,9 +323,16 @@ export interface OrchestratorDispatchHost {
   getProjectService(): {
     getSettings(
       projectId: string
-    ): Promise<{ mergeStrategy?: string; worktreeBaseBranch?: string }>;
+    ): Promise<{
+      mergeStrategy?: string;
+      worktreeBaseBranch?: string;
+      gitWorkingMode?: "worktree" | "branches";
+    }>;
   };
-  getBranchManager(): { ensureOnMain(repoPath: string, baseBranch: string): Promise<void> };
+  getBranchManager(): {
+    ensureOnMain(repoPath: string, baseBranch: string): Promise<void>;
+    getWorktreePath(key: string): string;
+  };
   getFileScopeAnalyzer(): {
     predict(
       projectId: string,
@@ -407,6 +414,10 @@ export class OrchestratorDispatchService {
     );
     if (mergeResumeState) {
       slot.worktreePath = mergeResumeState.worktreePath;
+    } else if (settings.gitWorkingMode === "branches") {
+      slot.worktreePath = repoPath;
+    } else {
+      slot.worktreePath = this.host.getBranchManager().getWorktreePath(worktreeKey);
     }
     slot.fileScope = await this.host
       .getFileScopeAnalyzer()

@@ -2080,13 +2080,17 @@ describe("OrchestratorService (slot-based model)", () => {
         expect(mockWriteJsonAtomic).toHaveBeenCalled();
       });
 
-      // Should broadcast execute.status with activeTasks
+      // Should broadcast execute.status with activeTasks including worktreePath
       expect(mockBroadcastToProject).toHaveBeenCalledWith(
         projectId,
         expect.objectContaining({
           type: "execute.status",
           activeTasks: expect.arrayContaining([
-            expect.objectContaining({ taskId: "task-1", phase: "coding" }),
+            expect.objectContaining({
+              taskId: "task-1",
+              phase: "coding",
+              worktreePath: expect.any(String),
+            }),
           ]),
         })
       );
@@ -2460,14 +2464,18 @@ describe("OrchestratorService (slot-based model)", () => {
         expect(mockCreateTaskWorktree).toHaveBeenCalled();
       });
 
-      // Agent-assigned or unassigned tasks are dispatched
+      // Agent-assigned or unassigned tasks are dispatched with worktreePath
       expect(mockCreateTaskWorktree).toHaveBeenCalled();
       expect(mockBroadcastToProject).toHaveBeenCalledWith(
         projectId,
         expect.objectContaining({
           type: "execute.status",
           activeTasks: expect.arrayContaining([
-            expect.objectContaining({ taskId: expect.any(String), phase: "coding" }),
+            expect.objectContaining({
+              taskId: expect.any(String),
+              phase: "coding",
+              worktreePath: expect.any(String),
+            }),
           ]),
         })
       );
@@ -2510,7 +2518,11 @@ describe("OrchestratorService (slot-based model)", () => {
         expect.objectContaining({
           type: "execute.status",
           activeTasks: expect.arrayContaining([
-            expect.objectContaining({ taskId: "task-1", phase: "coding" }),
+            expect.objectContaining({
+              taskId: "task-1",
+              phase: "coding",
+              worktreePath: repoPath,
+            }),
           ]),
         })
       );
@@ -2553,6 +2565,23 @@ describe("OrchestratorService (slot-based model)", () => {
       mockGetSelfImprovementRunMode.mockReturnValue("experiments");
       const statusExperiments = await orchestrator.getStatus(projectId);
       expect(statusExperiments.selfImprovementRunMode).toBe("experiments");
+    });
+
+    it("includes worktreePath (string or null) on every active task entry", async () => {
+      const { task } = setupSingleTaskFlow();
+      mockTaskStoreReady.mockResolvedValueOnce([task]);
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      const status = await orchestrator.getStatus(projectId);
+      expect(status.activeTasks.length).toBeGreaterThan(0);
+      for (const entry of status.activeTasks) {
+        expect(entry).toHaveProperty("worktreePath");
+        expect(typeof entry.worktreePath === "string" || entry.worktreePath === null).toBe(true);
+      }
     });
   });
 

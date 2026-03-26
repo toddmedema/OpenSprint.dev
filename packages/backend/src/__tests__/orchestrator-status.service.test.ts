@@ -116,6 +116,108 @@ describe("OrchestratorStatusService", () => {
         worktreePath: null,
       });
     });
+
+    it("sets worktreePath to null when slot has no worktreePath", () => {
+      const state: StateForStatus = {
+        slots: new Map([
+          [
+            "task-1",
+            {
+              taskId: "task-1",
+              taskTitle: "Task one",
+              phase: "coding",
+              agent: {
+                startedAt: "2025-01-01T00:00:00Z",
+                lifecycleState: "running",
+              },
+            } as SlotForStatus,
+          ],
+        ]),
+        status: { queueDepth: 0, totalDone: 0, totalFailed: 0 },
+      };
+      const tasks = statusService.buildActiveTasks(state);
+      expect(tasks[0]?.worktreePath).toBeNull();
+    });
+
+    it("populates worktreePath on review sub-agent entries from slot", () => {
+      const state: StateForStatus = {
+        slots: new Map([
+          [
+            "task-1",
+            {
+              taskId: "task-1",
+              taskTitle: null,
+              worktreePath: "/tmp/wt/os-1",
+              phase: "review",
+              agent: { startedAt: "2025-01-01T00:00:00Z", lifecycleState: "running" },
+              reviewAgents: new Map([
+                [
+                  "security",
+                  {
+                    angle: "security",
+                    agent: {
+                      startedAt: "2025-01-01T00:00:00Z",
+                      lifecycleState: "running",
+                    },
+                  },
+                ],
+                [
+                  "performance",
+                  {
+                    angle: "performance",
+                    agent: {
+                      startedAt: "2025-01-01T00:00:00Z",
+                      lifecycleState: "running",
+                    },
+                  },
+                ],
+              ]),
+            } as SlotForStatus,
+          ],
+        ]),
+        status: { queueDepth: 0, totalDone: 0, totalFailed: 0 },
+      };
+      const tasks = statusService.buildActiveTasks(state);
+      expect(tasks).toHaveLength(2);
+      for (const entry of tasks) {
+        expect(entry.worktreePath).toBe("/tmp/wt/os-1");
+      }
+    });
+
+    it("every active task entry always has worktreePath property (string or null)", () => {
+      const state: StateForStatus = {
+        slots: new Map([
+          [
+            "task-1",
+            {
+              taskId: "task-1",
+              taskTitle: "With path",
+              worktreePath: "/tmp/wt/os-1",
+              phase: "coding",
+              agent: { startedAt: "2025-01-01T00:00:00Z", lifecycleState: "running" },
+            } as SlotForStatus,
+          ],
+          [
+            "task-2",
+            {
+              taskId: "task-2",
+              taskTitle: "No path",
+              phase: "coding",
+              agent: { startedAt: "2025-01-01T00:00:00Z", lifecycleState: "running" },
+            } as SlotForStatus,
+          ],
+        ]),
+        status: { queueDepth: 0, totalDone: 0, totalFailed: 0 },
+      };
+      const tasks = statusService.buildActiveTasks(state);
+      expect(tasks).toHaveLength(2);
+      for (const entry of tasks) {
+        expect(entry).toHaveProperty("worktreePath");
+        expect(typeof entry.worktreePath === "string" || entry.worktreePath === null).toBe(true);
+      }
+      expect(tasks.find((t) => t.taskId === "task-1")?.worktreePath).toBe("/tmp/wt/os-1");
+      expect(tasks.find((t) => t.taskId === "task-2")?.worktreePath).toBeNull();
+    });
   });
 
   describe("buildReviewAgentId", () => {

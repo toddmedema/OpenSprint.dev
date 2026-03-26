@@ -3,7 +3,7 @@
  * Extracted from OrchestratorService for clarity and testability.
  */
 
-import type { OrchestratorStatus } from "@opensprint/shared";
+import type { ExecuteStatusEvent, OrchestratorStatus } from "@opensprint/shared";
 import {
   getAgentForComplexity,
   getProviderForAgentType,
@@ -144,13 +144,14 @@ export class OrchestratorLoopService {
 
   private async broadcastExecuteStatus(projectId: string): Promise<void> {
     const status = await this.host.getStatus(projectId);
-    broadcastToProject(projectId, {
+    const payload: ExecuteStatusEvent = {
       type: "execute.status",
       activeTasks: status.activeTasks,
       queueDepth: status.queueDepth,
       baselineStatus: status.baselineStatus,
       baselineCheckedAt: status.baselineCheckedAt ?? null,
       baselineFailureSummary: status.baselineFailureSummary ?? null,
+      baselineRemediationStatus: status.baselineRemediationStatus ?? null,
       mergeValidationStatus: status.mergeValidationStatus,
       mergeValidationFailureSummary: status.mergeValidationFailureSummary ?? null,
       dispatchPausedReason: status.dispatchPausedReason ?? null,
@@ -160,7 +161,8 @@ export class OrchestratorLoopService {
       ...(status.pendingFeedbackCategorizations && {
         pendingFeedbackCategorizations: status.pendingFeedbackCategorizations,
       }),
-    });
+    };
+    broadcastToProject(projectId, payload);
   }
 
   async runLoop(projectId: string): Promise<void> {
