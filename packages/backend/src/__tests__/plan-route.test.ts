@@ -114,6 +114,10 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
   });
 
   beforeEach(async () => {
+    mockPlanningAgentInvoke.mockReset();
+    mockSuggestInvoke.mockReset();
+    mockBroadcastToProject.mockClear();
+
     const mod = (await import("../services/task-store.service.js")) as unknown as {
       _resetSharedDb?: () => void | Promise<void>;
     };
