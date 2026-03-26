@@ -19,6 +19,14 @@ interface RepoSnapshot {
   untrackedFiles: Array<{ path: string; hash: string }>;
 }
 
+function hasContentMutation(before: RepoSnapshot, after: RepoSnapshot): boolean {
+  return (
+    before.worktreeDiff !== after.worktreeDiff ||
+    before.stagedDiff !== after.stagedDiff ||
+    JSON.stringify(before.untrackedFiles) !== JSON.stringify(after.untrackedFiles)
+  );
+}
+
 function normalizeLines(stdout: string): string[] {
   return stdout
     .split("\n")
@@ -76,12 +84,11 @@ async function captureSnapshot(repoPath: string): Promise<RepoSnapshot> {
 }
 
 function snapshotsMatch(before: RepoSnapshot, after: RepoSnapshot): boolean {
+  // Ignore HEAD-only drift (for example, concurrent fast-forward updates) and
+  // focus on filesystem/index mutations performed during planner execution.
   return (
-    before.head === after.head &&
     before.branch === after.branch &&
-    before.worktreeDiff === after.worktreeDiff &&
-    before.stagedDiff === after.stagedDiff &&
-    JSON.stringify(before.untrackedFiles) === JSON.stringify(after.untrackedFiles)
+    !hasContentMutation(before, after)
   );
 }
 
@@ -120,7 +127,7 @@ function buildMutationMessage(label: string, before: RepoSnapshot, after: RepoSn
         }.`
       : "";
   const gitSuffix =
-    before.head !== after.head || before.branch !== after.branch
+    before.branch !== after.branch || hasContentMutation(before, after)
       ? ` Git state changed unexpectedly (before: ${before.branch || "(detached)"} ${before.head.slice(0, 7)}, after: ${after.branch || "(detached)"} ${after.head.slice(0, 7)}).`
       : "";
   return (
