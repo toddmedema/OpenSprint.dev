@@ -348,6 +348,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
       enableHumanTeammates?: boolean;
       teamMembers: Array<{ id: string; name: string }>;
       selfImprovementFrequency?: SelfImprovementFrequency;
+      runAgentEnhancementExperiments?: boolean;
     }>;
 
     const persistSettings = useCallback(
@@ -475,6 +476,11 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                 overrides?.selfImprovementFrequency ??
                 effSettings?.selfImprovementFrequency ??
                 "never",
+              ...(overrides?.runAgentEnhancementExperiments !== undefined
+                ? { runAgentEnhancementExperiments: overrides.runAgentEnhancementExperiments }
+                : effSettings?.runAgentEnhancementExperiments !== undefined
+                  ? { runAgentEnhancementExperiments: effSettings.runAgentEnhancementExperiments }
+                  : {}),
             }),
           ]);
           void queryClient.invalidateQueries({ queryKey: queryKeys.projects.settings(project.id) });
