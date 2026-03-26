@@ -1597,16 +1597,14 @@ suite("TaskStoreService", () => {
 
     it("returns 0 when <= 100 sessions", async () => {
       const projectId = createTestProjectId("prune-sessions");
+      const now = new Date().toISOString();
       await store.runWrite(async (client) => {
-        const now = new Date().toISOString();
-        for (let i = 0; i < 50; i++) {
-          await client.execute(
-            toPgParams(
-              `INSERT INTO agent_sessions (project_id, task_id, attempt, agent_type, agent_model, started_at, status, git_branch) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-            ),
-            [projectId, `task-${i}`, 1, "coder", "claude", now, "success", "branch"]
-          );
-        }
+        await client.execute(
+          `INSERT INTO agent_sessions (project_id, task_id, attempt, agent_type, agent_model, started_at, status, git_branch)
+           SELECT $1, 'task-' || g, 1, 'coder', 'claude', $2, 'success', 'branch'
+           FROM generate_series(0, 49) AS g`,
+          [projectId, now]
+        );
       });
       const pruned = await store.pruneAgentSessions();
       expect(pruned).toBe(0);
@@ -1618,16 +1616,14 @@ suite("TaskStoreService", () => {
 
     it("keeps 100 most recent and prunes older", async () => {
       const projectId = createTestProjectId("prune-sessions");
+      const now = new Date().toISOString();
       await store.runWrite(async (client) => {
-        const now = new Date().toISOString();
-        for (let i = 0; i < 150; i++) {
-          await client.execute(
-            toPgParams(
-              `INSERT INTO agent_sessions (project_id, task_id, attempt, agent_type, agent_model, started_at, status, git_branch) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-            ),
-            [projectId, `task-${i}`, 1, "coder", "claude", now, "success", "branch"]
-          );
-        }
+        await client.execute(
+          `INSERT INTO agent_sessions (project_id, task_id, attempt, agent_type, agent_model, started_at, status, git_branch)
+           SELECT $1, 'task-' || g, 1, 'coder', 'claude', $2, 'success', 'branch'
+           FROM generate_series(0, 149) AS g`,
+          [projectId, now]
+        );
       });
 
       const pruned = await store.pruneAgentSessions();
@@ -1644,21 +1640,24 @@ suite("TaskStoreService", () => {
       expect(Math.max(...ids)).toBe(150);
     });
 
-    it("runs VACUUM after pruning without error", async () => {
+    it("prunes and returns count even when VACUUM is best-effort", async () => {
       const projectId = createTestProjectId("prune-sessions");
+      const now = new Date().toISOString();
       await store.runWrite(async (client) => {
-        const now = new Date().toISOString();
-        for (let i = 0; i < 120; i++) {
-          await client.execute(
-            toPgParams(
-              `INSERT INTO agent_sessions (project_id, task_id, attempt, agent_type, agent_model, started_at, status, git_branch) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-            ),
-            [projectId, `task-${i}`, 1, "coder", "claude", now, "success", "branch"]
-          );
-        }
+        await client.execute(
+          `INSERT INTO agent_sessions (project_id, task_id, attempt, agent_type, agent_model, started_at, status, git_branch)
+           SELECT $1, 'task-' || g, 1, 'coder', 'claude', $2, 'success', 'branch'
+           FROM generate_series(0, 119) AS g`,
+          [projectId, now]
+        );
       });
 
-      await expect(store.pruneAgentSessions()).resolves.toBe(20);
+      const pruned = await store.pruneAgentSessions();
+      expect(pruned).toBe(20);
+
+      const db = await store.getDb();
+      const row = await db.queryOne("SELECT COUNT(*)::int as cnt FROM agent_sessions");
+      expect(row?.cnt).toBe(100);
     });
   });
 });

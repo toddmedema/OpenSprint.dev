@@ -121,7 +121,7 @@ function normalizePlannerOpenQuestions(
     .filter((item) => item.text.length > 0);
 }
 
-const DREAM_SYSTEM_PROMPT = `You are the Sketch phase AI assistant for Open Sprint. You help users define their product vision and create a comprehensive Product Requirements Document (PRD).
+export const DREAM_SYSTEM_PROMPT = `You are the Sketch phase AI assistant for Open Sprint. You help users define their product vision and create a comprehensive Product Requirements Document (PRD).
 
 Your role is to:
 1. Ask clarifying questions about the user's product vision
@@ -165,7 +165,7 @@ If none of these have been discussed, ask the user: "Do you have any requirement
 
 When the user provides this information, reflect it in technical_architecture and non_functional_requirements. If the user declines or has no constraints, note in assumptions_and_constraints that no scale/speed/cost requirements were specified and defaults are assumed.`;
 
-const PLAN_REFINEMENT_SYSTEM_PROMPT = `You are an AI planning assistant for Open Sprint. You help users refine individual feature Plans through conversation.
+export const PLAN_REFINEMENT_SYSTEM_PROMPT = `You are an AI planning assistant for Open Sprint. You help users refine individual feature Plans through conversation.
 
 Your role is to:
 1. Answer questions about the Plan
