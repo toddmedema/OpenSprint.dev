@@ -22,3 +22,10 @@ export const EXECUTE_STICKY_TOOLBAR_CLUSTER_CLASSNAME =
 
 /** Horizontal + bottom padding for banners and lists (no top — see sticky cluster). */
 export const EXECUTE_MAIN_CONTENT_INSET_CLASSNAME = "px-4 md:px-6 pb-4 sm:pb-6";
+
+/**
+ * Sticky `top` for timeline section headers inside the Execute scrollport.
+ * Must clear the sticky toolbar cluster above: PHASE_TOOLBAR_HEIGHT (48px) + cluster pb padding.
+ * Mobile: 48 + 8 (pb-2) = 56px. sm+: 48 + 12 (pb-3) = 60px.
+ */
+export const EXECUTE_SECTION_HEADER_STICKY_TOP = "top-[56px] sm:top-[60px]";

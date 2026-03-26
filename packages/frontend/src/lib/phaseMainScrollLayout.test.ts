@@ -1,6 +1,7 @@
 import {
   EXECUTE_MAIN_CONTENT_INSET_CLASSNAME,
   EXECUTE_SCROLL_PORT_CLASSNAME,
+  EXECUTE_SECTION_HEADER_STICKY_TOP,
   EXECUTE_STICKY_TOOLBAR_CLUSTER_CLASSNAME,
   PHASE_MAIN_SCROLL_CLASSNAME,
 } from "./phaseMainScrollLayout";
@@ -20,5 +21,9 @@ describe("phaseMainScrollLayout", () => {
       "sticky top-0 z-30 shrink-0 bg-theme-surface pb-2 sm:pb-3 [background-clip:padding-box]"
     );
     expect(EXECUTE_MAIN_CONTENT_INSET_CLASSNAME).toBe("px-4 md:px-6 pb-4 sm:pb-6");
+  });
+
+  it("section header sticky top clears toolbar cluster height (48px toolbar + pb padding)", () => {
+    expect(EXECUTE_SECTION_HEADER_STICKY_TOP).toBe("top-[56px] sm:top-[60px]");
   });
 });
