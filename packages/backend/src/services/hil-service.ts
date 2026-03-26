@@ -1,6 +1,7 @@
 import type { HilConfig } from "@opensprint/shared";
 import { ProjectService } from "./project.service.js";
 import { notificationService } from "./notification.service.js";
+import { prdProposalStore } from "./prd-proposal-store.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -61,7 +62,9 @@ export class HilService {
     defaultApproved = true,
     scopeChangeMetadata?: ScopeChangeHilMetadata,
     source: "eval" | "prd" = "eval",
-    sourceId: string = ""
+    sourceId: string = "",
+    proposedSpecContent?: string,
+    baseSpecContent?: string
   ): Promise<{ approved: boolean; notes?: string }> {
     // PRD §6.5.1: Test failures are always automated — never configurable
     if (category === "testFailuresAndRetries") {
@@ -92,6 +95,11 @@ export class HilService {
               }
             : undefined,
         });
+
+        if (proposedSpecContent) {
+          prdProposalStore.register(notification.id, proposedSpecContent, baseSpecContent);
+        }
+
         broadcastToProject(projectId, {
           type: "notification.added",
           notification: {
@@ -126,6 +134,10 @@ export class HilService {
               }
             : undefined,
         });
+
+        if (proposedSpecContent) {
+          prdProposalStore.register(notification.id, proposedSpecContent, baseSpecContent);
+        }
 
         broadcastToProject(projectId, {
           type: "notification.added",
@@ -166,6 +178,8 @@ export class HilService {
    * Resolves the waiting promise for requires_approval.
    */
   notifyResolved(notificationId: string, approved: boolean): void {
+    prdProposalStore.remove(notificationId);
+
     const callback = this.notificationResolveCallbacks.get(notificationId);
     if (callback) {
       callback(approved);
