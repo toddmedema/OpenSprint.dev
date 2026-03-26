@@ -34,7 +34,7 @@ describe("HelpAnalyticsChart", () => {
     expect(screen.getByText(/No completed tasks with complexity data yet/)).toBeInTheDocument();
   });
 
-  it("renders chart when data has buckets with tasks", () => {
+  it("renders chart when data has buckets with tasks (after d3 loads)", async () => {
     const data = Array.from({ length: 10 }, (_, i) => ({
       complexity: i + 1,
       taskCount: i === 2 ? 2 : i === 4 ? 1 : 0,
@@ -42,18 +42,19 @@ describe("HelpAnalyticsChart", () => {
     }));
     render(<HelpAnalyticsChart data={data} totalTasks={3} />);
 
-    expect(screen.getByTestId("help-analytics-chart")).toBeInTheDocument();
-    expect(screen.getByLabelText("Task analytics by complexity")).toBeInTheDocument();
+    expect(await screen.findByTestId("help-analytics-chart")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Task analytics by complexity")).toBeInTheDocument();
     expect(screen.getByText(/Based on 3 most recent completed tasks/)).toBeInTheDocument();
   });
 
-  it("chart container has fixed height of 400px", () => {
+  it("chart container has fixed height of 400px after d3 loads", async () => {
     const data = Array.from({ length: 10 }, (_, i) => ({
       complexity: i + 1,
       taskCount: i === 2 ? 2 : 0,
       avgCompletionTimeMs: i === 2 ? 90000 : 0,
     }));
     const { container } = render(<HelpAnalyticsChart data={data} totalTasks={2} />);
+    await screen.findByLabelText("Task analytics by complexity");
     const chartContainer = container.querySelector('[data-testid="help-analytics-chart"] > div');
     expect(chartContainer).toHaveClass("h-[400px]");
   });

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import * as d3 from "d3";
 import type { TaskAnalyticsBucket } from "@opensprint/shared";
 
 interface HelpAnalyticsChartProps {
@@ -20,6 +19,11 @@ function formatDuration(ms: number): string {
 export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dimensions, setDimensions] = useState({ width: 600, height: 400 });
+  const [d3Module, setD3Module] = useState<typeof import("d3") | null>(null);
+
+  useEffect(() => {
+    import("d3").then((m) => setD3Module(m));
+  }, []);
 
   useEffect(() => {
     const el = svgRef.current?.parentElement;
@@ -33,8 +37,9 @@ export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps
   }, []);
 
   useEffect(() => {
+    const d3 = d3Module;
     const svg = svgRef.current;
-    if (!svg || data.length === 0) return;
+    if (!d3 || !svg || data.length === 0) return;
 
     const { width, height } = dimensions;
     const innerWidth = width - MARGIN.left - MARGIN.right;
@@ -132,13 +137,21 @@ export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps
     return () => {
       d3.select(svg).selectAll("*").remove();
     };
-  }, [data, dimensions]);
+  }, [d3Module, data, dimensions]);
 
   if (data.length === 0 || totalTasks === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-theme-muted text-sm">
         <p>No completed tasks with complexity data yet.</p>
         <p className="mt-1">Complete tasks with complexity 1–10 to see analytics.</p>
+      </div>
+    );
+  }
+
+  if (!d3Module) {
+    return (
+      <div data-testid="help-analytics-chart" className="text-theme-muted text-sm py-12 text-center">
+        Loading chart…
       </div>
     );
   }
