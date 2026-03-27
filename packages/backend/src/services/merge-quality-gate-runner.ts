@@ -707,13 +707,17 @@ async function repairQualityGateEnvironment(
     if (npmCiOutput) outputParts.push(`[npm ci @ ${installCwd}] ${npmCiOutput}`);
   }
 
-  commands.push("symlinkNodeModules");
+  const shouldRelinkNodeModules =
+    validationWorkspace !== "baseline" && validationWorkspace !== "merged_candidate";
   let symlinkSucceeded = true;
-  try {
-    await deps.symlinkNodeModules(options.repoPath, worktreePath);
-  } catch (err) {
-    symlinkSucceeded = false;
-    outputParts.push(`[symlinkNodeModules] ${getErrorMessage(err)}`);
+  if (shouldRelinkNodeModules) {
+    commands.push("symlinkNodeModules");
+    try {
+      await deps.symlinkNodeModules(options.repoPath, worktreePath);
+    } catch (err) {
+      symlinkSucceeded = false;
+      outputParts.push(`[symlinkNodeModules] ${getErrorMessage(err)}`);
+    }
   }
 
   let succeeded = recreateSucceeded && npmCiSucceeded && symlinkSucceeded;

@@ -74,6 +74,9 @@ const NON_RETRYABLE_BLOCK_FAILURE_TYPES = new Set([
   "repo_preflight",
   "environment_setup",
 ]);
+const BASELINE_MERGE_RETRY_MODE = "baseline_wait";
+const MERGE_RETRY_MODE_KEY = "merge_retry_mode";
+const WORKTREE_PATH_KEY = "worktreePath";
 
 function getBlockedTaskFailureType(task: StoredTask): string | null {
   const lastExecution = parseTaskLastExecutionSummary(
@@ -89,6 +92,13 @@ function getBlockedTaskFailureType(task: StoredTask): string | null {
   return typeof failureType === "string" && failureType.trim() !== ""
     ? failureType.trim().toLowerCase()
     : null;
+}
+
+function hasBaselineMergeResumeState(task: StoredTask): boolean {
+  const record = task as Record<string, unknown>;
+  if (record[MERGE_RETRY_MODE_KEY] !== BASELINE_MERGE_RETRY_MODE) return false;
+  const worktreePath = record[WORKTREE_PATH_KEY];
+  return typeof worktreePath === "string" && worktreePath.trim() !== "";
 }
 
 export class TaskStoreService {
@@ -568,7 +578,11 @@ export class TaskStoreService {
         .merge_quality_gate_paused_until;
       if (typeof mergePausedUntilRaw === "string") {
         const mergePausedUntilMs = Date.parse(mergePausedUntilRaw);
-        if (Number.isFinite(mergePausedUntilMs) && mergePausedUntilMs > Date.now()) {
+        if (
+          Number.isFinite(mergePausedUntilMs) &&
+          mergePausedUntilMs > Date.now() &&
+          !hasBaselineMergeResumeState(issue)
+        ) {
           continue;
         }
       }
@@ -578,7 +592,8 @@ export class TaskStoreService {
         const mergeValidationPausedUntilMs = Date.parse(mergeValidationPausedUntilRaw);
         if (
           Number.isFinite(mergeValidationPausedUntilMs) &&
-          mergeValidationPausedUntilMs > Date.now()
+          mergeValidationPausedUntilMs > Date.now() &&
+          !hasBaselineMergeResumeState(issue)
         ) {
           continue;
         }

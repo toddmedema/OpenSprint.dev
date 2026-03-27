@@ -572,14 +572,19 @@ export class MergeCoordinatorService {
   private buildEnvironmentSetupRemediation(params: {
     command?: string | null;
     worktreePath?: string | null;
+    validationWorkspace?: string | null;
   }): string {
     const command = params.command?.trim();
     const worktreePath = params.worktreePath?.trim();
+    const validationWorkspace = params.validationWorkspace?.trim();
     const commandStep = command
       ? `then rerun ${command} before retrying merge.`
       : "then rerun the failing quality gate before retrying merge.";
+    const isValidationWorkspace =
+      validationWorkspace === "baseline" || validationWorkspace === "merged_candidate";
+    const relinkStep = isValidationWorkspace ? "" : ", re-link worktree node_modules";
     return compactExecutionText(
-      `Run npm ci${worktreePath ? ` in ${worktreePath}` : " in the repository root"}, re-link worktree node_modules, ${commandStep}`,
+      `Run npm ci${worktreePath ? ` in ${worktreePath}` : " in the repository root"}${relinkStep}, ${commandStep}`,
       500
     );
   }
@@ -1202,6 +1207,7 @@ export class MergeCoordinatorService {
       ? this.buildEnvironmentSetupRemediation({
           command: failure.command,
           worktreePath: failureWorktreePath,
+          validationWorkspace: failure.validationWorkspace ?? null,
         })
       : null;
     const nextAction = remediationAction ?? "Paused until baseline quality gates pass";
@@ -1994,6 +2000,10 @@ export class MergeCoordinatorService {
               qualityGateFailureDetails?.command ??
               null,
             worktreePath: qualityGateStructuredDetails.worktreePath,
+            validationWorkspace:
+              qualityGateStructuredDetails.qualityGateValidationWorkspace ??
+              qualityGateFailureDetails?.validationWorkspace ??
+              null,
           })
         : null;
       const qualityGateSummaryDetail = isQualityGateFailure

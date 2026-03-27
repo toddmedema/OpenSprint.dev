@@ -793,6 +793,24 @@ suite("TaskStoreService", () => {
       expect(readyAfterPause.map((t) => t.id)).toContain(pausedTask.id);
     });
 
+    it("keeps baseline merge-resume tasks in ready queue even while pause window is active", async () => {
+      const pausedMergeRetryTask = await store.create(TEST_PROJECT_ID, "Resume pending merge", {
+        type: "task",
+      });
+      const pausedUntil = new Date(Date.now() + 60_000).toISOString();
+      await store.update(TEST_PROJECT_ID, pausedMergeRetryTask.id, {
+        extra: {
+          merge_quality_gate_paused_until: pausedUntil,
+          merge_validation_paused_until: pausedUntil,
+          merge_retry_mode: "baseline_wait",
+          worktreePath: "/tmp/opensprint-worktree",
+        },
+      });
+
+      const ready = await store.ready(TEST_PROJECT_ID);
+      expect(ready.map((t) => t.id)).toContain(pausedMergeRetryTask.id);
+    });
+
     it("should exclude tasks in blocked epic (epic-blocked model)", async () => {
       const epic = await store.create(TEST_PROJECT_ID, "Plan Epic", { type: "epic" });
       await store.create(TEST_PROJECT_ID, "Task under epic", {

@@ -249,4 +249,63 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
       "npm ci",
     ]);
   });
+
+  it("does not re-link node_modules after merged-candidate npm ci repair", async () => {
+    const worktreePath = await makeTempWorktree({ build: "tsc -b" });
+    let buildAttempts = 0;
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm ls --depth=0") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm run build") {
+          buildAttempts += 1;
+          if (buildAttempts === 1) {
+            throw makeCommandFailure(spec, options.cwd, {
+              message: "Command failed with exit code 1",
+              stderr: "src/app.ts(1,18): error TS2307: Cannot find module 'path' or its corresponding type declarations.",
+            });
+          }
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm ci") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+    const symlinkNodeModules = vi.fn(async () => undefined);
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-5",
+        branchName: "opensprint/os-5",
+        baseBranch: "main",
+        validationWorkspace: "merged_candidate",
+      },
+      {
+        commands: ["npm run build"],
+        runCommand,
+        symlinkNodeModules,
+      }
+    );
+
+    expect(failure).toBeNull();
+    expect(symlinkNodeModules).not.toHaveBeenCalled();
+    expect(getExecutedCommands(runCommand)).toEqual([
+      "npm ls --depth=0",
+      "npm run build",
+      "npm ci",
+      "npm ls --depth=0",
+      "npm ls --depth=0",
+      "npm run build",
+    ]);
+  });
 });
