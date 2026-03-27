@@ -97,6 +97,83 @@ describe.skipIf(!agentIdentityPostgresOk)("AgentIdentityService", () => {
     expect(recent).toHaveLength(2);
   });
 
+  it("updates an existing attempt row when completion is recorded after start", async () => {
+    await service.recordAttemptStarted(tmpDir, {
+      taskId: "task-1",
+      agentId: "cursor-default",
+      role: "coder",
+      model: "composer-2",
+      attempt: 3,
+      startedAt: "2025-01-01T00:03:00.000Z",
+    });
+    await service.recordAttempt(
+      tmpDir,
+      makeRecord({
+        attempt: 3,
+        role: "coder",
+        agentId: "cursor-default",
+        model: "composer-2",
+        startedAt: "2025-01-01T00:03:00.000Z",
+        completedAt: "2025-01-01T00:04:30.000Z",
+        durationMs: 90000,
+        outcome: "success",
+      })
+    );
+
+    const recent = await service.getRecentAttempts(tmpDir, "task-1");
+    const attempt3 = recent.find((record) => record.attempt === 3);
+    expect(attempt3).toBeDefined();
+    expect(attempt3?.outcome).toBe("success");
+    expect(attempt3?.durationMs).toBe(90000);
+    expect(recent.filter((record) => record.attempt === 3)).toHaveLength(1);
+  });
+
+  it("keeps separate rows for different agents in the same attempt", async () => {
+    await service.recordAttemptStarted(tmpDir, {
+      taskId: "task-1",
+      agentId: "cursor-review-general",
+      role: "reviewer",
+      model: "composer-2",
+      attempt: 4,
+      startedAt: "2025-01-01T00:05:00.000Z",
+    });
+    await service.recordAttemptStarted(tmpDir, {
+      taskId: "task-1",
+      agentId: "cursor-review-security",
+      role: "reviewer",
+      model: "composer-2",
+      attempt: 4,
+      startedAt: "2025-01-01T00:05:30.000Z",
+    });
+
+    await service.recordAttempt(
+      tmpDir,
+      makeRecord({
+        taskId: "task-1",
+        attempt: 4,
+        role: "reviewer",
+        agentId: "cursor-review-security",
+        model: "composer-2",
+        startedAt: "2025-01-01T00:05:30.000Z",
+        completedAt: "2025-01-01T00:06:30.000Z",
+        durationMs: 60000,
+        outcome: "success",
+      })
+    );
+
+    const recent = await service.getRecentAttempts(tmpDir, "task-1");
+    const attempt4 = recent.filter((record) => record.attempt === 4);
+    expect(attempt4).toHaveLength(2);
+    expect(attempt4.filter((record) => record.agentId === "cursor-review-general")).toHaveLength(1);
+    expect(attempt4.filter((record) => record.agentId === "cursor-review-security")).toHaveLength(1);
+    expect(
+      attempt4.find((record) => record.agentId === "cursor-review-security")?.outcome
+    ).toBe("success");
+    expect(attempt4.find((record) => record.agentId === "cursor-review-general")?.outcome).toBe(
+      "no_result"
+    );
+  });
+
   it("should build agent profile with aggregated stats", async () => {
     await service.recordAttempt(tmpDir, makeRecord({ outcome: "success", durationMs: 30000 }));
     await service.recordAttempt(

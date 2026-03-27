@@ -55,6 +55,15 @@ export interface TaskAttemptRecord {
   durationMs: number;
 }
 
+export interface TaskAttemptStartRecord {
+  taskId: string;
+  agentId: string;
+  role?: AgentRole;
+  model: string;
+  attempt: number;
+  startedAt: string;
+}
+
 export interface AgentProfile {
   id: string;
   model: string;
@@ -71,6 +80,77 @@ export interface AgentProfile {
 const MODEL_ESCALATION: string[] = ["claude-sonnet-4-20250514", "claude-opus-4-20250514"];
 
 export class AgentIdentityService {
+  private async upsertAttempt(
+    client: Awaited<ReturnType<typeof taskStore.getDb>>,
+    projectId: string,
+    record: TaskAttemptRecord
+  ): Promise<boolean> {
+    const existing = await client.queryOne(
+      `SELECT id
+         FROM agent_stats
+        WHERE project_id = $1
+          AND task_id = $2
+          AND attempt = $3
+          AND agent_id = $4
+          AND COALESCE(role, '') = COALESCE($5, '')
+        ORDER BY id DESC
+        LIMIT 1`,
+      [projectId, record.taskId, record.attempt, record.agentId, record.role ?? null]
+    );
+
+    if (existing?.id != null) {
+      await client.execute(
+        `UPDATE agent_stats
+            SET agent_id = $1,
+                role = $2,
+                model = $3,
+                started_at = $4,
+                completed_at = $5,
+                outcome = $6,
+                duration_ms = $7
+          WHERE id = $8`,
+        [
+          record.agentId,
+          record.role ?? null,
+          record.model,
+          record.startedAt,
+          record.completedAt,
+          record.outcome,
+          record.durationMs,
+          existing.id,
+        ]
+      );
+      return false;
+    }
+
+    await client.execute(
+      `INSERT INTO agent_stats (project_id, task_id, agent_id, role, model, attempt, started_at, completed_at, outcome, duration_ms)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        projectId,
+        record.taskId,
+        record.agentId,
+        record.role ?? null,
+        record.model,
+        record.attempt,
+        record.startedAt,
+        record.completedAt,
+        record.outcome,
+        record.durationMs,
+      ]
+    );
+    return true;
+  }
+
+  async recordAttemptStarted(repoPath: string, record: TaskAttemptStartRecord): Promise<void> {
+    await this.recordAttempt(repoPath, {
+      ...record,
+      completedAt: record.startedAt,
+      outcome: "no_result",
+      durationMs: 0,
+    });
+  }
+
   async recordAttempt(repoPath: string, record: TaskAttemptRecord): Promise<void> {
     const projectId = await repoPathToProjectId(repoPath);
     await taskStore.runWrite(async (client) => {
@@ -83,22 +163,8 @@ export class AgentIdentityService {
         recordCount = Number(countRow?.c ?? 0);
       }
 
-      await client.execute(
-        `INSERT INTO agent_stats (project_id, task_id, agent_id, role, model, attempt, started_at, completed_at, outcome, duration_ms)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [
-          projectId,
-          record.taskId,
-          record.agentId,
-          record.role ?? null,
-          record.model,
-          record.attempt,
-          record.startedAt,
-          record.completedAt,
-          record.outcome,
-          record.durationMs,
-        ]
-      );
+      const insertedNewRow = await this.upsertAttempt(client, projectId, record);
+      if (!insertedNewRow) return;
 
       const nextCount = recordCount + 1;
       if (nextCount > 500) {
