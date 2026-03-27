@@ -79,6 +79,16 @@ export interface AgentProfile {
 /** Known model escalation ladder (from faster/cheaper to more capable) */
 const MODEL_ESCALATION: string[] = ["claude-sonnet-4-20250514", "claude-opus-4-20250514"];
 
+export function buildAgentAttemptId(
+  agentConfig: { type: string; model?: string | null },
+  role: AgentRole,
+  options?: { reviewScope?: string }
+): string {
+  const baseId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+  if (role !== "reviewer") return baseId;
+  return `${baseId}-review-${options?.reviewScope ?? "general"}`;
+}
+
 export class AgentIdentityService {
   private async upsertAttempt(
     client: Awaited<ReturnType<typeof taskStore.getDb>>,

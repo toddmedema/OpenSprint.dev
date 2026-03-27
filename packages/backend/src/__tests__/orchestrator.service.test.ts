@@ -356,6 +356,15 @@ vi.mock("../services/agent.service.js", () => ({
 }));
 
 vi.mock("../services/agent-identity.service.js", () => ({
+  buildAgentAttemptId: (
+    agentConfig: { type: string; model?: string | null },
+    role: "coder" | "reviewer",
+    options?: { reviewScope?: string }
+  ) => {
+    const baseId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+    if (role !== "reviewer") return baseId;
+    return `${baseId}-review-${options?.reviewScope ?? "general"}`;
+  },
   agentIdentityService: {
     recordAttempt: (...args: unknown[]) => mockRecordAttempt(...args),
     recordAttemptStarted: vi.fn().mockResolvedValue(undefined),
@@ -1228,6 +1237,98 @@ describe("OrchestratorService (slot-based model)", () => {
       );
 
       expect(mockInvokeReviewAgent).toHaveBeenCalledTimes(1);
+    });
+
+    it("records approved angle reviewers with angle-specific agent IDs", async () => {
+      const { task } = setupSingleTaskFlow("task-review-approved-angle");
+      mockReadResult.mockResolvedValue({
+        status: "approved",
+        summary: "Looks good",
+      });
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      const state = (
+        orchestrator as unknown as {
+          getState: (
+            id: string
+          ) => {
+            slots: Map<
+              string,
+              {
+                phase: "coding" | "review";
+                attempt: number;
+                agent: { startedAt: string; outputLog: string[]; killedDueToTimeout: boolean };
+                branchName: string;
+                reviewAgents?: Map<
+                  string,
+                  {
+                    angle: string;
+                    agent: {
+                      startedAt: string;
+                      outputLog: string[];
+                      killedDueToTimeout: boolean;
+                    };
+                  }
+                >;
+                phaseCoordinator?: { setReviewOutcome: (result: unknown, angle?: string) => Promise<void> };
+              }
+            >;
+          };
+        }
+      ).getState(projectId);
+      const slot = state.slots.get(task.id);
+      expect(slot).toBeTruthy();
+      slot!.phase = "review";
+      slot!.phaseCoordinator = {
+        setReviewOutcome: vi.fn().mockResolvedValue(undefined),
+      };
+      slot!.reviewAgents = new Map([
+        [
+          "security",
+          {
+            angle: "security",
+            timers: { clearAll: vi.fn() },
+            agent: {
+              startedAt: "2026-03-27T08:00:00.000Z",
+              outputLog: [],
+              killedDueToTimeout: false,
+            },
+          },
+        ],
+      ]);
+
+      const invokeHandleReviewDone = orchestrator as unknown as {
+        handleReviewDone(
+          projectId: string,
+          repoPath: string,
+          task: typeof task,
+          branchName: string,
+          exitCode: number | null,
+          angle?: "security" | "performance"
+        ): Promise<void>;
+      };
+
+      await invokeHandleReviewDone.handleReviewDone(
+        projectId,
+        repoPath,
+        task,
+        slot!.branchName,
+        0,
+        "security"
+      );
+
+      expect(mockRecordAttempt).toHaveBeenCalledWith(
+        repoPath,
+        expect.objectContaining({
+          taskId: task.id,
+          role: "reviewer",
+          agentId: "claude-claude-sonnet-4-review-security",
+        })
+      );
     });
   });
 

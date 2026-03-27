@@ -15,6 +15,10 @@ const { mockResolveExecuteReplayMetadata } = vi.hoisted(() => ({
   mockResolveExecuteReplayMetadata: vi.fn().mockResolvedValue(null),
 }));
 
+const { mockRecordAttemptStarted } = vi.hoisted(() => ({
+  mockRecordAttemptStarted: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../services/execute-replay-metadata.service.js", () => ({
   resolveExecuteReplayMetadata: mockResolveExecuteReplayMetadata,
 }));
@@ -91,6 +95,15 @@ vi.mock("../services/event-log.service.js", () => ({
 }));
 
 vi.mock("../services/agent-identity.service.js", () => ({
+  buildAgentAttemptId: (
+    agentConfig: { type: string; model?: string | null },
+    role: "coder" | "reviewer",
+    options?: { reviewScope?: string }
+  ) => {
+    const baseId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+    if (role !== "reviewer") return baseId;
+    return `${baseId}-review-${options?.reviewScope ?? "general"}`;
+  },
   agentIdentityService: {
     getRecentAttempts: vi.fn().mockResolvedValue([]),
     selectAgentForRetry: vi
@@ -101,7 +114,7 @@ vi.mock("../services/agent-identity.service.js", () => ({
         cliCommand: null,
         ...(settings?.simpleComplexityAgent as Record<string, unknown> | undefined),
       })),
-    recordAttemptStarted: vi.fn().mockResolvedValue(undefined),
+    recordAttemptStarted: (...args: unknown[]) => mockRecordAttemptStarted(...args),
   },
 }));
 
@@ -182,6 +195,7 @@ describe("PhaseExecutorService", () => {
     mockLifecycleRun.mockResolvedValue(undefined);
     mockPersistCounters.mockResolvedValue(undefined);
     mockGetNextKey.mockResolvedValue({ key: "test-key" });
+    mockRecordAttemptStarted.mockClear();
 
     const slots = new Map<string, ReturnType<typeof makeSlot>>();
     mockGetState.mockReturnValue({
@@ -564,6 +578,26 @@ describe("PhaseExecutorService", () => {
         expect.arrayContaining([
           expect.stringContaining(path.join("review-angles", "security", "prompt.md")),
           expect.stringContaining(path.join("review-angles", "performance", "prompt.md")),
+        ])
+      );
+      expect(mockRecordAttemptStarted.mock.calls).toEqual(
+        expect.arrayContaining([
+          [
+            repoPath,
+            expect.objectContaining({
+              taskId,
+              role: "reviewer",
+              agentId: "cursor-default-review-security",
+            }),
+          ],
+          [
+            repoPath,
+            expect.objectContaining({
+              taskId,
+              role: "reviewer",
+              agentId: "cursor-default-review-performance",
+            }),
+          ],
         ])
       );
 

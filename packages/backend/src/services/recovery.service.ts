@@ -600,6 +600,21 @@ export class RecoveryService {
         typeof heartbeat.processGroupLeaderPid === "number" &&
         heartbeat.processGroupLeaderPid > 0 &&
         isProcessAlive(heartbeat.processGroupLeaderPid);
+      const heartbeatHasRecentOutput =
+        heartbeat != null &&
+        Number.isFinite(heartbeat.lastOutputTimestamp) &&
+        Date.now() - heartbeat.lastOutputTimestamp <= HEARTBEAT_STALE_MS;
+
+      // Some agent backends do not expose a stable local process-group PID and report 0/undefined.
+      // If heartbeat output is still fresh, treat the slot as active and avoid watchdog reset loops.
+      if (!pidAlive && heartbeatHasRecentOutput) {
+        log.info("Skipping slot recovery due to guard", {
+          projectId,
+          taskId,
+          guard: "recent_heartbeat_without_pid",
+        });
+        continue;
+      }
 
       if (!pidAlive && host.handleCompletedAssignment) {
         const terminalResult = await this.readTerminalAssignmentResult(assignment);

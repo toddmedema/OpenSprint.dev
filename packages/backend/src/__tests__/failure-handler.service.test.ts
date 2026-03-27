@@ -12,6 +12,7 @@ import {
   getProviderOutageBackoff,
 } from "../services/provider-outage-backoff.service.js";
 import { broadcastToProject } from "../websocket/index.js";
+import { agentIdentityService } from "../services/agent-identity.service.js";
 
 // Silence failure-handler logger so expected log.error() calls don't write to stderr and fail CI
 vi.mock("../utils/logger.js", () => ({
@@ -28,6 +29,15 @@ vi.mock("../services/event-log.service.js", () => ({
 }));
 
 vi.mock("../services/agent-identity.service.js", () => ({
+  buildAgentAttemptId: (
+    agentConfig: { type: string; model?: string | null },
+    role: "coder" | "reviewer",
+    options?: { reviewScope?: string }
+  ) => {
+    const baseId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+    if (role !== "reviewer") return baseId;
+    return `${baseId}-review-${options?.reviewScope ?? "general"}`;
+  },
   agentIdentityService: {
     recordAttempt: vi.fn().mockResolvedValue(undefined),
     recordAttemptStarted: vi.fn().mockResolvedValue(undefined),
@@ -1072,6 +1082,36 @@ describe("FailureHandlerService", () => {
   });
 
   describe("review failure notifications and execution diagnostics", () => {
+    it("records review failures using the angle-specific reviewer agent identity", async () => {
+      const slot = makeSlot("/tmp/worktree");
+      slot.phase = "review";
+      slot.attempt = 1;
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        "Review agent (security) exited with code 1 without producing a valid result",
+        null,
+        "no_result",
+        undefined,
+        { reviewScope: "security" }
+      );
+
+      expect(agentIdentityService.recordAttempt).toHaveBeenCalledWith(
+        repoPath,
+        expect.objectContaining({
+          role: "reviewer",
+          agentId: "cursor-default-review-security",
+        })
+      );
+    });
+
     it("does not create notification for review-phase failure when requeuing (retries not exceeded)", async () => {
       const slot = makeSlot("/tmp/worktree");
       slot.phase = "review";

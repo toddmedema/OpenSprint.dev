@@ -110,6 +110,15 @@ vi.mock("../services/event-log.service.js", () => ({
 }));
 
 vi.mock("../services/agent-identity.service.js", () => ({
+  buildAgentAttemptId: (
+    agentConfig: { type: string; model?: string | null },
+    role: "coder" | "reviewer",
+    options?: { reviewScope?: string }
+  ) => {
+    const baseId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+    if (role !== "reviewer") return baseId;
+    return `${baseId}-review-${options?.reviewScope ?? "general"}`;
+  },
   agentIdentityService: {
     getRecentAttempts: vi.fn().mockResolvedValue([]),
     selectAgentForRetry: vi

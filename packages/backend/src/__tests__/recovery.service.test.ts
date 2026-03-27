@@ -529,6 +529,49 @@ describe("RecoveryService — stale heartbeat recovery", () => {
     );
   });
 
+  it("does not recover a slotted task when heartbeat output is fresh but PID is unavailable", async () => {
+    const heartbeatGuardHost = {
+      getSlottedTaskIds: () => ["task-stale"],
+      getActiveAgentIds: () => [] as string[],
+      removeStaleSlot: vi.fn().mockResolvedValue(undefined),
+      handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+    };
+
+    vi.mocked(taskStore.listAll).mockResolvedValue([
+      {
+        id: "task-stale",
+        status: "in_progress",
+        assignee: "Ted",
+      } as never,
+    ]);
+    mockReadAssignmentAt.mockResolvedValue({
+      taskId: "task-stale",
+      projectId: "proj-1",
+      phase: "coding",
+      branchName: "opensprint/task-stale",
+      worktreePath: tmpDir,
+      promptPath: path.join(tmpDir, ".opensprint", "active", "task-stale", "prompt.md"),
+      agentConfig: { type: "cursor", model: "composer-2", cliCommand: null },
+      attempt: 2,
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+    });
+    mockReadHeartbeat.mockResolvedValue({
+      processGroupLeaderPid: 0,
+      lastOutputTimestamp: Date.now(),
+      heartbeatTimestamp: Date.now(),
+    });
+
+    const result = await service.runFullRecovery("proj-1", tmpDir, heartbeatGuardHost);
+
+    expect(result.cleaned).not.toContain("task-stale");
+    expect(heartbeatGuardHost.removeStaleSlot).not.toHaveBeenCalled();
+    expect(vi.mocked(taskStore.update)).not.toHaveBeenCalledWith(
+      "proj-1",
+      "task-stale",
+      expect.objectContaining({ status: "open" })
+    );
+  });
+
   describe("orphaned in_progress tasks (agent assignee, no process)", () => {
     it("resets tasks with agent assignee when no slot or active agent", async () => {
       vi.mocked(taskStore.listInProgressWithAgentAssignee).mockResolvedValue([

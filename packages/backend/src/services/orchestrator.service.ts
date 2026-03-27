@@ -56,7 +56,7 @@ import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
 import { filterAgentOutput } from "../utils/agent-output-filter.js";
 import { PhaseExecutorService, type PhaseExecutorHost } from "./phase-executor.service.js";
-import { agentIdentityService } from "./agent-identity.service.js";
+import { agentIdentityService, buildAgentAttemptId } from "./agent-identity.service.js";
 import { FailureHandlerService, type FailureHandlerHost } from "./failure-handler.service.js";
 import {
   MergeCoordinatorService,
@@ -2248,7 +2248,7 @@ export class OrchestratorService {
         agentIdentityService
           .recordAttempt(repoPath, {
             taskId: task.id,
-            agentId: `${agentConfig.type}-${agentConfig.model ?? "default"}`,
+            agentId: buildAgentAttemptId(agentConfig, "coder"),
             role: "coder",
             model: agentConfig.model ?? "unknown",
             attempt: slot.attempt,
@@ -2950,7 +2950,9 @@ export class OrchestratorService {
         agentIdentityService
           .recordAttempt(repoPath, {
             taskId: task.id,
-            agentId: `${agentConfig.type}-${agentConfig.model ?? "default"}`,
+            agentId: buildAgentAttemptId(agentConfig, "reviewer", {
+              reviewScope: angle ?? "general",
+            }),
             role: "reviewer",
             model: agentConfig.model ?? "unknown",
             attempt: slot.attempt,
@@ -2999,7 +3001,9 @@ export class OrchestratorService {
       agentIdentityService
         .recordAttempt(repoPath, {
           taskId: task.id,
-          agentId: `${agentConfig.type}-${agentConfig.model ?? "default"}`,
+          agentId: buildAgentAttemptId(agentConfig, "reviewer", {
+            reviewScope: "general",
+          }),
           role: "reviewer",
           model: agentConfig.model ?? "unknown",
           attempt: slot.attempt,
@@ -3034,7 +3038,9 @@ export class OrchestratorService {
           ? `Review agent (${angle}) exited with code ${exitCode} without producing a valid result${noResultReason ? ` (${noResultReason})` : ""}`
           : `Review agent exited with code ${exitCode} without producing a valid result${noResultReason ? ` (${noResultReason})` : ""}`,
         null,
-        failureType
+        failureType,
+        undefined,
+        { reviewScope: angle ?? "general" }
       );
     }
   }

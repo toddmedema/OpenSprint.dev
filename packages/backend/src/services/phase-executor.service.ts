@@ -22,7 +22,7 @@ import type { AgentLifecycleManager } from "./agent-lifecycle.js";
 import type { TaskContext } from "./context-assembler.js";
 import { shouldInvokeSummarizer } from "./summarizer.service.js";
 import { getComplexityForAgent } from "./plan-complexity.js";
-import { agentIdentityService } from "./agent-identity.service.js";
+import { agentIdentityService, buildAgentAttemptId } from "./agent-identity.service.js";
 import { eventLogService } from "./event-log.service.js";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { assertSafeTaskWorktreePath } from "../utils/path-safety.js";
@@ -404,7 +404,7 @@ export class PhaseExecutorService {
         return;
       }
 
-      const agentId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+      const agentId = buildAgentAttemptId(agentConfig, "coder");
       try {
         await agentIdentityService.recordAttemptStarted(repoPath, {
           taskId: task.id,
@@ -627,7 +627,9 @@ export class PhaseExecutorService {
       );
 
       const runGeneralAgent = async () => {
-        const agentId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+        const agentId = buildAgentAttemptId(agentConfig, "reviewer", {
+          reviewScope: "general",
+        });
         try {
           await agentIdentityService.recordAttemptStarted(repoPath, {
             taskId: task.id,
@@ -717,7 +719,9 @@ export class PhaseExecutorService {
           );
           const angleHeartbeatSubpath = `review-angles/${angle}`;
 
-          const agentId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+          const agentId = buildAgentAttemptId(agentConfig, "reviewer", {
+            reviewScope: angle,
+          });
           try {
             await agentIdentityService.recordAttemptStarted(repoPath, {
               taskId: task.id,
@@ -820,7 +824,9 @@ export class PhaseExecutorService {
         }
       } else if (!runOnlyGeneralReview) {
         slot.reviewAgents = undefined;
-        const agentId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+        const agentId = buildAgentAttemptId(agentConfig, "reviewer", {
+          reviewScope: "general",
+        });
         try {
           await agentIdentityService.recordAttemptStarted(repoPath, {
             taskId: task.id,

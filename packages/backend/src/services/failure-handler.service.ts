@@ -23,7 +23,11 @@ import type {
   RetryFailureHistoryEntry,
   RetryQualityGateDetail,
 } from "./orchestrator-phase-context.js";
-import { agentIdentityService, type AttemptOutcome } from "./agent-identity.service.js";
+import {
+  agentIdentityService,
+  buildAgentAttemptId,
+  type AttemptOutcome,
+} from "./agent-identity.service.js";
 import { eventLogService } from "./event-log.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { createLogger } from "../utils/logger.js";
@@ -546,7 +550,8 @@ export class FailureHandlerService {
     reason: string,
     testResults?: TestResults | null,
     failureType: FailureType = "coding_failure",
-    reviewFeedback?: string
+    reviewFeedback?: string,
+    options?: { reviewScope?: string }
   ): Promise<void> {
     const state = this.host.getState(projectId);
     const slot = state.slots.get(task.id);
@@ -721,10 +726,13 @@ export class FailureHandlerService {
 
     const gitWorkingMode = failSettings.gitWorkingMode ?? "worktree";
     const agentRole = slot.phase === "review" ? "reviewer" : "coder";
+    const reviewScope = agentRole === "reviewer" ? options?.reviewScope : undefined;
     agentIdentityService
       .recordAttempt(repoPath, {
         taskId: task.id,
-        agentId: `${agentConfig.type}-${agentConfig.model ?? "default"}`,
+        agentId: buildAgentAttemptId(agentConfig, agentRole, {
+          reviewScope,
+        }),
         role: agentRole,
         model: agentConfig.model ?? "unknown",
         attempt: cumulativeAttempts,

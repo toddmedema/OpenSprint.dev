@@ -36,6 +36,15 @@ vi.mock("../services/orchestrator.service.js", () => ({
 
 // Minimal mocks for services MergeCoordinator needs but we don't test
 vi.mock("../services/agent-identity.service.js", () => ({
+  buildAgentAttemptId: (
+    agentConfig: { type: string; model?: string | null },
+    role: "coder" | "reviewer",
+    options?: { reviewScope?: string }
+  ) => {
+    const baseId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+    if (role !== "reviewer") return baseId;
+    return `${baseId}-review-${options?.reviewScope ?? "general"}`;
+  },
   agentIdentityService: {
     recordAttempt: vi.fn().mockResolvedValue(undefined),
     recordAttemptStarted: vi.fn().mockResolvedValue(undefined),

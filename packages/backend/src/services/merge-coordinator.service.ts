@@ -23,7 +23,7 @@ import type { StoredTask } from "./task-store.service.js";
 import { resolveEpicId } from "./task-store.service.js";
 import { RebaseConflictError } from "./branch-manager.js";
 import { gitCommitQueue, MergeJobError } from "./git-commit-queue.service.js";
-import { agentIdentityService } from "./agent-identity.service.js";
+import { agentIdentityService, buildAgentAttemptId } from "./agent-identity.service.js";
 import { eventLogService } from "./event-log.service.js";
 import { triggerDeployForEvent } from "./deploy-trigger.service.js";
 import { finalReviewService } from "./final-review.service.js";
@@ -1491,7 +1491,7 @@ export class MergeCoordinatorService {
     agentIdentityService
       .recordAttempt(repoPath, {
         taskId: task.id,
-        agentId: `${agentConfig.type}-${agentConfig.model ?? "default"}`,
+        agentId: buildAgentAttemptId(agentConfig, "coder"),
         role: "coder",
         model: agentConfig.model ?? "unknown",
         attempt: slot.attempt,
