@@ -436,7 +436,7 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       promptPath: path.join(promptDir, "prompt.md"),
       agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
       attempt: 3,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
     });
 
     const result = await service.runFullRecovery("proj-1", tmpDir, completedHost);
@@ -451,6 +451,82 @@ describe("RecoveryService — stale heartbeat recovery", () => {
     expect(result.requeued).toEqual([]);
     expect(vi.mocked(taskStore.update)).not.toHaveBeenCalled();
     expect(completedHost.removeStaleSlot).not.toHaveBeenCalled();
+  });
+
+  it("keeps very recent slotted tasks during recovery grace window", async () => {
+    const graceHost = {
+      getSlottedTaskIds: () => ["task-stale"],
+      getActiveAgentIds: () => [] as string[],
+      removeStaleSlot: vi.fn().mockResolvedValue(undefined),
+      handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+    };
+
+    vi.mocked(taskStore.listAll).mockResolvedValue([
+      {
+        id: "task-stale",
+        status: "in_progress",
+        assignee: "Frodo",
+      } as never,
+    ]);
+    mockReadAssignmentAt.mockResolvedValue({
+      taskId: "task-stale",
+      projectId: "proj-1",
+      phase: "coding",
+      branchName: "opensprint/task-stale",
+      worktreePath: tmpDir,
+      promptPath: path.join(tmpDir, ".opensprint", "active", "task-stale", "prompt.md"),
+      agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+      attempt: 1,
+      createdAt: new Date().toISOString(),
+    });
+
+    const result = await service.runFullRecovery("proj-1", tmpDir, graceHost);
+
+    expect(result.cleaned).not.toContain("task-stale");
+    expect(graceHost.removeStaleSlot).not.toHaveBeenCalled();
+    expect(vi.mocked(taskStore.update)).not.toHaveBeenCalledWith(
+      "proj-1",
+      "task-stale",
+      expect.objectContaining({ status: "open" })
+    );
+  });
+
+  it("does not recover a slotted task while its agent is still active", async () => {
+    const activeHost = {
+      getSlottedTaskIds: () => ["task-stale"],
+      getActiveAgentIds: () => ["task-stale"],
+      removeStaleSlot: vi.fn().mockResolvedValue(undefined),
+      handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+    };
+
+    vi.mocked(taskStore.listAll).mockResolvedValue([
+      {
+        id: "task-stale",
+        status: "in_progress",
+        assignee: "Frodo",
+      } as never,
+    ]);
+    mockReadAssignmentAt.mockResolvedValue({
+      taskId: "task-stale",
+      projectId: "proj-1",
+      phase: "coding",
+      branchName: "opensprint/task-stale",
+      worktreePath: tmpDir,
+      promptPath: path.join(tmpDir, ".opensprint", "active", "task-stale", "prompt.md"),
+      agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+      attempt: 1,
+      createdAt: new Date().toISOString(),
+    });
+
+    const result = await service.runFullRecovery("proj-1", tmpDir, activeHost);
+
+    expect(result.cleaned).not.toContain("task-stale");
+    expect(activeHost.removeStaleSlot).not.toHaveBeenCalled();
+    expect(vi.mocked(taskStore.update)).not.toHaveBeenCalledWith(
+      "proj-1",
+      "task-stale",
+      expect.objectContaining({ status: "open" })
+    );
   });
 
   describe("orphaned in_progress tasks (agent assignee, no process)", () => {

@@ -38,6 +38,7 @@ vi.mock("../services/orchestrator.service.js", () => ({
 vi.mock("../services/agent-identity.service.js", () => ({
   agentIdentityService: {
     recordAttempt: vi.fn().mockResolvedValue(undefined),
+    recordAttemptStarted: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

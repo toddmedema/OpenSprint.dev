@@ -472,24 +472,30 @@ export class AgentLifecycleManager {
     timers: TimerRegistry,
     heartbeatSubpath?: string
   ): void {
+    const writeHeartbeat = () => {
+      if (!runState.activeProcess) return;
+      heartbeatService
+        .writeHeartbeat(
+          wtPath,
+          taskId,
+          {
+            // Execute agents run detached, so the child PID is the process-group leader.
+            processGroupLeaderPid: runState.activeProcess.pid ?? 0,
+            lastOutputTimestamp: runState.lastOutputTime,
+            heartbeatTimestamp: Date.now(),
+          },
+          heartbeatSubpath
+        )
+        .catch(() => {});
+    };
+
+    // Emit a heartbeat immediately so recovery does not treat freshly spawned
+    // slots as dead before the first interval tick.
+    writeHeartbeat();
+
     timers.setInterval(
       "heartbeat",
-      () => {
-        if (!runState.activeProcess) return;
-        heartbeatService
-          .writeHeartbeat(
-            wtPath,
-            taskId,
-            {
-              // Execute agents run detached, so the child PID is the process-group leader.
-              processGroupLeaderPid: runState.activeProcess.pid ?? 0,
-              lastOutputTimestamp: runState.lastOutputTime,
-              heartbeatTimestamp: Date.now(),
-            },
-            heartbeatSubpath
-          )
-          .catch(() => {});
-      },
+      writeHeartbeat,
       HEARTBEAT_INTERVAL_MS
     );
   }

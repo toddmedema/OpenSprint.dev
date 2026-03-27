@@ -28,6 +28,12 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("recovery");
 
 const GIT_LOCK_STALE_MS = 10 * 60 * 1000; // 10 minutes
+const SLOT_RECOVERY_GRACE_MS = (() => {
+  const rawValue = process.env.OPENSPRINT_SLOT_RECOVERY_GRACE_MS;
+  if (rawValue == null || rawValue.trim() === "") return 30_000;
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30_000;
+})();
 
 export interface RecoveryResult {
   reattached: string[];
@@ -528,6 +534,7 @@ export class RecoveryService {
     host: RecoveryHost
   ): Promise<string[]> {
     const slottedIds = host.getSlottedTaskIds(projectId);
+    const activeAgentIds = new Set(host.getActiveAgentIds(projectId));
     if (slottedIds.length === 0) return [];
 
     const allIssues = await this.taskStore.listAll(projectId);
@@ -547,6 +554,17 @@ export class RecoveryService {
     const stale: string[] = [];
 
     for (const taskId of slottedIds) {
+      if (activeAgentIds.has(taskId)) {
+        // The orchestrator still has an active agent registered for this task.
+        // Heartbeat files can lag behind process start, so avoid premature slot eviction.
+        log.info("Skipping slot recovery due to guard", {
+          projectId,
+          taskId,
+          guard: "active_agent",
+        });
+        continue;
+      }
+
       if (!validIds.has(taskId)) {
         log.warn("Removing stale slot: task no longer in task store", { projectId, taskId });
         await host.removeStaleSlot!(projectId, taskId, repoPath);
@@ -559,6 +577,20 @@ export class RecoveryService {
 
       const assignment = await this.readAssignment(repoPath, taskId);
       if (!assignment) continue;
+
+      const assignmentAgeMs = Date.now() - new Date(assignment.createdAt).getTime();
+      if (Number.isFinite(assignmentAgeMs) && assignmentAgeMs >= 0) {
+        if (assignmentAgeMs < SLOT_RECOVERY_GRACE_MS) {
+          log.info("Skipping slot recovery due to guard", {
+            projectId,
+            taskId,
+            guard: "grace_window",
+            assignmentAgeMs,
+            graceMs: SLOT_RECOVERY_GRACE_MS,
+          });
+          continue;
+        }
+      }
 
       const heartbeat = assignment.worktreePath
         ? await heartbeatService.readHeartbeat(assignment.worktreePath, taskId)

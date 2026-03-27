@@ -33,6 +33,8 @@ import { broadcastToProject } from "../websocket/index.js";
 import { broadcastAuthoritativeTaskUpdated } from "../task-store-events.js";
 import type { TimerRegistry } from "./timer-registry.js";
 import { createLogger } from "../utils/logger.js";
+import { appendCrashLog } from "../utils/crash-log.js";
+import { appendRuntimeTrace } from "../utils/runtime-trace.js";
 import { buildTaskLastExecutionSummary, compactExecutionText } from "./task-execution-summary.js";
 import { inspectGitRepoState, resolveBaseBranch } from "../utils/git-repo-state.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
@@ -284,6 +286,34 @@ export class MergeCoordinatorService {
   private mergeValidationHealthNotified = new Set<string>();
 
   constructor(private host: MergeCoordinatorHost) {}
+
+  private mergeTraceSessionId(projectId: string, taskId: string, attempt?: number): string {
+    return `merge:${projectId}:${taskId}:${attempt ?? 0}`;
+  }
+
+  private traceMergeLifecycle(
+    event: string,
+    projectId: string,
+    taskId: string,
+    payload?: Record<string, unknown>,
+    options?: { attempt?: number; mirrorToCrashLog?: boolean }
+  ): void {
+    const sessionId = this.mergeTraceSessionId(projectId, taskId, options?.attempt);
+    appendRuntimeTrace(`merge.${event}`, sessionId, {
+      projectId,
+      taskId,
+      ...(options?.attempt !== undefined && { attempt: options.attempt }),
+      ...(payload ?? {}),
+    });
+    if (options?.mirrorToCrashLog) {
+      appendCrashLog(`merge.${event}`, {
+        projectId,
+        taskId,
+        ...(options?.attempt !== undefined && { attempt: options.attempt }),
+        ...(payload ?? {}),
+      });
+    }
+  }
 
   private registerPendingCleanup(projectId: string, target: CleanupTarget): void {
     let perProject = this.pendingCleanup.get(projectId);
@@ -1542,8 +1572,22 @@ export class MergeCoordinatorService {
     log.info("Starting merge and done flow", { taskId: task.id, branchName });
     const state = this.host.getState(projectId);
     const slot = state.slots.get(task.id);
+    this.traceMergeLifecycle(
+      "flow_start",
+      projectId,
+      task.id,
+      { branchName, repoPath },
+      { attempt: slot?.attempt, mirrorToCrashLog: true }
+    );
     if (!slot) {
       log.warn("performMergeAndDone: no slot found for task", { taskId: task.id });
+      this.traceMergeLifecycle(
+        "missing_slot",
+        projectId,
+        task.id,
+        { branchName },
+        { mirrorToCrashLog: true }
+      );
       try {
         await this.host.taskStore.update(projectId, task.id, {
           status: "open",
@@ -1599,6 +1643,18 @@ export class MergeCoordinatorService {
 
       // Last task in epic: merge epic branch to main, then push and cleanup via postCompletionAsync
       try {
+        this.traceMergeLifecycle(
+          "attempt_start",
+          projectId,
+          task.id,
+          {
+            mode: "per_epic_final_merge",
+            branchName,
+            baseBranch,
+            wtPath,
+          },
+          { attempt: slot.attempt, mirrorToCrashLog: true }
+        );
         if (await this.deferMergeValidationWhileDegraded(projectId, repoPath, task, slot, wtPath)) {
           return;
         }
@@ -1641,7 +1697,21 @@ export class MergeCoordinatorService {
           baseBranch,
           validationWorkspace: "task_worktree",
         });
+        this.traceMergeLifecycle(
+          "quality_gates_passed",
+          projectId,
+          task.id,
+          { mode: "per_epic_final_merge", branchName, baseBranch, wtPath },
+          { attempt: slot.attempt }
+        );
         await gitCommitQueue.drain();
+        this.traceMergeLifecycle(
+          "queue_merge_begin",
+          projectId,
+          task.id,
+          { mode: "per_epic_final_merge", branchName, baseBranch },
+          { attempt: slot.attempt }
+        );
         await gitCommitQueue.enqueueAndWait({
           type: "worktree_merge",
           repoPath,
@@ -1651,11 +1721,33 @@ export class MergeCoordinatorService {
           taskTitle: task.title || task.id,
           baseBranch,
         });
+        this.traceMergeLifecycle(
+          "queue_merge_succeeded",
+          projectId,
+          task.id,
+          { mode: "per_epic_final_merge", branchName, baseBranch },
+          { attempt: slot.attempt, mirrorToCrashLog: true }
+        );
         await this.markMergeValidationHealthy(projectId, repoPath);
         await this.reconcileDependenciesAfterMerge(repoPath, task.id);
         this.invalidateBaselineCacheAfterMerge(projectId, baseBranch);
       } catch (mergeErr) {
         log.warn("Merge epic to main failed", { taskId: task.id, branchName, mergeErr });
+        this.traceMergeLifecycle(
+          "attempt_failed",
+          projectId,
+          task.id,
+          {
+            mode: "per_epic_final_merge",
+            branchName,
+            baseBranch,
+            err:
+              mergeErr instanceof Error
+                ? { name: mergeErr.name, message: mergeErr.message, stack: mergeErr.stack }
+                : String(mergeErr),
+          },
+          { attempt: slot.attempt, mirrorToCrashLog: true }
+        );
         await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, mergeErr as Error);
         return;
       }
@@ -1678,6 +1770,13 @@ export class MergeCoordinatorService {
 
     // 2. Attempt merge inside the serialized queue. Rebase now happens there.
     try {
+      this.traceMergeLifecycle(
+        "attempt_start",
+        projectId,
+        task.id,
+        { mode: "per_task_merge", branchName, baseBranch, wtPath },
+        { attempt: slot.attempt, mirrorToCrashLog: true }
+      );
       if (await this.deferMergeValidationWhileDegraded(projectId, repoPath, task, slot, wtPath)) {
         return;
       }
@@ -1720,7 +1819,21 @@ export class MergeCoordinatorService {
         baseBranch,
         validationWorkspace: "task_worktree",
       });
+      this.traceMergeLifecycle(
+        "quality_gates_passed",
+        projectId,
+        task.id,
+        { mode: "per_task_merge", branchName, baseBranch, wtPath },
+        { attempt: slot.attempt }
+      );
       await gitCommitQueue.drain();
+      this.traceMergeLifecycle(
+        "queue_merge_begin",
+        projectId,
+        task.id,
+        { mode: "per_task_merge", branchName, baseBranch },
+        { attempt: slot.attempt }
+      );
       await gitCommitQueue.enqueueAndWait({
         type: "worktree_merge",
         repoPath,
@@ -1730,11 +1843,33 @@ export class MergeCoordinatorService {
         taskTitle: task.title || task.id,
         baseBranch,
       });
+      this.traceMergeLifecycle(
+        "queue_merge_succeeded",
+        projectId,
+        task.id,
+        { mode: "per_task_merge", branchName, baseBranch },
+        { attempt: slot.attempt, mirrorToCrashLog: true }
+      );
       await this.markMergeValidationHealthy(projectId, repoPath);
       await this.reconcileDependenciesAfterMerge(repoPath, task.id);
       this.invalidateBaselineCacheAfterMerge(projectId, baseBranch);
     } catch (mergeErr) {
       log.warn("Merge to main failed", { taskId: task.id, branchName, mergeErr });
+      this.traceMergeLifecycle(
+        "attempt_failed",
+        projectId,
+        task.id,
+        {
+          mode: "per_task_merge",
+          branchName,
+          baseBranch,
+          err:
+            mergeErr instanceof Error
+              ? { name: mergeErr.name, message: mergeErr.message, stack: mergeErr.stack }
+              : String(mergeErr),
+        },
+        { attempt: slot.attempt, mirrorToCrashLog: true }
+      );
       await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, mergeErr as Error);
       return;
     }
@@ -1756,6 +1891,13 @@ export class MergeCoordinatorService {
       wtPath,
       slot,
       settings
+    );
+    this.traceMergeLifecycle(
+      "flow_complete",
+      projectId,
+      task.id,
+      { branchName, baseBranch },
+      { attempt: slot.attempt, mirrorToCrashLog: true }
     );
 
     // 5. Async push + post-completion

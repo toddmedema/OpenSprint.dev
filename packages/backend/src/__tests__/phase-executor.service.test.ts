@@ -91,7 +91,18 @@ vi.mock("../services/event-log.service.js", () => ({
 }));
 
 vi.mock("../services/agent-identity.service.js", () => ({
-  agentIdentityService: { getRecentAttempts: vi.fn().mockResolvedValue([]) },
+  agentIdentityService: {
+    getRecentAttempts: vi.fn().mockResolvedValue([]),
+    selectAgentForRetry: vi
+      .fn()
+      .mockImplementation((settings?: { simpleComplexityAgent?: unknown }) => ({
+        type: "cursor",
+        model: null,
+        cliCommand: null,
+        ...(settings?.simpleComplexityAgent as Record<string, unknown> | undefined),
+      })),
+    recordAttemptStarted: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 vi.mock("../services/api-key-resolver.service.js", () => ({

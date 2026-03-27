@@ -101,6 +101,9 @@ const DEPENDENCY_HEALTH_CHECK_COMMAND = "npm ls --depth=0";
 const DEPENDENCY_HEALTH_CHECK_WORKSPACES_COMMAND = "npm ls --depth=0 --workspaces";
 const DEPENDENCY_REPAIR_COMMAND = "npm ci";
 const DEPENDENCY_REPAIR_COMMANDS = [DEPENDENCY_REPAIR_COMMAND] as const;
+const WORKTREE_RM_RETRYABLE_CODES = new Set(["ENOTEMPTY", "EBUSY"]);
+const WORKTREE_RM_MAX_ATTEMPTS = 3;
+const WORKTREE_RM_RETRY_DELAY_MS = 250;
 const NPM_INCLUDE_DEV_ENV = {
   NPM_CONFIG_INCLUDE: "dev",
   npm_config_include: "dev",
@@ -376,14 +379,27 @@ export class BranchManager {
       });
       return false;
     }
-    try {
-      await fs.rm(safePath, { recursive: true, force: true });
-    } catch (rmErr) {
-      log.warn("fs.rm failed during worktree directory cleanup", {
-        taskId,
-        safePath,
-        err: rmErr instanceof Error ? rmErr.message : String(rmErr),
-      });
+    for (let attempt = 1; attempt <= WORKTREE_RM_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        await fs.rm(safePath, { recursive: true, force: true });
+        break;
+      } catch (rmErr) {
+        const code =
+          rmErr && typeof rmErr === "object" && "code" in rmErr
+            ? String((rmErr as { code?: string }).code ?? "")
+            : "";
+        const retryable = WORKTREE_RM_RETRYABLE_CODES.has(code);
+        const willRetry = retryable && attempt < WORKTREE_RM_MAX_ATTEMPTS;
+        log.warn("fs.rm failed during worktree directory cleanup", {
+          taskId,
+          safePath,
+          attempt,
+          willRetry,
+          err: rmErr instanceof Error ? rmErr.message : String(rmErr),
+        });
+        if (!willRetry) break;
+        await new Promise((resolve) => setTimeout(resolve, WORKTREE_RM_RETRY_DELAY_MS * attempt));
+      }
     }
     await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
     try {
@@ -1276,79 +1292,13 @@ export class BranchManager {
     worktreeKey: string,
     wtPath: string
   ): Promise<void> {
-    const pathGone = async () => {
-      try {
-        await fs.access(wtPath);
-        return false;
-      } catch {
-        return true;
-      }
-    };
-
-    if (await pathGone()) return;
-
-    // 1. git worktree remove --force (handles both git metadata and directory)
-    try {
-      await this.gitExec(repoPath, ["worktree", "remove", wtPath, "--force"]);
-    } catch {
-      /* may not be a registered worktree */
-    }
-    if (await pathGone()) return;
-
-    // 2. Validated fs.rm via removeWorktreeDirectorySafely
-    await this.removeWorktreeDirectorySafely(
+    const removed = await this.removeWorktreePathWithEscalation(
       repoPath,
       worktreeKey,
       wtPath,
       "Pre-worktree-add cleanup"
     );
-    if (await pathGone()) return;
-
-    // 3. Shell rm -rf (handles edge cases that Node.js fs.rm cannot, e.g. busy sub-processes)
-    log.warn("Worktree path survived fs.rm, escalating to shell rm -rf", {
-      worktreeKey,
-      wtPath,
-    });
-    try {
-      if (process.platform !== "win32") {
-        await runCommand({ command: "rm", args: ["-rf", wtPath] }, { cwd: repoPath, timeout: 15_000 });
-      }
-    } catch (rmErr) {
-      log.warn("Shell rm -rf failed", {
-        worktreeKey,
-        wtPath,
-        err: rmErr instanceof Error ? rmErr.message : String(rmErr),
-      });
-    }
-    await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
-    if (await pathGone()) return;
-
-    // 4. Last resort: rename the directory out of the way so the target path is clear.
-    //    The stale directory is cleaned up asynchronously.
-    const stalePath = `${wtPath}-stale-${Date.now()}`;
-    log.warn("Worktree path cannot be deleted, renaming aside", {
-      worktreeKey,
-      wtPath,
-      stalePath,
-    });
-    try {
-      await fs.rename(wtPath, stalePath);
-      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
-      // Fire-and-forget cleanup of the renamed directory
-      (process.platform !== "win32"
-        ? runCommand({ command: "rm", args: ["-rf", stalePath] }, { cwd: repoPath, timeout: 30_000 })
-        : Promise.resolve()
-      ).catch(() => fs.rm(stalePath, { recursive: true, force: true }).catch(() => {}));
-    } catch (renameErr) {
-      log.error("Failed to rename stale worktree path aside", {
-        worktreeKey,
-        wtPath,
-        stalePath,
-        err: renameErr instanceof Error ? renameErr.message : String(renameErr),
-      });
-    }
-    if (await pathGone()) return;
-
+    if (removed) return;
     throw new Error(
       `Cannot clear worktree path for ${worktreeKey}: ${wtPath} still exists after all cleanup attempts (git worktree remove, fs.rm, shell rm -rf, and rename all failed)`
     );
@@ -1693,7 +1643,7 @@ export class BranchManager {
     }
 
     try {
-      await this.forceSymlink(srcRoot, destRoot);
+      await this.forceSymlink(srcRoot, destRoot, { allowReplaceRealDirectory: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn("Failed to symlink root node_modules", { err: msg });
@@ -1710,7 +1660,7 @@ export class BranchManager {
         try {
           await fs.access(srcPkg);
           await fs.mkdir(path.dirname(destPkg), { recursive: true });
-          await this.forceSymlink(srcPkg, destPkg);
+          await this.forceSymlink(srcPkg, destPkg, { allowReplaceRealDirectory: true });
         } catch {
           // Package doesn't have node_modules — skip
         }
@@ -1723,7 +1673,11 @@ export class BranchManager {
   /**
    * Create a symlink, removing any existing file/symlink at the destination first.
    */
-  private async forceSymlink(target: string, linkPath: string): Promise<void> {
+  private async forceSymlink(
+    target: string,
+    linkPath: string,
+    opts?: { allowReplaceRealDirectory?: boolean }
+  ): Promise<void> {
     // Safety: never create a symlink that points to itself
     const resolvedTarget = await fs.realpath(target).catch(() => path.resolve(target));
     const resolvedLink = path.resolve(linkPath);
@@ -1738,13 +1692,16 @@ export class BranchManager {
       await fs.symlink(target, linkPath, "junction");
     } catch (err: unknown) {
       if (err instanceof Error && (err as NodeJS.ErrnoException).code === "EEXIST") {
-        // Don't delete a real directory that isn't a symlink
+        // By default, do not delete a real directory that isn't a symlink.
+        // Worktree cleanup can opt into replacing these directories.
         const stat = await fs.lstat(linkPath);
         if (stat.isDirectory() && !stat.isSymbolicLink()) {
-          log.warn("forceSymlink: path is a real directory, refusing to replace", {
-            linkPath,
-          });
-          return;
+          if (!opts?.allowReplaceRealDirectory) {
+            log.warn("forceSymlink: path is a real directory, refusing to replace", {
+              linkPath,
+            });
+            return;
+          }
         }
         await fs.rm(linkPath, { recursive: true, force: true });
         await fs.symlink(target, linkPath, "junction");
@@ -1822,11 +1779,12 @@ export class BranchManager {
         wtPath: safeRegisteredPath,
         err: err instanceof Error ? err.message : String(err),
       });
-      const removed = await this.removeWorktreeDirectorySafely(
+      const removed = await this.removeWorktreePathWithEscalation(
         repoPath,
         worktreeKey,
         safeRegisteredPath,
-        "Manual worktree cleanup"
+        "Manual worktree cleanup",
+        { skipGitWorktreeRemove: true }
       );
       if (!removed) {
         log.warn("Manual worktree cleanup failed", {
@@ -1835,6 +1793,89 @@ export class BranchManager {
         });
       }
     }
+  }
+
+  private async removeWorktreePathWithEscalation(
+    repoPath: string,
+    worktreeKey: string,
+    candidatePath: string,
+    reason: string,
+    opts?: { skipGitWorktreeRemove?: boolean }
+  ): Promise<boolean> {
+    let safePath: string;
+    try {
+      safePath = await this.validateDisposableWorktreePath(repoPath, worktreeKey, candidatePath, reason);
+    } catch (err) {
+      log.error("Refusing unsafe worktree cleanup target", {
+        taskId: worktreeKey,
+        candidatePath,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    }
+
+    const pathGone = async () => {
+      try {
+        await fs.access(safePath);
+        return false;
+      } catch {
+        return true;
+      }
+    };
+    if (await pathGone()) return true;
+
+    if (!opts?.skipGitWorktreeRemove) {
+      try {
+        await this.gitExec(repoPath, ["worktree", "remove", safePath, "--force"]);
+      } catch {
+        // Path may not be a registered worktree.
+      }
+      if (await pathGone()) return true;
+    }
+
+    await this.removeWorktreeDirectorySafely(repoPath, worktreeKey, safePath, reason);
+    if (await pathGone()) return true;
+
+    log.warn("Worktree path survived fs.rm, escalating to shell rm -rf", {
+      worktreeKey,
+      wtPath: safePath,
+    });
+    try {
+      if (process.platform !== "win32") {
+        await runCommand({ command: "rm", args: ["-rf", safePath] }, { cwd: repoPath, timeout: 15_000 });
+      }
+    } catch (rmErr) {
+      log.warn("Shell rm -rf failed", {
+        worktreeKey,
+        wtPath: safePath,
+        err: rmErr instanceof Error ? rmErr.message : String(rmErr),
+      });
+    }
+    await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
+    if (await pathGone()) return true;
+
+    const stalePath = `${safePath}-stale-${Date.now()}`;
+    log.warn("Worktree path cannot be deleted, renaming aside", {
+      worktreeKey,
+      wtPath: safePath,
+      stalePath,
+    });
+    try {
+      await fs.rename(safePath, stalePath);
+      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
+      (process.platform !== "win32"
+        ? runCommand({ command: "rm", args: ["-rf", stalePath] }, { cwd: repoPath, timeout: 30_000 })
+        : Promise.resolve()
+      ).catch(() => fs.rm(stalePath, { recursive: true, force: true }).catch(() => {}));
+    } catch (renameErr) {
+      log.error("Failed to rename stale worktree path aside", {
+        worktreeKey,
+        wtPath: safePath,
+        stalePath,
+        err: renameErr instanceof Error ? renameErr.message : String(renameErr),
+      });
+    }
+    return pathGone();
   }
 
   private async resolveRegisteredWorktreePath(

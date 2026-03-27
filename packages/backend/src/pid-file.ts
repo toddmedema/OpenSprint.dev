@@ -3,6 +3,7 @@ import os from "os";
 import path from "path";
 import { createLogger } from "./utils/logger.js";
 import { getErrorMessage } from "./utils/error-utils.js";
+import { appendCrashLog } from "./utils/crash-log.js";
 
 const log = createLogger("startup");
 
@@ -46,27 +47,49 @@ export function acquirePidFile(port: number): void {
       // During tsx watch restarts, the old process may still be in its exit sequence.
       // Wait briefly before giving up.
       log.info("Waiting for previous process to exit", { pid: oldPid });
+      appendCrashLog("pid_file.waiting_for_previous_process", {
+        port,
+        oldPid,
+      });
       if (!waitForProcessExit(oldPid, 3000)) {
         log.error("Another Open Sprint server is already running", {
           port,
           pid: oldPid,
           hint: `Kill it with: kill ${oldPid} or kill -9 ${oldPid}`,
         });
+        appendCrashLog("pid_file.acquire_failed_process_alive", {
+          port,
+          oldPid,
+        });
         process.exit(1);
       }
       log.info("Previous process has exited", { pid: oldPid });
+      appendCrashLog("pid_file.previous_process_exited", { port, oldPid });
     } else if (!isNaN(oldPid)) {
       log.info("Removing stale PID file", { pid: oldPid });
+      appendCrashLog("pid_file.removing_stale_pid", {
+        port,
+        stalePid: oldPid,
+      });
     }
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
       log.warn("Could not read PID file", { err: getErrorMessage(err) });
+      appendCrashLog("pid_file.read_failed", {
+        port,
+        err: getErrorMessage(err),
+      });
     }
   }
 
   // Write our PID
   fs.mkdirSync(pidDir, { recursive: true });
   fs.writeFileSync(pidFile, String(process.pid), "utf-8");
+  appendCrashLog("pid_file.acquired", {
+    port,
+    pid: process.pid,
+    pidFile,
+  });
 }
 
 /**
@@ -79,6 +102,11 @@ export function removePidFile(port: number): void {
     // Only remove if it's our PID (guard against race conditions)
     if (parseInt(content, 10) === process.pid) {
       fs.unlinkSync(pidFile);
+      appendCrashLog("pid_file.removed", {
+        port,
+        pid: process.pid,
+        pidFile,
+      });
     }
   } catch {
     // Best effort — file may already be gone

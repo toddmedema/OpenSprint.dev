@@ -1,4 +1,5 @@
 import path from "path";
+import crypto from "crypto";
 import { config } from "dotenv";
 import { createServer } from "http";
 import { createApp } from "./app.js";
@@ -30,6 +31,7 @@ import { getErrorMessage } from "./utils/error-utils.js";
 import { databaseRuntime } from "./services/database-runtime.service.js";
 import { openBrowser } from "./utils/open-browser.js";
 import { appendCrashLog } from "./utils/crash-log.js";
+import { appendRuntimeTrace } from "./utils/runtime-trace.js";
 
 // Electron launches backend with ELECTRON_RUN_AS_NODE=1 so process.execPath can run JS.
 // Clear it immediately so backend child processes (agent CLIs) are not forced into Node mode.
@@ -39,6 +41,7 @@ if (process.env.OPENSPRINT_DESKTOP === "1") {
 
 const logStartup = createLogger("startup");
 const logShutdown = createLogger("shutdown");
+const runtimeSessionId = crypto.randomUUID();
 
 const port = parseInt(process.env.PORT || String(DEFAULT_API_PORT), 10);
 
@@ -59,7 +62,42 @@ setupWebSocket(server, {
 wireTaskStoreEvents(broadcastToProject);
 
 const FLUSH_PERSIST_TIMEOUT_MS = 15000;
+const RUNTIME_HEARTBEAT_MS = 15_000;
 let shuttingDown = false;
+let runtimeHeartbeatTimer: NodeJS.Timeout | null = null;
+
+function getActiveHandleCount(): number | null {
+  try {
+    const getHandles = (process as unknown as { _getActiveHandles?: () => unknown[] })
+      ._getActiveHandles;
+    if (typeof getHandles !== "function") return null;
+    return getHandles().length;
+  } catch {
+    return null;
+  }
+}
+
+function startRuntimeHeartbeat(): void {
+  if (runtimeHeartbeatTimer) return;
+  runtimeHeartbeatTimer = setInterval(() => {
+    const mem = process.memoryUsage();
+    appendRuntimeTrace("process.heartbeat", runtimeSessionId, {
+      uptimeSec: Math.round(process.uptime()),
+      rssMb: Math.round(mem.rss / 1024 / 1024),
+      heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
+      activeHandles: getActiveHandleCount(),
+      dbState: databaseRuntime.getSnapshot().state,
+      dbMessage: databaseRuntime.getSnapshot().message,
+    });
+  }, RUNTIME_HEARTBEAT_MS);
+  runtimeHeartbeatTimer.unref();
+}
+
+function stopRuntimeHeartbeat(): void {
+  if (!runtimeHeartbeatTimer) return;
+  clearInterval(runtimeHeartbeatTimer);
+  runtimeHeartbeatTimer = null;
+}
 
 // Graceful shutdown
 const shutdown = async (trigger: string) => {
@@ -69,6 +107,12 @@ const shutdown = async (trigger: string) => {
     return;
   }
   shuttingDown = true;
+  stopRuntimeHeartbeat();
+  appendRuntimeTrace("shutdown.begin", runtimeSessionId, {
+    trigger,
+    uptimeSec: Math.round(process.uptime()),
+    activeHandles: getActiveHandleCount(),
+  });
   appendCrashLog("shutdown.begin", { trigger });
   logShutdown.info("Shutting down...");
   if (process.env.OPENSPRINT_PRESERVE_AGENTS === "1") {
@@ -98,11 +142,13 @@ const shutdown = async (trigger: string) => {
   closeWebSocket();
   server.close(() => {
     logShutdown.info("Server closed.");
+    appendRuntimeTrace("shutdown.server_closed", runtimeSessionId, { trigger });
     appendCrashLog("shutdown.server_closed", { trigger });
     process.exit(0);
   });
   setTimeout(() => {
     logShutdown.error("Forced shutdown after timeout.");
+    appendRuntimeTrace("shutdown.forced_timeout", runtimeSessionId, { trigger });
     appendCrashLog("shutdown.forced_timeout", { trigger });
     process.exit(1);
   }, 5000);
@@ -132,6 +178,17 @@ const FRONTEND_PORT = parseInt(process.env.FRONTEND_PORT || "5173", 10);
 server.listen(port, "127.0.0.1", () => {
   logStartup.info("Open Sprint backend listening", { url: `http://localhost:${port}` });
   logStartup.info("WebSocket server ready", { url: `ws://localhost:${port}/ws` });
+  appendRuntimeTrace("process.start", runtimeSessionId, {
+    port,
+    frontendPort: FRONTEND_PORT,
+    cwd: process.cwd(),
+    argv: process.argv,
+    nodeVersion: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    desktop: process.env.OPENSPRINT_DESKTOP ?? null,
+  });
+  startRuntimeHeartbeat();
   startProcessReaper();
   databaseRuntime.start();
 
@@ -154,20 +211,40 @@ server.listen(port, "127.0.0.1", () => {
 });
 
 process.on("SIGINT", () => {
+  appendRuntimeTrace("signal.SIGINT", runtimeSessionId);
   void shutdown("SIGINT");
 });
 process.on("SIGTERM", () => {
+  appendRuntimeTrace("signal.SIGTERM", runtimeSessionId);
   void shutdown("SIGTERM");
 });
 
 // Safety net: prevent unhandled rejections from crashing the server
 process.on("unhandledRejection", (reason) => {
+  appendRuntimeTrace("process.unhandledRejection", runtimeSessionId, { reason });
   appendCrashLog("process.unhandledRejection", { reason });
   logStartup.error("Unhandled promise rejection", { reason });
 });
 
 process.on("uncaughtException", (err) => {
+  appendRuntimeTrace("process.uncaughtException", runtimeSessionId, { err });
   appendCrashLog("process.uncaughtException", { err });
   logStartup.error("Uncaught exception", { err });
   void shutdown("uncaughtException");
+});
+
+process.on("beforeExit", (code) => {
+  appendRuntimeTrace("process.beforeExit", runtimeSessionId, { code });
+});
+
+process.on("exit", (code) => {
+  appendRuntimeTrace("process.exit", runtimeSessionId, { code });
+});
+
+process.on("warning", (warning) => {
+  appendRuntimeTrace("process.warning", runtimeSessionId, { warning });
+});
+
+process.on("disconnect", () => {
+  appendRuntimeTrace("process.disconnect", runtimeSessionId);
 });

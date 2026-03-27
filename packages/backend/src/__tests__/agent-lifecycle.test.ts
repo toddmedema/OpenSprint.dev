@@ -131,6 +131,14 @@ describe("AgentLifecycleManager", () => {
       );
       expect(timers.has("heartbeat")).toBe(true);
       expect(timers.has("inactivity")).toBe(true);
+      expect(mockWriteHeartbeat).toHaveBeenCalledWith(
+        "/tmp/repo",
+        "task-1",
+        expect.objectContaining({
+          processGroupLeaderPid: 9999,
+        }),
+        undefined
+      );
     });
 
     it("spawns reviewer agent when role is reviewer", async () => {

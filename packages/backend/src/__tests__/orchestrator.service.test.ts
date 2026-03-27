@@ -358,6 +358,16 @@ vi.mock("../services/agent.service.js", () => ({
 vi.mock("../services/agent-identity.service.js", () => ({
   agentIdentityService: {
     recordAttempt: (...args: unknown[]) => mockRecordAttempt(...args),
+    recordAttemptStarted: vi.fn().mockResolvedValue(undefined),
+    getRecentAttempts: vi.fn().mockResolvedValue([]),
+    selectAgentForRetry: vi
+      .fn()
+      .mockImplementation((settings?: { simpleComplexityAgent?: unknown }) => ({
+        type: "cursor",
+        model: null,
+        cliCommand: null,
+        ...(settings?.simpleComplexityAgent as Record<string, unknown> | undefined),
+      })),
   },
 }));
 

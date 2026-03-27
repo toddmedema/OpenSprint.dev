@@ -404,6 +404,20 @@ export class PhaseExecutorService {
         return;
       }
 
+      const agentId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+      try {
+        await agentIdentityService.recordAttemptStarted(repoPath, {
+          taskId: task.id,
+          agentId,
+          role: "coder",
+          model: agentConfig.model ?? "unknown",
+          attempt: slot.attempt,
+          startedAt: assignment.createdAt,
+        });
+      } catch (err) {
+        log.warn("Failed to record coder attempt start for Agent Log", { err });
+      }
+
       await this.host.lifecycleManager.run(
         {
           projectId,
@@ -613,6 +627,19 @@ export class PhaseExecutorService {
       );
 
       const runGeneralAgent = async () => {
+        const agentId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+        try {
+          await agentIdentityService.recordAttemptStarted(repoPath, {
+            taskId: task.id,
+            agentId,
+            role: "reviewer",
+            model: agentConfig.model ?? "unknown",
+            attempt: slot.attempt,
+            startedAt: assignment.createdAt,
+          });
+        } catch (err) {
+          log.warn("Failed to record reviewer attempt start for Agent Log (general)", { err });
+        }
         await this.host.lifecycleManager.run(
           {
             projectId,
@@ -689,6 +716,23 @@ export class PhaseExecutorService {
             OPENSPRINT_PATHS.agentOutputLog
           );
           const angleHeartbeatSubpath = `review-angles/${angle}`;
+
+          const agentId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+          try {
+            await agentIdentityService.recordAttemptStarted(repoPath, {
+              taskId: task.id,
+              agentId,
+              role: "reviewer",
+              model: agentConfig.model ?? "unknown",
+              attempt: slot.attempt,
+              startedAt: angleAssignment.createdAt,
+            });
+          } catch (err) {
+            log.warn("Failed to record reviewer attempt start for Agent Log (angle)", {
+              err,
+              angle,
+            });
+          }
 
           await this.host.lifecycleManager.run(
             {
@@ -776,6 +820,19 @@ export class PhaseExecutorService {
         }
       } else if (!runOnlyGeneralReview) {
         slot.reviewAgents = undefined;
+        const agentId = `${agentConfig.type}-${agentConfig.model ?? "default"}`;
+        try {
+          await agentIdentityService.recordAttemptStarted(repoPath, {
+            taskId: task.id,
+            agentId,
+            role: "reviewer",
+            model: agentConfig.model ?? "unknown",
+            attempt: slot.attempt,
+            startedAt: assignment.createdAt,
+          });
+        } catch (err) {
+          log.warn("Failed to record reviewer attempt start for Agent Log (single)", { err });
+        }
         await this.host.lifecycleManager.run(
           {
             projectId,

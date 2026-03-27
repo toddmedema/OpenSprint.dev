@@ -826,6 +826,54 @@ describe("BranchManager", () => {
       }
     });
 
+    it("falls back to full escalation path when git worktree remove fails", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const taskId = `wt-rm-fallback-${Date.now()}`;
+      const wtPath = path.join(branchManager.getWorktreeBasePath(), taskId);
+      const branchManagerAny = branchManager as unknown as {
+        resolveRegisteredWorktreePath: (...args: unknown[]) => Promise<string>;
+        validateDisposableWorktreePath: (...args: unknown[]) => Promise<string>;
+        gitExec: (...args: unknown[]) => Promise<{ stdout: string; stderr: string }>;
+        removeWorktreePathWithEscalation: (...args: unknown[]) => Promise<boolean>;
+      };
+
+      const resolveSpy = vi
+        .spyOn(branchManagerAny, "resolveRegisteredWorktreePath")
+        .mockResolvedValue(wtPath);
+      const validateSpy = vi
+        .spyOn(branchManagerAny, "validateDisposableWorktreePath")
+        .mockResolvedValue(wtPath);
+      const gitExecSpy = vi.spyOn(branchManagerAny, "gitExec").mockImplementation(async (_repo, args) => {
+        const gitArgs = args as string[];
+        if (gitArgs[0] === "worktree" && gitArgs[1] === "remove") {
+          throw new Error("simulated remove failure");
+        }
+        return { stdout: "", stderr: "" };
+      });
+      const escalationSpy = vi
+        .spyOn(branchManagerAny, "removeWorktreePathWithEscalation")
+        .mockResolvedValue(true);
+
+      await branchManager.removeTaskWorktree(repoPath, taskId, wtPath);
+
+      expect(resolveSpy).toHaveBeenCalled();
+      expect(validateSpy).toHaveBeenCalled();
+      expect(gitExecSpy).toHaveBeenCalled();
+      expect(escalationSpy).toHaveBeenCalledWith(
+        repoPath,
+        taskId,
+        wtPath,
+        "Manual worktree cleanup",
+        { skipGitWorktreeRemove: true }
+      );
+    });
+
     it("should handle removing a non-existent worktree gracefully", async () => {
       await execAsync("git init", { cwd: repoPath });
       await execAsync("git branch -M main", { cwd: repoPath });
@@ -836,6 +884,40 @@ describe("BranchManager", () => {
 
       // Should not throw
       await branchManager.removeTaskWorktree(repoPath, "nonexistent-task");
+    });
+
+    it("replaces real node_modules directories with symlinks in worktrees", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const taskId = `wt-symlink-replace-${Date.now()}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+      worktreePaths.push(wtPath);
+
+      const srcRootNodeModules = path.join(repoPath, "node_modules");
+      const srcPkgNodeModules = path.join(repoPath, "packages", "electron", "node_modules");
+      await fs.mkdir(srcRootNodeModules, { recursive: true });
+      await fs.mkdir(srcPkgNodeModules, { recursive: true });
+      await fs.writeFile(path.join(srcRootNodeModules, "root-only.txt"), "root");
+      await fs.writeFile(path.join(srcPkgNodeModules, "pkg-only.txt"), "pkg");
+
+      const wtRootNodeModules = path.join(wtPath, "node_modules");
+      const wtPkgNodeModules = path.join(wtPath, "packages", "electron", "node_modules");
+      await fs.mkdir(wtRootNodeModules, { recursive: true });
+      await fs.mkdir(wtPkgNodeModules, { recursive: true });
+      await fs.writeFile(path.join(wtRootNodeModules, "stale.txt"), "stale root");
+      await fs.writeFile(path.join(wtPkgNodeModules, "stale.txt"), "stale pkg");
+
+      await branchManager.symlinkNodeModules(repoPath, wtPath);
+
+      const rootStat = await fs.lstat(wtRootNodeModules);
+      const pkgStat = await fs.lstat(wtPkgNodeModules);
+      expect(rootStat.isSymbolicLink()).toBe(true);
+      expect(pkgStat.isSymbolicLink()).toBe(true);
     });
 
     it("refuses to delete the repo root when passed as an unsafe worktree path", async () => {

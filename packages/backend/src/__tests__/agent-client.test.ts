@@ -2442,6 +2442,57 @@ describe("AgentClient", () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     });
 
+    it("stops Cursor transient retries when the task file is removed during teardown", async () => {
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const os = await import("os");
+      const tmpDir = path.join(os.tmpdir(), `agent-client-cursor-teardown-${Date.now()}`);
+      const taskDir = path.join(tmpDir, ".opensprint/active/os-teardown.1");
+      await fs.mkdir(taskDir, { recursive: true });
+      const taskFilePath = path.join(taskDir, "prompt.md");
+      await fs.writeFile(taskFilePath, "# Task\n\nFix bug", "utf-8");
+      const outputLogPath = path.join(taskDir, "output.log");
+
+      mockGetNextKey.mockResolvedValue({ key: "cursor-key-1", keyId: "k1", source: "global" });
+
+      const mockChild = {
+        killed: false,
+        kill: vi.fn(),
+        pid: 12001,
+        stdout: { on: vi.fn(), removeAllListeners: vi.fn() },
+        stderr: { on: vi.fn(), removeAllListeners: vi.fn() },
+        on: vi.fn((ev: string, fn: (code?: number) => void) => {
+          if (ev === "close") setTimeout(() => fn(1), 20);
+          return { on: vi.fn(), removeAllListeners: vi.fn() };
+        }),
+        removeAllListeners: vi.fn(),
+      };
+      mockSpawn.mockReturnValue(mockChild);
+
+      const onExit = vi.fn();
+      client.spawnWithTaskFile(
+        { type: "cursor", model: "composer-1.5", cliCommand: null },
+        taskFilePath,
+        tmpDir,
+        vi.fn(),
+        onExit,
+        "coder",
+        outputLogPath,
+        "proj-123"
+      );
+
+      await fs.rm(taskFilePath, { force: true });
+
+      await vi.waitFor(
+        () => {
+          expect(onExit).toHaveBeenCalledWith(1);
+        },
+        { timeout: 3000 }
+      );
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    });
+
     it("relinks Cursor launcher and retries when runtime node fails on macOS", async () => {
       const fs = await import("fs/promises");
       const path = await import("path");

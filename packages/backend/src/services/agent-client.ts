@@ -1218,6 +1218,7 @@ export class AgentClient {
     let lastApiErrorKind: RotatableApiErrorKind | null = null;
     let transientRetryCount = 0;
     let lastSpawnStartedAt = 0;
+    let exited = false;
     const handle: { kill: () => void; pid: number | null } = {
       get pid() {
         return innerHandle?.pid ?? null;
@@ -1232,7 +1233,34 @@ export class AgentClient {
         setTimeout(resolve, ms);
       });
 
+    const exitOnce = async (code: number | null): Promise<void> => {
+      if (exited) return;
+      exited = true;
+      await Promise.resolve(onExit(code));
+    };
+
+    const isTaskFileMissing = async (): Promise<boolean> => {
+      try {
+        await fsStat(taskFilePath);
+        return false;
+      } catch (err) {
+        return (err as NodeJS.ErrnoException).code === "ENOENT";
+      }
+    };
+
+    const isTaskFileReadAfterTeardownError = (err: unknown): boolean => {
+      if (!(err instanceof AppError)) return false;
+      if (err.code !== ErrorCodes.AGENT_TASK_FILE_READ_FAILED) return false;
+      const details = (err.details ?? {}) as Record<string, unknown>;
+      return typeof details.cause === "string" && /ENOENT/i.test(details.cause);
+    };
+
     const trySpawn = async (): Promise<void> => {
+      if (await isTaskFileMissing()) {
+        log.warn("Skipping Cursor retry because task file no longer exists", { taskFilePath });
+        await exitOnce(1);
+        return;
+      }
       lastSpawnStartedAt = Date.now();
       const resolved = await getNextKey(projectId, "CURSOR_API_KEY");
       if (!resolved || !resolved.key.trim()) {
@@ -1240,7 +1268,7 @@ export class AgentClient {
         log.error("No Cursor API key available for spawn", { blockedKind });
         markExhausted(projectId, "CURSOR_API_KEY");
         await notifyProviderBlocked(projectId, "CURSOR_API_KEY", blockedKind);
-        Promise.resolve(onExit(1)).catch((e) => log.error("onExit failed", { err: e }));
+        Promise.resolve(exitOnce(1)).catch((e) => log.error("onExit failed", { err: e }));
         return;
       }
       const { key, keyId, source } = resolved;
@@ -1292,6 +1320,10 @@ export class AgentClient {
           transientRetryCount < CURSOR_TRANSIENT_RETRY_LIMIT &&
           (repairedLauncher || isCursorTransientSpawnError(combinedOutput) || transientNoOutput)
         ) {
+          if (await isTaskFileMissing()) {
+            log.warn("Skipping Cursor transient retry because task file is gone", { taskFilePath });
+            return Promise.resolve(exitOnce(1));
+          }
           transientRetryCount += 1;
           const retryReason = buildCursorTransientRetryReason(combinedOutput);
           onOutput(
@@ -1304,7 +1336,7 @@ export class AgentClient {
         const offlineMessage = await getOfflineFailureMessage(combinedOutput);
         if (offlineMessage) {
           onOutput(`[Agent error: ${offlineMessage}]\n`);
-          return Promise.resolve(onExit(1));
+          return Promise.resolve(exitOnce(1));
         }
 
         const apiErrorKind = toCursorRotatableApiErrorKind(apiErrorOutput);
@@ -1320,25 +1352,36 @@ export class AgentClient {
           markExhausted(projectId, "CURSOR_API_KEY");
           await notifyProviderBlocked(projectId, "CURSOR_API_KEY", apiErrorKind);
         }
-        return Promise.resolve(onExit(code));
+        return Promise.resolve(exitOnce(code));
       };
 
-      innerHandle = this.doSpawnWithTaskFile(
-        spawnConfig,
-        taskFilePath,
-        cwd,
-        onOutput,
-        wrappedOnExit,
-        agentRole,
-        outputLogPath,
-        { CURSOR_API_KEY: key },
-        stderrCollector
-      );
+      try {
+        innerHandle = this.doSpawnWithTaskFile(
+          spawnConfig,
+          taskFilePath,
+          cwd,
+          onOutput,
+          wrappedOnExit,
+          agentRole,
+          outputLogPath,
+          { CURSOR_API_KEY: key },
+          stderrCollector
+        );
+      } catch (err) {
+        if (isTaskFileReadAfterTeardownError(err)) {
+          log.warn("Skipping Cursor spawn because task file disappeared during teardown", {
+            taskFilePath,
+          });
+          await exitOnce(1);
+          return;
+        }
+        throw err;
+      }
     };
 
     trySpawn().catch((err) => {
       log.error("spawnCursorWithTaskFileAsync failed", { err });
-      Promise.resolve(onExit(1)).catch(() => {});
+      Promise.resolve(exitOnce(1)).catch(() => {});
     });
 
     return handle;

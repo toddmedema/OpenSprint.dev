@@ -184,7 +184,10 @@ vi.mock("../utils/git-repo-state.js", () => ({
 }));
 
 vi.mock("../services/agent-identity.service.js", () => ({
-  agentIdentityService: { recordAttempt: vi.fn().mockResolvedValue(undefined) },
+  agentIdentityService: {
+    recordAttempt: vi.fn().mockResolvedValue(undefined),
+    recordAttemptStarted: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 vi.mock("../services/event-log.service.js", () => ({
