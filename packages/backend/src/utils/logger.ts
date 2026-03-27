@@ -46,10 +46,31 @@ function shouldLog(level: LogLevel): boolean {
   return LEVEL_ORDER[level] >= LEVEL_ORDER[cachedLevel];
 }
 
+function safeJsonStringify(value: unknown): string {
+  const seen = new WeakSet<object>();
+  return JSON.stringify(value, (_key, currentValue: unknown) => {
+    if (typeof currentValue === "bigint") {
+      return `${currentValue.toString()}n`;
+    }
+    if (typeof currentValue === "object" && currentValue !== null) {
+      if (seen.has(currentValue)) {
+        return "[Circular]";
+      }
+      seen.add(currentValue);
+    }
+    return currentValue;
+  });
+}
+
 function formatMessage(namespace: string, msg: string, ctx?: Record<string, unknown>): string {
   const prefix = `[${namespace}] ${msg}`;
   if (ctx && Object.keys(ctx).length > 0) {
-    return `${prefix} ${JSON.stringify(ctx)}`;
+    try {
+      return `${prefix} ${safeJsonStringify(ctx)}`;
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      return `${prefix} {"_logContextSerializationError":"${reason}"}`;
+    }
   }
   return prefix;
 }

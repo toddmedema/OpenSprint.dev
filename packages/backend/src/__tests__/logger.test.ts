@@ -101,4 +101,24 @@ describe("createLogger", () => {
     expect(console.log).toHaveBeenCalledTimes(1);
     expect(console.log).toHaveBeenCalledWith("[test] Info");
   });
+
+  it("does not throw for circular context objects", () => {
+    process.env.LOG_LEVEL = "info";
+    resetLogLevelCache();
+    const log = createLogger("test");
+    const ctx: { self?: unknown; taskId: string } = { taskId: "os-1234" };
+    ctx.self = ctx;
+    expect(() => log.info("Circular context", ctx)).not.toThrow();
+    expect(console.log).toHaveBeenCalledWith(
+      '[test] Circular context {"taskId":"os-1234","self":"[Circular]"}'
+    );
+  });
+
+  it("serializes bigint values in context", () => {
+    process.env.LOG_LEVEL = "info";
+    resetLogLevelCache();
+    const log = createLogger("test");
+    log.info("Bigint context", { count: 12n });
+    expect(console.log).toHaveBeenCalledWith('[test] Bigint context {"count":"12n"}');
+  });
 });

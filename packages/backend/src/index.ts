@@ -29,6 +29,7 @@ import { createLogger } from "./utils/logger.js";
 import { getErrorMessage } from "./utils/error-utils.js";
 import { databaseRuntime } from "./services/database-runtime.service.js";
 import { openBrowser } from "./utils/open-browser.js";
+import { appendCrashLog } from "./utils/crash-log.js";
 
 // Electron launches backend with ELECTRON_RUN_AS_NODE=1 so process.execPath can run JS.
 // Clear it immediately so backend child processes (agent CLIs) are not forced into Node mode.
@@ -58,9 +59,17 @@ setupWebSocket(server, {
 wireTaskStoreEvents(broadcastToProject);
 
 const FLUSH_PERSIST_TIMEOUT_MS = 15000;
+let shuttingDown = false;
 
 // Graceful shutdown
-const shutdown = async () => {
+const shutdown = async (trigger: string) => {
+  if (shuttingDown) {
+    logShutdown.warn("Shutdown already in progress", { trigger });
+    appendCrashLog("shutdown.reentrant", { trigger });
+    return;
+  }
+  shuttingDown = true;
+  appendCrashLog("shutdown.begin", { trigger });
   logShutdown.info("Shutting down...");
   if (process.env.OPENSPRINT_PRESERVE_AGENTS === "1") {
     logShutdown.info("OPENSPRINT_PRESERVE_AGENTS=1 — preserving agent processes");
@@ -77,6 +86,10 @@ const shutdown = async () => {
   );
   await Promise.race([flushDone, flushTimeout]).catch((err) => {
     logShutdown.warn("Task store flush timed out or failed", { err: getErrorMessage(err) });
+    appendCrashLog("shutdown.flush_failed", {
+      trigger,
+      err: getErrorMessage(err),
+    });
   });
 
   await taskStore.closePool();
@@ -85,10 +98,12 @@ const shutdown = async () => {
   closeWebSocket();
   server.close(() => {
     logShutdown.info("Server closed.");
+    appendCrashLog("shutdown.server_closed", { trigger });
     process.exit(0);
   });
   setTimeout(() => {
     logShutdown.error("Forced shutdown after timeout.");
+    appendCrashLog("shutdown.forced_timeout", { trigger });
     process.exit(1);
   }, 5000);
 };
@@ -96,6 +111,11 @@ const shutdown = async () => {
 // Handle server errors (especially EADDRINUSE) before calling listen
 server.on("error", (err: NodeJS.ErrnoException) => {
   removePidFile(port);
+  appendCrashLog("server.error", {
+    code: err.code ?? null,
+    message: err.message,
+    stack: err.stack,
+  });
   if (err.code === "EADDRINUSE") {
     logStartup.error("Port already in use", {
       port,
@@ -133,15 +153,21 @@ server.listen(port, "127.0.0.1", () => {
   }
 });
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGINT", () => {
+  void shutdown("SIGINT");
+});
+process.on("SIGTERM", () => {
+  void shutdown("SIGTERM");
+});
 
 // Safety net: prevent unhandled rejections from crashing the server
 process.on("unhandledRejection", (reason) => {
+  appendCrashLog("process.unhandledRejection", { reason });
   logStartup.error("Unhandled promise rejection", { reason });
 });
 
 process.on("uncaughtException", (err) => {
+  appendCrashLog("process.uncaughtException", { err });
   logStartup.error("Uncaught exception", { err });
-  shutdown();
+  void shutdown("uncaughtException");
 });

@@ -208,6 +208,30 @@ function resolveBestMacCursorLauncher(): string | null {
   return null;
 }
 
+function resolveFallbackMacCursorLauncher(excludeVersion?: string): string | null {
+  const versionsDir = path.join(os.homedir(), ".local", "share", "cursor-agent", "versions");
+  try {
+    if (!existsSync(versionsDir)) return null;
+    const versions = readdirSync(versionsDir)
+      .map((name) => ({
+        name,
+        dir: path.join(versionsDir, name),
+      }))
+      .filter((entry) => entry.name !== excludeVersion)
+      .filter((entry) => existsSync(path.join(entry.dir, "cursor-agent")))
+      .sort((a, b) => b.name.localeCompare(a.name));
+
+    for (const version of versions) {
+      const nodeBinaryPath = path.join(version.dir, "node");
+      if (!isLikelyMachO(nodeBinaryPath)) continue;
+      return path.join(version.dir, "cursor-agent");
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function relinkLauncher(launcherPath: string, targetPath: string): void {
   if (existsSync(launcherPath)) {
     try {
@@ -245,6 +269,48 @@ function repairCursorLaunchersIfNeeded(): void {
     log.warn("Failed to repair Cursor launchers automatically", {
       err: getErrorMessage(err),
     });
+  }
+}
+
+function extractBrokenCursorVersionFromErrorText(text: string): string | undefined {
+  const match = text.match(/cursor-agent\/versions\/([^/]+)\/node:\s*Undefined error:\s*0/i);
+  const version = match?.[1]?.trim();
+  return version ? version : undefined;
+}
+
+function isCursorLauncherNodeFailureText(text: string): boolean {
+  return /cursor-agent\/versions\/[^/]+\/node:\s*Undefined error:\s*0/i.test(text);
+}
+
+function maybeRepairCursorLaunchersAfterNodeFailure(errorText: string): boolean {
+  if (process.platform !== "darwin" || process.env.VITEST) return false;
+  if (!isCursorLauncherNodeFailureText(errorText)) return false;
+
+  const failedVersion = extractBrokenCursorVersionFromErrorText(errorText);
+  const replacementTarget = resolveFallbackMacCursorLauncher(failedVersion);
+  if (!replacementTarget) {
+    log.warn("Cursor launcher fallback skipped: no alternate macOS runtime found", {
+      failedVersion: failedVersion ?? null,
+    });
+    return false;
+  }
+
+  const agentLauncher = path.join(os.homedir(), ".local", "bin", "agent");
+  const cursorAgentLauncher = path.join(os.homedir(), ".local", "bin", "cursor-agent");
+  try {
+    relinkLauncher(agentLauncher, replacementTarget);
+    relinkLauncher(cursorAgentLauncher, replacementTarget);
+    log.warn("Switched Cursor launcher after runtime node failure", {
+      failedVersion: failedVersion ?? null,
+      replacementTarget,
+    });
+    return true;
+  } catch (err) {
+    log.warn("Failed to switch Cursor launcher after runtime node failure", {
+      failedVersion: failedVersion ?? null,
+      err: getErrorMessage(err),
+    });
+    return false;
   }
 }
 
@@ -745,6 +811,9 @@ function isCursorInitOnlyOutput(output: string): boolean {
 }
 
 function buildCursorTransientRetryReason(output: string): string {
+  if (isCursorLauncherNodeFailureText(output)) {
+    return "Cursor runtime node failed; switched to fallback runtime";
+  }
   if (/security command failed/i.test(output)) {
     return "Cursor security helper failed";
   }
@@ -1216,9 +1285,12 @@ export class AgentClient {
         const transientNoOutput =
           elapsedMs < 5_000 &&
           (combinedOutput.trim().length === 0 || isCursorInitOnlyOutput(combinedOutput));
+        const repairedLauncher =
+          transientRetryCount < CURSOR_TRANSIENT_RETRY_LIMIT &&
+          maybeRepairCursorLaunchersAfterNodeFailure(combinedOutput);
         if (
           transientRetryCount < CURSOR_TRANSIENT_RETRY_LIMIT &&
-          (isCursorTransientSpawnError(combinedOutput) || transientNoOutput)
+          (repairedLauncher || isCursorTransientSpawnError(combinedOutput) || transientNoOutput)
         ) {
           transientRetryCount += 1;
           const retryReason = buildCursorTransientRetryReason(combinedOutput);
@@ -2691,16 +2763,36 @@ export class AgentClient {
         }
         return { content };
       } catch (error: unknown) {
-        lastError = error;
-        const offlineMessage = await getOfflineFailureMessage(error);
+        let handledError: unknown = error;
+        const initialRawError = getErrorMessage(error);
+        if (maybeRepairCursorLaunchersAfterNodeFailure(initialRawError)) {
+          try {
+            const retryContent = await this.runCursorAgentSpawn(args, cwd, key, timeoutMs);
+            log.info("Cursor CLI completed after launcher fallback", {
+              outputLen: retryContent.length,
+            });
+            if (projectId && keyId !== ENV_FALLBACK_KEY_ID) {
+              await clearLimitHit(projectId, "CURSOR_API_KEY", keyId, source);
+            }
+            if (options.onChunk) {
+              options.onChunk(retryContent);
+            }
+            return { content: retryContent };
+          } catch (retryError: unknown) {
+            handledError = retryError;
+          }
+        }
+
+        lastError = handledError;
+        const offlineMessage = await getOfflineFailureMessage(handledError);
         if (offlineMessage) {
           throw new AppError(503, ErrorCodes.AGENT_INVOKE_FAILED, offlineMessage, {
             agentType: "cursor",
-            raw: getErrorMessage(error),
+            raw: getErrorMessage(handledError),
             isConnectivityError: true,
           });
         }
-        const apiErrorKind = toCursorRotatableApiErrorKind(error);
+        const apiErrorKind = toCursorRotatableApiErrorKind(handledError);
         if (projectId && apiErrorKind && keyId !== ENV_FALLBACK_KEY_ID) {
           if (apiErrorKind === "rate_limit") {
             await recordLimitHit(projectId, "CURSOR_API_KEY", keyId, source);
@@ -2710,12 +2802,10 @@ export class AgentClient {
           continue;
         }
         // Non-limit error or env fallback with limit: throw
-        const isAppErr = error instanceof AppError;
-        const appDetails = isAppErr
-          ? (error.details as Record<string, unknown> | undefined)
-          : undefined;
-        const execShape = getExecErrorShape(error);
-        const isTimeout = isAppErr
+        const appError = handledError instanceof AppError ? handledError : null;
+        const appDetails = appError?.details as Record<string, unknown> | undefined;
+        const execShape = getExecErrorShape(handledError);
+        const isTimeout = appError
           ? Boolean(appDetails?.isTimeout)
           : Boolean(execShape.killed && execShape.signal === "SIGTERM");
 
@@ -2723,11 +2813,11 @@ export class AgentClient {
           ? `The Cursor agent timed out after ${
               timeoutMs === null ? "the configured timeout" : formatTimeoutLabel(timeoutMs)
             }. Try a faster model (e.g. sonnet-4.6-thinking) in Settings, or use Claude instead.`
-          : isAppErr
-            ? error.message
+          : appError
+            ? appError.message
             : execShape.stderr ||
               execShape.message ||
-              (error instanceof Error ? error.message : String(error));
+              (handledError instanceof Error ? handledError.message : String(handledError));
 
         log.error("Cursor CLI failed", { raw, isTimeout });
         throw new AppError(
@@ -2738,7 +2828,7 @@ export class AgentClient {
             agentType: "cursor",
             raw,
             isTimeout,
-            isLimitError: isLimitError(error),
+            isLimitError: isLimitError(handledError),
           }
         );
       }

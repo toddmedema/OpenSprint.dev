@@ -2442,6 +2442,102 @@ describe("AgentClient", () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     });
 
+    it("relinks Cursor launcher and retries when runtime node fails on macOS", async () => {
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const os = await import("os");
+      const originalVitest = process.env.VITEST;
+      const originalHome = process.env.HOME;
+      Object.defineProperty(process, "platform", { value: "darwin" });
+      delete process.env.VITEST;
+
+      const tmpHome = path.join(os.tmpdir(), `agent-client-cursor-fallback-home-${Date.now()}`);
+      const versionsDir = path.join(tmpHome, ".local", "share", "cursor-agent", "versions");
+      const brokenVersionDir = path.join(versionsDir, "1.0.0");
+      const fallbackVersionDir = path.join(versionsDir, "0.9.0");
+      const binDir = path.join(tmpHome, ".local", "bin");
+      const taskDir = path.join(tmpHome, "task", ".opensprint/active/os-cursor-fallback.1");
+      const outputLogPath = path.join(taskDir, "output.log");
+      const taskFilePath = path.join(taskDir, "prompt.md");
+      const fallbackLauncherPath = path.join(fallbackVersionDir, "cursor-agent");
+      try {
+        process.env.HOME = tmpHome;
+        await fs.mkdir(path.join(brokenVersionDir), { recursive: true });
+        await fs.mkdir(path.join(fallbackVersionDir), { recursive: true });
+        await fs.mkdir(binDir, { recursive: true });
+        await fs.mkdir(taskDir, { recursive: true });
+        await fs.writeFile(taskFilePath, "# Task\n\nFix bug", "utf-8");
+
+        const machOHeader = Buffer.from([0xfe, 0xed, 0xfa, 0xcf]);
+        await fs.writeFile(path.join(brokenVersionDir, "node"), machOHeader);
+        await fs.writeFile(path.join(fallbackVersionDir, "node"), machOHeader);
+        await fs.writeFile(path.join(brokenVersionDir, "cursor-agent"), "#!/bin/sh\necho broken\n");
+        await fs.writeFile(fallbackLauncherPath, "#!/bin/sh\necho fallback\n");
+        await fs.symlink(path.join(brokenVersionDir, "cursor-agent"), path.join(binDir, "agent"));
+        await fs.symlink(path.join(brokenVersionDir, "cursor-agent"), path.join(binDir, "cursor-agent"));
+
+        mockGetNextKey.mockResolvedValue({ key: "cursor-key-1", keyId: "k1", source: "global" });
+
+        const makeChild = (exitCode: number, pid: number) => ({
+          killed: false,
+          kill: vi.fn(),
+          pid,
+          stdout: { on: vi.fn(), removeAllListeners: vi.fn() },
+          stderr: { on: vi.fn(), removeAllListeners: vi.fn() },
+          on: vi.fn((ev: string, fn: (code?: number) => void) => {
+            if (ev === "close") setTimeout(() => fn(exitCode), 20);
+            return { on: vi.fn(), removeAllListeners: vi.fn() };
+          }),
+          removeAllListeners: vi.fn(),
+        });
+        mockSpawn.mockReturnValueOnce(makeChild(1, 11101)).mockReturnValueOnce(makeChild(0, 11102));
+
+        const onOutput = vi.fn();
+        const onExit = vi.fn();
+        client.spawnWithTaskFile(
+          { type: "cursor", model: "composer-1.5", cliCommand: null },
+          taskFilePath,
+          tmpHome,
+          onOutput,
+          onExit,
+          "coder",
+          outputLogPath,
+          "proj-123"
+        );
+
+        await fs.writeFile(
+          outputLogPath,
+          `${path.join(brokenVersionDir, "node")}: Undefined error: 0\n`,
+          "utf-8"
+        );
+
+        await vi.waitFor(
+          () => {
+            expect(onExit).toHaveBeenCalledWith(0);
+          },
+          { timeout: 4000 }
+        );
+
+        expect(mockSpawn).toHaveBeenCalledTimes(2);
+        expect(onOutput).toHaveBeenCalledWith(
+          expect.stringContaining("Cursor runtime node failed; switched to fallback runtime")
+        );
+        expect(await fs.readlink(path.join(binDir, "agent"))).toBe(fallbackLauncherPath);
+      } finally {
+        if (originalVitest === undefined) {
+          delete process.env.VITEST;
+        } else {
+          process.env.VITEST = originalVitest;
+        }
+        if (originalHome === undefined) {
+          delete process.env.HOME;
+        } else {
+          process.env.HOME = originalHome;
+        }
+        await fs.rm(tmpHome, { recursive: true, force: true });
+      }
+    });
+
     it("does not retry when Cursor slow-pool capacity error is returned (auto no longer supported)", async () => {
       const fs = await import("fs/promises");
       const path = await import("path");
