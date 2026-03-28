@@ -6,6 +6,8 @@ During **Execute**, users can **open the task worktree in VS Code or Cursor** fo
 
 When proposed **PRD/SPEC** changes require **human-in-the-loop** approval, the product shows a **rendered markdown diff** of current vs proposed SPEC.md (block-level changes with **word-level** highlights inside modified blocks) and a **[Rendered | Raw]** toggle to a traditional line-based diff. On **Sketch**, the **PRD version history** list includes **View Diff** on each entry to compare that saved snapshot to the **current** SPEC.md.
 
+During **Evaluate**, projects can connect **external feedback sources**—starting with **Todoist**—to automatically import new tasks as feedback items. A provider-agnostic integration framework supports OAuth-based connections, background polling, idempotent import with provenance tracking, and cleanup of imported items from the source. This closes the feedback loop between field observations and the Execute phase without manual data entry.
+
 ## Problem Statement
 
 Building software with AI today is fragmented and unstructured. Developers use AI coding assistants for individual tasks, but there is no cohesive system that manages the full journey from idea to deployed product. This leads to several persistent problems:
@@ -59,6 +61,10 @@ A small team that builds software for clients. They need to move quickly from cl
 - **PRD size:** Full `fromContent` / `toContent` in diff API responses is acceptable for typical SPEC sizes; extremely large PRDs may later need chunking, pagination, or virtualization.
 - **Frontend dependencies:** A rendered diff pipeline may add **remark**, **unified**, a markdown renderer (e.g. **react-markdown**), and **diff** or **diff-match-patch** for word-level highlighting within the existing frontend budget.
 - **HIL transport:** PRD approval **WebSocket** payloads do **not** carry full diffs; clients fetch diff data via **GET** when the user opens the approval UI.
+- **Todoist API v1 + official SDK:** The Todoist integration uses `@doist/todoist-api-typescript` (v7.6.0+). OAuth issues **long-lived access tokens** with no refresh token and no expiry; tokens persist until explicitly revoked. The SDK provides OAuth helpers and typed REST methods for projects, tasks, and token revocation.
+- **One integration connection per provider per project:** A single `(project_id, provider)` pair is the v1 scope. Multi-account bindings per provider are out of scope.
+- **Integration credentials:** `TODOIST_CLIENT_ID`, `TODOIST_CLIENT_SECRET`, and `TODOIST_REDIRECT_URI` are configured via environment variables per deployment. Tokens are stored encrypted at rest; never logged or returned to clients.
+- **Polling-first sync:** Primary sync uses short-interval polling (60–120 s); Todoist webhooks and the incremental Sync API are deferred enhancements for latency-sensitive or high-volume deployments.
 
 ## Feature List
 
@@ -71,6 +77,11 @@ Add under **Execute** phase:
 
 - **Open in Editor:** In-progress task cards and the task detail sidebar expose an **Open in Editor** control when a worktree path is available; it opens the worktree (or repo root in **branches** mode with a **shared-checkout** warning) in the user's preferred editor (**VS Code**, **Cursor**, or **auto** from global settings). If the path is missing, the task is not in progress, or the editor CLI is unavailable, the control is disabled with tooltips or inline guidance; pure web clients get **copy path** / pasteable commands.
 - **Live Chat with Execute agent:** For **Claude API, OpenAI, Google/Gemini, LM Studio, and Ollama** (shared `runAgenticLoop`), users send messages that are **queued and injected between agentic turns** as real user turns (replacing the default continuation). **Claude CLI, Cursor CLI, and Custom CLI** backends disable chat with an explicit **switch to API mode** message. The Execute sidebar combines **Output** (streaming logs) and **Chat** (Sketch/Plan-style `PrdChatPanel` pattern): optimistic send, **Waiting for response…** while the agent processes, persisted **per-attempt** history (survives refresh), bounded pending-message queue, and WebSocket delivery/receipt events.
+
+Add under **Evaluate** phase:
+
+- **Todoist integration for feedback import:** From project settings (**Integrations** subsection), users connect a Todoist account via OAuth, select **one Todoist project** as the feedback source, and enable background sync. New Todoist tasks are automatically imported as Evaluate feedback items (text from task title, description and labels preserved as provenance metadata). After **durable persistence** of the feedback row and import ledger entry, the source task is **permanently deleted** from Todoist to keep the inbox clean. An optional **Import existing open tasks** toggle controls whether pre-existing tasks are included on first connect. The settings surface shows connection status, selected project, last sync time, and error/reconnect states.
+- **Provider-agnostic integration framework:** The integration data model (`integration_connections`, `integration_import_ledger`) is designed for reuse across future providers (Slack, GitHub Issues, email) without schema changes. Adding a provider requires a new `provider` value, a provider-specific sync service, and OAuth route handlers—no new tables.
 
 ## Technical Architecture
 
@@ -89,6 +100,14 @@ Add under **Execute** phase:
 - **Integration:** **DiffView** is used for (1) PRD/SPEC **HIL** approvals when the request type indicates SPEC changes, and (2) **Sketch** version history **View Diff**. Sticky or floating actions keep **Approve**/**Reject** usable on long diffs.
 - **Edge behavior:** Identical or empty sides show a **No changes** state; stale bases (SPEC changed after proposal) warrant a warning and refresh path; invalid `requestId` or missing snapshots return **404** with dismissible UI errors.
 
+**Evaluate integrations (Todoist and provider-agnostic framework)**
+
+- **OAuth flow:** Three-step OAuth (authorize → callback → token exchange) using the Todoist SDK (`getAuthorizationUrl`, `getAuthToken`). Backend generates and validates a CSRF `state` parameter with server-side expiry. Tokens are encrypted before storage; `revokeToken` is called on disconnect.
+- **Sync worker:** A `TodoistSyncService` polls `api.getTasks({ projectId })` at a configurable interval (default 60–120 s). Each sync cycle: fetch tasks → filter by ledger (skip already-imported `external_item_id` values) → process in `addedAt` order → for each task, INSERT ledger claim + create `FeedbackItem` (with `extra.source = "todoist"` provenance) + enqueue categorization → on DB commit, call `api.deleteTask(id)` and mark ledger `completed`. Cycle is capped (e.g. 50 tasks) to bound duration.
+- **Failure handling:** If `deleteTask` fails, ledger stays at `pending_delete` with incremented `retry_count`; retried on next cycle. 404 on delete treated as success (task already removed). 401/403 from Todoist sets connection `status = 'needs_reconnect'` and pauses sync. 429 triggers backoff using `retry_after`.
+- **Idempotency:** `UNIQUE(project_id, provider, external_item_id)` on the import ledger prevents duplicate feedback. Crashes between feedback insert and Todoist delete are reconciled on next sync via `pending_delete` status.
+- **Frontend:** Project settings **Integrations** card with OAuth connect/disconnect, Todoist project picker (`api.getProjects()`), **Import existing open tasks** toggle, last-sync status, error banner, and **Sync Now** manual trigger.
+
 ## Data Model
 
 **Global settings:** Extend `GlobalSettings` with optional **`preferredEditor`**: `'vscode' | 'cursor' | 'auto'` (default/auto behavior as implemented).
@@ -103,6 +122,14 @@ Add under **Execute** phase:
 
 **Pending PRD HIL proposals:** Store or reference enough state (e.g. **`requestId`**, proposal content handle) for **`GET .../prd/proposed-diff`** to resolve **proposed** text vs **current** repo SPEC; avoid embedding full diff objects in **`hil.request`** payloads.
 
+**Integration connections (`integration_connections` table):** Provider-agnostic table — one row per connected provider per project. Key columns: `id` (UUID PK), `project_id`, `provider` (`'todoist'`, future `'slack'`/`'github'`/`'email'`), `provider_user_id`, `provider_user_email`, `provider_resource_id` (selected Todoist project ID), `provider_resource_name`, `access_token_enc` (encrypted), `refresh_token_enc` (NULL for Todoist), `token_expires_at` (NULL for non-expiring), `scopes` (JSON array), `status` (`'active'` / `'needs_reconnect'` / `'disabled'`), `last_sync_at`, `last_error`, `config` (provider-specific JSON — poll interval, backfill flag, etc.), `created_at`, `updated_at`. **UNIQUE** `(project_id, provider)`. Indexes on `project_id` and `(project_id, provider, status)`.
+
+**Integration import ledger (`integration_import_ledger` table):** Tracks every imported item for idempotency and delete-retry. Columns: `id` (auto PK), `project_id`, `provider`, `external_item_id` (Todoist task ID, etc.), `feedback_id` (created feedback row), `import_status` (`'pending_delete'` / `'completed'` / `'failed_delete'`), `last_error`, `retry_count`, `created_at`, `updated_at`. **UNIQUE** `(project_id, provider, external_item_id)`. Index on `(project_id, provider, import_status)` for retry queries.
+
+**Feedback provenance:** `feedback.extra` JSON (existing column, no migration) gains Todoist provenance fields: `source`, `todoistTaskId`, `todoistProjectId`, `importedAt`.
+
+**Environment variables:** `TODOIST_CLIENT_ID`, `TODOIST_CLIENT_SECRET`, `TODOIST_REDIRECT_URI` — required for Todoist OAuth; per-deployment configuration.
+
 ## API Contracts
 
 The statement that **no new REST endpoints are required for quality-gate diagnostics** remains true for merge/gate failures; **additional REST and WebSocket contracts** apply to Execute inspect/chat and PRD diff:
@@ -115,18 +142,32 @@ The statement that **no new REST endpoints are required for quality-gate diagnos
 - **`GET /api/projects/:projectId/prd/diff?fromVersion=<versionId>&toVersion=<versionId|'current'>`:** Omit or set **`toVersion`** to **`current`** to compare a historical snapshot to the live SPEC. **`200`** body mirrors the proposed-diff shape plus `fromVersion` / `toVersion`. **`404`** if a version or stored snapshot is missing.
 - **WebSocket:** Client **`agent.chat.send`** `{ taskId, message }`; server **`agent.chat.received`**, **`agent.chat.response`**, **`agent.chat.unsupported`** with task and message identifiers as specified in the implementation plan. **`hil.request` / `hil.respond`** behavior stays the same for approve/reject; consumers **ignore unknown fields** for forward compatibility.
 
+**Todoist integration endpoints** (under `/api/projects/:projectId/integrations/todoist`):
+
+- **`GET .../integrations/todoist/status`:** Returns `{ connected, todoistUser?: { id, email? }, selectedProject?: { id, name }, lastSyncAt?, lastError?, status }`. No tokens exposed.
+- **`POST .../integrations/todoist/oauth/start`:** Returns `{ authorizationUrl, state }` (state stored server-side with expiry).
+- **`GET .../integrations/todoist/oauth/callback`:** Query params `code`, `state`; validates state, exchanges code for token via SDK `getAuthToken()`, encrypts and stores in `integration_connections`, redirects to app settings with success/error flash.
+- **`GET .../integrations/todoist/projects`:** Returns `{ projects: [{ id, name, taskCount? }] }` for project picker UI.
+- **`PUT .../integrations/todoist/project`:** Body `{ todoistProjectId }`, validates against fetched list, persists `provider_resource_id` and `provider_resource_name`.
+- **`POST .../integrations/todoist/sync`:** Manual sync trigger; returns `{ imported, errors }` (rate-limited).
+- **`DELETE .../integrations/todoist`:** Disconnect — revokes token via SDK, deletes `integration_connections` row. Optional prompt about `pending_delete` ledger entries.
+
 ## Non-Functional Requirements
 
 | Category | Requirement |
 | -------- | ----------- |
 | Usability | Execute **Output** and **Chat** share familiar Sketch/Plan chat patterns (bubbles, keyboard shortcuts, draft persistence, clear disabled states for non-running tasks and CLI backends). |
 | Usability | PRD diff UIs reuse one **DiffView**: **Rendered** default, **Raw** toggle, keyboard-accessible controls, and non-color-only cues (strikethrough, labels/ARIA) for additions and deletions. |
+| Usability | Integration settings surface clear connection status, **Sync Now** manual trigger, and actionable error/reconnect states; **Import existing open tasks** toggle prevents surprise mass imports on first connect. |
 | Reliability | User chat messages are **queued at turn boundaries**; **bounded** pending queue prevents unbounded memory; if the agent finishes before delivery, persisted history reflects **undelivered** user messages per product rules. |
 | Reliability | PRD diff responses remain consistent if the client toggles modes; large SPEC files may use pagination, caps, or virtualization to protect responsiveness. |
+| Reliability | Todoist sync is **idempotent**: `UNIQUE(project_id, provider, external_item_id)` prevents duplicate feedback; `pending_delete` ledger status with retry ensures no data loss when Todoist delete fails; crashes between insert and delete are reconciled on next cycle. |
 | Compatibility | **Open in Editor** degrades gracefully: missing CLI → install guidance + **copy path**; **branches** mode warns about **shared checkout**; multiple browser tabs deduplicate by **message id**. |
 | Compatibility | PRD **rendered** diff falls back to **raw** when markdown parsing fails; structural markdown changes may appear as block remove+add rather than cross-type word diff. |
+| Compatibility | Todoist integration detects **token revocation** (401/403) and transitions to `needs_reconnect` with a user-facing reconnect prompt; **rate-limit** (429) responses trigger backoff without data loss. |
 | Security / privacy | Chat content is stored **locally** under `.opensprint/active/<taskId>/` (JSONL) alongside assignment artifacts—treat as sensitive project data in backups and retention policies. |
 | Security / privacy | SPEC snapshots and proposal text used for diffs are **project-local** data; apply the same backup and access controls as SPEC.md and `.opensprint` metadata. |
+| Security / privacy | Todoist OAuth tokens are stored **encrypted at rest** in `integration_connections`; never logged or returned to API clients. Imported task content (titles, descriptions) may contain PII—apply the same retention and access controls as other feedback data. |
 | Theming / accessibility | Diff highlight colors respect **light/dark/system** themes with sufficient contrast; screen readers should be able to perceive added vs removed text. |
 
 ## Open Questions

@@ -63,6 +63,13 @@ import { CollapsibleSection } from "../../components/execute/CollapsibleSection"
 import { formatUptime } from "../../lib/formatting";
 import { EMPTY_STATE_COPY } from "../../lib/emptyStateCopy";
 import { AGENT_ROLE_LABELS } from "@opensprint/shared";
+import type { ActiveAgent } from "@opensprint/shared";
+import type { PlanGenState } from "../../lib/planGenerationState";
+import {
+  getPlanGenerationState,
+  PLANNING_TOOLTIP,
+  STALE_TOOLTIP,
+} from "../../lib/planGenerationState";
 import { useScrollToQuestion } from "../../hooks/useScrollToQuestion";
 import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotifications";
 import { formatPlanIdAsTitle } from "../../lib/formatting";
@@ -89,15 +96,7 @@ export function getPlanChatMessageDisplay(content: string): string {
 
 const EMPTY_PLAN_ID_LIST: string[] = [];
 const EMPTY_OPTIMISTIC_PLAN_LIST: Plan[] = [];
-const EMPTY_ACTIVE_AGENTS: {
-  id: string;
-  projectId: string;
-  phase: string;
-  role: string;
-  label: string;
-  startedAt: string;
-  branchName?: string;
-}[] = [];
+const EMPTY_ACTIVE_AGENTS: ActiveAgent[] = [];
 const EMPTY_AUDITOR_OUTPUT_BY_PLAN_ID = Object.freeze({}) as Record<string, string>;
 
 function hasGeneratedPlanTasksForCurrentVersion(plan: Plan): boolean {
@@ -321,6 +320,17 @@ export function PlanPhase({
   const executeError = useAppSelector((s) => s.plan.executeError);
 
   const selectedPlan = plans.find((p) => p.metadata.planId === selectedPlanId) ?? null;
+
+  /** Resolve plan generation state for a given plan: planning / stale / ready. */
+  const getPlanGenStateCallback = useCallback(
+    (planId: string): PlanGenState => getPlanGenerationState(planId, activeAgents),
+    [activeAgents]
+  );
+
+  const selectedPlanGenState = selectedPlan
+    ? getPlanGenStateCallback(selectedPlan.metadata.planId)
+    : ("ready" as PlanGenState);
+
   /* ── Memoized task selectors (only re-render when tasks for current plan change) ── */
   const selectedPlanTasks = useAppSelector(
     (s) => selectTasksForEpic(s, selectedPlan?.metadata.epicId),
@@ -644,12 +654,15 @@ export function PlanPhase({
     };
   }, [dependencyGraph, statusFilter, searchQuery]);
 
-  /** Plans that should show "Generate Tasks" (planning status, generation not yet run for current version). */
+  /** Plans that should show "Generate Tasks" (planning status, generation not yet run, no active planner). */
   const plansWithNoTasks = useMemo(() => {
     return plans.filter(
-      (p) => p.status === "planning" && !hasGeneratedPlanTasksForCurrentVersion(p)
+      (p) =>
+        p.status === "planning" &&
+        !hasGeneratedPlanTasksForCurrentVersion(p) &&
+        getPlanGenStateCallback(p.metadata.planId) === "ready"
     );
-  }, [plans]);
+  }, [plans, getPlanGenStateCallback]);
 
   /** Plan IDs for "Generate All Tasks" in dependency order (foundational first), or current order if no edges. */
   const plansWithNoTasksOrderedIds = useMemo(() => {
@@ -1097,6 +1110,25 @@ export function PlanPhase({
     [dispatch, processGenerateQueue]
   );
 
+  /** Retry plan generation for a stale plan — re-generate using the plan's title. */
+  const handleRetryPlan = useCallback(
+    async (planId: string) => {
+      const plan = plans.find((p) => p.metadata.planId === planId);
+      if (!plan) return;
+      const titleMatch = plan.content.match(/^#\s+(.+)$/m);
+      const description = titleMatch?.[1]?.trim() || planId;
+      const ok = await handleGeneratePlan(description);
+      if (ok) {
+        const result = await dispatch(deletePlan({ projectId, planId }));
+        if (deletePlan.fulfilled.match(result)) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
+        }
+      }
+    },
+    [plans, handleGeneratePlan, dispatch, projectId, queryClient]
+  );
+
   const handleSelectPlan = useCallback(
     (plan: Plan) => {
       setSelectedDraftPlanId(null);
@@ -1349,6 +1381,8 @@ export function PlanPhase({
                   }
                   onGoToEvaluate={() => navigate(getProjectPhasePath(projectId, "eval"))}
                   autoExecutePlans={autoExecutePlans}
+                  getPlanGenState={getPlanGenStateCallback}
+                  onRetryPlan={handleRetryPlan}
                 />
               )}
             </>
@@ -1559,45 +1593,82 @@ export function PlanPhase({
                       <div className="space-y-2">
                         {selectedPlanNeedsTaskGeneration && (
                           <div className="space-y-2">
-                            {!autoExecutePlans && (
-                              <p className="text-sm text-theme-muted">
-                                Use the chat to refine the plan, then click Generate Tasks when
-                                you&apos;re ready to break it down into specific tickets
-                              </p>
-                            )}
-                            {autoExecutePlans ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  selectedPlan && handleShipOrGenerateAndShip(selectedPlan)
-                                }
-                                disabled={!!executingPlanId || selectedPlanTasksGenerating}
-                                className="btn-primary text-sm w-full py-2 rounded-lg font-medium inline-flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed"
-                                data-testid="execute-button-sidebar"
-                              >
-                                {selectedPlanTasksGenerating ||
-                                executingPlanId === selectedPlan.metadata.planId
-                                  ? "Generating & executing…"
-                                  : "Execute"}
-                              </button>
-                            ) : selectedPlanTasksGenerating ? (
-                              <p
-                                className="text-sm text-theme-muted"
-                                aria-busy="true"
-                                aria-label="Planning tasks"
-                                data-testid="plan-tasks-loading-sidebar"
-                              >
-                                Planning tasks…
-                              </p>
+                            {selectedPlanGenState === "planning" && !selectedPlanTasksGenerating ? (
+                              <>
+                                <p className="text-sm text-theme-muted">
+                                  {PLANNING_TOOLTIP}
+                                </p>
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="btn-primary text-sm w-full py-2 rounded-lg font-medium inline-flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed"
+                                  title={PLANNING_TOOLTIP}
+                                  data-testid="plan-tasks-planning-sidebar"
+                                >
+                                  <span
+                                    className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin mr-2"
+                                    aria-hidden
+                                  />
+                                  Planning
+                                </button>
+                              </>
+                            ) : selectedPlanGenState === "stale" && !selectedPlanTasksGenerating ? (
+                              <>
+                                <p className="text-sm text-theme-warning-text">
+                                  {STALE_TOOLTIP}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRetryPlan(selectedPlan.metadata.planId)}
+                                  className="btn-primary text-sm w-full py-2 rounded-lg font-medium inline-flex items-center justify-center bg-theme-warning-bg text-theme-warning-text border border-theme-warning-border hover:opacity-90"
+                                  data-testid="plan-tasks-retry-sidebar"
+                                >
+                                  Retry
+                                </button>
+                              </>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() => handlePlanTasks(selectedPlan.metadata.planId)}
-                                className="btn-primary text-sm w-full py-2 rounded-lg font-medium inline-flex items-center justify-center"
-                                data-testid="plan-tasks-button-sidebar"
-                              >
-                                Generate Tasks
-                              </button>
+                              <>
+                                {!autoExecutePlans && (
+                                  <p className="text-sm text-theme-muted">
+                                    Use the chat to refine the plan, then click Generate Tasks when
+                                    you&apos;re ready to break it down into specific tickets
+                                  </p>
+                                )}
+                                {autoExecutePlans ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      selectedPlan && handleShipOrGenerateAndShip(selectedPlan)
+                                    }
+                                    disabled={!!executingPlanId || selectedPlanTasksGenerating}
+                                    className="btn-primary text-sm w-full py-2 rounded-lg font-medium inline-flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed"
+                                    data-testid="execute-button-sidebar"
+                                  >
+                                    {selectedPlanTasksGenerating ||
+                                    executingPlanId === selectedPlan.metadata.planId
+                                      ? "Generating & executing…"
+                                      : "Execute"}
+                                  </button>
+                                ) : selectedPlanTasksGenerating ? (
+                                  <p
+                                    className="text-sm text-theme-muted"
+                                    aria-busy="true"
+                                    aria-label="Planning tasks"
+                                    data-testid="plan-tasks-loading-sidebar"
+                                  >
+                                    Planning tasks…
+                                  </p>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePlanTasks(selectedPlan.metadata.planId)}
+                                    className="btn-primary text-sm w-full py-2 rounded-lg font-medium inline-flex items-center justify-center"
+                                    data-testid="plan-tasks-button-sidebar"
+                                  >
+                                    Generate Tasks
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         )}

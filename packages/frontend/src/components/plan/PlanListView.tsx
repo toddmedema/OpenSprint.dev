@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import type { Plan, PlanStatus } from "@opensprint/shared";
 import { sortPlansByStatus } from "@opensprint/shared";
 import { formatPlanIdAsTitle } from "../../lib/formatting";
+import type { PlanGenState } from "../../lib/planGenerationState";
+import { PLANNING_TOOLTIP, STALE_TOOLTIP } from "../../lib/planGenerationState";
 
 const PLAN_STATUS_ORDER: PlanStatus[] = ["planning", "building", "in_review", "complete"];
 
@@ -29,6 +31,10 @@ export interface PlanListViewProps {
   markCompletePendingPlanId?: string | null;
   onGoToEvaluate?: () => void;
   autoExecutePlans?: boolean;
+  /** Resolve per-plan generation state (planning/stale/ready). */
+  getPlanGenState?: (planId: string) => PlanGenState;
+  /** Called when user clicks Retry on a stale plan. */
+  onRetryPlan?: (planId: string) => void;
 }
 
 function PlanListRow({
@@ -47,6 +53,8 @@ function PlanListRow({
   markCompletePendingPlanId,
   onGoToEvaluate,
   autoExecutePlans,
+  planGenState = "ready",
+  onRetryPlan,
 }: {
   plan: Plan;
   isSelected: boolean;
@@ -63,6 +71,8 @@ function PlanListRow({
   markCompletePendingPlanId?: string | null;
   onGoToEvaluate?: () => void;
   autoExecutePlans?: boolean;
+  planGenState?: PlanGenState;
+  onRetryPlan?: (planId: string) => void;
 }) {
   const isMarkCompletePending = markCompletePendingPlanId === plan.metadata.planId;
   const planId = plan.metadata.planId;
@@ -72,13 +82,19 @@ function PlanListRow({
     plan.status === "planning" &&
     !hasGeneratedTasksForCurrentVersion &&
     planTasksPlanIds.includes(planId);
+  const isPlannerInFlight = planGenState === "planning";
+  const isPlannerStale = planGenState === "stale";
   const showGenerateTasks =
     plan.status === "planning" &&
     !hasGeneratedTasksForCurrentVersion &&
     !autoExecutePlans &&
-    !planTasksPlanIds.includes(planId);
+    !planTasksPlanIds.includes(planId) &&
+    !isPlannerInFlight &&
+    !isPlannerStale;
   const showExecute =
     plan.status === "planning" &&
+    !isPlannerInFlight &&
+    !isPlannerStale &&
     (hasGeneratedTasksForCurrentVersion ||
       (autoExecutePlans && (planTasksPlanIds.includes(planId) || !hasGeneratedTasksForCurrentVersion)));
   const showMarkComplete = plan.status === "in_review" && onMarkComplete;
@@ -118,6 +134,23 @@ function PlanListRow({
           {plan.status === "planning" && isPlanningTasks && (
             <span className="shrink-0 text-xs text-theme-muted">Generating tasks...</span>
           )}
+          {plan.status === "planning" && isPlannerInFlight && !isPlanningTasks && (
+            <span
+              className="shrink-0 text-xs text-theme-muted flex items-center gap-1"
+              title={PLANNING_TOOLTIP}
+            >
+              <span
+                className="inline-block w-3 h-3 border-2 border-theme-border border-t-brand-500 rounded-full animate-spin"
+                aria-hidden
+              />
+              Planning…
+            </span>
+          )}
+          {plan.status === "planning" && isPlannerStale && !isPlanningTasks && (
+            <span className="shrink-0 text-xs text-theme-warning-text" title={STALE_TOOLTIP}>
+              May be stuck
+            </span>
+          )}
         </button>
         <span
           className="shrink-0 flex items-center gap-1.5"
@@ -125,6 +158,30 @@ function PlanListRow({
           onKeyDown={(e) => e.stopPropagation()}
           role="presentation"
         >
+          {isPlannerInFlight && !isPlanningTasks && (
+            <span
+              className="shrink-0 text-xs font-medium text-theme-muted px-2 py-1 rounded cursor-default opacity-60"
+              title={PLANNING_TOOLTIP}
+              aria-disabled="true"
+              data-testid="plan-list-planning-indicator"
+            >
+              Planning
+            </span>
+          )}
+          {isPlannerStale && !isPlanningTasks && onRetryPlan && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRetryPlan(planId);
+              }}
+              className="shrink-0 text-xs font-medium text-theme-warning-text hover:bg-theme-warning-bg px-2 py-1 rounded transition-colors"
+              title={STALE_TOOLTIP}
+              data-testid="plan-list-retry"
+            >
+              Retry
+            </button>
+          )}
           {showGenerateTasks && (
             <button
               type="button"
@@ -256,6 +313,8 @@ export function PlanListView({
   markCompletePendingPlanId = null,
   onGoToEvaluate,
   autoExecutePlans = false,
+  getPlanGenState,
+  onRetryPlan,
 }: PlanListViewProps) {
   const grouped = useMemo(() => {
     const byStatus: Record<PlanStatus, Plan[]> = {
@@ -304,6 +363,8 @@ export function PlanListView({
                   markCompletePendingPlanId={markCompletePendingPlanId}
                   onGoToEvaluate={onGoToEvaluate}
                   autoExecutePlans={autoExecutePlans}
+                  planGenState={getPlanGenState?.(plan.metadata.planId)}
+                  onRetryPlan={onRetryPlan}
                 />
               ))}
             </ul>

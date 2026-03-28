@@ -180,4 +180,164 @@ describe("PlanListView", () => {
     expect(within(planningRow).queryByText("0/2 tasks")).not.toBeInTheDocument();
     expect(within(buildingRow).getByText("0/2 tasks")).toBeInTheDocument();
   });
+
+  it("shows Planning indicator instead of Generate tasks when planner is in-flight", () => {
+    const plans = [makePlan("planning-feature", "planning", 0)];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+        getPlanGenState={() => "planning"}
+      />
+    );
+    expect(screen.getByTestId("plan-list-planning-indicator")).toBeInTheDocument();
+    expect(screen.queryByTestId("plan-list-generate-tasks")).not.toBeInTheDocument();
+  });
+
+  it("shows Retry button instead of Generate tasks when planner is stale", () => {
+    const plans = [makePlan("planning-feature", "planning", 0)];
+    const onRetryPlan = vi.fn();
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+        getPlanGenState={() => "stale"}
+        onRetryPlan={onRetryPlan}
+      />
+    );
+    expect(screen.getByTestId("plan-list-retry")).toBeInTheDocument();
+    expect(screen.queryByTestId("plan-list-generate-tasks")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("plan-list-planning-indicator")).not.toBeInTheDocument();
+  });
+
+  it("hides Execute button when planner is in-flight", () => {
+    const plans = [makePlan("planning-feature", "planning", 0, true)];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+        getPlanGenState={() => "planning"}
+      />
+    );
+    expect(screen.queryByTestId("plan-list-execute")).not.toBeInTheDocument();
+    expect(screen.getByTestId("plan-list-planning-indicator")).toBeInTheDocument();
+  });
+
+  it("shows Generate tasks when getPlanGenState returns ready", () => {
+    const plans = [makePlan("planning-feature", "planning", 0)];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+        getPlanGenState={() => "ready"}
+      />
+    );
+    expect(screen.getByTestId("plan-list-generate-tasks")).toBeInTheDocument();
+    expect(screen.queryByTestId("plan-list-planning-indicator")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("plan-list-retry")).not.toBeInTheDocument();
+  });
+
+  it("calls onRetryPlan with plan ID when Retry is clicked", async () => {
+    const plans = [makePlan("stale-plan", "planning", 0)];
+    const onRetryPlan = vi.fn();
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+        getPlanGenState={() => "stale"}
+        onRetryPlan={onRetryPlan}
+      />
+    );
+    screen.getByTestId("plan-list-retry").click();
+    expect(onRetryPlan).toHaveBeenCalledWith("stale-plan");
+  });
+
+  it("shows 'May be stuck' status text for stale plans", () => {
+    const plans = [makePlan("stale-plan", "planning", 0)];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+        getPlanGenState={() => "stale"}
+        onRetryPlan={vi.fn()}
+      />
+    );
+    expect(screen.getByText("May be stuck")).toBeInTheDocument();
+  });
+
+  it("shows 'Planning…' status text for in-flight plans", () => {
+    const plans = [makePlan("active-plan", "planning", 0)];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+        getPlanGenState={() => "planning"}
+      />
+    );
+    const row = screen.getByTestId("plan-list-row-active-plan");
+    expect(within(row).getByText(/Planning…/)).toBeInTheDocument();
+  });
 });
