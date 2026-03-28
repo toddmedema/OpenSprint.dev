@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { TaskExecutionDiagnostics } from "@opensprint/shared";
+import type { TaskExecutionDiagnostics, AgentChatHistoryResponse, AgentChatSupportResponse } from "@opensprint/shared";
 import { api } from "../client";
 import { queryKeys } from "../queryKeys";
 import { normalizeTaskListResponse } from "../taskList";
@@ -172,6 +172,41 @@ export function useAddTaskDependency(projectId: string) {
       void qc.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
       void qc.invalidateQueries({ queryKey: queryKeys.tasks.detail(projectId, taskId) });
     },
+  });
+}
+
+export function useOpenEditor(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) => api.tasks.openEditor(projectId, taskId),
+    onSuccess: (_, taskId) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.tasks.detail(projectId, taskId) });
+    },
+  });
+}
+
+export function useAgentChatHistory(
+  projectId: string | undefined,
+  taskId: string | undefined,
+  options?: { enabled?: boolean; attempt?: number; refetchInterval?: number | false }
+) {
+  return useQuery<AgentChatHistoryResponse>({
+    queryKey: queryKeys.tasks.chatHistory(projectId ?? "", taskId ?? "", options?.attempt),
+    queryFn: () => api.tasks.chatHistory(projectId!, taskId!, options?.attempt),
+    enabled: Boolean(projectId) && Boolean(taskId) && options?.enabled !== false,
+    refetchInterval: options?.refetchInterval,
+  });
+}
+
+export function useAgentChatSupport(
+  projectId: string | undefined,
+  taskId: string | undefined,
+  options?: { enabled?: boolean }
+) {
+  return useQuery<AgentChatSupportResponse>({
+    queryKey: queryKeys.tasks.chatSupport(projectId ?? "", taskId ?? ""),
+    queryFn: () => api.tasks.chatSupport(projectId!, taskId!),
+    enabled: Boolean(projectId) && Boolean(taskId) && options?.enabled !== false,
   });
 }
 

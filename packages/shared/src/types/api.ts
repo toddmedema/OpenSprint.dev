@@ -150,6 +150,40 @@ export interface AgentLogEntry {
   failureType?: string | null;
 }
 
+// ─── Open in Editor ───
+
+/** Response from POST /projects/:projectId/tasks/:taskId/open-editor */
+export interface OpenEditorResponse {
+  worktreePath: string;
+  editor: "vscode" | "cursor" | "auto" | "none";
+  opened: boolean;
+}
+
+// ─── Agent Chat ───
+
+/** Single chat message in the agent chat log */
+export interface AgentChatMessage {
+  id: string;
+  timestamp: string;
+  role: "user" | "assistant";
+  content: string;
+  attempt: number;
+}
+
+/** Response from GET /projects/:projectId/tasks/:taskId/chat-history */
+export interface AgentChatHistoryResponse {
+  messages: AgentChatMessage[];
+  attempt: number;
+  chatSupported: boolean;
+}
+
+/** Response from GET /projects/:projectId/tasks/:taskId/chat-support */
+export interface AgentChatSupportResponse {
+  supported: boolean;
+  backend: string | null;
+  reason: string | null;
+}
+
 /** Feedback submission */
 export interface FeedbackSubmitRequest {
   text: string;

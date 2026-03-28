@@ -944,6 +944,112 @@ describe("api client", () => {
     });
   });
 
+  describe("tasks.openEditor", () => {
+    it("calls POST /projects/:projectId/tasks/:taskId/open-editor and returns result", async () => {
+      const mockResult = {
+        worktreePath: "/tmp/worktrees/os-1234",
+        editor: "cursor" as const,
+        opened: true,
+      };
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: mockResult }),
+      } as Response);
+
+      const result = await api.tasks.openEditor("proj-1", "os-1234");
+      expect(result).toEqual(mockResult);
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/projects/proj-1/tasks/os-1234/open-editor"),
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+  });
+
+  describe("tasks.chatHistory", () => {
+    it("calls GET /projects/:projectId/tasks/:taskId/chat-history without attempt", async () => {
+      const mockResult = {
+        messages: [
+          {
+            id: "msg-1",
+            timestamp: "2025-01-01T00:00:00Z",
+            role: "user" as const,
+            content: "Hello",
+            attempt: 1,
+          },
+        ],
+        attempt: 1,
+        chatSupported: true,
+      };
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: mockResult }),
+      } as Response);
+
+      const result = await api.tasks.chatHistory("proj-1", "os-1234");
+      expect(result).toEqual(mockResult);
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/projects/proj-1/tasks/os-1234/chat-history"),
+        expect.any(Object)
+      );
+      const url = vi.mocked(fetch).mock.calls[0][0] as string;
+      expect(url).not.toContain("attempt=");
+    });
+
+    it("includes attempt query param when provided", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { messages: [], attempt: 2, chatSupported: false } }),
+      } as Response);
+
+      await api.tasks.chatHistory("proj-1", "os-1234", 2);
+      const url = vi.mocked(fetch).mock.calls[0][0] as string;
+      expect(url).toContain("attempt=2");
+    });
+  });
+
+  describe("tasks.chatSupport", () => {
+    it("calls GET /projects/:projectId/tasks/:taskId/chat-support and returns support info", async () => {
+      const mockResult = {
+        supported: true,
+        backend: "claude",
+        reason: null,
+      };
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: mockResult }),
+      } as Response);
+
+      const result = await api.tasks.chatSupport("proj-1", "os-1234");
+      expect(result).toEqual(mockResult);
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/projects/proj-1/tasks/os-1234/chat-support"),
+        expect.any(Object)
+      );
+    });
+
+    it("returns unsupported for CLI backends", async () => {
+      const mockResult = {
+        supported: false,
+        backend: "cursor",
+        reason: "Chat is not available for CLI-based agent backends.",
+      };
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: mockResult }),
+      } as Response);
+
+      const result = await api.tasks.chatSupport("proj-1", "os-5678");
+      expect(result.supported).toBe(false);
+      expect(result.backend).toBe("cursor");
+      expect(result.reason).toContain("CLI-based");
+    });
+  });
+
   describe("feedback", () => {
     it("submit includes priority in body when provided", async () => {
       vi.mocked(fetch).mockResolvedValue({

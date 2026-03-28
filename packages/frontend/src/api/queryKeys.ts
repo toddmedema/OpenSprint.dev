@@ -44,6 +44,10 @@ export const queryKeys = {
     detail: (projectId: string, taskId: string) => ["tasks", projectId, taskId] as const,
     sessions: (projectId: string, taskId: string) =>
       ["tasks", projectId, taskId, "sessions"] as const,
+    chatHistory: (projectId: string, taskId: string, attempt?: number) =>
+      ["tasks", projectId, taskId, "chat-history", attempt ?? "latest"] as const,
+    chatSupport: (projectId: string, taskId: string) =>
+      ["tasks", projectId, taskId, "chat-support"] as const,
   },
   execute: {
     status: (projectId: string) => ["execute", projectId, "status"] as const,

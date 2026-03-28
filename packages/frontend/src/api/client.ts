@@ -47,6 +47,9 @@ import type {
   EnvRuntimeResponse,
   PlanVersionSummary,
   PlanVersionContent,
+  OpenEditorResponse,
+  AgentChatHistoryResponse,
+  AgentChatSupportResponse,
 } from "@opensprint/shared";
 import type { TaskListResponse } from "./taskList";
 import type { PrdProposedDiffResponse, PrdVersionDiffResponse } from "./prdDiffTypes";
@@ -594,6 +597,19 @@ export const api = {
       request<Task>(`/projects/${projectId}/tasks/${taskId}/force-retry`, {
         method: "POST",
       }),
+    openEditor: (projectId: string, taskId: string) =>
+      request<OpenEditorResponse>(
+        `/projects/${projectId}/tasks/${taskId}/open-editor`,
+        { method: "POST" }
+      ),
+    chatHistory: (projectId: string, taskId: string, attempt?: number) =>
+      request<AgentChatHistoryResponse>(
+        `/projects/${projectId}/tasks/${taskId}/chat-history${attempt != null ? `?attempt=${attempt}` : ""}`
+      ),
+    chatSupport: (projectId: string, taskId: string) =>
+      request<AgentChatSupportResponse>(
+        `/projects/${projectId}/tasks/${taskId}/chat-support`
+      ),
   },
 
   // ─── Execute ───
