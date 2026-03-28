@@ -1,8 +1,10 @@
 /**
- * OAuth start and callback routes for Todoist integration.
+ * Todoist integration routes.
  *
- * POST /oauth/start  — generates authorization URL and stores state server-side
+ * POST /oauth/start    — generates authorization URL and stores state server-side
  * GET  /oauth/callback — validates state, exchanges code for token, stores connection
+ * GET  /status         — returns current integration connection status
+ * GET  /projects       — lists Todoist projects using stored token
  */
 
 import { Router, type Request } from "express";
@@ -19,11 +21,16 @@ import {
   exchangeCodeForToken,
   getTodoistOAuthConfig,
   TodoistApiClient,
+  TodoistAuthError,
+  TodoistRateLimitError,
 } from "../services/todoist-api-client.service.js";
 import type { IntegrationStoreService } from "../services/integration-store.service.js";
 import type { TokenEncryptionService } from "../services/token-encryption.service.js";
 import type { Permission } from "@doist/todoist-api-typescript";
-import type { TodoistOAuthStartResponse } from "@opensprint/shared";
+import type {
+  TodoistOAuthStartResponse,
+  TodoistIntegrationStatus,
+} from "@opensprint/shared";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("todoist-oauth");
@@ -175,8 +182,11 @@ const oauthCallbackQuerySchema = z.object({
 });
 
 export interface TodoistIntegrationRouterDeps {
-  integrationStore: Pick<IntegrationStoreService, "upsertConnection">;
-  tokenEncryption: Pick<TokenEncryptionService, "encryptToken">;
+  integrationStore: Pick<
+    IntegrationStoreService,
+    "upsertConnection" | "getConnection" | "getEncryptedTokenById" | "updateConnectionStatus"
+  >;
+  tokenEncryption: Pick<TokenEncryptionService, "encryptToken" | "decryptToken">;
 }
 
 type ProjectParams = { projectId: string };
@@ -304,6 +314,155 @@ export function createTodoistIntegrationRouter(
         res.json({ data: { success: true, projectId } });
       } else {
         res.redirect(redirectUrl);
+      }
+    }),
+  );
+
+  // GET /status
+  router.get(
+    "/status",
+    validateParams(projectIdParamSchema),
+    wrapAsync(async (req: Request<ProjectParams>, res) => {
+      const { projectId } = req.params;
+      const connection = await integrationStore.getConnection(projectId, "todoist");
+
+      if (!connection) {
+        const body: { data: TodoistIntegrationStatus } = {
+          data: { connected: false, status: "disabled" },
+        };
+        res.json(body);
+        return;
+      }
+
+      const status: TodoistIntegrationStatus = {
+        connected: true,
+        status: connection.status,
+      };
+
+      if (connection.provider_user_id) {
+        status.todoistUser = {
+          id: connection.provider_user_id,
+          ...(connection.provider_user_email
+            ? { email: connection.provider_user_email }
+            : {}),
+        };
+      }
+
+      if (connection.provider_resource_id) {
+        status.selectedProject = {
+          id: connection.provider_resource_id,
+          name: connection.provider_resource_name ?? connection.provider_resource_id,
+        };
+      }
+
+      if (connection.last_sync_at) {
+        status.lastSyncAt = connection.last_sync_at;
+      }
+
+      if (connection.last_error) {
+        status.lastError = connection.last_error;
+      }
+
+      log.info("Returned integration status", { projectId, connected: true });
+      res.json({ data: status });
+    }),
+  );
+
+  // GET /projects
+  router.get(
+    "/projects",
+    validateParams(projectIdParamSchema),
+    wrapAsync(async (req: Request<ProjectParams>, res) => {
+      const { projectId } = req.params;
+      const connection = await integrationStore.getConnection(projectId, "todoist");
+
+      if (!connection) {
+        res.status(404).json({
+          error: {
+            code: "NOT_CONNECTED",
+            message: "Todoist is not connected for this project.",
+          },
+        });
+        return;
+      }
+
+      if (connection.status === "needs_reconnect") {
+        res.status(409).json({
+          error: {
+            code: "NEEDS_RECONNECT",
+            message:
+              "Todoist connection requires re-authentication. Please reconnect.",
+          },
+        });
+        return;
+      }
+
+      const encryptedToken = await integrationStore.getEncryptedTokenById(
+        connection.id,
+      );
+      if (!encryptedToken) {
+        res.status(500).json({
+          error: {
+            code: "TOKEN_MISSING",
+            message: "Stored token could not be retrieved.",
+          },
+        });
+        return;
+      }
+
+      let accessToken: string;
+      try {
+        accessToken = tokenEncryption.decryptToken(encryptedToken);
+      } catch {
+        res.status(500).json({
+          error: {
+            code: "TOKEN_DECRYPT_FAILED",
+            message: "Failed to decrypt stored token.",
+          },
+        });
+        return;
+      }
+
+      try {
+        const client = new TodoistApiClient(accessToken);
+        const projects = await client.getProjects();
+        log.info("Listed Todoist projects", { projectId, count: projects.length });
+        res.json({ data: { projects } });
+      } catch (err) {
+        if (err instanceof TodoistAuthError) {
+          await integrationStore.updateConnectionStatus(
+            connection.id,
+            "needs_reconnect",
+            err.message,
+          );
+          log.warn("Todoist auth failed — marked needs_reconnect", { projectId });
+          res.status(401).json({
+            error: {
+              code: "TODOIST_AUTH_FAILED",
+              message:
+                "Todoist authentication failed. Please reconnect your account.",
+            },
+          });
+          return;
+        }
+
+        if (err instanceof TodoistRateLimitError) {
+          log.warn("Todoist rate limit hit", {
+            projectId,
+            retryAfter: err.retryAfter,
+          });
+          res.set("Retry-After", String(err.retryAfter));
+          res.status(429).json({
+            error: {
+              code: "RATE_LIMITED",
+              message: "Todoist API rate limit exceeded. Please try again later.",
+              retryAfter: err.retryAfter,
+            },
+          });
+          return;
+        }
+
+        throw err;
       }
     }),
   );

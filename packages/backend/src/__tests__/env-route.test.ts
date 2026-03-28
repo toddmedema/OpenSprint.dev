@@ -354,7 +354,7 @@ describe("Env API", () => {
         repoPathPolicy: "any",
       });
 
-      const res = await request(app).get(`${API_PREFIX}/env/prerequisites`);
+      const res = await withLocalSessionAuth(request(app).get(`${API_PREFIX}/env/prerequisites`));
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveProperty("missing");
@@ -374,7 +374,7 @@ describe("Env API", () => {
         repoPathPolicy: "any",
       });
 
-      const res = await request(app).get(`${API_PREFIX}/env/runtime`);
+      const res = await withLocalSessionAuth(request(app).get(`${API_PREFIX}/env/runtime`));
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({
@@ -393,7 +393,7 @@ describe("Env API", () => {
         repoPathPolicy: "linux_fs_only",
       });
 
-      const res = await request(app).get(`${API_PREFIX}/env/runtime`);
+      const res = await withLocalSessionAuth(request(app).get(`${API_PREFIX}/env/runtime`));
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({

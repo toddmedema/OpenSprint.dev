@@ -179,13 +179,15 @@ function globalStoreHasProvider(
   return Array.isArray(entries) && entries.length > 0;
 }
 
-// GET /env/global-status — Returns { hasAnyKey, useCustomCli } for modal flow.
-// hasAnyKey = global store has keys OR process.env has ANTHROPIC/CURSOR/OPENAI (per spec: API keys only).
-envRouter.get("/runtime", (_req, res) => {
-  res.json({
-    data: getBackendRuntimeInfo(),
-  } as ApiResponse<EnvRuntimeResponse>);
-});
+// GET /env/runtime — Platform / WSL detection for the frontend.
+envRouter.get(
+  "/runtime",
+  wrapAsync(async (_req, res) => {
+    res.json({
+      data: getBackendRuntimeInfo(),
+    } as ApiResponse<EnvRuntimeResponse>);
+  })
+);
 
 // GET /env/prerequisites — For installation checklist on home: which of Git/Node are missing + platform for install URLs.
 envRouter.get(

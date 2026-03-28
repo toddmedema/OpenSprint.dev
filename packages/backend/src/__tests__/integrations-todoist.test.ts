@@ -11,22 +11,46 @@ import {
 } from "../routes/integrations-todoist.js";
 import { errorHandler } from "../middleware/error-handler.js";
 
-vi.mock("../services/todoist-api-client.service.js", () => ({
-  generateOAuthState: vi.fn().mockReturnValue("mock-state-abc"),
-  buildAuthorizationUrl: vi.fn().mockReturnValue("https://todoist.example/authorize?state=mock-state-abc"),
-  exchangeCodeForToken: vi.fn().mockResolvedValue({
-    accessToken: "tok-real-123",
-    tokenType: "Bearer",
-  }),
-  getTodoistOAuthConfig: vi.fn().mockReturnValue({
-    clientId: "test-client-id",
-    clientSecret: "test-client-secret",
-    redirectUri: "http://localhost:3000/api/v1/projects/proj-1/integrations/todoist/oauth/callback",
-  }),
-  TodoistApiClient: vi.fn().mockImplementation(() => ({
-    getProjects: vi.fn().mockResolvedValue([{ id: "p1", name: "Inbox" }]),
-  })),
-}));
+vi.mock("../services/todoist-api-client.service.js", () => {
+  class _TodoistAuthError extends Error {
+    override name = "TodoistAuthError" as const;
+    constructor(
+      message: string,
+      public readonly httpStatusCode: number,
+    ) {
+      super(message);
+    }
+  }
+
+  class _TodoistRateLimitError extends Error {
+    override name = "TodoistRateLimitError" as const;
+    constructor(
+      message: string,
+      public readonly retryAfter: number,
+    ) {
+      super(message);
+    }
+  }
+
+  return {
+    generateOAuthState: vi.fn().mockReturnValue("mock-state-abc"),
+    buildAuthorizationUrl: vi.fn().mockReturnValue("https://todoist.example/authorize?state=mock-state-abc"),
+    exchangeCodeForToken: vi.fn().mockResolvedValue({
+      accessToken: "tok-real-123",
+      tokenType: "Bearer",
+    }),
+    getTodoistOAuthConfig: vi.fn().mockReturnValue({
+      clientId: "test-client-id",
+      clientSecret: "test-client-secret",
+      redirectUri: "http://localhost:3000/api/v1/projects/proj-1/integrations/todoist/oauth/callback",
+    }),
+    TodoistApiClient: vi.fn().mockImplementation(() => ({
+      getProjects: vi.fn().mockResolvedValue([{ id: "p1", name: "Inbox" }]),
+    })),
+    TodoistAuthError: _TodoistAuthError,
+    TodoistRateLimitError: _TodoistRateLimitError,
+  };
+});
 
 const mockedService = await import("../services/todoist-api-client.service.js");
 
@@ -41,29 +65,35 @@ function createTestApp(deps: TodoistIntegrationRouterDeps) {
   return app;
 }
 
+const DEFAULT_CONNECTION = {
+  id: "conn-1",
+  project_id: "proj-1",
+  provider: "todoist" as const,
+  status: "active" as const,
+  provider_user_id: "todoist-user",
+  provider_user_email: "user@example.com",
+  provider_resource_id: "proj-ext-1",
+  provider_resource_name: "My Todoist Project",
+  scopes: "data:read_write,data:delete",
+  last_sync_at: "2025-01-01T00:00:00.000Z",
+  last_error: null,
+  config: null,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
+
 function makeDeps(overrides?: Partial<TodoistIntegrationRouterDeps>): TodoistIntegrationRouterDeps {
   return {
     integrationStore: {
-      upsertConnection: vi.fn().mockResolvedValue({
-        id: "conn-1",
-        project_id: "proj-1",
-        provider: "todoist",
-        status: "active",
-        provider_user_id: null,
-        provider_user_email: null,
-        provider_resource_id: null,
-        provider_resource_name: null,
-        scopes: "data:read_write,data:delete",
-        last_sync_at: null,
-        last_error: null,
-        config: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }),
+      upsertConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
+      getConnection: vi.fn().mockResolvedValue(null),
+      getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
+      updateConnectionStatus: vi.fn().mockResolvedValue(undefined),
       ...(overrides?.integrationStore ?? {}),
     },
     tokenEncryption: {
       encryptToken: vi.fn().mockReturnValue("encrypted-token-abc"),
+      decryptToken: vi.fn().mockReturnValue("decrypted-access-token"),
       ...(overrides?.tokenEncryption ?? {}),
     },
   };
@@ -274,6 +304,262 @@ describe("Todoist OAuth Routes", () => {
         .expect(500);
 
       expect(res.body.error.code).toBe("INTEGRATION_NOT_CONFIGURED");
+    });
+  });
+
+  describe("GET /status", () => {
+    it("returns connected: false when no connection exists", async () => {
+      const deps = makeDeps();
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/status")
+        .expect(200);
+
+      expect(res.body.data).toEqual({
+        connected: false,
+        status: "disabled",
+      });
+    });
+
+    it("returns full status when connection exists with all fields", async () => {
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
+        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+      });
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/status")
+        .expect(200);
+
+      expect(res.body.data.connected).toBe(true);
+      expect(res.body.data.status).toBe("active");
+      expect(res.body.data.todoistUser).toEqual({
+        id: "todoist-user",
+        email: "user@example.com",
+      });
+      expect(res.body.data.selectedProject).toEqual({
+        id: "proj-ext-1",
+        name: "My Todoist Project",
+      });
+      expect(res.body.data.lastSyncAt).toBe("2025-01-01T00:00:00.000Z");
+      expect(res.body.data.lastError).toBeUndefined();
+    });
+
+    it("omits optional fields when they are null", async () => {
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({
+            ...DEFAULT_CONNECTION,
+            provider_user_id: null,
+            provider_user_email: null,
+            provider_resource_id: null,
+            provider_resource_name: null,
+            last_sync_at: null,
+            last_error: null,
+          }),
+        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+      });
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/status")
+        .expect(200);
+
+      expect(res.body.data.connected).toBe(true);
+      expect(res.body.data.todoistUser).toBeUndefined();
+      expect(res.body.data.selectedProject).toBeUndefined();
+      expect(res.body.data.lastSyncAt).toBeUndefined();
+      expect(res.body.data.lastError).toBeUndefined();
+    });
+
+    it("includes lastError when present", async () => {
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({
+            ...DEFAULT_CONNECTION,
+            last_error: "Something went wrong",
+            status: "needs_reconnect",
+          }),
+        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+      });
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/status")
+        .expect(200);
+
+      expect(res.body.data.lastError).toBe("Something went wrong");
+      expect(res.body.data.status).toBe("needs_reconnect");
+    });
+
+    it("never returns tokens in the status response", async () => {
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
+        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+      });
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/status")
+        .expect(200);
+
+      const body = JSON.stringify(res.body);
+      expect(body).not.toContain("access_token");
+      expect(body).not.toContain("refresh_token");
+      expect(body).not.toContain("encrypted");
+    });
+  });
+
+  describe("GET /projects", () => {
+    it("returns 404 when not connected", async () => {
+      const deps = makeDeps();
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/projects")
+        .expect(404);
+
+      expect(res.body.error.code).toBe("NOT_CONNECTED");
+    });
+
+    it("returns 409 when connection needs reconnect", async () => {
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({
+            ...DEFAULT_CONNECTION,
+            status: "needs_reconnect",
+          }),
+        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+      });
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/projects")
+        .expect(409);
+
+      expect(res.body.error.code).toBe("NEEDS_RECONNECT");
+    });
+
+    it("returns projects list on success", async () => {
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
+          getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
+        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+      });
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/projects")
+        .expect(200);
+
+      expect(res.body.data.projects).toEqual([{ id: "p1", name: "Inbox" }]);
+      expect(deps.tokenEncryption.decryptToken).toHaveBeenCalledWith(
+        "encrypted-token-abc",
+      );
+    });
+
+    it("returns 401 and marks needs_reconnect on TodoistAuthError", async () => {
+      const { TodoistAuthError } = mockedService;
+      vi.mocked(mockedService.TodoistApiClient).mockImplementationOnce(
+        () =>
+          ({
+            getProjects: vi
+              .fn()
+              .mockRejectedValue(new TodoistAuthError("bad token", 401)),
+          }) as ReturnType<typeof mockedService.TodoistApiClient>,
+      );
+
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
+          getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
+          updateConnectionStatus: vi.fn().mockResolvedValue(undefined),
+        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+      });
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/projects")
+        .expect(401);
+
+      expect(res.body.error.code).toBe("TODOIST_AUTH_FAILED");
+      expect(deps.integrationStore.updateConnectionStatus).toHaveBeenCalledWith(
+        "conn-1",
+        "needs_reconnect",
+        "bad token",
+      );
+    });
+
+    it("returns 429 with Retry-After on TodoistRateLimitError", async () => {
+      const { TodoistRateLimitError } = mockedService;
+      vi.mocked(mockedService.TodoistApiClient).mockImplementationOnce(
+        () =>
+          ({
+            getProjects: vi
+              .fn()
+              .mockRejectedValue(
+                new TodoistRateLimitError("rate limited", 30),
+              ),
+          }) as ReturnType<typeof mockedService.TodoistApiClient>,
+      );
+
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
+          getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
+        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+      });
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/projects")
+        .expect(429);
+
+      expect(res.body.error.code).toBe("RATE_LIMITED");
+      expect(res.body.error.retryAfter).toBe(30);
+      expect(res.headers["retry-after"]).toBe("30");
+    });
+
+    it("returns 500 when encrypted token is missing", async () => {
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
+          getEncryptedTokenById: vi.fn().mockResolvedValue(null),
+        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+      });
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/projects")
+        .expect(500);
+
+      expect(res.body.error.code).toBe("TOKEN_MISSING");
+    });
+
+    it("returns 500 when token decryption fails", async () => {
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
+          getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
+        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        tokenEncryption: {
+          decryptToken: vi.fn().mockImplementation(() => {
+            throw new Error("decryption failed");
+          }),
+        } as Partial<TodoistIntegrationRouterDeps["tokenEncryption"]> as TodoistIntegrationRouterDeps["tokenEncryption"],
+      });
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/projects")
+        .expect(500);
+
+      expect(res.body.error.code).toBe("TOKEN_DECRYPT_FAILED");
     });
   });
 
