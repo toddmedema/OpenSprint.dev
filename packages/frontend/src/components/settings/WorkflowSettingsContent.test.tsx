@@ -339,19 +339,6 @@ describe("WorkflowSettingsContent", () => {
       expect(api.projects.getSelfImprovementHistory).toHaveBeenCalledWith("proj-1", 20);
     });
 
-    it("renders mode badges correctly", async () => {
-      vi.mocked(api.projects.getSelfImprovementHistory).mockResolvedValue(sampleHistory);
-      renderWorkflowContent();
-
-      await waitFor(() => {
-        expect(screen.getByTestId("self-improvement-recent-runs")).toBeInTheDocument();
-      });
-
-      const modeBadges = screen.getAllByTestId("history-mode-badge");
-      expect(modeBadges[0]).toHaveTextContent("Audit + experiments");
-      expect(modeBadges[1]).toHaveTextContent("Audit only");
-    });
-
     it("renders outcome badges correctly", async () => {
       vi.mocked(api.projects.getSelfImprovementHistory).mockResolvedValue(sampleHistory);
       renderWorkflowContent();
@@ -363,6 +350,7 @@ describe("WorkflowSettingsContent", () => {
       const outcomeBadges = screen.getAllByTestId("history-outcome-badge");
       expect(outcomeBadges[0]).toHaveTextContent("Tasks created");
       expect(outcomeBadges[1]).toHaveTextContent("No changes");
+      expect(screen.queryByTestId("history-mode-badge")).not.toBeInTheDocument();
     });
 
     it("renders run summaries", async () => {

@@ -56,7 +56,6 @@ import {
 } from "./task-store-helpers.js";
 import { cascadeDeleteTaskReferences } from "./task-store-cascade.js";
 import { TaskStorePlanAuditorSIFacade } from "./task-store-facades.js";
-import { parseTaskLastExecutionSummary } from "./task-execution-summary.js";
 
 export type {
   StoredTask,
@@ -69,30 +68,9 @@ export { resolveEpicId, getBlockersFromIssue, getParentId } from "./task-store-h
 export type { PlanInsertData, StoredPlan } from "./plan-store.service.js";
 
 const log = createLogger("task-store");
-const NON_RETRYABLE_BLOCK_FAILURE_TYPES = new Set([
-  "review_rejection",
-  "repo_preflight",
-  "environment_setup",
-]);
 const BASELINE_MERGE_RETRY_MODE = "baseline_wait";
 const MERGE_RETRY_MODE_KEY = "merge_retry_mode";
 const WORKTREE_PATH_KEY = "worktreePath";
-
-function getBlockedTaskFailureType(task: StoredTask): string | null {
-  const lastExecution = parseTaskLastExecutionSummary(
-    (task as { last_execution_summary?: unknown }).last_execution_summary
-  );
-  if (typeof lastExecution?.failureType === "string" && lastExecution.failureType.trim() !== "") {
-    return lastExecution.failureType.trim().toLowerCase();
-  }
-
-  const retryContext = (task as { next_retry_context?: unknown }).next_retry_context;
-  if (!retryContext || typeof retryContext !== "object") return null;
-  const failureType = (retryContext as { failureType?: unknown }).failureType;
-  return typeof failureType === "string" && failureType.trim() !== ""
-    ? failureType.trim().toLowerCase()
-    : null;
-}
 
 function hasBaselineMergeResumeState(task: StoredTask): boolean {
   const record = task as Record<string, unknown>;
@@ -536,9 +514,8 @@ export class TaskStoreService {
 
   /**
    * List tasks blocked by technical errors (Merge Failure, Quality Gate Failure, Coding Failure) that are eligible
-   * for auto-retry. Excludes human-feedback blocks plus deterministic/setup or review failures
-   * that should stay blocked until someone intervenes. Only returns tasks whose
-   * last_auto_retry_at is null or older than AUTO_RETRY_BLOCKED_INTERVAL_MS (8 hours).
+   * for auto-retry. Excludes human-feedback blocks. Only returns tasks whose
+   * last_auto_retry_at is null or older than AUTO_RETRY_BLOCKED_INTERVAL_MS (6 hours).
    */
   async listBlockedByTechnicalErrorEligibleForRetry(projectId: string): Promise<StoredTask[]> {
     await this.ensureInitialized();
@@ -551,8 +528,6 @@ export class TaskStoreService {
     const cutoff = now - AUTO_RETRY_BLOCKED_INTERVAL_MS;
     return blocked.filter((t) => {
       if (!isBlockedByTechnicalError(t.block_reason)) return false;
-      const failureType = getBlockedTaskFailureType(t);
-      if (failureType && NON_RETRYABLE_BLOCK_FAILURE_TYPES.has(failureType)) return false;
       const lastRetry = t.last_auto_retry_at;
       if (!lastRetry) return true;
       const lastRetryMs = new Date(lastRetry).getTime();

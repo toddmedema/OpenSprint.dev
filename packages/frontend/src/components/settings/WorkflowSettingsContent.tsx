@@ -27,7 +27,6 @@ import type {
   SelfImprovementStage,
   SelfImprovementHistoryEntry,
   SelfImprovementRunOutcome,
-  SelfImprovementRunMode,
   CandidateDiffEntry,
 } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
@@ -69,11 +68,6 @@ function statusLabel(snapshot: SelfImprovementStatusSnapshot): string {
       return "Idle";
   }
 }
-
-const MODE_LABELS: Record<SelfImprovementRunMode, string> = {
-  audit_only: "Audit only",
-  audit_and_experiments: "Audit + experiments",
-};
 
 const OUTCOME_LABELS: Record<SelfImprovementRunOutcome, string> = {
   no_changes: "No changes",
@@ -1262,12 +1256,6 @@ export function WorkflowSettingsContent({
                     >
                       <span className="text-theme-muted shrink-0 w-28">
                         {formatTimestamp(run.timestamp)}
-                      </span>
-                      <span
-                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-theme-bg-elevated border border-theme-border shrink-0"
-                        data-testid="history-mode-badge"
-                      >
-                        {MODE_LABELS[run.mode]}
                       </span>
                       <span
                         className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${OUTCOME_COLORS[run.outcome]}`}

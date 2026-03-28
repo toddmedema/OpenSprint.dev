@@ -62,8 +62,8 @@ export const TECHNICAL_BLOCK_REASONS = [
 /** Block reason when Coder emits open_questions (human clarification needed) */
 export const OPEN_QUESTION_BLOCK_REASON = "Open Question";
 
-/** Interval for auto-retrying tasks blocked by technical errors (8 hours) */
-export const AUTO_RETRY_BLOCKED_INTERVAL_MS = 8 * 60 * 60 * 1000;
+/** Interval for auto-retrying tasks blocked by technical errors (6 hours) */
+export const AUTO_RETRY_BLOCKED_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 /** True if block_reason indicates a technical error (auto-retriable); false for human-feedback blocks. */
 export function isBlockedByTechnicalError(blockReason: string | null | undefined): boolean {

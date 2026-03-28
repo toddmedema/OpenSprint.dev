@@ -415,7 +415,7 @@ suite("TaskStoreService", () => {
       expect(eligible.map((e) => e.id)).not.toContain(t.id);
     });
 
-    it("excludes technical-error tasks retried within 8 hours", async () => {
+    it("excludes technical-error tasks retried within 6 hours", async () => {
       const t = await store.create(TEST_PROJECT_ID, "Recently retried");
       const recent = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // 1 hour ago
       await store.update(TEST_PROJECT_ID, t.id, {
@@ -427,9 +427,9 @@ suite("TaskStoreService", () => {
       expect(eligible.map((e) => e.id)).not.toContain(t.id);
     });
 
-    it("includes technical-error tasks retried more than 8 hours ago", async () => {
+    it("includes technical-error tasks retried more than 6 hours ago", async () => {
       const t = await store.create(TEST_PROJECT_ID, "Old retry");
-      const old = new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString(); // 9 hours ago
+      const old = new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(); // 7 hours ago
       await store.update(TEST_PROJECT_ID, t.id, {
         status: "blocked",
         block_reason: "Coding Failure",
@@ -439,7 +439,7 @@ suite("TaskStoreService", () => {
       expect(eligible.map((e) => e.id)).toContain(t.id);
     });
 
-    it("excludes review rejections even when they were blocked as Coding Failure", async () => {
+    it("includes review rejections when blocked as Coding Failure", async () => {
       const t = await store.create(TEST_PROJECT_ID, "Reviewer blocked");
       await store.update(TEST_PROJECT_ID, t.id, {
         status: "blocked",
@@ -458,10 +458,10 @@ suite("TaskStoreService", () => {
       });
 
       const eligible = await store.listBlockedByTechnicalErrorEligibleForRetry(TEST_PROJECT_ID);
-      expect(eligible.map((e) => e.id)).not.toContain(t.id);
+      expect(eligible.map((e) => e.id)).toContain(t.id);
     });
 
-    it("excludes deterministic setup failures even when block_reason looks technical", async () => {
+    it("includes deterministic setup failures when block_reason looks technical", async () => {
       const preflightTask = await store.create(TEST_PROJECT_ID, "Repo preflight blocked");
       await store.update(TEST_PROJECT_ID, preflightTask.id, {
         status: "blocked",
@@ -498,8 +498,8 @@ suite("TaskStoreService", () => {
 
       const eligible = await store.listBlockedByTechnicalErrorEligibleForRetry(TEST_PROJECT_ID);
       const eligibleIds = eligible.map((e) => e.id);
-      expect(eligibleIds).not.toContain(preflightTask.id);
-      expect(eligibleIds).not.toContain(envTask.id);
+      expect(eligibleIds).toContain(preflightTask.id);
+      expect(eligibleIds).toContain(envTask.id);
     });
   });
 

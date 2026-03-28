@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "../../contexts/ThemeContext";
 import { DisplayPreferencesProvider } from "../../contexts/DisplayPreferencesContext";
 import { NAVBAR_HEIGHT } from "../../lib/constants";

@@ -38,6 +38,12 @@ CI also runs `npm run lint:ci` (lint + format check). Fix any failures before su
 
 To fix formatting: `npm run format`.
 
+## Dependency ownership
+
+- Keep test tooling explicit in each workspace that runs tests (`vitest` and `@vitest/coverage-v8` in package-level `devDependencies`).
+- Avoid relying on a root-only test runner dependency for workspace scripts; this keeps `npm run test -w packages/<workspace>` self-contained.
+- If upgrading shared toolchain packages (for example, `vitest`, `vite`, `typescript`), align versions across workspaces in one change and regenerate lockfiles from repo root.
+
 ## Submitting changes
 
 - **Pull requests:** Open a PR against `main`. Describe what changed and how you tested it.

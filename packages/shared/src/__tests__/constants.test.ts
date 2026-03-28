@@ -120,7 +120,7 @@ describe("technical block constants", () => {
     expect(TECHNICAL_BLOCK_REASONS).toContain("Coding Failure");
   });
 
-  it("uses an eight-hour blocked retry interval", () => {
-    expect(AUTO_RETRY_BLOCKED_INTERVAL_MS).toBe(8 * 60 * 60 * 1000);
+  it("uses a six-hour blocked retry interval", () => {
+    expect(AUTO_RETRY_BLOCKED_INTERVAL_MS).toBe(6 * 60 * 60 * 1000);
   });
 });

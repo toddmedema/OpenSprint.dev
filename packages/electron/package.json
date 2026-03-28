@@ -34,12 +34,12 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
-    "vitest": "^2.1.0",
+    "vitest": "^3.2.4",
     "electron": "41.0.2",
     "electron-builder": "^26.8.1",
     "esbuild": "^0.25.12",
     "sharp": "^0.33.5",
-    "typescript": "^5.7.2"
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

@@ -1,9 +1,9 @@
 /**
  * Auto-retry service for tasks blocked by technical errors.
  *
- * Runs every 8 hours. Unblocks tasks with block_reason "Merge Failure", "Quality Gate Failure", or "Coding Failure"
+ * Runs every 6 hours. Unblocks tasks with block_reason "Merge Failure", "Quality Gate Failure", or "Coding Failure"
  * (technical errors). Never retries tasks blocked on human feedback (e.g. Open Question, API blocked).
- * Limits retry to once per 8-hour window per task via last_auto_retry_at.
+ * Limits retry to once per 6-hour window per task via last_auto_retry_at.
  */
 
 import { AUTO_RETRY_BLOCKED_INTERVAL_MS } from "@opensprint/shared";
@@ -22,7 +22,7 @@ let interval: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Run one auto-retry pass: for each project, unblock tasks blocked by technical errors
- * that are eligible (last_auto_retry_at null or > 8 hours ago).
+ * that are eligible (last_auto_retry_at null or > 6 hours ago).
  */
 export async function runBlockedAutoRetryPass(
   getTargets: () => Promise<BlockedAutoRetryTarget[]>
@@ -77,7 +77,7 @@ export async function runBlockedAutoRetryPass(
 }
 
 /**
- * Start the 8-hour auto-retry timer. Runs immediately on start, then every 8 hours.
+ * Start the 6-hour auto-retry timer. Runs immediately on start, then every 6 hours.
  */
 export function startBlockedAutoRetry(getTargets: () => Promise<BlockedAutoRetryTarget[]>): void {
   if (interval) return;
@@ -96,7 +96,7 @@ export function startBlockedAutoRetry(getTargets: () => Promise<BlockedAutoRetry
 }
 
 /**
- * Stop the 8-hour auto-retry timer.
+ * Stop the 6-hour auto-retry timer.
  */
 export function stopBlockedAutoRetry(): void {
   if (interval) {
