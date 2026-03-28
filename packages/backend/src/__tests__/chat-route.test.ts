@@ -31,6 +31,15 @@ vi.mock("drizzle-orm", () => ({
 }));
 vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
+vi.mock("../services/database-runtime.service.js", () => ({
+  databaseRuntime: {
+    requireDatabase: vi.fn().mockResolvedValue(undefined),
+    requestReconnect: vi.fn(),
+    start: vi.fn(),
+    getStatus: vi.fn().mockResolvedValue({ ok: true, state: "connected" }),
+  },
+}));
+
 vi.mock("../services/task-store.service.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/task-store.service.js")>();
   const { createTestPostgresClient, truncateTestDbTables } = await import("./test-db-helper.js");
