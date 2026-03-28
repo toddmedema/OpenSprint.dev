@@ -8,7 +8,7 @@ export type IntegrationConnectionStatus =
   | "disabled";
 
 /** Lifecycle status of an imported external item in the ledger. */
-export type ImportStatus = "pending_delete" | "completed" | "failed_delete";
+export type ImportStatus = "importing" | "pending_delete" | "completed" | "failed_delete";
 
 /** Mirrors DB row for integration_connections (excludes encrypted token fields). */
 export interface IntegrationConnection {

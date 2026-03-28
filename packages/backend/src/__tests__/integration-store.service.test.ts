@@ -241,6 +241,57 @@ describe("IntegrationStoreService — connections", () => {
 // ─── integration_import_ledger ───
 
 describe("IntegrationStoreService — ledger", () => {
+  describe("claimImportSlot", () => {
+    it("claims slot when insert succeeds", async () => {
+      executeFn
+        .mockResolvedValueOnce(1) // stale importing cleanup delete
+        .mockResolvedValueOnce(1); // insert
+      const result = await store.claimImportSlot("proj-1", "todoist", "ext-1");
+      expect(result).toBe(true);
+      expect(executeFn).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining("ON CONFLICT (project_id, provider, external_item_id) DO NOTHING"),
+        expect.arrayContaining(["proj-1", "todoist", "ext-1", "__pending__", "importing"])
+      );
+    });
+
+    it("returns false when slot already exists", async () => {
+      executeFn
+        .mockResolvedValueOnce(0) // stale cleanup
+        .mockResolvedValueOnce(0); // insert no-op due to conflict
+      const result = await store.claimImportSlot("proj-1", "todoist", "ext-1");
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("finalizeImportSlot", () => {
+    it("promotes importing row to pending_delete with feedback id", async () => {
+      executeFn.mockResolvedValueOnce(1);
+      await store.finalizeImportSlot("proj-1", "todoist", "ext-1", "fb-1");
+      expect(executeFn).toHaveBeenCalledWith(
+        expect.stringContaining("SET feedback_id = $1, import_status = $2"),
+        ["fb-1", "pending_delete", null, expect.any(String), "proj-1", "todoist", "ext-1", "importing"]
+      );
+    });
+
+    it("throws when no importing row exists", async () => {
+      executeFn.mockResolvedValueOnce(0);
+      await expect(
+        store.finalizeImportSlot("proj-1", "todoist", "ext-1", "fb-1")
+      ).rejects.toThrow("Failed to finalize import slot");
+    });
+  });
+
+  describe("abandonImportSlot", () => {
+    it("deletes importing row", async () => {
+      await store.abandonImportSlot("proj-1", "todoist", "ext-1");
+      expect(executeFn).toHaveBeenCalledWith(
+        expect.stringContaining("DELETE FROM integration_import_ledger"),
+        ["proj-1", "todoist", "ext-1", "importing"]
+      );
+    });
+  });
+
   describe("recordImport", () => {
     it("returns true when insert succeeds (no existing record)", async () => {
       queryOneFn.mockResolvedValueOnce(undefined);

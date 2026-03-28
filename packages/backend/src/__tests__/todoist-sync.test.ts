@@ -142,6 +142,9 @@ function createMockDeps(overrides: Partial<TodoistSyncDeps> = {}): TodoistSyncDe
     updateLastSync: vi.fn().mockResolvedValue(undefined),
     deleteConnection: vi.fn().mockResolvedValue(undefined),
     recordImport: vi.fn().mockResolvedValue(true),
+    claimImportSlot: vi.fn().mockResolvedValue(true),
+    finalizeImportSlot: vi.fn().mockResolvedValue(undefined),
+    abandonImportSlot: vi.fn().mockResolvedValue(undefined),
     getPendingDeletes: vi.fn().mockResolvedValue([]),
     markCompleted: vi.fn().mockResolvedValue(undefined),
     markFailedDelete: vi.fn().mockResolvedValue(undefined),
@@ -205,7 +208,8 @@ describe("TodoistSyncService", () => {
 
     expect(result).toEqual({ imported: 3, errors: 0 });
     expect(deps.submitFeedback).toHaveBeenCalledTimes(3);
-    expect(store.recordImport).toHaveBeenCalledTimes(3);
+    expect(store.claimImportSlot).toHaveBeenCalledTimes(3);
+    expect(store.finalizeImportSlot).toHaveBeenCalledTimes(3);
     expect(mockDeleteTask).toHaveBeenCalledTimes(3);
     expect(store.markCompleted).toHaveBeenCalledTimes(3);
     expect(store.markCompleted).toHaveBeenCalledWith("led-1");
@@ -215,14 +219,14 @@ describe("TodoistSyncService", () => {
 
   it("duplicate skip: task already in ledger is not re-imported or re-deleted", async () => {
     mockGetTasks.mockResolvedValue([makeTask({ id: "dup-1" })]);
-    (deps.integrationStore.hasBeenImported as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    (deps.integrationStore.claimImportSlot as ReturnType<typeof vi.fn>).mockResolvedValue(false);
 
     const result = await service.runSync("conn-1");
 
     expect(result.imported).toBe(0);
     expect(deps.submitFeedback).not.toHaveBeenCalled();
     expect(mockDeleteTask).not.toHaveBeenCalled();
-    expect(deps.integrationStore.recordImport).not.toHaveBeenCalled();
+    expect(deps.integrationStore.finalizeImportSlot).not.toHaveBeenCalled();
   });
 
   it("delete failure: feedback created but deleteTask throws → markFailedDelete called", async () => {
@@ -239,7 +243,7 @@ describe("TodoistSyncService", () => {
 
     expect(result.imported).toBe(1);
     expect(deps.submitFeedback).toHaveBeenCalled();
-    expect(store.recordImport).toHaveBeenCalled();
+    expect(store.finalizeImportSlot).toHaveBeenCalled();
     expect(store.markFailedDelete).toHaveBeenCalledWith("led-df", "Network error");
     expect(store.markCompleted).not.toHaveBeenCalled();
   });

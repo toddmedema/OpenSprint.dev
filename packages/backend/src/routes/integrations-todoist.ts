@@ -6,6 +6,9 @@
  */
 
 import { Router, type Request } from "express";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { z } from "zod";
 import { wrapAsync } from "../middleware/wrap-async.js";
 import { validateParams, validateQuery } from "../middleware/validate.js";
@@ -34,16 +37,77 @@ interface StoredOAuthState {
   expiresAt: number;
 }
 
-/** In-memory store for pending OAuth states with TTL cleanup. */
-class OAuthStateStore {
+function getOAuthStateFilePath(): string {
+  const home = process.env.HOME || process.env.USERPROFILE || os.homedir();
+  return path.join(home, ".opensprint", "todoist-oauth-states.json");
+}
+
+/**
+ * File-backed OAuth state store with in-memory cache and TTL cleanup.
+ * Survives backend restarts so in-flight OAuth callbacks still validate.
+ */
+export class OAuthStateStore {
   private states = new Map<string, StoredOAuthState>();
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly filePath: string;
+  private readonly now: () => number;
+
+  constructor(filePath = getOAuthStateFilePath(), now: () => number = () => Date.now()) {
+    this.filePath = filePath;
+    this.now = now;
+    this.loadFromDisk();
+    this.pruneExpired();
+    if (this.states.size > 0) {
+      this.ensureCleanup();
+    }
+  }
+
+  private loadFromDisk(): void {
+    try {
+      const raw = fs.readFileSync(this.filePath, "utf8");
+      const parsed = JSON.parse(raw) as Record<string, StoredOAuthState>;
+      for (const [state, entry] of Object.entries(parsed)) {
+        if (
+          entry &&
+          typeof entry.projectId === "string" &&
+          typeof entry.expiresAt === "number"
+        ) {
+          this.states.set(state, entry);
+        }
+      }
+    } catch {
+      // File missing or malformed: start with empty state map.
+    }
+  }
+
+  private persistToDisk(): void {
+    const dir = path.dirname(this.filePath);
+    fs.mkdirSync(dir, { recursive: true });
+    const payload = JSON.stringify(Object.fromEntries(this.states), null, 2);
+    fs.writeFileSync(this.filePath, payload, "utf8");
+  }
+
+  private pruneExpired(): void {
+    const now = this.now();
+    let changed = false;
+    for (const [key, entry] of this.states) {
+      if (now > entry.expiresAt) {
+        this.states.delete(key);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.persistToDisk();
+    }
+  }
 
   store(state: string, projectId: string): void {
+    this.pruneExpired();
     this.states.set(state, {
       projectId,
-      expiresAt: Date.now() + STATE_TTL_MS,
+      expiresAt: this.now() + STATE_TTL_MS,
     });
+    this.persistToDisk();
     this.ensureCleanup();
   }
 
@@ -52,20 +116,19 @@ class OAuthStateStore {
    * if valid and not expired, otherwise null.
    */
   consume(state: string): string | null {
+    this.pruneExpired();
     const entry = this.states.get(state);
     if (!entry) return null;
     this.states.delete(state);
-    if (Date.now() > entry.expiresAt) return null;
+    this.persistToDisk();
+    if (this.now() > entry.expiresAt) return null;
     return entry.projectId;
   }
 
   private ensureCleanup(): void {
     if (this.cleanupTimer) return;
     this.cleanupTimer = setInterval(() => {
-      const now = Date.now();
-      for (const [key, entry] of this.states) {
-        if (now > entry.expiresAt) this.states.delete(key);
-      }
+      this.pruneExpired();
       if (this.states.size === 0 && this.cleanupTimer) {
         clearInterval(this.cleanupTimer);
         this.cleanupTimer = null;
@@ -88,6 +151,19 @@ class OAuthStateStore {
       this.cleanupTimer = null;
     }
     this.states.clear();
+    try {
+      fs.rmSync(this.filePath, { force: true });
+    } catch {
+      // Ignore cleanup failure in tests/shutdown paths.
+    }
+  }
+
+  /** Exposed for testing. */
+  forceExpireForTest(state: string): void {
+    const entry = this.states.get(state);
+    if (!entry) return;
+    this.states.set(state, { ...entry, expiresAt: this.now() - 1 });
+    this.persistToDisk();
   }
 }
 

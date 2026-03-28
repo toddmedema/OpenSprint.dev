@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
+import os from "node:os";
+import path from "node:path";
 import {
   createTodoistIntegrationRouter,
+  OAuthStateStore,
   oauthStateStore,
   type TodoistIntegrationRouterDeps,
 } from "../routes/integrations-todoist.js";
@@ -181,9 +184,7 @@ describe("Todoist OAuth Routes", () => {
       const app = createTestApp(deps);
 
       oauthStateStore.store("expired-state", "proj-1");
-      const stateMap = (oauthStateStore as unknown as { states: Map<string, { expiresAt: number }> }).states;
-      const entry = stateMap.get("expired-state");
-      if (entry) entry.expiresAt = Date.now() - 1000;
+      oauthStateStore.forceExpireForTest("expired-state");
 
       const res = await request(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/oauth/callback")
@@ -292,9 +293,7 @@ describe("Todoist OAuth Routes", () => {
 
     it("returns null for expired state and removes it", () => {
       oauthStateStore.store("s-expired", "proj-b");
-      const stateMap = (oauthStateStore as unknown as { states: Map<string, { expiresAt: number }> }).states;
-      const entry = stateMap.get("s-expired");
-      if (entry) entry.expiresAt = Date.now() - 1;
+      oauthStateStore.forceExpireForTest("s-expired");
 
       expect(oauthStateStore.consume("s-expired")).toBeNull();
       expect(oauthStateStore.size).toBe(0);
@@ -307,6 +306,18 @@ describe("Todoist OAuth Routes", () => {
 
       oauthStateStore.destroy();
       expect(oauthStateStore.size).toBe(0);
+    });
+
+    it("persists states across store instances", () => {
+      const storagePath = path.join(os.tmpdir(), `oauth-state-${Date.now()}.json`);
+      const first = new OAuthStateStore(storagePath);
+      first.store("restart-state", "proj-restart");
+      const second = new OAuthStateStore(storagePath);
+
+      expect(second.consume("restart-state")).toBe("proj-restart");
+
+      first.destroy();
+      second.destroy();
     });
   });
 });

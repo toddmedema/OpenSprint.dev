@@ -74,7 +74,7 @@ export async function openInEditor(
   }
 
   for (const editor of editorsToTry) {
-    const uri = `${URI_SCHEMES[editor]}/${folderPath}`;
+    const uri = `${URI_SCHEMES[editor]}/${encodeURI(folderPath)}`;
     try {
       await deps.openExternal(uri);
       return { success: true, editor, method: "uri" };

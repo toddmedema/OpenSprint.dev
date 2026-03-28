@@ -15,6 +15,8 @@ import { taskStore } from "./task-store.service.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("integration-store");
+const IMPORT_SLOT_STALE_MS = 15 * 60 * 1000;
+const PENDING_FEEDBACK_ID = "__pending__";
 
 /** DB row shape for integration_connections (includes encrypted token columns). */
 interface ConnectionRow {
@@ -322,6 +324,83 @@ export class IntegrationStoreService {
       log.info("Recorded import in ledger", { projectId, provider, externalItemId, feedbackId });
     }
     return inserted;
+  }
+
+  /**
+   * Atomically claim an import slot for an external item.
+   * Returns false when another worker already claimed or imported it.
+   */
+  async claimImportSlot(
+    projectId: string,
+    provider: IntegrationProvider,
+    externalItemId: string
+  ): Promise<boolean> {
+    const now = new Date().toISOString();
+    const staleCutoff = new Date(Date.now() - IMPORT_SLOT_STALE_MS).toISOString();
+    let claimed = false;
+
+    await taskStore.runWrite(async (client) => {
+      // Recover from crashed workers that left an import slot in-progress.
+      await client.execute(
+        `DELETE FROM integration_import_ledger
+         WHERE project_id = $1 AND provider = $2 AND external_item_id = $3
+           AND import_status = $4 AND updated_at < $5`,
+        [projectId, provider, externalItemId, "importing", staleCutoff]
+      );
+
+      const inserted = await client.execute(
+        `INSERT INTO integration_import_ledger (
+          project_id, provider, external_item_id, feedback_id,
+          import_status, retry_count, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (project_id, provider, external_item_id) DO NOTHING`,
+        [projectId, provider, externalItemId, PENDING_FEEDBACK_ID, "importing", 0, now, now]
+      );
+      claimed = inserted > 0;
+    });
+
+    return claimed;
+  }
+
+  /**
+   * Finalize an already-claimed import slot after feedback creation succeeds.
+   */
+  async finalizeImportSlot(
+    projectId: string,
+    provider: IntegrationProvider,
+    externalItemId: string,
+    feedbackId: string
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    let updated = 0;
+    await taskStore.runWrite(async (client) => {
+      updated = await client.execute(
+        `UPDATE integration_import_ledger
+         SET feedback_id = $1, import_status = $2, last_error = $3, updated_at = $4
+         WHERE project_id = $5 AND provider = $6 AND external_item_id = $7 AND import_status = $8`,
+        [feedbackId, "pending_delete", null, now, projectId, provider, externalItemId, "importing"]
+      );
+    });
+    if (updated === 0) {
+      throw new Error(`Failed to finalize import slot for ${provider}:${externalItemId}`);
+    }
+  }
+
+  /**
+   * Release a claimed import slot when import side effects fail before finalize.
+   */
+  async abandonImportSlot(
+    projectId: string,
+    provider: IntegrationProvider,
+    externalItemId: string
+  ): Promise<void> {
+    await taskStore.runWrite(async (client) => {
+      await client.execute(
+        `DELETE FROM integration_import_ledger
+         WHERE project_id = $1 AND provider = $2 AND external_item_id = $3 AND import_status = $4`,
+        [projectId, provider, externalItemId, "importing"]
+      );
+    });
   }
 
   async getPendingDeletes(

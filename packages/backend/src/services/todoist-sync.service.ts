@@ -254,61 +254,67 @@ export class TodoistSyncService {
     task: Task,
     todoistClient: TodoistApiClient,
   ): Promise<boolean> {
-    // 6a. Check if already imported
-    const alreadyImported = await this.deps.integrationStore.hasBeenImported(
+    // 6a. Atomically claim import slot (idempotent across concurrent workers)
+    const claimed = await this.deps.integrationStore.claimImportSlot(
       projectId,
       "todoist",
       task.id
     );
-    if (alreadyImported) return false;
+    if (!claimed) return false;
 
-    // 6b. Build submit payload
-    const body: FeedbackSubmitRequest = {
-      text: buildFeedbackText(task),
-      priority: mapTodoistPriority(task.priority),
-    };
+    let finalized = false;
+    try {
+      // 6b. Build submit payload
+      const body: FeedbackSubmitRequest = {
+        text: buildFeedbackText(task),
+        priority: mapTodoistPriority(task.priority),
+      };
 
-    // 6c. Create feedback item
-    const feedbackItem = await this.deps.submitFeedback(projectId, body);
+      // 6c. Create feedback item
+      const feedbackItem = await this.deps.submitFeedback(projectId, body);
 
-    // Store provenance in extra column
-    const provenance = {
-      source: "todoist",
-      todoistTaskId: task.id,
-      todoistProjectId: providerResourceId,
-      importedAt: new Date().toISOString(),
-      labels: task.labels,
-    };
-    await taskStore.runWrite(async (client) => {
-      const existing = await client.queryOne(
-        "SELECT extra FROM feedback WHERE id = $1 AND project_id = $2",
-        [feedbackItem.id, projectId]
+      // Store provenance in extra column
+      const provenance = {
+        source: "todoist",
+        todoistTaskId: task.id,
+        todoistProjectId: providerResourceId,
+        importedAt: new Date().toISOString(),
+        labels: task.labels,
+      };
+      await taskStore.runWrite(async (client) => {
+        const existing = await client.queryOne(
+          "SELECT extra FROM feedback WHERE id = $1 AND project_id = $2",
+          [feedbackItem.id, projectId]
+        );
+        const currentExtra = existing
+          ? JSON.parse((existing as { extra: string }).extra || "{}")
+          : {};
+        const merged = { ...currentExtra, ...provenance };
+        await client.execute(
+          "UPDATE feedback SET extra = $1 WHERE id = $2 AND project_id = $3",
+          [JSON.stringify(merged), feedbackItem.id, projectId]
+        );
+      });
+
+      // 6d. Finalize ledger row to pending_delete with real feedback_id
+      await this.deps.integrationStore.finalizeImportSlot(
+        projectId,
+        "todoist",
+        task.id,
+        feedbackItem.id
       );
-      const currentExtra = existing
-        ? JSON.parse((existing as { extra: string }).extra || "{}")
-        : {};
-      const merged = { ...currentExtra, ...provenance };
-      await client.execute(
-        "UPDATE feedback SET extra = $1 WHERE id = $2 AND project_id = $3",
-        [JSON.stringify(merged), feedbackItem.id, projectId]
-      );
-    });
+      finalized = true;
 
-    // 6d. Record in ledger
-    const recorded = await this.deps.integrationStore.recordImport(
-      projectId,
-      "todoist",
-      task.id,
-      feedbackItem.id
-    );
-    if (!recorded) {
+      // 6e. Delete task from Todoist
+      await this.deleteAndUpdateLedger(projectId, task.id, todoistClient);
+
       return true;
+    } catch (err) {
+      if (!finalized) {
+        await this.deps.integrationStore.abandonImportSlot(projectId, "todoist", task.id);
+      }
+      throw err;
     }
-
-    // 6e. Delete task from Todoist
-    await this.deleteAndUpdateLedger(projectId, task.id, todoistClient);
-
-    return true;
   }
 
   private async deleteAndUpdateLedger(

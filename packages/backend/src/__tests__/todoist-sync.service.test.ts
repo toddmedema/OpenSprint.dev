@@ -113,6 +113,9 @@ function createMockDeps(overrides: Partial<TodoistSyncDeps> = {}): TodoistSyncDe
     updateLastSync: vi.fn().mockResolvedValue(undefined),
     deleteConnection: vi.fn().mockResolvedValue(undefined),
     recordImport: vi.fn().mockResolvedValue(true),
+    claimImportSlot: vi.fn().mockResolvedValue(true),
+    finalizeImportSlot: vi.fn().mockResolvedValue(undefined),
+    abandonImportSlot: vi.fn().mockResolvedValue(undefined),
     getPendingDeletes: vi.fn().mockResolvedValue([]),
     markCompleted: vi.fn().mockResolvedValue(undefined),
     markFailedDelete: vi.fn().mockResolvedValue(undefined),
@@ -234,7 +237,7 @@ describe("TodoistSyncService", () => {
       expect(result.imported).toBe(1);
       expect(result.errors).toBe(0);
 
-      expect(deps.integrationStore.hasBeenImported).toHaveBeenCalledWith(
+      expect(deps.integrationStore.claimImportSlot).toHaveBeenCalledWith(
         "proj-1",
         "todoist",
         "task-1"
@@ -243,7 +246,7 @@ describe("TodoistSyncService", () => {
         text: "Fix the login page",
         priority: 3,
       });
-      expect(deps.integrationStore.recordImport).toHaveBeenCalledWith(
+      expect(deps.integrationStore.finalizeImportSlot).toHaveBeenCalledWith(
         "proj-1",
         "todoist",
         "task-1",
@@ -296,10 +299,10 @@ describe("TodoistSyncService", () => {
       expect(calls[3][1].priority).toBe(3); // Low
     });
 
-    it("skips already-imported tasks", async () => {
+    it("skips task when import slot is already claimed", async () => {
       const task = makeTask();
       mockGetTasks.mockResolvedValue([task]);
-      (deps.integrationStore.hasBeenImported as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+      (deps.integrationStore.claimImportSlot as ReturnType<typeof vi.fn>).mockResolvedValue(false);
 
       const result = await service.runSync("conn-1");
 
@@ -307,15 +310,20 @@ describe("TodoistSyncService", () => {
       expect(deps.submitFeedback).not.toHaveBeenCalled();
     });
 
-    it("skips when recordImport returns false (duplicate)", async () => {
+    it("releases claimed slot when feedback creation fails", async () => {
       const task = makeTask();
       mockGetTasks.mockResolvedValue([task]);
-      (deps.integrationStore.recordImport as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+      (deps.submitFeedback as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("DB error"));
 
       const result = await service.runSync("conn-1");
 
-      expect(result.imported).toBe(1);
-      expect(mockDeleteTask).not.toHaveBeenCalled();
+      expect(result.imported).toBe(0);
+      expect(result.errors).toBe(1);
+      expect(deps.integrationStore.abandonImportSlot).toHaveBeenCalledWith(
+        "proj-1",
+        "todoist",
+        "task-1"
+      );
     });
 
     it("caps processing at 50 tasks", async () => {
@@ -374,6 +382,24 @@ describe("TodoistSyncService", () => {
 
       expect(result.errors).toBe(1);
       expect(result.imported).toBe(1);
+    });
+
+    it("imports only once when two sync runs race on same task", async () => {
+      const task = makeTask();
+      mockGetTasks.mockResolvedValue([task]);
+      const claimImportSlot = deps.integrationStore.claimImportSlot as ReturnType<typeof vi.fn>;
+      claimImportSlot
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+
+      const [first, second] = await Promise.all([
+        service.runSync("conn-1"),
+        service.runSync("conn-1"),
+      ]);
+
+      expect(first.imported + second.imported).toBe(1);
+      expect(deps.submitFeedback).toHaveBeenCalledTimes(1);
+      expect(deps.integrationStore.finalizeImportSlot).toHaveBeenCalledTimes(1);
     });
   });
 

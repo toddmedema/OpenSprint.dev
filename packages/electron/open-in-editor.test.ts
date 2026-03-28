@@ -105,6 +105,16 @@ describe("openInEditor", () => {
     expect(openExternal).toHaveBeenCalledWith("vscode://file//tmp/worktree");
   });
 
+  it("encodes URI fallback paths with spaces", async () => {
+    const execFileMock = stubExecFileAllFail();
+    const openExternal = vi.fn().mockResolvedValue(undefined);
+    const deps = makeDeps({ execFile: execFileMock, openExternal });
+    const result = await openInEditor("/tmp/My Repo/worktree", "vscode", deps);
+
+    expect(result).toEqual({ success: true, editor: "vscode", method: "uri" });
+    expect(openExternal).toHaveBeenCalledWith("vscode://file//tmp/My%20Repo/worktree");
+  });
+
   it("falls back to cursor URI in cursor mode when CLI fails", async () => {
     const execFileMock = stubExecFileAllFail();
     const openExternal = vi.fn().mockResolvedValue(undefined);
