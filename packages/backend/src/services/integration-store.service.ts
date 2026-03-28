@@ -266,6 +266,24 @@ export class IntegrationStoreService {
     log.info("Deleted integration connection", { projectId, provider });
   }
 
+  async getConnectionById(id: string): Promise<IntegrationConnection | null> {
+    const client = await taskStore.getDb();
+    const row = await client.queryOne(
+      "SELECT * FROM integration_connections WHERE id = $1",
+      [id]
+    );
+    return row ? connectionRowToPublic(row as unknown as ConnectionRow) : null;
+  }
+
+  async getEncryptedTokenById(id: string): Promise<string | null> {
+    const client = await taskStore.getDb();
+    const row = await client.queryOne(
+      "SELECT access_token_enc FROM integration_connections WHERE id = $1",
+      [id]
+    );
+    return row ? (row as unknown as ConnectionRow).access_token_enc : null;
+  }
+
   // ─── integration_import_ledger ───
 
   /**
