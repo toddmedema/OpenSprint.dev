@@ -6,7 +6,10 @@ import {
   closeWebSocket,
   broadcastToProject,
   sendAgentOutputToProject,
+  sendAgentChatResponse,
 } from "../websocket/index.js";
+import { AgentChatService } from "../services/agent-chat.service.js";
+import { ActiveAgentsService } from "../services/active-agents.service.js";
 
 vi.mock("../services/hil-service.js", () => ({
   hilService: {
@@ -145,5 +148,241 @@ describe("WebSocket server and connection handling", () => {
     await new Promise((r) => setTimeout(r, 30));
     ws.close();
     await waitForClose(ws);
+  });
+});
+
+describe("WebSocket agent.chat event handling", () => {
+  let server: ReturnType<typeof createServer>;
+  let port: number;
+  let activeAgents: ActiveAgentsService;
+  let chatSvc: AgentChatService;
+
+  function makePendingQueue(maxSize = 10) {
+    const items: string[] = [];
+    return {
+      push(msg: string): boolean {
+        if (items.length >= maxSize) return false;
+        items.push(msg);
+        return true;
+      },
+      items,
+    };
+  }
+
+  beforeEach(() => {
+    activeAgents = new ActiveAgentsService();
+    chatSvc = new AgentChatService(activeAgents, "/tmp/test-chat-" + Date.now());
+
+    server = createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    setupWebSocket(server, { agentChatService: chatSvc });
+    return new Promise<void>((resolve) => {
+      server.listen(0, () => {
+        const addr = server.address();
+        port = typeof addr === "object" && addr ? addr.port : 31999;
+        resolve();
+      });
+    });
+  });
+
+  afterEach(async () => {
+    closeWebSocket();
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
+    await new Promise((r) => setTimeout(r, 50));
+  });
+
+  it("broadcasts agent.chat.received when message is delivered to API backend", async () => {
+    const queue = makePendingQueue();
+    activeAgents.registerChannel("task-1", queue, "openai");
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat`);
+    const msgPromise = new Promise<Record<string, unknown>>((resolve) => {
+      ws.on("message", (data) => {
+        const event = JSON.parse(data.toString());
+        if (event.type === "agent.chat.received") resolve(event);
+      });
+    });
+    await new Promise<void>((resolve) => ws.on("open", () => resolve()));
+
+    ws.send(JSON.stringify({ type: "agent.chat.send", taskId: "task-1", message: "hello agent" }));
+    const received = await msgPromise;
+
+    expect(received.type).toBe("agent.chat.received");
+    expect(received.taskId).toBe("task-1");
+    expect(received.messageId).toBeTruthy();
+    expect(received.timestamp).toBeTruthy();
+    expect(queue.items).toContain("hello agent");
+
+    ws.close();
+    await waitForClose(ws);
+  });
+
+  it("broadcasts agent.chat.unsupported for CLI backends", async () => {
+    const queue = makePendingQueue();
+    activeAgents.registerChannel("task-cli", queue, "claude-cli");
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-cli`);
+    const msgPromise = new Promise<Record<string, unknown>>((resolve) => {
+      ws.on("message", (data) => {
+        const event = JSON.parse(data.toString());
+        if (event.type === "agent.chat.unsupported") resolve(event);
+      });
+    });
+    await new Promise<void>((resolve) => ws.on("open", () => resolve()));
+
+    ws.send(JSON.stringify({ type: "agent.chat.send", taskId: "task-cli", message: "hello" }));
+    const unsupported = await msgPromise;
+
+    expect(unsupported.type).toBe("agent.chat.unsupported");
+    expect(unsupported.taskId).toBe("task-cli");
+    expect(typeof unsupported.reason).toBe("string");
+    expect(queue.items).toHaveLength(0);
+
+    ws.close();
+    await waitForClose(ws);
+  });
+
+  it("broadcasts agent.chat.unsupported when no active agent exists", async () => {
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-none`);
+    const msgPromise = new Promise<Record<string, unknown>>((resolve) => {
+      ws.on("message", (data) => {
+        const event = JSON.parse(data.toString());
+        if (event.type === "agent.chat.unsupported") resolve(event);
+      });
+    });
+    await new Promise<void>((resolve) => ws.on("open", () => resolve()));
+
+    ws.send(JSON.stringify({ type: "agent.chat.send", taskId: "task-ghost", message: "hello" }));
+    const unsupported = await msgPromise;
+
+    expect(unsupported.type).toBe("agent.chat.unsupported");
+    expect(unsupported.taskId).toBe("task-ghost");
+    expect(unsupported.reason).toMatch(/no active agent/i);
+
+    ws.close();
+    await waitForClose(ws);
+  });
+
+  it("broadcasts agent.chat.unsupported when pending queue is full", async () => {
+    const queue = makePendingQueue(0);
+    activeAgents.registerChannel("task-full", queue, "claude");
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-full`);
+    const msgPromise = new Promise<Record<string, unknown>>((resolve) => {
+      ws.on("message", (data) => {
+        const event = JSON.parse(data.toString());
+        if (event.type === "agent.chat.unsupported") resolve(event);
+      });
+    });
+    await new Promise<void>((resolve) => ws.on("open", () => resolve()));
+
+    ws.send(JSON.stringify({ type: "agent.chat.send", taskId: "task-full", message: "hello" }));
+    const unsupported = await msgPromise;
+
+    expect(unsupported.type).toBe("agent.chat.unsupported");
+    expect(unsupported.taskId).toBe("task-full");
+    expect(unsupported.reason).toMatch(/pending/i);
+
+    ws.close();
+    await waitForClose(ws);
+  });
+
+  it("silently ignores agent.chat.send from unscoped /ws clients", async () => {
+    const queue = makePendingQueue();
+    activeAgents.registerChannel("task-2", queue, "openai");
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    const messages: Record<string, unknown>[] = [];
+    ws.on("message", (data) => {
+      messages.push(JSON.parse(data.toString()));
+    });
+    await new Promise<void>((resolve) => ws.on("open", () => resolve()));
+
+    ws.send(JSON.stringify({ type: "agent.chat.send", taskId: "task-2", message: "hello" }));
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(messages).toHaveLength(0);
+    expect(queue.items).toHaveLength(0);
+
+    ws.close();
+    await waitForClose(ws);
+  });
+
+  it("silently ignores agent.chat.send with missing taskId or message", async () => {
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-bad`);
+    const messages: Record<string, unknown>[] = [];
+    ws.on("message", (data) => {
+      messages.push(JSON.parse(data.toString()));
+    });
+    await new Promise<void>((resolve) => ws.on("open", () => resolve()));
+
+    ws.send(JSON.stringify({ type: "agent.chat.send", taskId: "", message: "hello" }));
+    ws.send(JSON.stringify({ type: "agent.chat.send", taskId: "task-1" }));
+    ws.send(JSON.stringify({ type: "agent.chat.send" }));
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(messages).toHaveLength(0);
+
+    ws.close();
+    await waitForClose(ws);
+  });
+
+  it("sendAgentChatResponse broadcasts agent.chat.response to project clients", async () => {
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-resp`);
+    const msgPromise = new Promise<Record<string, unknown>>((resolve) => {
+      ws.on("message", (data) => {
+        const event = JSON.parse(data.toString());
+        if (event.type === "agent.chat.response") resolve(event);
+      });
+    });
+    await new Promise<void>((resolve) => ws.on("open", () => resolve()));
+
+    sendAgentChatResponse("proj-chat-resp", "task-3", "msg-abc", "Here is my response");
+    const response = await msgPromise;
+
+    expect(response.type).toBe("agent.chat.response");
+    expect(response.taskId).toBe("task-3");
+    expect(response.messageId).toBe("msg-abc");
+    expect(response.content).toBe("Here is my response");
+
+    ws.close();
+    await waitForClose(ws);
+  });
+
+  it("delivers chat to multiple project-scoped clients", async () => {
+    const queue = makePendingQueue();
+    activeAgents.registerChannel("task-multi", queue, "google");
+
+    const ws1 = new WebSocket(`ws://localhost:${port}/ws/projects/proj-multi`);
+    const ws2 = new WebSocket(`ws://localhost:${port}/ws/projects/proj-multi`);
+    await Promise.all([
+      new Promise<void>((resolve) => ws1.on("open", () => resolve())),
+      new Promise<void>((resolve) => ws2.on("open", () => resolve())),
+    ]);
+
+    const collectFrom = (ws: WebSocket) =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        ws.on("message", (data) => {
+          const event = JSON.parse(data.toString());
+          if (event.type === "agent.chat.received") resolve(event);
+        });
+      });
+    const p1 = collectFrom(ws1);
+    const p2 = collectFrom(ws2);
+
+    ws1.send(JSON.stringify({ type: "agent.chat.send", taskId: "task-multi", message: "hello all" }));
+    const [r1, r2] = await Promise.all([p1, p2]);
+
+    expect(r1.type).toBe("agent.chat.received");
+    expect(r2.type).toBe("agent.chat.received");
+    expect(r1.messageId).toBe(r2.messageId);
+
+    ws1.close();
+    ws2.close();
+    await Promise.all([waitForClose(ws1), waitForClose(ws2)]);
   });
 });

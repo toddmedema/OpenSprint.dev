@@ -5,10 +5,17 @@ import type {
   ClientEvent,
   AgentOutputBackfillEvent,
   PlanAgentOutputBackfillEvent,
+  AgentChatReceivedEvent,
+  AgentChatResponseEvent,
+  AgentChatUnsupportedEvent,
 } from "@opensprint/shared";
 import { eventRelay } from "../services/event-relay.service.js";
 import { getPlanAgentOutput } from "../services/plan-agent-output-buffer.service.js";
 import { createLogger } from "../utils/logger.js";
+import {
+  AgentChatService,
+  agentChatService as defaultAgentChatService,
+} from "../services/agent-chat.service.js";
 
 const log = createLogger("websocket");
 
@@ -25,6 +32,7 @@ const planAgentSubscriptions = new Map<WebSocket, Set<string>>();
 const wsToProjectId = new Map<WebSocket, string>();
 
 let getLiveOutput: ((projectId: string, taskId: string) => Promise<string>) | null = null;
+let chatService: AgentChatService = defaultAgentChatService;
 
 let wss: WebSocketServer;
 let clientHasConnected = false;
@@ -36,10 +44,12 @@ export function hasClientConnected(): boolean {
 
 export interface WebSocketOptions {
   getLiveOutput?: (projectId: string, taskId: string) => Promise<string>;
+  agentChatService?: AgentChatService;
 }
 
 export function setupWebSocket(server: Server, options?: WebSocketOptions): void {
   getLiveOutput = options?.getLiveOutput ?? null;
+  chatService = options?.agentChatService ?? defaultAgentChatService;
   eventRelay.init(projectClients, agentSubscriptions, planAgentSubscriptions);
 
   // No path filter — we accept /ws and /ws/projects/:id; path matching is done in the handler
@@ -164,6 +174,48 @@ function handleClientEvent(ws: WebSocket, event: ClientEvent): void {
       }
       break;
     }
+    case "agent.chat.send": {
+      if (!("taskId" in event) || !event.taskId || !("message" in event) || !event.message) {
+        log.warn("agent.chat.send missing taskId or message");
+        break;
+      }
+      const projectId = wsToProjectId.get(ws);
+      if (!projectId) {
+        log.warn("agent.chat.send from client without project scope");
+        break;
+      }
+      const { taskId, message } = event;
+
+      const support = chatService.supportsChat(taskId);
+      if (!support.supported) {
+        const unsupported: AgentChatUnsupportedEvent = {
+          type: "agent.chat.unsupported",
+          taskId,
+          reason: support.reason ?? "Chat not supported",
+        };
+        broadcastToProject(projectId, unsupported);
+        break;
+      }
+
+      const result = chatService.sendMessage(projectId, taskId, message);
+      if (result.delivered) {
+        const received: AgentChatReceivedEvent = {
+          type: "agent.chat.received",
+          taskId,
+          messageId: result.messageId,
+          timestamp: result.timestamp,
+        };
+        broadcastToProject(projectId, received);
+      } else {
+        const unsupported: AgentChatUnsupportedEvent = {
+          type: "agent.chat.unsupported",
+          taskId,
+          reason: result.error ?? "Failed to deliver message",
+        };
+        broadcastToProject(projectId, unsupported);
+      }
+      break;
+    }
     default:
       log.warn("Unknown client event type", { type: (event as { type?: string }).type });
   }
@@ -198,4 +250,20 @@ export function sendPlanAgentOutputToProject(
   chunk: string
 ): void {
   eventRelay.sendPlanAgentOutputToProject(projectId, planId, chunk);
+}
+
+/** Broadcast an agent chat response to all project clients */
+export function sendAgentChatResponse(
+  projectId: string,
+  taskId: string,
+  messageId: string,
+  content: string
+): void {
+  const event: AgentChatResponseEvent = {
+    type: "agent.chat.response",
+    taskId,
+    messageId,
+    content,
+  };
+  broadcastToProject(projectId, event);
 }
