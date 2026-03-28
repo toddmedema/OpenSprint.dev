@@ -11,10 +11,12 @@ import {
   taskPatchBodySchema,
   dependencyBodySchema,
   unblockBodySchema,
+  chatAttemptQuerySchema,
 } from "../schemas/request-common.js";
 import { validateParams, validateQuery, validateBody } from "../middleware/validate.js";
 import { wrapAsync } from "../middleware/wrap-async.js";
 import { resolveOpenEditor, type OpenEditorResult } from "../services/open-editor.service.js";
+import { agentChatService } from "../services/agent-chat.service.js";
 
 const log = createLogger("tasks");
 
@@ -226,6 +228,56 @@ export function createTasksRouter(taskService: TaskService): Router {
       const result: OpenEditorResult = await resolveOpenEditor(projectId, taskId);
       const body: ApiResponse<OpenEditorResult> = { data: result };
       res.json(body);
+    })
+  );
+
+  // GET /projects/:projectId/tasks/:taskId/chat-history — Chat messages for the current or specified attempt
+  router.get(
+    "/:taskId/chat-history",
+    validateParams(taskIdParamSchema),
+    validateQuery(chatAttemptQuerySchema),
+    wrapAsync(async (req: Request<TaskParams>, res) => {
+      const { projectId, taskId } = req.params;
+      const attemptParam = (req.query as { attempt?: number }).attempt;
+
+      let messages;
+      let attempt: number;
+
+      if (attemptParam !== undefined) {
+        messages = agentChatService.getHistory(projectId, taskId, attemptParam);
+        attempt = attemptParam;
+      } else {
+        const allMessages = agentChatService.getHistory(projectId, taskId);
+        attempt =
+          allMessages.length > 0
+            ? Math.max(...allMessages.map((m) => m.attempt))
+            : 1;
+        messages = allMessages.filter((m) => m.attempt === attempt);
+      }
+
+      const support = agentChatService.supportsChat(taskId);
+
+      res.json({
+        data: { messages, attempt, chatSupported: support.supported },
+      });
+    })
+  );
+
+  // GET /projects/:projectId/tasks/:taskId/chat-support — Whether the active agent backend supports live chat
+  router.get(
+    "/:taskId/chat-support",
+    validateParams(taskIdParamSchema),
+    wrapAsync(async (req: Request<TaskParams>, res) => {
+      const { taskId } = req.params;
+      const support = agentChatService.supportsChat(taskId);
+
+      res.json({
+        data: {
+          supported: support.supported,
+          backend: support.backend,
+          reason: support.reason,
+        },
+      });
     })
   );
 

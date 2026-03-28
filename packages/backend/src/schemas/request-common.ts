@@ -96,6 +96,10 @@ export const chatHistoryQuerySchema = z.object({
   context: z.string().optional(),
 });
 
+export const chatAttemptQuerySchema = z.object({
+  attempt: z.coerce.number().int().positive().optional(),
+});
+
 export const agentRoleParamsSchema = z.object({
   projectId: z.string().min(1),
   role: z.enum([
