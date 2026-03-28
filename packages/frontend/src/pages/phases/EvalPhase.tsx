@@ -741,6 +741,26 @@ const FeedbackCard = memo(
                   </span>
                 </>
               )}
+              {item.source === "todoist" && (
+                <span
+                  className="float-right ml-2 mb-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-[#e44332]/10 text-[#e44332] flex-shrink-0"
+                  data-testid="todoist-provenance-badge"
+                  {...(item.todoistProjectId && {
+                    title: `Imported from Todoist project ${item.todoistProjectId}`,
+                  })}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className="w-3 h-3 flex-shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M2 3.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 .354.854l-4 4a.5.5 0 0 1-.708 0l-4-4A.5.5 0 0 1 2 3.5zM2 8.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 .354.854l-4 4a.5.5 0 0 1-.708 0l-4-4A.5.5 0 0 1 2 8.5z" />
+                  </svg>
+                  Todoist
+                </span>
+              )}
               {(() => {
                 const raw = item.text ?? "";
                 const displayText = raw || "(No feedback text)";

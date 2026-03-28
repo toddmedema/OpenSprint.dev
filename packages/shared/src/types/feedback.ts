@@ -50,4 +50,12 @@ export interface FeedbackItem {
   planVersionNumber?: number | null;
   /** When set, feedback was submitted from this plan's thread. This is contextual metadata, not a forced task/plan mapping. */
   submittedPlanId?: string | null;
+  /** Import source (e.g. "todoist") — set via extra when feedback is imported from an integration */
+  source?: string;
+  /** Todoist task ID when source is "todoist" */
+  todoistTaskId?: string;
+  /** Todoist project ID when source is "todoist" */
+  todoistProjectId?: string;
+  /** ISO timestamp when the feedback was imported from the external source */
+  importedAt?: string;
 }

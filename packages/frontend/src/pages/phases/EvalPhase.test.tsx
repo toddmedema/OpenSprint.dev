@@ -4481,4 +4481,93 @@ describe("EvalPhase feedback form", () => {
       await waitFor(() => expect(toggles[0]).toHaveTextContent("show more"));
     });
   });
+
+  describe("Todoist provenance badge", () => {
+    it("displays Todoist badge when feedback has source=todoist", async () => {
+      const todoistFeedback: FeedbackItem[] = [
+        {
+          id: "fb-todoist-1",
+          text: "Imported from Todoist",
+          category: "bug",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:01Z",
+          source: "todoist",
+          todoistTaskId: "12345",
+          todoistProjectId: "proj-abc",
+        },
+      ];
+      const store = createStore({ evalFeedback: todoistFeedback });
+      const queryClient = createQueryClientWithFeedbackPreloaded(todoistFeedback);
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+        { store, queryClient }
+      );
+
+      await waitFor(() => expect(screen.getByText("Imported from Todoist")).toBeInTheDocument());
+      const badge = screen.getByTestId("todoist-provenance-badge");
+      expect(badge).toBeInTheDocument();
+      expect(badge).toHaveTextContent("Todoist");
+      expect(badge).toHaveAttribute("title", "Imported from Todoist project proj-abc");
+    });
+
+    it("does not display Todoist badge for regular feedback", async () => {
+      const regularFeedback: FeedbackItem[] = [
+        {
+          id: "fb-regular",
+          text: "Regular feedback",
+          category: "feature",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:01Z",
+        },
+      ];
+      const store = createStore({ evalFeedback: regularFeedback });
+      const queryClient = createQueryClientWithFeedbackPreloaded(regularFeedback);
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+        { store, queryClient }
+      );
+
+      await waitFor(() => expect(screen.getByText("Regular feedback")).toBeInTheDocument());
+      expect(screen.queryByTestId("todoist-provenance-badge")).not.toBeInTheDocument();
+    });
+
+    it("displays Todoist badge without tooltip when todoistProjectId is absent", async () => {
+      const todoistFeedback: FeedbackItem[] = [
+        {
+          id: "fb-todoist-no-proj",
+          text: "From Todoist no project",
+          category: "ux",
+          mappedPlanId: null,
+          createdTaskIds: [],
+          status: "pending",
+          createdAt: "2024-01-01T00:00:01Z",
+          source: "todoist",
+          todoistTaskId: "67890",
+        },
+      ];
+      const store = createStore({ evalFeedback: todoistFeedback });
+      const queryClient = createQueryClientWithFeedbackPreloaded(todoistFeedback);
+      renderWithProviders(
+        <MemoryRouter>
+          <EvalPhase projectId="proj-1" />
+        </MemoryRouter>,
+        { store, queryClient }
+      );
+
+      await waitFor(() =>
+        expect(screen.getByText("From Todoist no project")).toBeInTheDocument()
+      );
+      const badge = screen.getByTestId("todoist-provenance-badge");
+      expect(badge).toBeInTheDocument();
+      expect(badge).not.toHaveAttribute("title");
+    });
+  });
 });
