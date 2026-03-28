@@ -32,17 +32,20 @@ const LINE_ARIA: Record<DiffLineType, string> = {
   context: "Context line",
 };
 
+const MODES: DiffViewMode[] = ["rendered", "raw"];
+
 export function DiffView({
   diff,
   fromContent,
   toContent,
-  defaultMode = "raw",
+  defaultMode = "rendered",
 }: DiffViewProps) {
   const [mode, setMode] = useState<DiffViewMode>(defaultMode);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [parseErrorFallback, setParseErrorFallback] = useState(false);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const toggleRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const effectiveMode =
     mode === "rendered" && parseErrorFallback ? "raw" : mode;
@@ -52,7 +55,25 @@ export function DiffView({
   const visibleLines = isCapped ? lines.slice(0, INITIAL_LINE_CAP) : lines;
   const hiddenCount = lines.length - visibleLines.length;
 
-  const handleKeyDown = useCallback(
+  const handleToggleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const idx = MODES.indexOf(mode);
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = MODES[(idx + 1) % MODES.length];
+        setMode(next);
+        toggleRefs.current[MODES.indexOf(next)]?.focus();
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const prev = MODES[(idx - 1 + MODES.length) % MODES.length];
+        setMode(prev);
+        toggleRefs.current[MODES.indexOf(prev)]?.focus();
+      }
+    },
+    [mode],
+  );
+
+  const handleLineKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (visibleLines.length === 0) return;
       const maxIdx = visibleLines.length - 1;
@@ -88,37 +109,31 @@ export function DiffView({
         className="flex items-center gap-2 px-3 py-2 bg-theme-border-subtle/50 border-b border-theme-border"
         data-testid="diff-view-toggle-bar"
       >
+        {/* eslint-disable-next-line jsx-a11y/interactive-supports-focus -- focus is managed via roving tabindex on child radio buttons */}
         <div
           role="radiogroup"
           aria-label="Diff view mode"
           className="inline-flex rounded-md border border-theme-border overflow-hidden text-xs"
+          onKeyDown={handleToggleKeyDown}
         >
-          <button
-            type="button"
-            role="radio"
-            aria-checked={mode === "rendered"}
-            onClick={() => setMode("rendered")}
-            className={`px-3 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring ${
-              mode === "rendered"
-                ? "bg-theme-accent text-white"
-                : "bg-theme-surface text-theme-text hover:bg-theme-surface-muted"
-            }`}
-          >
-            Rendered
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={mode === "raw"}
-            onClick={() => setMode("raw")}
-            className={`px-3 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring ${
-              mode === "raw"
-                ? "bg-theme-accent text-white"
-                : "bg-theme-surface text-theme-text hover:bg-theme-surface-muted"
-            }`}
-          >
-            Raw
-          </button>
+          {MODES.map((m, i) => (
+            <button
+              key={m}
+              ref={(el) => { toggleRefs.current[i] = el; }}
+              type="button"
+              role="radio"
+              aria-checked={mode === m}
+              tabIndex={mode === m ? 0 : -1}
+              onClick={() => setMode(m)}
+              className={`px-3 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring ${
+                mode === m
+                  ? "bg-accent-primary text-white"
+                  : "bg-theme-surface text-theme-text hover:bg-theme-surface-muted"
+              }`}
+            >
+              {m === "rendered" ? "Rendered" : "Raw"}
+            </button>
+          ))}
         </div>
         {summary != null && (
           <span className="ml-auto text-xs text-theme-muted" data-testid="diff-view-summary">
@@ -144,7 +159,7 @@ export function DiffView({
           role="textbox"
           tabIndex={0}
           aria-label="Diff lines"
-          onKeyDown={handleKeyDown}
+          onKeyDown={handleLineKeyDown}
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget)) setFocusedIndex(null);
           }}
@@ -219,7 +234,7 @@ export function DiffView({
                   <button
                     type="button"
                     onClick={() => setExpanded(true)}
-                    className="text-sm text-theme-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring rounded"
+                    className="text-sm text-accent-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring rounded"
                     data-testid="diff-view-show-more"
                   >
                     Show more ({hiddenCount} more line{hiddenCount !== 1 ? "s" : ""})

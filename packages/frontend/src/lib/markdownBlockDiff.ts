@@ -1,4 +1,6 @@
-import { remark } from "remark";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkStringify from "remark-stringify";
 import remarkGfm from "remark-gfm";
 import { toString } from "mdast-util-to-string";
 import * as Diff from "diff";
@@ -24,15 +26,17 @@ export interface MarkdownDiffResult {
   parseError: boolean;
 }
 
-const processor = remark().use(remarkGfm);
+function makeProcessor() {
+  return unified().use(remarkParse).use(remarkGfm).use(remarkStringify);
+}
 
 function parseMarkdown(content: string): Root {
-  return processor.parse(content);
+  return makeProcessor().parse(content);
 }
 
 function serializeNode(node: RootContent): string {
   const root: Root = { type: "root", children: [node] };
-  return processor.stringify(root).trim();
+  return makeProcessor().stringify(root).trim();
 }
 
 interface BlockInfo {
