@@ -255,6 +255,23 @@ export class IntegrationStoreService {
     });
   }
 
+  async updateSelectedResource(
+    id: string,
+    resourceId: string,
+    resourceName: string
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    await taskStore.runWrite(async (client) => {
+      await client.execute(
+        `UPDATE integration_connections
+         SET provider_resource_id = $1, provider_resource_name = $2, updated_at = $3
+         WHERE id = $4`,
+        [resourceId, resourceName, now, id]
+      );
+    });
+    log.info("Updated selected resource", { id, resourceId, resourceName });
+  }
+
   async deleteConnection(
     projectId: string,
     provider: IntegrationProvider

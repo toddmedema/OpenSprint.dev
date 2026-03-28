@@ -96,7 +96,7 @@ function TimelineRow({
     <div
       role={asListItem ? "listitem" : undefined}
       data-testid={`timeline-row-${task.id}`}
-      className={assigneeDropdownOpen ? "relative z-[1000]" : undefined}
+      className={`min-h-[52px]${assigneeDropdownOpen ? " relative z-[1000]" : ""}`}
     >
       <div className="flex items-center gap-2 px-4 py-2.5 group overflow-x-auto md:overflow-x-visible min-w-0">
         <button
@@ -377,7 +377,7 @@ export function TimelineList({
                 {item.kind === "header" ? (
                   <div data-testid={`timeline-section-${item.sectionKey}`}>
                     <div
-                      className="-mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 sm:pt-4 pb-[2px] mb-[7px] min-h-[44px] border-b border-theme-border-subtle bg-theme-surface [background-clip:padding-box]"
+                      className="-mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 sm:pt-4 pb-[2px] min-h-[44px] border-b border-theme-border-subtle bg-theme-surface [background-clip:padding-box]"
                     >
                       <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase">
                         {item.label}
@@ -419,7 +419,7 @@ export function TimelineList({
           sectionTasks.length > 0 && (
             <section key={key} data-testid={`timeline-section-${key}`}>
               <div
-                className={`sticky ${EXECUTE_SECTION_HEADER_STICKY_TOP} z-[12] -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 sm:pt-4 pb-[2px] mb-[7px] border-b border-theme-border-subtle bg-theme-surface [background-clip:padding-box]`}
+                className={`sticky ${EXECUTE_SECTION_HEADER_STICKY_TOP} z-[12] -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 sm:pt-4 pb-[2px] border-b border-theme-border-subtle bg-theme-surface [background-clip:padding-box]`}
               >
                 <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase">
                   {SECTION_LABELS[key]}

@@ -861,6 +861,106 @@ describe("TimelineList", () => {
     }
   });
 
+  it("all task rows have consistent min-h-[52px] regardless of position", () => {
+    const tasks = [
+      createMockTask({ id: "t-first", kanbanColumn: "ready", title: "First" }),
+      createMockTask({ id: "t-mid", kanbanColumn: "ready", title: "Middle" }),
+      createMockTask({ id: "t-last", kanbanColumn: "ready", title: "Last" }),
+    ];
+    renderWithProviders(
+      <TimelineList tasks={tasks} plans={[]} onTaskSelect={vi.fn()} {...defaultListProps} />
+    );
+
+    const rows = screen.getAllByTestId(/^timeline-row-/);
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row).toHaveClass("min-h-[52px]");
+    }
+  });
+
+  it("section headers do not add extra bottom margin above first task row", () => {
+    const tasks = [
+      createMockTask({ id: "a", kanbanColumn: "in_progress", title: "Active" }),
+      createMockTask({ id: "b", kanbanColumn: "ready", title: "Ready" }),
+    ];
+    renderWithProviders(
+      <TimelineList tasks={tasks} plans={[]} onTaskSelect={vi.fn()} {...defaultListProps} />
+    );
+
+    const activeSection = screen.getByTestId("timeline-section-active");
+    const readySection = screen.getByTestId("timeline-section-ready");
+
+    for (const section of [activeSection, readySection]) {
+      const header = section.querySelector("div.sticky") ?? section.querySelector("div");
+      expect(header).toBeTruthy();
+      expect(header!.className).not.toContain("mb-[7px]");
+      expect(header!.className).not.toContain("mb-[");
+    }
+  });
+
+  it("first and middle rows within a section share the same padding class", () => {
+    const tasks = [
+      createMockTask({ id: "r1", kanbanColumn: "ready", title: "Row 1" }),
+      createMockTask({ id: "r2", kanbanColumn: "ready", title: "Row 2" }),
+      createMockTask({ id: "r3", kanbanColumn: "ready", title: "Row 3" }),
+    ];
+    renderWithProviders(
+      <TimelineList tasks={tasks} plans={[]} onTaskSelect={vi.fn()} {...defaultListProps} />
+    );
+
+    const rows = screen.getAllByTestId(/^timeline-row-/);
+    const paddingClasses = rows.map((row) => {
+      const inner = row.querySelector(".py-2\\.5");
+      return inner !== null;
+    });
+    expect(paddingClasses.every(Boolean)).toBe(true);
+  });
+
+  it("virtualized rows all have min-h-[52px] wrapper", () => {
+    const n = TIMELINE_VIRTUALIZE_THRESHOLD + 5;
+    const tasks = Array.from({ length: n }, (_, i) =>
+      createMockTask({ id: `task-${i}`, kanbanColumn: "ready", title: `Task ${i}` })
+    );
+    const { unmount, host } = renderTimelineInSizedScrollPort(
+      { tasks, plans: [], onTaskSelect: vi.fn(), ...defaultListProps },
+      { height: 600, width: 640 }
+    );
+
+    try {
+      const list = screen.getByTestId("timeline-list");
+      expect(list).toHaveAttribute("data-timeline-virtualized", "true");
+      const rows = screen.queryAllByTestId(/^timeline-row-/);
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        expect(row).toHaveClass("min-h-[52px]");
+      }
+    } finally {
+      unmount();
+      host.remove();
+    }
+  });
+
+  it("virtualized section headers do not have bottom margin", () => {
+    const n = TIMELINE_VIRTUALIZE_THRESHOLD + 5;
+    const tasks = Array.from({ length: n }, (_, i) =>
+      createMockTask({ id: `task-${i}`, kanbanColumn: "ready", title: `Task ${i}` })
+    );
+    const { unmount, host } = renderTimelineInSizedScrollPort(
+      { tasks, plans: [], onTaskSelect: vi.fn(), ...defaultListProps },
+      { height: 600, width: 640 }
+    );
+
+    try {
+      const section = screen.getByTestId("timeline-section-ready");
+      const headerDiv = section.querySelector("div");
+      expect(headerDiv).toBeTruthy();
+      expect(headerDiv!.className).not.toContain("mb-[");
+    } finally {
+      unmount();
+      host.remove();
+    }
+  });
+
   it("virtualized mode omits sticky class on section headers", () => {
     const n = TIMELINE_VIRTUALIZE_THRESHOLD + 5;
     const tasks = Array.from({ length: n }, (_, i) =>

@@ -5,6 +5,7 @@
  * GET  /oauth/callback — validates state, exchanges code for token, stores connection
  * GET  /status         — returns current integration connection status
  * GET  /projects       — lists Todoist projects using stored token
+ * PUT  /project        — selects a Todoist project for sync
  */
 
 import { Router, type Request } from "express";
@@ -13,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import { wrapAsync } from "../middleware/wrap-async.js";
-import { validateParams, validateQuery } from "../middleware/validate.js";
+import { validateBody, validateParams, validateQuery } from "../middleware/validate.js";
 import { projectIdParamSchema } from "../schemas/request-common.js";
 import {
   generateOAuthState,
@@ -181,10 +182,14 @@ const oauthCallbackQuerySchema = z.object({
   state: z.string().min(1, "state is required"),
 });
 
+const selectProjectBodySchema = z.object({
+  todoistProjectId: z.string().min(1, "todoistProjectId is required"),
+});
+
 export interface TodoistIntegrationRouterDeps {
   integrationStore: Pick<
     IntegrationStoreService,
-    "upsertConnection" | "getConnection" | "getEncryptedTokenById" | "updateConnectionStatus"
+    "upsertConnection" | "getConnection" | "getEncryptedTokenById" | "updateConnectionStatus" | "updateSelectedResource"
   >;
   tokenEncryption: Pick<TokenEncryptionService, "encryptToken" | "decryptToken">;
 }
@@ -464,6 +469,128 @@ export function createTodoistIntegrationRouter(
 
         throw err;
       }
+    }),
+  );
+
+  // PUT /project
+  router.put(
+    "/project",
+    validateParams(projectIdParamSchema),
+    validateBody(selectProjectBodySchema),
+    wrapAsync(async (req: Request<ProjectParams>, res) => {
+      const { projectId } = req.params;
+      const { todoistProjectId } = req.body as z.infer<typeof selectProjectBodySchema>;
+
+      const connection = await integrationStore.getConnection(projectId, "todoist");
+      if (!connection) {
+        res.status(404).json({
+          error: {
+            code: "NOT_CONNECTED",
+            message: "Todoist is not connected for this project.",
+          },
+        });
+        return;
+      }
+
+      const encryptedToken = await integrationStore.getEncryptedTokenById(
+        connection.id,
+      );
+      if (!encryptedToken) {
+        res.status(500).json({
+          error: {
+            code: "TOKEN_MISSING",
+            message: "Stored token could not be retrieved.",
+          },
+        });
+        return;
+      }
+
+      let accessToken: string;
+      try {
+        accessToken = tokenEncryption.decryptToken(encryptedToken);
+      } catch {
+        res.status(500).json({
+          error: {
+            code: "TOKEN_DECRYPT_FAILED",
+            message: "Failed to decrypt stored token.",
+          },
+        });
+        return;
+      }
+
+      let projects: { id: string; name: string }[];
+      try {
+        const client = new TodoistApiClient(accessToken);
+        projects = await client.getProjects();
+      } catch (err) {
+        if (err instanceof TodoistAuthError) {
+          await integrationStore.updateConnectionStatus(
+            connection.id,
+            "needs_reconnect",
+            err.message,
+          );
+          log.warn("Todoist auth failed — marked needs_reconnect", { projectId });
+          res.status(401).json({
+            error: {
+              code: "TODOIST_AUTH_FAILED",
+              message:
+                "Todoist authentication failed. Please reconnect your account.",
+            },
+          });
+          return;
+        }
+
+        if (err instanceof TodoistRateLimitError) {
+          log.warn("Todoist rate limit hit", {
+            projectId,
+            retryAfter: err.retryAfter,
+          });
+          res.set("Retry-After", String(err.retryAfter));
+          res.status(429).json({
+            error: {
+              code: "RATE_LIMITED",
+              message: "Todoist API rate limit exceeded. Please try again later.",
+              retryAfter: err.retryAfter,
+            },
+          });
+          return;
+        }
+
+        throw err;
+      }
+
+      const selectedProject = projects.find((p) => p.id === todoistProjectId);
+      if (!selectedProject) {
+        res.status(400).json({
+          error: {
+            code: "PROJECT_NOT_FOUND",
+            message: "Todoist project not found",
+          },
+        });
+        return;
+      }
+
+      await integrationStore.updateSelectedResource(
+        connection.id,
+        selectedProject.id,
+        selectedProject.name,
+      );
+
+      log.info("Todoist project selected", {
+        projectId,
+        todoistProjectId: selectedProject.id,
+        todoistProjectName: selectedProject.name,
+      });
+
+      res.json({
+        data: {
+          success: true,
+          selectedProject: {
+            id: selectedProject.id,
+            name: selectedProject.name,
+          },
+        },
+      });
     }),
   );
 
