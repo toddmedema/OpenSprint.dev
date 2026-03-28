@@ -754,18 +754,24 @@ A simple marketing site for Open Sprint.
       "utf-8"
     );
 
-    const res = await request(app)
-      .post(`${API_PREFIX}/projects/${projectId}/chat`)
-      .send({ message: "hello from migrated app" });
+    try {
+      const res = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/chat`)
+        .send({ message: "hello from migrated app" });
 
-    expect(res.status).toBe(409);
-    expect(res.body.error?.code).toBe("MIGRATION_REQUIRED");
+      expect(res.status).toBe(409);
+      expect(res.body.error?.code).toBe("MIGRATION_REQUIRED");
+    } finally {
+      await fs.rm(legacyDir, { recursive: true, force: true }).catch(() => {});
+    }
   });
 
   it("conversation should be stored in project_conversations table", async () => {
-    await request(app)
+    const postRes = await request(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Test message" });
+
+    expect(postRes.status).toBe(200);
 
     const db = await taskStore.getDb();
     const row = await db.queryOne(
