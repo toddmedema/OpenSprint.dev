@@ -14,6 +14,7 @@ import {
 } from "../schemas/request-common.js";
 import { validateParams, validateQuery, validateBody } from "../middleware/validate.js";
 import { wrapAsync } from "../middleware/wrap-async.js";
+import { resolveOpenEditor, type OpenEditorResult } from "../services/open-editor.service.js";
 
 const log = createLogger("tasks");
 
@@ -212,6 +213,18 @@ export function createTasksRouter(taskService: TaskService): Router {
         parseInt(req.params.attempt, 10)
       );
       const body: ApiResponse<AgentSession> = { data: session };
+      res.json(body);
+    })
+  );
+
+  // POST /projects/:projectId/tasks/:taskId/open-editor — Resolve worktree path and editor for opening in desktop editor
+  router.post(
+    "/:taskId/open-editor",
+    validateParams(taskIdParamSchema),
+    wrapAsync(async (req: Request<TaskParams>, res) => {
+      const { projectId, taskId } = req.params;
+      const result: OpenEditorResult = await resolveOpenEditor(projectId, taskId);
+      const body: ApiResponse<OpenEditorResult> = { data: result };
       res.json(body);
     })
   );
