@@ -10,6 +10,7 @@ import { integrationStore } from "./integration-store.service.js";
 import { TodoistSyncService, type TodoistSyncDeps } from "./todoist-sync.service.js";
 import { tokenEncryption } from "./token-encryption.service.js";
 import { FeedbackService } from "./feedback.service.js";
+import { broadcastToProject } from "../websocket/index.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("todoist-sync-scheduler");
@@ -35,6 +36,7 @@ function buildSyncService(): TodoistSyncService {
     integrationStore,
     submitFeedback: (projectId, body) => feedbackService.submitFeedback(projectId, body),
     tokenEncryption,
+    broadcastToProject,
   };
   return new TodoistSyncService(deps);
 }

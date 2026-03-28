@@ -3,7 +3,12 @@
  * creates feedback items, and deletes the originals from Todoist.
  */
 
-import type { FeedbackItem, FeedbackSubmitRequest, TodoistSyncResult } from "@opensprint/shared";
+import type {
+  FeedbackItem,
+  FeedbackSubmitRequest,
+  ServerEvent,
+  TodoistSyncResult,
+} from "@opensprint/shared";
 import type { Task } from "@doist/todoist-api-typescript";
 import {
   TodoistApiClient,
@@ -45,6 +50,7 @@ export interface TodoistSyncDeps {
   integrationStore: IntegrationStoreService;
   submitFeedback: (projectId: string, body: FeedbackSubmitRequest) => Promise<FeedbackItem>;
   tokenEncryption: TokenEncryptionService;
+  broadcastToProject?: (projectId: string, event: ServerEvent) => void;
 }
 
 export class TodoistSyncService {
@@ -52,6 +58,14 @@ export class TodoistSyncService {
 
   constructor(deps: TodoistSyncDeps) {
     this.deps = deps;
+  }
+
+  private broadcast(projectId: string, event: ServerEvent): void {
+    try {
+      this.deps.broadcastToProject?.(projectId, event);
+    } catch {
+      // never let broadcast failures interrupt sync
+    }
   }
 
   async runSync(connectionId: string): Promise<TodoistSyncResult> {
@@ -78,6 +92,12 @@ export class TodoistSyncService {
       log.warn("No Todoist project selected, aborting sync", { connectionId, projectId });
       return result;
     }
+
+    this.broadcast(projectId, {
+      type: "integration.sync.started",
+      provider: "todoist",
+      projectId,
+    });
 
     // 2. Decrypt token and instantiate client
     let todoistClient: TodoistApiClient;
@@ -151,6 +171,14 @@ export class TodoistSyncService {
         imported: result.imported,
         errors: result.errors,
       });
+
+      this.broadcast(projectId, {
+        type: "integration.sync.completed",
+        provider: "todoist",
+        projectId,
+        imported: result.imported,
+        errors: result.errors,
+      });
     } catch (err) {
       // 9. Handle auth error
       if (err instanceof TodoistAuthError) {
@@ -163,6 +191,19 @@ export class TodoistSyncService {
           "needs_reconnect",
           err.message
         );
+        this.broadcast(projectId, {
+          type: "integration.connection.updated",
+          provider: "todoist",
+          projectId,
+          status: "needs_reconnect",
+        });
+        this.broadcast(projectId, {
+          type: "integration.sync.error",
+          provider: "todoist",
+          projectId,
+          error: err.message,
+          status: "needs_reconnect",
+        });
         return result;
       }
 
@@ -172,11 +213,18 @@ export class TodoistSyncService {
           connectionId,
           retryAfter: err.retryAfter,
         });
+        const rateLimitMsg = `Rate limited (retry after ${err.retryAfter}s)`;
         await this.deps.integrationStore.updateLastSync(
           connectionId,
           new Date().toISOString(),
-          `Rate limited (retry after ${err.retryAfter}s)`
+          rateLimitMsg
         );
+        this.broadcast(projectId, {
+          type: "integration.sync.error",
+          provider: "todoist",
+          projectId,
+          error: rateLimitMsg,
+        });
         return result;
       }
 
@@ -188,6 +236,12 @@ export class TodoistSyncService {
         new Date().toISOString(),
         errMsg
       );
+      this.broadcast(projectId, {
+        type: "integration.sync.error",
+        provider: "todoist",
+        projectId,
+        error: errMsg,
+      });
     }
 
     return result;

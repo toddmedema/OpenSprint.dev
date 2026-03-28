@@ -11,6 +11,8 @@ import type {
   FeedbackMappedEvent,
   FeedbackUpdatedEvent,
   FeedbackResolvedEvent,
+  IntegrationSyncCompletedEvent,
+  IntegrationConnectionUpdatedEvent,
   Task,
   TaskEventPayload,
   TaskPriority,
@@ -688,6 +690,40 @@ export const websocketMiddleware: Middleware = (storeApi) => {
       case "agent.chat.unsupported": {
         const chatUnsup = event as AgentChatUnsupportedEvent;
         d(chatUnsupported({ taskId: chatUnsup.taskId, reason: chatUnsup.reason }));
+        break;
+      }
+
+      case "integration.sync.started":
+        break;
+
+      case "integration.sync.completed": {
+        const syncEv = event as IntegrationSyncCompletedEvent;
+        void qc.invalidateQueries({
+          queryKey: queryKeys.integrations.status(projectId, syncEv.provider),
+        });
+        void qc.invalidateQueries({
+          queryKey: queryKeys.integrations.all(projectId),
+        });
+        if (syncEv.imported > 0) {
+          void qc.invalidateQueries({ queryKey: queryKeys.feedback.list(projectId) });
+        }
+        break;
+      }
+
+      case "integration.sync.error":
+        void qc.invalidateQueries({
+          queryKey: queryKeys.integrations.all(projectId),
+        });
+        break;
+
+      case "integration.connection.updated": {
+        const connEv = event as IntegrationConnectionUpdatedEvent;
+        void qc.invalidateQueries({
+          queryKey: queryKeys.integrations.status(projectId, connEv.provider),
+        });
+        void qc.invalidateQueries({
+          queryKey: queryKeys.integrations.all(projectId),
+        });
         break;
       }
     }

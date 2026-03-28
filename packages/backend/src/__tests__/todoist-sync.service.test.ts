@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Task } from "@doist/todoist-api-typescript";
-import type { FeedbackItem, FeedbackSubmitRequest, IntegrationConnection } from "@opensprint/shared";
+import type { FeedbackItem, FeedbackSubmitRequest, IntegrationConnection, ServerEvent } from "@opensprint/shared";
 import type { IntegrationStoreService } from "../services/integration-store.service.js";
 import type { TokenEncryptionService } from "../services/token-encryption.service.js";
 import type { TodoistSyncDeps } from "../services/todoist-sync.service.js";
@@ -128,7 +128,9 @@ function createMockDeps(overrides: Partial<TodoistSyncDeps> = {}): TodoistSyncDe
     decryptToken: vi.fn().mockReturnValue("decrypted-access-token"),
   } as unknown as TokenEncryptionService;
 
-  return { integrationStore, submitFeedback, tokenEncryption, ...overrides };
+  const broadcastToProject = vi.fn<(projectId: string, event: ServerEvent) => void>();
+
+  return { integrationStore, submitFeedback, tokenEncryption, broadcastToProject, ...overrides };
 }
 
 describe("TodoistSyncService", () => {
@@ -582,6 +584,133 @@ describe("TodoistSyncService", () => {
         expect.any(String),
         null
       );
+    });
+  });
+
+  describe("runSync — broadcast events", () => {
+    it("broadcasts sync.started and sync.completed on successful sync", async () => {
+      mockGetTasks.mockResolvedValue([]);
+
+      await service.runSync("conn-1");
+
+      const broadcast = deps.broadcastToProject as ReturnType<typeof vi.fn>;
+      const calls = broadcast.mock.calls as [string, ServerEvent][];
+      const types = calls.map(([, ev]) => ev.type);
+
+      expect(types).toContain("integration.sync.started");
+      expect(types).toContain("integration.sync.completed");
+
+      const started = calls.find(([, ev]) => ev.type === "integration.sync.started");
+      expect(started).toBeDefined();
+      expect(started![0]).toBe("proj-1");
+      expect(started![1]).toMatchObject({
+        type: "integration.sync.started",
+        provider: "todoist",
+        projectId: "proj-1",
+      });
+
+      const completed = calls.find(([, ev]) => ev.type === "integration.sync.completed");
+      expect(completed).toBeDefined();
+      expect(completed![1]).toMatchObject({
+        type: "integration.sync.completed",
+        provider: "todoist",
+        projectId: "proj-1",
+        imported: 0,
+        errors: 0,
+      });
+    });
+
+    it("broadcasts sync.completed with import count", async () => {
+      const task = makeTask();
+      mockGetTasks.mockResolvedValue([task]);
+      (deps.integrationStore.getPendingDeletes as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          id: "led-1",
+          external_item_id: "task-1",
+          import_status: "pending_delete",
+        },
+      ]);
+
+      await service.runSync("conn-1");
+
+      const broadcast = deps.broadcastToProject as ReturnType<typeof vi.fn>;
+      const calls = broadcast.mock.calls as [string, ServerEvent][];
+      const completed = calls.find(([, ev]) => ev.type === "integration.sync.completed");
+      expect(completed![1]).toMatchObject({
+        imported: 1,
+        errors: 0,
+      });
+    });
+
+    it("broadcasts connection.updated and sync.error on auth error", async () => {
+      mockGetTasks.mockRejectedValue(new TodoistAuthError("Unauthorized", 401));
+
+      await service.runSync("conn-1");
+
+      const broadcast = deps.broadcastToProject as ReturnType<typeof vi.fn>;
+      const calls = broadcast.mock.calls as [string, ServerEvent][];
+      const types = calls.map(([, ev]) => ev.type);
+
+      expect(types).toContain("integration.connection.updated");
+      expect(types).toContain("integration.sync.error");
+
+      const connUpdate = calls.find(([, ev]) => ev.type === "integration.connection.updated");
+      expect(connUpdate![1]).toMatchObject({
+        provider: "todoist",
+        projectId: "proj-1",
+        status: "needs_reconnect",
+      });
+
+      const syncError = calls.find(([, ev]) => ev.type === "integration.sync.error");
+      expect(syncError![1]).toMatchObject({
+        provider: "todoist",
+        projectId: "proj-1",
+        error: expect.stringContaining("Unauthorized"),
+        status: "needs_reconnect",
+      });
+    });
+
+    it("broadcasts sync.error on rate limit", async () => {
+      mockGetTasks.mockRejectedValue(new TodoistRateLimitError("Rate limited", 30));
+
+      await service.runSync("conn-1");
+
+      const broadcast = deps.broadcastToProject as ReturnType<typeof vi.fn>;
+      const calls = broadcast.mock.calls as [string, ServerEvent][];
+      const syncError = calls.find(([, ev]) => ev.type === "integration.sync.error");
+
+      expect(syncError).toBeDefined();
+      expect(syncError![1]).toMatchObject({
+        type: "integration.sync.error",
+        provider: "todoist",
+        error: expect.stringContaining("Rate limited"),
+      });
+    });
+
+    it("broadcasts sync.error on unexpected error", async () => {
+      mockGetTasks.mockRejectedValue(new Error("Connection reset"));
+
+      await service.runSync("conn-1");
+
+      const broadcast = deps.broadcastToProject as ReturnType<typeof vi.fn>;
+      const calls = broadcast.mock.calls as [string, ServerEvent][];
+      const syncError = calls.find(([, ev]) => ev.type === "integration.sync.error");
+
+      expect(syncError).toBeDefined();
+      expect(syncError![1]).toMatchObject({
+        type: "integration.sync.error",
+        provider: "todoist",
+        error: "Connection reset",
+      });
+    });
+
+    it("does not fail when broadcastToProject is undefined", async () => {
+      const noBroadcastDeps = createMockDeps({ broadcastToProject: undefined });
+      const noBroadcastService = new TodoistSyncService(noBroadcastDeps);
+      mockGetTasks.mockResolvedValue([]);
+
+      const result = await noBroadcastService.runSync("conn-1");
+      expect(result).toEqual({ imported: 0, errors: 0 });
     });
   });
 });

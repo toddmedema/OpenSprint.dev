@@ -68,4 +68,9 @@ export const queryKeys = {
     history: (projectId: string) => ["deliver", projectId, "history"] as const,
     expoReadiness: (projectId: string) => ["deliver", projectId, "expoReadiness"] as const,
   },
+  integrations: {
+    status: (projectId: string, provider: string) =>
+      ["integrations", projectId, provider, "status"] as const,
+    all: (projectId: string) => ["integrations", projectId] as const,
+  },
 } as const;

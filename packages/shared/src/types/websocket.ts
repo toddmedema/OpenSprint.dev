@@ -7,6 +7,7 @@ import type {
   TestResults,
 } from "./agent.js";
 import type { FeedbackItem } from "./feedback.js";
+import type { IntegrationConnectionStatus } from "./integrations.js";
 import type {
   ScopeChangeMetadata,
   ScopeChangeProposedUpdate,
@@ -382,6 +383,37 @@ export interface DeliverOutputEvent {
   chunk: string;
 }
 
+// ─── Integration Sync Events ───
+
+export interface IntegrationSyncStartedEvent {
+  type: "integration.sync.started";
+  provider: string;
+  projectId: string;
+}
+
+export interface IntegrationSyncCompletedEvent {
+  type: "integration.sync.completed";
+  provider: string;
+  projectId: string;
+  imported: number;
+  errors: number;
+}
+
+export interface IntegrationSyncErrorEvent {
+  type: "integration.sync.error";
+  provider: string;
+  projectId: string;
+  error: string;
+  status?: string;
+}
+
+export interface IntegrationConnectionUpdatedEvent {
+  type: "integration.connection.updated";
+  provider: string;
+  projectId: string;
+  status: IntegrationConnectionStatus;
+}
+
 /** All server-to-client WebSocket event types */
 export type ServerEvent =
   | TaskUpdatedEvent
@@ -414,7 +446,11 @@ export type ServerEvent =
   | PlanAgentOutputBackfillEvent
   | AgentChatReceivedEvent
   | AgentChatResponseEvent
-  | AgentChatUnsupportedEvent;
+  | AgentChatUnsupportedEvent
+  | IntegrationSyncStartedEvent
+  | IntegrationSyncCompletedEvent
+  | IntegrationSyncErrorEvent
+  | IntegrationConnectionUpdatedEvent;
 
 // ─── Client → Server Events ───
 
