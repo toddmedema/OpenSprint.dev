@@ -71,4 +71,14 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("window-unmaximized", handler);
     return () => ipcRenderer.removeListener("window-unmaximized", handler);
   },
+  openInEditor: (
+    folderPath: string,
+    editor?: "vscode" | "cursor" | "auto",
+  ) =>
+    ipcRenderer.invoke("shell:openInEditor", folderPath, editor) as Promise<{
+      success: boolean;
+      editor: string;
+      method: "cli" | "uri";
+      error?: string;
+    }>,
 });

@@ -10,5 +10,5 @@
     "outDir": "./dist",
     "rootDir": "."
   },
-  "include": ["main.ts", "preload.ts", "boot-screen.ts", "window-options.ts", "runtime-branding.ts"]
+  "include": ["main.ts", "preload.ts", "boot-screen.ts", "window-options.ts", "runtime-branding.ts", "open-in-editor.ts"]
 }

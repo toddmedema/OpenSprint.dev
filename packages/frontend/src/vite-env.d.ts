@@ -43,6 +43,15 @@ declare global {
       getWindowMaximized?: () => Promise<boolean>;
       onWindowMaximized?: (callback: () => void) => () => void;
       onWindowUnmaximized?: (callback: () => void) => () => void;
+      openInEditor?: (
+        folderPath: string,
+        editor?: "vscode" | "cursor" | "auto",
+      ) => Promise<{
+        success: boolean;
+        editor: string;
+        method: "cli" | "uri";
+        error?: string;
+      }>;
     };
   }
 }

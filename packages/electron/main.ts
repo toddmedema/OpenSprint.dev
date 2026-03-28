@@ -19,6 +19,8 @@ import {
 import { buildWindowOptions } from "./window-options";
 import { shouldApplyRuntimeDockIcon } from "./runtime-branding";
 import { renderBootHtml } from "./boot-screen";
+import { openInEditor, type EditorMode } from "./open-in-editor";
+import { execFile } from "child_process";
 
 import { autoUpdater } from "electron-updater";
 
@@ -1256,6 +1258,20 @@ app.whenReady().then(async () => {
       await killBackend();
       backendProcess = startBackend(pathOverride ?? undefined);
       await waitForBackend(backendProcess);
+    }
+  );
+
+  ipcMain.handle(
+    "shell:openInEditor",
+    async (
+      _event: Electron.IpcMainInvokeEvent,
+      folderPath: string,
+      editor?: EditorMode,
+    ) => {
+      return openInEditor(folderPath, editor ?? "auto", {
+        execFile,
+        openExternal: (url: string) => shell.openExternal(url),
+      });
     }
   );
 
