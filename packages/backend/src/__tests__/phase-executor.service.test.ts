@@ -437,7 +437,7 @@ describe("PhaseExecutorService", () => {
         new RepoPreflightError(
           "Dependency integrity check failed after one automatic repair attempt.",
           ErrorCodes.REPO_DEPENDENCIES_INVALID,
-          ["npm ci", "npm ls --depth=0 --workspaces"]
+          ["npm ci", "npm ls --depth=0 --workspaces --include=dev"]
         )
       );
 
@@ -459,7 +459,9 @@ describe("PhaseExecutorService", () => {
       expect(failureTask).toBe(task);
       expect(failureBranch).toBe(slot.branchName);
       expect(failureReason).toContain("[REPO_DEPENDENCIES_INVALID]");
-      expect(failureReason).toContain("Suggested commands: npm ci ; npm ls --depth=0 --workspaces");
+      expect(failureReason).toContain(
+        "Suggested commands: npm ci ; npm ls --depth=0 --workspaces --include=dev"
+      );
       expect(testError).toBeNull();
       expect(failureType).toBe("repo_preflight");
     });
@@ -699,7 +701,7 @@ describe("PhaseExecutorService", () => {
         new RepoPreflightError(
           "Dependency integrity check failed after one automatic repair attempt.",
           ErrorCodes.REPO_DEPENDENCIES_INVALID,
-          ["npm ci", "npm ls --depth=0 --workspaces"]
+          ["npm ci", "npm ls --depth=0 --workspaces --include=dev"]
         )
       );
 
@@ -721,7 +723,9 @@ describe("PhaseExecutorService", () => {
       expect(failureTask).toBe(task);
       expect(failureBranch).toBe(slot.branchName);
       expect(failureReason).toContain("[REPO_DEPENDENCIES_INVALID]");
-      expect(failureReason).toContain("Suggested commands: npm ci ; npm ls --depth=0 --workspaces");
+      expect(failureReason).toContain(
+        "Suggested commands: npm ci ; npm ls --depth=0 --workspaces --include=dev"
+      );
       expect(testError).toBeNull();
       expect(failureType).toBe("repo_preflight");
     });

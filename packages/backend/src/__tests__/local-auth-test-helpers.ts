@@ -1,10 +1,10 @@
 import type { Test } from "supertest";
 import request from "supertest";
-import { getLocalSessionToken } from "../services/local-session-auth.service.js";
+import { VITEST_DEFAULT_LOCAL_SESSION_TOKEN } from "../services/local-session-auth.service.js";
 
 /** Attach bearer token for Vitest (matches ensureLocalSessionToken test default). */
 export function withLocalSessionAuth(req: Test): Test {
-  return req.set("Authorization", `Bearer ${getLocalSessionToken()}`);
+  return req.set("Authorization", `Bearer ${VITEST_DEFAULT_LOCAL_SESSION_TOKEN}`);
 }
 
 /**

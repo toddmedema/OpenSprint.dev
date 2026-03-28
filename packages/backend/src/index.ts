@@ -32,6 +32,7 @@ import { databaseRuntime } from "./services/database-runtime.service.js";
 import { openBrowser } from "./utils/open-browser.js";
 import { appendCrashLog } from "./utils/crash-log.js";
 import { appendRuntimeTrace } from "./utils/runtime-trace.js";
+import { startBackendDeathSentinel } from "./utils/backend-death-sentinel.js";
 
 // Electron launches backend with ELECTRON_RUN_AS_NODE=1 so process.execPath can run JS.
 // Clear it immediately so backend child processes (agent CLIs) are not forced into Node mode.
@@ -188,6 +189,11 @@ server.listen(port, "127.0.0.1", () => {
     arch: process.arch,
     desktop: process.env.OPENSPRINT_DESKTOP ?? null,
   });
+  startBackendDeathSentinel({
+    sessionId: runtimeSessionId,
+    backendPid: process.pid,
+    parentPid: process.ppid,
+  });
   startRuntimeHeartbeat();
   startProcessReaper();
   databaseRuntime.start();
@@ -226,11 +232,25 @@ process.on("unhandledRejection", (reason) => {
   logStartup.error("Unhandled promise rejection", { reason });
 });
 
+process.on("uncaughtExceptionMonitor", (err, origin) => {
+  appendRuntimeTrace("process.uncaughtExceptionMonitor", runtimeSessionId, {
+    origin,
+    err,
+  });
+});
+
 process.on("uncaughtException", (err) => {
   appendRuntimeTrace("process.uncaughtException", runtimeSessionId, { err });
   appendCrashLog("process.uncaughtException", { err });
   logStartup.error("Uncaught exception", { err });
   void shutdown("uncaughtException");
+});
+
+process.on("multipleResolves", (type, _promise, reason) => {
+  appendRuntimeTrace("process.multipleResolves", runtimeSessionId, {
+    type,
+    reason,
+  });
 });
 
 process.on("beforeExit", (code) => {

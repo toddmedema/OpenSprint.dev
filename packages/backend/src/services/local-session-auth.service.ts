@@ -79,7 +79,11 @@ export function requestHasLocalSessionCredential(
   const auth = authorization;
   if (auth?.startsWith("Bearer ")) {
     const token = auth.slice("Bearer ".length).trim();
-    if (token.length > 0 && tokensEqual(token, getLocalSessionToken())) {
+    if (
+      token.length > 0 &&
+      (tokensEqual(token, getLocalSessionToken()) ||
+        (isTestProcess() && tokensEqual(token, VITEST_DEFAULT_LOCAL_SESSION_TOKEN)))
+    ) {
       return true;
     }
   }

@@ -214,7 +214,7 @@ describe("BranchManager", () => {
         .spyOn(commandRunnerModule, "runCommand")
         .mockImplementation(async (spec: CommandSpec) => {
           commands.push(commandRunnerKey(spec));
-          if (commandRunnerKey(spec) === "npm ls --depth=0 --workspaces") {
+          if (commandRunnerKey(spec) === "npm ls --depth=0 --workspaces --include=dev") {
             return { ...mockRunSuccess, stdout: "ok" };
           }
           throw new Error(`Unexpected command: ${commandRunnerKey(spec)}`);
@@ -222,7 +222,7 @@ describe("BranchManager", () => {
 
       await branchManager.checkDependencyIntegrity(repoPath);
 
-      expect(commands).toEqual(["npm ls --depth=0 --workspaces"]);
+      expect(commands).toEqual(["npm ls --depth=0 --workspaces --include=dev"]);
       runSpy.mockRestore();
     });
 
@@ -233,7 +233,7 @@ describe("BranchManager", () => {
         .spyOn(commandRunnerModule, "runCommand")
         .mockImplementation(async (spec: CommandSpec) => {
           commands.push(commandRunnerKey(spec));
-          if (commandRunnerKey(spec) === "npm ls --depth=0") {
+          if (commandRunnerKey(spec) === "npm ls --depth=0 --include=dev") {
             return { ...mockRunSuccess, stdout: "ok" };
           }
           throw new Error(`Unexpected command: ${commandRunnerKey(spec)}`);
@@ -241,7 +241,7 @@ describe("BranchManager", () => {
 
       await branchManager.checkDependencyIntegrity(repoPath);
 
-      expect(commands).toEqual(["npm ls --depth=0"]);
+      expect(commands).toEqual(["npm ls --depth=0 --include=dev"]);
       runSpy.mockRestore();
     });
 
@@ -254,7 +254,7 @@ describe("BranchManager", () => {
         .mockImplementation(async (spec: CommandSpec) => {
           const key = commandRunnerKey(spec);
           commands.push(key);
-          if (key === "npm ls --depth=0") {
+          if (key === "npm ls --depth=0 --include=dev") {
             healthCheckCalls += 1;
             if (healthCheckCalls === 1) {
               throw new Error("invalid dependencies");
@@ -269,7 +269,11 @@ describe("BranchManager", () => {
 
       await branchManager.checkDependencyIntegrity(repoPath);
 
-      expect(commands).toEqual(["npm ls --depth=0", "npm ci", "npm ls --depth=0"]);
+      expect(commands).toEqual([
+        "npm ls --depth=0 --include=dev",
+        "npm ci",
+        "npm ls --depth=0 --include=dev",
+      ]);
       expect(commands.filter((command) => command === "npm ci")).toHaveLength(1);
       runSpy.mockRestore();
     });
@@ -284,7 +288,7 @@ describe("BranchManager", () => {
         .mockImplementation(async (spec: CommandSpec) => {
           const key = commandRunnerKey(spec);
           commands.push(key);
-          if (key === "npm ls --depth=0") {
+          if (key === "npm ls --depth=0 --include=dev") {
             healthCheckCalls += 1;
             if (healthCheckCalls === 1) {
               throw new Error("missing module before repair");
@@ -300,7 +304,11 @@ describe("BranchManager", () => {
 
       await branchManager.checkDependencyIntegrity(repoPath, wtPath);
 
-      expect(commands).toEqual(["npm ls --depth=0", "npm ci", "npm ls --depth=0"]);
+      expect(commands).toEqual([
+        "npm ls --depth=0 --include=dev",
+        "npm ci",
+        "npm ls --depth=0 --include=dev",
+      ]);
       expect(commands.filter((command) => command === "npm ci")).toHaveLength(1);
       expect(symlinkSpy).toHaveBeenCalledTimes(1);
       expect(symlinkSpy).toHaveBeenCalledWith(repoPath, wtPath);
@@ -316,7 +324,7 @@ describe("BranchManager", () => {
         .mockImplementation(async (spec: CommandSpec) => {
           const key = commandRunnerKey(spec);
           commands.push(key);
-          if (key === "npm ls --depth=0") {
+          if (key === "npm ls --depth=0 --include=dev") {
             throw new Error("MODULE_NOT_FOUND");
           }
           if (key === "npm ci") {
@@ -332,11 +340,15 @@ describe("BranchManager", () => {
         expect(err).toBeInstanceOf(RepoPreflightError);
         const error = err as RepoPreflightError;
         expect(error.code).toBe(ErrorCodes.REPO_DEPENDENCIES_INVALID);
-        expect(error.commands).toEqual(["npm ci", "npm ls --depth=0"]);
+        expect(error.commands).toEqual(["npm ci", "npm ls --depth=0 --include=dev"]);
         expect(error.message).toContain("Run `npm ci` in the repo root");
       }
 
-      expect(commands).toEqual(["npm ls --depth=0", "npm ci", "npm ls --depth=0"]);
+      expect(commands).toEqual([
+        "npm ls --depth=0 --include=dev",
+        "npm ci",
+        "npm ls --depth=0 --include=dev",
+      ]);
       expect(commands.filter((command) => command === "npm ci")).toHaveLength(1);
       runSpy.mockRestore();
     });
@@ -350,7 +362,7 @@ describe("BranchManager", () => {
         .mockImplementation(async (spec: CommandSpec) => {
           const key = commandRunnerKey(spec);
           commands.push(key);
-          if (key === "npm ls --depth=0") {
+          if (key === "npm ls --depth=0 --include=dev") {
             healthCheckCalls += 1;
             throw new Error(
               healthCheckCalls === 1 ? "missing module before repair" : "still missing after repair"
@@ -366,7 +378,11 @@ describe("BranchManager", () => {
         name: "RepoPreflightError",
         code: ErrorCodes.REPO_DEPENDENCIES_INVALID,
       });
-      expect(commands).toEqual(["npm ls --depth=0", "npm ci", "npm ls --depth=0"]);
+      expect(commands).toEqual([
+        "npm ls --depth=0 --include=dev",
+        "npm ci",
+        "npm ls --depth=0 --include=dev",
+      ]);
       expect(commands.filter((command) => command === "npm ci")).toHaveLength(1);
       runSpy.mockRestore();
     });
@@ -381,7 +397,7 @@ describe("BranchManager", () => {
         .mockImplementation(async (spec: CommandSpec) => {
           const key = commandRunnerKey(spec);
           commands.push(key);
-          if (key === "npm ls --depth=0") {
+          if (key === "npm ls --depth=0 --include=dev") {
             healthCheckCalls += 1;
             throw new Error(
               healthCheckCalls === 1 ? "missing module before repair" : "still missing after repair"
@@ -398,7 +414,11 @@ describe("BranchManager", () => {
         name: "RepoPreflightError",
         code: ErrorCodes.REPO_DEPENDENCIES_INVALID,
       });
-      expect(commands).toEqual(["npm ls --depth=0", "npm ci", "npm ls --depth=0"]);
+      expect(commands).toEqual([
+        "npm ls --depth=0 --include=dev",
+        "npm ci",
+        "npm ls --depth=0 --include=dev",
+      ]);
       expect(commands.filter((command) => command === "npm ci")).toHaveLength(1);
       expect(symlinkSpy).toHaveBeenCalledTimes(1);
       expect(symlinkSpy).toHaveBeenCalledWith(repoPath, wtPath);

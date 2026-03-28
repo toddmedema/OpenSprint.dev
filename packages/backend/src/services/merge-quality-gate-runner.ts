@@ -21,6 +21,8 @@ const QUALITY_GATE_PRECHECK_TIMEOUT_MS = 30_000;
 const NPM_INCLUDE_DEV_ENV = {
   NPM_CONFIG_INCLUDE: "dev",
   npm_config_include: "dev",
+  NPM_CONFIG_OMIT: "",
+  npm_config_omit: "",
 } as const;
 const QUALITY_GATE_ENV_FINGERPRINTS: RegExp[] = [
   /\bmodule_not_found\b/i,
@@ -119,10 +121,10 @@ async function resolveDependencyHealthCheckArgs(workspacePath: string): Promise<
     const raw = await fs.readFile(packageJsonPath, "utf-8");
     const parsed = JSON.parse(raw) as { workspaces?: unknown } | null;
     return hasWorkspaceConfig(parsed?.workspaces)
-      ? ["ls", "--depth=0", "--workspaces"]
-      : ["ls", "--depth=0"];
+      ? ["ls", "--depth=0", "--workspaces", "--include=dev"]
+      : ["ls", "--depth=0", "--include=dev"];
   } catch {
-    return ["ls", "--depth=0"];
+    return ["ls", "--depth=0", "--include=dev"];
   }
 }
 

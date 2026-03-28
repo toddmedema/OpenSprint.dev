@@ -259,7 +259,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
         if (label === "git rev-parse --verify HEAD") {
           return makeCommandResult(spec, options.cwd);
         }
-        if (label === "npm ls --depth=0") {
+        if (label === "npm ls --depth=0 --include=dev") {
           return makeCommandResult(spec, options.cwd);
         }
         if (label === "npm run build") {
@@ -300,11 +300,11 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     expect(failure).toBeNull();
     expect(symlinkNodeModules).not.toHaveBeenCalled();
     expect(getExecutedCommands(runCommand)).toEqual([
-      "npm ls --depth=0",
+      "npm ls --depth=0 --include=dev",
       "npm run build",
       "npm ci",
-      "npm ls --depth=0",
-      "npm ls --depth=0",
+      "npm ls --depth=0 --include=dev",
+      "npm ls --depth=0 --include=dev",
       "npm run build",
     ]);
   });

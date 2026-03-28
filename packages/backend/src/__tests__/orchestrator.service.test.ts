@@ -1419,7 +1419,7 @@ describe("OrchestratorService (slot-based model)", () => {
         new RepoPreflightError(
           "Dependency integrity check failed after one automatic repair attempt.",
           ErrorCodes.REPO_DEPENDENCIES_INVALID,
-          ["npm ci", "npm ls --depth=0 --workspaces"]
+          ["npm ci", "npm ls --depth=0 --workspaces --include=dev"]
         )
       );
       const invokePreflight = orchestrator as unknown as {
@@ -1623,7 +1623,7 @@ describe("OrchestratorService (slot-based model)", () => {
         expect(getExecutedCommands()).toEqual([
           "npm run lint",
           "npm ci",
-          "npm ls --depth=0",
+          "npm ls --depth=0 --include=dev",
           "npm run lint",
           "npm run test",
         ]);
@@ -1667,7 +1667,7 @@ describe("OrchestratorService (slot-based model)", () => {
         expect(getExecutedCommands()).toEqual([
           "npm run lint",
           "npm ci",
-          "npm ls --depth=0",
+          "npm ls --depth=0 --include=dev",
           "npm run lint",
         ]);
       } finally {
@@ -1708,7 +1708,7 @@ describe("OrchestratorService (slot-based model)", () => {
         expect(getExecutedCommands()).toEqual([
           "npm run lint",
           "npm ci",
-          "npm ls --depth=0",
+          "npm ls --depth=0 --include=dev",
           "npm run lint",
         ]);
       } finally {

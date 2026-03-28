@@ -97,8 +97,9 @@ export interface CreateTaskWorktreeOptions {
 
 const NPM_HEALTH_CHECK_TIMEOUT_MS = 30_000;
 const NPM_REPAIR_TIMEOUT_MS = 10 * 60 * 1000;
-const DEPENDENCY_HEALTH_CHECK_COMMAND = "npm ls --depth=0";
-const DEPENDENCY_HEALTH_CHECK_WORKSPACES_COMMAND = "npm ls --depth=0 --workspaces";
+const DEPENDENCY_HEALTH_CHECK_COMMAND = "npm ls --depth=0 --include=dev";
+const DEPENDENCY_HEALTH_CHECK_WORKSPACES_COMMAND =
+  "npm ls --depth=0 --workspaces --include=dev";
 const DEPENDENCY_REPAIR_COMMAND = "npm ci";
 const DEPENDENCY_REPAIR_COMMANDS = [DEPENDENCY_REPAIR_COMMAND] as const;
 const WORKTREE_RM_RETRYABLE_CODES = new Set(["ENOTEMPTY", "EBUSY"]);
@@ -107,6 +108,8 @@ const WORKTREE_RM_RETRY_DELAY_MS = 250;
 const NPM_INCLUDE_DEV_ENV = {
   NPM_CONFIG_INCLUDE: "dev",
   npm_config_include: "dev",
+  NPM_CONFIG_OMIT: "",
+  npm_config_omit: "",
 } as const;
 
 export interface DependencyHealthResult {
@@ -1501,7 +1504,11 @@ export class BranchManager {
     try {
       const result = await runCommand(
         { command: "npm", args: npmShellCommandToArgv(command) },
-        { cwd: repoPath, timeout: NPM_HEALTH_CHECK_TIMEOUT_MS }
+        {
+          cwd: repoPath,
+          timeout: NPM_HEALTH_CHECK_TIMEOUT_MS,
+          env: { ...process.env, ...NPM_INCLUDE_DEV_ENV },
+        }
       );
       const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim().slice(0, 4000);
       return { healthy: true, output };
