@@ -70,6 +70,7 @@ export const backendResolveConfig = {
 export const backendSsrConfig = {
   external: [
     "@google/genai",
+    "@doist/todoist-api-typescript",
     "drizzle-orm",
     "drizzle-orm/node-postgres",
     "drizzle-orm/pg-core",

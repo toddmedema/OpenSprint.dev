@@ -25,6 +25,9 @@ import { envRouter } from "./routes/env.js";
 import { globalSettingsRouter } from "./routes/global-settings.js";
 import { helpRouter } from "./routes/help.js";
 import { dbStatusRouter } from "./routes/db-status.js";
+import { createTodoistIntegrationRouter } from "./routes/integrations-todoist.js";
+import { integrationStore } from "./services/integration-store.service.js";
+import { tokenEncryption } from "./services/token-encryption.service.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { requestIdMiddleware } from "./middleware/request-id.js";
 import { wrapAsync } from "./middleware/wrap-async.js";
@@ -122,6 +125,11 @@ export function createApp(services?: AppServices) {
     `${API_PREFIX}/projects/:projectId/feedback`,
     requireDatabase,
     createFeedbackRouter({ feedbackService, orchestratorService })
+  );
+  app.use(
+    `${API_PREFIX}/projects/:projectId/integrations/todoist`,
+    requireDatabase,
+    createTodoistIntegrationRouter({ integrationStore, tokenEncryption })
   );
   app.use(
     `${API_PREFIX}/projects/:projectId/notifications`,
