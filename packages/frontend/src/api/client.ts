@@ -50,6 +50,11 @@ import type {
   OpenEditorResponse,
   AgentChatHistoryResponse,
   AgentChatSupportResponse,
+  TodoistIntegrationStatus,
+  TodoistOAuthStartResponse,
+  TodoistProjectInfo,
+  TodoistProjectSelectionRequest,
+  TodoistSyncResult,
 } from "@opensprint/shared";
 import type { TaskListResponse } from "./taskList";
 import type { PrdProposedDiffResponse, PrdVersionDiffResponse } from "./prdDiffTypes";
@@ -811,5 +816,39 @@ export const api = {
       request<Conversation>(
         `/projects/${projectId}/chat/history${context ? `?context=${encodeURIComponent(context)}` : ""}`
       ),
+  },
+
+  // ─── Integrations ───
+  integrations: {
+    todoist: {
+      getStatus: (projectId: string) =>
+        request<TodoistIntegrationStatus>(
+          `/projects/${projectId}/integrations/todoist/status`
+        ),
+      startOAuth: (projectId: string) =>
+        request<TodoistOAuthStartResponse>(
+          `/projects/${projectId}/integrations/todoist/oauth/start`,
+          { method: "POST" }
+        ),
+      listProjects: (projectId: string) =>
+        request<{ projects: TodoistProjectInfo[] }>(
+          `/projects/${projectId}/integrations/todoist/projects`
+        ),
+      selectProject: (projectId: string, body: TodoistProjectSelectionRequest) =>
+        request<{ success: boolean; selectedProject: { id: string; name: string } }>(
+          `/projects/${projectId}/integrations/todoist/project`,
+          { method: "PUT", body: JSON.stringify(body) }
+        ),
+      syncNow: (projectId: string) =>
+        request<TodoistSyncResult>(
+          `/projects/${projectId}/integrations/todoist/sync`,
+          { method: "POST" }
+        ),
+      disconnect: (projectId: string) =>
+        request<{ disconnected: boolean; pendingDeletesWarning?: number }>(
+          `/projects/${projectId}/integrations/todoist`,
+          { method: "DELETE" }
+        ),
+    },
   },
 };
