@@ -2,6 +2,8 @@
 
 ## Executive Summary
 
+During **Plan**, large or cross-cutting plans are automatically decomposed into **hierarchical sub-plans**—each with its own bounded scope, epic, and dependency edges—capped at **~15 actionable tasks per plan node** and a maximum tree depth of **four levels**. This keeps each planning batch small enough for reliable agent output and human review while enabling complex initiatives to be structured top-down.
+
 During **Execute**, users can **open the task worktree in VS Code or Cursor** for live file and diff inspection, and—when using **in-process API agent backends**—**chat with the running agent** between turns for mid-flight guidance. **CLI-based agent backends** do not support reliable mid-flight messaging; the product surfaces a clear disabled state and directs users to API mode. A **browser-only** fallback exposes the worktree path and copyable shell commands when the desktop app cannot launch an editor.
 
 When proposed **PRD/SPEC** changes require **human-in-the-loop** approval, the product shows a **rendered markdown diff** of current vs proposed SPEC.md (block-level changes with **word-level** highlights inside modified blocks) and a **[Rendered | Raw]** toggle to a traditional line-based diff. On **Sketch**, the **PRD version history** list includes **View Diff** on each entry to compare that saved snapshot to the **current** SPEC.md.
@@ -65,8 +67,17 @@ A small team that builds software for clients. They need to move quickly from cl
 - **One integration connection per provider per project:** A single `(project_id, provider)` pair is the v1 scope. Multi-account bindings per provider are out of scope.
 - **Integration credentials:** `TODOIST_CLIENT_ID`, `TODOIST_CLIENT_SECRET`, and `TODOIST_REDIRECT_URI` are configured via environment variables per deployment. Tokens are stored encrypted at rest; never logged or returned to clients.
 - **Polling-first sync:** Primary sync uses short-interval polling (60–120 s); Todoist webhooks and the incremental Sync API are deferred enhancements for latency-sensitive or high-volume deployments.
+- **Sub-plan task cap:** Each plan node targets 8–15 tasks; the system enforces a hard upper bound of **15 tasks per plan node** and repairs or rejects planner output that exceeds it.
+- **Sub-plan depth limit:** A maximum of **four plan levels** on any root-to-leaf path (root plan = level 1; deepest leaf plan = level 4). Deeper decomposition is blocked with a user-visible message suggesting scope narrowing in the SPEC.
+- **Planning latency:** Recursive sub-planning adds LLM round-trips proportional to tree breadth × depth; concurrent LLM calls are limited per project and PRD context is cached per session to bound cost and latency.
 
 ## Feature List
+
+Add under **Plan** phase:
+
+- **Hierarchical sub-plans:** When a plan is too large or cross-cutting for a single batch of tasks, the planner decomposes it into **child sub-plans**—each with its own epic, scoped markdown content, and inter-plan dependency edges (`depends_on_plans`). Sub-plans can recurse up to **four levels** deep (root = level 1). Each leaf plan node generates at most **~15 implementation tasks**, keeping batches actionable for both agent execution and human review.
+- **Complexity gate:** Before task generation, a pre-pass classifies the plan body to decide between **direct task generation** (plan is leaf-sized) and **sub-plan split** (plan is too broad). Heuristics include section count, estimated workstreams, and optional user or planner hints (`strategy: "tasks" | "sub_plans"`).
+- **Plan tree UX:** The Plan phase UI shows the plan hierarchy as **nested rows** (indentation, expand/collapse) with per-node status, task count per epic, and a cap indicator. Users can trigger **Plan Tasks** on any node; at max depth the split action is disabled with an explanatory tooltip. New child plans without tasks show a **Generate tasks** CTA; blocked nodes explain upstream sub-plan dependencies.
 
 Add under **Sketch** and **human-in-the-loop**:
 
@@ -84,6 +95,16 @@ Add under **Evaluate** phase:
 - **Provider-agnostic integration framework:** The integration data model (`integration_connections`, `integration_import_ledger`) is designed for reuse across future providers (Slack, GitHub Issues, email) without schema changes. Adding a provider requires a new `provider` value, a provider-specific sync service, and OAuth route handlers—no new tables.
 
 ## Technical Architecture
+
+**Plan sub-plan decomposition**
+
+- **Complexity gate:** Before full task generation, classify plan body (section count, estimated workstreams, user hints, or explicit planner JSON `strategy: "tasks" | "sub_plans"`) to decide leaf generation vs sub-plan split.
+- **Sub-plan creation:** When splitting, the planner returns **N sub-plan specs** (title, overview, scoped markdown slices, `depends_on_plans` between siblings/peers). Backend creates **child plan rows** + **child epics**, wires `parent_plan_id`, and increments depth. Each child plan's depth is validated against the max (4).
+- **Recursive task generation:** For each leaf plan node, run task generation with prompt context including truncated ancestor chain, sibling summaries, and PRD excerpt—extending the existing `plan.content` + `prdContext` pattern in `plan-task-generation.ts`. Task count is validated ≤ 15; over-cap output is repaired (merge/drop prompt) or rejected.
+- **Cross-epic dependencies:** Existing task/plan dependency mechanisms (`blocks` edges between tasks or epics) are used across sub-plans when the planner declares cross-subplan ordering; title/id normalization follows `planner-normalize.ts` patterns.
+- **Depth enforcement:** At max depth (level 4), force leaf task generation only with consolidated instructions; refuse further splits. If the agent cannot comply, surface a user-facing message suggesting scope narrowing in the SPEC.
+- **Partial failure:** Child plans created but task gen fails on one node leave consistent statuses; retry is per-node; `plan.updated` WebSocket events fire per successful node.
+- **Performance:** Limit concurrent LLM calls per project during recursive decomposition; cache PRD context string per session; sequence sub-plan creation to avoid conflicting epic IDs.
 
 **Execute inspect and live chat**
 
@@ -110,6 +131,8 @@ Add under **Evaluate** phase:
 
 ## Data Model
 
+**Plan hierarchy (sub-plans):** Extend the `plans` table with nullable **`parent_plan_id`** (`TEXT`, same `project_id` scope) referencing a parent plan's `plan_id`. Index on `(project_id, parent_plan_id)`. Depth is derived by walking the parent chain (or optionally stored/cached). Shared types (`Plan`, `PlanMetadata`) gain **`parentPlanId`** (nullable string), **`depth`** (integer, root = 1), and **`childPlanIds`** (computed array). `plan_versions` snapshots apply per plan node; splitting a plan into sub-plans creates version 1 for each child. Tasks continue storing `parentId` = owning epic; no change to task ID format required since each sub-plan keeps its own epic.
+
 **Global settings:** Extend `GlobalSettings` with optional **`preferredEditor`**: `'vscode' | 'cursor' | 'auto'` (default/auto behavior as implemented).
 
 **Chat log (file-backed, no core DB migration):** `.opensprint/active/<taskId>/chat-log.jsonl` — one JSON object per line with `id`, `timestamp`, `role` (`user` | `assistant`), `content`, `attempt` (execution attempt number). Undelivered user messages may be recorded when the agent completes before delivery (per product rules).
@@ -132,15 +155,31 @@ Add under **Evaluate** phase:
 
 ## API Contracts
 
-The statement that **no new REST endpoints are required for quality-gate diagnostics** remains true for merge/gate failures; **additional REST and WebSocket contracts** apply to Execute inspect/chat and PRD diff:
+The statement that **no new REST endpoints are required for quality-gate diagnostics** remains true for merge/gate failures; **additional REST and WebSocket contracts** apply to Plan hierarchy, Execute inspect/chat, and PRD diff:
+
+**Plan hierarchy endpoints:**
+
+- **`POST .../plans/:planId/plan-tasks`:** Existing endpoint; behavior expands to **orchestrate** sub-plan creation + nested task generation when the complexity gate triggers a split. For leaf-sized plans, behavior is unchanged (one epic, one batch of tasks). Returns task/sub-plan creation results.
+- **`GET /api/projects/:projectId/plans/:planId/hierarchy`:** Returns `{ planId, epicId, depth, parentPlanId?, children: [{ planId, epicId, depth, taskCount, status, children }] }` tree for UI rendering without N+1 calls.
+- **`POST .../plans/:planId/split-subplans`** *(optional, if split is separated from task gen):* Idempotent split suggestion application; returns created child plan IDs and their epic IDs.
+- **Plan list/detail payloads** include **`parentPlanId`** and **`depth`** so clients can render trees or filter by hierarchy level.
+- **Errors:** **`400`** with machine-readable code when depth limit (4) exceeded or task batch over cap (15) after repair attempts; **`409`** if split would orphan plan versions. Aligns with existing `AppError` patterns.
+
+**Execute inspect and chat endpoints:**
 
 - **`GET` / `PUT /api/global-settings`:** Include **`preferredEditor`** (`vscode` | `cursor` | `auto`); validate on write.
 - **`POST /api/projects/:projectId/tasks/:taskId/open-editor`:** Returns `{ worktreePath, editor, opened }` when the task is actively executing and the path exists; **404** if task/worktree missing, **409** if not in an executable in-progress state. *(Exact path prefix must match the product's `/api` routing convention.)*
 - **`GET .../tasks/:taskId/chat-history`:** Query `attempt` (optional); response `{ messages[], attempt, chatSupported }`.
 - **`GET .../tasks/:taskId/chat-support`:** Response `{ supported, backend, reason | null }` for gating the Chat tab.
+
+**PRD diff endpoints:**
+
 - **`GET /api/projects/:projectId/prd/proposed-diff?requestId=<hilRequestId>`:** Returns **`200`** with `{ requestId, fromContent, toContent, diff: { lines[], summary? } }` for PRD/SPEC approval UI; **`fromContent`** is current SPEC, **`toContent`** is proposed. **`404`** if the request is unknown or not a PRD-approval type.
 - **`GET /api/projects/:projectId/prd/diff?fromVersion=<versionId>&toVersion=<versionId|'current'>`:** Omit or set **`toVersion`** to **`current`** to compare a historical snapshot to the live SPEC. **`200`** body mirrors the proposed-diff shape plus `fromVersion` / `toVersion`. **`404`** if a version or stored snapshot is missing.
-- **WebSocket:** Client **`agent.chat.send`** `{ taskId, message }`; server **`agent.chat.received`**, **`agent.chat.response`**, **`agent.chat.unsupported`** with task and message identifiers as specified in the implementation plan. **`hil.request` / `hil.respond`** behavior stays the same for approve/reject; consumers **ignore unknown fields** for forward compatibility.
+
+**WebSocket events:**
+
+- Client **`agent.chat.send`** `{ taskId, message }`; server **`agent.chat.received`**, **`agent.chat.response`**, **`agent.chat.unsupported`** with task and message identifiers as specified in the implementation plan. **`hil.request` / `hil.respond`** behavior stays the same for approve/reject; consumers **ignore unknown fields** for forward compatibility.
 
 **Todoist integration endpoints** (under `/api/projects/:projectId/integrations/todoist`):
 
@@ -156,9 +195,12 @@ The statement that **no new REST endpoints are required for quality-gate diagnos
 
 | Category | Requirement |
 | -------- | ----------- |
+| Usability | Plan tree UI shows **nested rows** with expand/collapse, per-node status, task count per epic, and a cap indicator (**~15 max per batch**); split action is disabled at max depth with an explanatory tooltip; new child plans show a **Generate tasks** CTA. |
 | Usability | Execute **Output** and **Chat** share familiar Sketch/Plan chat patterns (bubbles, keyboard shortcuts, draft persistence, clear disabled states for non-running tasks and CLI backends). |
 | Usability | PRD diff UIs reuse one **DiffView**: **Rendered** default, **Raw** toggle, keyboard-accessible controls, and non-color-only cues (strikethrough, labels/ARIA) for additions and deletions. |
 | Usability | Integration settings surface clear connection status, **Sync Now** manual trigger, and actionable error/reconnect states; **Import existing open tasks** toggle prevents surprise mass imports on first connect. |
+| Reliability | Planner output exceeding **15 tasks** per node is **repaired** (merge/drop prompt) or hard-rejected; circular `depends_on_plans` edges are validated as a DAG before persistence. |
+| Reliability | Partial sub-plan tree failures (some child plans created, task generation fails on one node) leave consistent statuses and allow **per-node retry** without data loss; `plan.updated` WebSocket events fire per successful node. |
 | Reliability | User chat messages are **queued at turn boundaries**; **bounded** pending queue prevents unbounded memory; if the agent finishes before delivery, persisted history reflects **undelivered** user messages per product rules. |
 | Reliability | PRD diff responses remain consistent if the client toggles modes; large SPEC files may use pagination, caps, or virtualization to protect responsiveness. |
 | Reliability | Todoist sync is **idempotent**: `UNIQUE(project_id, provider, external_item_id)` prevents duplicate feedback; `pending_delete` ledger status with retry ensures no data loss when Todoist delete fails; crashes between insert and delete are reconciled on next cycle. |
@@ -169,6 +211,7 @@ The statement that **no new REST endpoints are required for quality-gate diagnos
 | Security / privacy | SPEC snapshots and proposal text used for diffs are **project-local** data; apply the same backup and access controls as SPEC.md and `.opensprint` metadata. |
 | Security / privacy | Todoist OAuth tokens are stored **encrypted at rest** in `integration_connections`; never logged or returned to API clients. Imported task content (titles, descriptions) may contain PII—apply the same retention and access controls as other feedback data. |
 | Theming / accessibility | Diff highlight colors respect **light/dark/system** themes with sufficient contrast; screen readers should be able to perceive added vs removed text. |
+| Theming / accessibility | Plan tree supports **keyboard navigation** (arrow keys for expand/collapse/focus), visible focus indicators, and non-color-only status cues for sub-plan states. |
 
 ## Open Questions
 

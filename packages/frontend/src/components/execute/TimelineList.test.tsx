@@ -223,6 +223,26 @@ describe("TimelineList", () => {
     expect(within(row).queryByText("Auth Epic")).not.toBeInTheDocument();
   });
 
+  it("waiting_to_merge row does not show self-improvement badge (merge queue chrome only)", () => {
+    const tasks = [
+      createMockTask({
+        id: "w",
+        kanbanColumn: "waiting_to_merge",
+        title: "SI merge task",
+        source: "self-improvement",
+      }),
+    ];
+    const plans = [createMockPlan("epic-1", "Auth Epic")];
+
+    renderWithProviders(
+      <TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} {...defaultListProps} />
+    );
+
+    const row = screen.getByTestId("timeline-row-w");
+    expect(within(row).queryByTestId("task-badge-self-improvement")).not.toBeInTheDocument();
+    expect(within(row).getByTestId("task-row-merge-description")).toBeInTheDocument();
+  });
+
   it("non-merge row still shows epic name", () => {
     const tasks = [
       createMockTask({

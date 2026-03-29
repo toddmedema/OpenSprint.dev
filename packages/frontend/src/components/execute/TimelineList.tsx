@@ -160,7 +160,7 @@ function TimelineRow({
           <span className="flex-1 min-w-0 truncate font-medium text-theme-text" title={task.title}>
             {task.title}
           </span>
-          {isSelfImprovementTask(task) && (
+          {isSelfImprovementTask(task) && task.kanbanColumn !== "waiting_to_merge" && (
             <span
               className="hidden md:inline shrink-0 text-xs font-medium text-theme-muted"
               title="Created by self-improvement"
