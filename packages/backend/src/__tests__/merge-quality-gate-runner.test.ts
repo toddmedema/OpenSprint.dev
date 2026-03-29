@@ -281,7 +281,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
           if (buildAttempts === 1) {
             throw makeCommandFailure(spec, options.cwd, {
               message: "Command failed with exit code 1",
-              stderr: "src/app.ts(1,18): error TS2307: Cannot find module 'path' or its corresponding type declarations.",
+              stderr: "Error: spawn tsc ENOENT",
             });
           }
           return makeCommandResult(spec, options.cwd);
@@ -552,6 +552,49 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
       })
     );
     expect(failure?.classificationReason).toContain("ambiguous");
+  });
+
+  it("classifies TS compiler diagnostics as quality-gate failures", async () => {
+    const worktreePath = await makeTempWorktree({ build: "tsc -b" });
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm run build") {
+          throw makeCommandFailure(spec, options.cwd, {
+            message: "Command failed with exit code 1",
+            stderr:
+              "src/app.ts(1,18): error TS2307: Cannot find module 'path' or its corresponding type declarations.",
+          });
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-ts2307",
+        branchName: "opensprint/os-ts2307",
+        baseBranch: "main",
+      },
+      {
+        commands: ["npm run build"],
+        runCommand,
+      }
+    );
+
+    expect(failure).toEqual(
+      expect.objectContaining({
+        category: "quality_gate",
+        classificationConfidence: "high",
+      })
+    );
+    expect(failure?.classificationReason).toContain("compiler/linter diagnostic");
   });
 
   it("fails precheck with high confidence when package-lock is missing for npm gates", async () => {

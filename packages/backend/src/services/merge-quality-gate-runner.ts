@@ -358,6 +358,18 @@ function classifyQualityGateFailureCategory(failure: {
   confidence: "high" | "low";
   reason: string;
 } {
+  const text = `${failure.reason}\n${failure.output}\n${failure.firstErrorLine}`;
+  if (
+    /\berror TS\d+\b/i.test(text) ||
+    /\b\d+:\d+\s+error\b/i.test(text) ||
+    /\.(ts|tsx|js|jsx|mts|cts|mjs|cjs)\b.*[:(]\d+([:,)]\d+)?/i.test(text)
+  ) {
+    return {
+      category: "quality_gate",
+      confidence: "high",
+      reason: "compiler/linter diagnostic indicates code-level gate failure",
+    };
+  }
   if (failure.code === "ENOENT" || failure.code === "EACCES") {
     return {
       category: "environment_setup",
@@ -372,7 +384,6 @@ function classifyQualityGateFailureCategory(failure: {
       reason: `shell exit code ${failure.exitCode}`,
     };
   }
-  const text = `${failure.reason}\n${failure.output}\n${failure.firstErrorLine}`;
   if (QUALITY_GATE_ENV_FINGERPRINTS.some((fingerprint) => fingerprint.test(text))) {
     return {
       category: "environment_setup",
