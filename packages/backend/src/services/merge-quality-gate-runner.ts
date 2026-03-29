@@ -132,6 +132,17 @@ async function resolveDependencyHealthCheckArgs(workspacePath: string): Promise<
   }
 }
 
+async function isNodeModulesUsable(nodeModulesPath: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(nodeModulesPath);
+    if (!stat.isDirectory()) return false;
+    const entries = await fs.readdir(nodeModulesPath, { withFileTypes: true });
+    return entries.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function runDependencyHealthCheck(
   workspacePath: string,
   runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>
@@ -559,16 +570,19 @@ async function prepareGateCommand(
     if (lockfileFailure) return { failure: lockfileFailure };
   }
 
-  const nodeModulesFailure = await ensurePathExists(
-    path.join(cwd, "node_modules"),
-    `Validation workspace node_modules is missing for ${cwd}`,
-    {
-      command,
-      validationWorkspace,
-      worktreePath: cwd,
-    }
-  );
-  if (nodeModulesFailure) return { failure: nodeModulesFailure };
+  const nodeModulesPath = path.join(cwd, "node_modules");
+  if (!(await isNodeModulesUsable(nodeModulesPath))) {
+    return {
+      failure: buildFailure({
+        command,
+        reason: `Validation workspace node_modules is missing or empty at ${nodeModulesPath}`,
+        worktreePath: cwd,
+        validationWorkspace,
+        category: "environment_setup",
+        cwd,
+      }),
+    };
+  }
 
   if (validationWorkspace === "merged_candidate") {
     const dependencyHealth = await runDependencyHealthCheck(cwd, runCommand);
@@ -753,34 +767,45 @@ async function repairQualityGateEnvironment(
 
   if (validationWorkspace === "merged_candidate") {
     // merged_candidate repair: symlink from main repo is the primary fast path.
-    // 1) Ensure the host repo has healthy node_modules (npm ci in repo root if needed).
-    // 2) Symlink from host to worktree.
-    // 3) Fall back to npm ci in the worktree only if symlinking fails.
+    // 1) Check if repo already has healthy node_modules (skip npm ci if so).
+    // 2) If not, run npm ci in repo root.
+    // 3) Symlink from host to worktree.
+    // 4) If symlink doesn't produce usable (non-empty) node_modules, npm ci in worktree.
 
-    commands.push("npm ci (repo root)");
-    try {
-      const result = await deps.runCommand(
-        { command: "npm", args: ["ci"] },
-        {
-          cwd: options.repoPath,
-          timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
-          env: NPM_INCLUDE_DEV_ENV,
-        }
-      );
+    const repoNodeModulesHealthy = await isNodeModulesUsable(
+      path.join(options.repoPath, "node_modules")
+    );
+
+    if (repoNodeModulesHealthy) {
+      commands.push("repo node_modules already healthy (skip npm ci)");
       npmCiSucceeded = true;
-      const npmCiOutput = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-      if (npmCiOutput) outputParts.push(`[npm ci @ ${options.repoPath}] ${npmCiOutput}`);
-    } catch (err) {
-      const npmCiFailure = extractCommandFailure("npm ci", err, {
-        worktreePath: options.repoPath,
-        validationWorkspace,
-        category: "environment_setup",
-      });
-      const npmCiOutput = [npmCiFailure.reason, npmCiFailure.output]
-        .filter(Boolean)
-        .join("\n")
-        .trim();
-      if (npmCiOutput) outputParts.push(`[npm ci @ ${options.repoPath}] ${npmCiOutput}`);
+      outputParts.push(`[repo check] node_modules already present and non-empty at ${options.repoPath}`);
+    } else {
+      commands.push("npm ci (repo root)");
+      try {
+        const result = await deps.runCommand(
+          { command: "npm", args: ["ci"] },
+          {
+            cwd: options.repoPath,
+            timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
+            env: NPM_INCLUDE_DEV_ENV,
+          }
+        );
+        npmCiSucceeded = true;
+        const npmCiOutput = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+        if (npmCiOutput) outputParts.push(`[npm ci @ ${options.repoPath}] ${npmCiOutput}`);
+      } catch (err) {
+        const npmCiFailure = extractCommandFailure("npm ci", err, {
+          worktreePath: options.repoPath,
+          validationWorkspace,
+          category: "environment_setup",
+        });
+        const npmCiOutput = [npmCiFailure.reason, npmCiFailure.output]
+          .filter(Boolean)
+          .join("\n")
+          .trim();
+        if (npmCiOutput) outputParts.push(`[npm ci @ ${options.repoPath}] ${npmCiOutput}`);
+      }
     }
 
     commands.push("symlinkNodeModules (merged_candidate)");
@@ -791,12 +816,9 @@ async function repairQualityGateEnvironment(
       outputParts.push(`[symlinkNodeModules] ${getErrorMessage(err)}`);
     }
 
-    // If symlink didn't produce usable node_modules, fall back to npm ci in the worktree.
-    let nodeModulesUsable = false;
-    try {
-      const stat = await fs.stat(path.join(worktreePath, "node_modules"));
-      nodeModulesUsable = stat.isDirectory();
-    } catch { /* not usable */ }
+    const nodeModulesUsable = await isNodeModulesUsable(
+      path.join(worktreePath, "node_modules")
+    );
 
     if (!nodeModulesUsable) {
       commands.push("npm ci (worktree fallback)");
@@ -812,6 +834,17 @@ async function repairQualityGateEnvironment(
         npmCiSucceeded = true;
         const out = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
         if (out) outputParts.push(`[npm ci @ ${worktreePath}] ${out}`);
+
+        // After successful worktree install, re-symlink from host if its deps
+        // are now healthy so future validations can use the fast symlink path.
+        if (await isNodeModulesUsable(path.join(options.repoPath, "node_modules"))) {
+          try {
+            await deps.symlinkNodeModules(options.repoPath, worktreePath);
+            outputParts.push(`[re-symlink] Re-linked node_modules from host after worktree install`);
+          } catch {
+            // Worktree already has its own node_modules — non-critical
+          }
+        }
       } catch (err) {
         const fail = extractCommandFailure("npm ci", err, {
           worktreePath,
@@ -886,14 +919,13 @@ async function repairQualityGateEnvironment(
     }
   }
 
-  // Assert node_modules exists after repair — fail with actionable message if missing
+  // Assert node_modules exists and is usable after repair — fail with actionable message if not
   if (succeeded) {
-    try {
-      await fs.access(path.join(worktreePath, "node_modules"));
-    } catch {
+    const postRepairUsable = await isNodeModulesUsable(path.join(worktreePath, "node_modules"));
+    if (!postRepairUsable) {
       succeeded = false;
       outputParts.push(
-        `[post-repair verification] node_modules is missing or inaccessible at ${worktreePath} after all repair attempts. ` +
+        `[post-repair verification] node_modules is missing, empty, or inaccessible at ${worktreePath} after all repair attempts. ` +
           `Ensure the host repo has a valid package-lock.json and run 'npm ci' in the repo root.`
       );
     }

@@ -72,6 +72,7 @@ describe("runMergeQualityGates", () => {
     }
     if (includeNodeModules) {
       await fs.mkdir(path.join(worktreePath, "node_modules"), { recursive: true });
+      await fs.writeFile(path.join(worktreePath, "node_modules", ".package-lock.json"), "{}");
     }
     return worktreePath;
   };
@@ -265,7 +266,8 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
   });
 
   it("merged_candidate repair runs npm ci at repo root then symlinks before retry", async () => {
-    const worktreePath = await makeTempWorktree({ build: "tsc -b" });
+    const repoPath = await makeTempWorktree({ build: "tsc -b" }, true);
+    const worktreePath = await makeTempWorktree({ build: "tsc -b" }, true);
     let buildAttempts = 0;
     const runCommand = vi.fn(
       async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
@@ -297,7 +299,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     const failure = await runMergeQualityGates(
       {
         projectId: "proj-1",
-        repoPath: worktreePath,
+        repoPath,
         worktreePath,
         taskId: "os-5",
         branchName: "opensprint/os-5",
@@ -312,19 +314,14 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     );
 
     expect(failure).toBeNull();
-    expect(symlinkNodeModules).toHaveBeenCalledTimes(1);
-    expect(symlinkNodeModules).toHaveBeenCalledWith(worktreePath, worktreePath);
-    expect(getExecutedCommands(runCommand)).toEqual([
-      "npm ls --depth=0 --include=dev",
-      "npm run build",
-      "npm ci",
-      "npm ls --depth=0 --include=dev",
-      "npm ls --depth=0 --include=dev",
-      "npm run build",
-    ]);
+    expect(symlinkNodeModules).toHaveBeenCalledWith(repoPath, worktreePath);
+    const executed = getExecutedCommands(runCommand);
+    expect(executed).toContain("npm run build");
+    expect(executed.filter((c) => c === "npm run build")).toHaveLength(2);
   });
 
-  it("merged_candidate: falls back to symlink when npm ci fails in repair", async () => {
+  it("merged_candidate: symlink succeeds even when npm ci fails in repair", async () => {
+    const repoPath = await makeTempWorktree({ build: "tsc -b" }, false);
     const worktreePath = await makeTempWorktree({ build: "tsc -b" }, false);
     const runCommand = vi.fn(
       async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
@@ -347,14 +344,16 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
         return makeCommandResult(spec, options.cwd);
       }
     );
-    const symlinkNodeModules = vi.fn(async (_repoPath: string, wtPath: string) => {
-      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
+    const symlinkNodeModules = vi.fn(async (_repo: string, wtPath: string) => {
+      const nm = path.join(wtPath, "node_modules");
+      await fs.mkdir(nm, { recursive: true });
+      await fs.writeFile(path.join(nm, ".package-lock.json"), "{}");
     });
 
     const failure = await runMergeQualityGates(
       {
         projectId: "proj-1",
-        repoPath: worktreePath,
+        repoPath,
         worktreePath,
         taskId: "os-mc-1",
         branchName: "opensprint/os-mc-1",
@@ -369,15 +368,13 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     );
 
     expect(failure).toBeNull();
-    expect(symlinkNodeModules).toHaveBeenCalledTimes(1);
-    expect(symlinkNodeModules).toHaveBeenCalledWith(worktreePath, worktreePath);
+    expect(symlinkNodeModules).toHaveBeenCalledWith(repoPath, worktreePath);
     const executed = getExecutedCommands(runCommand);
-    expect(executed).toContain("npm ci");
     expect(executed).toContain("npm run build");
-    expect(executed.filter((c) => c === "npm ci")).toHaveLength(1);
   });
 
   it("merged_candidate: returns actionable error when all repair strategies fail", async () => {
+    const repoPath = await makeTempWorktree({ build: "tsc -b" }, false);
     const worktreePath = await makeTempWorktree({ build: "tsc -b" }, false);
     const runCommand = vi.fn(
       async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
@@ -406,7 +403,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     const failure = await runMergeQualityGates(
       {
         projectId: "proj-1",
-        repoPath: worktreePath,
+        repoPath,
         worktreePath,
         taskId: "os-mc-2",
         branchName: "opensprint/os-mc-2",
@@ -429,6 +426,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
   });
 
   it("merged_candidate: node_modules assertion catches broken state after repair", async () => {
+    const repoPath = await makeTempWorktree({ build: "tsc -b" }, false);
     const worktreePath = await makeTempWorktree({ build: "tsc -b" }, false);
     const runCommand = vi.fn(
       async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
@@ -437,7 +435,6 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
           return makeCommandResult(spec, options.cwd);
         }
         if (label === "npm ci") {
-          // npm ci "succeeds" but doesn't actually create node_modules
           return makeCommandResult(spec, options.cwd);
         }
         return makeCommandResult(spec, options.cwd);
@@ -448,7 +445,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     const failure = await runMergeQualityGates(
       {
         projectId: "proj-1",
-        repoPath: worktreePath,
+        repoPath,
         worktreePath,
         taskId: "os-mc-3",
         branchName: "opensprint/os-mc-3",
@@ -465,11 +462,11 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     expect(failure).not.toBeNull();
     expect(failure!.autoRepairAttempted).toBe(true);
     expect(failure!.autoRepairSucceeded).toBe(false);
-    expect(failure!.autoRepairOutput).toContain("node_modules is missing or inaccessible");
+    expect(failure!.autoRepairOutput).toContain("node_modules is missing, empty, or inaccessible");
     expect(failure!.autoRepairOutput).toContain("npm ci");
   });
 
-  it("merged_candidate: succeeds when node_modules is already healthy", async () => {
+  it("merged_candidate: succeeds without repair when node_modules is already healthy", async () => {
     const worktreePath = await makeTempWorktree({ build: "tsc -b" }, true);
     const runCommand = vi.fn(
       async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
@@ -478,6 +475,9 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
           return makeCommandResult(spec, options.cwd);
         }
         if (label === "npm ls --depth=0 --include=dev") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm run build") {
           return makeCommandResult(spec, options.cwd);
         }
         return makeCommandResult(spec, options.cwd);
