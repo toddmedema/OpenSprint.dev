@@ -179,6 +179,51 @@ describe("schema", () => {
     }
   });
 
+  it("Postgres schema includes parent_plan_id column and index on plans", () => {
+    const sql = getSchemaSql("postgres");
+    const plansMatch = sql.match(/CREATE TABLE IF NOT EXISTS plans\s*\([^;]+\)/);
+    expect(plansMatch?.[0]).toContain("parent_plan_id");
+    expect(sql).toContain("ALTER TABLE plans ADD COLUMN IF NOT EXISTS parent_plan_id TEXT");
+    expect(sql).toContain("CREATE INDEX IF NOT EXISTS idx_plans_parent ON plans(project_id, parent_plan_id)");
+  });
+
+  it("SQLite schema includes parent_plan_id column and index on plans", () => {
+    const sql = getSchemaSql("sqlite");
+    const plansMatch = sql.match(/CREATE TABLE IF NOT EXISTS plans\s*\([^;]+\)/);
+    expect(plansMatch?.[0]).toContain("parent_plan_id");
+    expect(sql).toContain("ALTER TABLE plans ADD COLUMN IF NOT EXISTS parent_plan_id TEXT");
+    expect(sql).toContain("CREATE INDEX IF NOT EXISTS idx_plans_parent ON plans(project_id, parent_plan_id)");
+  });
+
+  it("runSchema emits parent_plan_id ALTER and index for both dialects", async () => {
+    for (const dialect of ["postgres", "sqlite"] as const) {
+      const statements: string[] = [];
+      await runSchema(
+        {
+          query: async (sql: string) => {
+            statements.push(sql);
+            if (sql.startsWith("PRAGMA table_info("))
+              return [{ name: "project_id" }, { name: "plan_id" }];
+            return [];
+          },
+        },
+        dialect
+      );
+      expect(statements.some((s) => s.includes("idx_plans_parent"))).toBe(true);
+      if (dialect === "postgres") {
+        expect(
+          statements.some((s) => s.includes("ADD COLUMN IF NOT EXISTS parent_plan_id"))
+        ).toBe(true);
+      } else {
+        expect(
+          statements.some((s) =>
+            s.includes("ALTER TABLE plans ADD COLUMN parent_plan_id")
+          )
+        ).toBe(true);
+      }
+    }
+  });
+
   it("Postgres and SQLite schemas include prd_snapshots table", () => {
     const pg = getSchemaSql("postgres");
     const sqlite = getSchemaSql("sqlite");

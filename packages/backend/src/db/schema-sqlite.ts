@@ -167,10 +167,12 @@ CREATE TABLE IF NOT EXISTS plans (
     updated_at                      TEXT NOT NULL,
     current_version_number          INTEGER NOT NULL DEFAULT 1,
     last_executed_version_number    INTEGER,
+    parent_plan_id                  TEXT,
     PRIMARY KEY (project_id, plan_id)
 );
 CREATE INDEX IF NOT EXISTS idx_plans_project_id ON plans(project_id);
 CREATE INDEX IF NOT EXISTS idx_plans_project_epic ON plans(project_id, epic_id);
+CREATE INDEX IF NOT EXISTS idx_plans_parent ON plans(project_id, parent_plan_id);
 
 CREATE TABLE IF NOT EXISTS auditor_runs (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -335,5 +337,6 @@ export function getSqliteAlterStatements(): Array<{ table: string; column: strin
       def: "TEXT",
     },
     { table: "orchestrator_counters", column: "dispatch_paused_reason", def: "TEXT" },
+    { table: "plans", column: "parent_plan_id", def: "TEXT" },
   ];
 }
