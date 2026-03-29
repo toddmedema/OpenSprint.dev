@@ -9,16 +9,21 @@ export interface AgentProviderCliBannerProps {
 }
 
 /**
- * Warning + optional install for agent CLIs. Cursor supports in-app install; Claude is docs-only.
+ * Warning + optional install for agent CLIs. Shows manual install instructions
+ * instead of piping remote scripts to avoid supply-chain compromise risk.
  */
 export function AgentProviderCliBanner({
   kind,
   onInstallAttemptComplete,
 }: AgentProviderCliBannerProps) {
-  const [installing, setInstalling] = useState(false);
-  const [installResult, setInstallResult] = useState<{ success: boolean; message: string } | null>(
-    null
-  );
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [instructions, setInstructions] = useState<{
+    installUrl: string;
+    manualCommand: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   if (kind === "cursor") {
     return (
@@ -34,36 +39,76 @@ export function AgentProviderCliBanner({
         <button
           type="button"
           className="btn btn-primary text-sm"
-          disabled={installing}
+          disabled={loading}
           onClick={async () => {
-            setInstallResult(null);
-            setInstalling(true);
+            if (showInstructions && instructions) {
+              setShowInstructions(false);
+              return;
+            }
+            setError(null);
+            setLoading(true);
             try {
               const data = await api.env.installCursorCli();
-              setInstallResult({
-                success: data.success,
-                message: data.message ?? (data.success ? "Install finished." : "Install failed."),
+              setInstructions({
+                installUrl: data.installUrl,
+                manualCommand: data.manualCommand,
               });
+              setShowInstructions(true);
             } catch (err) {
-              setInstallResult({
-                success: false,
-                message: err instanceof Error ? err.message : "Install request failed.",
-              });
+              setError(err instanceof Error ? err.message : "Failed to load install instructions.");
             } finally {
-              setInstalling(false);
+              setLoading(false);
               onInstallAttemptComplete?.();
             }
           }}
           data-testid="install-cursor-cli-btn"
         >
-          {installing ? "Installing…" : "Install Cursor CLI"}
+          {loading
+            ? "Loading…"
+            : showInstructions
+              ? "Hide Install Instructions"
+              : "Show Install Instructions"}
         </button>
-        {installResult && (
-          <p
-            className={`text-sm mt-2 ${installResult.success ? "text-theme-success-text" : "text-theme-error-text"}`}
-          >
-            {installResult.message}
-          </p>
+        {error && (
+          <p className="text-sm mt-2 text-theme-error-text">{error}</p>
+        )}
+        {showInstructions && instructions && (
+          <div className="mt-3 space-y-2" data-testid="cursor-cli-install-instructions">
+            <p className="text-sm text-theme-warning-text">
+              Run this command in your terminal after reviewing it:
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="block flex-1 p-2 rounded bg-theme-bg-secondary text-xs font-mono break-all select-all">
+                {instructions.manualCommand}
+              </code>
+              <button
+                type="button"
+                className="btn btn-secondary text-xs px-2 py-1 shrink-0"
+                data-testid="copy-cursor-cli-cmd-btn"
+                onClick={() => {
+                  navigator.clipboard.writeText(instructions.manualCommand).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  });
+                }}
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <p className="text-xs text-theme-text-secondary">
+              Or visit{" "}
+              <a
+                href={instructions.installUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:opacity-80"
+                data-testid="cursor-cli-install-link"
+              >
+                {instructions.installUrl}
+              </a>{" "}
+              for official install instructions.
+            </p>
+          </div>
         )}
       </div>
     );

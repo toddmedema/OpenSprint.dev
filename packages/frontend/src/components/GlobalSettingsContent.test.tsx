@@ -70,7 +70,13 @@ describe("GlobalSettingsContent", () => {
       cursorCli: true,
       ollamaCli: true,
     });
-    mockInstallCursorCli.mockResolvedValue({ success: true, message: "Install finished." });
+    mockInstallCursorCli.mockResolvedValue({
+      success: true,
+      message: "Review and run the install command below in your terminal.",
+      installUrl: "https://cursor.com/install",
+      manualCommand: 'curl -fsSL "https://cursor.com/install" | bash',
+      platform: "darwin",
+    });
     mockModelsList.mockResolvedValue([{ id: "gpt-4", label: "GPT-4" }]);
     mockGlobalSettingsGet.mockResolvedValue({
       databaseUrl: "postgresql://user:***@localhost:5432/opensprint",
@@ -736,24 +742,18 @@ describe("GlobalSettingsContent", () => {
     );
   });
 
-  it("refreshes Cursor CLI prerequisite state after install succeeds", async () => {
+  it("shows manual install instructions when Cursor CLI install button is clicked", async () => {
     mockGlobalSettingsGet.mockResolvedValue({
       databaseUrl: "postgresql://user:***@localhost:5432/opensprint",
       apiKeys: {
         CURSOR_API_KEY: [{ id: "cursor-1", masked: "••••••••" }],
       },
     });
-    mockEnvGetKeys
-      .mockResolvedValueOnce({
-        claudeCli: true,
-        cursorCli: false,
-        ollamaCli: true,
-      })
-      .mockResolvedValueOnce({
-        claudeCli: true,
-        cursorCli: true,
-        ollamaCli: true,
-      });
+    mockEnvGetKeys.mockResolvedValue({
+      claudeCli: true,
+      cursorCli: false,
+      ollamaCli: true,
+    });
 
     renderGlobalSettingsContent();
     await screen.findByTestId("api-keys-section-wrapper");
@@ -779,10 +779,9 @@ describe("GlobalSettingsContent", () => {
 
     await waitFor(() => {
       expect(mockInstallCursorCli).toHaveBeenCalledTimes(1);
-      expect(mockEnvGetKeys).toHaveBeenCalledTimes(2);
     });
     await waitFor(() => {
-      expect(screen.queryAllByTestId("install-cursor-cli-btn")).toHaveLength(0);
+      expect(screen.getAllByTestId("cursor-cli-install-instructions").length).toBeGreaterThanOrEqual(1);
     });
   });
 });

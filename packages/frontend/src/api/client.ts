@@ -295,7 +295,13 @@ export const api = {
         useCustomCli: boolean;
       }>("/env/keys"),
     installCursorCli: () =>
-      request<{ success: boolean; message?: string }>("/env/cursor-cli-install", {
+      request<{
+        success: boolean;
+        message: string;
+        installUrl: string;
+        manualCommand: string;
+        platform: string;
+      }>("/env/cursor-cli-install", {
         method: "POST",
       }),
     getGlobalStatus: () =>

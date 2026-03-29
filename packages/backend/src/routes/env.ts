@@ -11,7 +11,7 @@ import path from "path";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile, access } from "node:fs/promises";
 import { constants } from "node:fs";
-import { exec, execFile, type ExecException } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { BackendPlatform } from "@opensprint/shared";
 import type {
@@ -283,76 +283,39 @@ envRouter.get(
   })
 );
 
-/** Cursor CLI install script URLs (official Cursor install). */
+/** Official Cursor install page URLs. */
 const CURSOR_CLI_INSTALL_UNIX = "https://cursor.com/install";
 const CURSOR_CLI_INSTALL_WIN = "https://cursor.com/install?win32=true";
 
-// POST /env/cursor-cli-install — Run the official Cursor CLI install script (user-initiated).
+// POST /env/cursor-cli-install — Return manual install instructions instead of
+// piping remote scripts (curl|bash / irm|iex) which is RCE if the CDN is compromised.
 envRouter.post(
   "/cursor-cli-install",
   requireLocalSessionAuth,
   wrapAsync(async (_req, res) => {
     const isWin = process.platform === "win32";
-    return new Promise<void>((resolve) => {
-      const timeout = 120_000;
-      if (isWin) {
-        const child = exec(
-          `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm '${CURSOR_CLI_INSTALL_WIN}' | iex"`,
-          { timeout, shell: "powershell" },
-          (err: ExecException | null, stdout: string, stderr: string) => {
-            if (err) {
-              const msg = [stdout, stderr].filter(Boolean).join("\n").trim() || err.message;
-              res.status(500).json({
-                data: { success: false, message: msg || "Install script failed." },
-              } as ApiResponse<{ success: boolean; message?: string }>);
-            } else {
-              res.json({
-                data: {
-                  success: true,
-                  message:
-                    "Cursor CLI install finished. Restart your terminal or Open Sprint so the agent command is available.",
-                },
-              } as ApiResponse<{ success: boolean; message?: string }>);
-            }
-            resolve();
-          }
-        );
-        child.stdout?.on("data", (d) =>
-          log.info("cursor-cli-install stdout", { chunk: d?.toString().slice(0, 200) })
-        );
-        child.stderr?.on("data", (d) =>
-          log.warn("cursor-cli-install stderr", { chunk: d?.toString().slice(0, 200) })
-        );
-      } else {
-        const child = exec(
-          `curl -fsS "${CURSOR_CLI_INSTALL_UNIX}" | bash`,
-          { timeout, shell: "/bin/bash" },
-          (err: ExecException | null, stdout: string, stderr: string) => {
-            if (err) {
-              const msg = [stdout, stderr].filter(Boolean).join("\n").trim() || err.message;
-              res.status(500).json({
-                data: { success: false, message: msg || "Install script failed." },
-              } as ApiResponse<{ success: boolean; message?: string }>);
-            } else {
-              res.json({
-                data: {
-                  success: true,
-                  message:
-                    "Cursor CLI install finished. Restart your terminal or Open Sprint so the agent command is available.",
-                },
-              } as ApiResponse<{ success: boolean; message?: string }>);
-            }
-            resolve();
-          }
-        );
-        child.stdout?.on("data", (d) =>
-          log.info("cursor-cli-install stdout", { chunk: d?.toString().slice(0, 200) })
-        );
-        child.stderr?.on("data", (d) =>
-          log.warn("cursor-cli-install stderr", { chunk: d?.toString().slice(0, 200) })
-        );
-      }
-    });
+    const installUrl = isWin ? CURSOR_CLI_INSTALL_WIN : CURSOR_CLI_INSTALL_UNIX;
+    const manualCommand = isWin
+      ? `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm '${CURSOR_CLI_INSTALL_WIN}' | iex"`
+      : `curl -fsSL "${CURSOR_CLI_INSTALL_UNIX}" | bash`;
+    const platform = process.platform;
+
+    res.json({
+      data: {
+        success: true,
+        message:
+          "Review and run the install command below in your terminal, or visit the install page directly. Restart your terminal or Open Sprint after installation so the agent command is available.",
+        installUrl,
+        manualCommand,
+        platform,
+      },
+    } as ApiResponse<{
+      success: boolean;
+      message: string;
+      installUrl: string;
+      manualCommand: string;
+      platform: string;
+    }>);
   })
 );
 

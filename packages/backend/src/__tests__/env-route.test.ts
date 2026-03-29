@@ -406,12 +406,47 @@ describe("Env API", () => {
   });
 
   describe("POST /env/cursor-cli-install", () => {
-    it("returns 200 with success and message when install script completes", async () => {
+    it("returns 200 with install instructions instead of executing remote scripts", async () => {
       const res = await withLocalSessionAuth(request(app).post(`${API_PREFIX}/env/cursor-cli-install`));
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
       expect(res.body.data.success).toBe(true);
       expect(typeof res.body.data.message).toBe("string");
+      expect(res.body.data.message).toMatch(/review|run|terminal/i);
+    });
+
+    it("returns installUrl and manualCommand for the current platform", async () => {
+      const res = await withLocalSessionAuth(request(app).post(`${API_PREFIX}/env/cursor-cli-install`));
+      expect(res.status).toBe(200);
+      const { installUrl, manualCommand, platform } = res.body.data;
+      expect(typeof installUrl).toBe("string");
+      expect(installUrl).toMatch(/^https:\/\/cursor\.com\/install/);
+      expect(typeof manualCommand).toBe("string");
+      expect(manualCommand.length).toBeGreaterThan(0);
+      expect(typeof platform).toBe("string");
+      expect(platform).toBe(process.platform);
+    });
+
+    it("does not execute child processes (no curl|bash or irm|iex)", async () => {
+      const { exec: mockExec } = await import("node:child_process");
+      const execSpy = vi.mocked(mockExec);
+      execSpy.mockClear();
+
+      await withLocalSessionAuth(request(app).post(`${API_PREFIX}/env/cursor-cli-install`));
+
+      for (const call of execSpy.mock.calls) {
+        const cmd = String(call[0]);
+        expect(cmd).not.toMatch(/curl.*\|.*bash/);
+        expect(cmd).not.toMatch(/irm.*\|.*iex/);
+      }
+    });
+
+    it("returns unix-style command on non-win32 platforms", async () => {
+      const res = await withLocalSessionAuth(request(app).post(`${API_PREFIX}/env/cursor-cli-install`));
+      if (process.platform !== "win32") {
+        expect(res.body.data.manualCommand).toContain("curl");
+        expect(res.body.data.installUrl).toBe("https://cursor.com/install");
+      }
     });
   });
 
