@@ -325,4 +325,21 @@ describe("OrchestratorDispatchService", () => {
     expect(executeCodingPhase).not.toHaveBeenCalled();
     expect(performMergeRetry).not.toHaveBeenCalled();
   });
+
+  it("skips dispatch when a slot already exists for the task", async () => {
+    const task = baseTask("os-slotted");
+    state.slots.set(task.id, {
+      taskId: task.id,
+      taskTitle: task.title ?? null,
+      branchName: `opensprint/${task.id}`,
+      attempt: 1,
+      worktreePath: "/tmp/repo/.worktrees/os-slotted",
+    } as DispatchSlotLike);
+
+    await service.dispatchTask(projectId, repoPath, task, 0);
+
+    expect(taskStore.update).not.toHaveBeenCalled();
+    expect(executeCodingPhase).not.toHaveBeenCalled();
+    expect(performMergeRetry).not.toHaveBeenCalled();
+  });
 });

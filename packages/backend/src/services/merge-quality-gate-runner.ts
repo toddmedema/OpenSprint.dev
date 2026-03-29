@@ -11,7 +11,11 @@ import {
 } from "../utils/command-runner.js";
 import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
 import { BranchManager } from "./branch-manager.js";
-import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
+import {
+  type MergeQualityGateExecutionPlanEntry,
+  getMergeQualityGateExecutionPlan,
+  type MergeQualityGateProfile,
+} from "./merge-quality-gates.js";
 
 const log = createLogger("merge-quality-gate-runner");
 const QUALITY_GATE_FAILURE_OUTPUT_LIMIT = 4000;
@@ -52,6 +56,7 @@ export interface MergeQualityGateRunOptions {
   branchName: string;
   baseBranch: string;
   validationWorkspace?: "baseline" | "merged_candidate" | "task_worktree" | "repo_root";
+  qualityGateProfile?: MergeQualityGateProfile;
 }
 
 export interface MergeQualityGateFailure {
@@ -953,12 +958,14 @@ async function executePreparedGate(
   prepared: PreparedGateCommand,
   options: MergeQualityGateRunOptions,
   validationWorkspace: MergeQualityGateFailure["validationWorkspace"],
-  runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>
+  runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>,
+  commandEnv?: NodeJS.ProcessEnv
 ): Promise<MergeQualityGateFailure | null> {
   try {
     await runCommand(prepared.spec, {
       cwd: options.worktreePath,
       timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
+      ...(commandEnv ? { env: commandEnv } : {}),
     });
     return null;
   } catch (err) {
@@ -969,6 +976,22 @@ async function executePreparedGate(
   }
 }
 
+function resolveMergeGateIntegrationWorkerCap(): number {
+  const parsed = Number.parseInt(
+    process.env.OPENSPRINT_MERGE_GATE_INTEGRATION_MAX_WORKERS ?? "",
+    10
+  );
+  if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
+  return 2;
+}
+
+function buildMergeGateRunId(options: MergeQualityGateRunOptions): string {
+  const seed = `${options.projectId}-${options.taskId}-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+  return `mergegate_${seed.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
 export async function runMergeQualityGates(
   options: MergeQualityGateRunOptions,
   deps: MergeQualityGateRunnerDeps = {}
@@ -976,7 +999,14 @@ export async function runMergeQualityGates(
   if (process.env.NODE_ENV === "test") return null;
 
   const runCommand = deps.runCommand ?? runCommandDefault;
-  const commands = deps.commands ?? getMergeQualityGateCommands();
+  const qualityGateProfile = options.qualityGateProfile ?? "deterministic";
+  const executionPlan: MergeQualityGateExecutionPlanEntry[] = deps.commands
+    ? deps.commands.map((command) => ({ command }))
+    : getMergeQualityGateExecutionPlan({
+        profile: qualityGateProfile,
+        testRunId: buildMergeGateRunId(options),
+        integrationWorkerCap: resolveMergeGateIntegrationWorkerCap(),
+      });
   const validationWorkspace =
     options.validationWorkspace ??
     (options.worktreePath === options.repoPath ? "repo_root" : "task_worktree");
@@ -987,7 +1017,9 @@ export async function runMergeQualityGates(
       await branchManager.symlinkNodeModules(repoPath, wtPath);
     });
 
-  for (const command of commands) {
+  for (const gate of executionPlan) {
+    const command = gate.command;
+    const commandEnv = gate.env;
     const preparedOrFailure = await prepareGateCommand(
       options,
       command,
@@ -1035,7 +1067,8 @@ export async function runMergeQualityGates(
         retryPreparedOrFailure.prepared,
         { ...options, worktreePath: autoRepair.worktreePath },
         validationWorkspace,
-        runCommand
+        runCommand,
+        commandEnv
       );
       if (retryFailure) {
         return {
@@ -1060,7 +1093,8 @@ export async function runMergeQualityGates(
       preparedOrFailure.prepared,
       options,
       validationWorkspace,
-      runCommand
+      runCommand,
+      commandEnv
     );
     if (!initialFailure) continue;
     if (initialFailure.category !== "environment_setup") {
@@ -1107,7 +1141,8 @@ export async function runMergeQualityGates(
       retryPreparedOrFailure.prepared,
       { ...options, worktreePath: autoRepair.worktreePath },
       validationWorkspace,
-      runCommand
+      runCommand,
+      commandEnv
     );
     if (!retryFailure) continue;
 

@@ -49,7 +49,14 @@ const parallelism =
   typeof os.availableParallelism === "function" ? os.availableParallelism() : os.cpus().length;
 
 export const unitWorkers = Math.max(1, Math.ceil(parallelism * 0.75));
-export const integrationWorkers = Math.min(3, Math.max(1, Math.floor(parallelism / 3) || 1));
+const envIntegrationWorkersRaw = process.env.OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS;
+const envIntegrationWorkers = envIntegrationWorkersRaw
+  ? Number.parseInt(envIntegrationWorkersRaw, 10)
+  : Number.NaN;
+export const integrationWorkers =
+  Number.isFinite(envIntegrationWorkers) && envIntegrationWorkers > 0
+    ? Math.floor(envIntegrationWorkers)
+    : Math.min(3, Math.max(1, Math.floor(parallelism / 3) || 1));
 
 export const backendUnitExclude = [
   ...backendIntegrationInclude,

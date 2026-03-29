@@ -193,7 +193,6 @@ CREATE TABLE IF NOT EXISTS plans (
 );
 CREATE INDEX IF NOT EXISTS idx_plans_project_id ON plans(project_id);
 CREATE INDEX IF NOT EXISTS idx_plans_project_epic ON plans(project_id, epic_id);
-CREATE INDEX IF NOT EXISTS idx_plans_parent ON plans(project_id, parent_plan_id);
 
 -- Plan versions (snapshots per plan: on execute or explicit save)
 CREATE TABLE IF NOT EXISTS plan_versions (
@@ -229,6 +228,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_execute_batches_project_running
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS current_version_number INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS last_executed_version_number INTEGER;
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS parent_plan_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_plans_parent ON plans(project_id, parent_plan_id);
 
 -- Auditor runs (final review Auditor execution records, enables plan-centric lookup and deep-linking)
 CREATE TABLE IF NOT EXISTS auditor_runs (
@@ -594,7 +594,6 @@ CREATE TABLE IF NOT EXISTS plans (
 );
 CREATE INDEX IF NOT EXISTS idx_plans_project_id ON plans(project_id);
 CREATE INDEX IF NOT EXISTS idx_plans_project_epic ON plans(project_id, epic_id);
-CREATE INDEX IF NOT EXISTS idx_plans_parent ON plans(project_id, parent_plan_id);
 
 CREATE TABLE IF NOT EXISTS plan_versions (
     id                   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -768,6 +767,7 @@ ALTER TABLE open_questions ADD COLUMN IF NOT EXISTS responses TEXT;
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS current_version_number INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS last_executed_version_number INTEGER;
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS parent_plan_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_plans_parent ON plans(project_id, parent_plan_id);
 
 -- Integration connections (provider-agnostic OAuth connections)
 CREATE TABLE IF NOT EXISTS integration_connections (

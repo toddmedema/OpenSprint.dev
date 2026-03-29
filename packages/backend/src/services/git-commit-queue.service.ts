@@ -10,7 +10,10 @@ import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { BranchManager, MergeConflictError, RebaseConflictError } from "./branch-manager.js";
 import { ProjectService } from "./project.service.js";
 import { agentService } from "./agent.service.js";
-import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
+import {
+  getMergeQualityGateCommands,
+  type MergeQualityGateProfile,
+} from "./merge-quality-gates.js";
 import { runMergeQualityGates } from "./merge-quality-gate-runner.js";
 import { eventLogService } from "./event-log.service.js";
 import { validationWorkspaceService } from "./validation-workspace.service.js";
@@ -87,6 +90,8 @@ export interface WorktreeMergeJob {
   taskTitle?: string;
   /** Base branch for rebase/merge (default: "main") */
   baseBranch?: string;
+  /** Optional merge-gate profile applied during merged-candidate validation. */
+  qualityGateProfile?: MergeQualityGateProfile;
 }
 
 import { formatClosedCommitMessage as formatClosedCommitMessageUtil } from "../utils/commit-message.js";
@@ -611,6 +616,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
               branchName: job.branchName,
               baseBranch,
               validationWorkspace: "merged_candidate",
+              qualityGateProfile: job.qualityGateProfile ?? "deterministic",
             },
             {
               symlinkNodeModules: this.branchManager.symlinkNodeModules.bind(this.branchManager),

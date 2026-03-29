@@ -379,6 +379,7 @@ export class OrchestratorLoopService {
         resolveMaxNewTasksPerLoop(slotsAvailable)
       );
       const dispatchBatch = dispatchableTasks.slice(0, maxNewTasksThisPass);
+      const dispatchedTaskIds = new Set<string>();
       if (dispatchableTasks.length > dispatchBatch.length) {
         log.info("Dispatch capped for stability; deferring additional ready tasks", {
           projectId,
@@ -406,6 +407,19 @@ export class OrchestratorLoopService {
 
       for (let i = 0; i < dispatchBatch.length; i++) {
         const selectedTask = dispatchBatch[i]!;
+        if (
+          dispatchedTaskIds.has(selectedTask.task.id) ||
+          state.slots.has(selectedTask.task.id)
+        ) {
+          log.info("Skipping dispatch: task already selected or active this pass", {
+            projectId,
+            taskId: selectedTask.task.id,
+            reason: dispatchedTaskIds.has(selectedTask.task.id)
+              ? "already_selected_this_loop"
+              : "active_slot_exists",
+          });
+          continue;
+        }
         try {
           await this.host.dispatchTask(
             projectId,
@@ -413,6 +427,7 @@ export class OrchestratorLoopService {
             selectedTask.task,
             Math.max(0, selected.length - (i + 1))
           );
+          dispatchedTaskIds.add(selectedTask.task.id);
         } catch (error) {
           if (error instanceof WorktreeBranchInUseError) {
             const deferredTask = selectedTask.task;

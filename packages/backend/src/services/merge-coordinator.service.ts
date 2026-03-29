@@ -38,6 +38,7 @@ import { appendRuntimeTrace } from "../utils/runtime-trace.js";
 import { buildTaskLastExecutionSummary, compactExecutionText } from "./task-execution-summary.js";
 import { inspectGitRepoState, resolveBaseBranch } from "../utils/git-repo-state.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
+import type { MergeQualityGateProfile } from "./merge-quality-gates.js";
 import type { RetryContext, RetryQualityGateDetail } from "./orchestrator-phase-context.js";
 import { validationWorkspaceService } from "./validation-workspace.service.js";
 
@@ -64,6 +65,7 @@ const MAX_ENVIRONMENT_SETUP_QUALITY_GATE_ATTEMPTS = 3;
 const MERGE_ATTEMPT_LEASE_EXPIRES_AT_KEY = "merge_attempt_lease_expires_at";
 const MERGE_ATTEMPT_LEASE_ACQUIRED_AT_KEY = "merge_attempt_lease_acquired_at";
 const MERGE_ATTEMPT_LEASE_OWNER_KEY = "merge_attempt_lease_owner";
+const DETERMINISTIC_MERGE_GATE_PROFILE: MergeQualityGateProfile = "deterministic";
 
 type BaselineCheckSource = "merge_precheck" | "push_precheck" | "push_rebase_recheck";
 
@@ -83,6 +85,7 @@ export interface MergeQualityGateRunOptions {
   branchName: string;
   baseBranch: string;
   validationWorkspace?: "baseline" | "merged_candidate" | "task_worktree" | "repo_root";
+  qualityGateProfile?: MergeQualityGateProfile;
 }
 
 export interface MergeQualityGateFailure {
@@ -301,6 +304,8 @@ export class MergeCoordinatorService {
   >();
   /** Dedupes project-level merge-validation notifications while degraded. */
   private mergeValidationHealthNotified = new Set<string>();
+  /** Prevent duplicate merge flow execution for the same project/task/attempt. */
+  private inFlightMergeFlows = new Set<string>();
 
   constructor(private host: MergeCoordinatorHost) {}
 
@@ -689,7 +694,10 @@ export class MergeCoordinatorService {
 
   private async ensureMergeQualityGates(options: MergeQualityGateRunOptions): Promise<void> {
     if (!this.host.runMergeQualityGates) return;
-    const failure = await this.host.runMergeQualityGates(options);
+    const failure = await this.host.runMergeQualityGates({
+      ...options,
+      qualityGateProfile: options.qualityGateProfile ?? DETERMINISTIC_MERGE_GATE_PROFILE,
+    });
     if (!failure) return;
 
     throw this.buildMergeQualityGateError(failure, options.worktreePath);
@@ -881,6 +889,7 @@ export class MergeCoordinatorService {
             branchName: baseBranch,
             baseBranch,
             validationWorkspace: "baseline",
+            qualityGateProfile: DETERMINISTIC_MERGE_GATE_PROFILE,
           })) ?? null;
 
         if (!failure) {
@@ -1757,6 +1766,25 @@ export class MergeCoordinatorService {
     log.info("Starting merge and done flow", { taskId: task.id, branchName });
     const state = this.host.getState(projectId);
     const slot = state.slots.get(task.id);
+    const mergeFlowKey = `${projectId}:${task.id}:${slot?.attempt ?? 0}`;
+    if (this.inFlightMergeFlows.has(mergeFlowKey)) {
+      log.warn("Suppressing duplicate merge flow invocation", {
+        projectId,
+        taskId: task.id,
+        attempt: slot?.attempt ?? 0,
+        branchName,
+      });
+      this.traceMergeLifecycle(
+        "duplicate_flow_suppressed",
+        projectId,
+        task.id,
+        { branchName },
+        { attempt: slot?.attempt }
+      );
+      return;
+    }
+    this.inFlightMergeFlows.add(mergeFlowKey);
+    try {
     this.traceMergeLifecycle(
       "flow_start",
       projectId,
@@ -1906,6 +1934,7 @@ export class MergeCoordinatorService {
           taskId: task.id,
           taskTitle: task.title || task.id,
           baseBranch,
+          qualityGateProfile: DETERMINISTIC_MERGE_GATE_PROFILE,
         });
         this.traceMergeLifecycle(
           "queue_merge_succeeded",
@@ -2029,6 +2058,7 @@ export class MergeCoordinatorService {
         taskId: task.id,
         taskTitle: task.title || task.id,
         baseBranch,
+        qualityGateProfile: DETERMINISTIC_MERGE_GATE_PROFILE,
       });
       this.traceMergeLifecycle(
         "queue_merge_succeeded",
@@ -2093,6 +2123,9 @@ export class MergeCoordinatorService {
     this.postCompletionAsync(projectId, repoPath, task.id, { mergedToMain: true }).catch((err) => {
       log.warn("Post-completion async work failed", { taskId: task.id, err });
     });
+    } finally {
+      this.inFlightMergeFlows.delete(mergeFlowKey);
+    }
   }
 
   /**

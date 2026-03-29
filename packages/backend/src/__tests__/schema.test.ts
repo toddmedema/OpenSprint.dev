@@ -210,16 +210,26 @@ describe("schema", () => {
         dialect
       );
       expect(statements.some((s) => s.includes("idx_plans_parent"))).toBe(true);
+      const parentIndexIdx = statements.findIndex((s) => s.includes("idx_plans_parent"));
+      expect(parentIndexIdx).toBeGreaterThanOrEqual(0);
       if (dialect === "postgres") {
+        const parentAlterIdx = statements.findIndex((s) =>
+          s.includes("ADD COLUMN IF NOT EXISTS parent_plan_id")
+        );
         expect(
           statements.some((s) => s.includes("ADD COLUMN IF NOT EXISTS parent_plan_id"))
         ).toBe(true);
+        expect(parentAlterIdx).toBeLessThan(parentIndexIdx);
       } else {
+        const parentAlterIdx = statements.findIndex((s) =>
+          s.includes("ALTER TABLE plans ADD COLUMN parent_plan_id")
+        );
         expect(
           statements.some((s) =>
             s.includes("ALTER TABLE plans ADD COLUMN parent_plan_id")
           )
         ).toBe(true);
+        expect(parentAlterIdx).toBeLessThan(parentIndexIdx);
       }
     }
   });

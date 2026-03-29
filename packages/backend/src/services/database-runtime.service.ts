@@ -54,6 +54,13 @@ function toIsoNow(): string {
   return new Date().toISOString();
 }
 
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  const maybeMessage = (err as { message?: unknown })?.message;
+  return typeof maybeMessage === "string" ? maybeMessage : "Unknown error";
+}
+
 async function probeDatabase(databaseUrl: string): Promise<void> {
   const dialect = getDatabaseDialect(databaseUrl);
   if (dialect === "sqlite") {
@@ -249,28 +256,54 @@ export class DatabaseRuntimeService {
 
     try {
       await this.deps.probe(config.databaseUrl);
-      this.snapshot = {
-        ok: true,
-        state: "connected",
-        message: null,
-        lastCheckedAt: toIsoNow(),
-        lastSuccessAt: toIsoNow(),
-      };
-      log.info("database.connected", {
-        source: config.source,
-        reason,
-      });
-      await this.handlers.onConnected?.({
-        ...config,
-        reason,
-        message: null,
-      });
     } catch (err) {
       const message =
         err instanceof AppError && err.code === ErrorCodes.DATABASE_UNAVAILABLE
           ? err.message
           : classifyDbConnectionError(err, dialect);
       await this.transitionToDisconnected({
+        ...config,
+        reason,
+        message,
+      });
+      return;
+    }
+
+    this.snapshot = {
+      ok: true,
+      state: "connected",
+      message: null,
+      lastCheckedAt: toIsoNow(),
+      lastSuccessAt: toIsoNow(),
+    };
+    log.info("database.connected", {
+      source: config.source,
+      reason,
+    });
+
+    try {
+      await this.handlers.onConnected?.({
+        ...config,
+        reason,
+        message: null,
+      });
+    } catch (err) {
+      const message = isDbConnectionError(err)
+        ? classifyDbConnectionError(err, dialect)
+        : `Connected to database, but Open Sprint could not finish startup: ${getErrorMessage(err)}`;
+      this.snapshot = {
+        ...this.snapshot,
+        ok: false,
+        state: "disconnected",
+        message,
+        lastCheckedAt: toIsoNow(),
+      };
+      log.warn("database.disconnected", {
+        source: config.source,
+        reason,
+        message,
+      });
+      await this.handlers.onDisconnected?.({
         ...config,
         reason,
         message,

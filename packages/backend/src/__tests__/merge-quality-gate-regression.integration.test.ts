@@ -63,6 +63,24 @@ vi.mock("../utils/command-runner.js", () => ({
 
 vi.mock("../services/merge-quality-gates.js", () => ({
   getMergeQualityGateCommands: (...args: unknown[]) => mockGetMergeQualityGateCommands(...args),
+  getMergeQualityGateExecutionPlan: (options?: {
+    profile?: "default" | "deterministic";
+    testRunId?: string;
+    integrationWorkerCap?: number;
+  }) =>
+    (mockGetMergeQualityGateCommands() as string[]).map((command) => {
+      if (command !== "npm run test" || options?.profile !== "deterministic") {
+        return { command };
+      }
+      return {
+        command,
+        env: {
+          OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
+          OPENSPRINT_VITEST_RUN_ID: options?.testRunId,
+          OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS: String(options?.integrationWorkerCap ?? 2),
+        },
+      };
+    }),
 }));
 
 vi.mock("../services/validation-workspace.service.js", () => ({
@@ -998,5 +1016,86 @@ describe("Cross-service quality-gate regression integration", () => {
         (e.data as Record<string, unknown>)?.qualityGateCategory != null
     );
     expect(qualityGateFailures).toHaveLength(0);
+  });
+
+  it("applies deterministic merge-gate env policy consistently across task and merged-candidate workspaces", async () => {
+    await fs.writeFile(
+      path.join(repoPath, "package.json"),
+      JSON.stringify({ name: "test-workspace", private: true, scripts: { test: "vitest run" } })
+    );
+    await fs.writeFile(
+      path.join(worktreePath, "package.json"),
+      JSON.stringify({ name: "test-workspace", private: true, scripts: { test: "vitest run" } })
+    );
+
+    mockGetMergeQualityGateCommands.mockReturnValue(["npm run test"]);
+    const observedEnvs: Array<Record<string, string | undefined>> = [];
+    mockRunCommand.mockImplementation(
+      async (
+        spec: { command: string; args?: string[] },
+        options?: { cwd?: string; timeout?: number; env?: Record<string, string | undefined> }
+      ) => {
+        const command = [spec.command, ...(spec.args ?? [])].join(" ");
+        if (command === "git rev-parse --verify HEAD") {
+          return {
+            stdout: "deadbeef",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? repoPath,
+            exitCode: 0,
+            signal: null,
+          };
+        }
+        if (command.startsWith("npm ls")) {
+          return {
+            stdout: "",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? repoPath,
+            exitCode: 0,
+            signal: null,
+          };
+        }
+        if (command === "npm run test") {
+          observedEnvs.push(options?.env ?? {});
+          return {
+            stdout: "ok",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? repoPath,
+            exitCode: 0,
+            signal: null,
+          };
+        }
+        throw new Error(`Unexpected command: ${command} (${options?.cwd ?? "no-cwd"})`);
+      }
+    );
+
+    const orchestrator = new OrchestratorService();
+    await orchestrator.runMergeQualityGates({
+      projectId,
+      repoPath,
+      worktreePath,
+      taskId,
+      branchName,
+      baseBranch: "main",
+      validationWorkspace: "task_worktree",
+    });
+    await orchestrator.runMergeQualityGates({
+      projectId,
+      repoPath,
+      worktreePath,
+      taskId,
+      branchName,
+      baseBranch: "main",
+      validationWorkspace: "merged_candidate",
+    });
+
+    expect(observedEnvs).toHaveLength(2);
+    for (const env of observedEnvs) {
+      expect(env.OPENSPRINT_MERGE_GATE_TEST_MODE).toBe("1");
+      expect(env.OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS).toBe("2");
+      expect(env.OPENSPRINT_VITEST_RUN_ID).toMatch(/^mergegate_/);
+    }
   });
 });

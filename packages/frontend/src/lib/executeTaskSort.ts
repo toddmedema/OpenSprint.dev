@@ -34,6 +34,10 @@ function getSortTimestamp(task: Task): string {
   return task.updatedAt || task.createdAt || "";
 }
 
+function getCreatedTimestamp(task: Task): string {
+  return task.createdAt || "";
+}
+
 /**
  * Sort tasks for Timeline view: active → queue → completed.
  * Within each tier: updatedAt descending, fallback to createdAt descending, then id as tiebreaker.
@@ -51,6 +55,26 @@ export function sortTasksForTimeline(tasks: Task[]): Task[] {
     const tsB = getSortTimestamp(b);
     const cmp = tsB.localeCompare(tsA); // descending: newer first
     if (cmp !== 0) return cmp;
+
+    return a.id.localeCompare(b.id);
+  });
+}
+
+/**
+ * Sort Ready-section tasks to match backend dispatch semantics.
+ * Primary: priority ascending (0 highest). Secondary: createdAt ascending.
+ * Tertiary: id ascending for deterministic ordering.
+ */
+export function sortReadyTasksForDispatch(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const priA = a.priority ?? 999;
+    const priB = b.priority ?? 999;
+    if (priA !== priB) return priA - priB;
+
+    const createdA = getCreatedTimestamp(a);
+    const createdB = getCreatedTimestamp(b);
+    const createdCmp = createdA.localeCompare(createdB); // ascending: older first
+    if (createdCmp !== 0) return createdCmp;
 
     return a.id.localeCompare(b.id);
   });

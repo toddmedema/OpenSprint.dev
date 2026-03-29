@@ -7,6 +7,25 @@ import { dbStatusRestored } from "../store/slices/connectionSlice";
 import { dismissNotification } from "../store/slices/notificationSlice";
 import { Banner } from "./notifications";
 
+const STARTUP_FAILURE_PREFIX = "Connected to database, but Open Sprint could not finish startup:";
+
+function toBannerMessage(data: { state: string; message?: string }): string {
+  if (data.state === "connecting") {
+    return "Reconnecting to PostgreSQL...";
+  }
+  const raw = data.message?.trim();
+  if (!raw) {
+    return "The database is not available; check Settings to fix the connection.";
+  }
+  if (raw.startsWith(STARTUP_FAILURE_PREFIX)) {
+    const detail = raw.slice(STARTUP_FAILURE_PREFIX.length).trim();
+    return detail
+      ? `Connected to database, but Open Sprint could not finish startup. ${detail}`
+      : "Connected to database, but Open Sprint could not finish startup. Check backend logs for details.";
+  }
+  return raw;
+}
+
 export function DatabaseStatusBanner() {
   const dispatch = useAppDispatch();
   const connectionError = useAppSelector((s) => s.connection?.connectionError ?? false);
@@ -42,10 +61,7 @@ export function DatabaseStatusBanner() {
   const settingsHref = projectMatch?.params.projectId
     ? `/projects/${projectMatch.params.projectId}/settings`
     : "/settings";
-  const message =
-    data.state === "connecting"
-      ? "Reconnecting to PostgreSQL..."
-      : (data.message ?? "The database is not available; check Settings to fix the connection.");
+  const message = toBannerMessage(data);
 
   return (
     <Banner

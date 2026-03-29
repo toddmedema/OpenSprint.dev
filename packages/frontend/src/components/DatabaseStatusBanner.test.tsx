@@ -102,6 +102,22 @@ describe("DatabaseStatusBanner", () => {
     );
   });
 
+  it("shows clearer copy when startup fails after database connection succeeds", () => {
+    renderBanner({
+      data: {
+        ok: false,
+        state: "disconnected",
+        lastCheckedAt: null,
+        message:
+          "Connected to database, but Open Sprint could not finish startup: startup bootstrap failed",
+      },
+      isPending: false,
+    });
+    expect(screen.getByTestId("database-status-banner")).toHaveTextContent(
+      "Connected to database, but Open Sprint could not finish startup. startup bootstrap failed"
+    );
+  });
+
   it("shows reconnecting copy on project routes", () => {
     renderBanner(
       {

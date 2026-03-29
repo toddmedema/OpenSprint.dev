@@ -472,6 +472,24 @@ vi.mock("../utils/shell-exec.js", () => ({
 
 vi.mock("../services/merge-quality-gates.js", () => ({
   getMergeQualityGateCommands: (...args: unknown[]) => mockGetMergeQualityGateCommands(...args),
+  getMergeQualityGateExecutionPlan: (options?: {
+    profile?: "default" | "deterministic";
+    testRunId?: string;
+    integrationWorkerCap?: number;
+  }) =>
+    (mockGetMergeQualityGateCommands() as string[]).map((command) => {
+      if (command !== "npm run test" || options?.profile !== "deterministic") {
+        return { command };
+      }
+      return {
+        command,
+        env: {
+          OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
+          OPENSPRINT_VITEST_RUN_ID: options?.testRunId,
+          OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS: String(options?.integrationWorkerCap ?? 2),
+        },
+      };
+    }),
 }));
 
 vi.mock("../services/crash-recovery.service.js", () => ({

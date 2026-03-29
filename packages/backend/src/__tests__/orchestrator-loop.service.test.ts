@@ -315,4 +315,28 @@ describe("OrchestratorLoopService", () => {
       expect.any(Number)
     );
   });
+
+  it("dispatches a task only once per loop pass when scheduler returns duplicates", async () => {
+    const duplicateTask = buildTask("os-dup");
+    host.getTaskStore = vi.fn().mockReturnValue({
+      readyWithStatusMap: vi
+        .fn()
+        .mockResolvedValue({ tasks: [duplicateTask], allIssues: [duplicateTask] }),
+      update: vi.fn().mockResolvedValue(undefined),
+      getCumulativeAttemptsFromIssue: vi.fn().mockReturnValue(0),
+    });
+    host.getTaskScheduler = vi.fn().mockReturnValue({
+      selectTasks: vi.fn().mockResolvedValue([{ task: duplicateTask }, { task: duplicateTask }]),
+    });
+
+    await service.runLoop(projectId);
+
+    expect(dispatchTask).toHaveBeenCalledTimes(1);
+    expect(dispatchTask).toHaveBeenCalledWith(
+      projectId,
+      repoPath,
+      expect.objectContaining({ id: "os-dup" }),
+      expect.any(Number)
+    );
+  });
 });

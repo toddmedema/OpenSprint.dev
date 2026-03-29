@@ -520,6 +520,25 @@ describe("MergeCoordinatorService", () => {
     expect(mockGetChangedFiles).toHaveBeenCalledWith(repoPath, branchName, "develop");
   });
 
+  it("suppresses duplicate in-flight merge flow for the same task attempt", async () => {
+    let releaseGitReady: (() => void) | null = null;
+    const gitReadyGate = new Promise<void>((resolve) => {
+      releaseGitReady = resolve;
+    });
+    mockHost.branchManager.waitForGitReady = vi.fn().mockImplementation(() => gitReadyGate);
+
+    const firstMerge = coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+    await Promise.resolve();
+    const duplicateMerge = coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    await duplicateMerge;
+    expect(mockHost.branchManager.waitForGitReady).toHaveBeenCalledTimes(1);
+
+    releaseGitReady?.();
+    await firstMerge;
+    expect(mockGitQueueEnqueueAndWait).toHaveBeenCalledTimes(1);
+  });
+
   it("invalidates baseline cache and reconciles dependencies after successful merge", async () => {
     const mockReconcile = vi.fn().mockResolvedValue(undefined);
     mockHost.branchManager.reconcileDependenciesAfterMerge = mockReconcile;

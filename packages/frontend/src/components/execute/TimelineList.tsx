@@ -5,6 +5,7 @@ import type { Plan } from "@opensprint/shared";
 import { isAgentAssignee } from "@opensprint/shared";
 import {
   sortTasksForTimeline,
+  sortReadyTasksForDispatch,
   getTimelineSection,
   TIMELINE_SECTION,
 } from "../../lib/executeTaskSort";
@@ -279,7 +280,9 @@ export function TimelineList({
     const completed = sorted.filter(
       (t) => getTimelineSection(t.kanbanColumn) === TIMELINE_SECTION.completed
     );
-    const ready = sorted.filter((t) => t.kanbanColumn === "ready" && notInPlanning(t));
+    const ready = sortReadyTasksForDispatch(
+      sorted.filter((t) => t.kanbanColumn === "ready" && notInPlanning(t))
+    );
     const inLine = sorted.filter(
       (t) => (t.kanbanColumn === "backlog" || t.kanbanColumn === "planning") && notInPlanning(t)
     );

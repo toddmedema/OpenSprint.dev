@@ -97,6 +97,35 @@ describe("DatabaseRuntimeService", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
+  it("reports startup failure clearly when onConnected throws after probe success", async () => {
+    const runtime = new DatabaseRuntimeService({
+      resolveConfig: async () => ({ databaseUrl: TEST_DB_URL, source: "default" }),
+      probe: async () => undefined,
+      initialSnapshot: {
+        ok: false,
+        state: "disconnected",
+        message: null,
+        lastCheckedAt: null,
+        lastSuccessAt: null,
+      },
+    });
+    runtime.setLifecycleHandlers({
+      onConnected: async () => {
+        throw new Error("startup bootstrap failed");
+      },
+    });
+
+    runtime.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(await runtime.getStatus()).toMatchObject({
+      ok: false,
+      state: "disconnected",
+      message:
+        "Connected to database, but Open Sprint could not finish startup: startup bootstrap failed",
+    });
+  });
+
   it("transitions to disconnected on runtime operational failure", async () => {
     const onDisconnected = vi.fn();
     const runtime = new DatabaseRuntimeService({

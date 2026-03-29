@@ -378,6 +378,13 @@ export class OrchestratorDispatchService {
   ): Promise<void> {
     const state = this.host.getState(projectId);
     log.info("Picking task", { projectId, taskId: task.id, title: task.title });
+    if (state.slots.has(task.id)) {
+      log.info("Skipping dispatch: task already has an active slot", {
+        projectId,
+        taskId: task.id,
+      });
+      return;
+    }
     if (hasActiveMergeAttemptLease(task)) {
       log.info("Skipping dispatch: merge attempt lease is still active", {
         projectId,

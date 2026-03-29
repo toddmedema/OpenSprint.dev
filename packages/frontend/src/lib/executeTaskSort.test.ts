@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   sortEpicTasksByStatus,
   sortTasksForTimeline,
+  sortReadyTasksForDispatch,
   getTimelineSection,
   TIMELINE_SECTION,
 } from "./executeTaskSort";
@@ -252,5 +253,45 @@ describe("sortTasksForTimeline", () => {
     const originalOrder = tasks.map((t) => t.id);
     sortTasksForTimeline(tasks);
     expect(tasks.map((t) => t.id)).toEqual(originalOrder);
+  });
+});
+
+describe("sortReadyTasksForDispatch", () => {
+  it("sorts by priority first, then createdAt ascending, then id", () => {
+    const tasks = [
+      createTask({
+        id: "late-high",
+        kanbanColumn: "ready",
+        priority: 1,
+        createdAt: "2024-01-03T12:00:00Z",
+        updatedAt: "2024-02-01T12:00:00Z",
+      }),
+      createTask({
+        id: "early-high",
+        kanbanColumn: "ready",
+        priority: 1,
+        createdAt: "2024-01-01T12:00:00Z",
+        updatedAt: "2024-03-01T12:00:00Z",
+      }),
+      createTask({
+        id: "medium",
+        kanbanColumn: "ready",
+        priority: 2,
+        createdAt: "2024-01-02T12:00:00Z",
+      }),
+    ];
+
+    const sorted = sortReadyTasksForDispatch(tasks);
+    expect(sorted.map((t) => t.id)).toEqual(["early-high", "late-high", "medium"]);
+  });
+
+  it("does not mutate the input array", () => {
+    const tasks = [
+      createTask({ id: "a", kanbanColumn: "ready", priority: 2 }),
+      createTask({ id: "b", kanbanColumn: "ready", priority: 0 }),
+    ];
+    const original = tasks.map((t) => t.id);
+    sortReadyTasksForDispatch(tasks);
+    expect(tasks.map((t) => t.id)).toEqual(original);
   });
 });

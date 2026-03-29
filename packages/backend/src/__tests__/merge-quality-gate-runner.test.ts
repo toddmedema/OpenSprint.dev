@@ -628,4 +628,68 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     );
     expect(failure?.reason).toContain("package-lock.json");
   });
+
+  it("injects deterministic merge-gate env for test command runs", async () => {
+    const worktreePath = await makeTempWorktree({ test: "vitest run" });
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) =>
+        makeCommandResult(spec, options.cwd)
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-det-env",
+        branchName: "opensprint/os-det-env",
+        baseBranch: "main",
+        validationWorkspace: "task_worktree",
+      },
+      { runCommand }
+    );
+
+    expect(failure).toBeNull();
+    const testCall = runCommand.mock.calls.find(
+      (call) => commandLabel(call[0] as { command: string; args?: string[] }) === "npm run test"
+    );
+    expect(testCall).toBeDefined();
+    const env = (testCall?.[1] as { env?: Record<string, string> | undefined })?.env;
+    expect(env).toEqual(
+      expect.objectContaining({
+        OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
+        OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS: "2",
+      })
+    );
+    expect(env?.OPENSPRINT_VITEST_RUN_ID).toMatch(/^mergegate_/);
+  });
+
+  it("does not inject deterministic merge-gate env when default profile is requested", async () => {
+    const worktreePath = await makeTempWorktree({ test: "vitest run" });
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) =>
+        makeCommandResult(spec, options.cwd)
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-default-env",
+        branchName: "opensprint/os-default-env",
+        baseBranch: "main",
+        qualityGateProfile: "default",
+      },
+      { runCommand }
+    );
+
+    expect(failure).toBeNull();
+    const testCall = runCommand.mock.calls.find(
+      (call) => commandLabel(call[0] as { command: string; args?: string[] }) === "npm run test"
+    );
+    expect(testCall).toBeDefined();
+    const env = (testCall?.[1] as { env?: Record<string, string> | undefined })?.env;
+    expect(env).toBeUndefined();
+  });
 });

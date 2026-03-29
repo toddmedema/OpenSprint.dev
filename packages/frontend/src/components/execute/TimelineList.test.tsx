@@ -172,6 +172,36 @@ describe("TimelineList", () => {
     expect(screen.getByText("Queued Task")).toBeInTheDocument();
   });
 
+  it("sorts Ready section rows by priority (agent order) instead of updatedAt recency", () => {
+    const tasks = [
+      createMockTask({
+        id: "low-recent",
+        title: "Low priority recent",
+        kanbanColumn: "ready",
+        priority: 3,
+        createdAt: "2024-01-03T12:00:00Z",
+        updatedAt: "2024-02-01T12:00:00Z",
+      }),
+      createMockTask({
+        id: "high-older",
+        title: "High priority older",
+        kanbanColumn: "ready",
+        priority: 1,
+        createdAt: "2024-01-01T12:00:00Z",
+        updatedAt: "2024-01-01T12:00:00Z",
+      }),
+    ];
+
+    renderWithProviders(
+      <TimelineList tasks={tasks} plans={[]} onTaskSelect={vi.fn()} {...defaultListProps} />
+    );
+
+    const readySection = screen.getByTestId("timeline-section-ready");
+    const readyRows = within(readySection).getAllByTestId(/^timeline-row-/);
+    expect(readyRows[0]).toHaveAttribute("data-testid", "timeline-row-high-older");
+    expect(readyRows[1]).toHaveAttribute("data-testid", "timeline-row-low-recent");
+  });
+
   it("displays Merge Queue section after In Progress when waiting_to_merge tasks exist", () => {
     const tasks = [
       createMockTask({ id: "a", kanbanColumn: "in_progress", title: "Active Task" }),
