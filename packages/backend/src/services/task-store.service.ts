@@ -68,15 +68,13 @@ export { resolveEpicId, getBlockersFromIssue, getParentId } from "./task-store-h
 export type { PlanInsertData, StoredPlan } from "./plan-store.service.js";
 
 const log = createLogger("task-store");
-const BASELINE_MERGE_RETRY_MODE = "baseline_wait";
-const MERGE_RETRY_MODE_KEY = "merge_retry_mode";
-const WORKTREE_PATH_KEY = "worktreePath";
+const MERGE_ATTEMPT_LEASE_EXPIRES_AT_KEY = "merge_attempt_lease_expires_at";
 
-function hasBaselineMergeResumeState(task: StoredTask): boolean {
-  const record = task as Record<string, unknown>;
-  if (record[MERGE_RETRY_MODE_KEY] !== BASELINE_MERGE_RETRY_MODE) return false;
-  const worktreePath = record[WORKTREE_PATH_KEY];
-  return typeof worktreePath === "string" && worktreePath.trim() !== "";
+function hasActiveMergeAttemptLease(task: StoredTask, nowMs = Date.now()): boolean {
+  const expiresAtRaw = (task as Record<string, unknown>)[MERGE_ATTEMPT_LEASE_EXPIRES_AT_KEY];
+  if (typeof expiresAtRaw !== "string" || expiresAtRaw.trim() === "") return false;
+  const expiresAtMs = Date.parse(expiresAtRaw);
+  return Number.isFinite(expiresAtMs) && expiresAtMs > nowMs;
 }
 
 export class TaskStoreService {
@@ -546,18 +544,16 @@ export class TaskStoreService {
     const statusMap = new Map(allIssues.map((i) => [i.id, i.status]));
 
     const filtered: StoredTask[] = [];
+    const nowMs = Date.now();
     for (const issue of allIssues) {
       if (issue.status !== "open") continue;
       if (issue.issue_type === "epic") continue;
+      if (hasActiveMergeAttemptLease(issue, nowMs)) continue;
       const mergePausedUntilRaw = (issue as Record<string, unknown>)
         .merge_quality_gate_paused_until;
       if (typeof mergePausedUntilRaw === "string") {
         const mergePausedUntilMs = Date.parse(mergePausedUntilRaw);
-        if (
-          Number.isFinite(mergePausedUntilMs) &&
-          mergePausedUntilMs > Date.now() &&
-          !hasBaselineMergeResumeState(issue)
-        ) {
+        if (Number.isFinite(mergePausedUntilMs) && mergePausedUntilMs > nowMs) {
           continue;
         }
       }
@@ -565,11 +561,7 @@ export class TaskStoreService {
         .merge_validation_paused_until;
       if (typeof mergeValidationPausedUntilRaw === "string") {
         const mergeValidationPausedUntilMs = Date.parse(mergeValidationPausedUntilRaw);
-        if (
-          Number.isFinite(mergeValidationPausedUntilMs) &&
-          mergeValidationPausedUntilMs > Date.now() &&
-          !hasBaselineMergeResumeState(issue)
-        ) {
+        if (Number.isFinite(mergeValidationPausedUntilMs) && mergeValidationPausedUntilMs > nowMs) {
           continue;
         }
       }

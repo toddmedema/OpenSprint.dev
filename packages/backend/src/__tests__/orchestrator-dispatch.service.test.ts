@@ -290,11 +290,14 @@ describe("OrchestratorDispatchService", () => {
       task.id,
       expect.objectContaining({
         status: "in_progress",
-        extra: {
+        extra: expect.objectContaining({
           next_retry_context: null,
           merge_retry_mode: null,
           merge_quality_gate_paused_until: null,
-        },
+          merge_attempt_lease_expires_at: expect.any(String),
+          merge_attempt_lease_acquired_at: expect.any(String),
+          merge_attempt_lease_owner: expect.stringContaining(task.id),
+        }),
       })
     );
     expect(performMergeRetry).toHaveBeenCalledWith(
@@ -308,5 +311,18 @@ describe("OrchestratorDispatchService", () => {
       })
     );
     expect(executeCodingPhase).not.toHaveBeenCalled();
+  });
+
+  it("skips dispatch when merge-attempt lease is still active", async () => {
+    const task = {
+      ...baseTask("os-leased"),
+      merge_attempt_lease_expires_at: new Date(Date.now() + 60_000).toISOString(),
+    } as StoredTask;
+
+    await service.dispatchTask(projectId, repoPath, task, 0);
+
+    expect(taskStore.update).not.toHaveBeenCalled();
+    expect(executeCodingPhase).not.toHaveBeenCalled();
+    expect(performMergeRetry).not.toHaveBeenCalled();
   });
 });

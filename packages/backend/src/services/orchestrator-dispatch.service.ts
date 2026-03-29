@@ -22,6 +22,10 @@ const MERGE_RETRY_MODE_KEY = "merge_retry_mode";
 const BASELINE_MERGE_RETRY_MODE = "baseline_wait";
 const BASELINE_QUALITY_GATE_PAUSED_UNTIL_KEY = "merge_quality_gate_paused_until";
 const MERGE_VALIDATION_PAUSED_UNTIL_KEY = "merge_validation_paused_until";
+const MERGE_ATTEMPT_LEASE_EXPIRES_AT_KEY = "merge_attempt_lease_expires_at";
+const MERGE_ATTEMPT_LEASE_ACQUIRED_AT_KEY = "merge_attempt_lease_acquired_at";
+const MERGE_ATTEMPT_LEASE_OWNER_KEY = "merge_attempt_lease_owner";
+const MERGE_ATTEMPT_LEASE_TTL_MS = 10 * 60_000;
 
 const FAILURE_TYPES: FailureType[] = [
   "test_failure",
@@ -272,6 +276,13 @@ function extractMergeResumeState(task: StoredTask): { worktreePath: string } | u
   };
 }
 
+function hasActiveMergeAttemptLease(task: StoredTask): boolean {
+  const expiresAtRaw = (task as Record<string, unknown>)[MERGE_ATTEMPT_LEASE_EXPIRES_AT_KEY];
+  if (typeof expiresAtRaw !== "string" || expiresAtRaw.trim() === "") return false;
+  const expiresAtMs = Date.parse(expiresAtRaw);
+  return Number.isFinite(expiresAtMs) && expiresAtMs > Date.now();
+}
+
 /** Slot shape required by dispatch (must have branchName, fileScope assignable). */
 export interface DispatchSlotLike {
   taskId: string;
@@ -367,6 +378,13 @@ export class OrchestratorDispatchService {
   ): Promise<void> {
     const state = this.host.getState(projectId);
     log.info("Picking task", { projectId, taskId: task.id, title: task.title });
+    if (hasActiveMergeAttemptLease(task)) {
+      log.info("Skipping dispatch: merge attempt lease is still active", {
+        projectId,
+        taskId: task.id,
+      });
+      return;
+    }
     const retryContext = extractRetryContext(task);
     const mergeResumeState = extractMergeResumeState(task);
     const hasMergeValidationPause =
@@ -379,10 +397,21 @@ export class OrchestratorDispatchService {
     }
 
     const taskStore = this.host.getTaskStore();
+    const cumulativeAttempts = taskStore.getCumulativeAttemptsFromIssue(task);
+    const leaseAcquiredAt = new Date().toISOString();
+    const leaseExpiresAt = new Date(Date.now() + MERGE_ATTEMPT_LEASE_TTL_MS).toISOString();
+    const mergeAttemptLease =
+      mergeResumeState != null
+        ? {
+            [MERGE_ATTEMPT_LEASE_OWNER_KEY]: `${task.id}:${cumulativeAttempts + 1}:${Date.now()}`,
+            [MERGE_ATTEMPT_LEASE_ACQUIRED_AT_KEY]: leaseAcquiredAt,
+            [MERGE_ATTEMPT_LEASE_EXPIRES_AT_KEY]: leaseExpiresAt,
+          }
+        : null;
     await taskStore.update(projectId, task.id, {
       status: "in_progress",
       ...(assignee !== undefined && { assignee }),
-      ...((retryContext != null || mergeResumeState != null) && {
+      ...((retryContext != null || mergeResumeState != null || mergeAttemptLease != null) && {
         extra: {
           ...(retryContext != null && { [NEXT_RETRY_CONTEXT_KEY]: null }),
           ...(mergeResumeState && {
@@ -392,10 +421,10 @@ export class OrchestratorDispatchService {
               [MERGE_VALIDATION_PAUSED_UNTIL_KEY]: null,
             }),
           }),
+          ...(mergeAttemptLease ?? {}),
         },
       }),
     });
-    const cumulativeAttempts = taskStore.getCumulativeAttemptsFromIssue(task);
     const settings = await this.host.getProjectService().getSettings(projectId);
     const mergeStrategy = settings.mergeStrategy ?? "per_task";
     const allIssues = await taskStore.listAll(projectId);

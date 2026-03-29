@@ -61,6 +61,9 @@ const MERGE_VALIDATION_FAILURE_WINDOW_MS = 10 * 60_000;
 const MERGE_VALIDATION_CANARY_INTERVAL_MS = 5 * 60_000;
 const MAX_BASELINE_REMEDIATION_ATTEMPTS = 3;
 const MAX_ENVIRONMENT_SETUP_QUALITY_GATE_ATTEMPTS = 3;
+const MERGE_ATTEMPT_LEASE_EXPIRES_AT_KEY = "merge_attempt_lease_expires_at";
+const MERGE_ATTEMPT_LEASE_ACQUIRED_AT_KEY = "merge_attempt_lease_acquired_at";
+const MERGE_ATTEMPT_LEASE_OWNER_KEY = "merge_attempt_lease_owner";
 
 type BaselineCheckSource = "merge_precheck" | "push_precheck" | "push_rebase_recheck";
 
@@ -1620,6 +1623,21 @@ export class MergeCoordinatorService {
     if (!state.slots.has(taskId)) {
       return;
     }
+    await this.host.taskStore
+      .update(projectId, taskId, {
+        extra: {
+          [MERGE_ATTEMPT_LEASE_EXPIRES_AT_KEY]: null,
+          [MERGE_ATTEMPT_LEASE_ACQUIRED_AT_KEY]: null,
+          [MERGE_ATTEMPT_LEASE_OWNER_KEY]: null,
+        },
+      })
+      .catch((err) => {
+        log.warn("Failed to clear merge attempt lease before slot release", {
+          projectId,
+          taskId,
+          err,
+        });
+      });
     this.host.transition(projectId, { to: outcome, taskId });
     await this.host.persistCounters(projectId, repoPath);
   }

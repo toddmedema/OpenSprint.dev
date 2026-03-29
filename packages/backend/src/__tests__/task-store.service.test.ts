@@ -793,7 +793,7 @@ suite("TaskStoreService", () => {
       expect(readyAfterPause.map((t) => t.id)).toContain(pausedTask.id);
     });
 
-    it("keeps baseline merge-resume tasks in ready queue even while pause window is active", async () => {
+    it("keeps baseline merge-resume tasks out of ready queue while pause window is active", async () => {
       const pausedMergeRetryTask = await store.create(TEST_PROJECT_ID, "Resume pending merge", {
         type: "task",
       });
@@ -808,7 +808,28 @@ suite("TaskStoreService", () => {
       });
 
       const ready = await store.ready(TEST_PROJECT_ID);
-      expect(ready.map((t) => t.id)).toContain(pausedMergeRetryTask.id);
+      expect(ready.map((t) => t.id)).not.toContain(pausedMergeRetryTask.id);
+    });
+
+    it("skips tasks while merge-attempt lease is active and re-enables them after expiry", async () => {
+      const leasedTask = await store.create(TEST_PROJECT_ID, "Leased merge task", { type: "task" });
+      await store.update(TEST_PROJECT_ID, leasedTask.id, {
+        extra: {
+          merge_attempt_lease_expires_at: new Date(Date.now() + 60_000).toISOString(),
+        },
+      });
+
+      const readyWithLease = await store.ready(TEST_PROJECT_ID);
+      expect(readyWithLease.map((t) => t.id)).not.toContain(leasedTask.id);
+
+      await store.update(TEST_PROJECT_ID, leasedTask.id, {
+        extra: {
+          merge_attempt_lease_expires_at: new Date(Date.now() - 60_000).toISOString(),
+        },
+      });
+
+      const readyAfterLease = await store.ready(TEST_PROJECT_ID);
+      expect(readyAfterLease.map((t) => t.id)).toContain(leasedTask.id);
     });
 
     it("should exclude tasks in blocked epic (epic-blocked model)", async () => {
