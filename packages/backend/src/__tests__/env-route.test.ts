@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi, assert } from "vitest";
 import request from "supertest";
 import express from "express";
 import fs from "fs";
@@ -78,6 +78,10 @@ describe("Env API", () => {
   let tmpDir: string;
 
   beforeEach(() => {
+    assert(
+      vi.isMockFunction(mockValidateApiKey),
+      "validateApiKey must be a vi.fn() stub — the real models.js was loaded, which causes network calls",
+    );
     app = createMinimalEnvApp();
     vi.clearAllMocks();
     mockExecFile.mockReset();
@@ -121,6 +125,12 @@ describe("Env API", () => {
     it("models module is fully stubbed (only validateApiKey export; no real models.ts surface)", async () => {
       const m = await import("../routes/models.js");
       expect(Object.keys(m).sort()).toEqual(["validateApiKey"]);
+
+      const sentinel = { valid: true, __guard: true };
+      mockValidateApiKey.mockResolvedValueOnce(sentinel);
+      const result = await m.validateApiKey("claude", "test");
+      expect(result).toBe(sentinel);
+      expect(mockValidateApiKey).toHaveBeenCalledWith("claude", "test");
     });
 
     it("returns 400 when provider and value are missing", async () => {

@@ -5,7 +5,7 @@ import {
   backendSsrConfig,
 } from "./vitest.shared.js";
 
-/** Isolated project: stubbed models.js + single-thread pool avoids mock races under CI parallelism. */
+/** Isolated project: stubbed models.js + single-fork pool avoids mock races under CI parallelism. */
 export default defineProject({
   resolve: backendResolveConfig,
   ssr: backendSsrConfig,
@@ -13,10 +13,10 @@ export default defineProject({
     ...backendCommonTestConfig,
     name: "backend-env-route",
     include: ["src/__tests__/env-route.test.ts"],
-    pool: "threads",
+    pool: "forks",
     poolOptions: {
-      threads: {
-        singleThread: true,
+      forks: {
+        singleFork: true,
       },
     },
   },
