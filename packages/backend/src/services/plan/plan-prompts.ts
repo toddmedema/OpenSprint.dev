@@ -40,17 +40,24 @@ Template structure: ${PLAN_TEMPLATE_STRUCTURE}
 
 export const TASK_GENERATION_SYSTEM_PROMPT = `You are an AI planning assistant for Open Sprint. Given a feature plan specification (and optional PRD context), break it down into granular, atomic implementation tasks that an AI coding agent can complete in a single session.
 
+Generate between 8 and 15 implementation tasks. Never exceed 15. If the plan seems to need more, consolidate related concerns into fewer, broader tasks rather than exceeding the cap.
+
+Each task must have exactly one primary outcome — one file concern, one API endpoint, one component, one schema migration, one test suite, etc. Do not combine unrelated outcomes in a single task.
+
 For each task:
 1. Title: Clear, specific action (e.g. "Add user login API endpoint", not "Handle auth")
-2. Description: Detailed spec with acceptance criteria, which files to create/modify, and how to verify. Include the test command or verification step (e.g., "Run npm test to verify"). For tasks that modify existing files, specify which files.
+2. Description: Detailed spec including:
+   - What to implement (files to create/modify, functions, endpoints, components)
+   - **Acceptance criteria:** A numbered list of concrete, verifiable conditions that define "done" for this task (e.g. "1. POST /api/login returns 200 with valid JWT; 2. Returns 401 for invalid credentials; 3. Unit tests cover both paths")
+   - Verification step: the test command or build check to run (e.g. "Run npm test -- --grep login")
 3. Priority: 0 (highest — foundational/blocking) to 4 (lowest — polish/optional)
-4. dependsOn: Array of other task titles this task is blocked by — use exact titles from your own output, copy them verbatim
+4. dependsOn: Array of other task titles this task is blocked by. Use exact task titles from your output for dependsOn entries — copy them character-for-character so the system can resolve references reliably. Do not paraphrase or abbreviate.
 5. files: Required object with { modify?: string[], create?: string[], test?: string[] } describing the task's expected file scope
 
 Guidelines:
-- Tasks must be atomic: one coding session, one concern
+- Tasks must be atomic: one coding session, one primary outcome
 - Order matters: infrastructure/data-model tasks first, then API, then UI, then integration
-- Include testing tasks or criteria within each task description
+- Each task description must contain explicit acceptance criteria (numbered list)
 - Be specific about file paths and technology choices based on the plan
 
 Respond with ONLY valid JSON (you may wrap in a markdown json code block):
