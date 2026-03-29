@@ -91,11 +91,14 @@ export function AgentsStep({
     simpleComplexityAgent.type === "cursor" || complexComplexityAgent.type === "cursor";
   const cursorCliMissing = envKeys && !envKeys.cursorCli && usesCursor;
 
-  const [cursorCliInstalling, setCursorCliInstalling] = useState(false);
-  const [cursorCliInstallResult, setCursorCliInstallResult] = useState<{
-    success: boolean;
-    message: string;
+  const [cursorCliLoading, setCursorCliLoading] = useState(false);
+  const [cursorCliInstructions, setCursorCliInstructions] = useState<{
+    installUrl: string;
+    manualCommand: string;
   } | null>(null);
+  const [cursorCliShowInstructions, setCursorCliShowInstructions] = useState(false);
+  const [cursorCliError, setCursorCliError] = useState<string | null>(null);
+  const [cursorCliCopied, setCursorCliCopied] = useState(false);
 
   return (
     <div className="space-y-6" data-testid="agents-step">
@@ -165,35 +168,79 @@ export function AgentsStep({
           <button
             type="button"
             className="btn btn-primary text-sm"
-            disabled={cursorCliInstalling}
+            disabled={cursorCliLoading}
             onClick={async () => {
-              setCursorCliInstallResult(null);
-              setCursorCliInstalling(true);
+              if (cursorCliShowInstructions && cursorCliInstructions) {
+                setCursorCliShowInstructions(false);
+                return;
+              }
+              setCursorCliError(null);
+              setCursorCliLoading(true);
               try {
                 const data = await api.env.installCursorCli();
-                setCursorCliInstallResult({
-                  success: data.success,
-                  message: data.message ?? (data.success ? "Install finished." : "Install failed."),
+                setCursorCliInstructions({
+                  installUrl: data.installUrl,
+                  manualCommand: data.manualCommand,
                 });
+                setCursorCliShowInstructions(true);
               } catch (err) {
-                setCursorCliInstallResult({
-                  success: false,
-                  message: err instanceof Error ? err.message : "Install request failed.",
-                });
+                setCursorCliError(
+                  err instanceof Error ? err.message : "Failed to load install instructions."
+                );
               } finally {
-                setCursorCliInstalling(false);
+                setCursorCliLoading(false);
               }
             }}
             data-testid="install-cursor-cli-btn"
           >
-            {cursorCliInstalling ? "Installing…" : "Install Cursor CLI"}
+            {cursorCliLoading
+              ? "Loading…"
+              : cursorCliShowInstructions
+                ? "Hide Install Instructions"
+                : "Show Install Instructions"}
           </button>
-          {cursorCliInstallResult && (
-            <p
-              className={`text-sm mt-2 ${cursorCliInstallResult.success ? "text-theme-success-text" : "text-theme-error-text"}`}
-            >
-              {cursorCliInstallResult.message}
-            </p>
+          {cursorCliError && (
+            <p className="text-sm mt-2 text-theme-error-text">{cursorCliError}</p>
+          )}
+          {cursorCliShowInstructions && cursorCliInstructions && (
+            <div className="mt-3 space-y-2" data-testid="cursor-cli-install-instructions">
+              <p className="text-sm text-theme-warning-text">
+                Run this command in your terminal after reviewing it:
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="block flex-1 p-2 rounded bg-theme-bg-secondary text-xs font-mono break-all select-all">
+                  {cursorCliInstructions.manualCommand}
+                </code>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs px-2 py-1 shrink-0"
+                  data-testid="copy-cursor-cli-cmd-btn"
+                  onClick={() => {
+                    navigator.clipboard
+                      .writeText(cursorCliInstructions.manualCommand)
+                      .then(() => {
+                        setCursorCliCopied(true);
+                        setTimeout(() => setCursorCliCopied(false), 2000);
+                      });
+                  }}
+                >
+                  {cursorCliCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <p className="text-xs text-theme-text-secondary">
+                Or visit{" "}
+                <a
+                  href={cursorCliInstructions.installUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:opacity-80"
+                  data-testid="cursor-cli-install-link"
+                >
+                  {cursorCliInstructions.installUrl}
+                </a>{" "}
+                for official install instructions.
+              </p>
+            </div>
           )}
         </div>
       )}
