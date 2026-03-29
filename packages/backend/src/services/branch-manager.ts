@@ -18,6 +18,7 @@ import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
+import { isNodeDependencyStrategy, resolveToolchainProfile } from "./toolchain-profile.service.js";
 
 /** Paths we must not commit from worktrees (runtime-only; would block merge in main). Agent stats, event log, and orchestrator counters are now DB-only. */
 const RUNTIME_EXCLUDE_FOR_WIP = [
@@ -35,12 +36,12 @@ const WIP_EXCLUDE_PATHS = [...RUNTIME_EXCLUDE_FOR_WIP, ...DEPENDENCY_EXCLUDE_PAT
 const log = createLogger("branch-manager");
 const DIFF_MAX_BUFFER_BYTES = 10 * 1024 * 1024;
 
-function npmShellCommandToArgv(shellStyleCommand: string): string[] {
-  const tokens = shellStyleCommand.trim().split(/\s+/);
-  if (tokens[0] !== "npm") {
-    throw new Error(`Expected npm command, got: ${shellStyleCommand}`);
+function shellCommandToSpec(shellStyleCommand: string): { command: string; args: string[] } {
+  const tokens = shellStyleCommand.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) {
+    throw new Error("Command cannot be empty");
   }
-  return tokens.slice(1);
+  return { command: tokens[0]!, args: tokens.slice(1) };
 }
 
 /** Thrown when `pushMain` rebase encounters conflicts. Repo is left in rebase state. */
@@ -101,7 +102,6 @@ const DEPENDENCY_HEALTH_CHECK_COMMAND = "npm ls --depth=0 --include=dev";
 const DEPENDENCY_HEALTH_CHECK_WORKSPACES_COMMAND =
   "npm ls --depth=0 --workspaces --include=dev";
 const DEPENDENCY_REPAIR_COMMAND = "npm ci";
-const DEPENDENCY_REPAIR_COMMANDS = [DEPENDENCY_REPAIR_COMMAND] as const;
 const WORKTREE_RM_RETRYABLE_CODES = new Set(["ENOTEMPTY", "EBUSY"]);
 const WORKTREE_RM_MAX_ATTEMPTS = 3;
 const WORKTREE_RM_RETRY_DELAY_MS = 250;
@@ -208,6 +208,17 @@ export class RepoRootDirtyRestoreError extends Error {
 export class BranchManager {
   private taskStore = taskStoreSingleton;
   private projectService = new ProjectService();
+
+  private async resolveToolchainProfileForRepo(repoPath: string) {
+    try {
+      const project = await this.projectService.getProjectByRepoPath(repoPath);
+      if (!project) return resolveToolchainProfile(undefined);
+      const settings = await this.projectService.getSettings(project.id);
+      return resolveToolchainProfile(settings.toolchainProfile);
+    } catch {
+      return resolveToolchainProfile(undefined);
+    }
+  }
 
   private async gitExec(
     repoPath: string,
@@ -1350,6 +1361,10 @@ export class BranchManager {
    * @returns true if node_modules exists after this call, false otherwise
    */
   private async ensureNodeModules(repoPath: string): Promise<boolean> {
+    const toolchain = await this.resolveToolchainProfileForRepo(repoPath);
+    if (!isNodeDependencyStrategy(toolchain.dependencyStrategy)) {
+      return true;
+    }
     const srcRoot = path.join(repoPath, "node_modules");
     try {
       await fs.access(srcRoot);
@@ -1365,7 +1380,11 @@ export class BranchManager {
       return false;
     }
 
-    const repair = await this.repairDependencies(repoPath, "missing node_modules");
+    const repair = await this.repairDependencies(
+      repoPath,
+      "missing node_modules",
+      toolchain.dependencyInstallCommand
+    );
     if (!repair.success) {
       log.warn("Dependency repair failed while ensuring node_modules", {
         repoPath,
@@ -1390,7 +1409,13 @@ export class BranchManager {
     return false;
   }
 
-  private async resolveDependencyHealthCheckCommand(repoPath: string): Promise<string> {
+  private async resolveDependencyHealthCheckCommand(
+    repoPath: string,
+    fallbackCommand: string
+  ): Promise<string> {
+    if (fallbackCommand.trim() !== DEPENDENCY_HEALTH_CHECK_COMMAND) {
+      return fallbackCommand;
+    }
     const pkgPath = path.join(repoPath, "package.json");
     try {
       const packageJson = JSON.parse(await fs.readFile(pkgPath, "utf-8")) as {
@@ -1398,7 +1423,7 @@ export class BranchManager {
       };
       return this.hasWorkspaceConfig(packageJson.workspaces)
         ? DEPENDENCY_HEALTH_CHECK_WORKSPACES_COMMAND
-        : DEPENDENCY_HEALTH_CHECK_COMMAND;
+        : fallbackCommand;
     } catch (err) {
       const code = err instanceof Error ? (err as NodeJS.ErrnoException).code : undefined;
       if (code !== "ENOENT") {
@@ -1407,7 +1432,7 @@ export class BranchManager {
           err: err instanceof Error ? err.message : String(err),
         });
       }
-      return DEPENDENCY_HEALTH_CHECK_COMMAND;
+      return fallbackCommand;
     }
   }
 
@@ -1420,18 +1445,31 @@ export class BranchManager {
   }
 
   async checkDependencyIntegrity(repoPath: string, wtPath?: string): Promise<void> {
-    const pkgPath = path.join(repoPath, "package.json");
+    const toolchain = await this.resolveToolchainProfileForRepo(repoPath);
+    if (!isNodeDependencyStrategy(toolchain.dependencyStrategy)) {
+      return;
+    }
+    if (!toolchain.dependencyHealthCheckCommand?.trim()) {
+      return;
+    }
     try {
-      await fs.access(pkgPath);
+      await fs.access(path.join(repoPath, "package.json"));
     } catch {
       return;
     }
 
-    const checkCommand = await this.resolveDependencyHealthCheckCommand(repoPath);
+    const checkCommand = await this.resolveDependencyHealthCheckCommand(
+      repoPath,
+      toolchain.dependencyHealthCheckCommand
+    );
     const initialHealth = await this.runDependencyHealthCheck(repoPath, checkCommand);
     if (initialHealth.healthy) return;
 
-    const repair = await this.repairDependencies(repoPath, "dependency integrity check failed");
+    const repair = await this.repairDependencies(
+      repoPath,
+      "dependency integrity check failed",
+      toolchain.dependencyInstallCommand
+    );
     if (repair.success && wtPath && wtPath !== repoPath) {
       await this.symlinkNodeModules(repoPath, wtPath);
     }
@@ -1443,12 +1481,13 @@ export class BranchManager {
       this.getFirstNonEmptyLine(postRepairHealth.output) ??
       this.getFirstNonEmptyLine(repair.output) ??
       this.getFirstNonEmptyLine(initialHealth.output) ??
-      "npm ls reported invalid or missing dependencies.";
+      "Dependency health check reported invalid or missing dependencies.";
+    const installCommand = toolchain.dependencyInstallCommand ?? "dependency install";
 
     throw new RepoPreflightError(
-      `Dependency integrity check failed after one automatic repair attempt. ${firstError} Run \`npm ci\` in the repo root and fix invalid dependencies in package.json/package-lock.json.`,
+      `Dependency integrity check failed after one automatic repair attempt. ${firstError} Run \`${installCommand}\` in the repo root and fix dependency manifest issues.`,
       ErrorCodes.REPO_DEPENDENCIES_INVALID,
-      [DEPENDENCY_REPAIR_COMMAND, checkCommand]
+      [installCommand, checkCommand]
     );
   }
 
@@ -1456,9 +1495,22 @@ export class BranchManager {
     repoPath: string,
     wtPath?: string
   ): Promise<DependencyHealthResult> {
-    const pkgPath = path.join(repoPath, "package.json");
+    const toolchain = await this.resolveToolchainProfileForRepo(repoPath);
+    if (
+      !isNodeDependencyStrategy(toolchain.dependencyStrategy) ||
+      !toolchain.dependencyHealthCheckCommand?.trim()
+    ) {
+      return {
+        healthy: true,
+        checkOutput: "",
+        repairAttempted: false,
+        repairSucceeded: false,
+        repairCommands: [],
+        repairOutput: "",
+      };
+    }
     try {
-      await fs.access(pkgPath);
+      await fs.access(path.join(repoPath, "package.json"));
     } catch {
       return {
         healthy: true,
@@ -1470,7 +1522,10 @@ export class BranchManager {
       };
     }
 
-    const checkCommand = await this.resolveDependencyHealthCheckCommand(repoPath);
+    const checkCommand = await this.resolveDependencyHealthCheckCommand(
+      repoPath,
+      toolchain.dependencyHealthCheckCommand
+    );
     const initialHealth = await this.runDependencyHealthCheck(repoPath, checkCommand);
     if (initialHealth.healthy) {
       return {
@@ -1483,7 +1538,11 @@ export class BranchManager {
       };
     }
 
-    const repair = await this.repairDependencies(repoPath, "dependency health check failed");
+    const repair = await this.repairDependencies(
+      repoPath,
+      "dependency health check failed",
+      toolchain.dependencyInstallCommand
+    );
     if (repair.success && wtPath && wtPath !== repoPath) {
       await this.symlinkNodeModules(repoPath, wtPath);
     }
@@ -1503,12 +1562,13 @@ export class BranchManager {
     command: string
   ): Promise<{ healthy: boolean; output: string }> {
     try {
+      const spec = shellCommandToSpec(command);
       const result = await runCommand(
-        { command: "npm", args: npmShellCommandToArgv(command) },
+        { command: spec.command, args: spec.args },
         {
           cwd: repoPath,
           timeout: NPM_HEALTH_CHECK_TIMEOUT_MS,
-          env: { ...process.env, ...NPM_INCLUDE_DEV_ENV },
+          ...(spec.command === "npm" ? { env: { ...process.env, ...NPM_INCLUDE_DEV_ENV } } : {}),
         }
       );
       const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim().slice(0, 4000);
@@ -1521,19 +1581,22 @@ export class BranchManager {
 
   private async repairDependencies(
     repoPath: string,
-    context: string
+    context: string,
+    installCommand?: string | null
   ): Promise<{ success: boolean; commands: string[]; output: string }> {
+    const commandToRun = installCommand?.trim() || DEPENDENCY_REPAIR_COMMAND;
+    const parsedSpec = shellCommandToSpec(commandToRun);
     const attempts: string[] = [];
     const outputs: string[] = [];
-    for (const command of DEPENDENCY_REPAIR_COMMANDS) {
+    for (const command of [commandToRun]) {
       attempts.push(command);
       try {
         const env =
-          command.startsWith("npm ")
+          parsedSpec.command === "npm"
             ? { ...process.env, ...NPM_INCLUDE_DEV_ENV }
             : undefined;
         const result = await runCommand(
-          { command: "npm", args: npmShellCommandToArgv(command) },
+          { command: parsedSpec.command, args: parsedSpec.args },
           { cwd: repoPath, timeout: NPM_REPAIR_TIMEOUT_MS, ...(env ? { env } : {}) }
         );
         const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
@@ -1573,40 +1636,46 @@ export class BranchManager {
    * under packages/.
    */
   async reconcileDependenciesAfterMerge(repoPath: string): Promise<void> {
+    const toolchain = await this.resolveToolchainProfileForRepo(repoPath);
+    if (
+      !isNodeDependencyStrategy(toolchain.dependencyStrategy) ||
+      !toolchain.dependencyInstallCommand?.trim()
+    ) {
+      return;
+    }
     let needsReconcile = true;
     try {
       const { stdout } = await this.gitExec(
         repoPath,
-        [
-          "diff",
-          "--name-only",
-          "ORIG_HEAD..HEAD",
-          "--",
-          "package.json",
-          "package-lock.json",
-          ":(glob)packages/**/package.json",
-          ":(glob)apps/**/package.json",
-        ],
+        ["diff", "--name-only", "ORIG_HEAD..HEAD", "--", ...toolchain.dependencyChangePathspecs],
         { timeout: 10_000 }
       );
       const changed = stdout.trim().split("\n").filter(Boolean);
       if (changed.length === 0) {
         needsReconcile = false;
-        log.info("No dependency files changed in merge, skipping npm ci", { repoPath });
+        log.info("No dependency files changed in merge, skipping dependency reconcile", { repoPath });
       } else {
-        log.info("Dependency files changed in merge, running npm ci", { repoPath, changed });
+        log.info("Dependency files changed in merge, running dependency reconcile", {
+          repoPath,
+          changed,
+          command: toolchain.dependencyInstallCommand,
+        });
       }
     } catch {
-      log.info("Could not determine changed files after merge, running npm ci as precaution", {
+      log.info("Could not determine changed files after merge, running dependency reconcile", {
         repoPath,
       });
     }
 
     if (!needsReconcile) return;
 
-    const repair = await this.repairDependencies(repoPath, "post-merge dependency reconciliation");
+    const repair = await this.repairDependencies(
+      repoPath,
+      "post-merge dependency reconciliation",
+      toolchain.dependencyInstallCommand
+    );
     if (!repair.success) {
-      log.warn("Post-merge npm ci failed — subsequent baseline checks may fail", {
+      log.warn("Post-merge dependency reconcile failed — subsequent baseline checks may fail", {
         repoPath,
         output: repair.output,
       });
@@ -1625,6 +1694,10 @@ export class BranchManager {
     const resolvedWt = await fs.realpath(wtPath).catch(() => wtPath);
     if (resolvedRepo === resolvedWt) {
       log.warn("symlinkNodeModules: wtPath equals repoPath, skipping to avoid circular symlinks");
+      return;
+    }
+    const toolchain = await this.resolveToolchainProfileForRepo(repoPath);
+    if (!isNodeDependencyStrategy(toolchain.dependencyStrategy)) {
       return;
     }
 
@@ -1944,12 +2017,16 @@ export class BranchManager {
   /**
    * Prune orphan worktrees: remove worktrees whose tasks are closed or don't exist.
    * Called periodically by recovery to prevent accumulation of stale worktrees.
-   * @param excludeTaskIds - Task IDs to never remove (e.g. slotted, in_progress)
+   * @param excludeTaskIds - Task IDs to never remove (legacy compatibility)
+   * @param excludeWorktreeKeys - Worktree keys to never remove (taskId or epic_<epicId>)
+   * @param excludeWorktreePaths - Worktree paths to never remove
    */
   async pruneOrphanWorktrees(
     repoPath: string,
     projectId: string,
     excludeTaskIds: Set<string>,
+    excludeWorktreeKeys: Set<string>,
+    excludeWorktreePaths: Set<string>,
     taskStore: { listAll: (projectId: string) => Promise<Array<{ id: string; status?: string }>> }
   ): Promise<string[]> {
     const worktrees = await this.listTaskWorktrees(repoPath);
@@ -1958,7 +2035,10 @@ export class BranchManager {
     const pruned: string[] = [];
 
     for (const { taskId, worktreePath } of worktrees) {
+      const resolvedPath = path.resolve(worktreePath);
       if (excludeTaskIds.has(taskId)) continue;
+      if (excludeWorktreeKeys.has(taskId)) continue;
+      if (excludeWorktreePaths.has(resolvedPath)) continue;
       const status = idToStatus.get(taskId);
       // Remove if task doesn't exist or is closed
       if (status === undefined || status === "closed") {

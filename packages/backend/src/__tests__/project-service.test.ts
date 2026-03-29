@@ -6,6 +6,7 @@ import {
   ProjectService,
   getNextScheduledSelfImprovementRunAt,
 } from "../services/project.service.js";
+import { BranchManager } from "../services/branch-manager.js";
 import { notificationService } from "../services/notification.service.js";
 import { setGlobalSettings } from "../services/global-settings.service.js";
 import {
@@ -1349,6 +1350,26 @@ describe("ProjectService", () => {
     const opensprintDir = path.join(repoPath, ".opensprint");
     const stat = await fs.stat(opensprintDir);
     expect(stat.isDirectory()).toBe(true);
+  });
+
+  it("archiveProject removes registered project worktrees", async () => {
+    const repoPath = path.join(tempDir, "archive-project-worktrees");
+    const project = await projectService.createProject({
+      name: "Archive Worktrees",
+      repoPath,
+      simpleComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      complexComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+    const branchManager = new BranchManager();
+    const taskId = `os-archive-${Date.now()}`;
+    const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+    await fs.stat(wtPath);
+
+    await projectService.archiveProject(project.id);
+
+    await expect(fs.stat(wtPath)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it.skip("archiveProject cascades delete of open_questions for the project (requires real task-store DB)", async () => {

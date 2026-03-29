@@ -62,6 +62,8 @@ export interface BaselineQualityGateTaskInput {
   validationWorkspace?: "baseline" | "merged_candidate" | "task_worktree" | "repo_root" | null;
 }
 
+export type BaselineRemediationTaskAction = "created" | "updated" | "reopened";
+
 function truncateText(value: string | null | undefined, maxLen: number): string {
   const trimmed = value?.trim() ?? "";
   if (trimmed.length <= maxLen) return trimmed;
@@ -244,8 +246,11 @@ export class SelfImprovementService {
     return this.toBehaviorStatus(updated);
   }
 
-  private buildBaselineQualityGateTaskDescription(input: BaselineQualityGateTaskInput): string {
-    const commands = getMergeQualityGateCommands();
+  private buildBaselineQualityGateTaskDescription(
+    input: BaselineQualityGateTaskInput,
+    mergeQualityGateCommands: string[]
+  ): string {
+    const commands = mergeQualityGateCommands;
     const reason =
       truncateText(input.reason, BASELINE_QUALITY_GATE_REASON_LIMIT) || "Unknown failure";
     const outputSnippet = truncateText(input.outputSnippet, BASELINE_QUALITY_GATE_OUTPUT_LIMIT);
@@ -273,9 +278,11 @@ export class SelfImprovementService {
   async ensureBaselineQualityGateTask(
     projectId: string,
     input: BaselineQualityGateTaskInput
-  ): Promise<{ taskId: string; created: boolean }> {
+  ): Promise<{ taskId: string; created: boolean; action: BaselineRemediationTaskAction }> {
+    const settings = await this.projectService.getSettings(projectId);
+    const mergeQualityGateCommands = getMergeQualityGateCommands(settings.toolchainProfile);
     const title = this.buildBaselineQualityGateTaskTitle(input.baseBranch);
-    const description = this.buildBaselineQualityGateTaskDescription(input);
+    const description = this.buildBaselineQualityGateTaskDescription(input, mergeQualityGateCommands);
     const reason = truncateText(input.reason, BASELINE_QUALITY_GATE_REASON_LIMIT);
     const outputSnippet = truncateText(input.outputSnippet, BASELINE_QUALITY_GATE_OUTPUT_LIMIT);
     const fingerprint = buildBaselineFailureFingerprint(input);
@@ -293,7 +300,7 @@ export class SelfImprovementService {
       validationWorkspace: input.validationWorkspace ?? null,
       baselineFailureFingerprint: fingerprint,
       baselineFailureObservedAt: observedAtIso,
-      baselineQualityGateCommands: getMergeQualityGateCommands(),
+      baselineQualityGateCommands: mergeQualityGateCommands,
     };
 
     const allTasks = await taskStore.listAll(projectId);
@@ -319,7 +326,7 @@ export class SelfImprovementService {
         complexity: BASELINE_QUALITY_GATE_TASK_COMPLEXITY,
         extra,
       });
-      return { taskId: existing.id, created: false };
+      return { taskId: existing.id, created: false, action: "updated" };
     }
 
     const nowMs = Date.now();
@@ -355,7 +362,7 @@ export class SelfImprovementService {
         complexity: BASELINE_QUALITY_GATE_TASK_COMPLEXITY,
         extra,
       });
-      return { taskId: recentlyClosedMatch.id, created: false };
+      return { taskId: recentlyClosedMatch.id, created: false, action: "reopened" };
     }
 
     const created = await taskStore.create(projectId, title, {
@@ -371,7 +378,7 @@ export class SelfImprovementService {
       baseBranch: input.baseBranch,
       command: input.command,
     });
-    return { taskId: created.id, created: true };
+    return { taskId: created.id, created: true, action: "created" };
   }
 
   /**

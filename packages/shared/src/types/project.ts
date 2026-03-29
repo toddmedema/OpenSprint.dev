@@ -43,6 +43,8 @@ export interface CreateProjectRequest {
   hilConfig?: HilConfigInput;
   /** Detected or user-selected test framework (PRD §10.2) */
   testFramework?: string | null;
+  /** Optional per-project toolchain profile for language-agnostic orchestration. */
+  toolchainProfile?: ToolchainProfile;
   /** Max concurrent coder agents (default 1). Stored in project settings. */
   maxConcurrentCoders?: number;
   /** Optional cap on all concurrent agents (plan + execute + merger). Stored in project settings. */
@@ -95,4 +97,5 @@ import type {
   DeploymentConfigInput,
   HilConfigInput,
   AiAutonomyLevel,
+  ToolchainProfile,
 } from "./settings.js";

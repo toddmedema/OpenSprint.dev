@@ -112,6 +112,8 @@ export const TEST_FRAMEWORKS = [
   { id: "playwright", label: "Playwright", command: "npx playwright test" },
   { id: "cypress", label: "Cypress", command: "npx cypress run" },
   { id: "pytest", label: "pytest", command: "pytest" },
+  { id: "go_test", label: "Go test", command: "go test ./..." },
+  { id: "cargo_test", label: "Cargo test", command: "cargo test" },
   { id: "mocha", label: "Mocha", command: "npm test" },
   { id: "none", label: "None / Configure later", command: "" },
 ] as const;
@@ -131,7 +133,7 @@ export function resolveTestCommand(settings: {
   if (settings.testCommand?.trim()) return settings.testCommand.trim();
   const fromFramework = getTestCommandForFramework(settings.testFramework ?? null);
   if (fromFramework) return fromFramework;
-  return "npm test";
+  return "";
 }
 
 // ─── Agent display names (orchestrator / task store / UI) ───

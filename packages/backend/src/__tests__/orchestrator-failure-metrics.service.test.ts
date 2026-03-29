@@ -60,4 +60,64 @@ describe("orchestrator-failure-metrics.service", () => {
       count: 1,
     });
   });
+
+  it("derives language-agnostic signature buckets for environment and quality-gate failures", () => {
+    const summary = rollupOrchestratorEvents("p2", "2025-01-01T00:00:00.000Z", "2025-01-31T00:00:00.000Z", [
+      {
+        timestamp: "2025-01-05T00:00:00.000Z",
+        projectId: "p2",
+        taskId: "a",
+        event: "merge.failed",
+        data: {
+          failureType: "environment_setup",
+          mergeStage: "quality_gate",
+          qualityGateCategory: "environment_setup",
+          qualityGateFirstErrorLine: "Validation workspace package.json is missing",
+        },
+      },
+      {
+        timestamp: "2025-01-06T00:00:00.000Z",
+        projectId: "p2",
+        taskId: "b",
+        event: "task.requeued",
+        data: {
+          failureType: "environment_setup",
+          mergeStage: "quality_gate",
+          qualityGateCategory: "environment_setup",
+          qualityGateClassificationConfidence: "low",
+          failedGateReason: "Cannot resolve project for repo path /tmp/repo",
+        },
+      },
+      {
+        timestamp: "2025-01-07T00:00:00.000Z",
+        projectId: "p2",
+        taskId: "c",
+        event: "merge.failed",
+        data: {
+          failureType: "merge_quality_gate",
+          mergeStage: "quality_gate",
+          qualityGateCategory: "quality_gate",
+          failedGateReason: "AssertionError: expected 401 to be 200",
+        },
+      },
+    ] as OrchestratorEvent[]);
+
+    expect(summary.totalEventsMatched).toBe(3);
+    expect(summary.buckets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          signatureBucket: "workspace_preflight",
+          qualityGateCategory: "environment_setup",
+        }),
+        expect.objectContaining({
+          signatureBucket: "project_resolution",
+          classificationConfidence: "low",
+        }),
+        expect.objectContaining({
+          signatureBucket: "deterministic_code_regression",
+          qualityGateCategory: "quality_gate",
+        }),
+      ])
+    );
+  });
 });

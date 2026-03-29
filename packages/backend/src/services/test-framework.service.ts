@@ -51,6 +51,12 @@ export async function detectTestFramework(repoPath: string): Promise<DetectedTes
       if (testScript.includes("pytest")) {
         return { framework: "pytest", testCommand: "pytest" };
       }
+      if (testScript.includes("go test")) {
+        return { framework: "go_test", testCommand: "go test ./..." };
+      }
+      if (testScript.includes("cargo test")) {
+        return { framework: "cargo_test", testCommand: "cargo test" };
+      }
       if (testScript.includes("mocha")) {
         return { framework: "mocha", testCommand: "npm test" };
       }
@@ -86,6 +92,8 @@ export async function detectTestFramework(repoPath: string): Promise<DetectedTes
       { file: "cypress.config.js", framework: "cypress", command: "npx cypress run" },
       { file: "pytest.ini", framework: "pytest", command: "pytest" },
       { file: "pyproject.toml", framework: "pytest", command: "pytest" },
+      { file: "go.mod", framework: "go_test", command: "go test ./..." },
+      { file: "Cargo.toml", framework: "cargo_test", command: "cargo test" },
     ];
 
     for (const { file, framework, command } of configs) {
@@ -111,6 +119,22 @@ export async function detectTestFramework(repoPath: string): Promise<DetectedTes
     try {
       await fs.access(path.join(repoPath, "setup.py"));
       return { framework: "pytest", testCommand: "pytest" };
+    } catch {
+      // Not found
+    }
+
+    // Detect Go projects when no explicit test framework was found.
+    try {
+      await fs.access(path.join(repoPath, "go.mod"));
+      return { framework: "go_test", testCommand: "go test ./..." };
+    } catch {
+      // Not found
+    }
+
+    // Detect Rust projects when no explicit test framework was found.
+    try {
+      await fs.access(path.join(repoPath, "Cargo.toml"));
+      return { framework: "cargo_test", testCommand: "cargo test" };
     } catch {
       // Not found
     }

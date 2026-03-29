@@ -1019,6 +1019,8 @@ describe("BranchManager", () => {
         repoPath,
         "test-project",
         new Set(["other-open"]),
+        new Set(),
+        new Set(),
         taskStore
       );
 
@@ -1047,12 +1049,47 @@ describe("BranchManager", () => {
         repoPath,
         "test-project",
         new Set([activeTaskId]),
+        new Set(),
+        new Set(),
         taskStore
       );
 
       expect(pruned).not.toContain(activeTaskId);
       const listAfter = await branchManager.listTaskWorktrees(repoPath);
       expect(listAfter.some((w) => w.taskId === activeTaskId)).toBe(true);
+    });
+
+    it("pruneOrphanWorktrees skips excluded worktree keys and paths", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const worktreeKey = `epic_skip_${Date.now()}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, worktreeKey, "main", {
+        worktreeKey,
+        branchName: `opensprint/${worktreeKey}`,
+      });
+      worktreePaths.push(wtPath);
+
+      const taskStore = {
+        listAll: vi.fn().mockResolvedValue([{ id: "other-task", status: "open" }]),
+      };
+
+      const pruned = await branchManager.pruneOrphanWorktrees(
+        repoPath,
+        "test-project",
+        new Set(),
+        new Set([worktreeKey]),
+        new Set([path.resolve(wtPath)]),
+        taskStore
+      );
+
+      expect(pruned).not.toContain(worktreeKey);
+      const listAfter = await branchManager.listTaskWorktrees(repoPath);
+      expect(listAfter.some((w) => w.taskId === worktreeKey)).toBe(true);
     });
 
     it("should replace a stale worktree when creating", async () => {

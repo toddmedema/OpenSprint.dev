@@ -11,6 +11,12 @@ const mockReadHeartbeat = vi.fn();
 const mockFindOrphanedAssignments = vi.fn();
 const mockFindOrphanedAssignmentsFromWorktrees = vi.fn();
 const mockReadAssignmentAt = vi.fn();
+const mockListCleanupIntents = vi.fn();
+const mockRemoveCleanupIntent = vi.fn();
+const mockRemoveTaskWorktree = vi.fn();
+const mockDeleteBranch = vi.fn();
+const mockPruneOrphanWorktrees = vi.fn();
+const mockListTaskWorktrees = vi.fn();
 
 vi.mock("../services/heartbeat.service.js", () => ({
   heartbeatService: {
@@ -53,6 +59,13 @@ vi.mock("../services/project.service.js", () => ({
   })),
 }));
 
+vi.mock("../services/worktree-cleanup-intent.service.js", () => ({
+  worktreeCleanupIntentService: {
+    list: (...args: unknown[]) => mockListCleanupIntents(...args),
+    removeBestEffort: (...args: unknown[]) => mockRemoveCleanupIntent(...args),
+  },
+}));
+
 vi.mock("../services/branch-manager.js", () => ({
   BranchManager: vi.fn().mockImplementation(() => ({
     getWorktreeBasePath: vi.fn().mockReturnValue(path.join(os.tmpdir(), "opensprint-worktrees")),
@@ -62,9 +75,10 @@ vi.mock("../services/branch-manager.js", () => ({
         path.join(os.tmpdir(), "opensprint-worktrees", taskId)
       ),
     commitWip: vi.fn().mockResolvedValue(undefined),
-    listTaskWorktrees: vi.fn().mockResolvedValue([]),
-    removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
-    pruneOrphanWorktrees: vi.fn().mockResolvedValue([]),
+    listTaskWorktrees: (...args: unknown[]) => mockListTaskWorktrees(...args),
+    removeTaskWorktree: (...args: unknown[]) => mockRemoveTaskWorktree(...args),
+    deleteBranch: (...args: unknown[]) => mockDeleteBranch(...args),
+    pruneOrphanWorktrees: (...args: unknown[]) => mockPruneOrphanWorktrees(...args),
   })),
 }));
 
@@ -91,6 +105,12 @@ describe("RecoveryService — stale heartbeat recovery", () => {
     mockFindOrphanedAssignments.mockResolvedValue([]);
     mockFindOrphanedAssignmentsFromWorktrees.mockResolvedValue([]);
     mockReadAssignmentAt.mockResolvedValue(null);
+    mockListCleanupIntents.mockResolvedValue([]);
+    mockRemoveCleanupIntent.mockResolvedValue(undefined);
+    mockRemoveTaskWorktree.mockResolvedValue(undefined);
+    mockDeleteBranch.mockResolvedValue(undefined);
+    mockPruneOrphanWorktrees.mockResolvedValue([]);
+    mockListTaskWorktrees.mockResolvedValue([]);
     vi.mocked(taskStore.listInProgressWithAgentAssignee).mockResolvedValue([]);
     vi.mocked(taskStore.listInProgressWithoutAssignee).mockResolvedValue([]);
     vi.mocked(taskStore.show).mockResolvedValue({
@@ -570,6 +590,38 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       "task-stale",
       expect.objectContaining({ status: "open" })
     );
+  });
+
+  it("replays persisted cleanup intents during recovery", async () => {
+    mockListCleanupIntents.mockResolvedValue([
+      {
+        taskId: "task-merged",
+        branchName: "opensprint/task-merged",
+        worktreePath: "/tmp/wt-merged",
+        gitWorkingMode: "worktree",
+        worktreeKey: "epic_123",
+      },
+    ]);
+
+    const result = await service.runFullRecovery("proj-1", tmpDir, host);
+
+    expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(tmpDir, "epic_123", "/tmp/wt-merged");
+    expect(mockDeleteBranch).toHaveBeenCalledWith(tmpDir, "opensprint/task-merged");
+    expect(mockRemoveCleanupIntent).toHaveBeenCalledWith(tmpDir, "proj-1", "task-merged");
+    expect(result.cleaned).toContain("cleanup_intent:task-merged");
+  });
+
+  it("cleans stale inactive blocked/open worktrees after TTL", async () => {
+    const staleUpdatedAt = new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString();
+    mockListTaskWorktrees.mockResolvedValue([{ taskId: "task-blocked", worktreePath: "/tmp/wt-blocked" }]);
+    vi.mocked(taskStore.listAll).mockResolvedValue([
+      { id: "task-blocked", status: "blocked", updated_at: staleUpdatedAt } as never,
+    ]);
+
+    const result = await service.runFullRecovery("proj-1", tmpDir, host);
+
+    expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(tmpDir, "task-blocked", "/tmp/wt-blocked");
+    expect(result.cleaned).toContain("stale_inactive_worktree:task-blocked");
   });
 
   describe("orphaned in_progress tasks (agent assignee, no process)", () => {

@@ -54,6 +54,7 @@ import {
 } from "./settings-store.service.js";
 import { deleteFeedbackAssetsForProject } from "./feedback-store.service.js";
 import { BranchManager } from "./branch-manager.js";
+import { worktreeCleanupIntentService } from "./worktree-cleanup-intent.service.js";
 import { detectTestFramework } from "./test-framework.service.js";
 import { ensureEasConfig } from "./eas-config.js";
 import { projectGitRuntimeCache } from "./project-git-runtime-cache.js";
@@ -140,9 +141,9 @@ const OPENSPRINT_RUNTIME_CONTRACT_SECTION = [
   "Open Sprint manages task state internally. Do not use external task CLIs.",
   "",
   "- Execute agents start in a prepared worktree with the task branch already checked out.",
-  "- Run the smallest relevant non-watch verification for touched workspaces while iterating. Use scoped tests first, add scoped build/typecheck and lint commands when your changes could affect them, and leave the branch in a state where the merge quality gates (`npm run build`, `npm run lint`, `npm run test`) are expected to pass before reporting success.",
-  "- If you add, remove, or upgrade package dependencies: run this repo’s install command from the repository root (root `package.json`), update lockfiles as required, and commit manifest and lockfile changes together with the code that uses those packages.",
-  "- If you add or change TypeScript tests that use Jest/Vitest/Mocha globals (`describe`, `it`, `expect`, etc.), ensure `npm run build` still passes: add matching dev typings (e.g. `@types/jest`) or exclude those tests from the build TypeScript project. `TS2582: Cannot find name 'describe'` means the build typechecks tests without test-runner types.",
+  "- Run the smallest relevant non-watch verification for touched workspaces while iterating. Use scoped tests first, add scoped build/typecheck and lint commands when your changes could affect them, and leave the branch in a state where the project’s configured merge quality gates are expected to pass before reporting success.",
+  "- If you add, remove, or upgrade dependencies: run the repository’s documented install workflow from the repository root, update manifests/lockfiles required by that ecosystem, and commit dependency metadata changes together with the code that uses them.",
+  "- If the project’s build/typecheck includes tests, ensure test-runner globals and typing/runtime configuration are set up so build/typecheck still passes after your changes.",
   "- Report completion or blocking questions by writing the exact `.opensprint/active/<task-id>/result.json` payload requested in the task prompt.",
   "- Commit incremental logical units while working so crash recovery can preserve progress.",
   '- If blocked by ambiguity, return `status: "failed"` with `open_questions` instead of guessing.',
@@ -252,6 +253,7 @@ function buildDefaultSettings(): ProjectSettings {
     hilConfig: { ...DEFAULT_HIL_CONFIG },
     testFramework: null,
     testCommand: null,
+    toolchainProfile: undefined,
     validationTimeoutMsOverride: null,
     reviewMode: DEFAULT_REVIEW_MODE,
     maxConcurrentCoders: 1,
@@ -281,6 +283,7 @@ function toCanonicalSettings(s: ProjectSettings): ProjectSettings {
     hilConfig: hilConfigFromAiAutonomyLevel(aiAutonomyLevel),
     testFramework: s.testFramework ?? null,
     testCommand: s.testCommand ?? null,
+    ...(s.toolchainProfile && { toolchainProfile: s.toolchainProfile }),
     validationTimeoutMsOverride:
       typeof s.validationTimeoutMsOverride === "number"
         ? clampValidationTimeoutMs(s.validationTimeoutMsOverride)
@@ -715,6 +718,7 @@ export class ProjectService {
       hilConfig,
       testFramework,
       testCommand,
+      ...(input.toolchainProfile && { toolchainProfile: input.toolchainProfile }),
       reviewMode: DEFAULT_REVIEW_MODE,
       gitWorkingMode,
       worktreeBaseBranch: baseBranch,
@@ -1625,8 +1629,11 @@ export class ProjectService {
 
   /** Archive a project: remove from index only. Data in project folder remains. */
   async archiveProject(id: string): Promise<void> {
-    await this.getProject(id); // validate exists, throws 404 if not
+    const project = await this.getProject(id); // validate exists, throws 404 if not
+    const repoPath = project.repoPath;
     await this.stopOrchestratorForProject(id);
+    await this.cleanupProjectWorktrees(repoPath);
+    await worktreeCleanupIntentService.clearProject(repoPath, id).catch(() => {});
     await this.taskStore.deleteOpenQuestionsByProjectId(id);
     await projectIndex.removeProject(id);
     this.invalidateListCache();
@@ -1640,20 +1647,8 @@ export class ProjectService {
     await this.stopOrchestratorForProject(id);
 
     // Remove worktrees for this project so watchdog/orphan recovery never see them again.
-    // Use listTaskWorktrees (from git) to find all worktrees regardless of tmpdir.
-    const branchManager = new BranchManager();
-    try {
-      const worktrees = await branchManager.listTaskWorktrees(repoPath);
-      for (const { taskId, worktreePath } of worktrees) {
-        try {
-          await branchManager.removeTaskWorktree(repoPath, taskId, worktreePath);
-        } catch {
-          // Best effort; worktree may already be gone
-        }
-      }
-    } catch {
-      // Repo may not exist or have no worktrees
-    }
+    await this.cleanupProjectWorktrees(repoPath);
+    await worktreeCleanupIntentService.clearProject(repoPath, id).catch(() => {});
 
     await this.taskStore.deleteByProjectId(id);
     await deleteSettingsFromStore(id);
@@ -1673,5 +1668,27 @@ export class ProjectService {
     await projectIndex.removeProject(id);
     this.invalidateListCache();
     projectGitRuntimeCache.invalidate(id);
+  }
+
+  private async cleanupProjectWorktrees(repoPath: string): Promise<void> {
+    const branchManager = new BranchManager();
+    let removed = 0;
+    let failed = 0;
+    try {
+      const worktrees = await branchManager.listTaskWorktrees(repoPath);
+      for (const { taskId, worktreePath } of worktrees) {
+        try {
+          await branchManager.removeTaskWorktree(repoPath, taskId, worktreePath);
+          removed += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+    } catch {
+      // Repo may not exist or have no worktrees
+    }
+    if (removed > 0 || failed > 0) {
+      log.info("Project worktree cleanup completed", { repoPath, removed, failed });
+    }
   }
 }

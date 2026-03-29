@@ -12,7 +12,6 @@ import { BranchManager } from "./branch-manager.js";
 import { PrdService } from "./prd.service.js";
 import { ChatService } from "./chat.service.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
-import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 import type { TaskStoreService } from "./task-store.service.js";
 import type { StoredTask } from "./task-store.service.js";
 import { notificationService } from "./notification.service.js";
@@ -498,9 +497,6 @@ export class ContextAssembler {
   }
 
   private generateCodingPrompt(config: ActiveTaskConfig, context: TaskContext): string {
-    const mergeQualityGateList = getMergeQualityGateCommands()
-      .map((command) => `\`${command}\``)
-      .join(", ");
     let prompt = `# Task: ${context.title}\n\n`;
     prompt += `Implement the task. Do not re-explain the task or list options — start implementing.\n\n`;
     prompt += `## Objective\n\n${context.description}\n\n`;
@@ -542,7 +538,7 @@ export class ContextAssembler {
     prompt += `${config.useExistingBranch ? "5" : "4"}. Write comprehensive tests (unit, and integration where applicable).\n`;
     prompt += `${config.useExistingBranch ? "6" : "5"}. **Commit after each logical unit** — with descriptive messages (e.g., "Add login API endpoint", "Add auth tests"). Do not wait until the end to commit. This protects your work if the process is interrupted.\n`;
     prompt += `${config.useExistingBranch ? "7" : "6"}. Run the smallest relevant non-watch verification for the workspaces you touch while iterating. Prefer scoped tests first, and add scoped build/typecheck and lint commands whenever your changes could affect them (for example TypeScript, exported interfaces, build config, or linted frontend/backend code).\n`;
-    prompt += `   Before writing \`result.json\`, run the merge quality gates from the repository root so your changes do not break the build: ${mergeQualityGateList}. The orchestrator runs the same commands automatically after you finish — fix any failures before reporting success. Never use watch mode or leave test processes running in the background.\n`;
+    prompt += `   Before writing \`result.json\`, run the project's configured merge quality gate commands from the repository root so your changes do not break the build. The orchestrator runs the same commands automatically after you finish — fix any failures before reporting success. Never use watch mode or leave test processes running in the background.\n`;
     if (config.attempt > 1) {
       prompt += `   **Retry:** Your previous attempt failed validation. Ensure every merge gate command above passes locally before you write \`result.json\`.\n`;
     }

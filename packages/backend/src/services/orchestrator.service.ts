@@ -1611,6 +1611,26 @@ export class OrchestratorService {
     return [...state.slots.keys()];
   }
 
+  getSlottedWorktreeKeys(projectId: string): string[] {
+    const state = this.state.get(projectId);
+    if (!state) return [];
+    const keys = new Set<string>();
+    for (const [taskId, slot] of state.slots.entries()) {
+      keys.add(slot.worktreeKey ?? taskId);
+    }
+    return [...keys];
+  }
+
+  getSlottedWorktreePaths(projectId: string): string[] {
+    const state = this.state.get(projectId);
+    if (!state) return [];
+    const paths = new Set<string>();
+    for (const slot of state.slots.values()) {
+      if (slot.worktreePath) paths.add(slot.worktreePath);
+    }
+    return [...paths];
+  }
+
   /** Active agent IDs (planning + execute) for recovery/orphan detection. */
   getActiveAgentIds(projectId: string): string[] {
     return activeAgentsService.list(projectId).map((a) => a.id);
@@ -2152,6 +2172,7 @@ export class OrchestratorService {
           branchName,
           baseBranch,
           validationWorkspace: "task_worktree",
+          toolchainProfile: settings.toolchainProfile,
         });
         if (qualityGateFailure) {
           const detail = this.applyQualityGateFailure(slot.phaseResult, qualityGateFailure, wtPath);
@@ -2462,7 +2483,7 @@ export class OrchestratorService {
     const wtPath = slot.worktreePath ?? repoPath;
     const testCommand = resolveTestCommand(settings) || undefined;
     const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
-    const mergeQualityGates = getMergeQualityGateCommands();
+    const mergeQualityGates = getMergeQualityGateCommands(settings.toolchainProfile);
     await this.writeReviewTestStatus(task.id, repoPath, wtPath, {
       status: "pending",
       testCommand,
@@ -2521,6 +2542,7 @@ export class OrchestratorService {
             branchName,
             baseBranch,
             validationWorkspace: "task_worktree",
+            toolchainProfile: settings.toolchainProfile,
           });
           if (qualityGateFailure) {
             const detail = this.applyQualityGateFailure(sl.phaseResult, qualityGateFailure, wtPath);
@@ -3379,16 +3401,10 @@ export class OrchestratorService {
       );
     }
 
-    try {
-      await fs.access(path.join(wtPath, "node_modules"));
-    } catch {
-      if (wtPath === repoPath) {
-        log.warn("Pre-flight: node_modules missing, ensuring in repo (Branches mode)");
-        await this.branchManager.ensureRepoNodeModules(repoPath);
-      } else {
-        log.warn("Pre-flight: node_modules missing, re-symlinking");
-        await this.branchManager.symlinkNodeModules(repoPath, wtPath);
-      }
+    if (wtPath === repoPath) {
+      await this.branchManager.ensureRepoNodeModules(repoPath);
+    } else {
+      await this.branchManager.symlinkNodeModules(repoPath, wtPath);
     }
 
     await this.branchManager.checkDependencyIntegrity(repoPath, wtPath);

@@ -10,6 +10,8 @@ import type { StoredTask } from "./task-store.service.js";
 export interface OrchestratorRecoveryHost {
   getSlottedTaskIds(projectId: string): string[];
   getActiveAgentIds(projectId: string): string[];
+  getSlottedWorktreeKeys(projectId: string): string[];
+  getSlottedWorktreePaths(projectId: string): string[];
   reattachRecoveredCodingTask(
     projectId: string,
     repoPath: string,
@@ -44,6 +46,8 @@ export function buildOrchestratorRecoveryHost(host: OrchestratorRecoveryHost): R
   return {
     getSlottedTaskIds: (projectId) => host.getSlottedTaskIds(projectId),
     getActiveAgentIds: (projectId) => host.getActiveAgentIds(projectId),
+    getSlottedWorktreeKeys: (projectId) => host.getSlottedWorktreeKeys(projectId),
+    getSlottedWorktreePaths: (projectId) => host.getSlottedWorktreePaths(projectId),
     reattachSlot: (projectId, repoPath, task, assignment) =>
       host.reattachRecoveredCodingTask(projectId, repoPath, task, assignment),
     resumeReviewPhase: (projectId, repoPath, task, assignment, options) =>

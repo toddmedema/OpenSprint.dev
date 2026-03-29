@@ -21,6 +21,7 @@ import { CrashRecoveryService } from "./crash-recovery.service.js";
 import { ProjectService } from "./project.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { eventLogService } from "./event-log.service.js";
+import { worktreeCleanupIntentService } from "./worktree-cleanup-intent.service.js";
 import type { RetryContext } from "./orchestrator-phase-context.js";
 import { isProcessAlive, terminateProcessGroup } from "../utils/process-group.js";
 import { createLogger } from "../utils/logger.js";
@@ -28,6 +29,12 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("recovery");
 
 const GIT_LOCK_STALE_MS = 10 * 60 * 1000; // 10 minutes
+const STALE_INACTIVE_WORKTREE_MS = (() => {
+  const rawValue = process.env.OPENSPRINT_STALE_INACTIVE_WORKTREE_MS;
+  if (rawValue == null || rawValue.trim() === "") return 24 * 60 * 60 * 1000;
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 24 * 60 * 60 * 1000;
+})();
 const SLOT_RECOVERY_GRACE_MS = (() => {
   const rawValue = process.env.OPENSPRINT_SLOT_RECOVERY_GRACE_MS;
   if (rawValue == null || rawValue.trim() === "") return 30_000;
@@ -44,6 +51,10 @@ export interface RecoveryResult {
 export interface RecoveryHost {
   getSlottedTaskIds(projectId: string): string[];
   getActiveAgentIds(projectId: string): string[];
+  /** Worktree keys held by active slots (task.id or epic_<epicId>). */
+  getSlottedWorktreeKeys?(projectId: string): string[];
+  /** Worktree paths held by active slots. */
+  getSlottedWorktreePaths?(projectId: string): string[];
   /** Called to reattach a slot for a still-running agent (GUPP recovery) */
   reattachSlot?(
     projectId: string,
@@ -131,6 +142,13 @@ export class RecoveryService {
       ...host.getActiveAgentIds(projectId),
       ...result.reattached,
     ]);
+    const excludeWorktreeKeys = new Set([
+      ...excludeIds,
+      ...(host.getSlottedWorktreeKeys?.(projectId) ?? []),
+    ]);
+    const excludeWorktreePaths = new Set(
+      (host.getSlottedWorktreePaths?.(projectId) ?? []).map((p) => path.resolve(p))
+    );
 
     // 2. Stale heartbeat recovery
     const staleResult = await this.recoverFromStaleHeartbeats(
@@ -144,11 +162,14 @@ export class RecoveryService {
 
     staleResult.reattached.forEach((taskId) => excludeIds.add(taskId));
     staleResult.requeued.forEach((taskId) => excludeIds.add(taskId));
+    staleResult.reattached.forEach((taskId) => excludeWorktreeKeys.add(taskId));
+    staleResult.requeued.forEach((taskId) => excludeWorktreeKeys.add(taskId));
 
     // 3. Orphaned in_progress tasks
     const orphanResult = await this.recoverOrphanedTasks(projectId, repoPath, excludeIds);
     result.requeued.push(...orphanResult);
     orphanResult.forEach((taskId) => excludeIds.add(taskId));
+    orphanResult.forEach((taskId) => excludeWorktreeKeys.add(taskId));
 
     // 4. Stranded merge retries: in_progress but no assignee, slot, or active agent.
     const assigneeLessResult = await this.recoverAssigneeLessInProgressTasks(
@@ -158,6 +179,7 @@ export class RecoveryService {
     );
     result.requeued.push(...assigneeLessResult);
     assigneeLessResult.forEach((taskId) => excludeIds.add(taskId));
+    assigneeLessResult.forEach((taskId) => excludeWorktreeKeys.add(taskId));
 
     // 5. Stale git lock removal
     const lockCleaned = await this.cleanStaleGitLocks(projectId, repoPath);
@@ -169,11 +191,40 @@ export class RecoveryService {
       result.cleaned.push(...reconciled);
     }
 
-    // 7. Prune orphan worktrees (closed tasks, missing tasks) — prevents accumulation
-    const pruned = await this.pruneOrphanWorktrees(projectId, repoPath, excludeIds);
+    // 7. Replay persisted merge cleanup intents (restart-safe deferred cleanup)
+    const replayed = await this.replayPendingCleanupIntents(
+      projectId,
+      repoPath,
+      excludeWorktreeKeys,
+      excludeWorktreePaths
+    );
+    if (replayed.length > 0) {
+      result.cleaned.push(...replayed.map((id) => `cleanup_intent:${id}`));
+    }
+
+    // 8. Prune orphan worktrees (closed/missing tasks), excluding active slot keys/paths
+    const pruned = await this.pruneOrphanWorktrees(
+      projectId,
+      repoPath,
+      excludeIds,
+      excludeWorktreeKeys,
+      excludeWorktreePaths
+    );
     if (pruned.length > 0) {
       result.cleaned.push(...pruned.map((id) => `worktree:${id}`));
       log.info("Pruned orphan worktrees", { projectId, pruned });
+    }
+
+    // 9. Cleanup stale inactive open/blocked worktrees (TTL-based safety net)
+    const staleInactive = await this.cleanupStaleInactiveWorktrees(
+      projectId,
+      repoPath,
+      excludeIds,
+      excludeWorktreeKeys,
+      excludeWorktreePaths
+    );
+    if (staleInactive.length > 0) {
+      result.cleaned.push(...staleInactive.map((id) => `stale_inactive_worktree:${id}`));
     }
 
     return result;
@@ -660,11 +711,168 @@ export class RecoveryService {
   private async pruneOrphanWorktrees(
     projectId: string,
     repoPath: string,
-    excludeIds: Set<string>
+    excludeIds: Set<string>,
+    excludeWorktreeKeys: Set<string>,
+    excludeWorktreePaths: Set<string>
   ): Promise<string[]> {
     const settings = await this.projectService.getSettings(projectId);
     if (settings.gitWorkingMode === "branches") return [];
-    return this.branchManager.pruneOrphanWorktrees(repoPath, projectId, excludeIds, this.taskStore);
+    return this.branchManager.pruneOrphanWorktrees(
+      repoPath,
+      projectId,
+      excludeIds,
+      excludeWorktreeKeys,
+      excludeWorktreePaths,
+      this.taskStore
+    );
+  }
+
+  private async replayPendingCleanupIntents(
+    projectId: string,
+    repoPath: string,
+    excludeWorktreeKeys: Set<string>,
+    excludeWorktreePaths: Set<string>
+  ): Promise<string[]> {
+    const intents = await worktreeCleanupIntentService.list(repoPath, projectId);
+    if (intents.length === 0) return [];
+    const cleaned: string[] = [];
+    for (const intent of intents) {
+      const worktreeKey = intent.worktreeKey ?? intent.taskId;
+      const resolvedPath = intent.worktreePath ? path.resolve(intent.worktreePath) : null;
+      if (excludeWorktreeKeys.has(worktreeKey)) continue;
+      if (resolvedPath && excludeWorktreePaths.has(resolvedPath)) continue;
+      try {
+        if (intent.gitWorkingMode === "branches") {
+          await this.branchManager.deleteBranch(repoPath, intent.branchName);
+        } else {
+          await this.branchManager.removeTaskWorktree(
+            repoPath,
+            worktreeKey,
+            intent.worktreePath ?? undefined
+          );
+          await this.branchManager.deleteBranch(repoPath, intent.branchName);
+        }
+        await worktreeCleanupIntentService.removeBestEffort(repoPath, projectId, intent.taskId);
+        cleaned.push(intent.taskId);
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: intent.taskId,
+            event: "worktree.cleanup_succeeded",
+            data: {
+              trigger: "recovery_replay",
+              branchName: intent.branchName,
+              worktreePath: intent.worktreePath,
+              worktreeKey,
+            },
+          })
+          .catch(() => {});
+      } catch (err) {
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: intent.taskId,
+            event: "worktree.cleanup_failed",
+            data: {
+              trigger: "recovery_replay",
+              branchName: intent.branchName,
+              worktreePath: intent.worktreePath,
+              worktreeKey,
+              error: err instanceof Error ? err.message : String(err),
+            },
+          })
+          .catch(() => {});
+      }
+    }
+    return cleaned;
+  }
+
+  private async cleanupStaleInactiveWorktrees(
+    projectId: string,
+    repoPath: string,
+    excludeTaskIds: Set<string>,
+    excludeWorktreeKeys: Set<string>,
+    excludeWorktreePaths: Set<string>
+  ): Promise<string[]> {
+    const settings = await this.projectService.getSettings(projectId);
+    if (settings.gitWorkingMode === "branches") return [];
+    const worktrees = await this.branchManager.listTaskWorktrees(repoPath);
+    if (worktrees.length === 0) return [];
+    const tasks = await this.taskStore.listAll(projectId);
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    const now = Date.now();
+    const cleaned: string[] = [];
+
+    for (const { taskId: worktreeKey, worktreePath } of worktrees) {
+      const resolvedPath = path.resolve(worktreePath);
+      if (excludeTaskIds.has(worktreeKey)) continue;
+      if (excludeWorktreeKeys.has(worktreeKey)) continue;
+      if (excludeWorktreePaths.has(resolvedPath)) continue;
+
+      const task = taskById.get(worktreeKey);
+      if (!task) continue;
+      const status = String(task.status ?? "");
+      if (status !== "open" && status !== "blocked") continue;
+
+      const updatedAt = Date.parse(String(task.updated_at ?? ""));
+      if (!Number.isFinite(updatedAt)) continue;
+      if (now - updatedAt < STALE_INACTIVE_WORKTREE_MS) continue;
+
+      const assignment = await this.readAssignment(repoPath, task.id);
+      if (assignment?.worktreePath && path.resolve(assignment.worktreePath) === resolvedPath) {
+        continue;
+      }
+      if (assignment?.worktreePath) {
+        const heartbeat = await heartbeatService.readHeartbeat(assignment.worktreePath, task.id);
+        const pid =
+          heartbeat && typeof heartbeat.processGroupLeaderPid === "number"
+            ? heartbeat.processGroupLeaderPid
+            : 0;
+        if (pid > 0 && isProcessAlive(pid)) {
+          continue;
+        }
+      }
+
+      try {
+        await this.branchManager.removeTaskWorktree(repoPath, worktreeKey, worktreePath);
+        cleaned.push(worktreeKey);
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: task.id,
+            event: "worktree.cleanup_succeeded",
+            data: {
+              trigger: "stale_inactive_ttl",
+              worktreeKey,
+              worktreePath,
+              taskStatus: status,
+              staleForMs: now - updatedAt,
+            },
+          })
+          .catch(() => {});
+      } catch (err) {
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: task.id,
+            event: "worktree.cleanup_failed",
+            data: {
+              trigger: "stale_inactive_ttl",
+              worktreeKey,
+              worktreePath,
+              taskStatus: status,
+              staleForMs: now - updatedAt,
+              error: err instanceof Error ? err.message : String(err),
+            },
+          })
+          .catch(() => {});
+      }
+    }
+    return cleaned;
   }
 
   // ─── Shared helpers ───

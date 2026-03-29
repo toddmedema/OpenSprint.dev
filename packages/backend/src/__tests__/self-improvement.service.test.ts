@@ -291,7 +291,7 @@ describe("SelfImprovementService", () => {
         worktreePath: "/tmp/repo",
       });
 
-      expect(result).toEqual({ taskId: "os-remediate", created: true });
+      expect(result).toEqual({ taskId: "os-remediate", created: true, action: "created" });
       expect(taskStore.create).toHaveBeenCalledWith(
         projectId,
         "Restore baseline quality gates on main",
@@ -331,7 +331,7 @@ describe("SelfImprovementService", () => {
         worktreePath: "/tmp/repo",
       });
 
-      expect(result).toEqual({ taskId: "os-existing", created: false });
+      expect(result).toEqual({ taskId: "os-existing", created: false, action: "updated" });
       expect(taskStore.update).toHaveBeenCalledWith(
         projectId,
         "os-existing",
@@ -373,7 +373,7 @@ describe("SelfImprovementService", () => {
         validationWorkspace: "baseline",
       });
 
-      expect(result).toEqual({ taskId: "os-closed", created: false });
+      expect(result).toEqual({ taskId: "os-closed", created: false, action: "reopened" });
       expect(taskStore.update).toHaveBeenCalledWith(
         projectId,
         "os-closed",

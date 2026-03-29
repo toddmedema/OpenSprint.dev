@@ -346,6 +346,27 @@ describe("parseSettings", () => {
     );
   });
 
+  it("should parse and preserve a valid toolchainProfile", () => {
+    const parsed = parseSettings({
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      toolchainProfile: {
+        mergeQualityGateCommands: ["go test ./...", "golangci-lint run"],
+        dependencyStrategy: "none",
+        dependencyChangePathspecs: ["go.mod", "go.sum"],
+        deterministicTestCommand: "go test ./...",
+        deterministicTestEnv: { GOFLAGS: "-count=1" },
+      },
+    });
+    expect(parsed.toolchainProfile).toEqual({
+      mergeQualityGateCommands: ["go test ./...", "golangci-lint run"],
+      dependencyStrategy: "none",
+      dependencyChangePathspecs: ["go.mod", "go.sum"],
+      deterministicTestCommand: "go test ./...",
+      deterministicTestEnv: { GOFLAGS: "-count=1" },
+    });
+  });
+
   it("should parse and preserve valid reviewAngles", () => {
     const raw = {
       simpleComplexityAgent: lowAgent,

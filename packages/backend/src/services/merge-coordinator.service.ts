@@ -17,6 +17,7 @@ import {
   resolveTestCommand,
   type AgentConfig,
   type TestResults,
+  type ToolchainProfile,
 } from "@opensprint/shared";
 import type { ServerEvent } from "@opensprint/shared";
 import type { StoredTask } from "./task-store.service.js";
@@ -41,6 +42,7 @@ import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 import type { MergeQualityGateProfile } from "./merge-quality-gates.js";
 import type { RetryContext, RetryQualityGateDetail } from "./orchestrator-phase-context.js";
 import { validationWorkspaceService } from "./validation-workspace.service.js";
+import { worktreeCleanupIntentService } from "./worktree-cleanup-intent.service.js";
 
 const log = createLogger("merge-coordinator");
 const _MAX_PUSH_REBASE_RESOLUTION_ROUNDS = 12;
@@ -51,6 +53,9 @@ const MERGE_RETRY_CONTEXT_FAILURE_LIMIT = 1200;
 const QUALITY_GATE_OUTPUT_SNIPPET_LIMIT = 1800;
 const BASELINE_QUALITY_GATE_SUCCESS_CACHE_MS = 60_000;
 const BASELINE_QUALITY_GATE_PAUSE_MS = 5 * 60_000;
+const BASELINE_QUALITY_GATE_PAUSE_MAX_MS = 60 * 60_000;
+const BASELINE_QUALITY_GATE_PAUSE_BACKOFF_WINDOW_MS = 30 * 60_000;
+const BASELINE_REMEDIATION_SUPPRESSION_MS = 10 * 60_000;
 const BASELINE_INCIDENT_HEALTHY_THRESHOLD = 2;
 const BASELINE_QUALITY_GATE_PAUSED_UNTIL_KEY = "merge_quality_gate_paused_until";
 const MERGE_VALIDATION_PAUSED_UNTIL_KEY = "merge_validation_paused_until";
@@ -68,6 +73,12 @@ const MERGE_ATTEMPT_LEASE_OWNER_KEY = "merge_attempt_lease_owner";
 const DETERMINISTIC_MERGE_GATE_PROFILE: MergeQualityGateProfile = "deterministic";
 
 type BaselineCheckSource = "merge_precheck" | "push_precheck" | "push_rebase_recheck";
+type BaselineRemediationTaskAction =
+  | "created"
+  | "updated"
+  | "reopened"
+  | "suppressed_redundant"
+  | "skipped_low_confidence";
 
 /** One-sentence explanation for merge failures shown to users (conflicts with main in same files). */
 const HUMAN_MERGE_FAILURE_MESSAGE =
@@ -86,6 +97,7 @@ export interface MergeQualityGateRunOptions {
   baseBranch: string;
   validationWorkspace?: "baseline" | "merged_candidate" | "task_worktree" | "repo_root";
   qualityGateProfile?: MergeQualityGateProfile;
+  toolchainProfile?: ToolchainProfile;
 }
 
 export interface MergeQualityGateFailure {
@@ -255,6 +267,7 @@ export interface MergeCoordinatorHost {
       deployment: { targets?: Array<{ name: string; autoDeployTrigger?: string }> };
       testCommand?: string | null;
       testFramework?: string | null;
+      toolchainProfile?: ToolchainProfile;
       gitWorkingMode?: "worktree" | "branches";
       worktreeBaseBranch?: string;
       unknownScopeStrategy?: "conservative" | "optimistic";
@@ -290,6 +303,16 @@ export class MergeCoordinatorService {
       consecutiveHealthy: number;
       lastFailureAtMs: number | null;
     }
+  >();
+  /** Repeated baseline-failure fingerprint counters used for bounded pause backoff. */
+  private baselineFailureBackoff = new Map<
+    string,
+    { fingerprint: string; lastAtMs: number; consecutiveFailures: number }
+  >();
+  /** Suppresses duplicate remediation updates for repeated same-fingerprint failures. */
+  private baselineRemediationSuppression = new Map<
+    string,
+    { fingerprint: string; observedAtMs: number }
   >();
   /** Rolling timestamps of merge-validation environment failures per project. */
   private mergeValidationEnvironmentFailures = new Map<string, number[]>();
@@ -337,16 +360,60 @@ export class MergeCoordinatorService {
     }
   }
 
-  private registerPendingCleanup(projectId: string, target: CleanupTarget): void {
+  private async registerPendingCleanup(
+    projectId: string,
+    repoPath: string,
+    target: CleanupTarget
+  ): Promise<void> {
     let perProject = this.pendingCleanup.get(projectId);
     if (!perProject) {
       perProject = new Map<string, CleanupTarget>();
       this.pendingCleanup.set(projectId, perProject);
     }
     perProject.set(target.taskId, target);
+    await worktreeCleanupIntentService.registerBestEffort(repoPath, projectId, {
+      ...target,
+    });
+    eventLogService
+      .append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId: target.taskId,
+        event: "worktree.cleanup_intent_registered",
+        data: {
+          trigger: "merge_success",
+          branchName: target.branchName,
+          worktreePath: target.worktreePath,
+          worktreeKey: target.worktreeKey ?? target.taskId,
+          gitWorkingMode: target.gitWorkingMode,
+        },
+      })
+      .catch(() => {});
+  }
+
+  private async hydratePendingCleanupFromDisk(projectId: string, repoPath: string): Promise<void> {
+    const intents = await worktreeCleanupIntentService.list(repoPath, projectId);
+    if (intents.length === 0) return;
+    let perProject = this.pendingCleanup.get(projectId);
+    if (!perProject) {
+      perProject = new Map<string, CleanupTarget>();
+      this.pendingCleanup.set(projectId, perProject);
+    }
+    for (const intent of intents) {
+      if (!perProject.has(intent.taskId)) {
+        perProject.set(intent.taskId, {
+          taskId: intent.taskId,
+          branchName: intent.branchName,
+          worktreePath: intent.worktreePath,
+          gitWorkingMode: intent.gitWorkingMode,
+          worktreeKey: intent.worktreeKey,
+        });
+      }
+    }
   }
 
   private async cleanupAfterSuccessfulPush(projectId: string, repoPath: string): Promise<void> {
+    await this.hydratePendingCleanupFromDisk(projectId, repoPath);
     const perProject = this.pendingCleanup.get(projectId);
     if (!perProject || perProject.size === 0) return;
     const settings = await this.host.projectService.getSettings(projectId);
@@ -378,12 +445,42 @@ export class MergeCoordinatorService {
           await this.host.branchManager.deleteBranch(repoPath, target.branchName);
         }
         perProject.delete(target.taskId);
+        await worktreeCleanupIntentService.removeBestEffort(repoPath, projectId, target.taskId);
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: target.taskId,
+            event: "worktree.cleanup_succeeded",
+            data: {
+              trigger: "merge_success_push",
+              branchName: target.branchName,
+              worktreePath: target.worktreePath,
+              worktreeKey: target.worktreeKey ?? target.taskId,
+            },
+          })
+          .catch(() => {});
       } catch (err) {
         log.warn("Deferred cleanup failed", {
           taskId: target.taskId,
           branchName: target.branchName,
           err: err instanceof Error ? err.message : String(err),
         });
+        eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: target.taskId,
+            event: "worktree.cleanup_failed",
+            data: {
+              trigger: "merge_success_push",
+              branchName: target.branchName,
+              worktreePath: target.worktreePath,
+              worktreeKey: target.worktreeKey ?? target.taskId,
+              error: err instanceof Error ? err.message : String(err),
+            },
+          })
+          .catch(() => {});
       }
     }
 
@@ -616,9 +713,11 @@ export class MergeCoordinatorService {
       : "then rerun the failing quality gate before retrying merge.";
     const isValidationWorkspace =
       validationWorkspace === "baseline" || validationWorkspace === "merged_candidate";
-    const relinkStep = isValidationWorkspace ? "" : ", re-link worktree node_modules";
+    const relinkStep = isValidationWorkspace
+      ? ""
+      : ", refresh worktree dependency workspace if required by this project";
     return compactExecutionText(
-      `Run npm ci${worktreePath ? ` in ${worktreePath}` : " in the repository root"}${relinkStep}, ${commandStep}`,
+      `Run the project dependency install command${worktreePath ? ` in ${worktreePath}` : " in the repository root"}${relinkStep}, ${commandStep}`,
       500
     );
   }
@@ -801,6 +900,85 @@ export class MergeCoordinatorService {
     );
   }
 
+  private buildBaselineFailureFingerprint(failure: MergeQualityGateFailure): string {
+    const command = failure.command.trim().toLowerCase();
+    const firstError = this.getQualityGateFirstErrorLine(failure).trim().toLowerCase();
+    const workspace = (failure.validationWorkspace ?? "unknown").trim().toLowerCase();
+    const category = (failure.category ?? "quality_gate").trim().toLowerCase();
+    return `${command}|${firstError}|${workspace}|${category}`.slice(0, 700);
+  }
+
+  private computeBaselinePauseWithBackoff(
+    projectId: string,
+    baseBranch: string,
+    failure: MergeQualityGateFailure
+  ): { pausedUntilIso: string; pauseMs: number; consecutiveFailures: number; fingerprint: string } {
+    const now = Date.now();
+    const cacheKey = this.baselineCacheKey(projectId, baseBranch);
+    const fingerprint = this.buildBaselineFailureFingerprint(failure);
+    const current = this.baselineFailureBackoff.get(cacheKey);
+    const sameFingerprintWithinWindow =
+      current &&
+      current.fingerprint === fingerprint &&
+      now - current.lastAtMs <= BASELINE_QUALITY_GATE_PAUSE_BACKOFF_WINDOW_MS;
+    const consecutiveFailures = sameFingerprintWithinWindow
+      ? Math.min(current.consecutiveFailures + 1, 8)
+      : 1;
+    this.baselineFailureBackoff.set(cacheKey, {
+      fingerprint,
+      lastAtMs: now,
+      consecutiveFailures,
+    });
+    const pauseMultiplier = Math.max(1, 2 ** (consecutiveFailures - 1));
+    const pauseMs = Math.min(BASELINE_QUALITY_GATE_PAUSE_MS * pauseMultiplier, BASELINE_QUALITY_GATE_PAUSE_MAX_MS);
+    return {
+      pausedUntilIso: new Date(now + pauseMs).toISOString(),
+      pauseMs,
+      consecutiveFailures,
+      fingerprint,
+    };
+  }
+
+  private async shouldSuppressRedundantBaselineRemediation(
+    projectId: string,
+    baseBranch: string,
+    fingerprint: string
+  ): Promise<boolean> {
+    const cacheKey = this.baselineCacheKey(projectId, baseBranch);
+    const cached = this.baselineRemediationSuppression.get(cacheKey);
+    const now = Date.now();
+    if (
+      cached &&
+      cached.fingerprint === fingerprint &&
+      now - cached.observedAtMs <= BASELINE_REMEDIATION_SUPPRESSION_MS
+    ) {
+      return true;
+    }
+
+    const allTasks = await this.host.taskStore.listAll(projectId);
+    const openRemediation = allTasks.find(
+      (task) =>
+        (task.status as string) !== "closed" &&
+        this.isBaselineQualityGateRemediationTask(task, baseBranch)
+    );
+    if (!openRemediation) return false;
+    const existingFingerprint = (openRemediation as { baselineFailureFingerprint?: unknown })
+      .baselineFailureFingerprint;
+    const observedAtRaw = (openRemediation as { baselineFailureObservedAt?: unknown })
+      .baselineFailureObservedAt;
+    const observedAtMs =
+      typeof observedAtRaw === "string" ? Date.parse(observedAtRaw) : Number.NaN;
+    if (
+      existingFingerprint === fingerprint &&
+      Number.isFinite(observedAtMs) &&
+      now - observedAtMs <= BASELINE_REMEDIATION_SUPPRESSION_MS
+    ) {
+      this.baselineRemediationSuppression.set(cacheKey, { fingerprint, observedAtMs: now });
+      return true;
+    }
+    return false;
+  }
+
   private buildUnexpectedBaselineFailure(err: unknown): MergeQualityGateFailure {
     const reason =
       compactExecutionText(err instanceof Error ? err.message : String(err), 500) ||
@@ -897,6 +1075,8 @@ export class MergeCoordinatorService {
           const incidentRecovered = this.markBaselineHealthySample(cacheKey);
           if (incidentRecovered) {
             this.baselineQualityGateNotified.delete(cacheKey);
+            this.baselineFailureBackoff.delete(cacheKey);
+            this.baselineRemediationSuppression.delete(cacheKey);
             await this.resolveBaselineQualityGateNotifications(projectId, baseBranch);
             await this.closeBaselineRemediationTask(projectId, baseBranch);
           }
@@ -1353,7 +1533,12 @@ export class MergeCoordinatorService {
       classificationReason: failure.classificationReason ?? null,
     };
     const attempt = Math.max(1, this.host.taskStore.getCumulativeAttemptsFromIssue(task) + 1) || 1;
-    const pausedUntil = new Date(Date.now() + BASELINE_QUALITY_GATE_PAUSE_MS).toISOString();
+    const {
+      pausedUntilIso: pausedUntil,
+      pauseMs,
+      consecutiveFailures,
+      fingerprint: baselineFailureFingerprint,
+    } = this.computeBaselinePauseWithBackoff(projectId, baseBranch, failure);
     const isEnvironmentSetupFailure = failure.category === "environment_setup";
     const remediationAction = isEnvironmentSetupFailure
       ? this.buildEnvironmentSetupRemediation({
@@ -1362,7 +1547,9 @@ export class MergeCoordinatorService {
           validationWorkspace: failure.validationWorkspace ?? null,
         })
       : null;
-    const nextAction = remediationAction ?? "Paused until baseline quality gates pass";
+    const nextAction =
+      remediationAction ??
+      `Paused until baseline quality gates pass (recheck in ~${Math.max(1, Math.round(pauseMs / 60_000))}m)`;
     const mergeValidationSummary = this.buildMergeValidationHealthSummary({
       command: failure.command,
       firstErrorLine,
@@ -1384,7 +1571,7 @@ export class MergeCoordinatorService {
       phase: "merge",
       failureType: isEnvironmentSetupFailure ? "environment_setup" : "merge_quality_gate",
       summary: compactExecutionText(
-        `Merge paused: baseline quality gates on ${baseBranch} are failing (${detail})${remediationAction ? `. Remediation: ${remediationAction}` : ""}.`,
+        `Merge paused: baseline quality gates on ${baseBranch} are failing (${detail})${remediationAction ? `. Remediation: ${remediationAction}` : ""}. Recheck scheduled in ~${Math.max(1, Math.round(pauseMs / 60_000))}m (same-fingerprint failures: ${consecutiveFailures}).`,
         500
       ),
     });
@@ -1406,6 +1593,9 @@ export class MergeCoordinatorService {
         [NEXT_RETRY_CONTEXT_KEY]: retryContext,
         [MERGE_RETRY_MODE_KEY]: BASELINE_MERGE_RETRY_MODE,
         [BASELINE_QUALITY_GATE_PAUSED_UNTIL_KEY]: pausedUntil,
+        baselineFailureFingerprint,
+        baselineQualityGatePauseMs: pauseMs,
+        baselineQualityGateConsecutiveFailures: consecutiveFailures,
         failedGateCommand: failure.command,
         failedGateReason,
         failedGateOutputSnippet,
@@ -1450,6 +1640,9 @@ export class MergeCoordinatorService {
           qualityGateCategory: failure.category ?? "quality_gate",
           qualityGateValidationWorkspace: failure.validationWorkspace ?? null,
           qualityGateCommand: failure.command,
+          baselineFailureFingerprint,
+          baselineQualityGatePauseMs: pauseMs,
+          baselineQualityGateConsecutiveFailures: consecutiveFailures,
           qualityGateFirstErrorLine: firstErrorLine,
           qualityGateAutoRepairAttempted: failure.autoRepairAttempted ?? false,
           qualityGateAutoRepairSucceeded: failure.autoRepairSucceeded ?? false,
@@ -1589,10 +1782,16 @@ export class MergeCoordinatorService {
   }
 
   private async createBaselineQualityGateRemediationTask(
+    repoPath: string,
     projectId: string,
     baseBranch: string,
     failure: MergeQualityGateFailure
-  ): Promise<boolean> {
+  ): Promise<{
+    action: BaselineRemediationTaskAction;
+    createdTask: boolean;
+    fingerprint: string;
+  }> {
+    const fingerprint = this.buildBaselineFailureFingerprint(failure);
     if (failure.category === "environment_setup" && failure.classificationConfidence === "low") {
       log.info(
         "Skipping baseline remediation task creation for low-confidence environment failure",
@@ -1604,12 +1803,49 @@ export class MergeCoordinatorService {
           classificationReason: failure.classificationReason ?? null,
         }
       );
-      return false;
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: "",
+          event: "baseline.remediation_task",
+          data: {
+            action: "skipped_low_confidence",
+            baseBranch,
+            fingerprint,
+            command: failure.command,
+            category: failure.category ?? null,
+            classificationConfidence: failure.classificationConfidence ?? null,
+            classificationReason: failure.classificationReason ?? null,
+          },
+        })
+        .catch(() => {});
+      return { action: "skipped_low_confidence", createdTask: false, fingerprint };
+    }
+    if (await this.shouldSuppressRedundantBaselineRemediation(projectId, baseBranch, fingerprint)) {
+      const cacheKey = this.baselineCacheKey(projectId, baseBranch);
+      this.baselineRemediationSuppression.set(cacheKey, { fingerprint, observedAtMs: Date.now() });
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: "",
+          event: "baseline.remediation_task",
+          data: {
+            action: "suppressed_redundant",
+            baseBranch,
+            fingerprint,
+            command: failure.command,
+            category: failure.category ?? null,
+          },
+        })
+        .catch(() => {});
+      return { action: "suppressed_redundant", createdTask: false, fingerprint };
     }
     const failedGateReason = failure.reason.trim().slice(0, 1200) || "Unknown quality gate failure";
     const failedGateOutputSnippet =
       this.toOutputSnippet(failure.outputSnippet ?? failure.output) ?? null;
-    await selfImprovementService.ensureBaselineQualityGateTask(projectId, {
+    const result = await selfImprovementService.ensureBaselineQualityGateTask(projectId, {
       baseBranch,
       command: failure.command,
       reason: failedGateReason,
@@ -1619,7 +1855,26 @@ export class MergeCoordinatorService {
         failure.validationWorkspace === "baseline" ? null : (failure.worktreePath ?? null),
       validationWorkspace: failure.validationWorkspace ?? null,
     });
-    return true;
+    const cacheKey = this.baselineCacheKey(projectId, baseBranch);
+    this.baselineRemediationSuppression.set(cacheKey, { fingerprint, observedAtMs: Date.now() });
+    eventLogService
+      .append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId: result.taskId,
+        event: "baseline.remediation_task",
+        data: {
+          action: result.action,
+          created: result.created,
+          baseBranch,
+          fingerprint,
+          command: failure.command,
+          category: failure.category ?? null,
+          validationWorkspace: failure.validationWorkspace ?? null,
+        },
+      })
+      .catch(() => {});
+    return { action: result.action, createdTask: result.created, fingerprint };
   }
 
   private async releaseMergeSlot(
@@ -1880,6 +2135,7 @@ export class MergeCoordinatorService {
           );
           if (baselineFailure) {
             await this.createBaselineQualityGateRemediationTask(
+              repoPath,
               projectId,
               baseBranch,
               baselineFailure
@@ -1910,6 +2166,7 @@ export class MergeCoordinatorService {
           branchName,
           baseBranch,
           validationWorkspace: "task_worktree",
+          toolchainProfile: settings.toolchainProfile,
         });
         this.traceMergeLifecycle(
           "quality_gates_passed",
@@ -1967,7 +2224,7 @@ export class MergeCoordinatorService {
         return;
       }
 
-      this.registerPendingCleanup(projectId, {
+      await this.registerPendingCleanup(projectId, repoPath, {
         taskId: task.id,
         branchName,
         worktreePath: wtPath,
@@ -2004,6 +2261,7 @@ export class MergeCoordinatorService {
         );
         if (baselineFailure) {
           await this.createBaselineQualityGateRemediationTask(
+            repoPath,
             projectId,
             baseBranch,
             baselineFailure
@@ -2034,6 +2292,7 @@ export class MergeCoordinatorService {
         branchName,
         baseBranch,
         validationWorkspace: "task_worktree",
+        toolchainProfile: settings.toolchainProfile,
       });
       this.traceMergeLifecycle(
         "quality_gates_passed",
@@ -2092,7 +2351,7 @@ export class MergeCoordinatorService {
     }
 
     // 4. Merge succeeded — close task, record, archive, release slot; then register cleanup and post-completion
-    this.registerPendingCleanup(projectId, {
+    await this.registerPendingCleanup(projectId, repoPath, {
       taskId: task.id,
       branchName,
       worktreePath: wtPath,
@@ -2761,7 +3020,7 @@ export class MergeCoordinatorService {
     });
     if (!failure) return;
 
-    await this.createBaselineQualityGateRemediationTask(projectId, baseBranch, failure);
+    await this.createBaselineQualityGateRemediationTask(repoPath, projectId, baseBranch, failure);
     await this.createBaselineQualityGateNotification(
       projectId,
       baseBranch,
@@ -2811,7 +3070,7 @@ export class MergeCoordinatorService {
         branchName: baseBranch,
         conflictedFiles: pendingConflict.conflictedFiles,
         testCommand: resolveTestCommand(settings),
-        mergeQualityGates: getMergeQualityGateCommands(),
+        mergeQualityGates: getMergeQualityGateCommands(settings.toolchainProfile),
         baseBranch,
       });
       if (!resolved) {

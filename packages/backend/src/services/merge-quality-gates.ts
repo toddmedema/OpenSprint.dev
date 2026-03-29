@@ -1,8 +1,5 @@
-/**
- * Canonical quality-gate commands that must pass before merge-to-main.
- * Keep this list aligned with CI merge-gate workflow.
- */
-const DEFAULT_MERGE_QUALITY_GATE_COMMANDS = ["npm run build", "npm run lint", "npm run test"];
+import type { ToolchainProfile } from "@opensprint/shared";
+import { resolveToolchainProfile } from "./toolchain-profile.service.js";
 
 export type MergeQualityGateProfile = "default" | "deterministic";
 
@@ -11,16 +8,18 @@ export interface MergeQualityGateExecutionPlanEntry {
   env?: NodeJS.ProcessEnv;
 }
 
-export function getMergeQualityGateCommands(): string[] {
-  return [...DEFAULT_MERGE_QUALITY_GATE_COMMANDS];
+export function getMergeQualityGateCommands(toolchainProfile?: ToolchainProfile | null): string[] {
+  return resolveToolchainProfile(toolchainProfile).mergeQualityGateCommands;
 }
 
 export function getMergeQualityGateExecutionPlan(options?: {
   profile?: MergeQualityGateProfile;
   testRunId?: string;
   integrationWorkerCap?: number;
+  toolchainProfile?: ToolchainProfile | null;
 }): MergeQualityGateExecutionPlanEntry[] {
-  const commands = getMergeQualityGateCommands();
+  const resolved = resolveToolchainProfile(options?.toolchainProfile);
+  const commands = resolved.mergeQualityGateCommands;
   if ((options?.profile ?? "default") !== "deterministic") {
     return commands.map((command) => ({ command }));
   }
@@ -29,15 +28,18 @@ export function getMergeQualityGateExecutionPlan(options?: {
   const workerCap = Number.isFinite(options?.integrationWorkerCap)
     ? Math.max(1, Math.floor(options!.integrationWorkerCap!))
     : 2;
+  const deterministicTestCommand = resolved.deterministicTestCommand;
+  const deterministicTestEnv = resolved.deterministicTestEnv;
 
   return commands.map((command) => {
-    if (command !== "npm run test") return { command };
+    if (!deterministicTestCommand || command !== deterministicTestCommand) return { command };
     return {
       command,
       env: {
         OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
         OPENSPRINT_VITEST_RUN_ID: runId && runId.length > 0 ? runId : undefined,
         OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS: String(workerCap),
+        ...deterministicTestEnv,
       },
     };
   });

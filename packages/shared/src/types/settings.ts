@@ -450,6 +450,30 @@ export type MergeStrategy = "per_task" | "per_epic";
 /** Valid merge strategy values for parsing/validation */
 export const VALID_MERGE_STRATEGIES: MergeStrategy[] = ["per_task", "per_epic"];
 
+/** Dependency strategy used by merge/review preflight and auto-repair. */
+export type DependencyStrategy = "npm" | "none" | "pnpm" | "yarn";
+
+/**
+ * Per-project toolchain profile used to keep merge/review/orchestration language-agnostic.
+ * When omitted, backend defaults preserve current npm-based behavior.
+ */
+export interface ToolchainProfile {
+  /** Ordered quality-gate commands to run before merge. */
+  mergeQualityGateCommands?: string[];
+  /** Dependency management strategy for health checks and repairs. */
+  dependencyStrategy?: DependencyStrategy;
+  /** Optional override command for dependency installation/repair. */
+  dependencyInstallCommand?: string | null;
+  /** Optional override command for dependency health checks. */
+  dependencyHealthCheckCommand?: string | null;
+  /** Git pathspecs used to detect dependency-manifest changes after merge. */
+  dependencyChangePathspecs?: string[];
+  /** Command that should receive deterministic test env when gate profile is deterministic. */
+  deterministicTestCommand?: string | null;
+  /** Environment variables injected for deterministic test runs. */
+  deterministicTestEnv?: Record<string, string>;
+}
+
 /** Self-improvement run frequency (default: never). Backend sets lastRunAt/lastCommitSha after each run. */
 export type SelfImprovementFrequency = "never" | "after_each_plan" | "daily" | "weekly";
 
@@ -798,6 +822,8 @@ export interface ProjectSettings {
   testFramework: string | null;
   /** Test command (auto-detected from package.json, default: npm test, overridable) */
   testCommand?: string | null;
+  /** Optional project-level toolchain profile for language-agnostic orchestration. */
+  toolchainProfile?: ToolchainProfile;
   /**
    * Optional project-level override for orchestrator validation timeout (milliseconds).
    * Use null/undefined to fall back to adaptive timeout.
@@ -964,6 +990,7 @@ export function getAgentForComplexity(
 }
 
 const VALID_AI_AUTONOMY_LEVELS: AiAutonomyLevel[] = ["confirm_all", "major_only", "full"];
+const VALID_DEPENDENCY_STRATEGIES: DependencyStrategy[] = ["npm", "none", "pnpm", "yarn"];
 
 /** Valid branch name: alphanumeric, slash, underscore, hyphen, dot */
 const BRANCH_NAME_REGEX = /^[a-zA-Z0-9/_.-]+$/;
@@ -1028,6 +1055,53 @@ function parseReviewAngles(raw: unknown): ReviewAngle[] | undefined {
     (v): v is ReviewAngle => typeof v === "string" && VALID_REVIEW_ANGLES.includes(v as ReviewAngle)
   );
   return filtered.length > 0 ? filtered : undefined;
+}
+
+function parseTrimmedStringArray(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const values = raw
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+  return values.length > 0 ? values : undefined;
+}
+
+function parseToolchainProfile(raw: unknown): ToolchainProfile | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  const dependencyStrategy =
+    typeof record.dependencyStrategy === "string" &&
+    VALID_DEPENDENCY_STRATEGIES.includes(record.dependencyStrategy as DependencyStrategy)
+      ? (record.dependencyStrategy as DependencyStrategy)
+      : undefined;
+  const mergeQualityGateCommands = parseTrimmedStringArray(record.mergeQualityGateCommands);
+  const dependencyChangePathspecs = parseTrimmedStringArray(record.dependencyChangePathspecs);
+  const deterministicTestEnv =
+    record.deterministicTestEnv && typeof record.deterministicTestEnv === "object"
+      ? Object.fromEntries(
+          Object.entries(record.deterministicTestEnv as Record<string, unknown>)
+            .filter(([key, value]) => key.trim().length > 0 && typeof value === "string")
+            .map(([key, value]) => [key.trim(), (value as string).trim()])
+            .filter(([, value]) => value.length > 0)
+        )
+      : undefined;
+  const profile: ToolchainProfile = {
+    ...(mergeQualityGateCommands && { mergeQualityGateCommands }),
+    ...(dependencyStrategy && { dependencyStrategy }),
+    ...(typeof record.dependencyInstallCommand === "string" && {
+      dependencyInstallCommand: record.dependencyInstallCommand.trim(),
+    }),
+    ...(typeof record.dependencyHealthCheckCommand === "string" && {
+      dependencyHealthCheckCommand: record.dependencyHealthCheckCommand.trim(),
+    }),
+    ...(dependencyChangePathspecs && { dependencyChangePathspecs }),
+    ...(typeof record.deterministicTestCommand === "string" && {
+      deterministicTestCommand: record.deterministicTestCommand.trim(),
+    }),
+    ...(deterministicTestEnv &&
+      Object.keys(deterministicTestEnv).length > 0 && { deterministicTestEnv }),
+  };
+  return Object.keys(profile).length > 0 ? profile : undefined;
 }
 
 /** Parse and validate teamMembers array. Filters invalid entries, trims id/name. Allows empty name when id is present (for add-then-edit flow). Exported for use in project.service. */
@@ -1176,6 +1250,7 @@ export function parseSettings(raw: unknown): ProjectSettings {
     aiAutonomyLevel,
     hilConfig,
     testFramework: (r?.testFramework as string | null) ?? null,
+    toolchainProfile: parseToolchainProfile(r?.toolchainProfile),
     gitWorkingMode,
     mergeStrategy,
     worktreeBaseBranch: normalizeWorktreeBaseBranch(r?.worktreeBaseBranch),

@@ -41,11 +41,11 @@ describe("resolveTestCommand", () => {
     },
     {
       project: { testCommand: null, testFramework: null },
-      expected: "npm test",
+      expected: "",
     },
     {
       project: { testCommand: null, testFramework: "none" as const },
-      expected: "npm test",
+      expected: "",
     },
   ])("resolves $expected", ({ project, expected }) => {
     expect(resolveTestCommand(project)).toBe(expected);

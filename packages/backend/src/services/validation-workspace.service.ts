@@ -109,34 +109,33 @@ export class ValidationWorkspaceService {
     worktreePath: string,
     kind: ValidationWorkspaceKind
   ): Promise<void> {
-    const packageJsonPath = path.join(worktreePath, "package.json");
-    try {
-      await fs.access(packageJsonPath);
-    } catch {
-      throw new Error(`Validation workspace package.json is missing: ${packageJsonPath}`);
-    }
-
-    const repoLockfilePath = path.join(repoPath, "package-lock.json");
-    const workspaceLockfilePath = path.join(worktreePath, "package-lock.json");
-    const repoHasLockfile = await fs
-      .access(repoLockfilePath)
-      .then(() => true)
-      .catch(() => false);
-    if (repoHasLockfile) {
+    const isNpmWorkspace = await this.repoHasFile(repoPath, "package.json");
+    if (isNpmWorkspace) {
+      const packageJsonPath = path.join(worktreePath, "package.json");
       try {
-        await fs.access(workspaceLockfilePath);
+        await fs.access(packageJsonPath);
       } catch {
+        throw new Error(`Validation workspace package.json is missing: ${packageJsonPath}`);
+      }
+
+      const workspaceLockfilePath = path.join(worktreePath, "package-lock.json");
+      const repoHasLockfile = await this.repoHasFile(repoPath, "package-lock.json");
+      if (repoHasLockfile) {
+        try {
+          await fs.access(workspaceLockfilePath);
+        } catch {
+          throw new Error(
+            `Validation workspace package-lock.json is missing: ${workspaceLockfilePath}`
+          );
+        }
+      }
+
+      const nodeModulesPath = path.join(worktreePath, "node_modules");
+      if (!(await this.isNodeModulesUsable(nodeModulesPath))) {
         throw new Error(
-          `Validation workspace package-lock.json is missing: ${workspaceLockfilePath}`
+          `Validation workspace node_modules is missing or unusable at ${nodeModulesPath}`
         );
       }
-    }
-
-    const nodeModulesPath = path.join(worktreePath, "node_modules");
-    if (!(await this.isNodeModulesUsable(nodeModulesPath))) {
-      throw new Error(
-        `Validation workspace node_modules is missing or unusable at ${nodeModulesPath}`
-      );
     }
 
     try {
@@ -185,7 +184,9 @@ export class ValidationWorkspaceService {
         timeout: 30_000,
       }
     );
-    await this.branchManager.symlinkNodeModules(repoPath, worktreePath);
+    if (await this.repoHasFile(repoPath, "package.json")) {
+      await this.branchManager.symlinkNodeModules(repoPath, worktreePath);
+    }
     await this.verifyWorkspaceReady(repoPath, worktreePath, "baseline");
 
     return {
@@ -228,7 +229,9 @@ export class ValidationWorkspaceService {
       }
     );
 
-    await this.ensureMergedCandidateNodeModules(repoPath, worktreePath);
+    if (await this.repoHasFile(repoPath, "package.json")) {
+      await this.ensureMergedCandidateNodeModules(repoPath, worktreePath);
+    }
     await this.verifyWorkspaceReady(repoPath, worktreePath, "merged_candidate");
 
     return {
@@ -254,6 +257,13 @@ export class ValidationWorkspaceService {
     } catch {
       return false;
     }
+  }
+
+  private async repoHasFile(repoPath: string, fileName: string): Promise<boolean> {
+    return fs
+      .access(path.join(repoPath, fileName))
+      .then(() => true)
+      .catch(() => false);
   }
 
   /**

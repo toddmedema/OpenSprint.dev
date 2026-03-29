@@ -80,6 +80,9 @@ const mockResolveBaseBranch = vi.fn();
 const mockInspectGitRepoState = vi.fn();
 const mockCreateBaselineWorkspace = vi.fn();
 const mockCleanupBaselineWorkspace = vi.fn();
+const mockRegisterCleanupIntent = vi.fn();
+const mockListCleanupIntents = vi.fn();
+const mockRemoveCleanupIntent = vi.fn();
 
 vi.mock("../services/git-commit-queue.service.js", () => ({
   MergeJobError: class MergeJobError extends Error {
@@ -123,6 +126,14 @@ vi.mock("../utils/git-repo-state.js", () => ({
 vi.mock("../services/validation-workspace.service.js", () => ({
   validationWorkspaceService: {
     createBaselineWorkspace: (...args: unknown[]) => mockCreateBaselineWorkspace(...args),
+  },
+}));
+
+vi.mock("../services/worktree-cleanup-intent.service.js", () => ({
+  worktreeCleanupIntentService: {
+    registerBestEffort: (...args: unknown[]) => mockRegisterCleanupIntent(...args),
+    list: (...args: unknown[]) => mockListCleanupIntents(...args),
+    removeBestEffort: (...args: unknown[]) => mockRemoveCleanupIntent(...args),
   },
 }));
 
@@ -178,6 +189,7 @@ vi.mock("../services/self-improvement.service.js", () => ({
     ensureBaselineQualityGateTask: vi.fn().mockResolvedValue({
       taskId: "os-baseline-fix",
       created: true,
+      action: "created",
     }),
   },
 }));
@@ -260,6 +272,9 @@ describe("MergeCoordinatorService", () => {
       async (_repoPath: string, preferredBaseBranch?: string | null) =>
         preferredBaseBranch ?? "main"
     );
+    mockRegisterCleanupIntent.mockResolvedValue(undefined);
+    mockListCleanupIntents.mockResolvedValue([]);
+    mockRemoveCleanupIntent.mockResolvedValue(undefined);
     mockCleanupBaselineWorkspace.mockResolvedValue(undefined);
     mockCreateBaselineWorkspace.mockResolvedValue({
       kind: "baseline",
@@ -366,6 +381,16 @@ describe("MergeCoordinatorService", () => {
     await vi.waitFor(() => {
       expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, taskId, "/tmp/worktree");
       expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, branchName);
+      expect(mockRegisterCleanupIntent).toHaveBeenCalledWith(
+        repoPath,
+        projectId,
+        expect.objectContaining({
+          taskId,
+          branchName,
+          worktreePath: "/tmp/worktree",
+          gitWorkingMode: "worktree",
+        })
+      );
     });
   });
 
@@ -424,6 +449,24 @@ describe("MergeCoordinatorService", () => {
         expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, branchName);
       });
     }
+  });
+
+  it("replays persisted cleanup intents during post-completion push", async () => {
+    mockListCleanupIntents.mockResolvedValue([
+      {
+        taskId: "os-replay",
+        branchName: "opensprint/os-replay",
+        worktreePath: "/tmp/replay-worktree",
+        gitWorkingMode: "worktree",
+        worktreeKey: "epic_42",
+      },
+    ]);
+
+    await coordinator.postCompletionAsync(projectId, repoPath, "os-abc.1");
+
+    expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, "epic_42", "/tmp/replay-worktree");
+    expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, "opensprint/os-replay");
+    expect(mockRemoveCleanupIntent).toHaveBeenCalledWith(repoPath, projectId, "os-replay");
   });
 
   it("enqueues merge job with worktreePath so rebase happens inside the serialized queue", async () => {
@@ -869,13 +912,67 @@ describe("MergeCoordinatorService", () => {
 
     hostState.slots.set(taskId, makeSlot());
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
-    expect(selfImprovementService.ensureBaselineQualityGateTask).toHaveBeenCalledTimes(2);
+    expect(selfImprovementService.ensureBaselineQualityGateTask).toHaveBeenCalledTimes(1);
     expect(mockNotificationCreateAgentFailed).toHaveBeenCalledTimes(1);
     expect(
       mockHost.runMergeQualityGates.mock.calls.filter(([options]) =>
         isBaselineValidation(options as { validationWorkspace?: string; taskId?: string })
       )
     ).toHaveLength(2);
+  });
+
+  it("suppresses duplicate baseline remediation task creation for repeated same fingerprint", async () => {
+    const { selfImprovementService } = await import("../services/self-improvement.service.js");
+    const nowSpy = vi.spyOn(Date, "now");
+    let nowMs = 1_000_000;
+    nowSpy.mockImplementation(() => nowMs);
+    mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
+      if (!isBaselineValidation(options)) return null;
+      return {
+        command: "npm run test",
+        reason: "Command failed: npm run test",
+        output: "stderr | baseline failure",
+        firstErrorLine: "stderr | baseline failure",
+        category: "quality_gate",
+      };
+    });
+    try {
+      await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+      expect(selfImprovementService.ensureBaselineQualityGateTask).toHaveBeenCalledTimes(1);
+
+      // Move beyond baseline success cache TTL, but stay within remediation suppression window.
+      nowMs += 61_000;
+      hostState.slots.set(taskId, makeSlot());
+      await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+      expect(selfImprovementService.ensureBaselineQualityGateTask).toHaveBeenCalledTimes(1);
+      const pauseWindows = vi
+        .mocked(mockHost.taskStore.update)
+        .mock.calls.map(([, , fields]) => {
+          const rec = fields as { extra?: { baselineQualityGatePauseMs?: unknown } };
+          const value = rec.extra?.baselineQualityGatePauseMs;
+          return typeof value === "number" ? value : null;
+        })
+        .filter((value): value is number => value != null);
+      expect(pauseWindows).toEqual(expect.arrayContaining([5 * 60_000, 10 * 60_000]));
+
+      const { eventLogService } = await import("../services/event-log.service.js");
+      const remediationEvents = vi
+        .mocked(eventLogService.append)
+        .mock.calls.map(([, event]) => event)
+        .filter((event) => event.event === "baseline.remediation_task");
+      expect(remediationEvents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            data: expect.objectContaining({ action: "created" }),
+          }),
+          expect.objectContaining({
+            data: expect.objectContaining({ action: "suppressed_redundant" }),
+          }),
+        ])
+      );
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it("lets the baseline remediation task bypass the baseline-on-main precheck while still merging through worktree gates", async () => {
@@ -1165,7 +1262,9 @@ describe("MergeCoordinatorService", () => {
     expect(blockedEvent).toBeDefined();
     expect(blockedEvent?.data).toEqual(
       expect.objectContaining({
-        nextAction: expect.stringContaining("re-link worktree node_modules"),
+        nextAction: expect.stringContaining(
+          "refresh worktree dependency workspace if required by this project"
+        ),
       })
     );
   });

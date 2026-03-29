@@ -4,6 +4,10 @@ export interface FailureMetricBucket {
   failureType: string | null;
   mergeStage: string | null;
   phase: string | null;
+  signatureBucket?: string | null;
+  qualityGateCategory?: string | null;
+  validationWorkspace?: string | null;
+  classificationConfidence?: "high" | "low" | null;
   count: number;
 }
 

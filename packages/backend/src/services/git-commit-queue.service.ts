@@ -5,7 +5,7 @@
  * commits (PRD update, worktree merge). Task state lives on the central server only.
  */
 
-import { resolveTestCommand, type AgentConfig } from "@opensprint/shared";
+import { resolveTestCommand, type AgentConfig, type ToolchainProfile } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { BranchManager, MergeConflictError, RebaseConflictError } from "./branch-manager.js";
 import { ProjectService } from "./project.service.js";
@@ -205,6 +205,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
     config: AgentConfig;
     testCommand?: string;
     mergeQualityGates: string[];
+    toolchainProfile?: ToolchainProfile;
   }> {
     const project = await this.projectService.getProjectByRepoPath(repoPath);
     if (!project) {
@@ -215,7 +216,8 @@ class GitCommitQueueImpl implements GitCommitQueueService {
       projectId: project.id,
       config: settings.simpleComplexityAgent as AgentConfig,
       testCommand: resolveTestCommand(settings),
-      mergeQualityGates: getMergeQualityGateCommands(),
+      mergeQualityGates: getMergeQualityGateCommands(settings.toolchainProfile),
+      toolchainProfile: settings.toolchainProfile,
     };
   }
 

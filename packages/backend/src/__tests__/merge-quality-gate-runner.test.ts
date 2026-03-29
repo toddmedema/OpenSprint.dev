@@ -265,6 +265,34 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     ]);
   });
 
+  it("runs non-npm gates without package.json/node_modules prechecks", async () => {
+    const worktreePath = await makeTempWorktree(undefined, false);
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        if (commandLabel(spec) === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-agnostic",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-agnostic",
+        branchName: "opensprint/os-agnostic",
+        baseBranch: "main",
+      },
+      {
+        commands: ["git status --short"],
+        runCommand,
+      }
+    );
+    expect(failure).toBeNull();
+    expect(getExecutedCommands(runCommand)).toEqual(["git status --short"]);
+  });
+
   it("merged_candidate repair runs npm ci at repo root then symlinks before retry", async () => {
     const repoPath = await makeTempWorktree({ build: "tsc -b" }, true);
     const worktreePath = await makeTempWorktree({ build: "tsc -b" }, true);
@@ -554,6 +582,46 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     expect(failure?.classificationReason).toContain("ambiguous");
   });
 
+  it("classifies project-resolution failures as high-confidence environment setup", async () => {
+    const worktreePath = await makeTempWorktree({ build: "tsc -b" });
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm run build") {
+          throw makeCommandFailure(spec, options.cwd, {
+            message: "Cannot resolve project for repo path /tmp/repo",
+          });
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-proj-resolution",
+        branchName: "opensprint/os-proj-resolution",
+        baseBranch: "main",
+      },
+      {
+        commands: ["npm run build"],
+        runCommand,
+      }
+    );
+
+    expect(failure).toEqual(
+      expect.objectContaining({
+        category: "environment_setup",
+        classificationConfidence: "high",
+      })
+    );
+  });
+
   it("classifies TS compiler diagnostics as quality-gate failures", async () => {
     const worktreePath = await makeTempWorktree({ build: "tsc -b" });
     const runCommand = vi.fn(
@@ -691,5 +759,73 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     expect(testCall).toBeDefined();
     const env = (testCall?.[1] as { env?: Record<string, string> | undefined })?.env;
     expect(env).toBeUndefined();
+  });
+
+  it("supports language-agnostic gates when dependency strategy is none", async () => {
+    const worktreePath = await makeTempWorktree(undefined, false);
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) =>
+        makeCommandResult(spec, options.cwd)
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-lang-agnostic",
+        branchName: "opensprint/os-lang-agnostic",
+        baseBranch: "main",
+        toolchainProfile: {
+          dependencyStrategy: "none",
+          mergeQualityGateCommands: ["node --version"],
+          deterministicTestCommand: "node --version",
+          deterministicTestEnv: { PYTEST_ADDOPTS: "--maxfail=1" },
+        },
+      },
+      { runCommand }
+    );
+
+    expect(failure).toBeNull();
+    expect(getExecutedCommands(runCommand)).toEqual(["node --version"]);
+  });
+
+  it("injects deterministic env for custom test command in toolchain profile", async () => {
+    const worktreePath = await makeTempWorktree(undefined, false);
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) =>
+        makeCommandResult(spec, options.cwd)
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-custom-det-env",
+        branchName: "opensprint/os-custom-det-env",
+        baseBranch: "main",
+        toolchainProfile: {
+          dependencyStrategy: "none",
+          mergeQualityGateCommands: ["node --version"],
+          deterministicTestCommand: "node --version",
+          deterministicTestEnv: { PYTEST_ADDOPTS: "--maxfail=1" },
+        },
+      },
+      { runCommand }
+    );
+
+    expect(failure).toBeNull();
+    const testCall = runCommand.mock.calls.find(
+      (call) => commandLabel(call[0] as { command: string; args?: string[] }) === "node --version"
+    );
+    expect(testCall).toBeDefined();
+    const env = (testCall?.[1] as { env?: Record<string, string> | undefined })?.env;
+    expect(env).toEqual(
+      expect.objectContaining({
+        OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
+        PYTEST_ADDOPTS: "--maxfail=1",
+      })
+    );
   });
 });
