@@ -250,7 +250,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     ]);
   });
 
-  it("does not re-link node_modules after merged-candidate npm ci repair", async () => {
+  it("merged_candidate repair runs npm ci at repo root then symlinks before retry", async () => {
     const worktreePath = await makeTempWorktree({ build: "tsc -b" });
     let buildAttempts = 0;
     const runCommand = vi.fn(
@@ -298,7 +298,8 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     );
 
     expect(failure).toBeNull();
-    expect(symlinkNodeModules).not.toHaveBeenCalled();
+    expect(symlinkNodeModules).toHaveBeenCalledTimes(1);
+    expect(symlinkNodeModules).toHaveBeenCalledWith(worktreePath, worktreePath);
     expect(getExecutedCommands(runCommand)).toEqual([
       "npm ls --depth=0 --include=dev",
       "npm run build",
@@ -309,7 +310,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     ]);
   });
 
-  it("falls back to relinking merged-candidate node_modules when npm ci fails", async () => {
+  it("merged_candidate: falls back to symlink when npm ci fails in repair", async () => {
     const worktreePath = await makeTempWorktree({ build: "tsc -b" }, false);
     const runCommand = vi.fn(
       async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
@@ -322,8 +323,8 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
         }
         if (label === "npm ci") {
           throw makeCommandFailure(spec, options.cwd, {
-            message: "Command failed: npm ci",
-            stderr: "npm ERR! network request failed",
+            message: "npm ci failed: network error",
+            stderr: "npm ERR! network error",
           });
         }
         if (label === "npm run build") {
@@ -332,8 +333,8 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
         return makeCommandResult(spec, options.cwd);
       }
     );
-    const symlinkNodeModules = vi.fn(async () => {
-      await fs.mkdir(path.join(worktreePath, "node_modules"), { recursive: true });
+    const symlinkNodeModules = vi.fn(async (_repoPath: string, wtPath: string) => {
+      await fs.mkdir(path.join(wtPath, "node_modules"), { recursive: true });
     });
 
     const failure = await runMergeQualityGates(
@@ -341,8 +342,8 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
         projectId: "proj-1",
         repoPath: worktreePath,
         worktreePath,
-        taskId: "os-6",
-        branchName: "opensprint/os-6",
+        taskId: "os-mc-1",
+        branchName: "opensprint/os-mc-1",
         baseBranch: "main",
         validationWorkspace: "merged_candidate",
       },
@@ -355,8 +356,134 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
 
     expect(failure).toBeNull();
     expect(symlinkNodeModules).toHaveBeenCalledTimes(1);
-    expect(getExecutedCommands(runCommand)).toEqual([
-      "npm ci",
+    const commands = getExecutedCommands(runCommand);
+    expect(commands).toContain("npm ci");
+    expect(commands).toContain("npm run build");
+  });
+
+  it("merged_candidate: returns actionable error when all repair strategies fail", async () => {
+    const worktreePath = await makeTempWorktree({ build: "tsc -b" }, false);
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm ci") {
+          throw makeCommandFailure(spec, options.cwd, {
+            message: "npm ci failed",
+            stderr: "npm ERR! Missing lockfile",
+          });
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+    // Symlink fallback also fails to restore node_modules
+    const symlinkNodeModules = vi.fn(async () => undefined);
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-mc-2",
+        branchName: "opensprint/os-mc-2",
+        baseBranch: "main",
+        validationWorkspace: "merged_candidate",
+      },
+      {
+        commands: ["npm run build"],
+        runCommand,
+        symlinkNodeModules,
+      }
+    );
+
+    expect(failure).not.toBeNull();
+    expect(failure!.autoRepairAttempted).toBe(true);
+    expect(failure!.autoRepairSucceeded).toBe(false);
+    expect(failure!.category).toBe("environment_setup");
+    // Error output should include actionable guidance
+    expect(failure!.autoRepairOutput).toMatch(/node_modules.*missing|npm ci/i);
+  });
+
+  it("merged_candidate: node_modules assertion catches broken state after repair", async () => {
+    const worktreePath = await makeTempWorktree({ build: "tsc -b" }, false);
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm ci") {
+          // npm ci "succeeds" but doesn't actually create node_modules
+          return makeCommandResult(spec, options.cwd);
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+    const symlinkNodeModules = vi.fn(async () => undefined);
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-mc-3",
+        branchName: "opensprint/os-mc-3",
+        baseBranch: "main",
+        validationWorkspace: "merged_candidate",
+      },
+      {
+        commands: ["npm run build"],
+        runCommand,
+        symlinkNodeModules,
+      }
+    );
+
+    expect(failure).not.toBeNull();
+    expect(failure!.autoRepairAttempted).toBe(true);
+    expect(failure!.autoRepairSucceeded).toBe(false);
+    expect(failure!.autoRepairOutput).toContain("node_modules is missing or inaccessible");
+    expect(failure!.autoRepairOutput).toContain("npm ci");
+  });
+
+  it("merged_candidate: succeeds when node_modules is already healthy", async () => {
+    const worktreePath = await makeTempWorktree({ build: "tsc -b" }, true);
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm ls --depth=0 --include=dev") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+    const symlinkNodeModules = vi.fn(async () => undefined);
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-mc-4",
+        branchName: "opensprint/os-mc-4",
+        baseBranch: "main",
+        validationWorkspace: "merged_candidate",
+      },
+      {
+        commands: ["npm run build"],
+        runCommand,
+        symlinkNodeModules,
+      }
+    );
+
+    expect(failure).toBeNull();
+    expect(symlinkNodeModules).not.toHaveBeenCalled();
+    const commands = getExecutedCommands(runCommand);
+    expect(commands).toEqual([
       "npm ls --depth=0 --include=dev",
       "npm run build",
     ]);

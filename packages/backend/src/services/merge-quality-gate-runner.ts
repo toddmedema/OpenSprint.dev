@@ -679,43 +679,108 @@ async function repairQualityGateEnvironment(
   }
 
   let npmCiSucceeded = false;
-  const installCwd = options.worktreePath;
-  commands.push("npm ci");
-  try {
-    const result = await deps.runCommand(
-      {
-        command: "npm",
-        args: ["ci"],
-      },
-      {
-        cwd: installCwd,
-        timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
-        env: NPM_INCLUDE_DEV_ENV,
-      }
-    );
-    npmCiSucceeded = true;
-    const npmCiOutput = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-    if (npmCiOutput) outputParts.push(`[npm ci @ ${installCwd}] ${npmCiOutput}`);
-  } catch (err) {
-    const npmCiFailure = extractCommandFailure("npm ci", err, {
-      worktreePath,
-      validationWorkspace,
-      category: "environment_setup",
-    });
-    const npmCiOutput = [npmCiFailure.reason, npmCiFailure.output]
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-    if (npmCiOutput) outputParts.push(`[npm ci @ ${installCwd}] ${npmCiOutput}`);
-  }
-
-  const shouldRelinkNodeModules =
-    validationWorkspace !== "baseline" &&
-    // merged_candidate prefers an isolated npm ci install; only fall back to relinking
-    // when npm ci could not restore dependencies.
-    (validationWorkspace !== "merged_candidate" || !npmCiSucceeded);
   let symlinkSucceeded = true;
-  if (shouldRelinkNodeModules) {
+
+  if (validationWorkspace === "merged_candidate") {
+    // merged_candidate repair: symlink from main repo is the primary fast path.
+    // 1) Ensure the host repo has healthy node_modules (npm ci in repo root if needed).
+    // 2) Symlink from host to worktree.
+    // 3) Fall back to npm ci in the worktree only if symlinking fails.
+
+    commands.push("npm ci (repo root)");
+    try {
+      const result = await deps.runCommand(
+        { command: "npm", args: ["ci"] },
+        {
+          cwd: options.repoPath,
+          timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
+          env: NPM_INCLUDE_DEV_ENV,
+        }
+      );
+      npmCiSucceeded = true;
+      const npmCiOutput = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+      if (npmCiOutput) outputParts.push(`[npm ci @ ${options.repoPath}] ${npmCiOutput}`);
+    } catch (err) {
+      const npmCiFailure = extractCommandFailure("npm ci", err, {
+        worktreePath: options.repoPath,
+        validationWorkspace,
+        category: "environment_setup",
+      });
+      const npmCiOutput = [npmCiFailure.reason, npmCiFailure.output]
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+      if (npmCiOutput) outputParts.push(`[npm ci @ ${options.repoPath}] ${npmCiOutput}`);
+    }
+
+    commands.push("symlinkNodeModules (merged_candidate)");
+    try {
+      await deps.symlinkNodeModules(options.repoPath, worktreePath);
+    } catch (err) {
+      symlinkSucceeded = false;
+      outputParts.push(`[symlinkNodeModules] ${getErrorMessage(err)}`);
+    }
+
+    // If symlink didn't produce usable node_modules, fall back to npm ci in the worktree.
+    let nodeModulesUsable = false;
+    try {
+      const stat = await fs.stat(path.join(worktreePath, "node_modules"));
+      nodeModulesUsable = stat.isDirectory();
+    } catch { /* not usable */ }
+
+    if (!nodeModulesUsable) {
+      commands.push("npm ci (worktree fallback)");
+      try {
+        const result = await deps.runCommand(
+          { command: "npm", args: ["ci"] },
+          {
+            cwd: worktreePath,
+            timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
+            env: NPM_INCLUDE_DEV_ENV,
+          }
+        );
+        npmCiSucceeded = true;
+        const out = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+        if (out) outputParts.push(`[npm ci @ ${worktreePath}] ${out}`);
+      } catch (err) {
+        const fail = extractCommandFailure("npm ci", err, {
+          worktreePath,
+          validationWorkspace,
+          category: "environment_setup",
+        });
+        const out = [fail.reason, fail.output].filter(Boolean).join("\n").trim();
+        if (out) outputParts.push(`[npm ci @ ${worktreePath}] ${out}`);
+      }
+    }
+  } else {
+    // Non-merged_candidate, non-baseline: npm ci in worktree + re-symlink.
+    const installCwd = options.worktreePath;
+    commands.push("npm ci");
+    try {
+      const result = await deps.runCommand(
+        { command: "npm", args: ["ci"] },
+        {
+          cwd: installCwd,
+          timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
+          env: NPM_INCLUDE_DEV_ENV,
+        }
+      );
+      npmCiSucceeded = true;
+      const npmCiOutput = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+      if (npmCiOutput) outputParts.push(`[npm ci @ ${installCwd}] ${npmCiOutput}`);
+    } catch (err) {
+      const npmCiFailure = extractCommandFailure("npm ci", err, {
+        worktreePath,
+        validationWorkspace,
+        category: "environment_setup",
+      });
+      const npmCiOutput = [npmCiFailure.reason, npmCiFailure.output]
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+      if (npmCiOutput) outputParts.push(`[npm ci @ ${installCwd}] ${npmCiOutput}`);
+    }
+
     commands.push("symlinkNodeModules");
     try {
       await deps.symlinkNodeModules(options.repoPath, worktreePath);
@@ -725,7 +790,13 @@ async function repairQualityGateEnvironment(
     }
   }
 
-  let succeeded = recreateSucceeded && npmCiSucceeded && symlinkSucceeded;
+  let succeeded: boolean;
+  if (validationWorkspace === "merged_candidate") {
+    // For merged_candidate: either npm ci (repo root or worktree) or symlink must work.
+    succeeded = recreateSucceeded && (npmCiSucceeded || symlinkSucceeded);
+  } else {
+    succeeded = recreateSucceeded && npmCiSucceeded && symlinkSucceeded;
+  }
 
   if (succeeded) {
     const criticalFiles = ["package.json"];
@@ -741,6 +812,19 @@ async function repairQualityGateEnvironment(
       succeeded = false;
       outputParts.push(
         `[post-repair verification] Critical files still missing after repair: ${missing.join(", ")}`
+      );
+    }
+  }
+
+  // Assert node_modules exists after repair — fail with actionable message if missing
+  if (succeeded) {
+    try {
+      await fs.access(path.join(worktreePath, "node_modules"));
+    } catch {
+      succeeded = false;
+      outputParts.push(
+        `[post-repair verification] node_modules is missing or inaccessible at ${worktreePath} after all repair attempts. ` +
+          `Ensure the host repo has a valid package-lock.json and run 'npm ci' in the repo root.`
       );
     }
   }
